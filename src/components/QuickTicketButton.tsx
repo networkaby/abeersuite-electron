@@ -110,6 +110,9 @@ export default function QuickTicketButton() {
             });
             toast.success(`Ticket #${res.data.id} created!`);
             closeModal();
+            // Open receipt in new tab immediately
+            window.open(`/receipt/${res.data.id}`, "_blank");
+            // Also navigate to ticket detail
             router.push(`/tickets/${res.data.id}`);
         } catch {
             toast.error("Failed to create ticket");
@@ -140,10 +143,10 @@ export default function QuickTicketButton() {
                                     {(["phone", "customer", "ticket"] as Step[]).map((s, i) => (
                                         <div key={s} className="flex items-center gap-1">
                                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${step === s
-                                                    ? "bg-blue-600 text-white"
-                                                    : (["phone", "customer", "ticket"] as Step[]).indexOf(step) > i
-                                                        ? "bg-green-500 text-white"
-                                                        : "bg-gray-200 text-gray-500"
+                                                ? "bg-blue-600 text-white"
+                                                : (["phone", "customer", "ticket"] as Step[]).indexOf(step) > i
+                                                    ? "bg-green-500 text-white"
+                                                    : "bg-gray-200 text-gray-500"
                                                 }`}>
                                                 {i + 1}
                                             </div>
