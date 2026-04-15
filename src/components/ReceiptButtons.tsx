@@ -1,6 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function ReceiptButtons() {
+    useEffect(() => {
+        window.print();
+    }, []);
+
     return (
         <div style={{ marginBottom: "12px", display: "flex", gap: "8px" }} className="no-print">
             <button
@@ -18,7 +24,7 @@ export default function ReceiptButtons() {
                 🖨️ Print
             </button>
             <button
-                onClick={() => window.history.back()}
+                onClick={() => window.close()}
                 style={{
                     padding: "6px 16px",
                     background: "#f3f4f6",
@@ -29,7 +35,7 @@ export default function ReceiptButtons() {
                     fontSize: "13px",
                 }}
             >
-                ← Back
+                ✕ Close
             </button>
         </div>
     );

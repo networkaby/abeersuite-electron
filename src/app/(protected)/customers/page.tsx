@@ -5,7 +5,7 @@ import axios from "axios";
 import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import CustomerForm from "@/components/CustomerForm";
-
+import Link from "next/link";
 interface Customer {
     id: number;
     name: string;
@@ -138,7 +138,20 @@ export default function CustomersPage() {
                         <tbody className="divide-y divide-gray-100">
                             {filtered.map((c) => (
                                 <tr key={c.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-gray-400">{c.id}</td>
+                                    {/* <td className="px-6 py-4 text-gray-400">{c.id}</td> */}
+
+
+                                    <td className="px-6 py-4">
+                                        <Link
+                                            href={`/customers/${c.id}`}
+                                            className="font-medium hover:text-blue-600 hover:underline"
+                                        >
+                                            {c.name}
+                                        </Link>
+                                    </td>
+
+
+
                                     <td className="px-6 py-4 font-medium">{c.name}</td>
                                     <td className="px-6 py-4">{c.phone}</td>
                                     <td className="px-6 py-4 text-gray-500">{c.email || "—"}</td>
