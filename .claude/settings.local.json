@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm exec tsx src/seed.ts)",
+      "Bash(pnpm list:*)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 pnpm exec tsx src/check.ts)",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/callback/credentials -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"admin@service.com\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
+      "Bash(curl -v http://localhost:3000/api/auth/providers)"
+    ]
+  }
+}
