@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(
+    _: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const { id } = await params;
         const customer = await prisma.customer.findUnique({
-            where: { id: Number(params.id) },
+            where: { id: Number(id) },
             include: { devices: { include: { ticket: true } } },
         });
         if (!customer) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -14,11 +18,15 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const { id } = await params;
         const body = await req.json();
         const customer = await prisma.customer.update({
-            where: { id: Number(params.id) },
+            where: { id: Number(id) },
             data: {
                 name: body.name,
                 phone: body.phone,
@@ -31,10 +39,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+    _: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const { id } = await params;
         await prisma.customer.delete({
-            where: { id: Number(params.id) },
+            where: { id: Number(id) },
         });
         return NextResponse.json({ success: true });
     } catch (error) {
