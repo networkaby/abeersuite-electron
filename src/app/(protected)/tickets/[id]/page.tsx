@@ -17,7 +17,7 @@ import {
 import Link from "next/link";
 import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
-
+import TicketReopenButton from "@/components/TicketReopenButton";
 
 
 
@@ -249,51 +249,39 @@ export default function TicketDetailPage() {
                     </div>
 
                     {/* Actions */}
-                    {ticket.status !== "RETURNED" && (
-                        <div className="bg-white rounded-xl shadow p-4 space-y-2">
-                            <h2 className="font-semibold text-gray-700 mb-3 text-sm">Actions</h2>
+                    <div className="bg-white rounded-xl shadow p-4 space-y-2">
+                        <h2 className="font-semibold text-gray-700 mb-3 text-sm">Actions</h2>
 
+                        <button
+                            onClick={() => setShowStatusUpdate(true)}
+                            className={`w-full text-white rounded-lg py-2 text-sm ${ticket.status === "RETURNED"
+                                    ? "bg-blue-500 hover:bg-blue-600"
+                                    : "bg-blue-600 hover:bg-blue-700"
+                                }`}
+                        >
+                            {ticket.status === "RETURNED" ? "↩️ Reopen Ticket" : "Update Status"}
+                        </button>
+
+                        {!ticket.escalated && ticket.status !== "RETURNED" && (
                             <button
-                                onClick={() => setShowStatusUpdate(true)}
-                                className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700"
+                                onClick={() => setShowEscalation(true)}
+                                className="w-full border border-orange-400 text-orange-500 rounded-lg py-2 text-sm hover:bg-orange-50 flex items-center justify-center gap-2"
                             >
-                                Update Status
+                                <AlertTriangle size={15} />
+                                Escalate to Service Center
                             </button>
+                        )}
 
-                            {!ticket.escalated && (
-                                <button
-                                    onClick={() => setShowEscalation(true)}
-                                    className="w-full border border-orange-400 text-orange-500 rounded-lg py-2 text-sm hover:bg-orange-50 flex items-center justify-center gap-2"
-                                >
-                                    <AlertTriangle size={15} />
-                                    Escalate to Service Center
-                                </button>
-                            )}
+                        <Link
+                            href={`/receipt/${ticket.id}`}
+                            target="_blank"
+                            className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                        >
+                            <Printer size={15} />
+                            Print Receipt
+                        </Link>
+                    </div>
 
-                            <Link
-                                href={`/receipt/${ticket.id}`}
-                                target="_blank"
-                                className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
-                            >
-                                <Printer size={15} />
-                                Print Receipt
-                            </Link>
-                        </div>
-                    )}
-
-                    {/* Always show print even if RETURNED */}
-                    {ticket.status === "RETURNED" && (
-                        <div className="bg-white rounded-xl shadow p-4">
-                            <Link
-                                href={`/receipt/${ticket.id}`}
-                                target="_blank"
-                                className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
-                            >
-                                <Printer size={15} />
-                                Print Receipt
-                            </Link>
-                        </div>
-                    )}
                 </div>
             </div>
 

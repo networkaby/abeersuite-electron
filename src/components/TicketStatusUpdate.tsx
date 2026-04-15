@@ -6,15 +6,25 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
 
-const STATUSES = [
-    "RECEIVED",
-    "DIAGNOSING",
-    "REPAIRING",
-    "ESCALATED",
-    "RECEIVED_BACK",
-    "READY",
-    "RETURNED",
-];
+const NEXT_STATUSES: Record<string, string[]> = {
+    RECEIVED: ["DIAGNOSING"],
+    DIAGNOSING: ["REPAIRING", "ESCALATED"],
+    REPAIRING: ["READY", "ESCALATED"],
+    ESCALATED: ["RECEIVED_BACK"],
+    RECEIVED_BACK: ["REPAIRING", "READY"],
+    READY: ["RETURNED"],
+    RETURNED: ["RECEIVED"],
+};
+
+const STATUS_LABELS: Record<string, string> = {
+    RECEIVED: "Received",
+    DIAGNOSING: "Diagnosing",
+    REPAIRING: "Repairing",
+    ESCALATED: "Escalated",
+    RECEIVED_BACK: "Received Back",
+    READY: "Ready for Pickup",
+    RETURNED: "Returned",
+};
 
 interface Props {
     ticket: any;
@@ -23,9 +33,11 @@ interface Props {
 
 export default function TicketStatusUpdate({ ticket, onClose }: Props) {
     const { data: session } = useSession();
+    const nextStatuses = NEXT_STATUSES[ticket.status] || [];
+
     const { register, handleSubmit, formState: { isSubmitting } } = useForm({
         defaultValues: {
-            status: ticket.status,
+            status: nextStatuses[0] || ticket.status,
             logNote: "",
         },
     });
@@ -47,56 +59,84 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Update Status</h2>
+                    <div>
+                        <h2 className="text-lg font-semibold">Update Status</h2>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            Current: <span className="font-medium text-gray-600">{STATUS_LABELS[ticket.status]}</span>
+                        </p>
+                    </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                         <X size={20} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">New Status</label>
-                        <select
-                            {...register("status")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            {STATUSES.map((s) => (
-                                <option key={s} value={s}>
-                                    {s.replace("_", " ")}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                {nextStatuses.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No further status updates available.</p>
+                ) : (
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
-                            Note <span className="text-gray-400">(optional)</span>
-                        </label>
-                        <textarea
-                            {...register("logNote")}
-                            rows={3}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Add a note about this status change..."
-                        />
-                    </div>
+                        {/* Reopen notice */}
+                        {ticket.status === "RETURNED" && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                                ↩️ This will <strong>reopen</strong> the ticket and start a new repair cycle.
+                            </div>
+                        )}
 
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {isSubmitting ? "Saving..." : "Update"}
-                        </button>
-                    </div>
-                </form>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">New Status</label>
+                            <select
+                                {...register("status")}
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {nextStatuses.map((s) => (
+                                    <option key={s} value={s}>
+                                        {STATUS_LABELS[s]}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Note <span className="text-gray-400">(optional)</span>
+                            </label>
+                            <textarea
+                                {...register("logNote")}
+                                rows={3}
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder={
+                                    ticket.status === "RETURNED"
+                                        ? "Why is this being reopened?"
+                                        : "Add a note about this status change..."
+                                }
+                            />
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${ticket.status === "RETURNED"
+                                        ? "bg-blue-500 hover:bg-blue-600"
+                                        : "bg-blue-600 hover:bg-blue-700"
+                                    }`}
+                            >
+                                {isSubmitting
+                                    ? "Saving..."
+                                    : ticket.status === "RETURNED"
+                                        ? "↩️ Reopen Ticket"
+                                        : "Update Status"}
+                            </button>
+                        </div>
+                    </form>
+                )}
             </div>
         </div>
     );

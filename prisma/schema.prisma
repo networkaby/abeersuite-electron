@@ -60,7 +60,7 @@ model Device {
   problem    String
   customer   Customer @relation(fields: [customerId], references: [id])
   customerId Int
-  ticket     Ticket?
+  tickets    Ticket[] // ← was ticket Ticket?
 }
 
 model Ticket {
@@ -71,7 +71,7 @@ model Ticket {
   accessInfo      String?
   estimatedCost   Float?
   device          Device         @relation(fields: [deviceId], references: [id])
-  deviceId        Int            @unique
+  deviceId        Int // ← remove @unique
   technician      User?          @relation(fields: [technicianId], references: [id])
   technicianId    Int?
   escalated       Boolean        @default(false)
