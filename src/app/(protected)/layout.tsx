@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Toaster } from "sonner";
+import SessionWrapper from "@/components/SessionWrapper";
 
 export default async function ProtectedLayout({
     children,
@@ -12,10 +13,12 @@ export default async function ProtectedLayout({
     if (!session) redirect("/login");
 
     return (
-        <div className="flex min-h-screen bg-gray-100">
-            <Sidebar user={session.user} />
-            <main className="flex-1 p-8 overflow-auto">{children}</main>
-            <Toaster richColors />
-        </div>
+        <SessionWrapper>
+            <div className="flex min-h-screen bg-gray-100">
+                <Sidebar user={session.user} />
+                <main className="flex-1 p-8 overflow-auto">{children}</main>
+                <Toaster richColors />
+            </div>
+        </SessionWrapper>
     );
 }
