@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import CustomerForm from "@/components/CustomerForm";
 
@@ -17,9 +17,11 @@ interface Customer {
 
 export default function CustomersPage() {
     const [customers, setCustomers] = useState<Customer[]>([]);
+    const [filtered, setFiltered] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+    const [search, setSearch] = useState("");
 
     const fetchCustomers = async () => {
         try {
@@ -35,6 +37,23 @@ export default function CustomersPage() {
     useEffect(() => {
         fetchCustomers();
     }, []);
+
+    // Apply search
+    useEffect(() => {
+        if (!search) {
+            setFiltered(customers);
+            return;
+        }
+        const s = search.toLowerCase();
+        setFiltered(
+            customers.filter(
+                (c) =>
+                    c.name.toLowerCase().includes(s) ||
+                    c.phone.includes(s) ||
+                    c.email?.toLowerCase().includes(s)
+            )
+        );
+    }, [search, customers]);
 
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this customer?")) return;
@@ -66,20 +85,42 @@ export default function CustomersPage() {
                 </button>
             </div>
 
-            {/* Form Modal */}
             {(showForm || editCustomer) && (
-                <CustomerForm
-                    customer={editCustomer}
-                    onClose={handleFormClose}
-                />
+                <CustomerForm customer={editCustomer} onClose={handleFormClose} />
             )}
+
+            {/* Search */}
+            <div className="bg-white rounded-lg shadow p-4 mb-4">
+                <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search by name, phone, email..."
+                        className="w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {search && (
+                        <button
+                            onClick={() => setSearch("")}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                            <X size={15} />
+                        </button>
+                    )}
+                </div>
+                <div className="mt-2 text-sm text-gray-500">
+                    Showing <span className="font-medium text-gray-700">{filtered.length}</span> of{" "}
+                    <span className="font-medium text-gray-700">{customers.length}</span> customers
+                </div>
+            </div>
 
             {/* Table */}
             {loading ? (
                 <p className="text-gray-500">Loading...</p>
-            ) : customers.length === 0 ? (
+            ) : filtered.length === 0 ? (
                 <div className="bg-white rounded-lg shadow p-12 text-center text-gray-400">
-                    No customers yet. Add your first one!
+                    {search ? "No customers match your search." : "No customers yet. Add your first one!"}
                 </div>
             ) : (
                 <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -95,7 +136,7 @@ export default function CustomersPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {customers.map((c) => (
+                            {filtered.map((c) => (
                                 <tr key={c.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 text-gray-400">{c.id}</td>
                                     <td className="px-6 py-4 font-medium">{c.name}</td>

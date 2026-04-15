@@ -12,10 +12,14 @@ import {
     Wrench,
     Building2,
     AlertTriangle,
+    Printer,
 } from "lucide-react";
 import Link from "next/link";
 import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
+
+
+
 
 interface Ticket {
     id: number;
@@ -265,6 +269,29 @@ export default function TicketDetailPage() {
                                     Escalate to Service Center
                                 </button>
                             )}
+
+                            <Link
+                                href={`/receipt/${ticket.id}`}
+                                target="_blank"
+                                className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                            >
+                                <Printer size={15} />
+                                Print Receipt
+                            </Link>
+                        </div>
+                    )}
+
+                    {/* Always show print even if RETURNED */}
+                    {ticket.status === "RETURNED" && (
+                        <div className="bg-white rounded-xl shadow p-4">
+                            <Link
+                                href={`/receipt/${ticket.id}`}
+                                target="_blank"
+                                className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                            >
+                                <Printer size={15} />
+                                Print Receipt
+                            </Link>
                         </div>
                     )}
                 </div>
