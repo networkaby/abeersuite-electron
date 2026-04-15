@@ -25,7 +25,7 @@ type SidebarUser = {
     role?: string | null;
 };
 
-export default function Sidebar({ user }: { user: SidebarUser }) {
+export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
 
     return (

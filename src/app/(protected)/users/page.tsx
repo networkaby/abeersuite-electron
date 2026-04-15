@@ -67,7 +67,7 @@ export default function UsersPage() {
 
             {(showForm || editUser) && (
                 <UserForm
-                    user={editUser}
+                    user={editUser ?? undefined}
                     onClose={() => {
                         setShowForm(false);
                         setEditUser(null);

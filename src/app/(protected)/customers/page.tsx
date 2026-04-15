@@ -86,7 +86,7 @@ export default function CustomersPage() {
             </div>
 
             {(showForm || editCustomer) && (
-                <CustomerForm customer={editCustomer} onClose={handleFormClose} />
+                <CustomerForm customer={editCustomer ?? undefined} onClose={handleFormClose} />
             )}
 
             {/* Search */}

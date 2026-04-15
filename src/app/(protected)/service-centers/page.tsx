@@ -62,7 +62,7 @@ export default function ServiceCentersPage() {
 
             {(showForm || editItem) && (
                 <ServiceCenterForm
-                    serviceCenter={editItem}
+                    serviceCenter={editItem ?? undefined}
                     onClose={() => {
                         setShowForm(false);
                         setEditItem(null);

@@ -9,7 +9,7 @@ export async function GET(
         const { id } = await params;
         const customer = await prisma.customer.findUnique({
             where: { id: Number(id) },
-            include: { devices: { include: { ticket: true } } },
+            include: { devices: { include: { tickets: true } } },
         });
         if (!customer) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(customer);

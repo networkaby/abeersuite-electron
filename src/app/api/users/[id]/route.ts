@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import { Role } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
 
 export async function PUT(
@@ -11,10 +11,15 @@ export async function PUT(
         const { id } = await params;
         const body = await req.json();
 
-        const data: Prisma.UserUpdateInput = {
+        const data: {
+            name: string;
+            email: string;
+            role: Role;
+            password?: string;
+        } = {
             name: body.name,
             email: body.email,
-            role: body.role,
+            role: body.role as Role,
         };
 
         if (body.password) {
