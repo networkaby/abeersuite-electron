@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/components/SessionWrapper";
+import QuickTicketButton from "@/components/QuickTicketButton";
 
 export default async function ProtectedLayout({
     children,
@@ -18,6 +19,7 @@ export default async function ProtectedLayout({
                 <Sidebar user={session.user} />
                 <main className="flex-1 p-8 overflow-auto">{children}</main>
                 <Toaster richColors />
+                <QuickTicketButton />
             </div>
         </SessionWrapper>
     );

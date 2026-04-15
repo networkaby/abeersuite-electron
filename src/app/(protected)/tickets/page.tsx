@@ -5,7 +5,7 @@ import axios from "axios";
 import { Plus, Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import TicketForm from "@/components/TicketForm";
+// import TicketForm from "@/components/TicketForm";
 
 interface Ticket {
     id: number;
@@ -48,7 +48,7 @@ export default function TicketsPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showForm, setShowForm] = useState(false);
+    // const [showForm, setShowForm] = useState(false);
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [serviceCenters, setServiceCenters] = useState<any[]>([]);
 
@@ -137,7 +137,7 @@ export default function TicketsPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            {/* <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold">Tickets</h1>
                 <button
                     onClick={() => setShowForm(true)}
@@ -146,16 +146,19 @@ export default function TicketsPage() {
                     <Plus size={18} />
                     New Ticket
                 </button>
+            </div> */}
+            <div className="flex items-center justify-between mb-6">
+                <h1 className="text-3xl font-bold">Tickets</h1>
+                <span className="text-sm text-gray-500">{tickets.length} total</span>
             </div>
-
-            {showForm && (
+            {/* {showForm && (
                 <TicketForm
                     onClose={() => {
                         setShowForm(false);
                         fetchTickets();
                     }}
                 />
-            )}
+            )} */}
 
             {/* Search & Filters */}
             <div className="bg-white rounded-lg shadow p-4 mb-4 space-y-3">
