@@ -44,7 +44,40 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
-        await prisma.user.delete({ where: { id: Number(id) } });
+        const userId = Number(id);
+
+        if (Number.isNaN(userId)) {
+            return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+        }
+
+        const userWithRelations = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                _count: {
+                    select: {
+                        tickets: true,
+                        ticketLogs: true,
+                    },
+                },
+            },
+        });
+
+        if (!userWithRelations) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        if (userWithRelations._count.tickets > 0 || userWithRelations._count.ticketLogs > 0) {
+            return NextResponse.json(
+                {
+                    error:
+                        "Cannot delete user because linked tickets or ticket logs exist. Reassign records first.",
+                },
+                { status: 400 }
+            );
+        }
+
+        await prisma.user.delete({ where: { id: userId } });
         return NextResponse.json({ success: true });
     } catch {
         return NextResponse.json({ error: "Failed to delete user" }, { status: 500 });
