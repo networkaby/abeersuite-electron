@@ -58,7 +58,7 @@ export default function TicketReopenButton({ ticketId }: Props) {
                         </div>
 
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 mb-4">
-                            This will create a <strong>new ticket</strong> for the same device, linked to this ticket's history.
+                            This will create a <strong>new ticket</strong> for the same device, linked to this ticket&apos;s history.
                         </div>
 
                         <div className="space-y-3">

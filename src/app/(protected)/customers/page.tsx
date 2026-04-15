@@ -11,7 +11,7 @@ interface Customer {
     name: string;
     phone: string;
     email?: string;
-    devices: any[];
+    devices: { id: number }[];
     createdAt: string;
 }
 

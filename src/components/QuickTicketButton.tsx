@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Plus, Search, UserPlus, ArrowRight } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -31,6 +31,16 @@ const ticketSchema = z.object({
 type CustomerFormData = z.infer<typeof customerSchema>;
 type TicketFormData = z.infer<typeof ticketSchema>;
 type Step = "phone" | "customer" | "ticket";
+type BasicCustomer = {
+    id: number;
+    name: string;
+    phone: string;
+};
+
+type TechnicianOption = {
+    id: number;
+    name: string;
+};
 
 export default function QuickTicketButton() {
     const router = useRouter();
@@ -39,15 +49,15 @@ export default function QuickTicketButton() {
     const [step, setStep] = useState<Step>("phone");
     const [phone, setPhone] = useState("");
     const [searching, setSearching] = useState(false);
-    const [customer, setCustomer] = useState<any>(null);
-    const [technicians, setTechnicians] = useState<any[]>([]);
+    const [customer, setCustomer] = useState<BasicCustomer | null>(null);
+    const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
 
     const customerForm = useForm<CustomerFormData>({
-        resolver: zodResolver(customerSchema),
+        resolver: zodResolver(customerSchema) as Resolver<CustomerFormData>,
     });
 
     const ticketForm = useForm<TicketFormData>({
-        resolver: zodResolver(ticketSchema),
+        resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
         defaultValues: { priority: "NORMAL" },
     });
 
@@ -102,6 +112,11 @@ export default function QuickTicketButton() {
     };
 
     const createTicket = async (data: TicketFormData) => {
+        if (!customer) {
+            toast.error("Customer is required");
+            return;
+        }
+
         try {
             const res = await axios.post("/api/tickets", {
                 ...data,
@@ -190,7 +205,7 @@ export default function QuickTicketButton() {
                                         </button>
                                     </div>
                                     <p className="text-xs text-gray-400">
-                                        If not found, you'll be prompted to create a new customer.
+                                        If not found, you&apos;ll be prompted to create a new customer.
                                     </p>
                                 </div>
                             )}

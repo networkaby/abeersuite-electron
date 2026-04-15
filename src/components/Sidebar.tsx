@@ -20,7 +20,12 @@ const navItems = [
     { label: "Users", href: "/users", icon: UserCog },
 ];
 
-export default function Sidebar({ user }: { user: any }) {
+type SidebarUser = {
+    name?: string | null;
+    role?: string | null;
+};
+
+export default function Sidebar({ user }: { user: SidebarUser }) {
     const pathname = usePathname();
 
     return (

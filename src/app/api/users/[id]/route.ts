@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 export async function PUT(
@@ -10,7 +11,7 @@ export async function PUT(
         const { id } = await params;
         const body = await req.json();
 
-        const data: any = {
+        const data: Prisma.UserUpdateInput = {
             name: body.name,
             email: body.email,
             role: body.role,
@@ -27,7 +28,7 @@ export async function PUT(
         });
 
         return NextResponse.json(user);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
     }
 }
@@ -40,7 +41,7 @@ export async function DELETE(
         const { id } = await params;
         await prisma.user.delete({ where: { id: Number(id) } });
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to delete user" }, { status: 500 });
     }
 }

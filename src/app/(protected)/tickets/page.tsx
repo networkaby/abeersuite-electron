@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Plus, Eye, Search, X } from "lucide-react";
+import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 // import TicketForm from "@/components/TicketForm";
@@ -23,6 +23,8 @@ interface Ticket {
     technician?: { name: string };
     serviceCenter?: { name: string };
 }
+type Technician = { id: number; name: string };
+type ServiceCenter = { id: number; name: string };
 
 const statusColors: Record<string, string> = {
     RECEIVED: "bg-gray-100 text-gray-600",
@@ -49,8 +51,8 @@ export default function TicketsPage() {
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
     // const [showForm, setShowForm] = useState(false);
-    const [technicians, setTechnicians] = useState<any[]>([]);
-    const [serviceCenters, setServiceCenters] = useState<any[]>([]);
+    const [technicians, setTechnicians] = useState<Technician[]>([]);
+    const [serviceCenters, setServiceCenters] = useState<ServiceCenter[]>([]);
 
     // Filters
     const [search, setSearch] = useState("");

@@ -18,7 +18,13 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Props {
-    serviceCenter?: any;
+    serviceCenter?: {
+        id: number;
+        name: string;
+        phone: string;
+        email?: string;
+        address?: string;
+    };
     onClose: () => void;
 }
 
@@ -41,7 +47,7 @@ export default function ServiceCenterForm({ serviceCenter, onClose }: Props) {
                 address: serviceCenter.address || "",
             });
         }
-    }, [serviceCenter]);
+    }, [serviceCenter, reset]);
 
     const onSubmit = async (data: FormData) => {
         try {

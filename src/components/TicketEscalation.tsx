@@ -8,13 +8,27 @@ import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 interface Props {
-    ticket: any;
+    ticket: {
+        id: number;
+    };
     onClose: () => void;
 }
 
+type ServiceCenterOption = {
+    id: number;
+    name: string;
+};
+
+type EscalationFormData = {
+    serviceCenterId: string;
+    externalRef: string;
+    escalatedAt: string;
+    expectedReturn: string;
+};
+
 export default function TicketEscalation({ ticket, onClose }: Props) {
     const { data: session } = useSession();
-    const [serviceCenters, setServiceCenters] = useState<any[]>([]);
+    const [serviceCenters, setServiceCenters] = useState<ServiceCenterOption[]>([]);
     const { register, handleSubmit, formState: { isSubmitting } } = useForm({
         defaultValues: {
             serviceCenterId: "",
@@ -28,7 +42,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
         axios.get("/api/service-centers").then((r) => setServiceCenters(r.data));
     }, []);
 
-    const onSubmit = async (data: any) => {
+    const onSubmit = async (data: EscalationFormData) => {
         try {
             await axios.put(`/api/tickets/${ticket.id}`, {
                 status: "ESCALATED",

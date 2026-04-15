@@ -28,10 +28,21 @@ interface Props {
     onClose: () => void;
 }
 
+type CustomerOption = {
+    id: number;
+    name: string;
+    phone: string;
+};
+
+type TechnicianOption = {
+    id: number;
+    name: string;
+};
+
 export default function TicketForm({ onClose }: Props) {
     const { data: session } = useSession();
-    const [customers, setCustomers] = useState<any[]>([]);
-    const [technicians, setTechnicians] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<CustomerOption[]>([]);
+    const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
 
     const {
         register,

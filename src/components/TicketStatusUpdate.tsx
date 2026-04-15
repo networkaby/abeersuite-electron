@@ -27,9 +27,17 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 interface Props {
-    ticket: any;
+    ticket: {
+        id: number;
+        status: string;
+    };
     onClose: () => void;
 }
+
+type StatusUpdateFormData = {
+    status: string;
+    logNote: string;
+};
 
 export default function TicketStatusUpdate({ ticket, onClose }: Props) {
     const { data: session } = useSession();
@@ -42,7 +50,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
         },
     });
 
-    const onSubmit = async (data: any) => {
+    const onSubmit = async (data: StatusUpdateFormData) => {
         try {
             await axios.put(`/api/tickets/${ticket.id}`, {
                 ...data,

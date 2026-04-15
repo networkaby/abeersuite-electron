@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
 import {
     ArrowLeft,
     Clock,
@@ -17,7 +16,6 @@ import {
 import Link from "next/link";
 import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
-import TicketReopenButton from "@/components/TicketReopenButton";
 
 
 
@@ -72,14 +70,12 @@ const priorityColors: Record<string, string> = {
 
 export default function TicketDetailPage() {
     const { id } = useParams();
-    const router = useRouter();
-    const { data: session } = useSession();
     const [ticket, setTicket] = useState<Ticket | null>(null);
     const [loading, setLoading] = useState(true);
     const [showStatusUpdate, setShowStatusUpdate] = useState(false);
     const [showEscalation, setShowEscalation] = useState(false);
 
-    const fetchTicket = async () => {
+    const fetchTicket = useCallback(async () => {
         try {
             const res = await axios.get(`/api/tickets/${id}`);
             setTicket(res.data);
@@ -88,11 +84,11 @@ export default function TicketDetailPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useEffect(() => {
         fetchTicket();
-    }, [id]);
+    }, [fetchTicket]);
 
     if (loading) return <p className="text-gray-500">Loading...</p>;
     if (!ticket) return <p className="text-gray-500">Ticket not found.</p>;
@@ -156,7 +152,7 @@ export default function TicketDetailPage() {
                             {ticket.estimatedCost && (
                                 <div>
                                     <p className="text-gray-400 text-xs uppercase mb-1">Estimated Cost</p>
-                                    <p className="font-medium text-green-600">৳ {ticket.estimatedCost}</p>
+                                    <p className="font-medium text-green-600">₹ {ticket.estimatedCost}</p>
                                 </div>
                             )}
                             {ticket.notes && (

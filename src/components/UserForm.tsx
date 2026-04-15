@@ -18,7 +18,12 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Props {
-    user?: any;
+    user?: {
+        id: number;
+        name: string;
+        email: string;
+        role: string;
+    };
     onClose: () => void;
 }
 
@@ -42,7 +47,7 @@ export default function UserForm({ user, onClose }: Props) {
                 password: "",
             });
         }
-    }, [user]);
+    }, [user, reset]);
 
     const onSubmit = async (data: FormData) => {
         try {
