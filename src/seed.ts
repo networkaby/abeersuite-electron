@@ -6,8 +6,9 @@ import * as dotenv from "dotenv";
 
 dotenv.config({ path: ".env" });
 
+const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
 const pool = new Pool({
-    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+    connectionString: rawUrl,
     ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
