@@ -18,7 +18,8 @@
       "Read(//tmp/**)",
       "Bash(npx tsx -e ' *)",
       "Bash(npx tsx *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(pnpm lint *)"
     ]
   }
 }
