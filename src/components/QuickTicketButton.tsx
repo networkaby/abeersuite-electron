@@ -11,7 +11,8 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuickTicketStore, type Step } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
-import { PRIORITY } from "@/lib/constants";
+
+type Priority = { id: string; label: string };
 
 const customerSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -40,6 +41,7 @@ export default function QuickTicketButton() {
     const { open, step, phone, customer, setOpen, setStep, setPhone, setCustomer, reset } = useQuickTicketStore();
     const { technicians, fetchTechnicians } = useReferenceStore();
     const [searching, setSearching] = useState(false);
+    const [priorities, setPriorities] = useState<Priority[]>([]);
 
     const customerForm = useForm<CustomerFormData>({
         resolver: zodResolver(customerSchema) as Resolver<CustomerFormData>,
@@ -47,15 +49,19 @@ export default function QuickTicketButton() {
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
-        defaultValues: { priority: PRIORITY.NORMAL },
+        defaultValues: { priority: "P2" },
     });
 
     const openModal = async () => {
         reset();
         setOpen(true);
         customerForm.reset();
-        ticketForm.reset({ priority: PRIORITY.NORMAL });
+        ticketForm.reset({ priority: "P2" });
         await fetchTechnicians();
+        if (priorities.length === 0) {
+            const r = await axios.get<Priority[]>("/api/priorities");
+            setPriorities(r.data);
+        }
     };
 
     const closeModal = () => {
@@ -326,10 +332,9 @@ export default function QuickTicketButton() {
                                                 {...ticketForm.register("priority")}
                                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             >
-                                                <option value={PRIORITY.LOW}>Low</option>
-                                                <option value={PRIORITY.NORMAL}>Normal</option>
-                                                <option value={PRIORITY.HIGH}>High</option>
-                                                <option value={PRIORITY.URGENT}>Urgent</option>
+                                                {priorities.map((p) => (
+                                                    <option key={p.id} value={p.id}>{p.label}</option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div>

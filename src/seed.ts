@@ -1,121 +1,88 @@
-import { PrismaClient } from './generated/prisma/client'
+import { PrismaClient } from './generated/prisma/client';
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
-import { TICKET_STATUS, PRIORITY, ROLE } from './lib/constants';
 
+dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
 const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
-const pool = new Pool({
-    connectionString: rawUrl,
-    ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool({ connectionString: rawUrl, ssl: { rejectUnauthorized: false } });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-    console.log("🌱 Seeding started...");
+    console.log("Seeding...");
 
-    // 🔐 Create Users
+    // ── Ticket Statuses ───────────────────────────────────────────────────────
+    await prisma.ticketStatus.createMany({
+        data: [
+            { id: "S1", label: "Received",      color: "bg-gray-100 text-gray-600",    order: 1 },
+            { id: "S2", label: "Diagnosing",    color: "bg-yellow-100 text-yellow-700", order: 2 },
+            { id: "S3", label: "Repairing",     color: "bg-blue-100 text-blue-700",    order: 3 },
+            { id: "S4", label: "Escalated",     color: "bg-orange-100 text-orange-700", order: 4 },
+            { id: "S5", label: "Received Back", color: "bg-purple-100 text-purple-700", order: 5 },
+            { id: "S6", label: "Ready",         color: "bg-green-100 text-green-700",  order: 6 },
+            { id: "S7", label: "Returned",      color: "bg-gray-200 text-gray-500",    order: 7 },
+        ],
+        skipDuplicates: true,
+    });
+
+    // ── Status Transitions ────────────────────────────────────────────────────
+    await prisma.statusTransition.createMany({
+        data: [
+            { fromStatusId: "S1", toStatusId: "S2" },
+            { fromStatusId: "S2", toStatusId: "S3" },
+            { fromStatusId: "S2", toStatusId: "S4" },
+            { fromStatusId: "S3", toStatusId: "S4" },
+            { fromStatusId: "S3", toStatusId: "S6" },
+            { fromStatusId: "S4", toStatusId: "S5" },
+            { fromStatusId: "S5", toStatusId: "S3" },
+            { fromStatusId: "S5", toStatusId: "S6" },
+            { fromStatusId: "S6", toStatusId: "S7" },
+            { fromStatusId: "S7", toStatusId: "S1" },
+        ],
+        skipDuplicates: true,
+    });
+
+    // ── Priorities ────────────────────────────────────────────────────────────
+    await prisma.priority.createMany({
+        data: [
+            { id: "P1", label: "Low",    color: "bg-gray-100 text-gray-500",     order: 1 },
+            { id: "P2", label: "Normal", color: "bg-blue-50 text-blue-500",      order: 2 },
+            { id: "P3", label: "High",   color: "bg-orange-100 text-orange-500", order: 3 },
+            { id: "P4", label: "Urgent", color: "bg-red-100 text-red-600",       order: 4 },
+        ],
+        skipDuplicates: true,
+    });
+
+    // ── Roles ─────────────────────────────────────────────────────────────────
+    await prisma.role.createMany({
+        data: [
+            { id: "R1", label: "Admin",      color: "bg-red-100 text-red-600" },
+            { id: "R2", label: "Technician", color: "bg-blue-100 text-blue-600" },
+            { id: "R3", label: "Front Desk", color: "bg-green-100 text-green-600" },
+        ],
+        skipDuplicates: true,
+    });
+
+    // ── Admin User ────────────────────────────────────────────────────────────
     const password = await bcrypt.hash("admin123", 10);
-
-    const admin = await prisma.user.upsert({
-        where: { email: "admin@service.com" },
+    await prisma.user.upsert({
+        where: { email: "admin@example.com" },
         update: {},
         create: {
-            name: "Admin User",
-            email: "admin@service.com",
+            name: "Admin",
+            email: "admin@example.com",
             password,
-            role: ROLE.ADMIN,
+            role: "R1",
         },
     });
 
-    const technician = await prisma.user.upsert({
-        where: { email: "tech@service.com" },
-        update: {},
-        create: {
-            name: "Technician",
-            email: "tech@service.com",
-            password,
-            role: ROLE.TECHNICIAN,
-        },
-    });
-
-    console.log("✅ Users created");
-
-    // 👤 Create Customer
-    const customer = await prisma.customer.create({
-        data: {
-            name: "Rahim Uddin",
-            phone: "9876543210",
-            email: "rahim@example.com",
-            agreedToTerms: true,
-            agreedAt: new Date(),
-        },
-    });
-
-    console.log("✅ Customer created");
-
-    // 💻 Create Device
-    const device = await prisma.device.create({
-        data: {
-            type: "Laptop",
-            brand: "Dell",
-            model: "Inspiron 15",
-            problem: "Not turning on",
-            customerId: customer.id,
-        },
-    });
-
-    console.log("✅ Device created");
-
-    // 🎫 Create Ticket
-    const ticket = await prisma.ticket.create({
-        data: {
-            status: TICKET_STATUS.RECEIVED,
-            priority: PRIORITY.NORMAL,
-            notes: "Customer reported sudden shutdown",
-            deviceId: device.id,
-            technicianId: technician.id,
-        },
-    });
-
-    console.log("✅ Ticket created");
-
-    // 📝 Ticket Log
-    await prisma.ticketLog.create({
-        data: {
-            ticketId: ticket.id,
-            status: TICKET_STATUS.RECEIVED,
-            note: "Ticket created",
-            userId: admin.id,
-        },
-    });
-
-    console.log("✅ Ticket log created");
-
-    // 🏢 Service Center
-    await prisma.serviceCenter.create({
-        data: {
-            name: "Dell Authorized Service",
-            phone: "1800-123-456",
-            email: "support@dell.com",
-            address: "Guwahati Service Center",
-        },
-    });
-
-    console.log("✅ Service center created");
-
-    console.log("🎉 Seeding finished!");
+    console.log("Done.");
 }
 
 main()
-    .catch((e) => {
-        console.error("❌ Seed error:", e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+    .catch(console.error)
+    .finally(() => prisma.$disconnect());

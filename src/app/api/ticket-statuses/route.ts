@@ -6,9 +6,9 @@ export async function GET() {
         const statuses = await prisma.ticketStatus.findMany({
             orderBy: { order: "asc" },
             include: {
-                toTransitions: {
+                fromTransitions: {
                     include: { to: true },
-                    orderBy: { to: { order: "asc" } },
+                    orderBy: { toStatusId: "asc" },
                 },
                 _count: { select: { tickets: true } },
             },

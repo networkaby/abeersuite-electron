@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { type Role } from "@/lib/constants";
 import bcrypt from "bcryptjs";
 
 export async function PUT(
@@ -14,12 +13,12 @@ export async function PUT(
         const data: {
             name: string;
             email: string;
-            role: Role;
+            role: string;
             password?: string;
         } = {
             name: body.name,
             email: body.email,
-            role: body.role as Role,  // validated by Zod in Phase 1
+            role: body.role as string,
         };
 
         if (body.password) {

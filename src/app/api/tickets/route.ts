@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { TICKET_STATUS, PRIORITY } from "@/lib/constants";
 
 export async function GET() {
     try {
@@ -12,10 +11,13 @@ export async function GET() {
                 },
                 technician: true,
                 serviceCenter: true,
+                ticketStatus: { select: { label: true, color: true } },
+                ticketPriority: { select: { label: true, color: true } },
             },
         });
         return NextResponse.json(tickets);
-    } catch {
+    } catch (error) {
+        console.error(error);
         return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
     }
 }
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
         const ticket = await prisma.ticket.create({
             data: {
                 deviceId: device.id,
-                priority: body.priority || PRIORITY.NORMAL,
+                priority: body.priority || "P2",
                 notes: body.notes || null,
                 accessInfo: body.accessInfo || null,
                 estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
@@ -55,7 +57,7 @@ export async function POST(req: Request) {
         await prisma.ticketLog.create({
             data: {
                 ticketId: ticket.id,
-                status: TICKET_STATUS.RECEIVED,
+                status: "S1",
                 note: "Ticket created",
                 userId: Number(body.createdBy),
             },

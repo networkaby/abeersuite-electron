@@ -1,13 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { ROLE } from "@/lib/constants";
 
 export async function GET() {
     try {
         const users = await prisma.user.findMany({
             orderBy: { createdAt: "desc" },
-            select: { id: true, name: true, email: true, role: true, createdAt: true },
+            select: { id: true, name: true, email: true, role: true, createdAt: true, userRole: { select: { label: true, color: true } } },
         });
         return NextResponse.json(users);
     } catch {
@@ -24,9 +23,9 @@ export async function POST(req: Request) {
                 name: body.name,
                 email: body.email,
                 password,
-                role: body.role || ROLE.TECHNICIAN,
+                role: body.role || "R2",
             },
-            select: { id: true, name: true, email: true, role: true, createdAt: true },
+            select: { id: true, name: true, email: true, role: true, createdAt: true, userRole: { select: { label: true, color: true } } },
         });
         return NextResponse.json(user);
     } catch {

@@ -5,15 +5,14 @@ import axios from "axios";
 import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { TICKET_STATUS, PRIORITY, STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS } from "@/lib/constants";
-// import TicketForm from "@/components/TicketForm";
-
 interface Ticket {
     id: number;
     status: string;
     priority: string;
     escalated: boolean;
     createdAt: string;
+    ticketStatus: { label: string; color: string };
+    ticketPriority: { label: string; color: string };
     device: {
         type: string;
         brand: string;
@@ -26,17 +25,17 @@ interface Ticket {
 }
 type Technician = { id: number; name: string };
 type ServiceCenter = { id: number; name: string };
-
-const STATUSES = Object.values(TICKET_STATUS);
-const PRIORITIES = Object.values(PRIORITY);
+type StatusOption = { id: string; label: string };
+type PriorityOption = { id: string; label: string };
 
 export default function TicketsPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
-    // const [showForm, setShowForm] = useState(false);
     const [technicians, setTechnicians] = useState<Technician[]>([]);
     const [serviceCenters, setServiceCenters] = useState<ServiceCenter[]>([]);
+    const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+    const [priorityOptions, setPriorityOptions] = useState<PriorityOption[]>([]);
 
     // Filters
     const [search, setSearch] = useState("");
@@ -62,6 +61,10 @@ export default function TicketsPage() {
         fetchTickets();
         axios.get("/api/users").then((r) => setTechnicians(r.data));
         axios.get("/api/service-centers").then((r) => setServiceCenters(r.data));
+        axios.get("/api/ticket-statuses").then((r) =>
+            setStatusOptions(r.data.map((s: { id: string; label: string }) => ({ id: s.id, label: s.label })))
+        );
+        axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
     }, []);
 
     // Apply filters
@@ -123,28 +126,10 @@ export default function TicketsPage() {
 
     return (
         <div>
-            {/* <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold">Tickets</h1>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                >
-                    <Plus size={18} />
-                    New Ticket
-                </button>
-            </div> */}
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold">Tickets</h1>
                 <span className="text-sm text-gray-500">{tickets.length} total</span>
             </div>
-            {/* {showForm && (
-                <TicketForm
-                    onClose={() => {
-                        setShowForm(false);
-                        fetchTickets();
-                    }}
-                />
-            )} */}
 
             {/* Search & Filters */}
             <div className="bg-white rounded-lg shadow p-4 mb-4 space-y-3">
@@ -169,8 +154,8 @@ export default function TicketsPage() {
                         className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                         <option value="">All Status</option>
-                        {STATUSES.map((s) => (
-                            <option key={s} value={s}>{STATUS_LABELS[s] ?? s.replace("_", " ")}</option>
+                        {statusOptions.map((s) => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
                         ))}
                     </select>
 
@@ -181,8 +166,8 @@ export default function TicketsPage() {
                         className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                         <option value="">All Priority</option>
-                        {PRIORITIES.map((p) => (
-                            <option key={p} value={p}>{p}</option>
+                        {priorityOptions.map((p) => (
+                            <option key={p.id} value={p.id}>{p.label}</option>
                         ))}
                     </select>
 
@@ -284,13 +269,13 @@ export default function TicketsPage() {
                                         {t.device.problem}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${PRIORITY_COLORS[t.priority]}`}>
-                                            {t.priority}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${t.ticketPriority.color}`}>
+                                            {t.ticketPriority.label}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[t.status]}`}>
-                                            {STATUS_LABELS[t.status] ?? t.status.replace("_", " ")}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${t.ticketStatus.color}`}>
+                                            {t.ticketStatus.label}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-gray-500">

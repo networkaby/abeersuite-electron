@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useReferenceStore } from "@/store/referenceStore";
-import { PRIORITY } from "@/lib/constants";
 
 const schema = z.object({
     customerId: z.string().min(1, "Customer is required"),
@@ -25,6 +24,7 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+type Priority = { id: string; label: string };
 
 interface Props {
     onClose: () => void;
@@ -33,6 +33,7 @@ interface Props {
 export default function TicketForm({ onClose }: Props) {
     const { data: session } = useSession();
     const { customers, technicians, fetchCustomers, fetchTechnicians } = useReferenceStore();
+    const [priorities, setPriorities] = useState<Priority[]>([]);
 
     const {
         register,
@@ -40,12 +41,13 @@ export default function TicketForm({ onClose }: Props) {
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { priority: PRIORITY.NORMAL },
+        defaultValues: { priority: "P2" },
     });
 
     useEffect(() => {
         fetchCustomers();
         fetchTechnicians();
+        axios.get<Priority[]>("/api/priorities").then((r) => setPriorities(r.data));
     }, [fetchCustomers, fetchTechnicians]);
 
     const onSubmit = async (data: FormData) => {
@@ -140,10 +142,9 @@ export default function TicketForm({ onClose }: Props) {
                                 {...register("priority")}
                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <option value={PRIORITY.LOW}>Low</option>
-                                <option value={PRIORITY.NORMAL}>Normal</option>
-                                <option value={PRIORITY.HIGH}>High</option>
-                                <option value={PRIORITY.URGENT}>Urgent</option>
+                                {priorities.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.label}</option>
+                                ))}
                             </select>
                         </div>
                         <div>

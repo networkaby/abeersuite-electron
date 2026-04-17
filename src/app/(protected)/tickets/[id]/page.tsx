@@ -16,14 +16,11 @@ import {
 import Link from "next/link";
 import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
-import { TICKET_STATUS, STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS } from "@/lib/constants";
-
-
-
 interface Ticket {
     id: number;
     status: string;
     priority: string;
+    ticketPriority: { label: string; color: string };
     notes?: string;
     accessInfo?: string;
     estimatedCost?: number;
@@ -34,6 +31,11 @@ interface Ticket {
     externalRef?: string;
     createdAt: string;
     updatedAt: string;
+    ticketStatus: {
+        label: string;
+        color: string;
+        fromTransitions: { to: { id: string; label: string } }[];
+    };
     device: {
         type: string;
         brand: string;
@@ -49,6 +51,7 @@ interface Ticket {
         note?: string;
         createdAt: string;
         changedBy: { name: string };
+        ticketStatus: { label: string; color: string };
     }[];
 }
 
@@ -92,11 +95,11 @@ export default function TicketDetailPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority]}`}>
-                        {ticket.priority}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketPriority.color}`}>
+                        {ticket.ticketPriority.label}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[ticket.status]}`}>
-                        {STATUS_LABELS[ticket.status] ?? ticket.status.replace("_", " ")}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketStatus.color}`}>
+                        {ticket.ticketStatus.label}
                     </span>
                 </div>
             </div>
@@ -196,8 +199,8 @@ export default function TicketDetailPage() {
                                         <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 shrink-0" />
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[log.status]}`}>
-                                                    {STATUS_LABELS[log.status] ?? log.status.replace("_", " ")}
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketStatus.color}`}>
+                                                    {log.ticketStatus.label}
                                                 </span>
                                                 <span className="text-xs text-gray-400">
                                                     by {log.changedBy.name}
@@ -235,15 +238,15 @@ export default function TicketDetailPage() {
 
                         <button
                             onClick={() => setShowStatusUpdate(true)}
-                            className={`w-full text-white rounded-lg py-2 text-sm ${ticket.status === TICKET_STATUS.RETURNED
+                            className={`w-full text-white rounded-lg py-2 text-sm ${ticket.status === "S7"
                                     ? "bg-blue-500 hover:bg-blue-600"
                                     : "bg-blue-600 hover:bg-blue-700"
                                 }`}
                         >
-                            {ticket.status === TICKET_STATUS.RETURNED ? "↩️ Reopen Ticket" : "Update Status"}
+                            {ticket.status === "S7" ? "↩️ Reopen Ticket" : "Update Status"}
                         </button>
 
-                        {!ticket.escalated && ticket.status !== TICKET_STATUS.RETURNED && (
+                        {!ticket.escalated && ticket.status !== "S7" && (
                             <button
                                 onClick={() => setShowEscalation(true)}
                                 className="w-full border border-orange-400 text-orange-500 rounded-lg py-2 text-sm hover:bg-orange-50 flex items-center justify-center gap-2"

@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
-import { ROLE } from "@/lib/constants";
+
+type Role = { id: string; label: string };
 
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export default function UserForm({ user, onClose }: Props) {
+    const [roles, setRoles] = useState<Role[]>([]);
     const {
         register,
         handleSubmit,
@@ -36,8 +38,12 @@ export default function UserForm({ user, onClose }: Props) {
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { role: ROLE.TECHNICIAN },
+        defaultValues: { role: "R2" },
     });
+
+    useEffect(() => {
+        axios.get<Role[]>("/api/roles").then((r) => setRoles(r.data));
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -104,9 +110,9 @@ export default function UserForm({ user, onClose }: Props) {
                             {...register("role")}
                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            <option value={ROLE.ADMIN}>Admin</option>
-                            <option value={ROLE.TECHNICIAN}>Technician</option>
-                            <option value={ROLE.FRONT_DESK}>Front Desk</option>
+                            {roles.map((r) => (
+                                <option key={r.id} value={r.id}>{r.label}</option>
+                            ))}
                         </select>
                     </div>
 

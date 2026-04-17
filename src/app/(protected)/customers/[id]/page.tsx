@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { TICKET_STATUS, STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS } from "@/lib/constants";
 
 export default async function CustomerDetailPage({
     params,
@@ -21,6 +20,8 @@ export default async function CustomerDetailPage({
                         include: {
                             technician: true,
                             serviceCenter: true,
+                            ticketStatus: { select: { label: true, color: true } },
+                            ticketPriority: { select: { label: true, color: true } },
                         },
                     },
                 },
@@ -36,7 +37,7 @@ export default async function CustomerDetailPage({
     );
     const openTickets = customer.devices.reduce(
         (acc, d) =>
-            acc + d.tickets.filter((t) => t.status !== TICKET_STATUS.RETURNED).length,
+            acc + d.tickets.filter((t) => t.status !== "S7").length,
         0
     );
 
@@ -147,11 +148,11 @@ export default async function CustomerDetailPage({
                                                         )}
                                                     </div>
                                                     <div className="flex gap-1.5">
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority]}`}>
-                                                            {ticket.priority}
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ticket.ticketPriority.color}`}>
+                                                            {ticket.ticketPriority.label}
                                                         </span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ticket.status]}`}>
-                                                            {STATUS_LABELS[ticket.status] ?? ticket.status.replace("_", " ")}
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ticket.ticketStatus.color}`}>
+                                                            {ticket.ticketStatus.label}
                                                         </span>
                                                     </div>
                                                 </div>

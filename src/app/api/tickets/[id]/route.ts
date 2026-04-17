@@ -13,8 +13,20 @@ export async function GET(
                 device: { include: { customer: true } },
                 technician: true,
                 serviceCenter: true,
+                ticketPriority: { select: { label: true, color: true } },
+                ticketStatus: {
+                    include: {
+                        fromTransitions: {
+                            include: { to: { select: { id: true, label: true } } },
+                            orderBy: { toStatusId: "asc" },
+                        },
+                    },
+                },
                 logs: {
-                    include: { changedBy: true },
+                    include: {
+                        changedBy: true,
+                        ticketStatus: { select: { label: true, color: true } },
+                    },
                     orderBy: { createdAt: "desc" },
                 },
             },

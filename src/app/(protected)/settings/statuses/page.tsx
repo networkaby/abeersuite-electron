@@ -11,7 +11,7 @@ interface TicketStatus {
     color: string;
     order: number;
     isTerminal: boolean;
-    toTransitions: { toStatusId: string; to: { label: string } }[];
+    fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
 }
 
@@ -89,7 +89,7 @@ export default function StatusesPage() {
 
     const openTransitions = (s: TicketStatus) => {
         setTransitionModalId(s.id);
-        setSelectedToIds(s.toTransitions.map((t) => t.toStatusId));
+        setSelectedToIds(s.fromTransitions.map((t) => t.toStatusId));
     };
 
     const saveTransitions = async () => {
@@ -243,11 +243,11 @@ export default function StatusesPage() {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">
-                                                {s.toTransitions.length === 0 ? (
+                                                {s.fromTransitions.length === 0 ? (
                                                     <span className="text-gray-400 text-xs">None</span>
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1">
-                                                        {s.toTransitions.map((t) => (
+                                                        {s.fromTransitions.map((t) => (
                                                             <span key={t.toStatusId} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
                                                                 {t.to.label}
                                                             </span>

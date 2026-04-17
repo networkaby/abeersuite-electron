@@ -5,12 +5,20 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { TICKET_STATUS, NEXT_STATUSES, STATUS_LABELS } from "@/lib/constants";
+
+interface NextStatus {
+    id: string;
+    label: string;
+}
 
 interface Props {
     ticket: {
         id: number;
         status: string;
+        ticketStatus: {
+            label: string;
+            fromTransitions: { to: NextStatus }[];
+        };
     };
     onClose: () => void;
 }
@@ -22,11 +30,11 @@ type StatusUpdateFormData = {
 
 export default function TicketStatusUpdate({ ticket, onClose }: Props) {
     const { data: session } = useSession();
-    const nextStatuses = NEXT_STATUSES[ticket.status] || [];
+    const nextStatuses: NextStatus[] = ticket.ticketStatus.fromTransitions.map((t) => t.to);
 
     const { register, handleSubmit, formState: { isSubmitting } } = useForm({
         defaultValues: {
-            status: nextStatuses[0] || ticket.status,
+            status: nextStatuses[0]?.id || ticket.status,
             logNote: "",
         },
     });
@@ -51,7 +59,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                     <div>
                         <h2 className="text-lg font-semibold">Update Status</h2>
                         <p className="text-xs text-gray-400 mt-0.5">
-                            Current: <span className="font-medium text-gray-600">{STATUS_LABELS[ticket.status]}</span>
+                            Current: <span className="font-medium text-gray-600">{ticket.ticketStatus.label}</span>
                         </p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -64,8 +72,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                 ) : (
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
-                        {/* Reopen notice */}
-                        {ticket.status === TICKET_STATUS.RETURNED && (
+                        {ticket.status === "S7" && (
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
                                 ↩️ This will <strong>reopen</strong> the ticket and start a new repair cycle.
                             </div>
@@ -78,8 +85,8 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {nextStatuses.map((s) => (
-                                    <option key={s} value={s}>
-                                        {STATUS_LABELS[s]}
+                                    <option key={s.id} value={s.id}>
+                                        {s.label}
                                     </option>
                                 ))}
                             </select>
@@ -94,7 +101,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                                 rows={3}
                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder={
-                                    ticket.status === TICKET_STATUS.RETURNED
+                                    ticket.status === "S7"
                                         ? "Why is this being reopened?"
                                         : "Add a note about this status change..."
                                 }
@@ -112,14 +119,14 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${ticket.status === TICKET_STATUS.RETURNED
+                                className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${ticket.status === "S7"
                                         ? "bg-blue-500 hover:bg-blue-600"
                                         : "bg-blue-600 hover:bg-blue-700"
                                     }`}
                             >
                                 {isSubmitting
                                     ? "Saving..."
-                                    : ticket.status === TICKET_STATUS.RETURNED
+                                    : ticket.status === "S7"
                                         ? "↩️ Reopen Ticket"
                                         : "Update Status"}
                             </button>

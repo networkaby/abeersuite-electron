@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { TICKET_STATUS } from "@/lib/constants";
 
 export async function POST(
     req: Request,
@@ -35,7 +34,7 @@ export async function POST(
         await prisma.ticketLog.create({
             data: {
                 ticketId: newTicket.id,
-                status: TICKET_STATUS.RECEIVED,
+                status: "S1",
                 note: `Reopened from Ticket #${original.id} — ${body.reason || "Problem not resolved"}`,
                 userId: Number(body.userId),
             },

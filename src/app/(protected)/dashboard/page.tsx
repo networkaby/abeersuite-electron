@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { TICKET_STATUS, STATUS_COLORS, STATUS_LABELS } from "@/lib/constants";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -8,13 +7,13 @@ export default async function DashboardPage() {
     const [total, open, escalated, ready] = await Promise.all([
         prisma.ticket.count(),
         prisma.ticket.count({
-            where: { status: { in: [TICKET_STATUS.RECEIVED, TICKET_STATUS.DIAGNOSING, TICKET_STATUS.REPAIRING] } },
+            where: { status: { in: ["S1", "S2", "S3"] } },
         }),
         prisma.ticket.count({
             where: { escalated: true },
         }),
         prisma.ticket.count({
-            where: { status: TICKET_STATUS.READY },
+            where: { status: "S6" },
         }),
     ]);
 
@@ -24,6 +23,7 @@ export default async function DashboardPage() {
         include: {
             device: { include: { customer: true } },
             technician: true,
+            ticketStatus: { select: { label: true, color: true } },
         },
     });
 
@@ -78,8 +78,8 @@ export default async function DashboardPage() {
                                     {t.device.brand} {t.device.model}
                                 </td>
                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[t.status]}`}>
-                                        {STATUS_LABELS[t.status] ?? t.status.replace("_", " ")}
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${t.ticketStatus.color}`}>
+                                        {t.ticketStatus.label}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-gray-500">

@@ -6,7 +6,6 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { TICKET_STATUS } from "@/lib/constants";
 
 interface Props {
     ticket: {
@@ -46,7 +45,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
     const onSubmit = async (data: EscalationFormData) => {
         try {
             await axios.put(`/api/tickets/${ticket.id}`, {
-                status: TICKET_STATUS.ESCALATED,
+                status: "S4",
                 escalated: true,
                 escalatedAt: data.escalatedAt,
                 expectedReturn: data.expectedReturn || null,
