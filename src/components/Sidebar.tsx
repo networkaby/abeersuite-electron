@@ -9,6 +9,7 @@ import {
     Ticket,
     Building2,
     UserCog,
+    Settings,
     LogOut,
 } from "lucide-react";
 
@@ -18,6 +19,7 @@ const navItems = [
     { label: "Tickets", href: "/tickets", icon: Ticket },
     { label: "Service Centers", href: "/service-centers", icon: Building2 },
     { label: "Users", href: "/users", icon: UserCog },
+    { label: "Settings", href: "/settings/statuses", icon: Settings },
 ];
 
 type SidebarUser = {

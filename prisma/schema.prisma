@@ -7,27 +7,27 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  ADMIN      @map("R1")
-  TECHNICIAN @map("R2")
-  FRONT_DESK @map("R3")
+model TicketStatus {
+  id          String   @id
+  label       String
+  color       String
+  order       Int
+  isTerminal  Boolean  @default(false)
+
+  tickets         Ticket[]
+  logs            TicketLog[]
+  fromTransitions StatusTransition[] @relation("FromStatus")
+  toTransitions   StatusTransition[] @relation("ToStatus")
 }
 
-enum Status {
-  RECEIVED      @map("S1")
-  DIAGNOSING    @map("S2")
-  REPAIRING     @map("S3")
-  ESCALATED     @map("S4")
-  RECEIVED_BACK @map("S5")
-  READY         @map("S6")
-  RETURNED      @map("S7")
-}
+model StatusTransition {
+  id           Int          @id @default(autoincrement())
+  fromStatusId String
+  toStatusId   String
+  from         TicketStatus @relation("FromStatus", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  to           TicketStatus @relation("ToStatus",   fields: [toStatusId],   references: [id], onDelete: Cascade)
 
-enum Priority {
-  LOW    @map("P1")
-  NORMAL @map("P2")
-  HIGH   @map("P3")
-  URGENT @map("P4")
+  @@unique([fromStatusId, toStatusId])
 }
 
 model User {
@@ -35,7 +35,7 @@ model User {
   name       String
   email      String      @unique
   password   String
-  role       Role        @default(TECHNICIAN)
+  role       String      @default("R2")
   tickets    Ticket[]
   ticketLogs TicketLog[]
   createdAt  DateTime    @default(now())
@@ -60,18 +60,19 @@ model Device {
   problem    String
   customer   Customer @relation(fields: [customerId], references: [id])
   customerId Int
-  tickets    Ticket[] // ← was ticket Ticket?
+  tickets    Ticket[]
 }
 
 model Ticket {
   id              Int            @id @default(autoincrement())
-  status          Status         @default(RECEIVED)
-  priority        Priority       @default(NORMAL)
+  status          String         @default("S1")
+  ticketStatus    TicketStatus   @relation(fields: [status], references: [id])
+  priority        String         @default("P2")
   notes           String?
   accessInfo      String?
   estimatedCost   Float?
   device          Device         @relation(fields: [deviceId], references: [id])
-  deviceId        Int // ← remove @unique
+  deviceId        Int
   technician      User?          @relation(fields: [technicianId], references: [id])
   technicianId    Int?
   escalated       Boolean        @default(false)
@@ -87,14 +88,15 @@ model Ticket {
 }
 
 model TicketLog {
-  id        Int      @id @default(autoincrement())
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
-  ticketId  Int
-  status    Status
-  note      String?
-  changedBy User     @relation(fields: [userId], references: [id])
-  userId    Int
-  createdAt DateTime @default(now())
+  id           Int          @id @default(autoincrement())
+  ticket       Ticket       @relation(fields: [ticketId], references: [id])
+  ticketId     Int
+  status       String
+  ticketStatus TicketStatus @relation(fields: [status], references: [id])
+  note         String?
+  changedBy    User         @relation(fields: [userId], references: [id])
+  userId       Int
+  createdAt    DateTime     @default(now())
 }
 
 model ServiceCenter {
