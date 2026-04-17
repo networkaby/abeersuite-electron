@@ -17,7 +17,8 @@
       "Bash(pandoc --track-changes=all \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\ServiceMgmt_Blueprint.docx\" -o /tmp/blueprint.md)",
       "Read(//tmp/**)",
       "Bash(npx tsx -e ' *)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(npx next *)"
     ]
   }
 }

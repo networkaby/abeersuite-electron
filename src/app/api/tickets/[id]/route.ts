@@ -22,10 +22,12 @@ export async function GET(
                         },
                     },
                 },
+                ticketSubStatus: { select: { id: true, label: true, color: true } },
                 logs: {
                     include: {
                         changedBy: true,
                         ticketStatus: { select: { label: true, color: true } },
+                        ticketSubStatus: { select: { label: true, color: true } },
                     },
                     orderBy: { createdAt: "desc" },
                 },

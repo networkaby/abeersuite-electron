@@ -12,6 +12,7 @@ import {
     Settings,
     LogOut,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 
 const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -19,7 +20,8 @@ const navItems = [
     { label: "Tickets", href: "/tickets", icon: Ticket },
     { label: "Service Centers", href: "/service-centers", icon: Building2 },
     { label: "Users", href: "/users", icon: UserCog },
-    { label: "Settings", href: "/settings/statuses", icon: Settings },
+    { label: "Statuses", href: "/settings/statuses", icon: Settings },
+    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings },
 ];
 
 type SidebarUser = {
@@ -34,7 +36,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         <aside className="w-64 bg-white shadow-md flex flex-col min-h-screen">
             {/* Logo */}
             <div className="p-6 border-b">
-                <h1 className="text-xl font-bold text-blue-600">ServiceMgmt</h1>
+                <div className="flex items-center justify-between">
+                    <h1 className="text-xl font-bold text-blue-600">ServiceMgmt</h1>
+                    <NotificationBell />
+                </div>
                 <p className="text-xs text-gray-400 mt-1">{user?.name}</p>
                 <p className="text-xs text-gray-400">{user?.role}</p>
             </div>

@@ -16,9 +16,12 @@ import {
 import Link from "next/link";
 import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
+import SubStatusUpdate from "@/components/SubStatusUpdate";
 interface Ticket {
     id: number;
     status: string;
+    subStatusId?: string;
+    ticketSubStatus?: { id: string; label: string; color: string } | null;
     priority: string;
     ticketPriority: { label: string; color: string };
     notes?: string;
@@ -48,10 +51,12 @@ interface Ticket {
     logs: {
         id: number;
         status: string;
+        subStatusId?: string;
         note?: string;
         createdAt: string;
         changedBy: { name: string };
         ticketStatus: { label: string; color: string };
+        ticketSubStatus?: { label: string; color: string } | null;
     }[];
 }
 
@@ -62,6 +67,7 @@ export default function TicketDetailPage() {
     const [loading, setLoading] = useState(true);
     const [showStatusUpdate, setShowStatusUpdate] = useState(false);
     const [showEscalation, setShowEscalation] = useState(false);
+    const [showSubStatusUpdate, setShowSubStatusUpdate] = useState(false);
 
     const fetchTicket = useCallback(async () => {
         try {
@@ -94,13 +100,18 @@ export default function TicketDetailPage() {
                         Created {new Date(ticket.createdAt).toLocaleString()}
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketPriority.color}`}>
                         {ticket.ticketPriority.label}
                     </span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketStatus.color}`}>
                         {ticket.ticketStatus.label}
                     </span>
+                    {ticket.ticketSubStatus && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketSubStatus.color}`}>
+                            {ticket.ticketSubStatus.label}
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -196,12 +207,17 @@ export default function TicketDetailPage() {
                             <div className="space-y-4">
                                 {ticket.logs.map((log) => (
                                     <div key={log.id} className="flex gap-3">
-                                        <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 shrink-0" />
+                                        <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${log.subStatusId ? "bg-purple-400" : "bg-blue-400"}`} />
                                         <div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketStatus.color}`}>
                                                     {log.ticketStatus.label}
                                                 </span>
+                                                {log.ticketSubStatus && (
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketSubStatus.color}`}>
+                                                        {log.ticketSubStatus.label}
+                                                    </span>
+                                                )}
                                                 <span className="text-xs text-gray-400">
                                                     by {log.changedBy.name}
                                                 </span>
@@ -246,6 +262,13 @@ export default function TicketDetailPage() {
                             {ticket.status === "S7" ? "↩️ Reopen Ticket" : "Update Status"}
                         </button>
 
+                        <button
+                            onClick={() => setShowSubStatusUpdate(true)}
+                            className="w-full border border-blue-400 text-blue-600 rounded-lg py-2 text-sm hover:bg-blue-50"
+                        >
+                            Update Sub-Status
+                        </button>
+
                         {!ticket.escalated && ticket.status !== "S7" && (
                             <button
                                 onClick={() => setShowEscalation(true)}
@@ -285,6 +308,16 @@ export default function TicketDetailPage() {
                     ticket={ticket}
                     onClose={() => {
                         setShowEscalation(false);
+                        fetchTicket();
+                    }}
+                />
+            )}
+
+            {showSubStatusUpdate && (
+                <SubStatusUpdate
+                    ticket={ticket}
+                    onClose={() => {
+                        setShowSubStatusUpdate(false);
                         fetchTicket();
                     }}
                 />
