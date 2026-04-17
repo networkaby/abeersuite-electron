@@ -1,8 +1,9 @@
-import { PrismaClient, Role, Status, Priority } from './generated/prisma/client'
+import { PrismaClient } from './generated/prisma/client'
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
+import { TICKET_STATUS, PRIORITY, ROLE } from './lib/constants';
 
 dotenv.config({ path: ".env" });
 
@@ -27,7 +28,7 @@ async function main() {
             name: "Admin User",
             email: "admin@service.com",
             password,
-            role: Role.ADMIN,
+            role: ROLE.ADMIN,
         },
     });
 
@@ -38,7 +39,7 @@ async function main() {
             name: "Technician",
             email: "tech@service.com",
             password,
-            role: Role.TECHNICIAN,
+            role: ROLE.TECHNICIAN,
         },
     });
 
@@ -73,8 +74,8 @@ async function main() {
     // 🎫 Create Ticket
     const ticket = await prisma.ticket.create({
         data: {
-            status: Status.RECEIVED,
-            priority: Priority.NORMAL,
+            status: TICKET_STATUS.RECEIVED,
+            priority: PRIORITY.NORMAL,
             notes: "Customer reported sudden shutdown",
             deviceId: device.id,
             technicianId: technician.id,
@@ -87,7 +88,7 @@ async function main() {
     await prisma.ticketLog.create({
         data: {
             ticketId: ticket.id,
-            status: Status.RECEIVED,
+            status: TICKET_STATUS.RECEIVED,
             note: "Ticket created",
             userId: admin.id,
         },

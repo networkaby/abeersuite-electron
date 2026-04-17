@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
+import { TICKET_STATUS, STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS } from "@/lib/constants";
 
 
 
@@ -51,22 +52,6 @@ interface Ticket {
     }[];
 }
 
-const statusColors: Record<string, string> = {
-    RECEIVED: "bg-gray-100 text-gray-600",
-    DIAGNOSING: "bg-blue-100 text-blue-600",
-    REPAIRING: "bg-yellow-100 text-yellow-600",
-    ESCALATED: "bg-orange-100 text-orange-600",
-    RECEIVED_BACK: "bg-purple-100 text-purple-600",
-    READY: "bg-green-100 text-green-600",
-    RETURNED: "bg-gray-100 text-gray-400",
-};
-
-const priorityColors: Record<string, string> = {
-    LOW: "bg-gray-100 text-gray-500",
-    NORMAL: "bg-blue-50 text-blue-500",
-    HIGH: "bg-orange-100 text-orange-500",
-    URGENT: "bg-red-100 text-red-600",
-};
 
 export default function TicketDetailPage() {
     const { id } = useParams();
@@ -107,11 +92,11 @@ export default function TicketDetailPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${priorityColors[ticket.priority]}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${PRIORITY_COLORS[ticket.priority]}`}>
                         {ticket.priority}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[ticket.status]}`}>
-                        {ticket.status.replace("_", " ")}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[ticket.status]}`}>
+                        {STATUS_LABELS[ticket.status] ?? ticket.status.replace("_", " ")}
                     </span>
                 </div>
             </div>
@@ -211,8 +196,8 @@ export default function TicketDetailPage() {
                                         <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 shrink-0" />
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[log.status]}`}>
-                                                    {log.status.replace("_", " ")}
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[log.status]}`}>
+                                                    {STATUS_LABELS[log.status] ?? log.status.replace("_", " ")}
                                                 </span>
                                                 <span className="text-xs text-gray-400">
                                                     by {log.changedBy.name}
@@ -250,15 +235,15 @@ export default function TicketDetailPage() {
 
                         <button
                             onClick={() => setShowStatusUpdate(true)}
-                            className={`w-full text-white rounded-lg py-2 text-sm ${ticket.status === "RETURNED"
+                            className={`w-full text-white rounded-lg py-2 text-sm ${ticket.status === TICKET_STATUS.RETURNED
                                     ? "bg-blue-500 hover:bg-blue-600"
                                     : "bg-blue-600 hover:bg-blue-700"
                                 }`}
                         >
-                            {ticket.status === "RETURNED" ? "↩️ Reopen Ticket" : "Update Status"}
+                            {ticket.status === TICKET_STATUS.RETURNED ? "↩️ Reopen Ticket" : "Update Status"}
                         </button>
 
-                        {!ticket.escalated && ticket.status !== "RETURNED" && (
+                        {!ticket.escalated && ticket.status !== TICKET_STATUS.RETURNED && (
                             <button
                                 onClick={() => setShowEscalation(true)}
                                 className="w-full border border-orange-400 text-orange-500 rounded-lg py-2 text-sm hover:bg-orange-50 flex items-center justify-center gap-2"

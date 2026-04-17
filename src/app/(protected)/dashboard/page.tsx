@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { TICKET_STATUS, STATUS_COLORS, STATUS_LABELS } from "@/lib/constants";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -7,13 +8,13 @@ export default async function DashboardPage() {
     const [total, open, escalated, ready] = await Promise.all([
         prisma.ticket.count(),
         prisma.ticket.count({
-            where: { status: { in: ["RECEIVED", "DIAGNOSING", "REPAIRING"] } },
+            where: { status: { in: [TICKET_STATUS.RECEIVED, TICKET_STATUS.DIAGNOSING, TICKET_STATUS.REPAIRING] } },
         }),
         prisma.ticket.count({
             where: { escalated: true },
         }),
         prisma.ticket.count({
-            where: { status: "READY" },
+            where: { status: TICKET_STATUS.READY },
         }),
     ]);
 
@@ -26,15 +27,6 @@ export default async function DashboardPage() {
         },
     });
 
-    const statusColors: Record<string, string> = {
-        RECEIVED: "bg-gray-100 text-gray-600",
-        DIAGNOSING: "bg-blue-100 text-blue-600",
-        REPAIRING: "bg-yellow-100 text-yellow-600",
-        ESCALATED: "bg-orange-100 text-orange-600",
-        RECEIVED_BACK: "bg-purple-100 text-purple-600",
-        READY: "bg-green-100 text-green-600",
-        RETURNED: "bg-gray-100 text-gray-400",
-    };
 
     return (
         <div>
@@ -86,8 +78,8 @@ export default async function DashboardPage() {
                                     {t.device.brand} {t.device.model}
                                 </td>
                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[t.status]}`}>
-                                        {t.status.replace("_", " ")}
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[t.status]}`}>
+                                        {STATUS_LABELS[t.status] ?? t.status.replace("_", " ")}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-gray-500">

@@ -5,26 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
-
-const NEXT_STATUSES: Record<string, string[]> = {
-    RECEIVED: ["DIAGNOSING"],
-    DIAGNOSING: ["REPAIRING", "ESCALATED"],
-    REPAIRING: ["READY", "ESCALATED"],
-    ESCALATED: ["RECEIVED_BACK"],
-    RECEIVED_BACK: ["REPAIRING", "READY"],
-    READY: ["RETURNED"],
-    RETURNED: ["RECEIVED"],
-};
-
-const STATUS_LABELS: Record<string, string> = {
-    RECEIVED: "Received",
-    DIAGNOSING: "Diagnosing",
-    REPAIRING: "Repairing",
-    ESCALATED: "Escalated",
-    RECEIVED_BACK: "Received Back",
-    READY: "Ready for Pickup",
-    RETURNED: "Returned",
-};
+import { TICKET_STATUS, NEXT_STATUSES, STATUS_LABELS } from "@/lib/constants";
 
 interface Props {
     ticket: {
@@ -84,7 +65,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
                         {/* Reopen notice */}
-                        {ticket.status === "RETURNED" && (
+                        {ticket.status === TICKET_STATUS.RETURNED && (
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
                                 ↩️ This will <strong>reopen</strong> the ticket and start a new repair cycle.
                             </div>
@@ -113,7 +94,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                                 rows={3}
                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder={
-                                    ticket.status === "RETURNED"
+                                    ticket.status === TICKET_STATUS.RETURNED
                                         ? "Why is this being reopened?"
                                         : "Add a note about this status change..."
                                 }
@@ -131,14 +112,14 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${ticket.status === "RETURNED"
+                                className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${ticket.status === TICKET_STATUS.RETURNED
                                         ? "bg-blue-500 hover:bg-blue-600"
                                         : "bg-blue-600 hover:bg-blue-700"
                                     }`}
                             >
                                 {isSubmitting
                                     ? "Saving..."
-                                    : ticket.status === "RETURNED"
+                                    : ticket.status === TICKET_STATUS.RETURNED
                                         ? "↩️ Reopen Ticket"
                                         : "Update Status"}
                             </button>

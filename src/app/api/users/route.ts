@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { ROLE } from "@/lib/constants";
 
 export async function GET() {
     try {
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
                 name: body.name,
                 email: body.email,
                 password,
-                role: body.role || "TECHNICIAN",
+                role: body.role || ROLE.TECHNICIAN,
             },
             select: { id: true, name: true, email: true, role: true, createdAt: true },
         });

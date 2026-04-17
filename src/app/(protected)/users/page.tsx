@@ -5,6 +5,7 @@ import axios from "axios";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/components/UserForm";
+import { ROLE_COLORS } from "@/lib/constants";
 
 interface User {
     id: number;
@@ -14,11 +15,6 @@ interface User {
     createdAt: string;
 }
 
-const roleColors: Record<string, string> = {
-    ADMIN: "bg-red-100 text-red-600",
-    TECHNICIAN: "bg-blue-100 text-blue-600",
-    FRONT_DESK: "bg-green-100 text-green-600",
-};
 
 export default function UsersPage() {
     const [users, setUsers] = useState<User[]>([]);
@@ -98,8 +94,8 @@ export default function UsersPage() {
                                     <td className="px-6 py-4 font-medium">{u.name}</td>
                                     <td className="px-6 py-4 text-gray-500">{u.email}</td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleColors[u.role]}`}>
-                                            {u.role.replace("_", " ")}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[u.role]}`}>
+                                            {u.role.replace(/_/g, " ")}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-gray-400">

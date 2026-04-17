@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuickTicketStore, type Step } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
+import { PRIORITY } from "@/lib/constants";
 
 const customerSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -46,14 +47,14 @@ export default function QuickTicketButton() {
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
-        defaultValues: { priority: "NORMAL" },
+        defaultValues: { priority: PRIORITY.NORMAL },
     });
 
     const openModal = async () => {
         reset();
         setOpen(true);
         customerForm.reset();
-        ticketForm.reset({ priority: "NORMAL" });
+        ticketForm.reset({ priority: PRIORITY.NORMAL });
         await fetchTechnicians();
     };
 
@@ -325,10 +326,10 @@ export default function QuickTicketButton() {
                                                 {...ticketForm.register("priority")}
                                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             >
-                                                <option value="LOW">Low</option>
-                                                <option value="NORMAL">Normal</option>
-                                                <option value="HIGH">High</option>
-                                                <option value="URGENT">Urgent</option>
+                                                <option value={PRIORITY.LOW}>Low</option>
+                                                <option value={PRIORITY.NORMAL}>Normal</option>
+                                                <option value={PRIORITY.HIGH}>High</option>
+                                                <option value={PRIORITY.URGENT}>Urgent</option>
                                             </select>
                                         </div>
                                         <div>

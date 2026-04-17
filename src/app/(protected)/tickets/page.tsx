@@ -5,6 +5,7 @@ import axios from "axios";
 import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { TICKET_STATUS, PRIORITY, STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS } from "@/lib/constants";
 // import TicketForm from "@/components/TicketForm";
 
 interface Ticket {
@@ -26,25 +27,8 @@ interface Ticket {
 type Technician = { id: number; name: string };
 type ServiceCenter = { id: number; name: string };
 
-const statusColors: Record<string, string> = {
-    RECEIVED: "bg-gray-100 text-gray-600",
-    DIAGNOSING: "bg-blue-100 text-blue-600",
-    REPAIRING: "bg-yellow-100 text-yellow-600",
-    ESCALATED: "bg-orange-100 text-orange-600",
-    RECEIVED_BACK: "bg-purple-100 text-purple-600",
-    READY: "bg-green-100 text-green-600",
-    RETURNED: "bg-gray-100 text-gray-400",
-};
-
-const priorityColors: Record<string, string> = {
-    LOW: "bg-gray-100 text-gray-500",
-    NORMAL: "bg-blue-50 text-blue-500",
-    HIGH: "bg-orange-100 text-orange-500",
-    URGENT: "bg-red-100 text-red-600",
-};
-
-const STATUSES = ["RECEIVED", "DIAGNOSING", "REPAIRING", "ESCALATED", "RECEIVED_BACK", "READY", "RETURNED"];
-const PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"];
+const STATUSES = Object.values(TICKET_STATUS);
+const PRIORITIES = Object.values(PRIORITY);
 
 export default function TicketsPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -186,7 +170,7 @@ export default function TicketsPage() {
                     >
                         <option value="">All Status</option>
                         {STATUSES.map((s) => (
-                            <option key={s} value={s}>{s.replace("_", " ")}</option>
+                            <option key={s} value={s}>{STATUS_LABELS[s] ?? s.replace("_", " ")}</option>
                         ))}
                     </select>
 
@@ -300,13 +284,13 @@ export default function TicketsPage() {
                                         {t.device.problem}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[t.priority]}`}>
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${PRIORITY_COLORS[t.priority]}`}>
                                             {t.priority}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[t.status]}`}>
-                                            {t.status.replace("_", " ")}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[t.status]}`}>
+                                            {STATUS_LABELS[t.status] ?? t.status.replace("_", " ")}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-gray-500">

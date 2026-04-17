@@ -7,6 +7,7 @@ import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
+import { ROLE } from "@/lib/constants";
 
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -35,7 +36,7 @@ export default function UserForm({ user, onClose }: Props) {
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { role: "TECHNICIAN" },
+        defaultValues: { role: ROLE.TECHNICIAN },
     });
 
     useEffect(() => {
@@ -103,9 +104,9 @@ export default function UserForm({ user, onClose }: Props) {
                             {...register("role")}
                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            <option value="ADMIN">Admin</option>
-                            <option value="TECHNICIAN">Technician</option>
-                            <option value="FRONT_DESK">Front Desk</option>
+                            <option value={ROLE.ADMIN}>Admin</option>
+                            <option value={ROLE.TECHNICIAN}>Technician</option>
+                            <option value={ROLE.FRONT_DESK}>Front Desk</option>
                         </select>
                     </div>
 

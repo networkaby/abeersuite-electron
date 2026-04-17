@@ -8,26 +8,26 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
-  TECHNICIAN
-  FRONT_DESK
+  ADMIN      @map("R1")
+  TECHNICIAN @map("R2")
+  FRONT_DESK @map("R3")
 }
 
 enum Status {
-  RECEIVED
-  DIAGNOSING
-  REPAIRING
-  ESCALATED
-  RECEIVED_BACK
-  READY
-  RETURNED
+  RECEIVED      @map("S1")
+  DIAGNOSING    @map("S2")
+  REPAIRING     @map("S3")
+  ESCALATED     @map("S4")
+  RECEIVED_BACK @map("S5")
+  READY         @map("S6")
+  RETURNED      @map("S7")
 }
 
 enum Priority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
+  LOW    @map("P1")
+  NORMAL @map("P2")
+  HIGH   @map("P3")
+  URGENT @map("P4")
 }
 
 model User {

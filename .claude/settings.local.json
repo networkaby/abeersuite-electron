@@ -13,7 +13,9 @@
       "Bash(xargs grep *)",
       "Bash(npx tsc *)",
       "Bash(pnpm build *)",
-      "Bash(node -e \"const p = require\\('./node_modules/prisma/config'\\); console.log\\(JSON.stringify\\(Object.keys\\(p\\)\\)\\)\")"
+      "Bash(node -e \"const p = require\\('./node_modules/prisma/config'\\); console.log\\(JSON.stringify\\(Object.keys\\(p\\)\\)\\)\")",
+      "Bash(pandoc --track-changes=all \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\ServiceMgmt_Blueprint.docx\" -o /tmp/blueprint.md)",
+      "Read(//tmp/**)"
     ]
   }
 }

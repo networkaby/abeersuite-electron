@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useReferenceStore } from "@/store/referenceStore";
+import { PRIORITY } from "@/lib/constants";
 
 const schema = z.object({
     customerId: z.string().min(1, "Customer is required"),
@@ -39,7 +40,7 @@ export default function TicketForm({ onClose }: Props) {
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { priority: "NORMAL" },
+        defaultValues: { priority: PRIORITY.NORMAL },
     });
 
     useEffect(() => {
@@ -139,10 +140,10 @@ export default function TicketForm({ onClose }: Props) {
                                 {...register("priority")}
                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <option value="LOW">Low</option>
-                                <option value="NORMAL">Normal</option>
-                                <option value="HIGH">High</option>
-                                <option value="URGENT">Urgent</option>
+                                <option value={PRIORITY.LOW}>Low</option>
+                                <option value={PRIORITY.NORMAL}>Normal</option>
+                                <option value={PRIORITY.HIGH}>High</option>
+                                <option value={PRIORITY.URGENT}>Urgent</option>
                             </select>
                         </div>
                         <div>

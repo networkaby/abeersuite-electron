@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { TICKET_STATUS, PRIORITY } from "@/lib/constants";
 
 export async function GET() {
     try {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
         const ticket = await prisma.ticket.create({
             data: {
                 deviceId: device.id,
-                priority: body.priority || "NORMAL",
+                priority: body.priority || PRIORITY.NORMAL,
                 notes: body.notes || null,
                 accessInfo: body.accessInfo || null,
                 estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
         await prisma.ticketLog.create({
             data: {
                 ticketId: ticket.id,
-                status: "RECEIVED",
+                status: TICKET_STATUS.RECEIVED,
                 note: "Ticket created",
                 userId: Number(body.createdBy),
             },
