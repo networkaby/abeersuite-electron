@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useQuickTicketStore } from "@/store/quickTicketStore";
+import { useQuickTicketStore, type Step } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
 
 const customerSchema = z.object({

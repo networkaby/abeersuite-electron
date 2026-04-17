@@ -9,7 +9,7 @@ export async function GET() {
             select: { id: true, name: true, email: true, role: true, createdAt: true },
         });
         return NextResponse.json(users);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
     }
 }
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
             select: { id: true, name: true, email: true, role: true, createdAt: true },
         });
         return NextResponse.json(user);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
     }
 }

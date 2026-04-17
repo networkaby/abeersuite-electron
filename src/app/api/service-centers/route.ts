@@ -8,7 +8,7 @@ export async function GET() {
             include: { _count: { select: { tickets: true } } },
         });
         return NextResponse.json(serviceCenters);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to fetch service centers" }, { status: 500 });
     }
 }
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(serviceCenter);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to create service center" }, { status: 500 });
     }
 }

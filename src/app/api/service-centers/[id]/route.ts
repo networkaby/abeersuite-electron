@@ -18,7 +18,7 @@ export async function PUT(
             },
         });
         return NextResponse.json(serviceCenter);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to update service center" }, { status: 500 });
     }
 }
@@ -31,7 +31,7 @@ export async function DELETE(
         const { id } = await params;
         await prisma.serviceCenter.delete({ where: { id: Number(id) } });
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to delete service center" }, { status: 500 });
     }
 }

@@ -11,7 +11,9 @@
       "Bash(DATABASE_URL=\"postgresql://postgres.gphtzbejvpijcfmvqpqo:uVh^+C8^*-G7z2Y@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require\" npx prisma migrate reset --force)",
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes proceed\" DATABASE_URL=\"postgresql://postgres.gphtzbejvpijcfmvqpqo:uVh^+C8^*-G7z2Y@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require\" npx prisma migrate reset --force)",
       "Bash(xargs grep *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(pnpm build *)",
+      "Bash(node -e \"const p = require\\('./node_modules/prisma/config'\\); console.log\\(JSON.stringify\\(Object.keys\\(p\\)\\)\\)\")"
     ]
   }
 }

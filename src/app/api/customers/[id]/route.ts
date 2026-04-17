@@ -13,7 +13,7 @@ export async function GET(
         });
         if (!customer) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(customer);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to fetch customer" }, { status: 500 });
     }
 }
@@ -34,7 +34,7 @@ export async function PUT(
             },
         });
         return NextResponse.json(customer);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to update customer" }, { status: 500 });
     }
 }
@@ -49,7 +49,7 @@ export async function DELETE(
             where: { id: Number(id) },
         });
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to delete customer" }, { status: 500 });
     }
 }

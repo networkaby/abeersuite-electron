@@ -12,7 +12,7 @@ export async function GET(req: Request) {
             include: { devices: true },
         });
         return NextResponse.json(customers);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
     }
 }
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(customer);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Failed to create customer" }, { status: 500 });
     }
 }
