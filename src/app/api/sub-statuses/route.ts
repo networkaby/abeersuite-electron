@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 // GET /api/sub-statuses?statusId=S3
-// Returns sub-statuses applicable to a given main status (or all if no filter)
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
@@ -10,7 +9,12 @@ export async function GET(req: Request) {
 
         const all = await prisma.ticketSubStatus.findMany({
             orderBy: { order: "asc" },
-            include: { triggerStatus: { select: { id: true, label: true } } },
+            include: {
+                triggerStatus: { select: { id: true, label: true } },
+                fromTransitions: {
+                    include: { to: { select: { id: true, label: true, color: true } } },
+                },
+            },
         });
 
         const result = statusId
@@ -20,5 +24,38 @@ export async function GET(req: Request) {
         return NextResponse.json(result);
     } catch {
         return NextResponse.json({ error: "Failed to fetch sub-statuses" }, { status: 500 });
+    }
+}
+
+// POST /api/sub-statuses
+export async function POST(req: Request) {
+    try {
+        const body = await req.json();
+
+        const existing = await prisma.ticketSubStatus.findMany({ select: { id: true } });
+        const maxN = existing.reduce((max, s) => {
+            const n = parseInt(s.id.replace(/\D/g, ""), 10);
+            return isNaN(n) ? max : Math.max(max, n);
+        }, 0);
+        const newId = `SS${maxN + 1}`;
+
+        const created = await prisma.ticketSubStatus.create({
+            data: {
+                id: newId,
+                label: body.label,
+                color: body.color ?? "bg-gray-100 text-gray-600",
+                group: body.group,
+                order: body.order ?? maxN + 1,
+                applicableStatusIds: body.applicableStatusIds ?? [],
+                allowedRoles: body.allowedRoles ?? [],
+                notifyRoles: body.notifyRoles ?? [],
+                triggerStatusId: body.triggerStatusId ?? null,
+            },
+        });
+
+        return NextResponse.json(created, { status: 201 });
+    } catch (error) {
+        console.error(error);
+        return NextResponse.json({ error: "Failed to create sub-status" }, { status: 500 });
     }
 }

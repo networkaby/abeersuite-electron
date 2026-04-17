@@ -14,9 +14,8 @@ import {
     Printer,
 } from "lucide-react";
 import Link from "next/link";
-import TicketStatusUpdate from "@/components/TicketStatusUpdate";
 import TicketEscalation from "@/components/TicketEscalation";
-import SubStatusUpdate from "@/components/SubStatusUpdate";
+import StatusUpdateCombined from "@/components/StatusUpdateCombined";
 interface Ticket {
     id: number;
     status: string;
@@ -67,7 +66,6 @@ export default function TicketDetailPage() {
     const [loading, setLoading] = useState(true);
     const [showStatusUpdate, setShowStatusUpdate] = useState(false);
     const [showEscalation, setShowEscalation] = useState(false);
-    const [showSubStatusUpdate, setShowSubStatusUpdate] = useState(false);
 
     const fetchTicket = useCallback(async () => {
         try {
@@ -254,19 +252,9 @@ export default function TicketDetailPage() {
 
                         <button
                             onClick={() => setShowStatusUpdate(true)}
-                            className={`w-full text-white rounded-lg py-2 text-sm ${ticket.status === "S7"
-                                    ? "bg-blue-500 hover:bg-blue-600"
-                                    : "bg-blue-600 hover:bg-blue-700"
-                                }`}
+                            className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700"
                         >
-                            {ticket.status === "S7" ? "↩️ Reopen Ticket" : "Update Status"}
-                        </button>
-
-                        <button
-                            onClick={() => setShowSubStatusUpdate(true)}
-                            className="w-full border border-blue-400 text-blue-600 rounded-lg py-2 text-sm hover:bg-blue-50"
-                        >
-                            Update Sub-Status
+                            Update Status
                         </button>
 
                         {!ticket.escalated && ticket.status !== "S7" && (
@@ -294,7 +282,7 @@ export default function TicketDetailPage() {
 
             {/* Modals */}
             {showStatusUpdate && (
-                <TicketStatusUpdate
+                <StatusUpdateCombined
                     ticket={ticket}
                     onClose={() => {
                         setShowStatusUpdate(false);
@@ -313,15 +301,6 @@ export default function TicketDetailPage() {
                 />
             )}
 
-            {showSubStatusUpdate && (
-                <SubStatusUpdate
-                    ticket={ticket}
-                    onClose={() => {
-                        setShowSubStatusUpdate(false);
-                        fetchTicket();
-                    }}
-                />
-            )}
         </div>
     );
 }

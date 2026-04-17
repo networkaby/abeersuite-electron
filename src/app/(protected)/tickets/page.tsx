@@ -12,6 +12,7 @@ interface Ticket {
     escalated: boolean;
     createdAt: string;
     ticketStatus: { label: string; color: string };
+    ticketSubStatus?: { label: string; color: string } | null;
     ticketPriority: { label: string; color: string };
     device: {
         type: string;
@@ -274,9 +275,16 @@ export default function TicketsPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${t.ticketStatus.color}`}>
-                                            {t.ticketStatus.label}
-                                        </span>
+                                        <div className="flex flex-col gap-1">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${t.ticketStatus.color}`}>
+                                                {t.ticketStatus.label}
+                                            </span>
+                                            {t.ticketSubStatus && (
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${t.ticketSubStatus.color}`}>
+                                                    {t.ticketSubStatus.label}
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 text-gray-500">
                                         {t.technician?.name || "—"}

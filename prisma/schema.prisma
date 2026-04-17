@@ -33,8 +33,20 @@ model TicketSubStatus {
   triggerStatusId     String?
   triggerStatus       TicketStatus? @relation("SubStatusTrigger", fields: [triggerStatusId], references: [id])
 
-  tickets Ticket[]
-  logs    TicketLog[]
+  tickets         Ticket[]
+  logs            TicketLog[]
+  fromTransitions SubStatusTransition[] @relation("FromSubStatus")
+  toTransitions   SubStatusTransition[] @relation("ToSubStatus")
+}
+
+model SubStatusTransition {
+  id               Int              @id @default(autoincrement())
+  fromSubStatusId  String?
+  toSubStatusId    String
+  from             TicketSubStatus? @relation("FromSubStatus", fields: [fromSubStatusId], references: [id], onDelete: Cascade)
+  to               TicketSubStatus  @relation("ToSubStatus",   fields: [toSubStatusId],   references: [id], onDelete: Cascade)
+
+  @@unique([fromSubStatusId, toSubStatusId])
 }
 
 model StatusTransition {

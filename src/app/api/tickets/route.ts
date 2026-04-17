@@ -12,6 +12,7 @@ export async function GET() {
                 technician: true,
                 serviceCenter: true,
                 ticketStatus: { select: { label: true, color: true } },
+                ticketSubStatus: { select: { label: true, color: true } },
                 ticketPriority: { select: { label: true, color: true } },
             },
         });

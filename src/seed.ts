@@ -397,6 +397,76 @@ async function main() {
         },
     });
 
+    // ── Sub-Status Transitions ────────────────────────────────────────────────
+    // null fromSubStatusId = entry point (set when ticket has no sub-status yet)
+    await prisma.subStatusTransition.createMany({
+        data: [
+            // ── Customer Communication (SS1–SS4) ──────────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS1" }, // entry: Waiting Customer Info
+            { fromSubStatusId: null,   toSubStatusId: "SS2" }, // entry: Waiting Customer to Bring Item
+            { fromSubStatusId: "SS1",  toSubStatusId: "SS3" }, // → Customer Unreachable
+            { fromSubStatusId: "SS1",  toSubStatusId: "SS4" }, // → Customer Responded
+            { fromSubStatusId: "SS2",  toSubStatusId: "SS3" }, // → Customer Unreachable
+            { fromSubStatusId: "SS2",  toSubStatusId: "SS4" }, // → Customer Responded
+            { fromSubStatusId: "SS3",  toSubStatusId: "SS4" }, // → Customer Responded (eventually)
+
+            // ── Quote & Approval (SS5–SS9) ────────────────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS5" }, // entry: Quote Prepared
+            { fromSubStatusId: "SS5",  toSubStatusId: "SS6" }, // → Awaiting Customer Approval
+            { fromSubStatusId: "SS6",  toSubStatusId: "SS7" }, // → Awaiting Insurance/Warranty
+            { fromSubStatusId: "SS6",  toSubStatusId: "SS8" }, // → Customer Approved  → S3
+            { fromSubStatusId: "SS6",  toSubStatusId: "SS9" }, // → Customer Declined  → S8
+            { fromSubStatusId: "SS7",  toSubStatusId: "SS8" }, // → Customer Approved
+            { fromSubStatusId: "SS7",  toSubStatusId: "SS9" }, // → Customer Declined
+
+            // ── Parts (SS10–SS13) ─────────────────────────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS10" }, // entry: Awaiting Parts
+            { fromSubStatusId: "SS10", toSubStatusId: "SS11" }, // → Parts Delayed
+            { fromSubStatusId: "SS10", toSubStatusId: "SS12" }, // → Parts Issue
+            { fromSubStatusId: "SS10", toSubStatusId: "SS13" }, // → Parts Arrived
+            { fromSubStatusId: "SS11", toSubStatusId: "SS12" }, // → Parts Issue
+            { fromSubStatusId: "SS11", toSubStatusId: "SS13" }, // → Parts Arrived
+            { fromSubStatusId: "SS12", toSubStatusId: "SS13" }, // → Parts Arrived
+
+            // ── Quality Check (SS14–SS17) ─────────────────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS14" }, // entry: QC In Progress
+            { fromSubStatusId: "SS14", toSubStatusId: "SS15" }, // → QC Passed   → S6
+            { fromSubStatusId: "SS14", toSubStatusId: "SS16" }, // → QC Failed
+            { fromSubStatusId: "SS14", toSubStatusId: "SS17" }, // → Partial Fix
+            { fromSubStatusId: "SS16", toSubStatusId: "SS14" }, // retry QC
+            { fromSubStatusId: "SS17", toSubStatusId: "SS15" }, // → QC Passed
+            { fromSubStatusId: "SS17", toSubStatusId: "SS16" }, // → QC Failed
+
+            // ── Escalated — Engineer Visit (SS18–SS21) ────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS18" }, // entry: Engineer Visit Requested
+            { fromSubStatusId: "SS18", toSubStatusId: "SS19" }, // → Scheduled
+            { fromSubStatusId: "SS19", toSubStatusId: "SS20" }, // → On-Site
+            { fromSubStatusId: "SS20", toSubStatusId: "SS21" }, // → Work Complete → S3
+
+            // ── Escalated — Service Centre (SS22–SS28) ────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS22" }, // entry: Pending Despatch
+            { fromSubStatusId: "SS22", toSubStatusId: "SS23" }, // → Dispatched
+            { fromSubStatusId: "SS23", toSubStatusId: "SS24" }, // → Received by SC
+            { fromSubStatusId: "SS24", toSubStatusId: "SS25" }, // → Being Repaired
+            { fromSubStatusId: "SS25", toSubStatusId: "SS26" }, // → SC Delayed
+            { fromSubStatusId: "SS25", toSubStatusId: "SS27" }, // → Shipped Back
+            { fromSubStatusId: "SS26", toSubStatusId: "SS27" }, // → Shipped Back
+            { fromSubStatusId: "SS27", toSubStatusId: "SS28" }, // → Received by Us → S5
+
+            // ── Ready for Collection (SS29–SS31) ──────────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS29" }, // entry: Customer Notified
+            { fromSubStatusId: "SS29", toSubStatusId: "SS30" }, // → Reminder Sent
+            { fromSubStatusId: "SS30", toSubStatusId: "SS31" }, // → Uncollected Action Needed
+
+            // ── No Fix (SS32–SS35) ────────────────────────────────────────────
+            { fromSubStatusId: null,   toSubStatusId: "SS32" }, // entry: Beyond Economical Repair
+            { fromSubStatusId: "SS32", toSubStatusId: "SS33" }, // → Customer Informed
+            { fromSubStatusId: "SS33", toSubStatusId: "SS34" }, // → Collecting Unrepaired → S7
+            { fromSubStatusId: "SS33", toSubStatusId: "SS35" }, // → Scrapped with Consent
+        ],
+        skipDuplicates: true,
+    });
+
     console.log("Done.");
 }
 
