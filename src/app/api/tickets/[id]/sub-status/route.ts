@@ -32,13 +32,16 @@ export async function PATCH(
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
         }
 
-        const newMainStatus = subStatus.triggerStatusId ?? ticket.status;
+        // Look up trigger for the ticket's CURRENT main status
+        const triggerMap = (subStatus.triggerMap ?? {}) as Record<string, string>;
+        const triggerStatusId = triggerMap[ticket.status] ?? null;
+        const newMainStatus = triggerStatusId ?? ticket.status;
 
-        // Update ticket: set sub-status, clear it if status changes
+        // Update ticket: set sub-status, clear it if status auto-advances
         await prisma.ticket.update({
             where: { id: ticketId },
             data: {
-                subStatusId: subStatus.triggerStatusId ? null : subStatusId,
+                subStatusId: triggerStatusId ? null : subStatusId,
                 status: newMainStatus,
                 updatedAt: new Date(),
             },
@@ -56,11 +59,11 @@ export async function PATCH(
         });
 
         // If main status auto-changed, log that too
-        if (subStatus.triggerStatusId) {
+        if (triggerStatusId) {
             await prisma.ticketLog.create({
                 data: {
                     ticketId,
-                    status: subStatus.triggerStatusId,
+                    status: triggerStatusId,
                     note: `Auto-advanced by: ${subStatus.label}`,
                     userId: Number(changedBy),
                 },

@@ -123,7 +123,6 @@ async function main() {
                 applicableStatusIds: ["S2"],
                 allowedRoles: ["R1", "R3"],
                 notifyRoles: ["R2"],               // → Technician
-                triggerStatusId: "S3",             // → auto-move to Repairing
             },
             {
                 id: "SS9", label: "Customer Declined", order: 9,
@@ -132,7 +131,6 @@ async function main() {
                 applicableStatusIds: ["S2"],
                 allowedRoles: ["R1", "R3"],
                 notifyRoles: ["R2"],               // → Technician
-                triggerStatusId: "S8",             // → auto-move to Closed — No Fix
             },
 
             // ── Group C: Parts (S3) ───────────────────────────────────────────
@@ -185,7 +183,6 @@ async function main() {
                 applicableStatusIds: ["S3"],
                 allowedRoles: ["R1", "R2"],
                 notifyRoles: ["R3"],               // → Front Desk (notify customer)
-                triggerStatusId: "S6",             // → auto-move to Ready
             },
             {
                 id: "SS16", label: "QC Failed", order: 16,
@@ -236,7 +233,6 @@ async function main() {
                 applicableStatusIds: ["S4"],
                 allowedRoles: ["R1", "R2"],
                 notifyRoles: ["R1"],
-                triggerStatusId: "S3",             // → back to Repairing
             },
 
             // ── Group E: Escalated — Service Centre (S4) ─────────────────────
@@ -295,7 +291,6 @@ async function main() {
                 applicableStatusIds: ["S4"],
                 allowedRoles: ["R1", "R4"],
                 notifyRoles: ["R2"],               // → Technician
-                triggerStatusId: "S5",             // → auto-move to Received Back
             },
 
             // ── Group F: Ready for Collection (S6) ───────────────────────────
@@ -348,7 +343,6 @@ async function main() {
                 applicableStatusIds: ["S8"],
                 allowedRoles: ["R1", "R3"],
                 notifyRoles: [],
-                triggerStatusId: "S7",             // → Returned
             },
             {
                 id: "SS35", label: "Scrapped with Consent", order: 35,
@@ -466,6 +460,20 @@ async function main() {
         ],
         skipDuplicates: true,
     });
+
+    // ── Per-parent trigger maps ───────────────────────────────────────────────
+    // Each entry: { id: sub-status, triggerMap: { parentStatusId → targetStatusId } }
+    const triggerMaps: { id: string; triggerMap: Record<string, string> }[] = [
+        { id: "SS8",  triggerMap: { S2: "S3" } }, // Customer Approved  (in Diagnosing) → Repairing
+        { id: "SS9",  triggerMap: { S2: "S8" } }, // Customer Declined  (in Diagnosing) → Closed No Fix
+        { id: "SS15", triggerMap: { S3: "S6" } }, // QC Passed          (in Repairing)  → Ready
+        { id: "SS21", triggerMap: { S4: "S3" } }, // Engineer Complete  (in Escalated)  → Repairing
+        { id: "SS28", triggerMap: { S4: "S5" } }, // Received by Us     (in Escalated)  → Received Back
+        { id: "SS34", triggerMap: { S8: "S7" } }, // Collecting Unrprd  (in No Fix)     → Returned
+    ];
+    for (const { id, triggerMap } of triggerMaps) {
+        await prisma.ticketSubStatus.update({ where: { id }, data: { triggerMap } });
+    }
 
     console.log("Done.");
 }

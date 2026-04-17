@@ -17,11 +17,16 @@ interface NextSubStatus {
     label: string;
     color: string;
     notifyRoles: string[];
-    triggerStatus: { id: string; label: string } | null;
+    triggerMap: Record<string, string>;
 }
 
 const ROLE_LABELS: Record<string, string> = {
     R1: "Admin", R2: "Technician", R3: "Front Desk", R4: "Despatch",
+};
+
+const ALL_STATUSES: Record<string, string> = {
+    S1: "Received", S2: "Diagnosing", S3: "Repairing", S4: "Escalated",
+    S5: "Received Back", S6: "Ready", S7: "Returned", S8: "Closed — No Fix", S9: "Cancelled",
 };
 
 interface Props {
@@ -193,9 +198,9 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                             />
                                             <div className="flex-1">
                                                 <span className="text-sm text-gray-700">{ss.label}</span>
-                                                {ss.triggerStatus && (
+                                                {ss.triggerMap[ticket.status] && (
                                                     <span className="ml-2 text-xs text-orange-600 font-medium">
-                                                        → {ss.triggerStatus.label}
+                                                        → {ALL_STATUSES[ss.triggerMap[ticket.status]] ?? ss.triggerMap[ticket.status]}
                                                     </span>
                                                 )}
                                             </div>
@@ -213,9 +218,9 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                     Notifies: {selectedSub.notifyRoles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
                                 </div>
                             )}
-                            {selectedSub?.triggerStatus && (
+                            {selectedSub?.triggerMap[ticket.status] && (
                                 <div className="mt-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-sm text-orange-700">
-                                    Stage will auto-advance to <strong>{selectedSub.triggerStatus.label}</strong>
+                                    Stage will auto-advance to <strong>{ALL_STATUSES[selectedSub.triggerMap[ticket.status]] ?? selectedSub.triggerMap[ticket.status]}</strong>
                                 </div>
                             )}
                         </div>

@@ -19,7 +19,8 @@
       "Bash(npx tsx -e ' *)",
       "Bash(npx tsx *)",
       "Bash(npx next *)",
-      "Bash(pnpm lint *)"
+      "Bash(pnpm lint *)",
+      "Bash(node -e ' *)"
     ]
   }
 }

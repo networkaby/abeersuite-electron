@@ -10,7 +10,6 @@ export async function GET(req: Request) {
         const all = await prisma.ticketSubStatus.findMany({
             orderBy: { order: "asc" },
             include: {
-                triggerStatus: { select: { id: true, label: true } },
                 fromTransitions: {
                     include: { to: { select: { id: true, label: true, color: true } } },
                 },
@@ -49,7 +48,7 @@ export async function POST(req: Request) {
                 applicableStatusIds: body.applicableStatusIds ?? [],
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles: body.notifyRoles ?? [],
-                triggerStatusId: body.triggerStatusId ?? null,
+                triggerMap: body.triggerMap ?? {},
             },
         });
 

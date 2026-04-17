@@ -37,11 +37,14 @@ export async function PATCH(
         const updated = await prisma.ticketSubStatus.update({
             where: { id },
             data: {
+                ...(body.label !== undefined              && { label: body.label }),
+                ...(body.color !== undefined              && { color: body.color }),
+                ...(body.group !== undefined              && { group: body.group }),
+                ...(body.order !== undefined              && { order: body.order }),
                 ...(body.applicableStatusIds !== undefined && { applicableStatusIds: body.applicableStatusIds }),
-                ...(body.allowedRoles !== undefined && { allowedRoles: body.allowedRoles }),
-                ...(body.notifyRoles !== undefined && { notifyRoles: body.notifyRoles }),
-                ...(body.label !== undefined && { label: body.label }),
-                ...(body.color !== undefined && { color: body.color }),
+                ...(body.allowedRoles !== undefined       && { allowedRoles: body.allowedRoles }),
+                ...(body.notifyRoles !== undefined        && { notifyRoles: body.notifyRoles }),
+                ...("triggerMap" in body                   && { triggerMap: body.triggerMap }),
             },
         });
 

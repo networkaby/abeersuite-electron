@@ -20,11 +20,7 @@ export async function GET(req: Request) {
         // Find transitions where fromSubStatusId matches (or is null for entry points)
         const transitions = await prisma.subStatusTransition.findMany({
             where: { fromSubStatusId: entryOnly || !fromSubStatusId ? null : fromSubStatusId },
-            include: {
-                to: {
-                    include: { triggerStatus: { select: { id: true, label: true } } },
-                },
-            },
+            include: { to: true },
             orderBy: { id: "asc" },
         });
 

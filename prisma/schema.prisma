@@ -14,11 +14,10 @@ model TicketStatus {
   order       Int
   isTerminal  Boolean  @default(false)
 
-  tickets                Ticket[]
-  logs                   TicketLog[]
-  fromTransitions        StatusTransition[]  @relation("FromStatus")
-  toTransitions          StatusTransition[]  @relation("ToStatus")
-  triggeredBySubStatuses TicketSubStatus[]   @relation("SubStatusTrigger")
+  tickets         Ticket[]
+  logs            TicketLog[]
+  fromTransitions StatusTransition[] @relation("FromStatus")
+  toTransitions   StatusTransition[] @relation("ToStatus")
 }
 
 model TicketSubStatus {
@@ -30,8 +29,10 @@ model TicketSubStatus {
   applicableStatusIds String[]
   allowedRoles        String[]
   notifyRoles         String[]
-  triggerStatusId     String?
-  triggerStatus       TicketStatus? @relation("SubStatusTrigger", fields: [triggerStatusId], references: [id])
+
+  // triggerMap: JSON object { parentStatusId → targetStatusId }
+  // e.g. { "S2": "S3", "S4": "S5" }  — different advance per parent
+  triggerMap      Json  @default("{}")
 
   tickets         Ticket[]
   logs            TicketLog[]
