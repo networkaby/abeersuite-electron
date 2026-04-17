@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-guard";
 
 // PATCH /api/tickets/[id]/sub-status
 // Body: { subStatusId: string, note?: string, changedBy: number }
@@ -7,6 +8,9 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { session, response } = await requireAuth();
+    if (response) return response;
+
     try {
         const { id } = await params;
         const ticketId = Number(id);
@@ -22,6 +26,11 @@ export async function PATCH(
         });
         if (!subStatus) {
             return NextResponse.json({ error: "Sub-status not found" }, { status: 404 });
+        }
+
+        const userRole = (session.user as { role?: string }).role ?? "";
+        if (userRole !== "R1" && subStatus.allowedRoles.length > 0 && !subStatus.allowedRoles.includes(userRole)) {
+            return NextResponse.json({ error: "Your role cannot set this sub-status" }, { status: 403 });
         }
 
         const ticket = await prisma.ticket.findUnique({

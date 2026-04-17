@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth-guard";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
+    const { response } = await requireRole("R1");
+    if (response) return response;
     try {
         const { id } = await params;
         const body = await req.json();
@@ -24,6 +27,8 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_: Request, { params }: Params) {
+    const { response } = await requireRole("R1");
+    if (response) return response;
     try {
         const { id } = await params;
 

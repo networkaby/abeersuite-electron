@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { requireRole } from "@/lib/auth-guard";
 
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { response } = await requireRole("R1");
+    if (response) return response;
     try {
         const { id } = await params;
         const body = await req.json();
@@ -41,6 +44,8 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { response } = await requireRole("R1");
+    if (response) return response;
     try {
         const { id } = await params;
         const userId = Number(id);

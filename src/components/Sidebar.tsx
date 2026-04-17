@@ -14,15 +14,23 @@ import {
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 
-const navItems = [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Customers", href: "/customers", icon: Users },
-    { label: "Tickets", href: "/tickets", icon: Ticket },
-    { label: "Service Centers", href: "/service-centers", icon: Building2 },
-    { label: "Users", href: "/users", icon: UserCog },
-    { label: "Statuses", href: "/settings/statuses", icon: Settings },
-    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings },
-];
+const ROLE_LABELS: Record<string, string> = {
+    R1: "Admin",
+    R2: "Technician",
+    R3: "Front Desk",
+    R4: "Despatch",
+};
+
+// roles: null = all authenticated users
+const NAV_ITEMS = [
+    { label: "Dashboard",       href: "/dashboard",            icon: LayoutDashboard, roles: null },
+    { label: "Customers",       href: "/customers",            icon: Users,           roles: null },
+    { label: "Tickets",         href: "/tickets",              icon: Ticket,          roles: null },
+    { label: "Service Centers", href: "/service-centers",      icon: Building2,       roles: ["R1", "R2"] },
+    { label: "Users",           href: "/users",                icon: UserCog,         roles: ["R1"] },
+    { label: "Statuses",        href: "/settings/statuses",    icon: Settings,        roles: ["R1"] },
+    { label: "Sub-Statuses",    href: "/settings/sub-statuses",icon: Settings,        roles: ["R1"] },
+] as const;
 
 type SidebarUser = {
     name?: string | null;
@@ -31,6 +39,11 @@ type SidebarUser = {
 
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
+    const userRole = user?.role ?? "";
+
+    const visibleItems = NAV_ITEMS.filter(
+        (item) => item.roles === null || item.roles.includes(userRole as never)
+    );
 
     return (
         <aside className="w-64 bg-white shadow-md flex flex-col min-h-screen">
@@ -40,22 +53,25 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     <h1 className="text-xl font-bold text-blue-600">ServiceMgmt</h1>
                     <NotificationBell />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">{user?.name}</p>
-                <p className="text-xs text-gray-400">{user?.role}</p>
+                <p className="text-xs text-gray-600 font-medium mt-1">{user?.name}</p>
+                <p className="text-xs text-gray-400">
+                    {ROLE_LABELS[userRole] ?? userRole}
+                </p>
             </div>
 
             {/* Nav */}
             <nav className="flex-1 p-4 space-y-1">
-                {navItems.map(({ label, href, icon: Icon }) => {
+                {visibleItems.map(({ label, href, icon: Icon }) => {
                     const isActive = pathname.startsWith(href);
                     return (
                         <Link
                             key={href}
                             href={href}
-                            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                                isActive
                                     ? "bg-blue-50 text-blue-600"
                                     : "text-gray-600 hover:bg-gray-100"
-                                }`}
+                            }`}
                         >
                             <Icon size={18} />
                             {label}
