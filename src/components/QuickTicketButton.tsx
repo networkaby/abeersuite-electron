@@ -9,6 +9,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useQuickTicketStore } from "@/store/quickTicketStore";
+import { useReferenceStore } from "@/store/referenceStore";
 
 const customerSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -30,27 +32,13 @@ const ticketSchema = z.object({
 
 type CustomerFormData = z.infer<typeof customerSchema>;
 type TicketFormData = z.infer<typeof ticketSchema>;
-type Step = "phone" | "customer" | "ticket";
-type BasicCustomer = {
-    id: number;
-    name: string;
-    phone: string;
-};
-
-type TechnicianOption = {
-    id: number;
-    name: string;
-};
 
 export default function QuickTicketButton() {
     const router = useRouter();
     const { data: session } = useSession();
-    const [open, setOpen] = useState(false);
-    const [step, setStep] = useState<Step>("phone");
-    const [phone, setPhone] = useState("");
+    const { open, step, phone, customer, setOpen, setStep, setPhone, setCustomer, reset } = useQuickTicketStore();
+    const { technicians, fetchTechnicians } = useReferenceStore();
     const [searching, setSearching] = useState(false);
-    const [customer, setCustomer] = useState<BasicCustomer | null>(null);
-    const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
 
     const customerForm = useForm<CustomerFormData>({
         resolver: zodResolver(customerSchema) as Resolver<CustomerFormData>,
@@ -62,21 +50,15 @@ export default function QuickTicketButton() {
     });
 
     const openModal = async () => {
+        reset();
         setOpen(true);
-        setStep("phone");
-        setPhone("");
-        setCustomer(null);
         customerForm.reset();
         ticketForm.reset({ priority: "NORMAL" });
-        const res = await axios.get("/api/users");
-        setTechnicians(res.data);
+        await fetchTechnicians();
     };
 
     const closeModal = () => {
-        setOpen(false);
-        setStep("phone");
-        setPhone("");
-        setCustomer(null);
+        reset();
     };
 
     const searchByPhone = async () => {

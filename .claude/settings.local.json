@@ -9,7 +9,9 @@
       "Bash(curl -s -X POST http://localhost:3000/api/auth/callback/credentials -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"admin@service.com\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
       "Bash(curl -v http://localhost:3000/api/auth/providers)",
       "Bash(DATABASE_URL=\"postgresql://postgres.gphtzbejvpijcfmvqpqo:uVh^+C8^*-G7z2Y@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require\" npx prisma migrate reset --force)",
-      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes proceed\" DATABASE_URL=\"postgresql://postgres.gphtzbejvpijcfmvqpqo:uVh^+C8^*-G7z2Y@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require\" npx prisma migrate reset --force)"
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes proceed\" DATABASE_URL=\"postgresql://postgres.gphtzbejvpijcfmvqpqo:uVh^+C8^*-G7z2Y@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require\" npx prisma migrate reset --force)",
+      "Bash(xargs grep *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

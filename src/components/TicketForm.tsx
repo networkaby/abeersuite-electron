@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
@@ -8,6 +8,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useReferenceStore } from "@/store/referenceStore";
 
 const schema = z.object({
     customerId: z.string().min(1, "Customer is required"),
@@ -28,21 +29,9 @@ interface Props {
     onClose: () => void;
 }
 
-type CustomerOption = {
-    id: number;
-    name: string;
-    phone: string;
-};
-
-type TechnicianOption = {
-    id: number;
-    name: string;
-};
-
 export default function TicketForm({ onClose }: Props) {
     const { data: session } = useSession();
-    const [customers, setCustomers] = useState<CustomerOption[]>([]);
-    const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
+    const { customers, technicians, fetchCustomers, fetchTechnicians } = useReferenceStore();
 
     const {
         register,
@@ -54,9 +43,9 @@ export default function TicketForm({ onClose }: Props) {
     });
 
     useEffect(() => {
-        axios.get("/api/customers").then((r) => setCustomers(r.data));
-        axios.get("/api/users").then((r) => setTechnicians(r.data));
-    }, []);
+        fetchCustomers();
+        fetchTechnicians();
+    }, [fetchCustomers, fetchTechnicians]);
 
     const onSubmit = async (data: FormData) => {
         try {
