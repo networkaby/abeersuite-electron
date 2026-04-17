@@ -14,10 +14,27 @@ model TicketStatus {
   order       Int
   isTerminal  Boolean  @default(false)
 
-  tickets         Ticket[]
-  logs            TicketLog[]
-  fromTransitions StatusTransition[] @relation("FromStatus")
-  toTransitions   StatusTransition[] @relation("ToStatus")
+  tickets                Ticket[]
+  logs                   TicketLog[]
+  fromTransitions        StatusTransition[]  @relation("FromStatus")
+  toTransitions          StatusTransition[]  @relation("ToStatus")
+  triggeredBySubStatuses TicketSubStatus[]   @relation("SubStatusTrigger")
+}
+
+model TicketSubStatus {
+  id                  String  @id
+  label               String
+  color               String  @default("bg-gray-100 text-gray-600")
+  group               String
+  order               Int
+  applicableStatusIds String[]
+  allowedRoles        String[]
+  notifyRoles         String[]
+  triggerStatusId     String?
+  triggerStatus       TicketStatus? @relation("SubStatusTrigger", fields: [triggerStatusId], references: [id])
+
+  tickets Ticket[]
+  logs    TicketLog[]
 }
 
 model StatusTransition {
@@ -46,15 +63,16 @@ model Role {
 }
 
 model User {
-  id         Int         @id @default(autoincrement())
-  name       String
-  email      String      @unique
-  password   String
-  role       String      @default("R2")
-  userRole   Role        @relation(fields: [role], references: [id])
-  tickets    Ticket[]
-  ticketLogs TicketLog[]
-  createdAt  DateTime    @default(now())
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  password      String
+  role          String         @default("R2")
+  userRole      Role           @relation(fields: [role], references: [id])
+  tickets       Ticket[]
+  ticketLogs    TicketLog[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
 }
 
 model Customer {
@@ -80,40 +98,58 @@ model Device {
 }
 
 model Ticket {
-  id              Int            @id @default(autoincrement())
-  status          String         @default("S1")
-  ticketStatus    TicketStatus   @relation(fields: [status], references: [id])
-  priority        String         @default("P2")
-  ticketPriority  Priority       @relation(fields: [priority], references: [id])
+  id              Int              @id @default(autoincrement())
+  status          String           @default("S1")
+  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
+  subStatusId     String?
+  ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
+  escalationType  String?
+  priority        String           @default("P2")
+  ticketPriority  Priority         @relation(fields: [priority], references: [id])
   notes           String?
   accessInfo      String?
   estimatedCost   Float?
-  device          Device         @relation(fields: [deviceId], references: [id])
+  device          Device           @relation(fields: [deviceId], references: [id])
   deviceId        Int
-  technician      User?          @relation(fields: [technicianId], references: [id])
+  technician      User?            @relation(fields: [technicianId], references: [id])
   technicianId    Int?
-  escalated       Boolean        @default(false)
+  escalated       Boolean          @default(false)
   escalatedAt     DateTime?
   expectedReturn  DateTime?
   receivedBackAt  DateTime?
   externalRef     String?
-  serviceCenter   ServiceCenter? @relation(fields: [serviceCenterId], references: [id])
+  serviceCenter   ServiceCenter?   @relation(fields: [serviceCenterId], references: [id])
   serviceCenterId Int?
   logs            TicketLog[]
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  notifications   Notification[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model TicketLog {
-  id           Int          @id @default(autoincrement())
-  ticket       Ticket       @relation(fields: [ticketId], references: [id])
-  ticketId     Int
-  status       String
-  ticketStatus TicketStatus @relation(fields: [status], references: [id])
-  note         String?
-  changedBy    User         @relation(fields: [userId], references: [id])
-  userId       Int
-  createdAt    DateTime     @default(now())
+  id              Int              @id @default(autoincrement())
+  ticket          Ticket           @relation(fields: [ticketId], references: [id])
+  ticketId        Int
+  status          String
+  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
+  subStatusId     String?
+  ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
+  note            String?
+  changedBy       User             @relation(fields: [userId], references: [id])
+  userId          Int
+  createdAt       DateTime         @default(now())
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  message   String
+  type      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 model ServiceCenter {
