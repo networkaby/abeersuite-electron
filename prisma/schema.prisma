@@ -8,11 +8,14 @@ datasource db {
 }
 
 model TicketStatus {
-  id          String   @id
-  label       String
-  color       String
-  order       Int
-  isTerminal  Boolean  @default(false)
+  id           String   @id
+  label        String
+  color        String
+  order        Int
+  isTerminal   Boolean  @default(false)
+  allowedRoles String[]
+  notifyRoles  String[]
+  actionLabel  String?
 
   tickets         Ticket[]
   logs            TicketLog[]

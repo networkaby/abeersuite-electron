@@ -36,11 +36,14 @@ export async function POST(req: Request) {
 
         const status = await prisma.ticketStatus.create({
             data: {
-                id:         newId,
-                label:      body.label,
-                color:      body.color  ?? "bg-gray-100 text-gray-600",
-                order:      body.order  ?? maxN + 1,
-                isTerminal: body.isTerminal ?? false,
+                id:           newId,
+                label:        body.label,
+                color:        body.color       ?? "bg-gray-100 text-gray-600",
+                order:        body.order       ?? maxN + 1,
+                isTerminal:   body.isTerminal  ?? false,
+                allowedRoles: body.allowedRoles ?? [],
+                notifyRoles:  body.notifyRoles  ?? [],
+                actionLabel:  body.actionLabel  ?? null,
             },
         });
         return NextResponse.json(status, { status: 201 });

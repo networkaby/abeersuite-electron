@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, X, ArrowUpDown, GitMerge } from "lucide-react";
+import { Plus, Trash2, Save, X, ArrowUpDown, GitMerge, Users } from "lucide-react";
 
 interface TicketStatus {
     id: string;
@@ -11,32 +11,57 @@ interface TicketStatus {
     color: string;
     order: number;
     isTerminal: boolean;
+    allowedRoles: string[];
+    notifyRoles: string[];
+    actionLabel: string | null;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
 }
 
 const COLOR_OPTIONS = [
-    { label: "Gray",   value: "bg-gray-100 text-gray-600" },
-    { label: "Blue",   value: "bg-blue-100 text-blue-600" },
-    { label: "Yellow", value: "bg-yellow-100 text-yellow-600" },
-    { label: "Orange", value: "bg-orange-100 text-orange-600" },
-    { label: "Purple", value: "bg-purple-100 text-purple-600" },
-    { label: "Green",  value: "bg-green-100 text-green-600" },
-    { label: "Red",    value: "bg-red-100 text-red-600" },
-    { label: "Teal",   value: "bg-teal-100 text-teal-600" },
+    { label: "Gray",     value: "bg-gray-100 text-gray-600" },
+    { label: "Blue",     value: "bg-blue-100 text-blue-600" },
+    { label: "Yellow",   value: "bg-yellow-100 text-yellow-600" },
+    { label: "Orange",   value: "bg-orange-100 text-orange-600" },
+    { label: "Purple",   value: "bg-purple-100 text-purple-600" },
+    { label: "Green",    value: "bg-green-100 text-green-600" },
+    { label: "Red",      value: "bg-red-100 text-red-600" },
+    { label: "Teal",     value: "bg-teal-100 text-teal-600" },
     { label: "Dim gray", value: "bg-gray-100 text-gray-400" },
+];
+
+const ALL_ROLES = [
+    { id: "R1", label: "Admin" },
+    { id: "R2", label: "Technician" },
+    { id: "R3", label: "Front Desk" },
+    { id: "R4", label: "Despatch" },
 ];
 
 export default function StatusesPage() {
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Inline edit
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValues, setEditValues] = useState<{ label: string; color: string; order: number; isTerminal: boolean }>({
         label: "", color: "", order: 0, isTerminal: false,
     });
+
+    // Transitions modal
     const [transitionModalId, setTransitionModalId] = useState<string | null>(null);
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
+
+    // Roles modal
+    const [rolesModalId, setRolesModalId] = useState<string | null>(null);
+    const [rolesForm, setRolesForm] = useState<{
+        allowedRoles: string[];
+        notifyRoles: string[];
+        actionLabel: string;
+    }>({ allowedRoles: [], notifyRoles: [], actionLabel: "" });
+    const [savingRoles, setSavingRoles] = useState(false);
+
+    // Add new
     const [addingNew, setAddingNew] = useState(false);
     const [newStatus, setNewStatus] = useState({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
 
@@ -53,13 +78,12 @@ export default function StatusesPage() {
 
     useEffect(() => { fetchStatuses(); }, []);
 
+    // ── Inline edit ──
     const startEdit = (s: TicketStatus) => {
         setEditingId(s.id);
         setEditValues({ label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal });
     };
-
     const cancelEdit = () => setEditingId(null);
-
     const saveEdit = async (id: string) => {
         try {
             await axios.patch(`/api/ticket-statuses/${id}`, editValues);
@@ -71,11 +95,9 @@ export default function StatusesPage() {
         }
     };
 
+    // ── Delete ──
     const deleteStatus = async (id: string, ticketCount: number) => {
-        if (ticketCount > 0) {
-            toast.error(`Cannot delete: ${ticketCount} ticket(s) use this status.`);
-            return;
-        }
+        if (ticketCount > 0) { toast.error(`Cannot delete: ${ticketCount} ticket(s) use this status.`); return; }
         if (!confirm("Delete this status? This cannot be undone.")) return;
         try {
             await axios.delete(`/api/ticket-statuses/${id}`);
@@ -87,11 +109,11 @@ export default function StatusesPage() {
         }
     };
 
+    // ── Transitions modal ──
     const openTransitions = (s: TicketStatus) => {
         setTransitionModalId(s.id);
         setSelectedToIds(s.fromTransitions.map((t) => t.toStatusId));
     };
-
     const saveTransitions = async () => {
         if (!transitionModalId) return;
         setSavingTransitions(true);
@@ -107,6 +129,43 @@ export default function StatusesPage() {
         }
     };
 
+    // ── Roles modal ──
+    const openRoles = (s: TicketStatus) => {
+        setRolesModalId(s.id);
+        setRolesForm({
+            allowedRoles: s.allowedRoles,
+            notifyRoles:  s.notifyRoles,
+            actionLabel:  s.actionLabel ?? "",
+        });
+    };
+    const toggleRole = (field: "allowedRoles" | "notifyRoles", id: string) => {
+        setRolesForm((prev) => ({
+            ...prev,
+            [field]: prev[field].includes(id)
+                ? prev[field].filter((r) => r !== id)
+                : [...prev[field], id],
+        }));
+    };
+    const saveRoles = async () => {
+        if (!rolesModalId) return;
+        setSavingRoles(true);
+        try {
+            await axios.patch(`/api/ticket-statuses/${rolesModalId}`, {
+                allowedRoles: rolesForm.allowedRoles,
+                notifyRoles:  rolesForm.notifyRoles,
+                actionLabel:  rolesForm.actionLabel || null,
+            });
+            toast.success("Role settings saved");
+            setRolesModalId(null);
+            await fetchStatuses();
+        } catch {
+            toast.error("Failed to save role settings");
+        } finally {
+            setSavingRoles(false);
+        }
+    };
+
+    // ── Add new ──
     const addStatus = async () => {
         if (!newStatus.label.trim()) { toast.error("Label is required"); return; }
         try {
@@ -126,20 +185,20 @@ export default function StatusesPage() {
     };
 
     const transitionStatus = transitionModalId ? statuses.find((s) => s.id === transitionModalId) : null;
+    const rolesStatus      = rolesModalId      ? statuses.find((s) => s.id === rolesModalId)      : null;
 
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold">Ticket Statuses</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage status labels, colors, order, and allowed transitions.</p>
+                    <p className="text-sm text-gray-500 mt-1">Manage status labels, colors, transitions, and role permissions.</p>
                 </div>
                 <button
                     onClick={() => setAddingNew(true)}
                     className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
                 >
-                    <Plus size={16} />
-                    Add Status
+                    <Plus size={16} /> Add Status
                 </button>
             </div>
 
@@ -157,6 +216,8 @@ export default function StatusesPage() {
                                     <span className="flex items-center gap-1"><ArrowUpDown size={12} />Order</span>
                                 </th>
                                 <th className="px-6 py-3 text-left">Terminal</th>
+                                <th className="px-6 py-3 text-left">Who can set</th>
+                                <th className="px-6 py-3 text-left">Notifies</th>
                                 <th className="px-6 py-3 text-left">Transitions To</th>
                                 <th className="px-6 py-3 text-left">Tickets</th>
                                 <th className="px-6 py-3 text-left">Actions</th>
@@ -207,6 +268,7 @@ export default function StatusesPage() {
                                                     className="w-4 h-4"
                                                 />
                                             </td>
+                                            <td className="px-6 py-3 text-gray-400 text-xs" colSpan={2}>—</td>
                                             <td className="px-6 py-3 text-gray-400 text-xs">—</td>
                                             <td className="px-6 py-3 text-gray-400">{s._count.tickets}</td>
                                             <td className="px-6 py-3">
@@ -243,6 +305,28 @@ export default function StatusesPage() {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">
+                                                {s.allowedRoles.length === 0 ? (
+                                                    <span className="text-gray-400 text-xs">Anyone</span>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {s.allowedRoles.map((r) => (
+                                                            <span key={r} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{ALL_ROLES.find((x) => x.id === r)?.label ?? r}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {s.notifyRoles.length === 0 ? (
+                                                    <span className="text-gray-400 text-xs">None</span>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {s.notifyRoles.map((r) => (
+                                                            <span key={r} className="px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-xs">{ALL_ROLES.find((x) => x.id === r)?.label ?? r}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
                                                 {s.fromTransitions.length === 0 ? (
                                                     <span className="text-gray-400 text-xs">None</span>
                                                 ) : (
@@ -257,12 +341,18 @@ export default function StatusesPage() {
                                             </td>
                                             <td className="px-6 py-4 text-gray-500">{s._count.tickets}</td>
                                             <td className="px-6 py-4">
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 flex-wrap">
                                                     <button
                                                         onClick={() => startEdit(s)}
                                                         className="px-3 py-1 border rounded text-xs text-gray-600 hover:bg-gray-50"
                                                     >
                                                         Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openRoles(s)}
+                                                        className="flex items-center gap-1 px-3 py-1 border rounded text-xs text-purple-600 hover:bg-purple-50"
+                                                    >
+                                                        <Users size={12} /> Roles
                                                     </button>
                                                     <button
                                                         onClick={() => openTransitions(s)}
@@ -321,7 +411,7 @@ export default function StatusesPage() {
                                             className="w-4 h-4"
                                         />
                                     </td>
-                                    <td className="px-6 py-3 text-gray-400 text-xs">Set after creation</td>
+                                    <td className="px-6 py-3 text-gray-400 text-xs" colSpan={3}>Set roles after creation</td>
                                     <td className="px-6 py-3 text-gray-400">0</td>
                                     <td className="px-6 py-3">
                                         <div className="flex gap-2">
@@ -383,10 +473,7 @@ export default function StatusesPage() {
                                 ))}
                         </div>
                         <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-                            <button
-                                onClick={() => setTransitionModalId(null)}
-                                className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
-                            >
+                            <button onClick={() => setTransitionModalId(null)} className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50">
                                 Cancel
                             </button>
                             <button
@@ -395,6 +482,94 @@ export default function StatusesPage() {
                                 className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-60"
                             >
                                 {savingTransitions ? "Saving…" : "Save Transitions"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Roles modal */}
+            {rolesModalId && rolesStatus && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold">
+                                Role settings —{" "}
+                                <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${rolesStatus.color}`}>
+                                    {rolesStatus.label}
+                                </span>
+                            </h2>
+                            <button onClick={() => setRolesModalId(null)} className="text-gray-400 hover:text-gray-600">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-5">
+                            {/* Who can set */}
+                            <div>
+                                <p className="text-sm font-medium mb-2">Who can move a ticket to this status?</p>
+                                <p className="text-xs text-gray-400 mb-2">Leave all unchecked to allow any role. Admin always bypasses this.</p>
+                                <div className="grid grid-cols-2 gap-1">
+                                    {ALL_ROLES.map((r) => (
+                                        <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={rolesForm.allowedRoles.includes(r.id)}
+                                                onChange={() => toggleRole("allowedRoles", r.id)}
+                                                className="accent-blue-600"
+                                            />
+                                            {r.label}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Who gets notified */}
+                            <div>
+                                <p className="text-sm font-medium mb-2">Which roles see this as an action item?</p>
+                                <p className="text-xs text-gray-400 mb-2">These roles will see tickets in this status on their dashboard queue.</p>
+                                <div className="grid grid-cols-2 gap-1">
+                                    {ALL_ROLES.map((r) => (
+                                        <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={rolesForm.notifyRoles.includes(r.id)}
+                                                onChange={() => toggleRole("notifyRoles", r.id)}
+                                                className="accent-orange-500"
+                                            />
+                                            {r.label}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Action label */}
+                            <div>
+                                <label className="block text-sm font-medium mb-1">
+                                    Action label <span className="text-gray-400">(optional)</span>
+                                </label>
+                                <input
+                                    value={rolesForm.actionLabel}
+                                    onChange={(e) => setRolesForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
+                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="e.g. New ticket received — assign a technician"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Shown on the notified role&apos;s dashboard as the task description.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+                            <button onClick={() => setRolesModalId(null)} className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={saveRoles}
+                                disabled={savingRoles}
+                                className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-60"
+                            >
+                                {savingRoles ? "Saving…" : "Save Role Settings"}
                             </button>
                         </div>
                     </div>

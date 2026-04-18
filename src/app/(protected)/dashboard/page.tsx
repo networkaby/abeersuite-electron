@@ -148,12 +148,15 @@ async function TechnicianDashboard({ name, userId }: { name: string; userId: num
     });
 
     const unassigned = await prisma.ticket.findMany({
-        where: { technicianId: null, ticketStatus: { isTerminal: false } },
+        where: {
+            technicianId: null,
+            ticketStatus: { isTerminal: false, notifyRoles: { has: "R2" } },
+        },
         orderBy: { createdAt: "asc" },
-        take: 5,
+        take: 10,
         include: {
             device: { include: { customer: true } },
-            ticketStatus: { select: { label: true, color: true } },
+            ticketStatus: { select: { label: true, color: true, actionLabel: true } },
         },
     });
 
@@ -219,26 +222,39 @@ async function TechnicianDashboard({ name, userId }: { name: string; userId: num
                 )}
             </div>
 
-            {/* Unassigned tickets */}
+            {/* Action queue from status notifyRoles */}
             {unassigned.length > 0 && (
                 <div className="bg-white rounded-xl shadow overflow-hidden">
-                    <div className="px-6 py-4 border-b">
-                        <h2 className="font-semibold text-gray-700">Unassigned Tickets</h2>
-                        <p className="text-xs text-gray-400 mt-0.5">Open tickets with no technician assigned</p>
+                    <div className="px-6 py-4 border-b bg-blue-50 flex items-center gap-2">
+                        <Wrench size={16} className="text-blue-500" />
+                        <div>
+                            <h2 className="font-semibold text-blue-700">Action Required — Needs Attention</h2>
+                            <p className="text-xs text-blue-500 mt-0.5">Tickets in statuses requesting technician action</p>
+                        </div>
+                        <span className="ml-auto bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                            {unassigned.length} tickets
+                        </span>
                     </div>
                     <div className="divide-y">
                         {unassigned.map((t) => (
-                            <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50">
+                            <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-blue-50/30">
                                 <Link href={`/tickets/${t.id}`} className="text-blue-600 font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">
                                         {t.device.customer.name} — {t.device.brand} {t.device.model}
                                     </p>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
-                                        {t.ticketStatus.label}
-                                    </span>
+                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                            {t.ticketStatus.label}
+                                        </span>
+                                        {t.ticketStatus.actionLabel && (
+                                            <span className="text-xs text-blue-600 font-medium">
+                                                → {t.ticketStatus.actionLabel}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                                <span className="text-xs text-gray-400">{timeAgo(t.createdAt)}</span>
+                                <span className="text-xs text-gray-400 shrink-0">{timeAgo(t.createdAt)}</span>
                                 <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-blue-600"><ArrowRight size={16} /></Link>
                             </div>
                         ))}
@@ -254,70 +270,109 @@ async function FrontDeskDashboard({ name }: { name: string }) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [actionCount, newToday, readyCount] = await Promise.all([
+    const [subActionCount, statusActionCount, newToday] = await Promise.all([
         prisma.ticket.count({
             where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
         }),
+        prisma.ticket.count({
+            where: { ticketStatus: { notifyRoles: { has: "R3" } } },
+        }),
         prisma.ticket.count({ where: { createdAt: { gte: today } } }),
-        prisma.ticket.count({ where: { status: "S6" } }),
     ]);
+    const actionCount = subActionCount + statusActionCount;
 
-    const actionQueue = await prisma.ticket.findMany({
-        where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
-        orderBy: { updatedAt: "asc" },
-        include: {
-            device: { include: { customer: true } },
-            ticketStatus: { select: { label: true, color: true } },
-            ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
-            technician: { select: { name: true } },
-        },
-    });
-
-    const readyTickets = await prisma.ticket.findMany({
-        where: { status: "S6" },
-        orderBy: { updatedAt: "asc" },
-        take: 10,
-        include: {
-            device: { include: { customer: true } },
-            ticketStatus: { select: { label: true, color: true } },
-            ticketSubStatus: { select: { label: true, color: true } },
-        },
-    });
+    const [actionQueue, statusQueue] = await Promise.all([
+        prisma.ticket.findMany({
+            where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
+            orderBy: { updatedAt: "asc" },
+            include: {
+                device: { include: { customer: true } },
+                ticketStatus: { select: { label: true, color: true } },
+                ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
+                technician: { select: { name: true } },
+            },
+        }),
+        prisma.ticket.findMany({
+            where: { ticketStatus: { notifyRoles: { has: "R3" } } },
+            orderBy: { updatedAt: "asc" },
+            include: {
+                device: { include: { customer: true } },
+                ticketStatus: { select: { label: true, color: true, actionLabel: true } },
+                ticketSubStatus: { select: { label: true, color: true } },
+            },
+        }),
+    ]);
 
     return (
         <div>
             <h1 className="text-2xl font-bold mb-1">Front Desk</h1>
             <p className="text-gray-400 text-sm mb-6">Welcome back, {name}</p>
 
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-2 gap-4 mb-8">
                 <StatCard label="Action Required" value={actionCount} color={actionCount > 0 ? "text-red-600" : "text-gray-800"} icon={<Phone size={22} />} />
                 <StatCard label="New Today" value={newToday} color="text-blue-600" icon={<Package size={22} />} />
-                <StatCard label="Ready for Collection" value={readyCount} color="text-green-600" icon={<CheckCircle size={22} />} />
             </div>
 
-            {/* Action Queue */}
+            {/* Status-level action queue (e.g. Ready → call customer) */}
+            {statusQueue.length > 0 && (
+                <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
+                    <div className="px-6 py-4 border-b bg-green-50 flex items-center gap-2">
+                        <CheckCircle size={16} className="text-green-600" />
+                        <h2 className="font-semibold text-green-700">Status Actions</h2>
+                        <span className="ml-auto bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                            {statusQueue.length} pending
+                        </span>
+                    </div>
+                    <div className="divide-y">
+                        {statusQueue.map((t) => (
+                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-green-50/30">
+                                <div className="shrink-0 mt-0.5"><CheckCircle size={16} className="text-green-400" /></div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                            Ticket #{t.id}
+                                        </Link>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                            {t.ticketStatus.label}
+                                        </span>
+                                        <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-gray-800 mt-1">
+                                        {t.device.customer.name}
+                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.brand} {t.device.model}</span>
+                                    </p>
+                                    {t.ticketStatus.actionLabel && (
+                                        <p className="text-xs text-green-700 mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
+                                    )}
+                                </div>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Sub-status action queue (call queue) */}
             <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
                 <div className="px-6 py-4 border-b bg-red-50 flex items-center gap-2">
                     <Phone size={16} className="text-red-500" />
-                    <h2 className="font-semibold text-red-700">Action Required — Call Queue</h2>
-                    {actionCount > 0 && (
+                    <h2 className="font-semibold text-red-700">Call Queue</h2>
+                    {subActionCount > 0 && (
                         <span className="ml-auto bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                            {actionCount} pending
+                            {subActionCount} pending
                         </span>
                     )}
                 </div>
                 {actionQueue.length === 0 ? (
                     <div className="px-6 py-10 text-center">
                         <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">All clear — no pending actions.</p>
+                        <p className="text-sm text-gray-400">All clear — no pending calls.</p>
                     </div>
                 ) : (
                     <div className="divide-y">
                         {actionQueue.map((t) => (
                             <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-red-50/30">
-                                <div className="shrink-0 mt-0.5">
-                                    <Phone size={16} className="text-red-400" />
-                                </div>
+                                <div className="shrink-0 mt-0.5"><Phone size={16} className="text-red-400" /></div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
@@ -337,42 +392,21 @@ async function FrontDeskDashboard({ name }: { name: string }) {
                                         {t.technician && <span className="ml-2 text-gray-400">· Tech: {t.technician.name}</span>}
                                     </p>
                                     {t.ticketSubStatus!.actionLabel && (
-                                        <p className="text-xs text-red-600 mt-1 font-medium">
-                                            → {t.ticketSubStatus!.actionLabel}
-                                        </p>
+                                        <p className="text-xs text-red-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">
-                                    Open
-                                </Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
 
-            {/* Ready for collection */}
-            {readyTickets.length > 0 && (
-                <div className="bg-white rounded-xl shadow overflow-hidden">
-                    <div className="px-6 py-4 border-b bg-green-50 flex items-center gap-2">
-                        <CheckCircle size={16} className="text-green-600" />
-                        <h2 className="font-semibold text-green-700">Ready for Collection</h2>
-                    </div>
-                    <div className="divide-y">
-                        {readyTickets.map((t) => (
-                            <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50">
-                                <Link href={`/tickets/${t.id}`} className="text-blue-600 font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
-                                <div className="flex-1">
-                                    <p className="text-sm font-medium">{t.device.customer.name}
-                                        <span className="text-gray-400 font-normal text-xs ml-2">{t.device.customer.phone}</span>
-                                    </p>
-                                    <p className="text-xs text-gray-500">{t.device.brand} {t.device.model}</p>
-                                </div>
-                                <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
-                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-blue-600"><ArrowRight size={16} /></Link>
-                            </div>
-                        ))}
-                    </div>
+            {/* Ready for collection — driven by statusQueue S6 entries shown above; no duplicate section needed */}
+            {statusQueue.length === 0 && actionQueue.length === 0 && (
+                <div className="px-6 py-10 text-center bg-white rounded-xl shadow">
+                    <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">All clear — no pending actions.</p>
                 </div>
             )}
         </div>
@@ -381,24 +415,39 @@ async function FrontDeskDashboard({ name }: { name: string }) {
 
 // ── Despatch Dashboard ─────────────────────────────────────────────────────────
 async function DespatchDashboard({ name }: { name: string }) {
-    const [pendingCount, inTransitCount] = await Promise.all([
+    const [subPendingCount, statusPendingCount, inTransitCount] = await Promise.all([
         prisma.ticket.count({
             where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
         }),
+        prisma.ticket.count({
+            where: { ticketStatus: { notifyRoles: { has: "R4" } } },
+        }),
         prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
     ]);
+    const pendingCount = subPendingCount + statusPendingCount;
 
-    const pendingQueue = await prisma.ticket.findMany({
-        where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
-        orderBy: { updatedAt: "asc" },
-        include: {
-            device: { include: { customer: true } },
-            ticketStatus: { select: { label: true, color: true } },
-            ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
-            serviceCenter: { select: { name: true } },
-            technician: { select: { name: true } },
-        },
-    });
+    const [pendingQueue, statusQueue] = await Promise.all([
+        prisma.ticket.findMany({
+            where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
+            orderBy: { updatedAt: "asc" },
+            include: {
+                device: { include: { customer: true } },
+                ticketStatus: { select: { label: true, color: true } },
+                ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
+                serviceCenter: { select: { name: true } },
+                technician: { select: { name: true } },
+            },
+        }),
+        prisma.ticket.findMany({
+            where: { ticketStatus: { notifyRoles: { has: "R4" } } },
+            orderBy: { updatedAt: "asc" },
+            include: {
+                device: { include: { customer: true } },
+                ticketStatus: { select: { label: true, color: true, actionLabel: true } },
+                serviceCenter: { select: { name: true } },
+            },
+        }),
+    ]);
 
     return (
         <div>
@@ -410,13 +459,56 @@ async function DespatchDashboard({ name }: { name: string }) {
                 <StatCard label="Escalated (In Repair)" value={inTransitCount} color="text-blue-600" icon={<AlertCircle size={22} />} />
             </div>
 
+            {/* Status-level queue (e.g. S4 Escalated → arrange courier) */}
+            {statusQueue.length > 0 && (
+                <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
+                    <div className="px-6 py-4 border-b bg-orange-50 flex items-center gap-2">
+                        <Package size={16} className="text-orange-500" />
+                        <h2 className="font-semibold text-orange-700">Status Actions</h2>
+                        <span className="ml-auto bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                            {statusQueue.length} pending
+                        </span>
+                    </div>
+                    <div className="divide-y">
+                        {statusQueue.map((t) => (
+                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-orange-50/30">
+                                <Package size={16} className="text-orange-400 mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                            Ticket #{t.id}
+                                        </Link>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                            {t.ticketStatus.label}
+                                        </span>
+                                        <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-gray-800 mt-1">
+                                        {t.device.brand} {t.device.model}
+                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.customer.name}</span>
+                                    </p>
+                                    {t.serviceCenter && (
+                                        <p className="text-xs text-gray-500 mt-0.5">Service Centre: {t.serviceCenter.name}</p>
+                                    )}
+                                    {t.ticketStatus.actionLabel && (
+                                        <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
+                                    )}
+                                </div>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Sub-status despatch queue */}
             <div className="bg-white rounded-xl shadow overflow-hidden">
                 <div className="px-6 py-4 border-b bg-orange-50 flex items-center gap-2">
                     <Package size={16} className="text-orange-500" />
                     <h2 className="font-semibold text-orange-700">Despatch Queue</h2>
-                    {pendingCount > 0 && (
+                    {subPendingCount > 0 && (
                         <span className="ml-auto bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                            {pendingCount} pending
+                            {subPendingCount} pending
                         </span>
                     )}
                 </div>
@@ -451,14 +543,10 @@ async function DespatchDashboard({ name }: { name: string }) {
                                         <p className="text-xs text-gray-400">Technician: {t.technician.name}</p>
                                     )}
                                     {t.ticketSubStatus!.actionLabel && (
-                                        <p className="text-xs text-orange-600 mt-1 font-medium">
-                                            → {t.ticketSubStatus!.actionLabel}
-                                        </p>
+                                        <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">
-                                    Open
-                                </Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
                             </div>
                         ))}
                     </div>

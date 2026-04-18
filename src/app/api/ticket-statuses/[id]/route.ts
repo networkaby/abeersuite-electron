@@ -14,10 +14,13 @@ export async function PATCH(req: Request, { params }: Params) {
         const status = await prisma.ticketStatus.update({
             where: { id },
             data: {
-                label:      body.label      !== undefined ? body.label      : undefined,
-                color:      body.color      !== undefined ? body.color      : undefined,
-                order:      body.order      !== undefined ? Number(body.order) : undefined,
-                isTerminal: body.isTerminal !== undefined ? body.isTerminal : undefined,
+                label:        body.label        !== undefined ? body.label                : undefined,
+                color:        body.color        !== undefined ? body.color                : undefined,
+                order:        body.order        !== undefined ? Number(body.order)        : undefined,
+                isTerminal:   body.isTerminal   !== undefined ? body.isTerminal           : undefined,
+                allowedRoles: body.allowedRoles !== undefined ? body.allowedRoles         : undefined,
+                notifyRoles:  body.notifyRoles  !== undefined ? body.notifyRoles          : undefined,
+                actionLabel:  "actionLabel" in body            ? (body.actionLabel ?? null) : undefined,
             },
         });
         return NextResponse.json(status);

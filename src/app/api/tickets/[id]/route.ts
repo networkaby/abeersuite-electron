@@ -50,9 +50,25 @@ export async function PUT(
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const userId = Number((session.user as { id?: string }).id);
+        const userRole = (session.user as { role?: string }).role ?? "";
 
         const { id } = await params;
         const body = await req.json();
+
+        // Enforce allowedRoles on main status change (Admin bypasses)
+        if (body.status && userRole !== "R1") {
+            const targetStatus = await prisma.ticketStatus.findUnique({
+                where: { id: body.status },
+                select: { allowedRoles: true },
+            });
+            if (
+                targetStatus &&
+                targetStatus.allowedRoles.length > 0 &&
+                !targetStatus.allowedRoles.includes(userRole)
+            ) {
+                return NextResponse.json({ error: "Your role cannot set this status." }, { status: 403 });
+            }
+        }
 
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },

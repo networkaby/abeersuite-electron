@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `dev`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-18 21:30
+**Last Updated:** 2026-04-18 22:30
 
 ---
 
@@ -39,6 +39,23 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - Admin sees global stats + recent activity
 - Fixed `open` count to use `ticketStatus.isTerminal: false` (was hardcoded `["S1","S2","S3"]`)
 - Files: `src/app/(protected)/dashboard/page.tsx`
+
+### 2026-04-18 — Main status role permissions (allowedRoles / notifyRoles / actionLabel)
+- `TicketStatus` now has same role config as `TicketSubStatus`: `allowedRoles`, `notifyRoles`, `actionLabel`
+- Migration 0007: added columns + seeded defaults (S1 notifies R2, S4 notifies R4, S5 notifies R2, S6 notifies R3)
+- Settings → Statuses: "Roles" button per row opens modal to configure all three fields
+- `PUT /api/tickets/[id]` now enforces `allowedRoles` when changing main status (Admin bypasses)
+- Dashboards now show **two queues** per role: status-level (from `ticketStatus.notifyRoles`) and sub-status-level (from `ticketSubStatus.notifyRoles`)
+- Technician "Action Required" queue: tickets in statuses where `notifyRoles` has R2 (e.g. S1 newly received, S5 received back) — no longer just "unassigned"
+- Files: `prisma/schema.prisma`, `prisma/migrations/0007_*`, `src/app/api/ticket-statuses/`, `src/app/api/tickets/[id]/route.ts`, `src/app/(protected)/settings/statuses/page.tsx`, `src/app/(protected)/dashboard/page.tsx`
+
+### 2026-04-18 — actionLabel on TicketSubStatus + formatDate utility
+- Added `actionLabel String?` to `TicketSubStatus` — replaces hardcoded `ACTION_LABELS`/`DESPATCH_ACTIONS` maps in dashboard
+- Migration 0006: added column + seeded values for SS1, SS2, SS5, SS11, SS12, SS15, SS17, SS22, SS27, SS32
+- Settings → Sub-Statuses form modal: new "Action label" input field
+- API POST/PATCH sub-statuses: accept and persist `actionLabel`
+- Created `src/lib/format-date.ts`: `formatDate()` → "18 Apr 2026", `formatDateTime()` → "18 Apr 2026, 14:30"
+- Replaced all `toLocaleDateString()` / `toLocaleString()` calls across 6 files with the utility
 
 ### 2026-04-18 — Settings page statuses fetched dynamically
 - Sub-status form modal now fetches main statuses from `/api/ticket-statuses` instead of hardcoded array
@@ -129,7 +146,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | U9 | No pagination or sort on ticket list — all tickets fetched at once | `tickets/page.tsx` | Add server-side pagination; make column headers sortable; show "X of Y tickets" |
 | U10 | Empty search results give no actionable suggestion | `tickets/page.tsx` L237, `customers/page.tsx` L121 | Add CTA in empty state: "Clear filters" or "Create new ticket/customer" |
 | U11 | Success toasts don't confirm *what* changed — just "Status updated" | `StatusUpdateCombined.tsx` L111 | Show new status label: "Status updated → Repairing" |
-| U12 | Dashboard action queue uses hardcoded `ACTION_LABELS` keyed by sub-status ID | `dashboard/page.tsx` | Add `actionLabel` field to `TicketSubStatus` model; settings page can edit it per sub-status |
+| ~~U12~~ | ~~Dashboard action queue uses hardcoded `ACTION_LABELS` keyed by sub-status ID~~ | ✅ Done 2026-04-18 | `actionLabel` field added to both `TicketSubStatus` and `TicketStatus`; editable in settings |
 | U13 | Customer detail page has no "Edit Customer" button — must navigate to list | `customers/[id]/page.tsx` | Add "Edit Customer" button in detail sidebar that opens edit modal with pre-filled data |
 | U14 | Technician "Waiting: Front Desk / Despatch" indicators have no tooltip explaining required action | `dashboard/page.tsx` | Add tooltip or expand-on-hover with action description |
 | U15 | No skeleton/error boundary when ticket detail fails to load | `tickets/[id]/page.tsx` L85 | Show loading skeleton; distinguish 404 (not found) from 500 (retry button) |
@@ -142,7 +159,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | U17 | No SLA timer or time-elapsed shown on tickets | ticket list + detail | Show "3 days in Diagnosing" on both list row and detail page; flag with amber/red after threshold |
 | U18 | Sub-status badge shown next to main status with no visual relationship indicator | `tickets/[id]/page.tsx` | Add chevron arrow between main and sub-status badges (e.g. "Repairing → Waiting for Parts") |
 | U19 | "Print Receipt" button buried at bottom of sidebar | `tickets/[id]/page.tsx` L270 | Move to top of actions panel; add `Ctrl+P` hint |
-| U20 | Dates use `toLocaleDateString()` — ambiguous when day/month could swap (US vs UK locale) | multiple pages | Use unambiguous format: "18 Apr 2026" everywhere |
+| ~~U20~~ | ~~Dates use `toLocaleDateString()` — ambiguous when day/month could swap~~ | ✅ Done 2026-04-18 | `src/lib/format-date.ts` utility; all 12 occurrences replaced |
 | U21 | Empty state messaging inconsistent across pages; users page shows nothing | multiple pages | Standardise: icon + headline + description + CTA button for all empty states |
 | U22 | Badge colours have no legend or tooltip — new staff must guess meaning | all status/priority badges | Add tooltip-on-hover: "P1 = Critical — respond within 2 hours" |
 | U23 | Long ticket form has no progress/section indicator | `TicketForm.tsx` | Divide into labelled sections (Customer → Device → Problem → Internal Notes) with visible section headers |
@@ -194,6 +211,8 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | Null uniqueness | `NULLS NOT DISTINCT` index (PG 15) | Sentinel value, dedup in code | Cleanest DB-level constraint; dedup in code as backup |
 | Role system | String IDs (R1-R4) | Enums, separate permissions table | Simple, works with Prisma `String[]` scalar lists |
 | Dashboard approach | Server components per role | Client-side + API | No extra API route, no client fetch, faster render |
+| Status role config | `allowedRoles`+`notifyRoles`+`actionLabel` on both `TicketStatus` and `TicketSubStatus` | Hardcoded maps in dashboard | Fully DB-driven; admins configure via Settings without code changes |
+| Date format utility | `formatDate()` / `formatDateTime()` in `src/lib/format-date.ts` (en-GB, unambiguous) | `toLocaleDateString()` | Avoids day/month locale ambiguity; consistent "18 Apr 2026" across all pages |
 | changedBy in logs | Server session `auth()` | Client-sent body field | Client can send wrong/null userId; server session is authoritative |
 
 ---
