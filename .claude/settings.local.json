@@ -21,7 +21,9 @@
       "Bash(npx next *)",
       "Bash(pnpm lint *)",
       "Bash(node -e ' *)",
-      "Bash(find \"D:/our-own-website/service-mgmt-experiment/src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" \\\\\\) -exec grep -l \"task\\\\|myTask\\\\|actionable\" {} \\\\;)"
+      "Bash(find \"D:/our-own-website/service-mgmt-experiment/src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" \\\\\\) -exec grep -l \"task\\\\|myTask\\\\|actionable\" {} \\\\;)",
+      "Bash(cp \"d:/Users/User/Downloads/project-brain.skill\" project-brain.zip)",
+      "Bash(unzip -o project-brain.zip -d project-brain-skill)"
     ]
   }
 }
