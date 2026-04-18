@@ -33,6 +33,7 @@ model TicketSubStatus {
   // triggerMap: JSON object { parentStatusId → targetStatusId }
   // e.g. { "S2": "S3", "S4": "S5" }  — different advance per parent
   triggerMap      Json  @default("{}")
+  actionLabel     String?
 
   tickets         Ticket[]
   logs            TicketLog[]

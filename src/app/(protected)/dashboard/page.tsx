@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
 import { Phone, Package, AlertCircle, Wrench, Clock, CheckCircle, ArrowRight } from "lucide-react";
+import { formatDate } from "@/lib/format-date";
 
 function timeAgo(date: Date): string {
     const diff = Date.now() - new Date(date).getTime();
@@ -267,7 +268,7 @@ async function FrontDeskDashboard({ name }: { name: string }) {
         include: {
             device: { include: { customer: true } },
             ticketStatus: { select: { label: true, color: true } },
-            ticketSubStatus: { select: { id: true, label: true, color: true } },
+            ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
             technician: { select: { name: true } },
         },
     });
@@ -282,17 +283,6 @@ async function FrontDeskDashboard({ name }: { name: string }) {
             ticketSubStatus: { select: { label: true, color: true } },
         },
     });
-
-    const ACTION_LABELS: Record<string, string> = {
-        SS1:  "Call customer — needs to provide information",
-        SS2:  "Call customer — needs to bring item",
-        SS5:  "Call customer — quote ready for approval",
-        SS11: "Inform customer — parts delayed",
-        SS12: "Inform customer — parts issue, decision needed",
-        SS15: "Notify customer — device is ready to collect",
-        SS17: "Call customer — partial fix, decision needed",
-        SS32: "Call customer — beyond economical repair",
-    };
 
     return (
         <div>
@@ -346,9 +336,9 @@ async function FrontDeskDashboard({ name }: { name: string }) {
                                         {t.device.brand} {t.device.model}
                                         {t.technician && <span className="ml-2 text-gray-400">· Tech: {t.technician.name}</span>}
                                     </p>
-                                    {ACTION_LABELS[t.ticketSubStatus!.id] && (
+                                    {t.ticketSubStatus!.actionLabel && (
                                         <p className="text-xs text-red-600 mt-1 font-medium">
-                                            → {ACTION_LABELS[t.ticketSubStatus!.id]}
+                                            → {t.ticketSubStatus!.actionLabel}
                                         </p>
                                     )}
                                 </div>
@@ -404,16 +394,11 @@ async function DespatchDashboard({ name }: { name: string }) {
         include: {
             device: { include: { customer: true } },
             ticketStatus: { select: { label: true, color: true } },
-            ticketSubStatus: { select: { id: true, label: true, color: true } },
+            ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
             serviceCenter: { select: { name: true } },
             technician: { select: { name: true } },
         },
     });
-
-    const DESPATCH_ACTIONS: Record<string, string> = {
-        SS22: "Pack device and arrange courier to service centre",
-        SS27: "Await incoming delivery from service centre",
-    };
 
     return (
         <div>
@@ -465,9 +450,9 @@ async function DespatchDashboard({ name }: { name: string }) {
                                     {t.technician && (
                                         <p className="text-xs text-gray-400">Technician: {t.technician.name}</p>
                                     )}
-                                    {DESPATCH_ACTIONS[t.ticketSubStatus!.id] && (
+                                    {t.ticketSubStatus!.actionLabel && (
                                         <p className="text-xs text-orange-600 mt-1 font-medium">
-                                            → {DESPATCH_ACTIONS[t.ticketSubStatus!.id]}
+                                            → {t.ticketSubStatus!.actionLabel}
                                         </p>
                                     )}
                                 </div>

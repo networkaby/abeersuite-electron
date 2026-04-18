@@ -105,12 +105,69 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ---
 
+## 🎨 UX Improvement Backlog
+
+> Audited 2026-04-18. Ordered by impact on daily workflow.
+
+### 🔴 High Priority (workflow-blocking friction)
+
+| # | Issue | Location | Fix |
+|---|-------|----------|-----|
+| U1 | All destructive deletes use browser `confirm()` — no context on dependencies | customers, users, service-centers, settings pages | Replace with styled modal showing related record counts; block delete if dependencies exist |
+| U2 | Duplicate "Name" column in customers table | `customers/page.tsx` L144–155 | Remove the duplicate column; keep only the linked name |
+| U3 | No confirmation before ticket escalation | `TicketEscalation.tsx` | Add confirm modal showing: ticket ID, service center, external ref, escalation date |
+| U4 | Ticket detail `grid-cols-3` breaks on mobile — Actions panel unreachable | `tickets/[id]/page.tsx` L116 | Change to `grid-cols-1 md:grid-cols-3`; sticky action bar on mobile |
+| U5 | Ticket escalation button hidden with no explanation when conditions not met | `tickets/[id]/page.tsx` L260 | Always render button, disable with tooltip: "Already escalated" or "Ticket is closed" |
+| U6 | Reopen ticket modal doesn't show which ticket ID is being reopened | `TicketReopenButton.tsx` L61 | Show ticket ID prominently ("Reopening Ticket #123") in modal header |
+
+### 🟡 Medium Priority (daily friction points)
+
+| # | Issue | Location | Fix |
+|---|-------|----------|-----|
+| U7 | "Unassigned" technician shown as plain grey text — not visually distinct | `tickets/[id]/page.tsx` L244 | Show as coloured badge (amber/red) with hint "Click to assign" |
+| U8 | StatusUpdateCombined loads sub-statuses before showing anything — user sees blank modal | `StatusUpdateCombined.tsx` L177 | Show main status options immediately; load sub-statuses progressively |
+| U9 | No pagination or sort on ticket list — all tickets fetched at once | `tickets/page.tsx` | Add server-side pagination; make column headers sortable; show "X of Y tickets" |
+| U10 | Empty search results give no actionable suggestion | `tickets/page.tsx` L237, `customers/page.tsx` L121 | Add CTA in empty state: "Clear filters" or "Create new ticket/customer" |
+| U11 | Success toasts don't confirm *what* changed — just "Status updated" | `StatusUpdateCombined.tsx` L111 | Show new status label: "Status updated → Repairing" |
+| U12 | Dashboard action queue uses hardcoded `ACTION_LABELS` keyed by sub-status ID | `dashboard/page.tsx` | Add `actionLabel` field to `TicketSubStatus` model; settings page can edit it per sub-status |
+| U13 | Customer detail page has no "Edit Customer" button — must navigate to list | `customers/[id]/page.tsx` | Add "Edit Customer" button in detail sidebar that opens edit modal with pre-filled data |
+| U14 | Technician "Waiting: Front Desk / Despatch" indicators have no tooltip explaining required action | `dashboard/page.tsx` | Add tooltip or expand-on-hover with action description |
+| U15 | No skeleton/error boundary when ticket detail fails to load | `tickets/[id]/page.tsx` L85 | Show loading skeleton; distinguish 404 (not found) from 500 (retry button) |
+| U16 | Ticket list has no sort — newest tickets not guaranteed to appear first | `tickets/page.tsx` | Sort by `createdAt desc` by default; add sort controls per column |
+
+### 🟢 Low Priority (polish & consistency)
+
+| # | Issue | Location | Fix |
+|---|-------|----------|-----|
+| U17 | No SLA timer or time-elapsed shown on tickets | ticket list + detail | Show "3 days in Diagnosing" on both list row and detail page; flag with amber/red after threshold |
+| U18 | Sub-status badge shown next to main status with no visual relationship indicator | `tickets/[id]/page.tsx` | Add chevron arrow between main and sub-status badges (e.g. "Repairing → Waiting for Parts") |
+| U19 | "Print Receipt" button buried at bottom of sidebar | `tickets/[id]/page.tsx` L270 | Move to top of actions panel; add `Ctrl+P` hint |
+| U20 | Dates use `toLocaleDateString()` — ambiguous when day/month could swap (US vs UK locale) | multiple pages | Use unambiguous format: "18 Apr 2026" everywhere |
+| U21 | Empty state messaging inconsistent across pages; users page shows nothing | multiple pages | Standardise: icon + headline + description + CTA button for all empty states |
+| U22 | Badge colours have no legend or tooltip — new staff must guess meaning | all status/priority badges | Add tooltip-on-hover: "P1 = Critical — respond within 2 hours" |
+| U23 | Long ticket form has no progress/section indicator | `TicketForm.tsx` | Divide into labelled sections (Customer → Device → Problem → Internal Notes) with visible section headers |
+| U24 | Customer detail shows tickets per-device only; no cross-device recent history | `customers/[id]/page.tsx` | Add "Recent Tickets" section at top spanning all devices, sorted by date desc |
+| U25 | All icon buttons missing `aria-label` | all components | Add `aria-label` to every icon-only button (Edit, Delete, View, etc.) |
+| U26 | Modals don't trap focus or return focus to trigger on close | all modals | Use Radix `Dialog` primitive or add manual `focus-trap`; auto-focus first field on open |
+| U27 | Role-specific ticket detail: all roles see same layout including irrelevant sections | `tickets/[id]/page.tsx` | Hide escalation info for Technician; hide full timeline for Front Desk (show summary only) |
+
+### ⚡ Quick Wins (< 1 hour each)
+
+1. **U2** — Remove duplicate Name column in customers table (2 line delete)
+2. **U11** — Include new status label in success toast (1 line change)
+3. **U4** — Add `md:` breakpoint to ticket detail grid (1 class change)
+4. **U20** — Create a `formatDate(d)` utility and use it everywhere (30 min)
+5. **U18** — Add chevron between status badges (5 min)
+6. **U19** — Move Print Receipt button to top (2 line move)
+
+---
+
 ## 💡 Ideas & Notes
 
 - 2026-04-18 **Quick ticket creation**: QuickTicketButton component already exists — review if it handles all required fields
 - 2026-04-18 **SLA alerts**: Flag tickets that have been in the same status for too long (e.g. "Diagnosing for 5+ days") — show in dashboard
 - 2026-04-18 **Despatch courier integration**: Auto-generate tracking label from SS22 "Pending Despatch" — integrate with a courier API
-- 2026-04-18 **Sub-status role display in modal**: The `ACTION_LABELS` map in the dashboard is hardcoded — consider making action descriptions a field on TicketSubStatus model itself
+- 2026-04-18 **Sub-status role display in modal**: The `ACTION_LABELS` map in the dashboard is hardcoded — consider making action descriptions a field on TicketSubStatus model itself (tracked as U12 above)
 
 ---
 

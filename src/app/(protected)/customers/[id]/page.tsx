@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { formatDate } from "@/lib/format-date";
 
 export default async function CustomerDetailPage({
     params,
@@ -51,7 +52,7 @@ export default async function CustomerDetailPage({
                 <div className="flex-1">
                     <h1 className="text-2xl font-bold">{customer.name}</h1>
                     <p className="text-gray-400 text-sm">
-                        Customer since {new Date(customer.createdAt).toLocaleDateString()}
+                        Customer since {formatDate(customer.createdAt)}
                     </p>
                 </div>
             </div>
@@ -163,7 +164,7 @@ export default async function CustomerDetailPage({
                                                         Technician: {ticket.technician?.name || "Unassigned"}
                                                     </span>
                                                     <span>
-                                                        {new Date(ticket.createdAt).toLocaleDateString()}
+                                                        {formatDate(ticket.createdAt)}
                                                     </span>
                                                 </div>
 

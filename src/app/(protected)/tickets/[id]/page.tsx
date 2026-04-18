@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { formatDate, formatDateTime } from "@/lib/format-date";
 import {
     ArrowLeft,
     Clock,
@@ -95,7 +96,7 @@ export default function TicketDetailPage() {
                 <div className="flex-1">
                     <h1 className="text-2xl font-bold">Ticket #{ticket.id}</h1>
                     <p className="text-gray-400 text-sm">
-                        Created {new Date(ticket.createdAt).toLocaleString()}
+                        Created {formatDateTime(ticket.createdAt)}
                     </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -178,16 +179,16 @@ export default function TicketDetailPage() {
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs uppercase mb-1">Escalated At</p>
-                                    <p>{ticket.escalatedAt ? new Date(ticket.escalatedAt).toLocaleDateString() : "—"}</p>
+                                    <p>{ticket.escalatedAt ? formatDate(ticket.escalatedAt) : "—"}</p>
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs uppercase mb-1">Expected Return</p>
-                                    <p>{ticket.expectedReturn ? new Date(ticket.expectedReturn).toLocaleDateString() : "—"}</p>
+                                    <p>{ticket.expectedReturn ? formatDate(ticket.expectedReturn) : "—"}</p>
                                 </div>
                                 {ticket.receivedBackAt && (
                                     <div>
                                         <p className="text-gray-400 text-xs uppercase mb-1">Received Back</p>
-                                        <p>{new Date(ticket.receivedBackAt).toLocaleDateString()}</p>
+                                        <p>{formatDate(ticket.receivedBackAt)}</p>
                                     </div>
                                 )}
                             </div>
@@ -220,7 +221,7 @@ export default function TicketDetailPage() {
                                                     by {log.changedBy.name}
                                                 </span>
                                                 <span className="text-xs text-gray-400">
-                                                    {new Date(log.createdAt).toLocaleString()}
+                                                    {formatDateTime(log.createdAt)}
                                                 </span>
                                             </div>
                                             {log.note && (

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import axios from "axios";
 import Link from "next/link";
+import { formatDateTime } from "@/lib/format-date";
 
 interface Notification {
     id: number;
@@ -109,7 +110,7 @@ export default function NotificationBell() {
                                         <div className={!n.read ? "" : "pl-4"}>
                                             <p className="text-sm text-gray-700 leading-snug">{n.message}</p>
                                             <p className="text-xs text-gray-400 mt-0.5">
-                                                {new Date(n.createdAt).toLocaleString()}
+                                                {formatDateTime(n.createdAt)}
                                             </p>
                                         </div>
                                     </div>

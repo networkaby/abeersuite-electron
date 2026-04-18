@@ -5,6 +5,7 @@ import axios from "axios";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/components/UserForm";
+import { formatDate } from "@/lib/format-date";
 
 interface User {
     id: number;
@@ -99,7 +100,7 @@ export default function UsersPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-gray-400">
-                                        {new Date(u.createdAt).toLocaleDateString()}
+                                        {formatDate(u.createdAt)}
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex gap-2">

@@ -22,6 +22,7 @@ interface SubStatus {
     allowedRoles: string[];
     notifyRoles: string[];
     triggerMap: Record<string, string>;
+    actionLabel: string | null;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -34,11 +35,13 @@ type FormValues = {
     allowedRoles: string[];
     notifyRoles: string[];
     triggerMap: Record<string, string>;
+    actionLabel: string;
 };
 
 const BLANK_FORM: FormValues = {
     label: "", color: "bg-gray-100 text-gray-600", group: "customer_comm",
     order: "", applicableStatusIds: [], allowedRoles: [], notifyRoles: [], triggerMap: {},
+    actionLabel: "",
 };
 
 const GROUP_OPTIONS = [
@@ -123,6 +126,22 @@ function SubStatusFormModal({
                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="e.g. Waiting for Parts"
                         />
+                    </div>
+
+                    {/* Action label */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1">
+                            Action label <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <input
+                            value={form.actionLabel}
+                            onChange={(e) => setForm({ ...form, actionLabel: e.target.value })}
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="e.g. Call customer — quote ready for approval"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                            Shown on role dashboards as the task description (Front Desk / Despatch).
+                        </p>
                     </div>
 
                     {/* Color + Group row */}
@@ -328,6 +347,7 @@ export default function SubStatusesPage() {
             allowedRoles: ss.allowedRoles,
             notifyRoles: ss.notifyRoles,
             triggerMap: (ss.triggerMap ?? {}) as Record<string, string>,
+            actionLabel: ss.actionLabel ?? "",
         });
         setEditId(ss.id);
     };
@@ -345,6 +365,7 @@ export default function SubStatusesPage() {
                 allowedRoles: editForm.allowedRoles,
                 notifyRoles: editForm.notifyRoles,
                 triggerMap: editForm.triggerMap,
+                actionLabel: editForm.actionLabel || null,
             });
             toast.success("Sub-status updated");
             setEditId(null);

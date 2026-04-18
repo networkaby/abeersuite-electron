@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import ReceiptButtons from "@/components/ReceiptButtons";
+import { formatDateTime } from "@/lib/format-date";
 
 export default async function ReceiptPage({
     params,
@@ -103,7 +104,7 @@ export default async function ReceiptPage({
                 <div className="center">
                     <div className="ticket-id">#{String(ticket.id).padStart(4, "0")}</div>
                     <div className="small" style={{ marginTop: "2px" }}>
-                        {new Date(ticket.createdAt).toLocaleString()}
+                        {formatDateTime(ticket.createdAt)}
                     </div>
                     <div style={{ marginTop: "4px" }}>
                         <span className="status-badge">{ticket.status.replace("_", " ")}</span>

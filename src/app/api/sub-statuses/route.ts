@@ -52,6 +52,7 @@ export async function POST(req: Request) {
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles: body.notifyRoles ?? [],
                 triggerMap: body.triggerMap ?? {},
+                actionLabel: body.actionLabel ?? null,
             },
         });
 

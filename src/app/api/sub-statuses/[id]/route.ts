@@ -50,6 +50,7 @@ export async function PATCH(
                 ...(body.allowedRoles !== undefined       && { allowedRoles: body.allowedRoles }),
                 ...(body.notifyRoles !== undefined        && { notifyRoles: body.notifyRoles }),
                 ...("triggerMap" in body                   && { triggerMap: body.triggerMap }),
+                ...("actionLabel" in body                  && { actionLabel: body.actionLabel ?? null }),
             },
         });
 

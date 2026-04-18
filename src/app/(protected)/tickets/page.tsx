@@ -5,6 +5,7 @@ import axios from "axios";
 import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { formatDate } from "@/lib/format-date";
 interface Ticket {
     id: number;
     status: string;
@@ -290,7 +291,7 @@ export default function TicketsPage() {
                                         {t.technician?.name || "—"}
                                     </td>
                                     <td className="px-6 py-4 text-gray-400">
-                                        {new Date(t.createdAt).toLocaleDateString()}
+                                        {formatDate(t.createdAt)}
                                     </td>
                                     <td className="px-6 py-4">
                                         <Link
