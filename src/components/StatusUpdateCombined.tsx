@@ -23,10 +23,6 @@ const ROLE_LABELS: Record<string, string> = {
     R1: "Admin", R2: "Technician", R3: "Front Desk", R4: "Despatch",
 };
 
-const ALL_STATUSES: Record<string, string> = {
-    S1: "Received", S2: "Diagnosing", S3: "Repairing", S4: "Escalated",
-    S5: "Received Back", S6: "Ready", S7: "Returned", S8: "Closed — No Fix", S9: "Cancelled",
-};
 
 interface Props {
     ticket: {
@@ -52,6 +48,7 @@ type FormData = {
 export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     const [nextSubStatuses, setNextSubStatuses] = useState<NextSubStatus[]>([]);
     const [loadingSubStatuses, setLoadingSubStatuses] = useState(true);
+    const [statusLabels, setStatusLabels] = useState<Record<string, string>>({});
 
     const nextMainStatuses: NextMainStatus[] = ticket.ticketStatus.fromTransitions.map((t) => t.to);
 
@@ -72,21 +69,27 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     const selectedMain = nextMainStatuses.find((s) => s.id === selectedMainId);
 
     useEffect(() => {
-        // Load next sub-statuses based on current sub-status transitions
         const currentSubId = ticket.subStatusId ?? null;
         const params = new URLSearchParams({ statusId: ticket.status });
         if (currentSubId) params.set("fromSubStatusId", currentSubId);
         else params.set("entryOnly", "true");
 
-        axios
-            .get(`/api/sub-statuses/next?${params}`)
-            .then((r) => {
-                setNextSubStatuses(r.data);
-                if (r.data.length === 0 && nextMainStatuses.length > 0) {
+        Promise.all([
+            axios.get(`/api/sub-statuses/next?${params}`),
+            axios.get("/api/ticket-statuses"),
+        ])
+            .then(([subRes, statusRes]) => {
+                setNextSubStatuses(subRes.data);
+                const labels: Record<string, string> = {};
+                for (const s of statusRes.data as { id: string; label: string }[]) {
+                    labels[s.id] = s.label;
+                }
+                setStatusLabels(labels);
+                if (subRes.data.length === 0 && nextMainStatuses.length > 0) {
                     setValue("mode", "mainstatus");
                 }
             })
-            .catch(() => toast.error("Failed to load sub-statuses"))
+            .catch(() => toast.error("Failed to load statuses"))
             .finally(() => setLoadingSubStatuses(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ticket.status, ticket.subStatusId]);
@@ -196,7 +199,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                                 <span className="text-sm text-gray-700">{ss.label}</span>
                                                 {ss.triggerMap[ticket.status] && (
                                                     <span className="ml-2 text-xs text-orange-600 font-medium">
-                                                        → {ALL_STATUSES[ss.triggerMap[ticket.status]] ?? ss.triggerMap[ticket.status]}
+                                                        → {statusLabels[ss.triggerMap[ticket.status]] ?? ss.triggerMap[ticket.status]}
                                                     </span>
                                                 )}
                                             </div>
@@ -216,7 +219,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             )}
                             {selectedSub?.triggerMap[ticket.status] && (
                                 <div className="mt-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-sm text-orange-700">
-                                    Stage will auto-advance to <strong>{ALL_STATUSES[selectedSub.triggerMap[ticket.status]] ?? selectedSub.triggerMap[ticket.status]}</strong>
+                                    Stage will auto-advance to <strong>{statusLabels[selectedSub.triggerMap[ticket.status]] ?? selectedSub.triggerMap[ticket.status]}</strong>
                                 </div>
                             )}
                         </div>

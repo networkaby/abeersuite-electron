@@ -5,6 +5,13 @@ import axios from "axios";
 import { toast } from "sonner";
 import { ChevronRight, GitMerge, Pencil, Plus, Trash2, X } from "lucide-react";
 
+interface StatusItem {
+    id: string;
+    label: string;
+    color: string;
+    order: number;
+}
+
 interface SubStatus {
     id: string;
     label: string;
@@ -65,19 +72,7 @@ const ALL_ROLES = [
 ];
 const ROLE_LABELS = Object.fromEntries(ALL_ROLES.map((r) => [r.id, r.label]));
 
-const ALL_STATUSES = [
-    { id: "S1", label: "Received",        color: "bg-gray-100 text-gray-600" },
-    { id: "S2", label: "Diagnosing",      color: "bg-yellow-100 text-yellow-700" },
-    { id: "S3", label: "Repairing",       color: "bg-blue-100 text-blue-700" },
-    { id: "S4", label: "Escalated",       color: "bg-orange-100 text-orange-700" },
-    { id: "S5", label: "Received Back",   color: "bg-purple-100 text-purple-700" },
-    { id: "S6", label: "Ready",           color: "bg-green-100 text-green-700" },
-    { id: "S7", label: "Returned",        color: "bg-gray-200 text-gray-500" },
-    { id: "S8", label: "Closed — No Fix", color: "bg-red-100 text-red-600" },
-    { id: "S9", label: "Cancelled",       color: "bg-gray-100 text-gray-400" },
-];
-
-// ── Form modal (shared for create + edit) ─────────────────────────────────────
+// ── Form modal ────────────────────────────────────────────────────────────────
 function SubStatusFormModal({
     title,
     form,
@@ -85,6 +80,7 @@ function SubStatusFormModal({
     onSave,
     onClose,
     saving,
+    statuses,
 }: {
     title: string;
     form: FormValues;
@@ -92,6 +88,7 @@ function SubStatusFormModal({
     onSave: () => void;
     onClose: () => void;
     saving: boolean;
+    statuses: StatusItem[];
 }) {
     const toggle = (field: "applicableStatusIds" | "allowedRoles" | "notifyRoles", val: string) =>
         setForm({
@@ -159,39 +156,43 @@ function SubStatusFormModal({
                         </div>
                     </div>
 
-                    {/* Applies to — main statuses with per-parent trigger */}
+                    {/* Applies to — fetched main statuses with per-parent trigger */}
                     <div>
                         <label className="block text-sm font-medium mb-2">Applies to (main status)</label>
-                        <div className="space-y-1">
-                            {ALL_STATUSES.map((s) => (
-                                <div key={s.id} className="flex items-center gap-2 flex-wrap">
-                                    <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-xs min-w-[160px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.applicableStatusIds.includes(s.id)}
-                                            onChange={() => toggle("applicableStatusIds", s.id)}
-                                            className="accent-blue-600"
-                                        />
-                                        <span className={`px-1.5 py-0.5 rounded-full font-medium ${s.color}`}>{s.label}</span>
-                                    </label>
-                                    {form.applicableStatusIds.includes(s.id) && (
-                                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                                            <span className="text-gray-400">→ auto-advance to:</span>
-                                            <select
-                                                value={form.triggerMap[s.id] ?? ""}
-                                                onChange={(e) => setTrigger(s.id, e.target.value)}
-                                                className="border rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            >
-                                                <option value="">— none —</option>
-                                                {ALL_STATUSES.filter((t) => t.id !== s.id).map((t) => (
-                                                    <option key={t.id} value={t.id}>{t.label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                        {statuses.length === 0 ? (
+                            <p className="text-xs text-gray-400">Loading statuses…</p>
+                        ) : (
+                            <div className="space-y-1">
+                                {statuses.map((s) => (
+                                    <div key={s.id} className="flex items-center gap-2 flex-wrap">
+                                        <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-xs min-w-[160px]">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.applicableStatusIds.includes(s.id)}
+                                                onChange={() => toggle("applicableStatusIds", s.id)}
+                                                className="accent-blue-600"
+                                            />
+                                            <span className={`px-1.5 py-0.5 rounded-full font-medium ${s.color}`}>{s.label}</span>
+                                        </label>
+                                        {form.applicableStatusIds.includes(s.id) && (
+                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                <span className="text-gray-400">→ auto-advance to:</span>
+                                                <select
+                                                    value={form.triggerMap[s.id] ?? ""}
+                                                    onChange={(e) => setTrigger(s.id, e.target.value)}
+                                                    className="border rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                >
+                                                    <option value="">— none —</option>
+                                                    {statuses.filter((t) => t.id !== s.id).map((t) => (
+                                                        <option key={t.id} value={t.id}>{t.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Roles row */}
@@ -256,6 +257,7 @@ function SubStatusFormModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SubStatusesPage() {
+    const [statuses, setStatuses] = useState<StatusItem[]>([]);
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -277,18 +279,24 @@ export default function SubStatusesPage() {
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
-    const fetch = async () => {
+    const loadAll = async () => {
         try {
-            const res = await axios.get("/api/sub-statuses");
-            setSubStatuses(res.data);
+            const [statusRes, subRes] = await Promise.all([
+                axios.get("/api/ticket-statuses"),
+                axios.get("/api/sub-statuses"),
+            ]);
+            setStatuses(
+                (statusRes.data as StatusItem[]).sort((a, b) => a.order - b.order)
+            );
+            setSubStatuses(subRes.data);
         } catch {
-            toast.error("Failed to load sub-statuses");
+            toast.error("Failed to load data");
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => { fetch(); }, []);
+    useEffect(() => { loadAll(); }, []);
 
     // ── Create ──
     const handleCreate = async () => {
@@ -301,7 +309,7 @@ export default function SubStatusesPage() {
             toast.success("Sub-status created");
             setShowCreate(false);
             setCreateForm(BLANK_FORM);
-            fetch();
+            loadAll();
         } catch {
             toast.error("Failed to create");
         } finally {
@@ -340,7 +348,7 @@ export default function SubStatusesPage() {
             });
             toast.success("Sub-status updated");
             setEditId(null);
-            fetch();
+            loadAll();
         } catch {
             toast.error("Failed to update");
         } finally {
@@ -354,7 +362,7 @@ export default function SubStatusesPage() {
         try {
             await axios.delete(`/api/sub-statuses/${id}`);
             toast.success("Sub-status deleted");
-            fetch();
+            loadAll();
         } catch (err) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete";
             toast.error(msg ?? "Failed to delete");
@@ -377,7 +385,7 @@ export default function SubStatusesPage() {
             await axios.put(`/api/sub-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
             setTransitionModalId(null);
-            fetch();
+            loadAll();
         } catch {
             toast.error("Failed to save transitions");
         } finally {
@@ -396,16 +404,16 @@ export default function SubStatusesPage() {
           )
         : [];
 
-    // ── Parent-wise grouping ──
-    // For each main status, collect sub-statuses that apply to it
-    const byParent = ALL_STATUSES.map((status) => ({
+    // ── Parent-wise grouping (uses fetched statuses) ──
+    const statusLabelMap = Object.fromEntries(statuses.map((s) => [s.id, s.label]));
+
+    const byParent = statuses.map((status) => ({
         status,
         children: subStatuses
             .filter((ss) => ss.applicableStatusIds.includes(status.id))
             .sort((a, b) => a.order - b.order),
     })).filter((p) => p.children.length > 0);
 
-    // Sub-statuses not yet assigned to any main status
     const unassigned = subStatuses.filter((ss) => ss.applicableStatusIds.length === 0);
 
     return (
@@ -445,18 +453,15 @@ export default function SubStatusesPage() {
                             <div className="divide-y">
                                 {children.map((ss) => (
                                     <div key={ss.id} className="flex items-start gap-3 px-6 py-3.5">
-                                        {/* Indent line */}
                                         <div className="flex flex-col items-center pt-1 shrink-0">
                                             <div className="w-px h-2 bg-gray-200" />
                                             <div className="w-3 h-px bg-gray-200" />
                                         </div>
 
-                                        {/* Color badge */}
                                         <span className={`mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${ss.color}`}>
                                             {ss.id}
                                         </span>
 
-                                        {/* Info */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-sm font-medium text-gray-800">{ss.label}</span>
@@ -466,13 +471,14 @@ export default function SubStatusesPage() {
                                                 {ss.triggerMap[status.id] && (
                                                     <span className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
                                                         <ChevronRight size={11} />
-                                                        → {ALL_STATUSES.find((s) => s.id === ss.triggerMap[status.id])?.label ?? ss.triggerMap[status.id]}
+                                                        → {statusLabelMap[ss.triggerMap[status.id]] ?? ss.triggerMap[status.id]}
                                                     </span>
                                                 )}
                                                 {ss.applicableStatusIds.length > 1 && (
                                                     <span className="text-xs text-gray-400">
                                                         also in: {ss.applicableStatusIds
                                                             .filter((sid) => sid !== status.id)
+                                                            .map((sid) => statusLabelMap[sid] ?? sid)
                                                             .join(", ")}
                                                     </span>
                                                 )}
@@ -505,30 +511,16 @@ export default function SubStatusesPage() {
                                             )}
                                         </div>
 
-                                        {/* Actions */}
                                         <div className="flex items-center gap-1.5 shrink-0">
-                                            <button
-                                                onClick={() => openTransitionModal(ss.id)}
-                                                title="Transitions"
-                                                className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50"
-                                            >
+                                            <button onClick={() => openTransitionModal(ss.id)} title="Transitions" className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50">
                                                 <GitMerge size={13} />
                                                 <span className="hidden sm:inline">Flow</span>
                                             </button>
-                                            <button
-                                                onClick={() => openEdit(ss)}
-                                                title="Edit"
-                                                className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50"
-                                            >
+                                            <button onClick={() => openEdit(ss)} title="Edit" className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50">
                                                 <Pencil size={13} />
                                                 <span className="hidden sm:inline">Edit</span>
                                             </button>
-                                            <button
-                                                onClick={() => handleDelete(ss.id)}
-                                                disabled={deletingId === ss.id}
-                                                title="Delete"
-                                                className="flex items-center gap-1 text-xs border border-red-200 rounded-lg px-2 py-1.5 text-red-500 hover:bg-red-50 disabled:opacity-40"
-                                            >
+                                            <button onClick={() => handleDelete(ss.id)} disabled={deletingId === ss.id} title="Delete" className="flex items-center gap-1 text-xs border border-red-200 rounded-lg px-2 py-1.5 text-red-500 hover:bg-red-50 disabled:opacity-40">
                                                 <Trash2 size={13} />
                                             </button>
                                         </div>
@@ -538,7 +530,6 @@ export default function SubStatusesPage() {
                         </div>
                     ))}
 
-                    {/* Unassigned sub-statuses */}
                     {unassigned.length > 0 && (
                         <div className="bg-white rounded-xl shadow overflow-hidden">
                             <div className="flex items-center gap-3 px-6 py-3 bg-yellow-50 border-b">
@@ -566,7 +557,6 @@ export default function SubStatusesPage() {
                 </div>
             )}
 
-            {/* Create modal */}
             {showCreate && (
                 <SubStatusFormModal
                     title="Add Sub-Status"
@@ -575,10 +565,10 @@ export default function SubStatusesPage() {
                     onSave={handleCreate}
                     onClose={() => setShowCreate(false)}
                     saving={creating}
+                    statuses={statuses}
                 />
             )}
 
-            {/* Edit modal */}
             {editId && (
                 <SubStatusFormModal
                     title={`Edit — ${subStatuses.find((s) => s.id === editId)?.id}`}
@@ -587,10 +577,10 @@ export default function SubStatusesPage() {
                     onSave={handleEdit}
                     onClose={() => setEditId(null)}
                     saving={editing}
+                    statuses={statuses}
                 />
             )}
 
-            {/* Transitions modal */}
             {transitionModalId && modalSubStatus && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[80vh] flex flex-col">
