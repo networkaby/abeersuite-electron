@@ -20,7 +20,8 @@
       "Bash(npx tsx *)",
       "Bash(npx next *)",
       "Bash(pnpm lint *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(find \"D:/our-own-website/service-mgmt-experiment/src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" \\\\\\) -exec grep -l \"task\\\\|myTask\\\\|actionable\" {} \\\\;)"
     ]
   }
 }
