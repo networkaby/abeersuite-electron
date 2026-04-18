@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
 import { X, ArrowRight, ChevronRight } from "lucide-react";
-import { useSession } from "next-auth/react";
 
 interface NextMainStatus {
     id: string;
@@ -51,7 +50,6 @@ type FormData = {
 };
 
 export default function StatusUpdateCombined({ ticket, onClose }: Props) {
-    const { data: session } = useSession();
     const [nextSubStatuses, setNextSubStatuses] = useState<NextSubStatus[]>([]);
     const [loadingSubStatuses, setLoadingSubStatuses] = useState(true);
 
@@ -100,14 +98,12 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                 await axios.patch(`/api/tickets/${ticket.id}/sub-status`, {
                     subStatusId: data.subStatusId,
                     note: data.note || undefined,
-                    changedBy: session?.user?.id,
                 });
             } else {
                 if (!data.mainStatusId) { toast.error("Select a status"); return; }
                 await axios.put(`/api/tickets/${ticket.id}`, {
                     status: data.mainStatusId,
                     logNote: data.note || undefined,
-                    changedBy: session?.user?.id,
                 });
             }
             toast.success("Status updated");

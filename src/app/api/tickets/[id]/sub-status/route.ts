@@ -1,24 +1,28 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { auth } from "@/auth";
 
 // PATCH /api/tickets/[id]/sub-status
-// Body: { subStatusId: string, note?: string, changedBy: number }
+// Body: { subStatusId: string, note?: string }
 export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { session, response } = await requireAuth();
-    if (response) return response;
-
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const userId = Number((session.user as { id?: string }).id);
+        const userRole = (session.user as { role?: string }).role ?? "";
+
         const { id } = await params;
         const ticketId = Number(id);
         const body = await req.json();
-        const { subStatusId, note, changedBy } = body as {
+        const { subStatusId, note } = body as {
             subStatusId: string;
             note?: string;
-            changedBy: number;
         };
 
         const subStatus = await prisma.ticketSubStatus.findUnique({
@@ -28,7 +32,7 @@ export async function PATCH(
             return NextResponse.json({ error: "Sub-status not found" }, { status: 404 });
         }
 
-        const userRole = (session.user as { role?: string }).role ?? "";
+        // Admin (R1) can set any sub-status regardless of allowedRoles
         if (userRole !== "R1" && subStatus.allowedRoles.length > 0 && !subStatus.allowedRoles.includes(userRole)) {
             return NextResponse.json({ error: "Your role cannot set this sub-status" }, { status: 403 });
         }
@@ -63,7 +67,7 @@ export async function PATCH(
                 status: ticket.status,
                 subStatusId,
                 note: note || null,
-                userId: Number(changedBy),
+                userId,
             },
         });
 
@@ -74,7 +78,7 @@ export async function PATCH(
                     ticketId,
                     status: triggerStatusId,
                     note: `Auto-advanced by: ${subStatus.label}`,
-                    userId: Number(changedBy),
+                    userId,
                 },
             });
         }
@@ -103,7 +107,7 @@ export async function PATCH(
 
         return NextResponse.json({ ok: true });
     } catch (error) {
-        console.error(error);
+        console.error("[sub-status PATCH]", error);
         return NextResponse.json({ error: "Failed to update sub-status" }, { status: 500 });
     }
 }

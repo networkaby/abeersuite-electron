@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 
 export async function GET(
     _: Request,
@@ -46,6 +47,10 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const session = await auth();
+        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const userId = Number((session.user as { id?: string }).id);
+
         const { id } = await params;
         const body = await req.json();
 
@@ -67,13 +72,13 @@ export async function PUT(
             },
         });
 
-        if (body.status && body.changedBy) {
+        if (body.status) {
             await prisma.ticketLog.create({
                 data: {
                     ticketId: ticket.id,
                     status: body.status,
                     note: body.logNote || null,
-                    userId: Number(body.changedBy),
+                    userId,
                 },
             });
         }
