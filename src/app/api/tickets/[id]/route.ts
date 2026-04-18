@@ -94,6 +94,7 @@ export async function PUT(
                     ticketId: ticket.id,
                     status: body.status,
                     note: body.logNote || null,
+                    visibility: body.visibility === "public" ? "public" : "internal",
                     userId,
                 },
             });

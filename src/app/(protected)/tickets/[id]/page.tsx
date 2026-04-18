@@ -13,10 +13,14 @@ import {
     Building2,
     AlertTriangle,
     Printer,
+    Lock,
+    Eye,
+    NotebookPen,
 } from "lucide-react";
 import Link from "next/link";
 import TicketEscalation from "@/components/TicketEscalation";
 import StatusUpdateCombined from "@/components/StatusUpdateCombined";
+import AddNoteModal from "@/components/AddNoteModal";
 interface Ticket {
     id: number;
     status: string;
@@ -53,6 +57,7 @@ interface Ticket {
         status: string;
         subStatusId?: string;
         note?: string;
+        visibility: string;
         createdAt: string;
         changedBy: { name: string };
         ticketStatus: { label: string; color: string };
@@ -67,6 +72,7 @@ export default function TicketDetailPage() {
     const [loading, setLoading] = useState(true);
     const [showStatusUpdate, setShowStatusUpdate] = useState(false);
     const [showEscalation, setShowEscalation] = useState(false);
+    const [showAddNote, setShowAddNote] = useState(false);
 
     const fetchTicket = useCallback(async () => {
         try {
@@ -204,32 +210,44 @@ export default function TicketDetailPage() {
                             <p className="text-gray-400 text-sm">No history yet.</p>
                         ) : (
                             <div className="space-y-4">
-                                {ticket.logs.map((log) => (
-                                    <div key={log.id} className="flex gap-3">
-                                        <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${log.subStatusId ? "bg-purple-400" : "bg-blue-400"}`} />
-                                        <div>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketStatus.color}`}>
-                                                    {log.ticketStatus.label}
-                                                </span>
-                                                {log.ticketSubStatus && (
-                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketSubStatus.color}`}>
-                                                        {log.ticketSubStatus.label}
+                                {ticket.logs.map((log) => {
+                                    const isNoteOnly = !log.subStatusId && log.note && log.status === ticket.status;
+                                    return (
+                                        <div key={log.id} className="flex gap-3">
+                                            <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
+                                                log.subStatusId ? "bg-purple-400" : isNoteOnly ? "bg-green-400" : "bg-blue-400"
+                                            }`} />
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketStatus.color}`}>
+                                                        {log.ticketStatus.label}
                                                     </span>
+                                                    {log.ticketSubStatus && (
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketSubStatus.color}`}>
+                                                            {log.ticketSubStatus.label}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-xs text-gray-400">by {log.changedBy.name}</span>
+                                                    <span className="text-xs text-gray-400">{formatDateTime(log.createdAt)}</span>
+                                                </div>
+                                                {log.note && (
+                                                    <div className="flex items-start gap-2 mt-1">
+                                                        <p className="text-sm text-gray-600 flex-1">{log.note}</p>
+                                                        {log.visibility === "public" ? (
+                                                            <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+                                                                <Eye size={10} /> Public
+                                                            </span>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                                                                <Lock size={10} /> Internal
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
-                                                <span className="text-xs text-gray-400">
-                                                    by {log.changedBy.name}
-                                                </span>
-                                                <span className="text-xs text-gray-400">
-                                                    {formatDateTime(log.createdAt)}
-                                                </span>
                                             </div>
-                                            {log.note && (
-                                                <p className="text-sm text-gray-500 mt-1">{log.note}</p>
-                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -256,6 +274,14 @@ export default function TicketDetailPage() {
                             className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700"
                         >
                             Update Status
+                        </button>
+
+                        <button
+                            onClick={() => setShowAddNote(true)}
+                            className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                        >
+                            <NotebookPen size={15} />
+                            Add Note
                         </button>
 
                         {!ticket.escalated && ticket.status !== "S7" && (
@@ -297,6 +323,16 @@ export default function TicketDetailPage() {
                     ticket={ticket}
                     onClose={() => {
                         setShowEscalation(false);
+                        fetchTicket();
+                    }}
+                />
+            )}
+
+            {showAddNote && (
+                <AddNoteModal
+                    ticketId={ticket.id}
+                    onClose={() => {
+                        setShowAddNote(false);
                         fetchTicket();
                     }}
                 />

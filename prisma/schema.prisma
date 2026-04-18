@@ -152,6 +152,7 @@ model TicketLog {
   subStatusId     String?
   ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
   note            String?
+  visibility      String           @default("internal")
   changedBy       User             @relation(fields: [userId], references: [id])
   userId          Int
   createdAt       DateTime         @default(now())

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, ArrowRight, ChevronRight } from "lucide-react";
+import { X, ArrowRight, ChevronRight, Lock, Eye } from "lucide-react";
 
 interface NextMainStatus {
     id: string;
@@ -43,6 +43,7 @@ type FormData = {
     subStatusId: string;
     mainStatusId: string;
     note: string;
+    visibility: "internal" | "public";
 };
 
 export default function StatusUpdateCombined({ ticket, onClose }: Props) {
@@ -58,12 +59,14 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
             subStatusId: "",
             mainStatusId: nextMainStatuses[0]?.id ?? "",
             note: "",
+            visibility: "internal",
         },
     });
 
     const mode = watch("mode");
     const selectedSubId = watch("subStatusId");
     const selectedMainId = watch("mainStatusId");
+    const visibility = watch("visibility");
 
     const selectedSub = nextSubStatuses.find((ss) => ss.id === selectedSubId);
     const selectedMain = nextMainStatuses.find((s) => s.id === selectedMainId);
@@ -101,12 +104,14 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                 await axios.patch(`/api/tickets/${ticket.id}/sub-status`, {
                     subStatusId: data.subStatusId,
                     note: data.note || undefined,
+                    visibility: data.visibility,
                 });
             } else {
                 if (!data.mainStatusId) { toast.error("Select a status"); return; }
                 await axios.put(`/api/tickets/${ticket.id}`, {
                     status: data.mainStatusId,
                     logNote: data.note || undefined,
+                    visibility: data.visibility,
                 });
             }
             toast.success("Status updated");
@@ -263,9 +268,9 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                         </div>
                     )}
 
-                    {/* Note */}
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
+                    {/* Note + visibility */}
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium">
                             Note <span className="text-gray-400">(optional)</span>
                         </label>
                         <textarea
@@ -274,6 +279,30 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             placeholder="Add context — part number, customer quote, courier details..."
                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setValue("visibility", "internal")}
+                                className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                                    visibility === "internal"
+                                        ? "border-gray-400 bg-gray-100 text-gray-700"
+                                        : "border-gray-200 text-gray-400 hover:bg-gray-50"
+                                }`}
+                            >
+                                <Lock size={11} /> Internal
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setValue("visibility", "public")}
+                                className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                                    visibility === "public"
+                                        ? "border-blue-400 bg-blue-50 text-blue-700"
+                                        : "border-gray-200 text-gray-400 hover:bg-gray-50"
+                                }`}
+                            >
+                                <Eye size={11} /> Public
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex gap-3 pt-1">

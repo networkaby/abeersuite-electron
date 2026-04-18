@@ -20,9 +20,10 @@ export async function PATCH(
         const { id } = await params;
         const ticketId = Number(id);
         const body = await req.json();
-        const { subStatusId, note } = body as {
+        const { subStatusId, note, visibility } = body as {
             subStatusId: string;
             note?: string;
+            visibility?: "internal" | "public";
         };
 
         const subStatus = await prisma.ticketSubStatus.findUnique({
@@ -67,6 +68,7 @@ export async function PATCH(
                 status: ticket.status,
                 subStatusId,
                 note: note || null,
+                visibility: visibility === "public" ? "public" : "internal",
                 userId,
             },
         });
