@@ -22,6 +22,7 @@ export async function GET(
                             orderBy: { toStatusId: "asc" },
                         },
                     },
+                    // include isTerminal so the client can conditionally show escalation
                 },
                 ticketSubStatus: { select: { id: true, label: true, color: true } },
                 logs: {
@@ -74,24 +75,35 @@ export async function PUT(
             }
         }
 
+        // Fetch current state BEFORE update (needed for escalation task logic)
+        const prevState = body.escalated !== undefined
+            ? await prisma.ticket.findUnique({
+                where: { id: Number(id) },
+                select: {
+                    escalated: true,
+                    device: { select: { brand: true, model: true, customer: { select: { name: true } } } },
+                },
+              })
+            : null;
+
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
             data: {
-                status: body.status,
-                priority: body.priority,
-                notes: body.notes,
-                accessInfo: body.accessInfo,
-                estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
-                technicianId: body.technicianId ? Number(body.technicianId) : null,
-                escalated: body.escalated ?? false,
-                escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null,
-                expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null,
-                receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null,
-                externalRef: body.externalRef || null,
-                serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null,
-                isWarranty: body.isWarranty !== undefined ? Boolean(body.isWarranty) : undefined,
-                warrantyRef: body.warrantyRef !== undefined ? (body.warrantyRef || null) : undefined,
-                purchaseDate: body.purchaseDate !== undefined ? (body.purchaseDate ? new Date(body.purchaseDate) : null) : undefined,
+                ...(body.status      !== undefined && { status: body.status }),
+                ...(body.priority    !== undefined && { priority: body.priority }),
+                ...(body.notes       !== undefined && { notes: body.notes }),
+                ...(body.accessInfo  !== undefined && { accessInfo: body.accessInfo }),
+                ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
+                ...(body.technicianId  !== undefined && { technicianId: body.technicianId ? Number(body.technicianId) : null }),
+                ...(body.escalated   !== undefined && { escalated: body.escalated }),
+                ...(body.escalatedAt !== undefined && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
+                ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
+                ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
+                ...(body.externalRef !== undefined && { externalRef: body.externalRef || null }),
+                ...(body.serviceCenterId !== undefined && { serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null }),
+                ...(body.isWarranty  !== undefined && { isWarranty: Boolean(body.isWarranty) }),
+                ...(body.warrantyRef !== undefined && { warrantyRef: body.warrantyRef || null }),
+                ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
             },
         });
 
@@ -105,6 +117,27 @@ export async function PUT(
                     userId,
                 },
             });
+        }
+
+        // When freshly escalating to a service centre, auto-create a Despatch task (R4)
+        if (body.escalated === true && prevState && !prevState.escalated) {
+            const deviceLabel = `${prevState.device.brand} ${prevState.device.model}`;
+            try {
+                await prisma.task.create({
+                    data: {
+                        title:        `Contact service centre — Ticket #${ticket.id} (${deviceLabel})`,
+                        description:  `Customer: ${prevState.device.customer.name}. Determine if on-site engineer visit or device despatch is required. Record external ref once confirmed.`,
+                        source:       "ticket_workflow",
+                        status:       "open",
+                        priority:     ticket.priority,
+                        assignedRole: "R4",
+                        ticketId:     ticket.id,
+                        createdById:  userId,
+                    },
+                });
+            } catch (taskErr) {
+                console.warn("[ticket PUT] escalation task creation skipped:", taskErr);
+            }
         }
 
         return NextResponse.json(ticket);

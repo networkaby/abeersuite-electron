@@ -28,7 +28,11 @@ export async function GET(req: Request) {
 
     let assigneeFilter: WhereClause = {};
     if (scope === "own") {
-        assigneeFilter = { OR: [{ assignedToId: userId }, { assignedRole: { in: userRoles } }] };
+        assigneeFilter = { OR: [
+            { assignedToId: userId },
+            { assignedRole: { in: userRoles } },
+            { pickedUpById: userId },
+        ]};
     } else if (scope === "team") {
         assigneeFilter = { assignedRole: { in: userRoles } };
     }
@@ -39,8 +43,9 @@ export async function GET(req: Request) {
             where: { ...assigneeFilter, ...statusFilter },
             orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
             include: {
-                assignedTo: { select: { id: true, name: true } },
-                createdBy:  { select: { id: true, name: true } },
+                assignedTo:  { select: { id: true, name: true } },
+                createdBy:   { select: { id: true, name: true } },
+                pickedUpBy:  { select: { id: true, name: true } },
                 ticket: {
                     select: {
                         id: true,

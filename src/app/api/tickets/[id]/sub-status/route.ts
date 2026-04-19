@@ -106,21 +106,32 @@ export async function PATCH(
                 });
             }
 
-            // Auto-create one workflow task per notifyRole
-            const taskTitle = `${subStatus.label} — Ticket #${ticketId} (${deviceLabel})`;
-            await prisma.task.createMany({
-                data: subStatus.notifyRoles.map((roleId) => ({
-                    title:        taskTitle,
-                    description:  `Customer: ${ticket.device.customer.name}`,
-                    source:       "ticket_workflow",
-                    status:       "open",
-                    priority:     ticket.priority,
-                    assignedRole: roleId,
-                    ticketId,
-                    createdById:  userId,
-                })),
-                skipDuplicates: true,
-            });
+            // Auto-create one workflow task per notifyRole (best-effort — never blocks the status update)
+            try {
+                const taskTitle = `${subStatus.label} — Ticket #${ticketId} (${deviceLabel})`;
+                for (const roleId of subStatus.notifyRoles) {
+                    const existing = await prisma.task.findFirst({
+                        where: { ticketId, assignedRole: roleId, source: "ticket_workflow", status: "open" },
+                        select: { id: true },
+                    });
+                    if (!existing) {
+                        await prisma.task.create({
+                            data: {
+                                title:        taskTitle,
+                                description:  `Customer: ${ticket.device.customer.name}`,
+                                source:       "ticket_workflow",
+                                status:       "open",
+                                priority:     ticket.priority,
+                                assignedRole: roleId,
+                                ticketId,
+                                createdById:  userId,
+                            },
+                        });
+                    }
+                }
+            } catch (taskErr) {
+                console.warn("[sub-status PATCH] task creation skipped:", taskErr);
+            }
         }
 
         return NextResponse.json({ ok: true });

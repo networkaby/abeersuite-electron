@@ -49,6 +49,7 @@ interface Ticket {
     ticketStatus: {
         label: string;
         color: string;
+        isTerminal: boolean;
         fromTransitions: { to: { id: string; label: string } }[];
     };
     device: {
@@ -93,9 +94,27 @@ export default function TicketDetailPage() {
     const [showEscalation, setShowEscalation] = useState(false);
     const [showAddNote, setShowAddNote] = useState(false);
     const [showWarrantyModal, setShowWarrantyModal] = useState(false);
+    const [showRefEdit, setShowRefEdit] = useState(false);
+    const [refValue, setRefValue] = useState("");
+    const [savingRef, setSavingRef] = useState(false);
     const { data: session } = useSession();
     const userRoles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
     const canConvertWarranty = userRoles.some((r) => r === "R1" || r === "R2");
+
+    const saveRef = async () => {
+        if (!ticket) return;
+        setSavingRef(true);
+        try {
+            await axios.put(`/api/tickets/${ticket.id}`, { externalRef: refValue });
+            toast.success("Reference saved");
+            setShowRefEdit(false);
+            fetchTicket();
+        } catch {
+            toast.error("Failed to save reference");
+        } finally {
+            setSavingRef(false);
+        }
+    };
 
     const fetchTicket = useCallback(async () => {
         try {
@@ -364,14 +383,47 @@ export default function TicketDetailPage() {
                             </button>
                         )}
 
-                        {!ticket.escalated && ticket.status !== "S7" && (
+                        {/* Escalate — only when not yet escalated and status can transition to S4 */}
+                        {!ticket.escalated && !ticket.ticketStatus.isTerminal &&
+                            ticket.ticketStatus.fromTransitions.some(t => t.to.id === "S4") && (
                             <button
                                 onClick={() => setShowEscalation(true)}
                                 className="w-full border border-orange-400 text-orange-500 rounded-lg py-2 text-sm hover:bg-orange-50 flex items-center justify-center gap-2"
                             >
                                 <AlertTriangle size={15} />
-                                Escalate to Service Center
+                                Escalate to Service Centre
                             </button>
+                        )}
+
+                        {/* Update Ref # — visible when already escalated */}
+                        {ticket.escalated && (
+                            showRefEdit ? (
+                                <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+                                    <p className="text-xs text-gray-500 font-medium">External Ref # / RMA</p>
+                                    <input
+                                        type="text"
+                                        value={refValue}
+                                        onChange={e => setRefValue(e.target.value)}
+                                        placeholder="Job #, RMA code…"
+                                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        autoFocus
+                                    />
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setShowRefEdit(false)} className="flex-1 text-xs py-1.5 border rounded hover:bg-gray-50">Cancel</button>
+                                        <button onClick={saveRef} disabled={savingRef} className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+                                            {savingRef ? "Saving…" : "Save"}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => { setRefValue(ticket.externalRef ?? ""); setShowRefEdit(true); }}
+                                    className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                                >
+                                    <Building2 size={15} />
+                                    {ticket.externalRef ? `Ref: ${ticket.externalRef}` : "Add External Ref # / RMA"}
+                                </button>
+                            )
                         )}
 
                         <Link

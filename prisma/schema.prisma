@@ -147,6 +147,7 @@ model User {
   warrantyLogs  WarrantyLog[]    @relation("WarrantyLogUser")
   assignedTasks Task[]           @relation("TaskAssignee")
   createdTasks  Task[]           @relation("TaskCreator")
+  pickedUpTasks Task[]           @relation("TaskPickup")
   taskLogs      TaskLog[]        @relation("TaskLogUser")
   createdAt     DateTime         @default(now())
 }
@@ -262,25 +263,28 @@ model ServiceCenter {
 }
 
 model Task {
-  id           Int       @id @default(autoincrement())
-  title        String
-  description  String?
-  source       String    @default("manual")
-  status       String    @default("open")
-  priority     String    @default("P2")
-  taskPriority Priority  @relation(fields: [priority], references: [id])
-  assignedToId Int?
-  assignedTo   User?     @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  assignedRole String?
-  ticketId     Int?
-  ticket       Ticket?   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  createdById  Int
-  createdBy    User      @relation("TaskCreator", fields: [createdById], references: [id])
-  dueAt        DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  logs         TaskLog[]
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  source        String    @default("manual")
+  status        String    @default("open")
+  priority      String    @default("P2")
+  taskPriority  Priority  @relation(fields: [priority], references: [id])
+  assignedToId  Int?
+  assignedTo    User?     @relation("TaskAssignee",  fields: [assignedToId],  references: [id])
+  assignedRole  String?
+  pickedUpById  Int?
+  pickedUpBy    User?     @relation("TaskPickup",    fields: [pickedUpById],  references: [id])
+  pickedUpAt    DateTime?
+  ticketId      Int?
+  ticket        Ticket?   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdById   Int
+  createdBy     User      @relation("TaskCreator",   fields: [createdById],   references: [id])
+  dueAt         DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  logs          TaskLog[]
 
   @@unique([ticketId, assignedRole, source, status])
 }

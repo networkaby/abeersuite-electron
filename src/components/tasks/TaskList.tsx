@@ -4,6 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
     CheckCircle2,
     Circle,
@@ -12,6 +13,8 @@ import {
     ExternalLink,
     ChevronDown,
     Loader2,
+    HandHelping,
+    UserCheck,
 } from "lucide-react";
 
 interface TaskTicket {
@@ -28,12 +31,15 @@ export interface TaskRow {
     priority: string;
     assignedToId: number | null;
     assignedRole: string | null;
+    pickedUpById: number | null;
+    pickedUpAt: string | null;
     ticketId: number | null;
     dueAt: string | null;
     completedAt: string | null;
     createdAt: string;
     assignedTo: { id: number; name: string } | null;
     createdBy: { id: number; name: string };
+    pickedUpBy: { id: number; name: string } | null;
     ticket: TaskTicket | null;
 }
 
@@ -77,8 +83,14 @@ interface Props {
 }
 
 export default function TaskList({ tasks, onRefresh }: Props) {
+    const { data: session } = useSession();
+    const userId = Number((session?.user as { id?: string } | undefined)?.id ?? 0);
+    const permissions: string[] = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canPickup = permissions.includes("tasks:pickup");
+
     const [updating, setUpdating] = useState<number | null>(null);
     const [expanded, setExpanded] = useState<number | null>(null);
+    const [helpingId, setHelpingId] = useState<number | null>(null);
 
     const cycleStatus = async (task: TaskRow) => {
         const next = STATUS_NEXT[task.status] ?? "open";
@@ -90,6 +102,33 @@ export default function TaskList({ tasks, onRefresh }: Props) {
             toast.error("Failed to update task");
         } finally {
             setUpdating(null);
+        }
+    };
+
+    const pickUp = async (task: TaskRow) => {
+        setUpdating(task.id);
+        try {
+            await axios.post(`/api/tasks/${task.id}/pickup`);
+            toast.success("Task picked up");
+            onRefresh();
+        } catch (e) {
+            const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Failed to pick up task";
+            toast.error(msg);
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const logHelp = async (task: TaskRow) => {
+        setHelpingId(task.id);
+        try {
+            await axios.post(`/api/tasks/${task.id}/help`);
+            toast.success("Help logged");
+            onRefresh();
+        } catch {
+            toast.error("Failed to log help");
+        } finally {
+            setHelpingId(null);
         }
     };
 
@@ -107,11 +146,24 @@ export default function TaskList({ tasks, onRefresh }: Props) {
             {tasks.map((task) => {
                 const overdue = isOverdue(task);
                 const isExpanded = expanded === task.id;
+                const isMyTask = task.assignedToId === userId || task.pickedUpById === userId;
+                const showPickup = canPickup && !isMyTask && !task.pickedUpById
+                    && task.status !== "done" && task.status !== "cancelled";
+                const showHelp = canPickup && !isMyTask
+                    && task.status !== "done" && task.status !== "cancelled";
 
                 return (
                     <div key={task.id} className="px-5 py-4 hover:bg-gray-50/60 transition-colors">
+                        {/* Picked-up banner */}
+                        {task.pickedUpBy && (
+                            <div className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 rounded px-2 py-1 mb-2 w-fit">
+                                <UserCheck size={12} />
+                                Picked up by {task.pickedUpBy.name}
+                            </div>
+                        )}
+
                         <div className="flex items-start gap-3">
-                            {/* Status toggle button */}
+                            {/* Status toggle */}
                             <button
                                 onClick={() => cycleStatus(task)}
                                 disabled={updating === task.id}
@@ -142,28 +194,19 @@ export default function TaskList({ tasks, onRefresh }: Props) {
                                     >
                                         {task.title}
                                     </span>
-
-                                    {/* Badges */}
                                     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${PRIORITY_COLOR[task.priority] ?? "bg-gray-100 text-gray-600"}`}>
                                         {task.priority}
                                     </span>
-
                                     {task.source === "ticket_workflow" && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">
-                                            Workflow
-                                        </span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">Workflow</span>
                                     )}
-
                                     {task.assignedRole && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
-                                            {task.assignedRole}
-                                        </span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">{task.assignedRole}</span>
                                     )}
                                 </div>
 
                                 {/* Meta row */}
                                 <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                    {/* Due date */}
                                     {task.dueAt && (
                                         <span className={`text-xs flex items-center gap-1 ${overdue ? "text-red-500 font-medium" : "text-gray-400"}`}>
                                             <Clock size={11} />
@@ -171,15 +214,9 @@ export default function TaskList({ tasks, onRefresh }: Props) {
                                             {new Date(task.dueAt).toLocaleDateString()}
                                         </span>
                                     )}
-
-                                    {/* Assigned to */}
                                     {task.assignedTo && (
-                                        <span className="text-xs text-gray-400">
-                                            → {task.assignedTo.name}
-                                        </span>
+                                        <span className="text-xs text-gray-400">→ {task.assignedTo.name}</span>
                                     )}
-
-                                    {/* Linked ticket */}
                                     {task.ticket && (
                                         <Link
                                             href={`/tickets/${task.ticket.id}`}
@@ -189,12 +226,36 @@ export default function TaskList({ tasks, onRefresh }: Props) {
                                             Ticket #{task.ticket.id} · {task.ticket.device.brand} {task.ticket.device.model}
                                         </Link>
                                     )}
-
-                                    {/* Status chip */}
                                     <span className={`text-xs font-medium ${STATUS_COLOR[task.status]}`}>
                                         {STATUS_LABEL[task.status]}
                                     </span>
                                 </div>
+
+                                {/* Pickup / Help buttons */}
+                                {(showPickup || showHelp) && (
+                                    <div className="flex gap-2 mt-2">
+                                        {showPickup && (
+                                            <button
+                                                onClick={() => pickUp(task)}
+                                                disabled={updating === task.id}
+                                                className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                                            >
+                                                <UserCheck size={12} />
+                                                Pick Up
+                                            </button>
+                                        )}
+                                        {showHelp && (
+                                            <button
+                                                onClick={() => logHelp(task)}
+                                                disabled={helpingId === task.id}
+                                                className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                            >
+                                                <HandHelping size={12} />
+                                                {helpingId === task.id ? "Logging…" : "Help With"}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Expanded description */}
                                 {isExpanded && task.description && (
