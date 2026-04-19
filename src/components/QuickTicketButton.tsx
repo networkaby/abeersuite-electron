@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Search, UserPlus, ArrowRight } from "lucide-react";
+import { Plus, Search, UserPlus, ArrowRight, ShieldCheck, Wrench } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useForm, type Resolver } from "react-hook-form";
@@ -30,6 +30,8 @@ const ticketSchema = z.object({
     accessInfo: z.string().optional(),
     estimatedCost: z.string().optional(),
     technicianId: z.string().optional(),
+    warrantyRef: z.string().optional(),
+    purchaseDate: z.string().optional(),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -42,6 +44,7 @@ export default function QuickTicketButton() {
     const { technicians, fetchTechnicians } = useReferenceStore();
     const [searching, setSearching] = useState(false);
     const [priorities, setPriorities] = useState<Priority[]>([]);
+    const [isWarranty, setIsWarranty] = useState(false);
 
     const customerForm = useForm<CustomerFormData>({
         resolver: zodResolver(customerSchema) as Resolver<CustomerFormData>,
@@ -55,6 +58,7 @@ export default function QuickTicketButton() {
     const openModal = async () => {
         reset();
         setOpen(true);
+        setIsWarranty(false);
         customerForm.reset();
         ticketForm.reset({ priority: "P2" });
         await fetchTechnicians();
@@ -109,6 +113,7 @@ export default function QuickTicketButton() {
         try {
             const res = await axios.post("/api/tickets", {
                 ...data,
+                isWarranty,
                 customerId: customer.id,
                 createdBy: session?.user?.id,
             });
@@ -323,6 +328,59 @@ export default function QuickTicketButton() {
                                             <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.problem.message}</p>
                                         )}
                                     </div>
+
+                                    {/* Job Type — Warranty Toggle */}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">Job Type</label>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsWarranty(false); ticketForm.setValue("warrantyRef", ""); ticketForm.setValue("purchaseDate", ""); }}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                                    !isWarranty
+                                                        ? "bg-blue-600 border-blue-600 text-white"
+                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                                }`}
+                                            >
+                                                <Wrench size={14} />
+                                                Paid Repair
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsWarranty(true)}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                                    isWarranty
+                                                        ? "bg-amber-500 border-amber-500 text-white"
+                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                                }`}
+                                            >
+                                                <ShieldCheck size={14} />
+                                                Warranty Claim
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Warranty Details */}
+                                    {isWarranty && (
+                                        <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Serial / Purchase Ref <span className="text-gray-400">(optional)</span></label>
+                                                <input
+                                                    {...ticketForm.register("warrantyRef")}
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                                    placeholder="Serial number or receipt ref"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Purchase Date <span className="text-gray-400">(optional)</span></label>
+                                                <input
+                                                    {...ticketForm.register("purchaseDate")}
+                                                    type="date"
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Priority + Technician */}
                                     <div className="grid grid-cols-2 gap-3">
