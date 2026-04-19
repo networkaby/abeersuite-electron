@@ -23,3 +23,14 @@ export async function requireRole(...roles: string[]): Promise<GuardResult> {
     }
     return result;
 }
+
+// Permission-based guard — use this in new/updated API routes
+export async function requirePermission(permissionId: string): Promise<GuardResult> {
+    const result = await requireAuth();
+    if (result.response) return result;
+    const perms = (result.session.user as { permissions?: string[] }).permissions ?? [];
+    if (!perms.includes(permissionId)) {
+        return { session: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+    return result;
+}

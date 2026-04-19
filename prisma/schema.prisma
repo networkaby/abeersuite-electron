@@ -73,23 +73,75 @@ model Priority {
 }
 
 model Role {
-  id    String @id
-  label String
-  color String
-  users User[]
+  id          String               @id
+  label       String
+  color       String
+  isSystem    Boolean              @default(false)
+  users       User[]
+  userRoles   UserRole[]
+  permissions UserRolePermission[]
+}
+
+model Permission {
+  id          String               @id
+  label       String
+  description String?
+  module      String               @default("core")
+  roleGrants  UserRolePermission[]
+  userGrants  UserPermission[]
+}
+
+model UserRole {
+  userId     Int
+  roleId     String
+  isPrimary  Boolean  @default(false)
+  assignedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId],  references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+}
+
+model UserRolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId],       references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserPermission {
+  userId       Int
+  permissionId String
+  granted      Boolean  @default(true)
+  grantedBy    Int?
+  grantedAt    DateTime @default(now())
+  user         User     @relation("UserPermissionUser",    fields: [userId],    references: [id], onDelete: Cascade)
+  granter      User?    @relation("UserPermissionGranter", fields: [grantedBy], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
 }
 
 model User {
-  id            Int            @id @default(autoincrement())
+  id            Int              @id @default(autoincrement())
   name          String
-  email         String         @unique
+  email         String           @unique
   password      String
-  role          String         @default("R2")
-  userRole      Role           @relation(fields: [role], references: [id])
+  role          String           @default("R2")
+  userRole      Role             @relation(fields: [role], references: [id])
+  managerId     Int?
+  manager       User?            @relation("UserHierarchy", fields: [managerId], references: [id])
+  reports       User[]           @relation("UserHierarchy")
+  userRoles     UserRole[]
+  permissions   UserPermission[] @relation("UserPermissionUser")
+  grantedPerms  UserPermission[] @relation("UserPermissionGranter")
   tickets       Ticket[]
   ticketLogs    TicketLog[]
   notifications Notification[]
-  createdAt     DateTime       @default(now())
+  createdAt     DateTime         @default(now())
 }
 
 model Customer {

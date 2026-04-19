@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `dev`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-18 22:30
+**Last Updated:** 2026-04-19 12:00
 
 ---
 
@@ -31,6 +31,16 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 ---
 
 ## ✅ Completed Work
+
+### 2026-04-19 — Dashboard refactor into role components
+- Extracted `AdminDashboard` and `TechnicianDashboard` into separate client components under `src/components/dashboard/`
+- `dashboard/page.tsx` is now a lean server orchestrator: fetches data via a new `fetchPipeline()` function, passes typed props down to role components
+- `fetchPipeline()` dynamically queries all non-terminal statuses + ticket counts — no hardcoded status IDs
+- Both dashboards display a pipeline strip (status counts), filterable active-ticket table (by pending team), and role-specific action queues
+- Admin dashboard adds escalated-count metric and full team-filter tabs (All / Tech / Front Desk / Despatch)
+- Technician dashboard adds unassigned queue (tickets not yet claimed)
+- New `src/lib/time-ago.ts`: `timeAgo(date)` → "3m ago / 5h ago / 2d ago" — used in both dashboard tables
+- Files: `src/app/(protected)/dashboard/page.tsx`, `src/components/dashboard/AdminDashboard.tsx`, `src/components/dashboard/TechnicianDashboard.tsx`, `src/lib/time-ago.ts`
 
 ### 2026-04-18 — Role-based dashboard (action queues)
 - Front Desk sees a **Call Queue**: tickets where `ticketSubStatus.notifyRoles` includes `R3` — shows customer name, phone, and plain-English action ("Call customer — quote ready for approval")
@@ -113,7 +123,12 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ## 📋 Next Up (Prioritized)
 
-1. **Reporting dashboard** — ticket counts by status over time, technician performance (average repair time), revenue (estimated cost sum), weekly/monthly charts. Use Recharts or similar.
+1. **Phase 1 — Multi-Role + Permission Foundation** — `UserRole` join table, `Permission` model, multi-role users, custom roles via Settings, `managerId` hierarchy, JWT extended with `roles[]` + `permissions[]`. See full plan.
+2. **Phase 2 — Warranty System** — `isWarranty` flag on Ticket, `warrantyScope` on both `TicketStatus` and `TicketSubStatus`, conversion flow with bridge sub-statuses, `WarrantyLog` audit trail, visual badges.
+3. **Phase 3 — Task System** — `/tasks` page (My / Team / Org), auto-tasks from ticket workflow, manual tasks, dashboard task summary cards.
+4. **Phase 4 — Cross-User Delegation** — `tasks:pickup` permission, Pick Up / Help With buttons, per-user permission override UI.
+5. **Phase 5 — ERP Module Foundation** — module registry, module toggle settings, module-driven sidebar and nav.
+6. **Reporting dashboard** — ticket counts by status over time, technician performance (average repair time), revenue (estimated cost sum), weekly/monthly charts. Use Recharts or similar.
 2. **Customer SMS/email templates** — when front desk marks "Customer Called" or "Quote Sent", optionally send a template message. Needs integration choice (Twilio, Resend, etc.).
 3. **Ticket search improvements** — full-text search across customer name, phone, device model, notes. Currently client-side filter only; needs server-side for large datasets.
 4. **Technician time tracking** — log how long each ticket spends in each status. Derived from TicketLog timestamps.
@@ -179,6 +194,11 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ---
 
+## 💡 Ideas & Notes (Future / Dream)
+
+- 2026-04-19 **Branch + Department structure**: `Branch` (physical site) + `Department` (functional group within branch). Users and tickets get `branchId`. Data scoping: staff see only their branch's data; `data:all_branches` permission for managers. Departments handled by roles for now; proper `Department` model when HR module is built.
+- 2026-04-19 **ERP modules roadmap**: service (active) → tasks (active) → CRM → Inventory → HR → Finance. Each module lives under `src/app/(protected)/[module]/`. Module registry in `src/config/modules.ts` controls nav and permissions.
+
 ## 💡 Ideas & Notes
 
 - 2026-04-18 **Quick ticket creation**: QuickTicketButton component already exists — review if it handles all required fields
@@ -214,6 +234,10 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | Status role config | `allowedRoles`+`notifyRoles`+`actionLabel` on both `TicketStatus` and `TicketSubStatus` | Hardcoded maps in dashboard | Fully DB-driven; admins configure via Settings without code changes |
 | Date format utility | `formatDate()` / `formatDateTime()` in `src/lib/format-date.ts` (en-GB, unambiguous) | `toLocaleDateString()` | Avoids day/month locale ambiguity; consistent "18 Apr 2026" across all pages |
 | changedBy in logs | Server session `auth()` | Client-sent body field | Client can send wrong/null userId; server session is authoritative |
+| Multi-role users | `UserRole` join table (many-to-many) | Changing `User.role` to array | Additive; legacy `User.role` kept in sync as primary role for compat |
+| User rank/hierarchy | `managerId` self-relation only, no numeric rank | Numeric rank field | Rank is redundant with permissions for small teams; `managerId` covers org structure distinctly |
+| Warranty scope | `warrantyScope` enum on both `TicketStatus` AND `TicketSubStatus` | Status-only or sub-status-only | Future-proofs for warranty-specific pipeline stages; all existing records default to `"any"` |
+| Warranty conversion | Dedicated `/warranty` API endpoint + bridge sub-statuses | Sub-status transition | Conversion changes data model (isWarranty flag), not just workflow step; bridge sub-status is the handoff point |
 
 ---
 
@@ -243,6 +267,9 @@ src/
 │   │   └── roles/             # Role list
 │   └── login/                 # Public login page
 ├── components/
+│   ├── dashboard/
+│   │   ├── AdminDashboard.tsx     # Admin: pipeline strip, team-filtered table, all metrics
+│   │   └── TechnicianDashboard.tsx # Tech: pipeline strip, workbench, unassigned queue
 │   ├── StatusUpdateCombined.tsx   # Single modal: sub-status + main status update
 │   ├── NotificationBell.tsx       # Polling bell + unread badge
 │   ├── Sidebar.tsx                # Role-filtered navigation
@@ -250,7 +277,9 @@ src/
 │   └── SessionWrapper.tsx         # NextAuth session provider
 ├── lib/
 │   ├── prisma.ts              # Prisma client singleton
-│   └── auth-guard.ts          # requireAuth() / requireRole() helpers
+│   ├── auth-guard.ts          # requireAuth() / requireRole() helpers
+│   ├── format-date.ts         # formatDate() / formatDateTime() — en-GB, unambiguous
+│   └── time-ago.ts            # timeAgo() — "3m ago / 5h ago / 2d ago"
 ├── auth.ts                    # NextAuth config (JWT, credentials provider)
 ├── auth.d.ts                  # Session type augmentation (id, role on user)
 ├── proxy.ts                   # Auth middleware (Next.js 16 — NOT middleware.ts)

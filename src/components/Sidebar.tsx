@@ -10,40 +10,42 @@ import {
     Building2,
     UserCog,
     Settings,
+    ShieldCheck,
     LogOut,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 
-const ROLE_LABELS: Record<string, string> = {
-    R1: "Admin",
-    R2: "Technician",
-    R3: "Front Desk",
-    R4: "Despatch",
-};
-
 // roles: null = all authenticated users
 const NAV_ITEMS = [
-    { label: "Dashboard",       href: "/dashboard",            icon: LayoutDashboard, roles: null },
-    { label: "Customers",       href: "/customers",            icon: Users,           roles: null },
-    { label: "Tickets",         href: "/tickets",              icon: Ticket,          roles: null },
-    { label: "Service Centers", href: "/service-centers",      icon: Building2,       roles: ["R1", "R2"] },
-    { label: "Users",           href: "/users",                icon: UserCog,         roles: ["R1"] },
-    { label: "Statuses",        href: "/settings/statuses",    icon: Settings,        roles: ["R1"] },
-    { label: "Sub-Statuses",    href: "/settings/sub-statuses",icon: Settings,        roles: ["R1"] },
+    { label: "Dashboard",       href: "/dashboard",             icon: LayoutDashboard, roles: null },
+    { label: "Customers",       href: "/customers",             icon: Users,           roles: null },
+    { label: "Tickets",         href: "/tickets",               icon: Ticket,          roles: null },
+    { label: "Service Centers", href: "/service-centers",       icon: Building2,       roles: ["R1", "R2"] },
+    { label: "Users",           href: "/users",                 icon: UserCog,         roles: ["R1"] },
+    { label: "Statuses",        href: "/settings/statuses",     icon: Settings,        roles: ["R1"] },
+    { label: "Sub-Statuses",    href: "/settings/sub-statuses", icon: Settings,        roles: ["R1"] },
+    { label: "Roles",           href: "/settings/roles",        icon: ShieldCheck,     roles: ["R1"] },
 ] as const;
 
 type SidebarUser = {
     name?: string | null;
     role?: string | null;
+    roles?: string[] | null;
 };
 
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
-    const userRole = user?.role ?? "";
+    const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
+    const primaryRole = user?.role ?? "";
 
     const visibleItems = NAV_ITEMS.filter(
-        (item) => item.roles === null || item.roles.includes(userRole as never)
+        (item) => item.roles === null || item.roles.some((r) => userRoles.includes(r))
     );
+
+    // Build role label: "Front Desk / Despatch" for multi-role users
+    const roleLabel = userRoles.length > 0
+        ? userRoles.join(" / ")
+        : primaryRole;
 
     return (
         <aside className="w-64 bg-white shadow-md flex flex-col min-h-screen">
@@ -54,9 +56,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     <NotificationBell />
                 </div>
                 <p className="text-xs text-gray-600 font-medium mt-1">{user?.name}</p>
-                <p className="text-xs text-gray-400">
-                    {ROLE_LABELS[userRole] ?? userRole}
-                </p>
+                <p className="text-xs text-gray-400 truncate">{roleLabel}</p>
             </div>
 
             {/* Nav */}

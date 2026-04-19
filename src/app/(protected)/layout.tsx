@@ -16,7 +16,11 @@ export default async function ProtectedLayout({
     return (
         <SessionWrapper>
             <div className="flex min-h-screen bg-gray-100">
-                <Sidebar user={session.user} />
+                <Sidebar user={{
+                    name: session.user?.name,
+                    role: (session.user as { role?: string } | undefined)?.role,
+                    roles: (session.user as { roles?: string[] } | undefined)?.roles,
+                }} />
                 <main className="flex-1 p-8 overflow-auto">{children}</main>
                 <Toaster richColors />
                 <QuickTicketButton />

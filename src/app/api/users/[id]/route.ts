@@ -13,25 +13,46 @@ export async function PUT(
         const { id } = await params;
         const body = await req.json();
 
+        const primaryRole: string = body.role as string;
+
         const data: {
             name: string;
             email: string;
             role: string;
+            managerId?: number | null;
             password?: string;
         } = {
             name: body.name,
             email: body.email,
-            role: body.role as string,
+            role: primaryRole,
+            managerId: body.managerId !== undefined
+                ? (body.managerId ? Number(body.managerId) : null)
+                : undefined,
         };
 
         if (body.password) {
             data.password = await bcrypt.hash(body.password, 10);
         }
 
-        const user = await prisma.user.update({
-            where: { id: Number(id) },
-            data,
-            select: { id: true, name: true, email: true, role: true, createdAt: true },
+        // Update user + keep primary UserRole in sync
+        const user = await prisma.$transaction(async (tx) => {
+            const updated = await tx.user.update({
+                where: { id: Number(id) },
+                data,
+                select: { id: true, name: true, email: true, role: true, createdAt: true },
+            });
+            // Upsert the primary UserRole row (don't touch any secondary roles)
+            await tx.userRole.upsert({
+                where: { userId_roleId: { userId: updated.id, roleId: primaryRole } },
+                create: { userId: updated.id, roleId: primaryRole, isPrimary: true },
+                update: { isPrimary: true },
+            });
+            // Demote any old primary that's no longer primary
+            await tx.userRole.updateMany({
+                where: { userId: updated.id, roleId: { not: primaryRole }, isPrimary: true },
+                data: { isPrimary: false },
+            });
+            return updated;
         });
 
         return NextResponse.json(user);
