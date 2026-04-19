@@ -41,12 +41,16 @@ export async function POST(req: Request) {
         // Create ticket
         const ticket = await prisma.ticket.create({
             data: {
-                deviceId: device.id,
-                priority: body.priority || "P2",
-                notes: body.notes || null,
-                accessInfo: body.accessInfo || null,
+                deviceId:      device.id,
+                priority:      body.priority || "P2",
+                notes:         body.notes || null,
+                accessInfo:    body.accessInfo || null,
                 estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
-                technicianId: body.technicianId ? Number(body.technicianId) : null,
+                technicianId:  body.technicianId ? Number(body.technicianId) : null,
+                isWarranty:    Boolean(body.isWarranty),
+                warrantyStatus: body.isWarranty ? "claimed" : "none",
+                warrantyRef:   body.warrantyRef || null,
+                purchaseDate:  body.purchaseDate ? new Date(body.purchaseDate) : null,
             },
             include: {
                 device: { include: { customer: true } },
