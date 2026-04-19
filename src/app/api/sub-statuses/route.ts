@@ -51,8 +51,9 @@ export async function POST(req: Request) {
                 applicableStatusIds: body.applicableStatusIds ?? [],
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles: body.notifyRoles ?? [],
-                triggerMap: body.triggerMap ?? {},
-                actionLabel: body.actionLabel ?? null,
+                triggerMap:    body.triggerMap ?? {},
+                actionLabel:   body.actionLabel ?? null,
+                warrantyScope: body.warrantyScope ?? "any",
             },
         });
 

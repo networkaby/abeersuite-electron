@@ -8,14 +8,15 @@ datasource db {
 }
 
 model TicketStatus {
-  id           String   @id
-  label        String
-  color        String
-  order        Int
-  isTerminal   Boolean  @default(false)
-  allowedRoles String[]
-  notifyRoles  String[]
-  actionLabel  String?
+  id             String   @id
+  label          String
+  color          String
+  order          Int
+  isTerminal     Boolean  @default(false)
+  allowedRoles   String[]
+  notifyRoles    String[]
+  actionLabel    String?
+  warrantyScope  String   @default("any")
 
   tickets         Ticket[]
   logs            TicketLog[]
@@ -32,6 +33,7 @@ model TicketSubStatus {
   applicableStatusIds String[]
   allowedRoles        String[]
   notifyRoles         String[]
+  warrantyScope       String  @default("any")
 
   // triggerMap: JSON object { parentStatusId → targetStatusId }
   // e.g. { "S2": "S3", "S4": "S5" }  — different advance per parent
@@ -141,6 +143,7 @@ model User {
   tickets       Ticket[]
   ticketLogs    TicketLog[]
   notifications Notification[]
+  warrantyLogs  WarrantyLog[]    @relation("WarrantyLogUser")
   createdAt     DateTime         @default(now())
 }
 
@@ -189,10 +192,31 @@ model Ticket {
   externalRef     String?
   serviceCenter   ServiceCenter?   @relation(fields: [serviceCenterId], references: [id])
   serviceCenterId Int?
+  isWarranty      Boolean          @default(false)
+  warrantyStatus  String           @default("none")
+  voidReason      String?
+  warrantyRef     String?
+  purchaseDate    DateTime?
   logs            TicketLog[]
   notifications   Notification[]
+  warrantyLogs    WarrantyLog[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+}
+
+model WarrantyLog {
+  id           Int      @id @default(autoincrement())
+  ticketId     Int
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromWarranty Boolean
+  toWarranty   Boolean
+  fromStatus   String
+  toStatus     String
+  voidReason   String?
+  note         String?
+  changedById  Int
+  changedBy    User     @relation("WarrantyLogUser", fields: [changedById], references: [id])
+  createdAt    DateTime @default(now())
 }
 
 model TicketLog {

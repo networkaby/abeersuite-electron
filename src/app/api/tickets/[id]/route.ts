@@ -32,6 +32,10 @@ export async function GET(
                     },
                     orderBy: { createdAt: "desc" },
                 },
+                warrantyLogs: {
+                    include: { changedBy: { select: { name: true } } },
+                    orderBy: { createdAt: "desc" },
+                },
             },
         });
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -85,6 +89,9 @@ export async function PUT(
                 receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null,
                 externalRef: body.externalRef || null,
                 serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null,
+                isWarranty: body.isWarranty !== undefined ? Boolean(body.isWarranty) : undefined,
+                warrantyRef: body.warrantyRef !== undefined ? (body.warrantyRef || null) : undefined,
+                purchaseDate: body.purchaseDate !== undefined ? (body.purchaseDate ? new Date(body.purchaseDate) : null) : undefined,
             },
         });
 

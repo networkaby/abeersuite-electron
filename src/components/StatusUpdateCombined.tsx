@@ -29,6 +29,7 @@ interface Props {
         id: number;
         status: string;
         subStatusId?: string | null;
+        isWarranty?: boolean;
         ticketStatus: {
             label: string;
             fromTransitions: { to: NextMainStatus }[];
@@ -76,6 +77,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         const params = new URLSearchParams({ statusId: ticket.status });
         if (currentSubId) params.set("fromSubStatusId", currentSubId);
         else params.set("entryOnly", "true");
+        if (ticket.isWarranty) params.set("isWarranty", "true");
 
         Promise.all([
             axios.get(`/api/sub-statuses/next?${params}`),

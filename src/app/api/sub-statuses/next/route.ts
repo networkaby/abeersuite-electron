@@ -17,6 +17,7 @@ export async function GET(req: Request) {
         const statusId = searchParams.get("statusId");
         const fromSubStatusId = searchParams.get("fromSubStatusId");
         const entryOnly = searchParams.get("entryOnly") === "true";
+        const isWarranty = searchParams.get("isWarranty") === "true";
         const userRole = (session.user as { role?: string }).role ?? "";
 
         if (!statusId) {
@@ -38,6 +39,12 @@ export async function GET(req: Request) {
                 if (!ss.applicableStatusIds.includes(statusId)) return false;
                 // Admin (R1) can set any sub-status regardless of allowedRoles
                 if (userRole !== "R1" && ss.allowedRoles.length > 0 && !ss.allowedRoles.includes(userRole)) return false;
+                // Filter by warrantyScope
+                const scope = ss.warrantyScope ?? "any";
+                if (scope !== "any") {
+                    if (scope === "warranty_only" && !isWarranty) return false;
+                    if (scope === "non_warranty_only" && isWarranty) return false;
+                }
                 return true;
             });
 

@@ -14,6 +14,7 @@ interface TicketStatus {
     allowedRoles: string[];
     notifyRoles: string[];
     actionLabel: string | null;
+    warrantyScope: string;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
 }
@@ -58,7 +59,8 @@ export default function StatusesPage() {
         allowedRoles: string[];
         notifyRoles: string[];
         actionLabel: string;
-    }>({ allowedRoles: [], notifyRoles: [], actionLabel: "" });
+        warrantyScope: string;
+    }>({ allowedRoles: [], notifyRoles: [], actionLabel: "", warrantyScope: "any" });
     const [savingRoles, setSavingRoles] = useState(false);
 
     // Add new
@@ -133,9 +135,10 @@ export default function StatusesPage() {
     const openRoles = (s: TicketStatus) => {
         setRolesModalId(s.id);
         setRolesForm({
-            allowedRoles: s.allowedRoles,
-            notifyRoles:  s.notifyRoles,
-            actionLabel:  s.actionLabel ?? "",
+            allowedRoles:  s.allowedRoles,
+            notifyRoles:   s.notifyRoles,
+            actionLabel:   s.actionLabel ?? "",
+            warrantyScope: s.warrantyScope ?? "any",
         });
     };
     const toggleRole = (field: "allowedRoles" | "notifyRoles", id: string) => {
@@ -151,9 +154,10 @@ export default function StatusesPage() {
         setSavingRoles(true);
         try {
             await axios.patch(`/api/ticket-statuses/${rolesModalId}`, {
-                allowedRoles: rolesForm.allowedRoles,
-                notifyRoles:  rolesForm.notifyRoles,
-                actionLabel:  rolesForm.actionLabel || null,
+                allowedRoles:  rolesForm.allowedRoles,
+                notifyRoles:   rolesForm.notifyRoles,
+                actionLabel:   rolesForm.actionLabel || null,
+                warrantyScope: rolesForm.warrantyScope,
             });
             toast.success("Role settings saved");
             setRolesModalId(null);
@@ -541,6 +545,21 @@ export default function StatusesPage() {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Warranty scope */}
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Warranty scope</label>
+                                <select
+                                    value={rolesForm.warrantyScope}
+                                    onChange={(e) => setRolesForm((prev) => ({ ...prev, warrantyScope: e.target.value }))}
+                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="any">Any (warranty + non-warranty)</option>
+                                    <option value="warranty_only">Warranty only</option>
+                                    <option value="non_warranty_only">Non-warranty only</option>
+                                </select>
+                                <p className="text-xs text-gray-400 mt-1">Controls whether this status appears for warranty or non-warranty tickets.</p>
                             </div>
 
                             {/* Action label */}

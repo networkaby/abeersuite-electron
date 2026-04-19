@@ -6,11 +6,14 @@ import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatDate } from "@/lib/format-date";
+import WarrantyBadge from "@/components/WarrantyBadge";
 interface Ticket {
     id: number;
     status: string;
     priority: string;
     escalated: boolean;
+    isWarranty: boolean;
+    warrantyStatus: string;
     createdAt: string;
     ticketStatus: { label: string; color: string };
     ticketSubStatus?: { label: string; color: string } | null;
@@ -47,6 +50,7 @@ export default function TicketsPage() {
     const [serviceCenterFilter, setServiceCenterFilter] = useState("");
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
+    const [warrantyFilter, setWarrantyFilter] = useState("");
 
     const fetchTickets = async () => {
         try {
@@ -111,6 +115,9 @@ export default function TicketsPage() {
             );
         }
 
+        if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
+        if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
+
         setFiltered(result);
     }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo]);
 
@@ -122,9 +129,10 @@ export default function TicketsPage() {
         setServiceCenterFilter("");
         setDateFrom("");
         setDateTo("");
+        setWarrantyFilter("");
     };
 
-    const hasFilters = search || statusFilter || priorityFilter || technicianFilter || serviceCenterFilter || dateFrom || dateTo;
+    const hasFilters = search || statusFilter || priorityFilter || technicianFilter || serviceCenterFilter || dateFrom || dateTo || warrantyFilter;
 
     return (
         <div>
@@ -148,7 +156,7 @@ export default function TicketsPage() {
                 </div>
 
                 {/* Filter Row */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
                     {/* Status */}
                     <select
                         value={statusFilter}
@@ -195,6 +203,17 @@ export default function TicketsPage() {
                         {serviceCenters.map((s) => (
                             <option key={s.id} value={s.name}>{s.name}</option>
                         ))}
+                    </select>
+
+                    {/* Warranty */}
+                    <select
+                        value={warrantyFilter}
+                        onChange={(e) => setWarrantyFilter(e.target.value)}
+                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="">All Warranty</option>
+                        <option value="warranty">Warranty only</option>
+                        <option value="non_warranty">Non-warranty only</option>
                     </select>
 
                     {/* Date From */}
@@ -285,6 +304,7 @@ export default function TicketsPage() {
                                                     {t.ticketSubStatus.label}
                                                 </span>
                                             )}
+                                            <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-gray-500">

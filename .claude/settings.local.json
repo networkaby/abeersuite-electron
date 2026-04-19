@@ -24,7 +24,9 @@
       "Bash(find \"D:/our-own-website/service-mgmt-experiment/src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" \\\\\\) -exec grep -l \"task\\\\|myTask\\\\|actionable\" {} \\\\;)",
       "Bash(cp \"d:/Users/User/Downloads/project-brain.skill\" project-brain.zip)",
       "Bash(unzip -o project-brain.zip -d project-brain-skill)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:60555/login)"
     ]
   }
 }

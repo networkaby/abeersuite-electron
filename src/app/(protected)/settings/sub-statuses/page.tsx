@@ -36,12 +36,13 @@ type FormValues = {
     notifyRoles: string[];
     triggerMap: Record<string, string>;
     actionLabel: string;
+    warrantyScope: string;
 };
 
 const BLANK_FORM: FormValues = {
     label: "", color: "bg-gray-100 text-gray-600", group: "customer_comm",
     order: "", applicableStatusIds: [], allowedRoles: [], notifyRoles: [], triggerMap: {},
-    actionLabel: "",
+    actionLabel: "", warrantyScope: "any",
 };
 
 const GROUP_OPTIONS = [
@@ -126,6 +127,20 @@ function SubStatusFormModal({
                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="e.g. Waiting for Parts"
                         />
+                    </div>
+
+                    {/* Warranty scope */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Warranty scope</label>
+                        <select
+                            value={form.warrantyScope}
+                            onChange={(e) => setForm({ ...form, warrantyScope: e.target.value })}
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="any">Any (shown for all tickets)</option>
+                            <option value="warranty_only">Warranty only</option>
+                            <option value="non_warranty_only">Non-warranty only</option>
+                        </select>
                     </div>
 
                     {/* Action label */}
@@ -347,7 +362,8 @@ export default function SubStatusesPage() {
             allowedRoles: ss.allowedRoles,
             notifyRoles: ss.notifyRoles,
             triggerMap: (ss.triggerMap ?? {}) as Record<string, string>,
-            actionLabel: ss.actionLabel ?? "",
+            actionLabel:   ss.actionLabel ?? "",
+            warrantyScope: (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
         });
         setEditId(ss.id);
     };
@@ -364,8 +380,9 @@ export default function SubStatusesPage() {
                 applicableStatusIds: editForm.applicableStatusIds,
                 allowedRoles: editForm.allowedRoles,
                 notifyRoles: editForm.notifyRoles,
-                triggerMap: editForm.triggerMap,
-                actionLabel: editForm.actionLabel || null,
+                triggerMap:    editForm.triggerMap,
+                actionLabel:   editForm.actionLabel || null,
+                warrantyScope: editForm.warrantyScope,
             });
             toast.success("Sub-status updated");
             setEditId(null);

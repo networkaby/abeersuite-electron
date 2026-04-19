@@ -21,6 +21,9 @@ import Link from "next/link";
 import TicketEscalation from "@/components/TicketEscalation";
 import StatusUpdateCombined from "@/components/StatusUpdateCombined";
 import AddNoteModal from "@/components/AddNoteModal";
+import WarrantyBadge from "@/components/WarrantyBadge";
+import WarrantyConvertModal from "@/components/WarrantyConvertModal";
+import { useSession } from "next-auth/react";
 interface Ticket {
     id: number;
     status: string;
@@ -36,6 +39,11 @@ interface Ticket {
     expectedReturn?: string;
     receivedBackAt?: string;
     externalRef?: string;
+    isWarranty: boolean;
+    warrantyStatus: string;
+    voidReason?: string | null;
+    warrantyRef?: string | null;
+    purchaseDate?: string | null;
     createdAt: string;
     updatedAt: string;
     ticketStatus: {
@@ -63,6 +71,17 @@ interface Ticket {
         ticketStatus: { label: string; color: string };
         ticketSubStatus?: { label: string; color: string } | null;
     }[];
+    warrantyLogs: {
+        id: number;
+        fromWarranty: boolean;
+        toWarranty: boolean;
+        fromStatus: string;
+        toStatus: string;
+        voidReason?: string | null;
+        note?: string | null;
+        createdAt: string;
+        changedBy: { name: string };
+    }[];
 }
 
 
@@ -73,6 +92,10 @@ export default function TicketDetailPage() {
     const [showStatusUpdate, setShowStatusUpdate] = useState(false);
     const [showEscalation, setShowEscalation] = useState(false);
     const [showAddNote, setShowAddNote] = useState(false);
+    const [showWarrantyModal, setShowWarrantyModal] = useState(false);
+    const { data: session } = useSession();
+    const userRoles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
+    const canConvertWarranty = userRoles.some((r) => r === "R1" || r === "R2");
 
     const fetchTicket = useCallback(async () => {
         try {
@@ -119,6 +142,23 @@ export default function TicketDetailPage() {
                     )}
                 </div>
             </div>
+
+            {/* Warranty banner */}
+            {ticket.isWarranty && (
+                <div className={`mb-4 rounded-xl border px-5 py-3 flex items-center gap-3 text-sm ${
+                    ticket.warrantyStatus === "voided" ? "bg-red-50 border-red-200 text-red-700" :
+                    ticket.warrantyStatus === "confirmed" ? "bg-green-50 border-green-200 text-green-700" :
+                    "bg-amber-50 border-amber-200 text-amber-700"
+                }`}>
+                    <WarrantyBadge isWarranty={ticket.isWarranty} warrantyStatus={ticket.warrantyStatus} />
+                    <span className="flex-1">
+                        {ticket.warrantyStatus === "voided" && ticket.voidReason && `Void reason: ${ticket.voidReason.replace(/_/g, " ")}`}
+                        {ticket.warrantyStatus === "confirmed" && "Warranty confirmed — no charge to customer."}
+                        {ticket.warrantyStatus === "claimed" && "Warranty claim in progress."}
+                    </span>
+                    {ticket.warrantyRef && <span className="text-xs opacity-70">Ref: {ticket.warrantyRef}</span>}
+                </div>
+            )}
 
             <div className="grid grid-cols-3 gap-6">
                 {/* Left Column */}
@@ -206,9 +246,36 @@ export default function TicketDetailPage() {
                         <h2 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
                             <Clock size={16} /> Timeline
                         </h2>
-                        {ticket.logs.length === 0 ? (
+                        {ticket.warrantyLogs.length > 0 && (
+                            <div className="mb-4 space-y-3">
+                                {ticket.warrantyLogs.map((wl) => (
+                                    <div key={wl.id} className="flex gap-3">
+                                        <div className="w-2 h-2 rounded-full mt-2 shrink-0 bg-amber-400" />
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                                    {wl.toWarranty
+                                                        ? wl.toStatus === "voided" ? "Warranty Voided" : "Converted to Warranty"
+                                                        : "Removed from Warranty"}
+                                                </span>
+                                                <span className="text-xs text-gray-400">by {wl.changedBy.name}</span>
+                                                <span className="text-xs text-gray-400">{formatDateTime(wl.createdAt)}</span>
+                                            </div>
+                                            {(wl.voidReason || wl.note) && (
+                                                <p className="text-sm text-gray-500 mt-0.5">
+                                                    {wl.voidReason && <span>Reason: {wl.voidReason.replace(/_/g, " ")}. </span>}
+                                                    {wl.note}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                <hr className="border-dashed border-gray-200" />
+                            </div>
+                        )}
+                        {ticket.logs.length === 0 && ticket.warrantyLogs.length === 0 ? (
                             <p className="text-gray-400 text-sm">No history yet.</p>
-                        ) : (
+                        ) : ticket.logs.length === 0 ? null : (
                             <div className="space-y-4">
                                 {ticket.logs.map((log) => {
                                     const isNoteOnly = !log.subStatusId && log.note && log.status === ticket.status;
@@ -284,6 +351,19 @@ export default function TicketDetailPage() {
                             Add Note
                         </button>
 
+                        {canConvertWarranty && ticket.status !== "S7" && ticket.status !== "S8" && (
+                            <button
+                                onClick={() => setShowWarrantyModal(true)}
+                                className={`w-full border rounded-lg py-2 text-sm flex items-center justify-center gap-2 ${
+                                    ticket.isWarranty
+                                        ? "border-red-300 text-red-600 hover:bg-red-50"
+                                        : "border-amber-300 text-amber-600 hover:bg-amber-50"
+                                }`}
+                            >
+                                {ticket.isWarranty ? "⚙ Manage Warranty" : "⚙ Mark as Warranty"}
+                            </button>
+                        )}
+
                         {!ticket.escalated && ticket.status !== "S7" && (
                             <button
                                 onClick={() => setShowEscalation(true)}
@@ -333,6 +413,20 @@ export default function TicketDetailPage() {
                     ticketId={ticket.id}
                     onClose={() => {
                         setShowAddNote(false);
+                        fetchTicket();
+                    }}
+                />
+            )}
+
+            {showWarrantyModal && (
+                <WarrantyConvertModal
+                    ticketId={ticket.id}
+                    isWarranty={ticket.isWarranty}
+                    warrantyStatus={ticket.warrantyStatus}
+                    warrantyRef={ticket.warrantyRef}
+                    purchaseDate={ticket.purchaseDate}
+                    onClose={() => {
+                        setShowWarrantyModal(false);
                         fetchTicket();
                     }}
                 />
