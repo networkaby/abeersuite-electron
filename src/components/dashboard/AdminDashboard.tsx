@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ChevronRight } from "lucide-react";
+import { AlertCircle, ChevronRight, ListTodo } from "lucide-react";
 import { timeAgo } from "@/lib/time-ago";
 
 interface PipelineStage {
@@ -28,7 +28,7 @@ interface Props {
     name: string;
     pipeline: PipelineStage[];
     allActiveTickets: TicketRow[];
-    counts: { total: number; open: number; escalated: number; ready: number; actionItems: number };
+    counts: { total: number; open: number; escalated: number; ready: number; actionItems: number; openTasks: number };
 }
 
 const TEAM_TABS = [
@@ -86,6 +86,11 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                         <span className="text-xs text-yellow-800 font-medium">{counts.actionItems} pending actions</span>
                     </div>
                 )}
+                <Link href="/tasks" className="bg-white rounded-lg shadow px-4 py-2.5 flex items-center gap-2 hover:bg-blue-50/40 transition-colors">
+                    <ListTodo size={14} className="text-blue-500" />
+                    <span className="text-xs text-gray-500">Tasks</span>
+                    <span className={`text-xl font-bold ${counts.openTasks > 0 ? "text-blue-600" : "text-gray-700"}`}>{counts.openTasks}</span>
+                </Link>
             </div>
 
             {/* Pipeline strip */}

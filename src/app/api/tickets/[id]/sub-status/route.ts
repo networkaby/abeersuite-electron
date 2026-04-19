@@ -85,7 +85,7 @@ export async function PATCH(
             });
         }
 
-        // Notify the relevant roles
+        // Notify the relevant roles + auto-create workflow tasks
         if (subStatus.notifyRoles.length > 0) {
             const usersToNotify = await prisma.user.findMany({
                 where: { role: { in: subStatus.notifyRoles } },
@@ -105,6 +105,22 @@ export async function PATCH(
                     })),
                 });
             }
+
+            // Auto-create one workflow task per notifyRole
+            const taskTitle = `${subStatus.label} — Ticket #${ticketId} (${deviceLabel})`;
+            await prisma.task.createMany({
+                data: subStatus.notifyRoles.map((roleId) => ({
+                    title:        taskTitle,
+                    description:  `Customer: ${ticket.device.customer.name}`,
+                    source:       "ticket_workflow",
+                    status:       "open",
+                    priority:     ticket.priority,
+                    assignedRole: roleId,
+                    ticketId,
+                    createdById:  userId,
+                })),
+                skipDuplicates: true,
+            });
         }
 
         return NextResponse.json({ ok: true });

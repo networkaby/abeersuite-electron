@@ -11,6 +11,7 @@ import {
     UserCog,
     Settings,
     ShieldCheck,
+    ListTodo,
     LogOut,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
     { label: "Dashboard",       href: "/dashboard",             icon: LayoutDashboard, roles: null },
     { label: "Customers",       href: "/customers",             icon: Users,           roles: null },
     { label: "Tickets",         href: "/tickets",               icon: Ticket,          roles: null },
+    { label: "Tasks",           href: "/tasks",                 icon: ListTodo,        roles: null },
     { label: "Service Centers", href: "/service-centers",       icon: Building2,       roles: ["R1", "R2"] },
     { label: "Users",           href: "/users",                 icon: UserCog,         roles: ["R1"] },
     { label: "Statuses",        href: "/settings/statuses",     icon: Settings,        roles: ["R1"] },
