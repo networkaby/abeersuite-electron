@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
 import { X, ArrowRight, ChevronRight, Lock, Eye } from "lucide-react";
+import HandoffPickerModal from "./assignments/HandoffPickerModal";
 
 interface NextMainStatus {
     id: string;
@@ -51,6 +52,11 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     const [nextSubStatuses, setNextSubStatuses] = useState<NextSubStatus[]>([]);
     const [loadingSubStatuses, setLoadingSubStatuses] = useState(true);
     const [statusLabels, setStatusLabels] = useState<Record<string, string>>({});
+    const [handoff, setHandoff] = useState<{
+        role: string;
+        subStatusId: string;
+        candidates: { id: number; name: string; role: string }[];
+    } | null>(null);
 
     const nextMainStatuses: NextMainStatus[] = ticket.ticketStatus.fromTransitions.map((t) => t.to);
 
@@ -103,11 +109,25 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         try {
             if (data.mode === "substatus") {
                 if (!data.subStatusId) { toast.error("Select a sub-status"); return; }
-                await axios.patch(`/api/tickets/${ticket.id}/sub-status`, {
+                const res = await axios.patch<{
+                    ok?: boolean;
+                    requiresAssignment?: boolean;
+                    role?: string;
+                    subStatusId?: string;
+                    candidates?: { id: number; name: string; role: string }[];
+                }>(`/api/tickets/${ticket.id}/sub-status`, {
                     subStatusId: data.subStatusId,
                     note: data.note || undefined,
                     visibility: data.visibility,
                 });
+                if (res.data.requiresAssignment && res.data.role && res.data.subStatusId && res.data.candidates) {
+                    setHandoff({
+                        role: res.data.role,
+                        subStatusId: res.data.subStatusId,
+                        candidates: res.data.candidates,
+                    });
+                    return;
+                }
             } else {
                 if (!data.mainStatusId) { toast.error("Select a status"); return; }
                 await axios.put(`/api/tickets/${ticket.id}`, {
@@ -124,6 +144,19 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     };
 
     const isTerminalReopen = ticket.status === "S7" || ticket.status === "S8";
+
+    if (handoff) {
+        return (
+            <HandoffPickerModal
+                ticketId={ticket.id}
+                role={handoff.role}
+                subStatusId={handoff.subStatusId}
+                candidates={handoff.candidates}
+                onClose={() => { setHandoff(null); onClose(); }}
+                onDone={() => { setHandoff(null); onClose(); }}
+            />
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

@@ -31,7 +31,7 @@ async function AdminDashboardServer({ name }: { name: string }) {
             take: 100,
             include: {
                 device: { include: { customer: true } },
-                technician: { select: { id: true, name: true } },
+                primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
             },
@@ -64,14 +64,14 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
             orderBy: { updatedAt: "desc" },
             include: {
                 device: { include: { customer: true } },
-                technician: { select: { id: true, name: true } },
+                primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
             },
         }),
         prisma.ticket.findMany({
             where: {
-                technicianId: null,
+                primaryOwnerId: null,
                 ticketStatus: { isTerminal: false, notifyRoles: { has: "R2" } },
             },
             orderBy: { createdAt: "asc" },
@@ -133,7 +133,7 @@ async function FrontDeskDashboard({ name }: { name: string }) {
                 device: { include: { customer: true } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
-                technician: { select: { name: true } },
+                primaryOwner: { select: { name: true } },
             },
         }),
         prisma.ticket.findMany({
@@ -250,7 +250,7 @@ async function FrontDeskDashboard({ name }: { name: string }) {
                                     </p>
                                     <p className="text-xs text-gray-500 mt-0.5">
                                         {t.device.brand} {t.device.model}
-                                        {t.technician && <span className="ml-2 text-gray-400">· Tech: {t.technician.name}</span>}
+                                        {t.primaryOwner && <span className="ml-2 text-gray-400">· Tech: {t.primaryOwner.name}</span>}
                                     </p>
                                     {t.ticketSubStatus!.actionLabel && (
                                         <p className="text-xs text-red-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
@@ -296,7 +296,7 @@ async function DespatchDashboard({ name }: { name: string }) {
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
-                technician: { select: { name: true } },
+                primaryOwner: { select: { name: true } },
             },
         }),
         prisma.ticket.findMany({
@@ -417,8 +417,8 @@ async function DespatchDashboard({ name }: { name: string }) {
                                     {t.serviceCenter && (
                                         <p className="text-xs text-gray-500 mt-0.5">Service Centre: {t.serviceCenter.name}</p>
                                     )}
-                                    {t.technician && (
-                                        <p className="text-xs text-gray-400">Technician: {t.technician.name}</p>
+                                    {t.primaryOwner && (
+                                        <p className="text-xs text-gray-400">Technician: {t.primaryOwner.name}</p>
                                     )}
                                     {t.ticketSubStatus!.actionLabel && (
                                         <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>

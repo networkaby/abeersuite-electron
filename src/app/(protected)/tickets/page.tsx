@@ -25,7 +25,7 @@ interface Ticket {
         problem: string;
         customer: { name: string; phone: string };
     };
-    technician?: { name: string };
+    primaryOwner?: { name: string };
     serviceCenter?: { name: string };
 }
 type Technician = { id: number; name: string };
@@ -98,7 +98,7 @@ export default function TicketsPage() {
         }
 
         if (technicianFilter) {
-            result = result.filter((t) => t.technician?.name === technicianFilter);
+            result = result.filter((t) => t.primaryOwner?.name === technicianFilter);
         }
 
         if (serviceCenterFilter) {
@@ -308,7 +308,7 @@ export default function TicketsPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-gray-500">
-                                        {t.technician?.name || "—"}
+                                        {t.primaryOwner?.name || "—"}
                                     </td>
                                     <td className="px-6 py-4 text-gray-400">
                                         {formatDate(t.createdAt)}

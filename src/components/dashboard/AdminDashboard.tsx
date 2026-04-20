@@ -19,7 +19,7 @@ interface TicketRow {
     updatedAt: Date;
     pendingTeam: string[];
     device: { brand: string; model: string; customer: { name: string } };
-    technician: { id: number; name: string } | null;
+    primaryOwner: { id: number; name: string } | null;
     ticketStatus: { id: string; label: string; color: string };
     ticketSubStatus: { label: string; color: string } | null;
 }
@@ -196,7 +196,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                                             {t.pendingTeam.length === 0 && <span className="text-xs text-gray-400">—</span>}
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-gray-500">{t.technician?.name ?? "—"}</td>
+                                    <td className="px-5 py-3 text-gray-500">{t.primaryOwner?.name ?? "—"}</td>
                                     <td className="px-5 py-3 text-gray-400 text-xs">{timeAgo(t.updatedAt)}</td>
                                 </tr>
                             ))}

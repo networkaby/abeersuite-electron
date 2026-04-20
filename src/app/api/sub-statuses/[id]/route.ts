@@ -49,9 +49,11 @@ export async function PATCH(
                 ...(body.applicableStatusIds !== undefined && { applicableStatusIds: body.applicableStatusIds }),
                 ...(body.allowedRoles !== undefined       && { allowedRoles: body.allowedRoles }),
                 ...(body.notifyRoles !== undefined        && { notifyRoles: body.notifyRoles }),
-                ...("triggerMap"    in body && { triggerMap:    body.triggerMap }),
-                ...("actionLabel"  in body && { actionLabel:   body.actionLabel ?? null }),
-                ...("warrantyScope" in body && { warrantyScope: body.warrantyScope }),
+                ...("triggerMap"         in body && { triggerMap:        body.triggerMap }),
+                ...("actionLabel"        in body && { actionLabel:       body.actionLabel ?? null }),
+                ...("warrantyScope"      in body && { warrantyScope:     body.warrantyScope }),
+                ...("handoffRole"        in body && { handoffRole:       body.handoffRole ?? null }),
+                ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
             },
         });
 

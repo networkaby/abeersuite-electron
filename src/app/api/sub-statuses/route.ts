@@ -51,9 +51,11 @@ export async function POST(req: Request) {
                 applicableStatusIds: body.applicableStatusIds ?? [],
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles: body.notifyRoles ?? [],
-                triggerMap:    body.triggerMap ?? {},
-                actionLabel:   body.actionLabel ?? null,
-                warrantyScope: body.warrantyScope ?? "any",
+                triggerMap:         body.triggerMap ?? {},
+                actionLabel:        body.actionLabel ?? null,
+                warrantyScope:      body.warrantyScope ?? "any",
+                handoffRole:        body.handoffRole ?? null,
+                autoRevertOnClear:  body.autoRevertOnClear ?? true,
             },
         });
 

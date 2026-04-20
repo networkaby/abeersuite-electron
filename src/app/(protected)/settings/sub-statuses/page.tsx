@@ -23,6 +23,8 @@ interface SubStatus {
     notifyRoles: string[];
     triggerMap: Record<string, string>;
     actionLabel: string | null;
+    handoffRole: string | null;
+    autoRevertOnClear: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -37,12 +39,15 @@ type FormValues = {
     triggerMap: Record<string, string>;
     actionLabel: string;
     warrantyScope: string;
+    handoffRole: string;
+    autoRevertOnClear: boolean;
 };
 
 const BLANK_FORM: FormValues = {
     label: "", color: "bg-gray-100 text-gray-600", group: "customer_comm",
     order: "", applicableStatusIds: [], allowedRoles: [], notifyRoles: [], triggerMap: {},
     actionLabel: "", warrantyScope: "any",
+    handoffRole: "", autoRevertOnClear: true,
 };
 
 const GROUP_OPTIONS = [
@@ -157,6 +162,38 @@ function SubStatusFormModal({
                         <p className="text-xs text-gray-400 mt-1">
                             Shown on role dashboards as the task description (Front Desk / Despatch).
                         </p>
+                    </div>
+
+                    {/* Handoff role + auto-revert */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Handoff role <span className="text-gray-400">(optional)</span>
+                            </label>
+                            <select
+                                value={form.handoffRole}
+                                onChange={(e) => setForm({ ...form, handoffRole: e.target.value })}
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">— none —</option>
+                                {ALL_ROLES.map((r) => (
+                                    <option key={r.id} value={r.id}>{r.label}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-400 mt-1">Auto-assigns a secondary owner with this role when the sub-status is set.</p>
+                        </div>
+                        <div className="flex flex-col justify-center">
+                            <label className="flex items-center gap-2 cursor-pointer mt-5">
+                                <input
+                                    type="checkbox"
+                                    checked={form.autoRevertOnClear}
+                                    onChange={(e) => setForm({ ...form, autoRevertOnClear: e.target.checked })}
+                                    className="accent-blue-600 w-4 h-4"
+                                />
+                                <span className="text-sm font-medium">Auto-remove participant on clear</span>
+                            </label>
+                            <p className="text-xs text-gray-400 mt-1 ml-6">Soft-deletes the assigned participant when this sub-status changes away.</p>
+                        </div>
                     </div>
 
                     {/* Color + Group row */}
@@ -339,6 +376,7 @@ export default function SubStatusesPage() {
             await axios.post("/api/sub-statuses", {
                 ...createForm,
                 order: createForm.order ? Number(createForm.order) : undefined,
+                handoffRole: createForm.handoffRole || null,
             });
             toast.success("Sub-status created");
             setShowCreate(false);
@@ -362,8 +400,10 @@ export default function SubStatusesPage() {
             allowedRoles: ss.allowedRoles,
             notifyRoles: ss.notifyRoles,
             triggerMap: (ss.triggerMap ?? {}) as Record<string, string>,
-            actionLabel:   ss.actionLabel ?? "",
-            warrantyScope: (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
+            actionLabel:       ss.actionLabel ?? "",
+            warrantyScope:     (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
+            handoffRole:       ss.handoffRole ?? "",
+            autoRevertOnClear: ss.autoRevertOnClear ?? true,
         });
         setEditId(ss.id);
     };
@@ -381,8 +421,10 @@ export default function SubStatusesPage() {
                 allowedRoles: editForm.allowedRoles,
                 notifyRoles: editForm.notifyRoles,
                 triggerMap:    editForm.triggerMap,
-                actionLabel:   editForm.actionLabel || null,
-                warrantyScope: editForm.warrantyScope,
+                actionLabel:       editForm.actionLabel || null,
+                warrantyScope:     editForm.warrantyScope,
+                handoffRole:       editForm.handoffRole || null,
+                autoRevertOnClear: editForm.autoRevertOnClear,
             });
             toast.success("Sub-status updated");
             setEditId(null);

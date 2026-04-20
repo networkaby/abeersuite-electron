@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 // PATCH /api/tickets/[id]/sub-status
-// Body: { subStatusId: string, note?: string }
+// Body: { subStatusId: string, note?: string, visibility?: string }
+// Returns { ok: true } or { ok: false, requiresAssignment: true, role, candidates }
 export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -14,8 +15,10 @@ export async function PATCH(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const userId = Number((session.user as { id?: string }).id);
-        const userRole = (session.user as { role?: string }).role ?? "";
+        const sessionUser = session.user as { id?: string; role?: string; roles?: string[] };
+        const userId = Number(sessionUser.id ?? 0);
+        const userRoles: string[] = sessionUser.roles ?? (sessionUser.role ? [sessionUser.role] : []);
+        const userRole = sessionUser.role ?? "";
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -33,11 +36,6 @@ export async function PATCH(
             return NextResponse.json({ error: "Sub-status not found" }, { status: 404 });
         }
 
-        // Admin (R1) can set any sub-status regardless of allowedRoles
-        if (userRole !== "R1" && subStatus.allowedRoles.length > 0 && !subStatus.allowedRoles.includes(userRole)) {
-            return NextResponse.json({ error: "Your role cannot set this sub-status" }, { status: 403 });
-        }
-
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
             include: { device: { include: { customer: true } } },
@@ -46,92 +44,156 @@ export async function PATCH(
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
         }
 
-        // Look up trigger for the ticket's CURRENT main status
-        const triggerMap = (subStatus.triggerMap ?? {}) as Record<string, string>;
-        const triggerStatusId = triggerMap[ticket.status] ?? null;
-        const newMainStatus = triggerStatusId ?? ticket.status;
+        // Auth: Admin (R1) bypasses allowedRoles.
+        // Primary owner and active secondary owners can also update sub-status.
+        const isAdmin = userRole === "R1";
+        const isPrimaryOwner = ticket.primaryOwnerId === userId;
 
-        // Update ticket: set sub-status, clear it if status auto-advances
-        await prisma.ticket.update({
-            where: { id: ticketId },
-            data: {
-                subStatusId: triggerStatusId ? null : subStatusId,
-                status: newMainStatus,
-                updatedAt: new Date(),
-            },
-        });
-
-        // Log the sub-status change
-        await prisma.ticketLog.create({
-            data: {
-                ticketId,
-                status: ticket.status,
-                subStatusId,
-                note: note || null,
-                visibility: visibility === "public" ? "public" : "internal",
-                userId,
-            },
-        });
-
-        // If main status auto-changed, log that too
-        if (triggerStatusId) {
-            await prisma.ticketLog.create({
-                data: {
-                    ticketId,
-                    status: triggerStatusId,
-                    note: `Auto-advanced by: ${subStatus.label}`,
-                    userId,
-                },
-            });
-        }
-
-        // Notify the relevant roles + auto-create workflow tasks
-        if (subStatus.notifyRoles.length > 0) {
-            const usersToNotify = await prisma.user.findMany({
-                where: { role: { in: subStatus.notifyRoles } },
+        if (!isAdmin) {
+            // Check if secondary participant
+            const isSecondary = await prisma.ticketParticipant.findFirst({
+                where: { ticketId, userId, removedAt: null },
                 select: { id: true },
             });
 
-            const deviceLabel = `${ticket.device.brand} ${ticket.device.model}`;
-            const message = `Ticket #${ticketId} (${deviceLabel}): ${subStatus.label}`;
+            const roleAllowed = subStatus.allowedRoles.length === 0 || userRoles.some(r => subStatus.allowedRoles.includes(r));
+            const hasAccess = isPrimaryOwner || !!isSecondary || roleAllowed;
 
-            if (usersToNotify.length > 0) {
-                await prisma.notification.createMany({
-                    data: usersToNotify.map((u) => ({
-                        userId: u.id,
-                        ticketId,
-                        message,
-                        type: "sub_status",
-                    })),
-                });
+            if (!hasAccess) {
+                return NextResponse.json({ error: "Your role cannot set this sub-status" }, { status: 403 });
             }
+        }
 
-            // Auto-create one workflow task per notifyRole (best-effort — never blocks the status update)
-            try {
-                const taskTitle = `${subStatus.label} — Ticket #${ticketId} (${deviceLabel})`;
-                for (const roleId of subStatus.notifyRoles) {
-                    const existing = await prisma.task.findFirst({
-                        where: { ticketId, assignedRole: roleId, source: "ticket_workflow", status: "open" },
-                        select: { id: true },
+        // Capture previous sub-status before update (needed for auto-revert)
+        const prevSubStatusId = ticket.subStatusId;
+
+        const triggerMap = (subStatus.triggerMap ?? {}) as Record<string, string>;
+        const triggerStatusId = triggerMap[ticket.status] ?? null;
+        const newMainStatus = triggerStatusId ?? ticket.status;
+        const newSubStatusId = triggerStatusId ? null : subStatusId;
+
+        // ── Transaction: update ticket + auto-revert old participants ───────────
+        await prisma.$transaction(async (tx) => {
+            // 1. Update ticket
+            await tx.ticket.update({
+                where: { id: ticketId },
+                data: {
+                    subStatusId: newSubStatusId,
+                    status: newMainStatus,
+                    updatedAt: new Date(),
+                },
+            });
+
+            // 2. Auto-revert participants added by the outgoing sub-status
+            if (prevSubStatusId && prevSubStatusId !== subStatusId) {
+                const prevSub = await tx.ticketSubStatus.findUnique({
+                    where: { id: prevSubStatusId },
+                    select: { autoRevertOnClear: true },
+                });
+                if (prevSub?.autoRevertOnClear) {
+                    const toRevert = await tx.ticketParticipant.findMany({
+                        where: { ticketId, addedBySubStatusId: prevSubStatusId, removedAt: null },
+                        select: { id: true, user: { select: { name: true } } },
                     });
-                    if (!existing) {
-                        await prisma.task.create({
+                    for (const p of toRevert) {
+                        await tx.ticketParticipant.update({
+                            where: { id: p.id },
+                            data: { removedAt: new Date(), removedBySubStatusId: subStatusId },
+                        });
+                        await tx.ticketLog.create({
                             data: {
-                                title:        taskTitle,
-                                description:  `Customer: ${ticket.device.customer.name}`,
-                                source:       "ticket_workflow",
-                                status:       "open",
-                                priority:     ticket.priority,
-                                assignedRole: roleId,
                                 ticketId,
-                                createdById:  userId,
+                                status: newMainStatus,
+                                note: `Secondary owner auto-removed: ${p.user.name} (sub-status changed)`,
+                                userId,
                             },
                         });
                     }
                 }
-            } catch (taskErr) {
-                console.warn("[sub-status PATCH] task creation skipped:", taskErr);
             }
+
+            // 3. Log the sub-status change
+            await tx.ticketLog.create({
+                data: {
+                    ticketId,
+                    status: ticket.status,
+                    subStatusId,
+                    note: note || null,
+                    visibility: visibility === "public" ? "public" : "internal",
+                    userId,
+                },
+            });
+
+            // 4. Log auto-advance if triggered
+            if (triggerStatusId) {
+                await tx.ticketLog.create({
+                    data: {
+                        ticketId,
+                        status: triggerStatusId,
+                        note: `Auto-advanced by: ${subStatus.label}`,
+                        userId,
+                    },
+                });
+            }
+        });
+
+        // ── Notifications (outside transaction, non-blocking) ──────────────────
+        if (subStatus.notifyRoles.length > 0) {
+            const usersToNotify = await prisma.user.findMany({
+                where: { userRoles: { some: { roleId: { in: subStatus.notifyRoles } } } },
+                select: { id: true },
+            });
+            const deviceLabel = `${ticket.device.brand} ${ticket.device.model}`;
+            const message = `Ticket #${ticketId} (${deviceLabel}): ${subStatus.label}`;
+            if (usersToNotify.length > 0) {
+                await prisma.notification.createMany({
+                    data: usersToNotify.map((u) => ({ userId: u.id, ticketId, message, type: "sub_status" })),
+                    skipDuplicates: true,
+                });
+            }
+        }
+
+        // ── Handoff: auto-assign secondary if handoffRole set ──────────────────
+        if (subStatus.handoffRole && newSubStatusId) {
+            const candidates = await prisma.user.findMany({
+                where: { userRoles: { some: { roleId: subStatus.handoffRole } } },
+                select: { id: true, name: true, role: true },
+            });
+
+            if (candidates.length === 1) {
+                // Auto-assign the only candidate
+                try {
+                    await prisma.ticketParticipant.create({
+                        data: {
+                            ticketId,
+                            userId: candidates[0].id,
+                            addedById: userId,
+                            addedForRole: subStatus.handoffRole,
+                            addedBySubStatusId: subStatusId,
+                        },
+                    });
+                    await prisma.ticketLog.create({
+                        data: {
+                            ticketId,
+                            status: newMainStatus,
+                            note: `Auto-assigned ${candidates[0].name} as secondary (${subStatus.handoffRole})`,
+                            userId,
+                        },
+                    });
+                } catch {
+                    // Already a participant — ignore duplicate
+                }
+            } else if (candidates.length > 1) {
+                // Return picker prompt — ticket update already committed
+                return NextResponse.json({
+                    ok: false,
+                    requiresAssignment: true,
+                    role: subStatus.handoffRole,
+                    subStatusId,
+                    candidates,
+                });
+            }
+            // candidates.length === 0: skip silently
         }
 
         return NextResponse.json({ ok: true });

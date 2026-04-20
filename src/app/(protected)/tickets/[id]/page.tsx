@@ -9,7 +9,6 @@ import {
     ArrowLeft,
     Clock,
     User,
-    Wrench,
     Building2,
     AlertTriangle,
     Printer,
@@ -23,6 +22,7 @@ import StatusUpdateCombined from "@/components/StatusUpdateCombined";
 import AddNoteModal from "@/components/AddNoteModal";
 import WarrantyBadge from "@/components/WarrantyBadge";
 import WarrantyConvertModal from "@/components/WarrantyConvertModal";
+import TicketOwnershipPanel from "@/components/TicketOwnershipPanel";
 import { useSession } from "next-auth/react";
 interface Ticket {
     id: number;
@@ -59,7 +59,8 @@ interface Ticket {
         problem: string;
         customer: { name: string; phone: string; email?: string };
     };
-    technician?: { id: number; name: string };
+    primaryOwner?: { id: number; name: string };
+    participants?: { user: { id: number; name: string; role: string }; addedForRole?: string | null }[];
     serviceCenter?: { id: number; name: string };
     logs: {
         id: number;
@@ -98,8 +99,11 @@ export default function TicketDetailPage() {
     const [refValue, setRefValue] = useState("");
     const [savingRef, setSavingRef] = useState(false);
     const { data: session } = useSession();
-    const userRoles = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
+    const sessionUser = session?.user as { id?: string; roles?: string[]; permissions?: string[] } | undefined;
+    const userRoles = sessionUser?.roles ?? [];
+    const currentUserId = Number(sessionUser?.id ?? "0");
     const canConvertWarranty = userRoles.some((r) => r === "R1" || r === "R2");
+    const canManageOwnership = sessionUser?.permissions?.includes("tickets:manage-participants") ?? userRoles.some(r => r === "R1" || r === "R2");
 
     const saveRef = async () => {
         if (!ticket) return;
@@ -341,15 +345,15 @@ export default function TicketDetailPage() {
 
                 {/* Right Column — Actions */}
                 <div className="space-y-4">
-                    {/* Technician */}
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2 text-sm">
-                            <Wrench size={15} /> Assigned Technician
-                        </h2>
-                        <p className="text-sm text-gray-600">
-                            {ticket.technician?.name || "Unassigned"}
-                        </p>
-                    </div>
+                    <TicketOwnershipPanel
+                        ticketId={ticket.id}
+                        primaryOwner={ticket.primaryOwner}
+                        participants={ticket.participants ?? []}
+                        currentUserId={currentUserId}
+                        canManage={canManageOwnership}
+                        isTerminal={ticket.ticketStatus.isTerminal}
+                        onChanged={fetchTicket}
+                    />
 
                     {/* Actions */}
                     <div className="bg-white rounded-xl shadow p-4 space-y-2">

@@ -14,7 +14,7 @@ export default async function ReceiptPage({
         where: { id: Number(id) },
         include: {
             device: { include: { customer: true } },
-            technician: true,
+            primaryOwner: true,
         },
     });
 
@@ -168,10 +168,10 @@ export default async function ReceiptPage({
                     <span className="label">Priority:</span>
                     <span className="bold">{ticket.priority}</span>
                 </div>
-                {ticket.technician && (
+                {ticket.primaryOwner && (
                     <div className="row">
                         <span className="label">Technician:</span>
-                        <span>{ticket.technician.name}</span>
+                        <span>{ticket.primaryOwner.name}</span>
                     </div>
                 )}
 

@@ -28,7 +28,8 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:60555/login)",
       "Bash(mkdir -p \"D:/our-own-website/service-mgmt-experiment/src/app/api/tasks/[id]/pickup\")",
-      "Bash(mkdir -p \"D:/our-own-website/service-mgmt-experiment/src/app/api/tasks/[id]/help\")"
+      "Bash(mkdir -p \"D:/our-own-website/service-mgmt-experiment/src/app/api/tasks/[id]/help\")",
+      "Bash(xargs ls *)"
     ]
   }
 }

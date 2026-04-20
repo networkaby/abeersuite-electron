@@ -34,6 +34,8 @@ model TicketSubStatus {
   allowedRoles        String[]
   notifyRoles         String[]
   warrantyScope       String  @default("any")
+  handoffRole         String?
+  autoRevertOnClear   Boolean @default(true)
 
   // triggerMap: JSON object { parentStatusId → targetStatusId }
   // e.g. { "S2": "S3", "S4": "S5" }  — different advance per parent
@@ -44,6 +46,7 @@ model TicketSubStatus {
   logs            TicketLog[]
   fromTransitions SubStatusTransition[] @relation("FromSubStatus")
   toTransitions   SubStatusTransition[] @relation("ToSubStatus")
+  participants    TicketParticipant[]   @relation("ParticipantSubStatus")
 }
 
 model SubStatusTransition {
@@ -138,18 +141,20 @@ model User {
   managerId     Int?
   manager       User?            @relation("UserHierarchy", fields: [managerId], references: [id])
   reports       User[]           @relation("UserHierarchy")
-  userRoles     UserRole[]
-  permissions   UserPermission[] @relation("UserPermissionUser")
-  grantedPerms  UserPermission[] @relation("UserPermissionGranter")
-  tickets       Ticket[]
-  ticketLogs    TicketLog[]
-  notifications Notification[]
-  warrantyLogs  WarrantyLog[]    @relation("WarrantyLogUser")
-  assignedTasks Task[]           @relation("TaskAssignee")
-  createdTasks  Task[]           @relation("TaskCreator")
-  pickedUpTasks Task[]           @relation("TaskPickup")
-  taskLogs      TaskLog[]        @relation("TaskLogUser")
-  createdAt     DateTime         @default(now())
+  userRoles            UserRole[]
+  permissions          UserPermission[]    @relation("UserPermissionUser")
+  grantedPerms         UserPermission[]    @relation("UserPermissionGranter")
+  ownedTickets         Ticket[]
+  ticketLogs           TicketLog[]
+  notifications        Notification[]
+  warrantyLogs         WarrantyLog[]       @relation("WarrantyLogUser")
+  assignedTasks        Task[]              @relation("TaskAssignee")
+  createdTasks         Task[]              @relation("TaskCreator")
+  pickedUpTasks        Task[]              @relation("TaskPickup")
+  taskLogs             TaskLog[]           @relation("TaskLogUser")
+  participantEntries   TicketParticipant[] @relation("ParticipantUser")
+  participantAdded     TicketParticipant[] @relation("ParticipantAddedBy")
+  createdAt            DateTime            @default(now())
 }
 
 model Customer {
@@ -188,8 +193,8 @@ model Ticket {
   estimatedCost   Float?
   device          Device           @relation(fields: [deviceId], references: [id])
   deviceId        Int
-  technician      User?            @relation(fields: [technicianId], references: [id])
-  technicianId    Int?
+  primaryOwner    User?            @relation(fields: [primaryOwnerId], references: [id])
+  primaryOwnerId  Int?
   escalated       Boolean          @default(false)
   escalatedAt     DateTime?
   expectedReturn  DateTime?
@@ -206,6 +211,7 @@ model Ticket {
   notifications   Notification[]
   warrantyLogs    WarrantyLog[]
   tasks           Task[]
+  participants    TicketParticipant[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -223,6 +229,26 @@ model WarrantyLog {
   changedById  Int
   changedBy    User     @relation("WarrantyLogUser", fields: [changedById], references: [id])
   createdAt    DateTime @default(now())
+}
+
+model TicketParticipant {
+  id                   Int              @id @default(autoincrement())
+  ticketId             Int
+  ticket               Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId               Int
+  user                 User             @relation("ParticipantUser",    fields: [userId],    references: [id])
+  addedById            Int
+  addedBy              User             @relation("ParticipantAddedBy", fields: [addedById], references: [id])
+  addedForRole         String?
+  addedBySubStatusId   String?
+  addedBySubStatus     TicketSubStatus? @relation("ParticipantSubStatus", fields: [addedBySubStatusId], references: [id])
+  removedAt            DateTime?
+  removedBySubStatusId String?
+  createdAt            DateTime         @default(now())
+
+  @@unique([ticketId, userId, addedBySubStatusId])
+  @@index([ticketId])
+  @@index([userId])
 }
 
 model TicketLog {

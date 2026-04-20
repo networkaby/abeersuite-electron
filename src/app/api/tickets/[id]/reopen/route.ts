@@ -26,7 +26,7 @@ export async function POST(
                 notes: body.notes || null,
                 accessInfo: original.accessInfo,
                 estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
-                technicianId: original.technicianId || null,
+                primaryOwnerId: original.primaryOwnerId || null,
             },
         });
 

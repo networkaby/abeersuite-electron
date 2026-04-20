@@ -29,7 +29,7 @@ const ticketSchema = z.object({
     notes: z.string().optional(),
     accessInfo: z.string().optional(),
     estimatedCost: z.string().optional(),
-    technicianId: z.string().optional(),
+    primaryOwnerId: z.string().optional(),
     warrantyRef: z.string().optional(),
     purchaseDate: z.string().optional(),
 });
@@ -397,10 +397,10 @@ export default function QuickTicketButton() {
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium mb-1">
-                                                Assign Technician <span className="text-gray-400">(optional)</span>
+                                                Primary Owner <span className="text-gray-400">(optional)</span>
                                             </label>
                                             <select
-                                                {...ticketForm.register("technicianId")}
+                                                {...ticketForm.register("primaryOwnerId")}
                                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             >
                                                 <option value="">Unassigned</option>

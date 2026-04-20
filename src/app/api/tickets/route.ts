@@ -9,7 +9,7 @@ export async function GET() {
                 device: {
                     include: { customer: true },
                 },
-                technician: true,
+                primaryOwner: true,
                 serviceCenter: true,
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { label: true, color: true } },
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
                 notes:         body.notes || null,
                 accessInfo:    body.accessInfo || null,
                 estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
-                technicianId:  body.technicianId ? Number(body.technicianId) : null,
+                primaryOwnerId: body.primaryOwnerId ? Number(body.primaryOwnerId) : null,
                 isWarranty:    Boolean(body.isWarranty),
                 warrantyStatus: body.isWarranty ? "claimed" : "none",
                 warrantyRef:   body.warrantyRef || null,
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
             },
             include: {
                 device: { include: { customer: true } },
-                technician: true,
+                primaryOwner: true,
             },
         });
 

@@ -19,7 +19,7 @@ export default async function CustomerDetailPage({
                     tickets: {
                         orderBy: { createdAt: "desc" },
                         include: {
-                            technician: true,
+                            primaryOwner: true,
                             serviceCenter: true,
                             ticketStatus: { select: { label: true, color: true } },
                             ticketPriority: { select: { label: true, color: true } },
@@ -161,7 +161,7 @@ export default async function CustomerDetailPage({
                                                 {/* Ticket Details */}
                                                 <div className="flex justify-between text-xs text-gray-500">
                                                     <span>
-                                                        Technician: {ticket.technician?.name || "Unassigned"}
+                                                        Technician: {ticket.primaryOwner?.name || "Unassigned"}
                                                     </span>
                                                     <span>
                                                         {formatDate(ticket.createdAt)}

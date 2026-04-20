@@ -12,7 +12,7 @@ export async function GET(
             where: { id: Number(id) },
             include: {
                 device: { include: { customer: true } },
-                technician: true,
+                primaryOwner: true,
                 serviceCenter: true,
                 ticketPriority: { select: { label: true, color: true } },
                 ticketStatus: {
@@ -25,6 +25,11 @@ export async function GET(
                     // include isTerminal so the client can conditionally show escalation
                 },
                 ticketSubStatus: { select: { id: true, label: true, color: true } },
+                participants: {
+                    where: { removedAt: null },
+                    include: { user: { select: { id: true, name: true, role: true } } },
+                    orderBy: { createdAt: "asc" },
+                },
                 logs: {
                     include: {
                         changedBy: true,
@@ -94,7 +99,7 @@ export async function PUT(
                 ...(body.notes       !== undefined && { notes: body.notes }),
                 ...(body.accessInfo  !== undefined && { accessInfo: body.accessInfo }),
                 ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
-                ...(body.technicianId  !== undefined && { technicianId: body.technicianId ? Number(body.technicianId) : null }),
+                ...(body.primaryOwnerId !== undefined && { primaryOwnerId: body.primaryOwnerId ? Number(body.primaryOwnerId) : null }),
                 ...(body.escalated   !== undefined && { escalated: body.escalated }),
                 ...(body.escalatedAt !== undefined && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
                 ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),

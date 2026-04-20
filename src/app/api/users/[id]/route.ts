@@ -81,7 +81,7 @@ export async function DELETE(
                 id: true,
                 _count: {
                     select: {
-                        tickets: true,
+                        ownedTickets: true,
                         ticketLogs: true,
                     },
                 },
@@ -92,7 +92,7 @@ export async function DELETE(
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        if (userWithRelations._count.tickets > 0 || userWithRelations._count.ticketLogs > 0) {
+        if (userWithRelations._count.ownedTickets > 0 || userWithRelations._count.ticketLogs > 0) {
             return NextResponse.json(
                 {
                     error:

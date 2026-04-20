@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `dev`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-19 18:00
+**Last Updated:** 2026-04-20 00:00
 
 ---
 
@@ -27,9 +27,10 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | 6 | Task System (Phase 3) | ✅ Done | 2026-04-19 |
 | 7 | Cross-User Delegation + UX polish (Phase 4) | ✅ Done | 2026-04-19 |
 | 8 | ERP Module Foundation (Phase 5) | ⏳ Archived — implement later | — |
-| 9 | Reporting & Analytics | ⏳ Not Started | — |
+| 9 | Assignment & Ownership System | 🔄 In Progress | — |
+| 10 | Reporting & Analytics | ⏳ Not Started | — |
 
-> **Current Milestone:** Day-to-day usability improvements + Bug fixes
+> **Current Milestone:** Milestone #9 — Assignment & Ownership System
 
 ---
 
@@ -90,17 +91,49 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ## 🔄 In Progress
 
-- Nothing actively in progress
+- **Assignment & Ownership System** — schema + APIs + UI overhaul (Milestone 9, plan finalised 2026-04-20)
 
 ---
 
 ## 📋 Next Up (Prioritized)
 
-1. **Quick UX wins** — U2 (duplicate Name column), U4 (mobile grid breakpoint), U11 (toast with status label), U16 (ticket list default sort by date desc)
-2. **Escalation sub-status flow UX** — Make it clearer that after escalating to S4, Despatch should set SS19 (Engineer Visit Scheduled) or SS22 (Pending Despatch); consider an inline prompt in the ticket detail when status=S4 and sub-status is unset
-3. **Reporting dashboard** — ticket counts by status over time, avg repair time, revenue, weekly charts (Recharts)
-4. **Ticket list pagination** — server-side, with sort controls
-5. **Customer portal** — read-only status page via shareable link
+### Milestone 9 — Assignment & Ownership System (build order)
+
+**Phase A — Schema**
+1. `prisma/schema.prisma` — rename `technicianId` → `primaryOwnerId`; add `TicketParticipant` model; add `handoffRole String?` + `autoRevertOnClear Boolean @default(true)` to `TicketSubStatus`; add back-relations on `User` and `Ticket`
+2. `prisma db push` + `prisma generate` — apply schema
+3. `prisma/seed-assignments.ts` — insert 2 new permissions (`tickets:assign`, `tickets:manage-participants`); grant to R1/R2
+
+**Phase B — Core APIs**
+4. `src/app/api/tickets/[id]/assign/route.ts` — NEW: `POST` handles claim / pass / reject; optimistic lock on claim; logs every action
+5. `src/app/api/tickets/[id]/participants/route.ts` — NEW: `GET` list active secondaries; `POST` add secondary (validates not terminal, no duplicate)
+6. `src/app/api/tickets/[id]/participants/[userId]/route.ts` — NEW: `DELETE` soft-delete (self-removal bypasses permission check)
+7. `src/app/api/tickets/[id]/sub-status/route.ts` — MODIFY: add handoff logic (auto-assign if 1 candidate, return `requiresAssignment` if multiple); add auto-revert (soft-delete participants from outgoing sub-status); remove ALL auto-task creation; wrap in `$transaction`; fix notifyRoles to use `userRoles` relation not legacy `role` field; allow secondary owners to trigger sub-status update
+8. `src/app/api/sub-statuses/route.ts` + `[id]/route.ts` — MODIFY: accept + return `handoffRole` and `autoRevertOnClear` fields
+
+**Phase C — Assignment Page**
+9. `src/app/(protected)/assignments/page.tsx` — REWRITE: fix roles bug (`roles[]` not `role`); new scope queries (me = primary OR active secondary; team = direct reports via `managerId`; org = admin only); pass `userId/roles/isAdmin` props to cards
+10. `src/components/assignments/TicketCard.tsx` — NEW client component: conditional Claim / Pass / Reject buttons; `router.refresh()` after action
+11. `src/components/assignments/PassRejectModal.tsx` — NEW: pass shows user picker; reject confirms then calls assign endpoint
+
+**Phase D — Handoff Picker**
+12. `src/components/StatusUpdateCombined.tsx` — MODIFY: handle `requiresAssignment: true` response (HTTP 200, check explicitly); show `HandoffPickerModal`; re-validate candidate on confirm
+13. `src/components/assignments/HandoffPickerModal.tsx` — NEW: radio list of candidates; on confirm calls `POST /participants`; on cancel leaves sub-status set but without participant
+
+**Phase E — Ticket Detail**
+14. `src/app/api/tickets/[id]/route.ts` — MODIFY: GET includes `participants { where: { removedAt: null }, include: { user } }`; rename `technicianId` → `primaryOwnerId` in response
+15. `src/components/TicketOwnershipPanel.tsx` — NEW client component: primary owner row + inline reassign (admin/direct manager); active secondaries list + remove button; "Add Secondary" button
+16. `src/app/(protected)/tickets/[id]/page.tsx` — MODIFY: replace simple technician card with `TicketOwnershipPanel`; pass `canReassign` boolean from server side
+
+**Phase F — Settings UI**
+17. `src/app/(protected)/settings/sub-statuses/page.tsx` — MODIFY: add `handoffRole` select + `autoRevertOnClear` checkbox to sub-status form modal
+
+### After Milestone 9
+- Quick UX wins (U2 duplicate Name col, U4 mobile grid, U11 toast label, U16 default date sort)
+- Escalation sub-status flow UX clarity
+- Reporting dashboard (Recharts)
+- Ticket list pagination
+- Customer portal
 
 ---
 
@@ -140,6 +173,13 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | Escalation visibility | `fromTransitions.some(t => t.to.id === "S4")` | Hardcoded status IDs | Config-driven; status graph controls when escalation is available |
 | Settings nav | Collapsible sidebar section | Separate settings layout | Saves vertical space; groups related admin items |
 | Phase 5 (ERP modules) | Archived for later | Immediate implementation | Core workflows must be stable first; modules add complexity without day-1 value |
+| Ticket ownership | `primaryOwnerId` (renamed from `technicianId`) + `TicketParticipant` table | Single field / array field | Primary = accountable end-to-end; secondaries = named helpers at stages; enables pass/reject/claim without losing history |
+| Sub-status handoff | `handoffRole` on `TicketSubStatus`; auto-assign if 1 user, picker if multiple | Always manual / always auto | Removes friction for small teams while still working for larger ones |
+| Handoff revert | `autoRevertOnClear` flag + `addedBySubStatusId` on participant | Manual removal only | Participants added by a sub-status are automatically soft-deleted when sub-status changes away |
+| Assignment page scopes | me = primary OR active secondary; team = direct reports via `managerId`; org = admin only | Role-based notifyRoles filter | Ownership-based is accurate; notifyRoles filter was showing wrong tickets |
+| Secondary sub-status rights | Secondary owners CAN update sub-status (same as primary) | Primary-only updates | Secondaries are actively working the ticket at that stage; blocking them creates friction |
+| Tasks | Purely personal/manual; no auto-creation | Auto-create from sub-status | Tasks are a personal notepad; workflow handoffs handled by Assignment page + TicketParticipant |
+| Concurrent claim | Prisma `update where { primaryOwnerId: null }` optimistic lock | Application-level check | Database-level atomicity; throws RecordNotFound if race condition occurs |
 
 ---
 

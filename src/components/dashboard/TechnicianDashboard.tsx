@@ -20,7 +20,7 @@ interface TicketRow {
     updatedAt: Date;
     pendingTeam: string[];
     device: { brand: string; model: string; customer: { name: string } };
-    technician: { id: number; name: string } | null;
+    primaryOwner: { id: number; name: string } | null;
     ticketStatus: { id: string; label: string; color: string };
     ticketSubStatus: { label: string; color: string } | null;
 }
@@ -78,7 +78,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
             await fetch(`/api/tickets/${ticketId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ technicianId: userId }),
+                body: JSON.stringify({ primaryOwnerId: userId }),
             });
             router.refresh();
         } finally {
@@ -184,7 +184,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                         ))}
                                     </div>
                                 </div>
-                                <span className="text-xs text-gray-400 shrink-0">{t.technician?.name ?? "Unassigned"}</span>
+                                <span className="text-xs text-gray-400 shrink-0">{t.primaryOwner?.name ?? "Unassigned"}</span>
                                 <span className="text-xs text-gray-400 shrink-0">{timeAgo(t.updatedAt)}</span>
                                 <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-blue-600">
                                     <ArrowRight size={16} />
