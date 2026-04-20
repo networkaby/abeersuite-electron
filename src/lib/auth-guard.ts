@@ -36,7 +36,7 @@ function resolveFromSession(sessionUser: {
 
 export async function requireAuth(): Promise<GuardResult> {
     const session = await auth();
-    if (!session) {
+    if (!session || !session.user) {
         return { user: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
     }
     return { user: resolveFromSession(session.user), response: null };

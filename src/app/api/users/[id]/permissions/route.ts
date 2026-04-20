@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import type { Session } from "next-auth";
-import { auth } from "@/auth";
+import { requirePermission, type ResolvedUser } from "@/lib/auth-guard";
 
 export async function GET(
     _: Request,
@@ -49,13 +47,12 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response, session } = await requirePermission("users:manage") as
-        { response: null; session: Session } | { response: NextResponse; session: null };
+    const { response, user } = await requirePermission("users:manage");
     if (response) return response;
     try {
         const { id } = await params;
         const userId = Number(id);
-        const grantedById = Number((session.user as { id?: string }).id ?? 0);
+        const grantedById = user.id;
 
         // overrides: array of { permissionId, granted: boolean | null }
         // null = remove override (revert to role default)
