@@ -1,250 +1,288 @@
-"use client";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import Link from "next/link";
+import { Phone, Package, CheckCircle, AlertCircle, UserCheck, Wrench } from "lucide-react";
+import { timeAgo } from "@/lib/time-ago";
 
-import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
-import { toast } from "sonner";
-import { Plus, ClipboardList, UserCheck, AlertCircle, CheckCircle2, Clock, Filter, ArrowUpDown } from "lucide-react";
-import { useSession } from "next-auth/react";
-import TaskList, { TaskRow } from "@/components/tasks/TaskList";
-import CreateTaskModal from "@/components/tasks/CreateTaskModal";
+interface TicketDevice {
+    brand: string;
+    model: string;
+    customer: {
+        name: string;
+        phone: string;
+    };
+}
 
-type AssignmentStatus = "pending" | "in_progress" | "completed" | "overdue";
-type AssignmentType = "all" | "assigned_to_me" | "created_by_me" | "unassigned";
-type SortBy = "due_date" | "priority" | "created_at" | "status";
+interface TicketStatus {
+    label: string;
+    color: string;
+    actionLabel?: string;
+    notifyRoles: string[];
+}
 
-const STATUS_FILTERS: { id: AssignmentStatus; label: string; color: string }[] = [
-    { id: "pending", label: "Pending", color: "bg-gray-100 text-gray-700" },
-    { id: "in_progress", label: "In Progress", color: "bg-blue-100 text-blue-700" },
-    { id: "completed", label: "Completed", color: "bg-green-100 text-green-700" },
-    { id: "overdue", label: "Overdue", color: "bg-red-100 text-red-700" },
-];
+interface TicketSubStatus {
+    id: string;
+    label: string;
+    color: string;
+    actionLabel?: string;
+    notifyRoles: string[];
+}
 
-const TYPE_FILTERS: { id: AssignmentType; label: string }[] = [
-    { id: "all", label: "All Assignments" },
-    { id: "assigned_to_me", label: "Assigned to Me" },
-    { id: "created_by_me", label: "Created by Me" },
-    { id: "unassigned", label: "Unassigned" },
-];
+interface Ticket {
+    id: number;
+    device: TicketDevice;
+    technician?: { id: number; name: string };
+    ticketStatus: TicketStatus;
+    ticketSubStatus?: TicketSubStatus;
+    serviceCenter?: { name: string };
+    updatedAt: string;
+    escalated: boolean;
+}
 
-const SORT_OPTIONS: { id: SortBy; label: string }[] = [
-    { id: "due_date", label: "Due Date" },
-    { id: "priority", label: "Priority" },
-    { id: "created_at", label: "Created" },
-    { id: "status", label: "Status" },
-];
+// ── Fetch assignments based on user role ────────────────────────────────────────
+async function fetchAssignmentsForRole(role: string) {
+    // Get all active tickets first
+    const allTickets = await prisma.ticket.findMany({
+        where: { ticketStatus: { isTerminal: false } },
+        orderBy: { updatedAt: "asc" },
+        include: {
+            device: { include: { customer: true } },
+            technician: { select: { id: true, name: true } },
+            serviceCenter: { select: { name: true } },
+            ticketStatus: { select: { label: true, color: true, actionLabel: true, notifyRoles: true } },
+            ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, notifyRoles: true } },
+        },
+    });
 
-export default function AssignmentsPage() {
-    const { data: session } = useSession();
-    const userId = Number((session?.user as { id?: string })?.id ?? 0);
+    // Categorize tickets based on role (same logic as dashboard)
+    const statusActions = allTickets.filter(t => 
+        t.ticketStatus.notifyRoles.includes(role) && 
+        (!t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0)
+    );
     
-    const [assignments, setAssignments] = useState<TaskRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [showCreate, setShowCreate] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<AssignmentStatus>("pending");
-    const [typeFilter, setTypeFilter] = useState<AssignmentType>("assigned_to_me");
-    const [sortBy, setSortBy] = useState<SortBy>("due_date");
-    const [showFilters, setShowFilters] = useState(false);
+    const callQueue = allTickets.filter(t => 
+        t.ticketSubStatus?.notifyRoles.includes("R3")
+    );
+    
+    const despatchQueue = allTickets.filter(t => 
+        t.ticketSubStatus?.notifyRoles.includes("R4")
+    );
+    
+    const unassignedTickets = allTickets.filter(t => 
+        !t.technician && 
+        t.ticketStatus.notifyRoles.includes(role)
+    );
 
-    const fetchAssignments = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data } = await axios.get<TaskRow[]>("/api/tasks", {
-                params: { 
-                    scope: typeFilter === "all" ? "org" : typeFilter === "assigned_to_me" ? "own" : "team",
-                    filter: statusFilter === "completed" ? "done" : statusFilter === "overdue" ? "overdue" : "open",
-                    sortBy,
-                },
-            });
-            
-            // Filter assignments based on type
-            let filteredAssignments = data;
-            if (typeFilter === "created_by_me") {
-                filteredAssignments = data.filter(task => task.createdBy.id === userId);
-            } else if (typeFilter === "unassigned") {
-                filteredAssignments = data.filter(task => !task.assignedToId && task.status !== "done");
-            }
+    return { statusActions, callQueue, despatchQueue, unassignedTickets };
+}
 
-            setAssignments(filteredAssignments);
-        } catch {
-            toast.error("Failed to load assignments");
-        } finally {
-            setLoading(false);
+// ── Ticket Card Component ────────────────────────────────────────────────────────
+function TicketCard({ ticket, type }: { ticket: Ticket; type: string }) {
+    const getIcon = () => {
+        switch (type) {
+            case "status": return <CheckCircle size={16} className="text-green-400" />;
+            case "call": return <Phone size={16} className="text-red-400" />;
+            case "despatch": return <Package size={16} className="text-orange-400" />;
+            case "unassigned": return <UserCheck size={16} className="text-blue-400" />;
+            default: return <AlertCircle size={16} className="text-gray-400" />;
         }
-    }, [statusFilter, typeFilter, sortBy, userId]);
-
-    useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
-
-    const getAssignmentStats = () => {
-        const pending = assignments.filter(a => a.status === "open").length;
-        const inProgress = assignments.filter(a => a.status === "in_progress").length;
-        const completed = assignments.filter(a => a.status === "done").length;
-        const overdue = assignments.filter(a => {
-            if (!a.dueAt || a.status === "done") return false;
-            return new Date(a.dueAt) < new Date();
-        }).length;
-
-        return { pending, inProgress, completed, overdue };
     };
 
-    const stats = getAssignmentStats();
+    const getBgColor = () => {
+        switch (type) {
+            case "status": return "hover:bg-green-50/30";
+            case "call": return "hover:bg-red-50/30";
+            case "despatch": return "hover:bg-orange-50/30";
+            case "unassigned": return "hover:bg-blue-50/30";
+            default: return "hover:bg-gray-50/30";
+        }
+    };
+
+    return (
+        <div className={`flex items-start gap-4 px-6 py-4 transition-colors ${getBgColor()}`}>
+            <div className="shrink-0 mt-0.5">{getIcon()}</div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Link href={`/tickets/${ticket.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                        Ticket #{ticket.id}
+                    </Link>
+                    {ticket.ticketSubStatus ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ticket.ticketSubStatus.color}`}>
+                            {ticket.ticketSubStatus.label}
+                        </span>
+                    ) : (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ticket.ticketStatus.color}`}>
+                            {ticket.ticketStatus.label}
+                        </span>
+                    )}
+                    <span className="text-xs text-gray-400">{timeAgo(ticket.updatedAt)}</span>
+                    {ticket.escalated && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">Escalated</span>
+                    )}
+                </div>
+                <p className="text-sm font-medium text-gray-800 mt-1">
+                    {ticket.device.customer.name}
+                    <span className="text-gray-400 font-normal text-xs ml-2">· {ticket.device.brand} {ticket.device.model}</span>
+                    {ticket.device.customer.phone && (
+                        <span className="text-gray-400 font-normal text-xs ml-2">· {ticket.device.customer.phone}</span>
+                    )}
+                </p>
+                {ticket.technician && (
+                    <p className="text-xs text-gray-500 mt-0.5">Technician: {ticket.technician.name}</p>
+                )}
+                {ticket.serviceCenter && (
+                    <p className="text-xs text-gray-500 mt-0.5">Service Centre: {ticket.serviceCenter.name}</p>
+                )}
+                {(ticket.ticketSubStatus?.actionLabel || ticket.ticketStatus.actionLabel) && (
+                    <p className="text-xs text-blue-600 mt-1 font-medium">
+                        → {ticket.ticketSubStatus?.actionLabel || ticket.ticketStatus.actionLabel}
+                    </p>
+                )}
+            </div>
+            <Link href={`/tickets/${ticket.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">
+                Process
+            </Link>
+        </div>
+    );
+}
+
+// ── Ticket Section Component ────────────────────────────────────────────────────
+function TicketSection({ title, tickets, type, color, bgColor }: { 
+    title: string; 
+    tickets: Ticket[]; 
+    type: string;
+    color: string;
+    bgColor: string;
+}) {
+    if (tickets.length === 0) return null;
+    
+    return (
+        <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
+            <div className={`px-6 py-4 border-b ${bgColor} flex items-center gap-2`}>
+                {type === "status" && <CheckCircle size={16} className="text-green-600" />}
+                {type === "call" && <Phone size={16} className="text-red-500" />}
+                {type === "despatch" && <Package size={16} className="text-orange-500" />}
+                {type === "unassigned" && <UserCheck size={16} className="text-blue-500" />}
+                <h2 className={`font-semibold ${color}`}>{title}</h2>
+                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${bgColor} ${color}`}>
+                    {tickets.length} pending
+                </span>
+            </div>
+            <div className="divide-y">
+                {tickets.map((ticket) => (
+                    <TicketCard key={ticket.id} ticket={ticket} type={type} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ── Main Page Component ───────────────────────────────────────────────────────────
+export default async function AssignmentsPage() {
+    const session = await auth();
+    const role = (session?.user as { role?: string })?.role ?? "";
+    const userName = session?.user?.name ?? "there";
+    
+    const { statusActions, callQueue, despatchQueue, unassignedTickets } = await fetchAssignmentsForRole(role);
+
+    const stats = {
+        total: statusActions.length + callQueue.length + despatchQueue.length + unassignedTickets.length,
+        statusActions: statusActions.length,
+        callQueue: callQueue.length,
+        despatchQueue: despatchQueue.length,
+        unassigned: unassignedTickets.length
+    };
 
     return (
         <div>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <ClipboardList size={24} className="text-blue-600" />
+                    <Wrench size={24} className="text-blue-600" />
                     <div>
-                        <h1 className="text-3xl font-bold">Assignments</h1>
-                        <p className="text-gray-400 text-sm">Manage and track your work assignments</p>
+                        <h1 className="text-3xl font-bold">Work Inbox</h1>
+                        <p className="text-gray-400 text-sm">Process tickets that need your attention</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                    <Plus size={16} />
-                    New Assignment
-                </button>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-5 gap-4 mb-6">
                 <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
-                    <div className="text-gray-400"><Clock size={20} /></div>
+                    <div className="text-gray-400"><AlertCircle size={20} /></div>
                     <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Pending</p>
-                        <p className="text-2xl font-bold text-gray-800">{stats.pending}</p>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total</p>
+                        <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                    <div className="text-green-500"><CheckCircle size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Status</p>
+                        <p className="text-2xl font-bold text-green-600">{stats.statusActions}</p>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                    <div className="text-red-500"><Phone size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Calls</p>
+                        <p className="text-2xl font-bold text-red-600">{stats.callQueue}</p>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+                    <div className="text-orange-500"><Package size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Despatch</p>
+                        <p className="text-2xl font-bold text-orange-600">{stats.despatchQueue}</p>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
                     <div className="text-blue-500"><UserCheck size={20} /></div>
                     <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</p>
-                        <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
-                    <div className="text-green-500"><CheckCircle2 size={20} /></div>
-                    <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</p>
-                        <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
-                    <div className="text-red-500"><AlertCircle size={20} /></div>
-                    <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Overdue</p>
-                        <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Unassigned</p>
+                        <p className="text-2xl font-bold text-blue-600">{stats.unassigned}</p>
                     </div>
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white rounded-xl shadow p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <Filter size={16} className="text-gray-500" />
-                        <span className="text-sm font-medium text-gray-700">Filters</span>
-                    </div>
-                    <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className="text-xs text-blue-600 hover:text-blue-700"
-                    >
-                        {showFilters ? "Hide" : "Show"} filters
-                    </button>
-                </div>
-
-                {showFilters && (
-                    <div className="space-y-3">
-                        {/* Type Filter */}
-                        <div>
-                            <label className="text-xs text-gray-500 font-medium uppercase tracking-wide block mb-2">Type</label>
-                            <div className="flex gap-2 flex-wrap">
-                                {TYPE_FILTERS.map(filter => (
-                                    <button
-                                        key={filter.id}
-                                        onClick={() => setTypeFilter(filter.id)}
-                                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                            typeFilter === filter.id
-                                                ? "bg-blue-600 text-white"
-                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                        }`}
-                                    >
-                                        {filter.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Status Filter */}
-                        <div>
-                            <label className="text-xs text-gray-500 font-medium uppercase tracking-wide block mb-2">Status</label>
-                            <div className="flex gap-2 flex-wrap">
-                                {STATUS_FILTERS.map(filter => (
-                                    <button
-                                        key={filter.id}
-                                        onClick={() => setStatusFilter(filter.id)}
-                                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter.color} ${
-                                            statusFilter === filter.id
-                                                ? "ring-2 ring-offset-2 ring-blue-500"
-                                                : ""
-                                        }`}
-                                    >
-                                        {filter.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Sort */}
-                        <div>
-                            <label className="text-xs text-gray-500 font-medium uppercase tracking-wide block mb-2">Sort by</label>
-                            <div className="flex items-center gap-2">
-                                <ArrowUpDown size={14} className="text-gray-400" />
-                                <select
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value as SortBy)}
-                                    className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-300"
-                                >
-                                    {SORT_OPTIONS.map(option => (
-                                        <option key={option.id} value={option.id}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+            {/* All Tickets Section */}
+            <div>
+                <TicketSection 
+                    title="Status Actions" 
+                    tickets={statusActions} 
+                    type="status"
+                    color="text-green-700"
+                    bgColor="bg-green-50"
+                />
+                <TicketSection 
+                    title="Call Queue" 
+                    tickets={callQueue} 
+                    type="call"
+                    color="text-red-700"
+                    bgColor="bg-red-50"
+                />
+                <TicketSection 
+                    title="Despatch Queue" 
+                    tickets={despatchQueue} 
+                    type="despatch"
+                    color="text-orange-700"
+                    bgColor="bg-orange-50"
+                />
+                <TicketSection 
+                    title="Unassigned Tickets" 
+                    tickets={unassignedTickets} 
+                    type="unassigned"
+                    color="text-blue-700"
+                    bgColor="bg-blue-50"
+                />
+                {stats.total === 0 && (
+                    <div className="bg-white rounded-xl shadow p-16 text-center">
+                        <CheckCircle size={48} className="text-green-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-800 mb-2">All caught up!</h3>
+                        <p className="text-sm text-gray-400">No tickets need your attention right now.</p>
                     </div>
                 )}
             </div>
-
-            {/* Assignment List */}
-            <div className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="px-5 py-3 border-b bg-gray-50">
-                    <div className="flex items-center justify-between">
-                        <h2 className="font-medium text-gray-800">
-                            {assignments.length} assignment{assignments.length !== 1 ? "s" : ""}
-                        </h2>
-                        <div className="text-xs text-gray-500">
-                            {TYPE_FILTERS.find(f => f.id === typeFilter)?.label} · {STATUS_FILTERS.find(f => f.id === statusFilter)?.label}
-                        </div>
-                    </div>
-                </div>
-                
-                {loading ? (
-                    <div className="py-16 text-center text-gray-400 text-sm">Loading assignments...</div>
-                ) : (
-                    <TaskList tasks={assignments} onRefresh={fetchAssignments} />
-                )}
-            </div>
-
-            {/* Create Modal */}
-            <CreateTaskModal
-                open={showCreate}
-                onClose={() => setShowCreate(false)}
-                onCreated={fetchAssignments}
-            />
         </div>
     );
 }
