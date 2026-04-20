@@ -76,15 +76,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const rolePermIds = new Set<string>();
                 for (const ur of user.userRoles) {
                     for (const rp of ur.role.permissions) {
-                        rolePermIds.add(rp.permissionId);
+                        // Access permission.id from the included relation
+                        const permId = rp.permission?.id;
+                        if (permId) rolePermIds.add(permId);
                     }
                 }
                 // Apply user-level overrides
                 for (const up of user.permissions) {
+                    const permId = up.permission?.id;
+                    if (!permId) continue;
                     if (up.granted) {
-                        rolePermIds.add(up.permissionId);
+                        rolePermIds.add(permId);
                     } else {
-                        rolePermIds.delete(up.permissionId);
+                        rolePermIds.delete(permId);
                     }
                 }
 

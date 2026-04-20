@@ -17,11 +17,6 @@ const PERMISSIONS = [
     { id: "tickets:substatus:set", label: "Set ticket sub-status",       module: "service" },
     { id: "tickets:create",        label: "Create tickets",              module: "service" },
     { id: "warranty:convert",      label: "Convert warranty status",     module: "service" },
-    { id: "tasks:view:own",        label: "View own tasks",              module: "tasks" },
-    { id: "tasks:view:team",       label: "View team tasks",             module: "tasks" },
-    { id: "tasks:view:org",        label: "View all org tasks",          module: "tasks" },
-    { id: "tasks:create",          label: "Create tasks",                module: "tasks" },
-    { id: "tasks:pickup",          label: "Pick up another user's task", module: "tasks" },
     { id: "users:manage",          label: "Create/edit/delete users",    module: "admin" },
     { id: "roles:manage",          label: "Create/edit custom roles",    module: "admin" },
     { id: "settings:statuses",     label: "Manage ticket statuses",      module: "admin" },
@@ -32,15 +27,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     R2: [
         "tickets:status:set", "tickets:substatus:set", "tickets:create",
         "warranty:convert",
-        "tasks:view:own", "tasks:view:team", "tasks:create",
     ],
     R3: [
         "tickets:status:set", "tickets:substatus:set", "tickets:create",
-        "tasks:view:own", "tasks:view:team", "tasks:create",
     ],
     R4: [
         "tickets:substatus:set",
-        "tasks:view:own", "tasks:view:team", "tasks:create",
     ],
 };
 
