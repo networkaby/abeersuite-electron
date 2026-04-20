@@ -80,17 +80,6 @@ export async function PUT(
             }
         }
 
-        // Fetch current state BEFORE update (needed for escalation task logic)
-        const prevState = body.escalated !== undefined
-            ? await prisma.ticket.findUnique({
-                where: { id: Number(id) },
-                select: {
-                    escalated: true,
-                    device: { select: { brand: true, model: true, customer: { select: { name: true } } } },
-                },
-              })
-            : null;
-
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
             data: {
@@ -124,26 +113,7 @@ export async function PUT(
             });
         }
 
-        // When freshly escalating to a service centre, auto-create a Despatch task (R4)
-        if (body.escalated === true && prevState && !prevState.escalated) {
-            const deviceLabel = `${prevState.device.brand} ${prevState.device.model}`;
-            try {
-                await prisma.task.create({
-                    data: {
-                        title:        `Contact service centre — Ticket #${ticket.id} (${deviceLabel})`,
-                        description:  `Customer: ${prevState.device.customer.name}. Determine if on-site engineer visit or device despatch is required. Record external ref once confirmed.`,
-                        source:       "ticket_workflow",
-                        status:       "open",
-                        priority:     ticket.priority,
-                        assignedRole: "R4",
-                        ticketId:     ticket.id,
-                        createdById:  userId,
-                    },
-                });
-            } catch (taskErr) {
-                console.warn("[ticket PUT] escalation task creation skipped:", taskErr);
-            }
-        }
+
 
         return NextResponse.json(ticket);
     } catch (error) {

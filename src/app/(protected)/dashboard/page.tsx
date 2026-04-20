@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
-import { Phone, Package, AlertCircle, CheckCircle, ArrowRight, ListTodo } from "lucide-react";
+import { Phone, Package, AlertCircle, CheckCircle, ArrowRight } from "lucide-react";
 import { timeAgo } from "@/lib/time-ago";
 import TechnicianDashboard from "@/components/dashboard/TechnicianDashboard";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
@@ -17,13 +17,12 @@ async function fetchPipeline() {
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────────
 async function AdminDashboardServer({ name }: { name: string }) {
-    const [total, open, escalated, ready, actionItems, openTasks, pipeline, rawTickets] = await Promise.all([
+    const [total, open, escalated, ready, actionItems, pipeline, rawTickets] = await Promise.all([
         prisma.ticket.count(),
         prisma.ticket.count({ where: { ticketStatus: { isTerminal: false } } }),
         prisma.ticket.count({ where: { escalated: true } }),
         prisma.ticket.count({ where: { status: "S6" } }),
         prisma.ticket.count({ where: { subStatusId: { not: null } } }),
-        prisma.task.count({ where: { status: { in: ["open", "in_progress"] } } }),
         fetchPipeline(),
         prisma.ticket.findMany({
             where: { ticketStatus: { isTerminal: false } },
@@ -50,14 +49,14 @@ async function AdminDashboardServer({ name }: { name: string }) {
             name={name}
             pipeline={pipeline}
             allActiveTickets={allActiveTickets}
-            counts={{ total, open, escalated, ready, actionItems, openTasks }}
+            counts={{ total, open, escalated, ready, actionItems }}
         />
     );
 }
 
 // ── Technician Dashboard ───────────────────────────────────────────────────────
 async function TechnicianDashboardServer({ name, userId }: { name: string; userId: number }) {
-    const [pipeline, rawTickets, unassigned, openTasks] = await Promise.all([
+    const [pipeline, rawTickets, unassigned] = await Promise.all([
         fetchPipeline(),
         prisma.ticket.findMany({
             where: { ticketStatus: { isTerminal: false } },
@@ -81,12 +80,6 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
             },
         }),
-        prisma.task.count({
-            where: {
-                status: { in: ["open", "in_progress"] },
-                OR: [{ assignedToId: userId }, { assignedRole: "R2" }],
-            },
-        }),
     ]);
 
     const allActiveTickets = rawTickets.map(t => ({
@@ -103,7 +96,6 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
             pipeline={pipeline}
             allActiveTickets={allActiveTickets}
             unassigned={unassigned}
-            openTasks={openTasks}
         />
     );
 }
@@ -113,7 +105,7 @@ async function FrontDeskDashboard({ name }: { name: string }) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [subActionCount, statusActionCount, newToday, openTasks] = await Promise.all([
+    const [subActionCount, statusActionCount, newToday] = await Promise.all([
         prisma.ticket.count({
             where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
         }),
@@ -121,7 +113,6 @@ async function FrontDeskDashboard({ name }: { name: string }) {
             where: { ticketStatus: { notifyRoles: { has: "R3" } } },
         }),
         prisma.ticket.count({ where: { createdAt: { gte: today } } }),
-        prisma.task.count({ where: { status: { in: ["open", "in_progress"] }, assignedRole: "R3" } }),
     ]);
     const actionCount = subActionCount + statusActionCount;
 
@@ -167,13 +158,6 @@ async function FrontDeskDashboard({ name }: { name: string }) {
                         <p className="text-3xl font-bold mt-0.5 text-blue-600">{newToday}</p>
                     </div>
                 </div>
-                <Link href="/tasks" className="bg-white rounded-xl shadow p-5 flex items-center gap-4 hover:bg-blue-50/40 transition-colors">
-                    <div className="text-blue-400"><ListTodo size={22} /></div>
-                    <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Open Tasks</p>
-                        <p className={`text-3xl font-bold mt-0.5 ${openTasks > 0 ? "text-blue-600" : "text-gray-800"}`}>{openTasks}</p>
-                    </div>
-                </Link>
             </div>
 
             {statusQueue.length > 0 && (
@@ -275,7 +259,7 @@ async function FrontDeskDashboard({ name }: { name: string }) {
 
 // ── Despatch Dashboard ─────────────────────────────────────────────────────────
 async function DespatchDashboard({ name }: { name: string }) {
-    const [subPendingCount, statusPendingCount, inTransitCount, openTasks] = await Promise.all([
+    const [subPendingCount, statusPendingCount, inTransitCount] = await Promise.all([
         prisma.ticket.count({
             where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
         }),
@@ -283,7 +267,6 @@ async function DespatchDashboard({ name }: { name: string }) {
             where: { ticketStatus: { notifyRoles: { has: "R4" } } },
         }),
         prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
-        prisma.task.count({ where: { status: { in: ["open", "in_progress"] }, assignedRole: "R4" } }),
     ]);
     const pendingCount = subPendingCount + statusPendingCount;
 
@@ -330,13 +313,6 @@ async function DespatchDashboard({ name }: { name: string }) {
                         <p className="text-3xl font-bold mt-0.5 text-blue-600">{inTransitCount}</p>
                     </div>
                 </div>
-                <Link href="/tasks" className="bg-white rounded-xl shadow p-5 flex items-center gap-4 hover:bg-blue-50/40 transition-colors">
-                    <div className="text-blue-400"><ListTodo size={22} /></div>
-                    <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Open Tasks</p>
-                        <p className={`text-3xl font-bold mt-0.5 ${openTasks > 0 ? "text-blue-600" : "text-gray-800"}`}>{openTasks}</p>
-                    </div>
-                </Link>
             </div>
 
             {statusQueue.length > 0 && (

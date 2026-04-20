@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Wrench, ChevronRight, ArrowRight, ListTodo } from "lucide-react";
+import { Wrench, ChevronRight, ArrowRight } from "lucide-react";
 import { timeAgo } from "@/lib/time-ago";
 
 interface PipelineStage {
@@ -38,7 +38,6 @@ interface Props {
     pipeline: PipelineStage[];
     allActiveTickets: TicketRow[];
     unassigned: UnassignedRow[];
-    openTasks: number;
 }
 
 const TEAM_TABS = [
@@ -60,7 +59,7 @@ const TEAM_LABEL: Record<string, string> = {
     R4: "Despatch",
 };
 
-export default function TechnicianDashboard({ name, userId, pipeline, allActiveTickets, unassigned, openTasks }: Props) {
+export default function TechnicianDashboard({ name, userId, pipeline, allActiveTickets, unassigned }: Props) {
     const router = useRouter();
     const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<string | null>("R2");
@@ -90,16 +89,6 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
         <div>
             <h1 className="text-2xl font-bold mb-1">My Workbench</h1>
             <p className="text-gray-400 text-sm mb-6">Welcome back, {name}</p>
-
-            {/* Tasks quick link */}
-            {openTasks > 0 && (
-                <Link href="/tasks" className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3.5 mb-6 hover:bg-blue-100 transition-colors">
-                    <ListTodo size={18} className="text-blue-500 shrink-0" />
-                    <span className="text-sm font-medium text-blue-700">
-                        You have <span className="font-bold">{openTasks}</span> open task{openTasks !== 1 ? "s" : ""} — view them →
-                    </span>
-                </Link>
-            )}
 
             {/* Pipeline strip */}
             <div className="bg-white rounded-xl shadow p-4 mb-6">

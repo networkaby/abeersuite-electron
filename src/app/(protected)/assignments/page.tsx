@@ -2,9 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Wrench, AlertCircle, CheckCircle, Phone, Package, UserCheck, Users } from "lucide-react";
+import {
+    Wrench, Phone, Package, CheckCircle, AlertCircle,
+    UserCheck, Users, User,
+} from "lucide-react";
 import { TicketSection, type TicketCardData } from "@/components/assignments/TicketCard";
 
+// ── Shared include ────────────────────────────────────────────────────────────
 const TICKET_INCLUDE = {
     device: { include: { customer: true } },
     primaryOwner: { select: { id: true, name: true } },
@@ -17,44 +21,9 @@ const TICKET_INCLUDE = {
     },
 } as const;
 
-type RawTicket = Awaited<ReturnType<typeof fetchTickets>>[0];
+type RawTicket = Awaited<ReturnType<typeof prisma.ticket.findMany<{ include: typeof TICKET_INCLUDE }>>>[0];
 
-async function fetchTickets(scope: "me" | "team" | "org", userId: number, managerId: number | null) {
-    if (scope === "me") {
-        return prisma.ticket.findMany({
-            where: {
-                ticketStatus: { isTerminal: false },
-                OR: [
-                    { primaryOwnerId: userId },
-                    { participants: { some: { userId, removedAt: null } } },
-                ],
-            },
-            orderBy: { updatedAt: "asc" },
-            include: TICKET_INCLUDE,
-        });
-    }
-
-    if (scope === "team") {
-        if (!managerId) return [];
-        return prisma.ticket.findMany({
-            where: {
-                ticketStatus: { isTerminal: false },
-                primaryOwner: { managerId: userId },
-            },
-            orderBy: { updatedAt: "asc" },
-            include: TICKET_INCLUDE,
-        });
-    }
-
-    // org — admin only, guarded at render time
-    return prisma.ticket.findMany({
-        where: { ticketStatus: { isTerminal: false } },
-        orderBy: { updatedAt: "asc" },
-        include: TICKET_INCLUDE,
-    });
-}
-
-function toCardData(t: RawTicket): TicketCardData {
+function toCard(t: RawTicket): TicketCardData {
     return {
         id: t.id,
         escalated: t.escalated,
@@ -82,13 +51,29 @@ function toCardData(t: RawTicket): TicketCardData {
     };
 }
 
+// ── Stat card ─────────────────────────────────────────────────────────────────
+function StatCard({
+    label, value, icon, textColor,
+}: { label: string; value: number; icon: React.ReactNode; textColor: string }) {
+    return (
+        <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+            <div className={textColor}>{icon}</div>
+            <div>
+                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
+                <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
+            </div>
+        </div>
+    );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default async function AssignmentsPage({
     searchParams,
 }: {
     searchParams: Promise<{ scope?: string }>;
 }) {
     const session = await auth();
-    const resolvedParams = await searchParams;
+    const { scope: rawScope } = await searchParams;
 
     const sessionUser = session?.user as {
         id?: string;
@@ -97,118 +82,202 @@ export default async function AssignmentsPage({
         permissions?: string[];
     } | undefined;
 
-    const userId = Number(sessionUser?.id ?? "0");
+    const userId     = Number(sessionUser?.id ?? "0");
     const roles: string[] = sessionUser?.roles ?? (sessionUser?.role ? [sessionUser.role] : []);
-    const isAdmin = sessionUser?.permissions?.includes("admin:bypass") ?? false;
+    const permissions: string[] = sessionUser?.permissions ?? [];
 
-    const rawScope = resolvedParams.scope;
+    const canViewTeam = permissions.includes("assignments:view-team");
+    const canViewOrg  = permissions.includes("assignments:view-org") || permissions.includes("admin:bypass");
+
     const scope: "me" | "team" | "org" =
-        rawScope === "me" || rawScope === "team" || rawScope === "org" ? rawScope : "me";
+        rawScope === "team" && canViewTeam ? "team" :
+        rawScope === "org"  && canViewOrg  ? "org"  : "me";
 
-    // Org scope restricted to admins
-    if (scope === "org" && !isAdmin) redirect("/assignments?scope=me");
+    if (rawScope === "team" && !canViewTeam) redirect("/assignments?scope=me");
+    if (rawScope === "org"  && !canViewOrg)  redirect("/assignments?scope=me");
 
-    // Get caller's managerId for team scope
-    const callerUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { managerId: true, name: true },
-    });
-    const managerId = callerUser?.managerId ?? null;
+    // ── Fetch ─────────────────────────────────────────────────────────────────
+    const raw = await (scope === "me"
+        // "Assigned to Me": tickets where I am primary owner OR named participant
+        ? prisma.ticket.findMany({
+            where: {
+                ticketStatus: { isTerminal: false },
+                OR: [
+                    { primaryOwnerId: userId },
+                    { participants: { some: { userId, removedAt: null } } },
+                ],
+            },
+            orderBy: { updatedAt: "asc" },
+            include: TICKET_INCLUDE,
+        })
+        : scope === "team"
+        // "My Team": all active tickets routed to any of my roles (assigned or not)
+        ? prisma.ticket.findMany({
+            where: {
+                ticketStatus: { isTerminal: false },
+                OR: [
+                    { ticketStatus: { notifyRoles: { hasSome: roles } } },
+                    { ticketSubStatus: { notifyRoles: { hasSome: roles } } },
+                ],
+            },
+            orderBy: { updatedAt: "asc" },
+            include: TICKET_INCLUDE,
+        })
+        // "Org": every active ticket
+        : prisma.ticket.findMany({
+            where: { ticketStatus: { isTerminal: false } },
+            orderBy: { updatedAt: "asc" },
+            include: TICKET_INCLUDE,
+        })
+    );
 
-    const tickets = await fetchTickets(scope, userId, managerId);
-    const cards = tickets.map(toCardData);
+    const cards = raw.map(toCard);
 
     // ── Categorise ─────────────────────────────────────────────────────────────
-    let primaryTickets: TicketCardData[] = [];
-    let secondaryTickets: TicketCardData[] = [];
-    let callQueue: TicketCardData[] = [];
-    let despatchQueue: TicketCardData[] = [];
+    let myOwned:    TicketCardData[] = [];
+    let mySecond:   TicketCardData[] = [];
+    let callQueue:  TicketCardData[] = [];
+    let despQueue:  TicketCardData[] = [];
     let unassigned: TicketCardData[] = [];
-    let teamTickets: TicketCardData[] = [];
+    let general:    TicketCardData[] = [];
 
     if (scope === "me") {
-        primaryTickets = cards.filter(t => t.primaryOwner?.id === userId);
-        secondaryTickets = cards.filter(t =>
-            t.primaryOwner?.id !== userId &&
-            t.activeParticipants?.some(p => p.user.id === userId)
-        );
+        myOwned  = cards.filter(t => t.primaryOwner?.id === userId);
+        mySecond = cards.filter(t => t.primaryOwner?.id !== userId);
     } else if (scope === "team") {
-        // Team view: show by sub-status category
-        callQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3") ||
-            roles.some(r => t.ticketSubStatus?.notifyRoles?.includes(r)));
-        despatchQueue = cards.filter(t =>
-            !callQueue.includes(t) &&
-            (t.ticketSubStatus?.notifyRoles?.includes("R4") || roles.some(r => t.ticketSubStatus?.notifyRoles?.includes(r)))
-        );
-        teamTickets = cards.filter(t => !callQueue.includes(t) && !despatchQueue.includes(t));
+        callQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3"));
+        despQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !callQueue.includes(t));
+        unassigned = cards.filter(t => !t.primaryOwner && !callQueue.includes(t) && !despQueue.includes(t));
+        general    = cards.filter(t => !callQueue.includes(t) && !despQueue.includes(t) && !unassigned.includes(t));
     } else {
-        // Org view
-        callQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3"));
-        despatchQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !callQueue.includes(t));
         unassigned = cards.filter(t => !t.primaryOwner);
-        primaryTickets = cards.filter(t => t.primaryOwner && !callQueue.includes(t) && !despatchQueue.includes(t) && !unassigned.includes(t));
+        callQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3") && !unassigned.includes(t));
+        despQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !unassigned.includes(t) && !callQueue.includes(t));
+        general    = cards.filter(t => !unassigned.includes(t) && !callQueue.includes(t) && !despQueue.includes(t));
     }
 
-    const total = primaryTickets.length + secondaryTickets.length + callQueue.length +
-        despatchQueue.length + unassigned.length + teamTickets.length;
+    const total     = cards.length;
+    const callCount = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3")).length;
+    const despCount = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4")).length;
+    const escCount  = cards.filter(t => t.escalated).length;
 
-    const SCOPE_TABS = [
-        { id: "me", label: "Assigned to Me", description: "Primary + secondary assignments" },
-        { id: "team", label: "My Team", description: "Tickets for your direct reports" },
-        ...(isAdmin ? [{ id: "org", label: "All Organisation", description: "Every active ticket" }] : []),
+    // ── Tabs ───────────────────────────────────────────────────────────────────
+    const TABS = [
+        { id: "me",   label: "Assigned to Me",    desc: "Your primary & secondary assignments" },
+        ...(canViewTeam ? [{ id: "team", label: "My Team",         desc: "All tickets for your role" }] : []),
+        ...(canViewOrg  ? [{ id: "org",  label: "All Organisation", desc: "Every active ticket" }] : []),
     ] as const;
 
     return (
         <div>
             {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-                <Wrench size={24} className="text-blue-600" />
-                <div>
-                    <h1 className="text-3xl font-bold">Assignments</h1>
-                    <p className="text-gray-400 text-sm">Your tickets and team workload</p>
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <Wrench size={24} className="text-blue-600" />
+                    <div>
+                        <h1 className="text-3xl font-bold">Work Inbox</h1>
+                        <p className="text-gray-400 text-sm">Process tickets that need your attention</p>
+                    </div>
                 </div>
             </div>
 
-            {/* Scope Tabs */}
+            {/* Scope tabs */}
             <div className="bg-white rounded-xl shadow p-1 mb-6">
                 <div className="flex gap-1">
-                    {SCOPE_TABS.map(tab => (
+                    {TABS.map(tab => (
                         <Link
                             key={tab.id}
                             href={`?scope=${tab.id}`}
                             className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
-                                scope === tab.id ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"
+                                scope === tab.id
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-600 hover:bg-gray-100"
                             }`}
                         >
                             <span className="font-medium">{tab.label}</span>
                             <span className={`text-xs ${scope === tab.id ? "text-blue-100" : "text-gray-400"}`}>
-                                {tab.description}
+                                {tab.desc}
                             </span>
                         </Link>
                     ))}
                 </div>
             </div>
 
-            {/* Summary */}
-            <div className="mb-4 text-sm text-gray-500">
-                Showing <span className="font-semibold text-gray-800">{total}</span> ticket{total !== 1 ? "s" : ""}
+            {/* Scope banner */}
+            {scope === "me" && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-blue-800">
+                        <UserCheck size={16} className="text-blue-600" />
+                        <span className="text-sm font-medium">Your named assignments</span>
+                    </div>
+                    <p className="text-xs text-blue-600 mt-1">
+                        Tickets where you are the primary owner or a named secondary participant.
+                    </p>
+                </div>
+            )}
+            {scope === "team" && (
+                <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-green-800">
+                        <Users size={16} className="text-green-600" />
+                        <span className="text-sm font-medium">Team view — {roles.join(", ")}</span>
+                    </div>
+                    <p className="text-xs text-green-600 mt-1">
+                        All active tickets routed to your role, whether assigned to someone or not.
+                    </p>
+                </div>
+            )}
+            {scope === "org" && (
+                <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-gray-800">
+                        <AlertCircle size={16} className="text-gray-600" />
+                        <span className="text-sm font-medium">Organisation view</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">All active tickets across every role.</p>
+                </div>
+            )}
+
+            {/* Stats */}
+            <div className="grid grid-cols-5 gap-4 mb-6">
+                <StatCard label="Total"     value={total}    icon={<AlertCircle size={20} />}  textColor="text-gray-600" />
+                {scope === "me" ? (
+                    <>
+                        <StatCard label="Primary"   value={myOwned.length}  icon={<User size={20} />}        textColor="text-blue-600" />
+                        <StatCard label="Secondary" value={mySecond.length} icon={<Users size={20} />}       textColor="text-purple-600" />
+                        <StatCard label="Calls"     value={callCount}       icon={<Phone size={20} />}       textColor="text-red-600" />
+                        <StatCard label="Despatch"  value={despCount}       icon={<Package size={20} />}     textColor="text-orange-600" />
+                    </>
+                ) : scope === "team" ? (
+                    <>
+                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />}   textColor="text-amber-600" />
+                        <StatCard label="Calls"      value={callCount}         icon={<Phone size={20} />}       textColor="text-red-600" />
+                        <StatCard label="Despatch"   value={despCount}         icon={<Package size={20} />}     textColor="text-orange-600" />
+                        <StatCard label="Escalated"  value={escCount}          icon={<AlertCircle size={20} />} textColor="text-red-500" />
+                    </>
+                ) : (
+                    <>
+                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />}   textColor="text-blue-600" />
+                        <StatCard label="Calls"      value={callCount}         icon={<Phone size={20} />}       textColor="text-red-600" />
+                        <StatCard label="Despatch"   value={despCount}         icon={<Package size={20} />}     textColor="text-orange-600" />
+                        <StatCard label="Escalated"  value={escCount}          icon={<AlertCircle size={20} />} textColor="text-red-500" />
+                    </>
+                )}
             </div>
 
             {/* Sections */}
             {scope === "me" && (
                 <>
                     <TicketSection
-                        title="My Tickets (Primary Owner)"
-                        tickets={primaryTickets}
+                        title="Primary Owner"
+                        tickets={myOwned}
                         type="primary"
-                        color="text-green-700"
-                        bgColor="bg-green-50"
-                        icon={<CheckCircle size={16} className="text-green-600" />}
+                        color="text-blue-700"
+                        bgColor="bg-blue-50"
+                        icon={<User size={16} className="text-blue-500" />}
                         currentUserId={userId}
                     />
                     <TicketSection
-                        title="Helping With (Secondary)"
-                        tickets={secondaryTickets}
+                        title="Secondary Participant"
+                        tickets={mySecond}
                         type="secondary"
                         color="text-purple-700"
                         bgColor="bg-purple-50"
@@ -221,6 +290,15 @@ export default async function AssignmentsPage({
             {scope === "team" && (
                 <>
                     <TicketSection
+                        title="Unassigned"
+                        tickets={unassigned}
+                        type="unassigned"
+                        color="text-amber-700"
+                        bgColor="bg-amber-50"
+                        icon={<UserCheck size={16} className="text-amber-500" />}
+                        currentUserId={userId}
+                    />
+                    <TicketSection
                         title="Call Queue"
                         tickets={callQueue}
                         type="call"
@@ -231,7 +309,7 @@ export default async function AssignmentsPage({
                     />
                     <TicketSection
                         title="Despatch Queue"
-                        tickets={despatchQueue}
+                        tickets={despQueue}
                         type="despatch"
                         color="text-orange-700"
                         bgColor="bg-orange-50"
@@ -239,21 +317,14 @@ export default async function AssignmentsPage({
                         currentUserId={userId}
                     />
                     <TicketSection
-                        title="Team Tickets"
-                        tickets={teamTickets}
+                        title="Active Tickets"
+                        tickets={general}
                         type="status"
                         color="text-gray-700"
                         bgColor="bg-gray-50"
-                        icon={<AlertCircle size={16} className="text-gray-500" />}
+                        icon={<CheckCircle size={16} className="text-gray-500" />}
                         currentUserId={userId}
                     />
-                    {scope === "team" && !managerId && tickets.length === 0 && (
-                        <div className="bg-white rounded-xl shadow p-12 text-center text-gray-400">
-                            <Users size={40} className="mx-auto mb-3 text-gray-300" />
-                            <p className="font-medium">No direct reports</p>
-                            <p className="text-sm mt-1">You have no team members assigned to you.</p>
-                        </div>
-                    )}
                 </>
             )}
 
@@ -279,7 +350,7 @@ export default async function AssignmentsPage({
                     />
                     <TicketSection
                         title="Despatch Queue"
-                        tickets={despatchQueue}
+                        tickets={despQueue}
                         type="despatch"
                         color="text-orange-700"
                         bgColor="bg-orange-50"
@@ -288,7 +359,7 @@ export default async function AssignmentsPage({
                     />
                     <TicketSection
                         title="All Active Tickets"
-                        tickets={primaryTickets}
+                        tickets={general}
                         type="status"
                         color="text-gray-700"
                         bgColor="bg-gray-50"
