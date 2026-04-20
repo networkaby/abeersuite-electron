@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/permissions";
+import { requirePermission } from "@/lib/auth-guard";
 import { auth } from "@/auth";
 
 export async function GET(

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/permissions";
+import { requirePermission } from "@/lib/auth-guard";
 
 type Params = { params: Promise<{ id: string }> };
 

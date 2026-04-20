@@ -1,29 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/permissions";
-import { auth } from "@/auth";
+import { requireAuth, hasPermission } from "@/lib/auth-guard";
 
 export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
-    const session = await auth();
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const sessionUser = session.user as { id?: string; permissions?: string[] };
-    const callerId = Number(sessionUser.id ?? 0);
-    const callerPermissions = sessionUser.permissions ?? [];
+    const { user, response } = await requireAuth();
+    if (response) return response;
 
     const { id, userId } = await params;
     const ticketId = Number(id);
     const targetUserId = Number(userId);
 
-    // Allow self-removal without permission check; otherwise require manage-participants
-    const isSelfRemoval = callerId === targetUserId;
-    if (!isSelfRemoval && !callerPermissions.includes("tickets:manage-participants")) {
-        // Re-use requirePermission for the error response shape
-        const { response } = await requirePermission("tickets:manage-participants");
-        return response!;
+    const isSelfRemoval = user.id === targetUserId;
+    if (!isSelfRemoval && !hasPermission(user, "tickets:manage-participants")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     try {
@@ -44,7 +36,7 @@ export async function DELETE(
                 ticketId,
                 status: currentStatus!.status,
                 note: `Secondary owner removed: ${participant.user.name}`,
-                userId: callerId,
+                userId: user.id,
             },
         });
 

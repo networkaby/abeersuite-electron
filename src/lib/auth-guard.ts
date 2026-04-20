@@ -1,36 +1,61 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import type { Session } from "next-auth";
+
+export interface ResolvedUser {
+    id: number;
+    primaryRole: string;
+    roles: string[];
+    permissions: string[];
+}
+
+export function hasPermission(user: ResolvedUser, permissionId: string): boolean {
+    return user.permissions.includes(permissionId);
+}
+
+export function isAdmin(user: ResolvedUser): boolean {
+    return hasPermission(user, "admin:bypass");
+}
 
 type GuardResult =
-    | { session: Session; response: null }
-    | { session: null; response: NextResponse };
+    | { user: ResolvedUser; response: null }
+    | { user: null; response: NextResponse };
+
+function resolveFromSession(sessionUser: {
+    id?: string;
+    role?: string;
+    roles?: string[];
+    permissions?: string[];
+}): ResolvedUser {
+    return {
+        id: Number(sessionUser.id ?? 0),
+        primaryRole: sessionUser.role ?? "",
+        roles: sessionUser.roles ?? [sessionUser.role ?? ""],
+        permissions: sessionUser.permissions ?? [],
+    };
+}
 
 export async function requireAuth(): Promise<GuardResult> {
     const session = await auth();
     if (!session) {
-        return { session: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+        return { user: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
     }
-    return { session, response: null };
+    return { user: resolveFromSession(session.user), response: null };
 }
 
 export async function requireRole(...roles: string[]): Promise<GuardResult> {
     const result = await requireAuth();
     if (result.response) return result;
-    const role = (result.session.user as { role?: string }).role ?? "";
-    if (!roles.includes(role)) {
-        return { session: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    if (!roles.includes(result.user.primaryRole)) {
+        return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return result;
 }
 
-// Permission-based guard — use this in new/updated API routes
 export async function requirePermission(permissionId: string): Promise<GuardResult> {
     const result = await requireAuth();
     if (result.response) return result;
-    const perms = (result.session.user as { permissions?: string[] }).permissions ?? [];
-    if (!perms.includes(permissionId)) {
-        return { session: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    if (!result.user.permissions.includes(permissionId)) {
+        return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return result;
 }

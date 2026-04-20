@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission, isAdmin } from "@/lib/permissions";
+import { requirePermission, isAdmin } from "@/lib/auth-guard";
 
 export async function POST(
     req: Request,

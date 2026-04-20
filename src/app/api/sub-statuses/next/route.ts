@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth, isAdmin } from "@/lib/auth-guard";
 
 // GET /api/sub-statuses/next?statusId=S3&fromSubStatusId=SS10
 // GET /api/sub-statuses/next?statusId=S3&entryOnly=true  (no current sub-status)
@@ -9,7 +9,7 @@ import { requireAuth } from "@/lib/auth-guard";
 // and current sub-status (or entry points when there is no sub-status yet).
 // Only returns sub-statuses the calling user's role is permitted to set.
 export async function GET(req: Request) {
-    const { session, response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     try {
@@ -18,7 +18,6 @@ export async function GET(req: Request) {
         const fromSubStatusId = searchParams.get("fromSubStatusId");
         const entryOnly = searchParams.get("entryOnly") === "true";
         const isWarranty = searchParams.get("isWarranty") === "true";
-        const userRole = (session.user as { role?: string }).role ?? "";
 
         if (!statusId) {
             return NextResponse.json({ error: "statusId required" }, { status: 400 });
@@ -37,9 +36,7 @@ export async function GET(req: Request) {
                 if (seen.has(ss.id)) return false;
                 seen.add(ss.id);
                 if (!ss.applicableStatusIds.includes(statusId)) return false;
-                // Admin (R1) can set any sub-status regardless of allowedRoles
-                if (userRole !== "R1" && ss.allowedRoles.length > 0 && !ss.allowedRoles.includes(userRole)) return false;
-                // Filter by warrantyScope
+                if (!isAdmin(user) && ss.allowedRoles.length > 0 && !ss.allowedRoles.includes(user.primaryRole)) return false;
                 const scope = ss.warrantyScope ?? "any";
                 if (scope !== "any") {
                     if (scope === "warranty_only" && !isWarranty) return false;
