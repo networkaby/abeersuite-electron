@@ -35,7 +35,7 @@ interface Ticket {
     ticketStatus: TicketStatus;
     ticketSubStatus: TicketSubStatus | null;
     serviceCenter: { name: string } | null;
-    updatedAt: string;
+    updatedAt: Date | string;
     escalated: boolean;
 }
 
@@ -56,13 +56,13 @@ async function fetchAssignmentsForRole(role: string, userId: number, scope: "me"
 
     // Filter tickets based on scope
     let filteredTickets = allTickets;
-    
+
     if (scope === "me") {
         // Only tickets assigned to current user
         filteredTickets = allTickets.filter(t => t.technician?.id === userId);
     } else if (scope === "team") {
         // Tickets relevant to this role (notifyRoles) or assigned to this role
-        filteredTickets = allTickets.filter(t => 
+        filteredTickets = allTickets.filter(t =>
             t.ticketStatus.notifyRoles.includes(role) ||
             t.ticketSubStatus?.notifyRoles.includes(role) ||
             (t.technician && t.ticketStatus.notifyRoles.includes(role))
@@ -72,54 +72,54 @@ async function fetchAssignmentsForRole(role: string, userId: number, scope: "me"
 
     // Categorize tickets based on scope
     let statusActions, callQueue, despatchQueue, unassignedTickets;
-    
+
     if (scope === "me") {
         // For "me" scope, show all categories for user's assigned tickets
-        statusActions = filteredTickets.filter(t => 
+        statusActions = filteredTickets.filter(t =>
             !t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0
         );
-        
-        callQueue = filteredTickets.filter(t => 
+
+        callQueue = filteredTickets.filter(t =>
             t.ticketSubStatus?.notifyRoles.includes("R3")
         );
-        
-        despatchQueue = filteredTickets.filter(t => 
+
+        despatchQueue = filteredTickets.filter(t =>
             t.ticketSubStatus?.notifyRoles.includes("R4")
         );
-        
+
         unassignedTickets = []; // No unassigned tickets in "me" view
     } else if (scope === "org") {
         // For "org" scope, show all categories for all tickets
-        statusActions = filteredTickets.filter(t => 
+        statusActions = filteredTickets.filter(t =>
             !t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0
         );
-        
-        callQueue = filteredTickets.filter(t => 
+
+        callQueue = filteredTickets.filter(t =>
             t.ticketSubStatus?.notifyRoles.includes("R3")
         );
-        
-        despatchQueue = filteredTickets.filter(t => 
+
+        despatchQueue = filteredTickets.filter(t =>
             t.ticketSubStatus?.notifyRoles.includes("R4")
         );
-        
+
         unassignedTickets = filteredTickets.filter(t => !t.technician);
     } else {
         // For "team" scope, use role-based filtering (same as dashboard)
-        statusActions = filteredTickets.filter(t => 
-            t.ticketStatus.notifyRoles.includes(role) && 
+        statusActions = filteredTickets.filter(t =>
+            t.ticketStatus.notifyRoles.includes(role) &&
             (!t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0)
         );
-        
-        callQueue = filteredTickets.filter(t => 
+
+        callQueue = filteredTickets.filter(t =>
             t.ticketSubStatus?.notifyRoles.includes("R3")
         );
-        
-        despatchQueue = filteredTickets.filter(t => 
+
+        despatchQueue = filteredTickets.filter(t =>
             t.ticketSubStatus?.notifyRoles.includes("R4")
         );
-        
-        unassignedTickets = filteredTickets.filter(t => 
-            !t.technician && 
+
+        unassignedTickets = filteredTickets.filter(t =>
+            !t.technician &&
             t.ticketStatus.notifyRoles.includes(role)
         );
     }
@@ -198,15 +198,15 @@ function TicketCard({ ticket, type }: { ticket: Ticket; type: string }) {
 }
 
 // ── Ticket Section Component ────────────────────────────────────────────────────
-function TicketSection({ title, tickets, type, color, bgColor }: { 
-    title: string; 
-    tickets: Ticket[]; 
+function TicketSection({ title, tickets, type, color, bgColor }: {
+    title: string;
+    tickets: Ticket[];
     type: string;
     color: string;
     bgColor: string;
 }) {
     if (tickets.length === 0) return null;
-    
+
     return (
         <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
             <div className={`px-6 py-4 border-b ${bgColor} flex items-center gap-2`}>
@@ -232,13 +232,14 @@ function TicketSection({ title, tickets, type, color, bgColor }: {
 export default async function AssignmentsPage({
     searchParams,
 }: {
-    searchParams: { scope?: "me" | "team" | "org" };
+    searchParams: Promise<{ scope?: "me" | "team" | "org" }>;
 }) {
     const session = await auth();
+    const resolvedSearchParams = await searchParams;
     const role = (session?.user as { role?: string })?.role ?? "";
     const userId = Number((session?.user as { id?: string })?.id ?? "0");
-    const scope = searchParams.scope ?? "team"; // Default to team view
-    
+    const scope = resolvedSearchParams.scope ?? "team"; // Default to team view
+
     const { statusActions, callQueue, despatchQueue, unassignedTickets } = await fetchAssignmentsForRole(role, userId, scope);
 
     const stats = {
@@ -282,16 +283,14 @@ export default async function AssignmentsPage({
                         <Link
                             key={tab.id}
                             href={`?scope=${tab.id}`}
-                            className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
-                                scope === tab.id
+                            className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${scope === tab.id
                                     ? "bg-blue-600 text-white"
                                     : "text-gray-600 hover:bg-gray-100"
-                            }`}
+                                }`}
                         >
                             <span className="font-medium">{tab.label}</span>
-                            <span className={`text-xs ${
-                                scope === tab.id ? "text-blue-100" : "text-gray-400"
-                            }`}>
+                            <span className={`text-xs ${scope === tab.id ? "text-blue-100" : "text-gray-400"
+                                }`}>
                                 {tab.description}
                             </span>
                         </Link>
@@ -359,7 +358,7 @@ export default async function AssignmentsPage({
                         <p className="text-xs text-blue-600 mt-1">Only tickets assigned directly to you are shown</p>
                     </div>
                 )}
-                
+
                 {scope === "team" && (
                     <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-green-800">
@@ -369,7 +368,7 @@ export default async function AssignmentsPage({
                         <p className="text-xs text-green-600 mt-1">Tickets that need attention from your role level</p>
                     </div>
                 )}
-                
+
                 {scope === "org" && (
                     <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-gray-800">
@@ -380,30 +379,30 @@ export default async function AssignmentsPage({
                     </div>
                 )}
 
-                <TicketSection 
-                    title="Status Actions" 
-                    tickets={statusActions} 
+                <TicketSection
+                    title="Status Actions"
+                    tickets={statusActions}
                     type="status"
                     color="text-green-700"
                     bgColor="bg-green-50"
                 />
-                <TicketSection 
-                    title="Call Queue" 
-                    tickets={callQueue} 
+                <TicketSection
+                    title="Call Queue"
+                    tickets={callQueue}
                     type="call"
                     color="text-red-700"
                     bgColor="bg-red-50"
                 />
-                <TicketSection 
-                    title="Despatch Queue" 
-                    tickets={despatchQueue} 
+                <TicketSection
+                    title="Despatch Queue"
+                    tickets={despatchQueue}
                     type="despatch"
                     color="text-orange-700"
                     bgColor="bg-orange-50"
                 />
-                <TicketSection 
-                    title="Unassigned Tickets" 
-                    tickets={unassignedTickets} 
+                <TicketSection
+                    title="Unassigned Tickets"
+                    tickets={unassignedTickets}
                     type="unassigned"
                     color="text-blue-700"
                     bgColor="bg-blue-50"
