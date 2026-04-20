@@ -16,7 +16,7 @@ interface TicketDevice {
 interface TicketStatus {
     label: string;
     color: string;
-    actionLabel?: string;
+    actionLabel: string | null;
     notifyRoles: string[];
 }
 
@@ -24,23 +24,23 @@ interface TicketSubStatus {
     id: string;
     label: string;
     color: string;
-    actionLabel?: string;
+    actionLabel: string | null;
     notifyRoles: string[];
 }
 
 interface Ticket {
     id: number;
     device: TicketDevice;
-    technician?: { id: number; name: string };
+    technician: { id: number; name: string } | null;
     ticketStatus: TicketStatus;
-    ticketSubStatus?: TicketSubStatus;
-    serviceCenter?: { name: string };
+    ticketSubStatus: TicketSubStatus | null;
+    serviceCenter: { name: string } | null;
     updatedAt: string;
     escalated: boolean;
 }
 
-// ── Fetch assignments based on user role ────────────────────────────────────────
-async function fetchAssignmentsForRole(role: string) {
+// ── Fetch assignments based on user role and scope ────────────────────────────────
+async function fetchAssignmentsForRole(role: string, userId: number, scope: "me" | "team" | "org") {
     // Get all active tickets first
     const allTickets = await prisma.ticket.findMany({
         where: { ticketStatus: { isTerminal: false } },
@@ -54,24 +54,75 @@ async function fetchAssignmentsForRole(role: string) {
         },
     });
 
-    // Categorize tickets based on role (same logic as dashboard)
-    const statusActions = allTickets.filter(t => 
-        t.ticketStatus.notifyRoles.includes(role) && 
-        (!t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0)
-    );
+    // Filter tickets based on scope
+    let filteredTickets = allTickets;
     
-    const callQueue = allTickets.filter(t => 
-        t.ticketSubStatus?.notifyRoles.includes("R3")
-    );
+    if (scope === "me") {
+        // Only tickets assigned to current user
+        filteredTickets = allTickets.filter(t => t.technician?.id === userId);
+    } else if (scope === "team") {
+        // Tickets relevant to this role (notifyRoles) or assigned to this role
+        filteredTickets = allTickets.filter(t => 
+            t.ticketStatus.notifyRoles.includes(role) ||
+            t.ticketSubStatus?.notifyRoles.includes(role) ||
+            (t.technician && t.ticketStatus.notifyRoles.includes(role))
+        );
+    }
+    // "org" scope shows all tickets (no additional filtering)
+
+    // Categorize tickets based on scope
+    let statusActions, callQueue, despatchQueue, unassignedTickets;
     
-    const despatchQueue = allTickets.filter(t => 
-        t.ticketSubStatus?.notifyRoles.includes("R4")
-    );
-    
-    const unassignedTickets = allTickets.filter(t => 
-        !t.technician && 
-        t.ticketStatus.notifyRoles.includes(role)
-    );
+    if (scope === "me") {
+        // For "me" scope, show all categories for user's assigned tickets
+        statusActions = filteredTickets.filter(t => 
+            !t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0
+        );
+        
+        callQueue = filteredTickets.filter(t => 
+            t.ticketSubStatus?.notifyRoles.includes("R3")
+        );
+        
+        despatchQueue = filteredTickets.filter(t => 
+            t.ticketSubStatus?.notifyRoles.includes("R4")
+        );
+        
+        unassignedTickets = []; // No unassigned tickets in "me" view
+    } else if (scope === "org") {
+        // For "org" scope, show all categories for all tickets
+        statusActions = filteredTickets.filter(t => 
+            !t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0
+        );
+        
+        callQueue = filteredTickets.filter(t => 
+            t.ticketSubStatus?.notifyRoles.includes("R3")
+        );
+        
+        despatchQueue = filteredTickets.filter(t => 
+            t.ticketSubStatus?.notifyRoles.includes("R4")
+        );
+        
+        unassignedTickets = filteredTickets.filter(t => !t.technician);
+    } else {
+        // For "team" scope, use role-based filtering (same as dashboard)
+        statusActions = filteredTickets.filter(t => 
+            t.ticketStatus.notifyRoles.includes(role) && 
+            (!t.ticketSubStatus || t.ticketSubStatus.notifyRoles.length === 0)
+        );
+        
+        callQueue = filteredTickets.filter(t => 
+            t.ticketSubStatus?.notifyRoles.includes("R3")
+        );
+        
+        despatchQueue = filteredTickets.filter(t => 
+            t.ticketSubStatus?.notifyRoles.includes("R4")
+        );
+        
+        unassignedTickets = filteredTickets.filter(t => 
+            !t.technician && 
+            t.ticketStatus.notifyRoles.includes(role)
+        );
+    }
 
     return { statusActions, callQueue, despatchQueue, unassignedTickets };
 }
@@ -178,12 +229,17 @@ function TicketSection({ title, tickets, type, color, bgColor }: {
 }
 
 // ── Main Page Component ───────────────────────────────────────────────────────────
-export default async function AssignmentsPage() {
+export default async function AssignmentsPage({
+    searchParams,
+}: {
+    searchParams: { scope?: "me" | "team" | "org" };
+}) {
     const session = await auth();
     const role = (session?.user as { role?: string })?.role ?? "";
-    const userName = session?.user?.name ?? "there";
+    const userId = Number((session?.user as { id?: string })?.id ?? "0");
+    const scope = searchParams.scope ?? "team"; // Default to team view
     
-    const { statusActions, callQueue, despatchQueue, unassignedTickets } = await fetchAssignmentsForRole(role);
+    const { statusActions, callQueue, despatchQueue, unassignedTickets } = await fetchAssignmentsForRole(role, userId, scope);
 
     const stats = {
         total: statusActions.length + callQueue.length + despatchQueue.length + unassignedTickets.length,
@@ -191,6 +247,15 @@ export default async function AssignmentsPage() {
         callQueue: callQueue.length,
         despatchQueue: despatchQueue.length,
         unassigned: unassignedTickets.length
+    };
+
+    const getScopeLabel = () => {
+        switch (scope) {
+            case "me": return "Assigned to Me";
+            case "team": return "My Team";
+            case "org": return "All Organization";
+            default: return "My Team";
+        }
     };
 
     return (
@@ -203,6 +268,44 @@ export default async function AssignmentsPage() {
                         <h1 className="text-3xl font-bold">Work Inbox</h1>
                         <p className="text-gray-400 text-sm">Process tickets that need your attention</p>
                     </div>
+                </div>
+            </div>
+
+            {/* Scope Filter Tabs */}
+            <div className="bg-white rounded-xl shadow p-1 mb-6">
+                <div className="flex gap-1">
+                    {[
+                        { id: "me", label: "Assigned to Me", description: "Tickets assigned directly to you" },
+                        { id: "team", label: "My Team", description: "Tickets for your role level" },
+                        { id: "org", label: "All Organization", description: "All tickets in the system" },
+                    ].map((tab) => (
+                        <Link
+                            key={tab.id}
+                            href={`?scope=${tab.id}`}
+                            className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
+                                scope === tab.id
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-600 hover:bg-gray-100"
+                            }`}
+                        >
+                            <span className="font-medium">{tab.label}</span>
+                            <span className={`text-xs ${
+                                scope === tab.id ? "text-blue-100" : "text-gray-400"
+                            }`}>
+                                {tab.description}
+                            </span>
+                        </Link>
+                    ))}
+                </div>
+            </div>
+
+            {/* Current Scope Indicator */}
+            <div className="mb-6">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <span>Showing:</span>
+                    <span className="font-medium text-gray-800">{getScopeLabel()}</span>
+                    <span>•</span>
+                    <span>{stats.total} ticket{stats.total !== 1 ? "s" : ""}</span>
                 </div>
             </div>
 
@@ -247,6 +350,36 @@ export default async function AssignmentsPage() {
 
             {/* All Tickets Section */}
             <div>
+                {scope === "me" && (
+                    <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-blue-800">
+                            <UserCheck size={16} className="text-blue-600" />
+                            <span className="text-sm font-medium">Your assigned tickets</span>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-1">Only tickets assigned directly to you are shown</p>
+                    </div>
+                )}
+                
+                {scope === "team" && (
+                    <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-green-800">
+                            <CheckCircle size={16} className="text-green-600" />
+                            <span className="text-sm font-medium">Team tickets ({role})</span>
+                        </div>
+                        <p className="text-xs text-green-600 mt-1">Tickets that need attention from your role level</p>
+                    </div>
+                )}
+                
+                {scope === "org" && (
+                    <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-gray-800">
+                            <AlertCircle size={16} className="text-gray-600" />
+                            <span className="text-sm font-medium">Organization view</span>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">All active tickets in the system</p>
+                    </div>
+                )}
+
                 <TicketSection 
                     title="Status Actions" 
                     tickets={statusActions} 
