@@ -181,8 +181,8 @@ export default async function AssignmentsPage({
                             key={tab.id}
                             href={`?scope=${tab.id}`}
                             className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${scope === tab.id
-                                    ? "bg-blue-600 text-white"
-                                    : "text-gray-600 hover:bg-gray-100"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 hover:bg-gray-100"
                                 }`}
                         >
                             <span className="font-medium">{tab.label}</span>
@@ -210,7 +210,7 @@ export default async function AssignmentsPage({
                 <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-green-800">
                         <Users size={16} className="text-green-600" />
-                        <span className="text-sm font-medium">Team view — {roles.join(", ")}</span>
+                        <span className="text-sm font-medium">Team view — {userRoles.join(", ")}</span>
                     </div>
                     <p className="text-xs text-green-600 mt-1">
                         All active tickets routed to your role, whether assigned to someone or not.

@@ -20,14 +20,14 @@ interface TicketStatus {
 }
 
 const COLOR_OPTIONS = [
-    { label: "Gray",     value: "bg-gray-100 text-gray-600" },
-    { label: "Blue",     value: "bg-blue-100 text-blue-600" },
-    { label: "Yellow",   value: "bg-yellow-100 text-yellow-600" },
-    { label: "Orange",   value: "bg-orange-100 text-orange-600" },
-    { label: "Purple",   value: "bg-purple-100 text-purple-600" },
-    { label: "Green",    value: "bg-green-100 text-green-600" },
-    { label: "Red",      value: "bg-red-100 text-red-600" },
-    { label: "Teal",     value: "bg-teal-100 text-teal-600" },
+    { label: "Gray", value: "bg-gray-100 text-gray-600" },
+    { label: "Blue", value: "bg-blue-100 text-blue-600" },
+    { label: "Yellow", value: "bg-yellow-100 text-yellow-600" },
+    { label: "Orange", value: "bg-orange-100 text-orange-600" },
+    { label: "Purple", value: "bg-purple-100 text-purple-600" },
+    { label: "Green", value: "bg-green-100 text-green-600" },
+    { label: "Red", value: "bg-red-100 text-red-600" },
+    { label: "Teal", value: "bg-teal-100 text-teal-600" },
     { label: "Dim gray", value: "bg-gray-100 text-gray-400" },
 ];
 
@@ -89,7 +89,7 @@ export default function StatusesPage() {
             await axios.patch(`/api/ticket-statuses/${id}`, editValues);
             toast.success("Status updated");
             setEditingId(null);
-            await fetchStatuses();
+            await fetchData();
         } catch {
             toast.error("Failed to update status");
         }
@@ -102,7 +102,7 @@ export default function StatusesPage() {
         try {
             await axios.delete(`/api/ticket-statuses/${id}`);
             toast.success("Status deleted");
-            await fetchStatuses();
+            await fetchData();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
             toast.error(msg ?? "Failed to delete status");
@@ -121,7 +121,7 @@ export default function StatusesPage() {
             await axios.put(`/api/ticket-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
             setTransitionModalId(null);
-            await fetchStatuses();
+            await fetchData();
         } catch {
             toast.error("Failed to save transitions");
         } finally {
@@ -133,9 +133,9 @@ export default function StatusesPage() {
     const openRoles = (s: TicketStatus) => {
         setRolesModalId(s.id);
         setRolesForm({
-            allowedRoles:  s.allowedRoles,
-            notifyRoles:   s.notifyRoles,
-            actionLabel:   s.actionLabel ?? "",
+            allowedRoles: s.allowedRoles,
+            notifyRoles: s.notifyRoles,
+            actionLabel: s.actionLabel ?? "",
             warrantyScope: s.warrantyScope ?? "any",
         });
     };
@@ -152,14 +152,14 @@ export default function StatusesPage() {
         setSavingRoles(true);
         try {
             await axios.patch(`/api/ticket-statuses/${rolesModalId}`, {
-                allowedRoles:  rolesForm.allowedRoles,
-                notifyRoles:   rolesForm.notifyRoles,
-                actionLabel:   rolesForm.actionLabel || null,
+                allowedRoles: rolesForm.allowedRoles,
+                notifyRoles: rolesForm.notifyRoles,
+                actionLabel: rolesForm.actionLabel || null,
                 warrantyScope: rolesForm.warrantyScope,
             });
             toast.success("Role settings saved");
             setRolesModalId(null);
-            await fetchStatuses();
+            await fetchData();
         } catch {
             toast.error("Failed to save role settings");
         } finally {
@@ -177,17 +177,17 @@ export default function StatusesPage() {
                 isTerminal: newStatus.isTerminal,
                 order: statuses.length + 1,
             });
-            toast.success("Status created");
+            toast.success("Status added");
             setAddingNew(false);
             setNewStatus({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
-            await fetchStatuses();
+            await fetchData();
         } catch {
             toast.error("Failed to create status");
         }
     };
 
     const transitionStatus = transitionModalId ? statuses.find((s) => s.id === transitionModalId) : null;
-    const rolesStatus      = rolesModalId      ? statuses.find((s) => s.id === rolesModalId)      : null;
+    const rolesStatus = rolesModalId ? statuses.find((s) => s.id === rolesModalId) : null;
 
     return (
         <div>
@@ -512,7 +512,7 @@ export default function StatusesPage() {
                                 <p className="text-sm font-medium mb-2">Who can move a ticket to this status?</p>
                                 <p className="text-xs text-gray-400 mb-2">Leave all unchecked to allow any role. Admin always bypasses this.</p>
                                 <div className="grid grid-cols-2 gap-1">
-                                    {ALL_ROLES.map((r) => (
+                                    {roles.map((r) => (
                                         <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
                                             <input
                                                 type="checkbox"
@@ -531,7 +531,7 @@ export default function StatusesPage() {
                                 <p className="text-sm font-medium mb-2">Which roles see this as an action item?</p>
                                 <p className="text-xs text-gray-400 mb-2">These roles will see tickets in this status on their dashboard queue.</p>
                                 <div className="grid grid-cols-2 gap-1">
-                                    {ALL_ROLES.map((r) => (
+                                    {roles.map((r) => (
                                         <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
                                             <input
                                                 type="checkbox"

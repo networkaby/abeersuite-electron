@@ -23,6 +23,7 @@ type SidebarUser = {
     name?: string | null;
     role?: string | null;
     roles?: string[] | null;
+    permissions?: string[] | null;
 };
 
 const MAIN_NAV = [
@@ -43,7 +44,7 @@ const SETTINGS_NAV = [
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
-    const permissions = (user as any)?.permissions ?? [];
+    const permissions = user?.permissions ?? [];
     const primaryRole = user?.role ?? "";
     const isAdmin = permissions.includes("admin:bypass");
 
@@ -52,11 +53,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
 
     const visibleMain = MAIN_NAV.filter(
-        (item) => item.permission === null || permissions.includes(item.permission)
+        (item) => item.permission === null || isAdmin || permissions.includes(item.permission)
     );
 
     const visibleSettings = SETTINGS_NAV.filter(
-        (item) => permissions.includes(item.permission)
+        (item) => isAdmin || permissions.includes(item.permission)
     );
 
     const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : primaryRole;
