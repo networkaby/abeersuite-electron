@@ -15,10 +15,15 @@ export async function PATCH(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const sessionUser = session.user as { id?: string; role?: string; roles?: string[] };
+        const sessionUser = session.user as { 
+            id?: string; 
+            role?: string; 
+            roles?: string[]; 
+            permissions?: string[];
+        };
         const userId = Number(sessionUser.id ?? 0);
         const userRoles: string[] = sessionUser.roles ?? (sessionUser.role ? [sessionUser.role] : []);
-        const userRole = sessionUser.role ?? "";
+        const permissions = sessionUser.permissions ?? [];
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -44,9 +49,9 @@ export async function PATCH(
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
         }
 
-        // Auth: Admin (R1) bypasses allowedRoles.
+        // Auth: Admin bypasses allowedRoles.
         // Primary owner and active secondary owners can also update sub-status.
-        const isAdmin = userRole === "R1";
+        const isAdmin = permissions.includes("admin:bypass");
         const isPrimaryOwner = ticket.primaryOwnerId === userId;
 
         if (!isAdmin) {

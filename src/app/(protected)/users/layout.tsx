@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 
 export default async function UsersLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
-    if ((session?.user as { role?: string } | undefined)?.role !== "R1") redirect("/dashboard");
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    if (!permissions.includes("users:manage") && !permissions.includes("admin:bypass")) {
+        redirect("/dashboard");
+    }
     return <>{children}</>;
 }

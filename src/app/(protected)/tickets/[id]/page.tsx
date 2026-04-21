@@ -100,10 +100,10 @@ export default function TicketDetailPage() {
     const [savingRef, setSavingRef] = useState(false);
     const { data: session } = useSession();
     const sessionUser = session?.user as { id?: string; roles?: string[]; permissions?: string[] } | undefined;
-    const userRoles = sessionUser?.roles ?? [];
+    const permissions = sessionUser?.permissions ?? [];
     const currentUserId = Number(sessionUser?.id ?? "0");
-    const canConvertWarranty = userRoles.some((r) => r === "R1" || r === "R2");
-    const canManageOwnership = sessionUser?.permissions?.includes("tickets:manage-participants") ?? userRoles.some(r => r === "R1" || r === "R2");
+    const canConvertWarranty = permissions.includes("warranty:convert") || permissions.includes("admin:bypass");
+    const canManageOwnership = permissions.includes("tickets:manage-participants") || permissions.includes("admin:bypass");
 
     const saveRef = async () => {
         if (!ticket) return;

@@ -38,32 +38,22 @@ interface Props {
     pipeline: PipelineStage[];
     allActiveTickets: TicketRow[];
     unassigned: UnassignedRow[];
+    roles: { id: string; label: string; color: string }[];
 }
 
-const TEAM_TABS = [
-    { key: null, label: "All Teams" },
-    { key: "R2", label: "Technician" },
-    { key: "R3", label: "Front Desk" },
-    { key: "R4", label: "Despatch" },
-] as const;
-
-const TEAM_BADGE: Record<string, string> = {
-    R2: "bg-blue-100 text-blue-700",
-    R3: "bg-green-100 text-green-700",
-    R4: "bg-orange-100 text-orange-700",
-};
-
-const TEAM_LABEL: Record<string, string> = {
-    R2: "Technician",
-    R3: "Front Desk",
-    R4: "Despatch",
-};
-
-export default function TechnicianDashboard({ name, userId, pipeline, allActiveTickets, unassigned }: Props) {
+export default function TechnicianDashboard({ name, userId, pipeline, allActiveTickets, unassigned, roles }: Props) {
     const router = useRouter();
     const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<string | null>("R2");
     const [claiming, setClaiming] = useState<number | null>(null);
+
+    const TEAM_TABS = [
+        { key: null, label: "All Teams" },
+        ...roles.filter(r => r.id !== "R1").map(r => ({ key: r.id, label: r.label })),
+    ];
+
+    const TEAM_BADGE = Object.fromEntries(roles.map(r => [r.id, r.color]));
+    const TEAM_LABEL = Object.fromEntries(roles.map(r => [r.id, r.label]));
 
     const filtered = allActiveTickets.filter(t => {
         if (selectedStageId && t.ticketStatus.id !== selectedStageId) return false;

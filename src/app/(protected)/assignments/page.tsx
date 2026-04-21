@@ -82,23 +82,22 @@ export default async function AssignmentsPage({
         permissions?: string[];
     } | undefined;
 
-    const userId     = Number(sessionUser?.id ?? "0");
-    const roles: string[] = sessionUser?.roles ?? (sessionUser?.role ? [sessionUser.role] : []);
+    const userId = Number(sessionUser?.id ?? "0");
+    const userRoles = sessionUser?.roles ?? (sessionUser?.role ? [sessionUser.role] : []);
     const permissions: string[] = sessionUser?.permissions ?? [];
 
-    const canViewTeam = permissions.includes("assignments:view-team");
-    const canViewOrg  = permissions.includes("assignments:view-org") || permissions.includes("admin:bypass");
+    const canViewTeam = permissions.includes("assignments:view-team") || permissions.includes("admin:bypass");
+    const canViewOrg = permissions.includes("assignments:view-org") || permissions.includes("admin:bypass");
 
     const scope: "me" | "team" | "org" =
         rawScope === "team" && canViewTeam ? "team" :
-        rawScope === "org"  && canViewOrg  ? "org"  : "me";
+            rawScope === "org" && canViewOrg ? "org" : "me";
 
     if (rawScope === "team" && !canViewTeam) redirect("/assignments?scope=me");
-    if (rawScope === "org"  && !canViewOrg)  redirect("/assignments?scope=me");
+    if (rawScope === "org" && !canViewOrg) redirect("/assignments?scope=me");
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
     const raw = await (scope === "me"
-        // "Assigned to Me": tickets where I am primary owner OR named participant
         ? prisma.ticket.findMany({
             where: {
                 ticketStatus: { isTerminal: false },
@@ -110,20 +109,6 @@ export default async function AssignmentsPage({
             orderBy: { updatedAt: "asc" },
             include: TICKET_INCLUDE,
         })
-        : scope === "team"
-        // "My Team": all active tickets routed to any of my roles (assigned or not)
-        ? prisma.ticket.findMany({
-            where: {
-                ticketStatus: { isTerminal: false },
-                OR: [
-                    { ticketStatus: { notifyRoles: { hasSome: roles } } },
-                    { ticketSubStatus: { notifyRoles: { hasSome: roles } } },
-                ],
-            },
-            orderBy: { updatedAt: "asc" },
-            include: TICKET_INCLUDE,
-        })
-        // "Org": every active ticket
         : prisma.ticket.findMany({
             where: { ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "asc" },
@@ -134,38 +119,45 @@ export default async function AssignmentsPage({
     const cards = raw.map(toCard);
 
     // ── Categorise ─────────────────────────────────────────────────────────────
-    let myOwned:    TicketCardData[] = [];
-    let mySecond:   TicketCardData[] = [];
-    let callQueue:  TicketCardData[] = [];
-    let despQueue:  TicketCardData[] = [];
+    let myOwned: TicketCardData[] = [];
+    let mySecond: TicketCardData[] = [];
+    let callQueue: TicketCardData[] = [];
+    let despQueue: TicketCardData[] = [];
     let unassigned: TicketCardData[] = [];
-    let general:    TicketCardData[] = [];
+    let general: TicketCardData[] = [];
 
     if (scope === "me") {
-        myOwned  = cards.filter(t => t.primaryOwner?.id === userId);
+        myOwned = cards.filter(t => t.primaryOwner?.id === userId);
         mySecond = cards.filter(t => t.primaryOwner?.id !== userId);
     } else if (scope === "team") {
-        callQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3"));
-        despQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !callQueue.includes(t));
-        unassigned = cards.filter(t => !t.primaryOwner && !callQueue.includes(t) && !despQueue.includes(t));
-        general    = cards.filter(t => !callQueue.includes(t) && !despQueue.includes(t) && !unassigned.includes(t));
+        // Dynamic: Show any ticket where at least one of MY roles is in notifyRoles
+        const myTeamTickets = cards.filter((_, idx) => {
+            const t = raw[idx];
+            return t.ticketSubStatus?.notifyRoles?.some(r => userRoles.includes(r)) ||
+                t.ticketStatus?.notifyRoles?.some(r => userRoles.includes(r));
+        });
+
+        callQueue = myTeamTickets.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3"));
+        despQueue = myTeamTickets.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !callQueue.includes(t));
+        unassigned = myTeamTickets.filter(t => !t.primaryOwner && !callQueue.includes(t) && !despQueue.includes(t));
+        general = myTeamTickets.filter(t => !callQueue.includes(t) && !despQueue.includes(t) && !unassigned.includes(t));
     } else {
         unassigned = cards.filter(t => !t.primaryOwner);
-        callQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3") && !unassigned.includes(t));
-        despQueue  = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !unassigned.includes(t) && !callQueue.includes(t));
-        general    = cards.filter(t => !unassigned.includes(t) && !callQueue.includes(t) && !despQueue.includes(t));
+        callQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3") && !unassigned.includes(t));
+        despQueue = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4") && !unassigned.includes(t) && !callQueue.includes(t));
+        general = cards.filter(t => !unassigned.includes(t) && !callQueue.includes(t) && !despQueue.includes(t));
     }
 
-    const total     = cards.length;
+    const total = cards.length;
     const callCount = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3")).length;
     const despCount = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4")).length;
-    const escCount  = cards.filter(t => t.escalated).length;
+    const escCount = cards.filter(t => t.escalated).length;
 
     // ── Tabs ───────────────────────────────────────────────────────────────────
     const TABS = [
-        { id: "me",   label: "Assigned to Me",    desc: "Your primary & secondary assignments" },
-        ...(canViewTeam ? [{ id: "team", label: "My Team",         desc: "All tickets for your role" }] : []),
-        ...(canViewOrg  ? [{ id: "org",  label: "All Organisation", desc: "Every active ticket" }] : []),
+        { id: "me", label: "Assigned to Me", desc: "Your primary & secondary assignments" },
+        ...(canViewTeam ? [{ id: "team", label: "My Team", desc: "All tickets for your role" }] : []),
+        ...(canViewOrg ? [{ id: "org", label: "All Organisation", desc: "Every active ticket" }] : []),
     ] as const;
 
     return (
@@ -188,11 +180,10 @@ export default async function AssignmentsPage({
                         <Link
                             key={tab.id}
                             href={`?scope=${tab.id}`}
-                            className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
-                                scope === tab.id
+                            className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${scope === tab.id
                                     ? "bg-blue-600 text-white"
                                     : "text-gray-600 hover:bg-gray-100"
-                            }`}
+                                }`}
                         >
                             <span className="font-medium">{tab.label}</span>
                             <span className={`text-xs ${scope === tab.id ? "text-blue-100" : "text-gray-400"}`}>
@@ -238,27 +229,27 @@ export default async function AssignmentsPage({
 
             {/* Stats */}
             <div className="grid grid-cols-5 gap-4 mb-6">
-                <StatCard label="Total"     value={total}    icon={<AlertCircle size={20} />}  textColor="text-gray-600" />
+                <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-gray-600" />
                 {scope === "me" ? (
                     <>
-                        <StatCard label="Primary"   value={myOwned.length}  icon={<User size={20} />}        textColor="text-blue-600" />
-                        <StatCard label="Secondary" value={mySecond.length} icon={<Users size={20} />}       textColor="text-purple-600" />
-                        <StatCard label="Calls"     value={callCount}       icon={<Phone size={20} />}       textColor="text-red-600" />
-                        <StatCard label="Despatch"  value={despCount}       icon={<Package size={20} />}     textColor="text-orange-600" />
+                        <StatCard label="Primary" value={myOwned.length} icon={<User size={20} />} textColor="text-blue-600" />
+                        <StatCard label="Secondary" value={mySecond.length} icon={<Users size={20} />} textColor="text-purple-600" />
+                        <StatCard label="Calls" value={callCount} icon={<Phone size={20} />} textColor="text-red-600" />
+                        <StatCard label="Despatch" value={despCount} icon={<Package size={20} />} textColor="text-orange-600" />
                     </>
                 ) : scope === "team" ? (
                     <>
-                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />}   textColor="text-amber-600" />
-                        <StatCard label="Calls"      value={callCount}         icon={<Phone size={20} />}       textColor="text-red-600" />
-                        <StatCard label="Despatch"   value={despCount}         icon={<Package size={20} />}     textColor="text-orange-600" />
-                        <StatCard label="Escalated"  value={escCount}          icon={<AlertCircle size={20} />} textColor="text-red-500" />
+                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />} textColor="text-amber-600" />
+                        <StatCard label="Calls" value={callCount} icon={<Phone size={20} />} textColor="text-red-600" />
+                        <StatCard label="Despatch" value={despCount} icon={<Package size={20} />} textColor="text-orange-600" />
+                        <StatCard label="Escalated" value={escCount} icon={<AlertCircle size={20} />} textColor="text-red-500" />
                     </>
                 ) : (
                     <>
-                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />}   textColor="text-blue-600" />
-                        <StatCard label="Calls"      value={callCount}         icon={<Phone size={20} />}       textColor="text-red-600" />
-                        <StatCard label="Despatch"   value={despCount}         icon={<Package size={20} />}     textColor="text-orange-600" />
-                        <StatCard label="Escalated"  value={escCount}          icon={<AlertCircle size={20} />} textColor="text-red-500" />
+                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />} textColor="text-blue-600" />
+                        <StatCard label="Calls" value={callCount} icon={<Phone size={20} />} textColor="text-red-600" />
+                        <StatCard label="Despatch" value={despCount} icon={<Package size={20} />} textColor="text-orange-600" />
+                        <StatCard label="Escalated" value={escCount} icon={<AlertCircle size={20} />} textColor="text-red-500" />
                     </>
                 )}
             </div>

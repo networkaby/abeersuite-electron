@@ -17,7 +17,7 @@ async function fetchPipeline() {
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────────
 async function AdminDashboardServer({ name }: { name: string }) {
-    const [total, open, escalated, ready, actionItems, pipeline, rawTickets] = await Promise.all([
+    const [total, open, escalated, ready, actionItems, pipeline, rawTickets, roles] = await Promise.all([
         prisma.ticket.count(),
         prisma.ticket.count({ where: { ticketStatus: { isTerminal: false } } }),
         prisma.ticket.count({ where: { escalated: true } }),
@@ -35,6 +35,7 @@ async function AdminDashboardServer({ name }: { name: string }) {
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
             },
         }),
+        prisma.role.findMany({ orderBy: { id: "asc" } }),
     ]);
 
     const allActiveTickets = rawTickets.map(t => ({
@@ -50,13 +51,14 @@ async function AdminDashboardServer({ name }: { name: string }) {
             pipeline={pipeline}
             allActiveTickets={allActiveTickets}
             counts={{ total, open, escalated, ready, actionItems }}
+            roles={roles}
         />
     );
 }
 
 // ── Technician Dashboard ───────────────────────────────────────────────────────
 async function TechnicianDashboardServer({ name, userId }: { name: string; userId: number }) {
-    const [pipeline, rawTickets, unassigned] = await Promise.all([
+    const [pipeline, rawTickets, unassigned, roles] = await Promise.all([
         fetchPipeline(),
         prisma.ticket.findMany({
             where: { ticketStatus: { isTerminal: false } },
@@ -80,6 +82,7 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
             },
         }),
+        prisma.role.findMany({ orderBy: { id: "asc" } }),
     ]);
 
     const allActiveTickets = rawTickets.map(t => ({
@@ -96,6 +99,7 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
             pipeline={pipeline}
             allActiveTickets={allActiveTickets}
             unassigned={unassigned}
+            roles={roles}
         />
     );
 }
@@ -413,12 +417,14 @@ async function DespatchDashboard({ name }: { name: string }) {
 // ── Router ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
     const session = await auth();
-    const role = (session?.user as { role?: string })?.role ?? "";
+    const permissions = (session?.user as { permissions?: string[] })?.permissions ?? [];
     const name = session?.user?.name ?? "there";
     const userId = Number((session?.user as { id?: string })?.id ?? "0");
 
-    if (role === "R2") return <TechnicianDashboardServer name={name} userId={userId} />;
-    if (role === "R3") return <FrontDeskDashboard name={name} />;
-    if (role === "R4") return <DespatchDashboard name={name} />;
+    if (permissions.includes("admin:bypass")) return <AdminDashboardServer name={name} />;
+    if (permissions.includes("warranty:convert")) return <TechnicianDashboardServer name={name} userId={userId} />;
+    if (permissions.includes("tickets:create")) return <FrontDeskDashboard name={name} />;
+    if (permissions.includes("tickets:substatus:set")) return <DespatchDashboard name={name} />;
+    
     return <AdminDashboardServer name={name} />;
 }

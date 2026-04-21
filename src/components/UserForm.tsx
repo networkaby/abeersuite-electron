@@ -47,7 +47,7 @@ export default function UserForm({ user, onClose }: Props) {
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { primaryRole: "R2", managerId: "" },
+        defaultValues: { primaryRole: "", managerId: "" },
     });
 
     const primaryRole = watch("primaryRole");
@@ -61,10 +61,17 @@ export default function UserForm({ user, onClose }: Props) {
                     .map((u) => ({ id: (u as { id: number }).id, name: (u as { name: string }).name }))
             ),
         ]).then(([rolesRes, usersRes]) => {
-            setRoles(rolesRes.data);
+            const fetchedRoles = rolesRes.data;
+            setRoles(fetchedRoles);
             setUsers(usersRes);
+            
+            if (!user && fetchedRoles.length > 0) {
+                const defaultRole = fetchedRoles.find(r => r.id === "R2")?.id || fetchedRoles[0].id;
+                setSelectedRoleIds([defaultRole]);
+                setValue("primaryRole", defaultRole);
+            }
         });
-    }, [user?.id]);
+    }, [user?.id, user, setValue]);
 
     useEffect(() => {
         if (user) {
@@ -77,8 +84,6 @@ export default function UserForm({ user, onClose }: Props) {
                 password: "",
                 managerId: user.managerId ? String(user.managerId) : "",
             });
-        } else {
-            setSelectedRoleIds(["R2"]);
         }
     }, [user, reset]);
 

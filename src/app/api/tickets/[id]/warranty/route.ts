@@ -64,12 +64,18 @@ export async function POST(req: Request, { params }: Params) {
             },
         });
 
-        // Notify all R3 users (Front Desk) to call the customer
-        const r3Users = await prisma.user.findMany({
-            where: { role: "R3" },
+        // Notify all Front Desk users to call the customer
+        // We find users who have the role R3 or permissions that match
+        const frontDeskUsers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { role: "R3" },
+                    { userRoles: { some: { roleId: "R3" } } }
+                ]
+            },
             select: { id: true },
         });
-        if (r3Users.length > 0) {
+        if (frontDeskUsers.length > 0) {
             const message = voidReason
                 ? `Ticket #${ticketId}: Warranty voided (${voidReason}). Customer approval needed for paid repair.`
                 : toWarranty
@@ -77,7 +83,7 @@ export async function POST(req: Request, { params }: Params) {
                 : `Ticket #${ticketId}: Converted to non-warranty. Customer notification needed.`;
 
             await prisma.notification.createMany({
-                data: r3Users.map((u) => ({
+                data: frontDeskUsers.map((u) => ({
                     userId: u.id,
                     ticketId,
                     message,

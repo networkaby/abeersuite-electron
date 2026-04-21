@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 
 export default async function ServiceCentersLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
-    const role = (session?.user as { role?: string } | undefined)?.role;
-    if (role !== "R1" && role !== "R2") redirect("/dashboard");
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    if (!permissions.includes("warranty:convert") && !permissions.includes("admin:bypass")) {
+        redirect("/dashboard");
+    }
     return <>{children}</>;
 }

@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
-    const { response } = await requireRole("R1");
+    const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
         const { id } = await params;
@@ -14,14 +14,14 @@ export async function PATCH(req: Request, { params }: Params) {
         const status = await prisma.ticketStatus.update({
             where: { id },
             data: {
-                label:         body.label         !== undefined ? body.label                : undefined,
-                color:         body.color         !== undefined ? body.color                : undefined,
-                order:         body.order         !== undefined ? Number(body.order)        : undefined,
-                isTerminal:    body.isTerminal    !== undefined ? body.isTerminal           : undefined,
-                allowedRoles:  body.allowedRoles  !== undefined ? body.allowedRoles         : undefined,
-                notifyRoles:   body.notifyRoles   !== undefined ? body.notifyRoles          : undefined,
-                actionLabel:   "actionLabel" in body            ? (body.actionLabel ?? null) : undefined,
-                warrantyScope: body.warrantyScope !== undefined ? body.warrantyScope        : undefined,
+                label: body.label !== undefined ? body.label : undefined,
+                color: body.color !== undefined ? body.color : undefined,
+                order: body.order !== undefined ? Number(body.order) : undefined,
+                isTerminal: body.isTerminal !== undefined ? body.isTerminal : undefined,
+                allowedRoles: body.allowedRoles !== undefined ? body.allowedRoles : undefined,
+                notifyRoles: body.notifyRoles !== undefined ? body.notifyRoles : undefined,
+                actionLabel: "actionLabel" in body ? (body.actionLabel ?? null) : undefined,
+                warrantyScope: body.warrantyScope !== undefined ? body.warrantyScope : undefined,
             },
         });
         return NextResponse.json(status);
@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_: Request, { params }: Params) {
-    const { response } = await requireRole("R1");
+    const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
         const { id } = await params;

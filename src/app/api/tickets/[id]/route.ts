@@ -59,14 +59,23 @@ export async function PUT(
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const userId = Number((session.user as { id?: string }).id);
-        const userRole = (session.user as { role?: string }).role ?? "";
+
+        const sessionUser = session.user as {
+            id?: string;
+            role?: string;
+            roles?: string[];
+            permissions?: string[];
+        };
+        const userId = Number(sessionUser.id);
+        const userRoles = sessionUser.roles ?? [sessionUser.role ?? ""];
+        const permissions = sessionUser.permissions ?? [];
+        const isAdmin = permissions.includes("admin:bypass");
 
         const { id } = await params;
         const body = await req.json();
 
         // Enforce allowedRoles on main status change (Admin bypasses)
-        if (body.status && userRole !== "R1") {
+        if (body.status && !isAdmin) {
             const targetStatus = await prisma.ticketStatus.findUnique({
                 where: { id: body.status },
                 select: { allowedRoles: true },
@@ -74,7 +83,7 @@ export async function PUT(
             if (
                 targetStatus &&
                 targetStatus.allowedRoles.length > 0 &&
-                !targetStatus.allowedRoles.includes(userRole)
+                !targetStatus.allowedRoles.some(r => userRoles.includes(r))
             ) {
                 return NextResponse.json({ error: "Your role cannot set this status." }, { status: 403 });
             }
@@ -83,19 +92,19 @@ export async function PUT(
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
             data: {
-                ...(body.status      !== undefined && { status: body.status }),
-                ...(body.priority    !== undefined && { priority: body.priority }),
-                ...(body.notes       !== undefined && { notes: body.notes }),
-                ...(body.accessInfo  !== undefined && { accessInfo: body.accessInfo }),
+                ...(body.status !== undefined && { status: body.status }),
+                ...(body.priority !== undefined && { priority: body.priority }),
+                ...(body.notes !== undefined && { notes: body.notes }),
+                ...(body.accessInfo !== undefined && { accessInfo: body.accessInfo }),
                 ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
                 ...(body.primaryOwnerId !== undefined && { primaryOwnerId: body.primaryOwnerId ? Number(body.primaryOwnerId) : null }),
-                ...(body.escalated   !== undefined && { escalated: body.escalated }),
+                ...(body.escalated !== undefined && { escalated: body.escalated }),
                 ...(body.escalatedAt !== undefined && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
                 ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
                 ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
                 ...(body.externalRef !== undefined && { externalRef: body.externalRef || null }),
                 ...(body.serviceCenterId !== undefined && { serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null }),
-                ...(body.isWarranty  !== undefined && { isWarranty: Boolean(body.isWarranty) }),
+                ...(body.isWarranty !== undefined && { isWarranty: Boolean(body.isWarranty) }),
                 ...(body.warrantyRef !== undefined && { warrantyRef: body.warrantyRef || null }),
                 ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
             },

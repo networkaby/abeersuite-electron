@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 
 // PUT /api/sub-statuses/[id]/transitions
 // Body: { toIds: (string | null)[] }  — null means "entry point" transition
@@ -9,7 +9,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requireRole("R1");
+    const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
         const { id } = await params;

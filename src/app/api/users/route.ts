@@ -36,7 +36,12 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         const password = await bcrypt.hash(body.password, 10);
-        const primaryRole: string = body.role || "R2";
+        
+        let primaryRole: string = body.role;
+        if (!primaryRole) {
+            const firstRole = await prisma.role.findFirst({ orderBy: { id: "asc" } });
+            primaryRole = firstRole?.id || "R2";
+        }
 
         const user = await prisma.$transaction(async (tx) => {
             const created = await tx.user.create({

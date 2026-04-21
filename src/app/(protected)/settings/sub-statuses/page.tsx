@@ -52,34 +52,28 @@ const BLANK_FORM: FormValues = {
 
 const GROUP_OPTIONS = [
     { value: "customer_comm", label: "Customer Communication" },
-    { value: "approval",      label: "Quote & Approval" },
-    { value: "parts",         label: "Parts" },
-    { value: "qc",            label: "Quality Check" },
-    { value: "escalated",     label: "Escalated" },
-    { value: "ready",         label: "Ready for Collection" },
-    { value: "no_fix",        label: "No Fix" },
+    { value: "approval", label: "Quote & Approval" },
+    { value: "parts", label: "Parts" },
+    { value: "qc", label: "Quality Check" },
+    { value: "escalated", label: "Escalated" },
+    { value: "ready", label: "Ready for Collection" },
+    { value: "no_fix", label: "No Fix" },
 ];
 
 const GROUP_LABELS = Object.fromEntries(GROUP_OPTIONS.map((g) => [g.value, g.label]));
 
 const COLOR_OPTIONS = [
-    { label: "Gray",   value: "bg-gray-100 text-gray-600" },
-    { label: "Blue",   value: "bg-blue-100 text-blue-600" },
+    { label: "Gray", value: "bg-gray-100 text-gray-600" },
+    { label: "Blue", value: "bg-blue-100 text-blue-600" },
     { label: "Yellow", value: "bg-yellow-100 text-yellow-700" },
     { label: "Orange", value: "bg-orange-100 text-orange-600" },
     { label: "Purple", value: "bg-purple-100 text-purple-600" },
-    { label: "Green",  value: "bg-green-100 text-green-700" },
-    { label: "Red",    value: "bg-red-100 text-red-600" },
-    { label: "Teal",   value: "bg-teal-100 text-teal-600" },
+    { label: "Green", value: "bg-green-100 text-green-700" },
+    { label: "Red", value: "bg-red-100 text-red-600" },
+    { label: "Teal", value: "bg-teal-100 text-teal-600" },
 ];
 
-const ALL_ROLES = [
-    { id: "R1", label: "Admin" },
-    { id: "R2", label: "Technician" },
-    { id: "R3", label: "Front Desk" },
-    { id: "R4", label: "Despatch" },
-];
-const ROLE_LABELS = Object.fromEntries(ALL_ROLES.map((r) => [r.id, r.label]));
+
 
 // ── Form modal ────────────────────────────────────────────────────────────────
 function SubStatusFormModal({
@@ -90,6 +84,7 @@ function SubStatusFormModal({
     onClose,
     saving,
     statuses,
+    roles,
 }: {
     title: string;
     form: FormValues;
@@ -98,6 +93,7 @@ function SubStatusFormModal({
     onClose: () => void;
     saving: boolean;
     statuses: StatusItem[];
+    roles: { id: string; label: string }[];
 }) {
     const toggle = (field: "applicableStatusIds" | "allowedRoles" | "notifyRoles", val: string) =>
         setForm({
@@ -176,7 +172,7 @@ function SubStatusFormModal({
                                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">— none —</option>
-                                {ALL_ROLES.map((r) => (
+                                {roles.map((r) => (
                                     <option key={r.id} value={r.id}>{r.label}</option>
                                 ))}
                             </select>
@@ -270,7 +266,7 @@ function SubStatusFormModal({
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-medium mb-2">Who can set it</label>
-                            {ALL_ROLES.map((r) => (
+                            {roles.map((r) => (
                                 <label key={r.id} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -284,7 +280,7 @@ function SubStatusFormModal({
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-2">Notifies</label>
-                            {ALL_ROLES.map((r) => (
+                            {roles.map((r) => (
                                 <label key={r.id} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -318,7 +314,7 @@ function SubStatusFormModal({
                         disabled={saving || !form.label.trim()}
                         className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
                     >
-                        {saving ? "Saving..." : "Save"}
+                        {saving ? "Saving…" : "Save"}
                     </button>
                 </div>
             </div>
@@ -330,6 +326,7 @@ function SubStatusFormModal({
 export default function SubStatusesPage() {
     const [statuses, setStatuses] = useState<StatusItem[]>([]);
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
+    const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Create modal
@@ -352,14 +349,16 @@ export default function SubStatusesPage() {
 
     const loadAll = async () => {
         try {
-            const [statusRes, subRes] = await Promise.all([
+            const [statusRes, subRes, roleRes] = await Promise.all([
                 axios.get("/api/ticket-statuses"),
                 axios.get("/api/sub-statuses"),
+                axios.get("/api/roles"),
             ]);
             setStatuses(
                 (statusRes.data as StatusItem[]).sort((a, b) => a.order - b.order)
             );
             setSubStatuses(subRes.data);
+            setRoles(roleRes.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -400,9 +399,9 @@ export default function SubStatusesPage() {
             allowedRoles: ss.allowedRoles,
             notifyRoles: ss.notifyRoles,
             triggerMap: (ss.triggerMap ?? {}) as Record<string, string>,
-            actionLabel:       ss.actionLabel ?? "",
-            warrantyScope:     (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
-            handoffRole:       ss.handoffRole ?? "",
+            actionLabel: ss.actionLabel ?? "",
+            warrantyScope: (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
+            handoffRole: ss.handoffRole ?? "",
             autoRevertOnClear: ss.autoRevertOnClear ?? true,
         });
         setEditId(ss.id);
@@ -420,10 +419,10 @@ export default function SubStatusesPage() {
                 applicableStatusIds: editForm.applicableStatusIds,
                 allowedRoles: editForm.allowedRoles,
                 notifyRoles: editForm.notifyRoles,
-                triggerMap:    editForm.triggerMap,
-                actionLabel:       editForm.actionLabel || null,
-                warrantyScope:     editForm.warrantyScope,
-                handoffRole:       editForm.handoffRole || null,
+                triggerMap: editForm.triggerMap,
+                actionLabel: editForm.actionLabel || null,
+                warrantyScope: editForm.warrantyScope,
+                handoffRole: editForm.handoffRole || null,
                 autoRevertOnClear: editForm.autoRevertOnClear,
             });
             toast.success("Sub-status updated");
@@ -479,13 +478,14 @@ export default function SubStatusesPage() {
     const modalSubStatus = subStatuses.find((s) => s.id === transitionModalId);
     const transitionCandidates = modalSubStatus
         ? subStatuses.filter((s) =>
-              s.id !== modalSubStatus.id &&
-              s.applicableStatusIds.some((sid) => modalSubStatus.applicableStatusIds.includes(sid))
-          )
+            s.id !== modalSubStatus.id &&
+            s.applicableStatusIds.some((sid) => modalSubStatus.applicableStatusIds.includes(sid))
+        )
         : [];
 
     // ── Parent-wise grouping (uses fetched statuses) ──
     const statusLabelMap = Object.fromEntries(statuses.map((s) => [s.id, s.label]));
+    const roleLabelMap = Object.fromEntries(roles.map((r) => [r.id, r.label]));
 
     const byParent = statuses.map((status) => ({
         status,
@@ -568,13 +568,13 @@ export default function SubStatusesPage() {
                                                 {ss.allowedRoles.length > 0 && (
                                                     <span>
                                                         <span className="font-medium text-gray-600">Set by:</span>{" "}
-                                                        {ss.allowedRoles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
+                                                        {ss.allowedRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
                                                     </span>
                                                 )}
                                                 {ss.notifyRoles.length > 0 && (
                                                     <span>
                                                         <span className="font-medium text-gray-600">Notifies:</span>{" "}
-                                                        {ss.notifyRoles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
+                                                        {ss.notifyRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
                                                     </span>
                                                 )}
                                             </div>
@@ -646,6 +646,7 @@ export default function SubStatusesPage() {
                     onClose={() => setShowCreate(false)}
                     saving={creating}
                     statuses={statuses}
+                    roles={roles}
                 />
             )}
 
@@ -658,6 +659,7 @@ export default function SubStatusesPage() {
                     onClose={() => setEditId(null)}
                     saving={editing}
                     statuses={statuses}
+                    roles={roles}
                 />
             )}
 

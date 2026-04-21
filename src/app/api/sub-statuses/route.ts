@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 
 // GET /api/sub-statuses?statusId=S3
 export async function GET(req: Request) {
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 
 // POST /api/sub-statuses
 export async function POST(req: Request) {
-    const { response } = await requireRole("R1");
+    const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
         const body = await req.json();

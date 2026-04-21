@@ -31,15 +31,9 @@ const COLOR_OPTIONS = [
     { label: "Dim gray", value: "bg-gray-100 text-gray-400" },
 ];
 
-const ALL_ROLES = [
-    { id: "R1", label: "Admin" },
-    { id: "R2", label: "Technician" },
-    { id: "R3", label: "Front Desk" },
-    { id: "R4", label: "Despatch" },
-];
-
 export default function StatusesPage() {
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
+    const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Inline edit
@@ -67,18 +61,22 @@ export default function StatusesPage() {
     const [addingNew, setAddingNew] = useState(false);
     const [newStatus, setNewStatus] = useState({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
 
-    const fetchStatuses = async () => {
+    const fetchData = async () => {
         try {
-            const res = await axios.get("/api/ticket-statuses");
-            setStatuses(res.data);
+            const [sRes, rRes] = await Promise.all([
+                axios.get("/api/ticket-statuses"),
+                axios.get("/api/roles")
+            ]);
+            setStatuses(sRes.data);
+            setRoles(rRes.data);
         } catch {
-            toast.error("Failed to load statuses");
+            toast.error("Failed to load data");
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => { fetchStatuses(); }, []);
+    useEffect(() => { fetchData(); }, []);
 
     // ── Inline edit ──
     const startEdit = (s: TicketStatus) => {
@@ -314,7 +312,7 @@ export default function StatusesPage() {
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1">
                                                         {s.allowedRoles.map((r) => (
-                                                            <span key={r} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{ALL_ROLES.find((x) => x.id === r)?.label ?? r}</span>
+                                                            <span key={r} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{roles.find((x) => x.id === r)?.label ?? r}</span>
                                                         ))}
                                                     </div>
                                                 )}
@@ -325,7 +323,7 @@ export default function StatusesPage() {
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1">
                                                         {s.notifyRoles.map((r) => (
-                                                            <span key={r} className="px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-xs">{ALL_ROLES.find((x) => x.id === r)?.label ?? r}</span>
+                                                            <span key={r} className="px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-xs">{roles.find((x) => x.id === r)?.label ?? r}</span>
                                                         ))}
                                                     </div>
                                                 )}

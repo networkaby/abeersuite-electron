@@ -26,32 +26,37 @@ type SidebarUser = {
 };
 
 const MAIN_NAV = [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: null },
-    { label: "Customers", href: "/customers", icon: Users, roles: null },
-    { label: "Tickets", href: "/tickets", icon: Ticket, roles: null },
-    { label: "Assignments", href: "/assignments", icon: ClipboardList, roles: null },
-    { label: "Service Centres", href: "/service-centers", icon: Building2, roles: ["R1", "R2"] },
-    { label: "Users", href: "/users", icon: UserCog, roles: ["R1"] },
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: null },
+    { label: "Customers", href: "/customers", icon: Users, permission: null },
+    { label: "Tickets", href: "/tickets", icon: Ticket, permission: null },
+    { label: "Assignments", href: "/assignments", icon: ClipboardList, permission: null },
+    { label: "Service Centres", href: "/service-centers", icon: Building2, permission: "warranty:convert" },
+    { label: "Users", href: "/users", icon: UserCog, permission: "users:manage" },
 ] as const;
 
 const SETTINGS_NAV = [
-    { label: "Statuses", href: "/settings/statuses", icon: Settings },
-    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings },
-    { label: "Roles", href: "/settings/roles", icon: ShieldCheck },
+    { label: "Statuses", href: "/settings/statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Roles", href: "/settings/roles", icon: ShieldCheck, permission: "roles:manage" },
 ] as const;
 
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
+    const permissions = (user as any)?.permissions ?? [];
     const primaryRole = user?.role ?? "";
-    const isAdmin = userRoles.includes("R1");
+    const isAdmin = permissions.includes("admin:bypass");
 
     const [collapsed, setCollapsed] = useState(false);
     // Auto-open settings section if currently on a settings page
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
 
     const visibleMain = MAIN_NAV.filter(
-        (item) => item.roles === null || item.roles.some((r) => userRoles.includes(r))
+        (item) => item.permission === null || permissions.includes(item.permission)
+    );
+
+    const visibleSettings = SETTINGS_NAV.filter(
+        (item) => permissions.includes(item.permission)
     );
 
     const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : primaryRole;
@@ -96,8 +101,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     </Link>
                 ))}
 
-                {/* Settings collapsible — admin only */}
-                {isAdmin && (
+                {/* Settings collapsible */}
+                {visibleSettings.length > 0 && (
                     <div className="pt-1">
                         <button
                             onClick={() => !collapsed && setSettingsOpen(o => !o)}
@@ -118,7 +123,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                         {settingsOpen && !collapsed && (
                             <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
-                                {SETTINGS_NAV.map(({ label, href, icon: Icon }) => (
+                                {visibleSettings.map(({ label, href, icon: Icon }) => (
                                     <Link key={href} href={href} className={linkClass(href)}>
                                         <Icon size={16} className="shrink-0" />
                                         <span className="truncate">{label}</span>
