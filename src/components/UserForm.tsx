@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
@@ -14,6 +14,7 @@ type UserOption = { id: number; name: string };
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email"),
+    roleIds: z.array(z.string()).min(1, "At least one role is required"),
     primaryRole: z.string().min(1, "Primary role is required"),
     password: z.string().optional(),
     managerId: z.string().optional(),
@@ -36,21 +37,21 @@ interface Props {
 export default function UserForm({ user, onClose }: Props) {
     const [roles, setRoles] = useState<Role[]>([]);
     const [users, setUsers] = useState<UserOption[]>([]);
-    const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
 
     const {
         register,
         handleSubmit,
         reset,
-        watch,
+        control,
         setValue,
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { primaryRole: "", managerId: "" },
+        defaultValues: { roleIds: [], primaryRole: "", managerId: "" },
     });
 
-    const primaryRole = watch("primaryRole");
+    const selectedRoleIds = useWatch({ control, name: "roleIds" }) ?? [];
+    const primaryRole = useWatch({ control, name: "primaryRole" });
 
     useEffect(() => {
         Promise.all([
@@ -67,7 +68,7 @@ export default function UserForm({ user, onClose }: Props) {
             
             if (!user && fetchedRoles.length > 0) {
                 const defaultRole = fetchedRoles.find(r => r.id === "R2")?.id || fetchedRoles[0].id;
-                setSelectedRoleIds([defaultRole]);
+                setValue("roleIds", [defaultRole]);
                 setValue("primaryRole", defaultRole);
             }
         });
@@ -76,10 +77,10 @@ export default function UserForm({ user, onClose }: Props) {
     useEffect(() => {
         if (user) {
             const existingRoleIds = user.userRoles?.map((r) => r.roleId) ?? [user.role];
-            setSelectedRoleIds(existingRoleIds);
             reset({
                 name: user.name,
                 email: user.email,
+                roleIds: existingRoleIds,
                 primaryRole: user.role,
                 password: "",
                 managerId: user.managerId ? String(user.managerId) : "",
@@ -87,21 +88,18 @@ export default function UserForm({ user, onClose }: Props) {
         }
     }, [user, reset]);
 
-    // Ensure primaryRole stays within selectedRoleIds
-    useEffect(() => {
-        if (selectedRoleIds.length > 0 && !selectedRoleIds.includes(primaryRole)) {
-            setValue("primaryRole", selectedRoleIds[0]);
-        }
-    }, [selectedRoleIds, primaryRole, setValue]);
-
     const toggleRole = (roleId: string) => {
-        setSelectedRoleIds((prev) => {
-            if (prev.includes(roleId)) {
-                if (prev.length === 1) return prev; // must keep at least one
-                return prev.filter((r) => r !== roleId);
-            }
-            return [...prev, roleId];
-        });
+        const nextRoleIds = selectedRoleIds.includes(roleId)
+            ? selectedRoleIds.length === 1
+                ? selectedRoleIds // must keep at least one
+                : selectedRoleIds.filter((id) => id !== roleId)
+            : [...selectedRoleIds, roleId];
+
+        setValue("roleIds", nextRoleIds, { shouldDirty: true, shouldValidate: true });
+
+        if (!nextRoleIds.includes(primaryRole)) {
+            setValue("primaryRole", nextRoleIds[0], { shouldDirty: true, shouldValidate: true });
+        }
     };
 
     const onSubmit = async (data: FormData) => {

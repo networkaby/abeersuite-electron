@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
-import { Phone, Package, AlertCircle, CheckCircle, ArrowRight } from "lucide-react";
+import { Phone, Package, AlertCircle, CheckCircle } from "lucide-react";
 import { timeAgo } from "@/lib/time-ago";
 import TechnicianDashboard from "@/components/dashboard/TechnicianDashboard";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";

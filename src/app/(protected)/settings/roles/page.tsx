@@ -110,12 +110,16 @@ export default function RolesSettingsPage() {
     const toggleModule = (module: string) => {
         setCollapsedModules(prev => {
             const next = new Set(prev);
-            next.has(module) ? next.delete(module) : next.add(module);
+            if (next.has(module)) {
+                next.delete(module);
+            } else {
+                next.add(module);
+            }
             return next;
         });
     };
 
-    const selectAllInModule = (module: string, perms: Permission[]) => {
+    const selectAllInModule = (perms: Permission[]) => {
         setSelectedPerms(prev => {
             const next = new Set(prev);
             perms.forEach(p => next.add(p.id));
@@ -123,7 +127,7 @@ export default function RolesSettingsPage() {
         });
     };
 
-    const deselectAllInModule = (module: string, perms: Permission[]) => {
+    const deselectAllInModule = (perms: Permission[]) => {
         setSelectedPerms(prev => {
             const next = new Set(prev);
             perms.forEach(p => next.delete(p.id));
@@ -346,7 +350,13 @@ export default function RolesSettingsPage() {
                                                     <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-1">{module}</span>
                                                     <span className="text-xs text-gray-500">{moduleSelected}/{moduleTotal}</span>
                                                     <button
-                                                        onClick={() => isAllSelected ? deselectAllInModule(module, perms) : selectAllInModule(module, perms)}
+                                                        onClick={() => {
+                                                            if (isAllSelected) {
+                                                                deselectAllInModule(perms);
+                                                            } else {
+                                                                selectAllInModule(perms);
+                                                            }
+                                                        }}
                                                         className="text-xs px-2 py-1 rounded hover:bg-gray-200 text-gray-600 ml-2"
                                                         title={isAllSelected ? "Deselect all in module" : "Select all in module"}
                                                     >
@@ -371,7 +381,11 @@ export default function RolesSettingsPage() {
                                                                             e.preventDefault();
                                                                             setSelectedPerms((prev) => {
                                                                                 const next = new Set(prev);
-                                                                                isSelected ? next.delete(p.id) : next.add(p.id);
+                                                                                if (isSelected) {
+                                                                                    next.delete(p.id);
+                                                                                } else {
+                                                                                    next.add(p.id);
+                                                                                }
                                                                                 return next;
                                                                             });
                                                                         }}
