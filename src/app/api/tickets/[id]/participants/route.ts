@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { auth } from "@/auth";
+import { z } from "zod";
+
+const participantSchema = z.object({
+    userId: z.coerce.number().int().positive("userId required"),
+    addedForRole: z.string().trim().optional(),
+    addedBySubStatusId: z.string().trim().optional(),
+});
 
 export async function GET(
     _: Request,
@@ -35,9 +42,11 @@ export async function POST(
 
     const { id } = await params;
     const ticketId = Number(id);
-    const body: { userId: number; addedForRole?: string; addedBySubStatusId?: string } = await req.json();
-
-    if (!body.userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+    const parsed = participantSchema.safeParse(await req.json());
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid participant payload" }, { status: 400 });
+    }
+    const body = parsed.data;
 
     try {
         const ticket = await prisma.ticket.findUnique({

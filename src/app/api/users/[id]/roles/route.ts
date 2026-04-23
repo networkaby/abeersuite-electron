@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const userRolesSchema = z.object({
+    roleIds: z.array(z.string().trim().min(1)).min(1, "At least one role is required"),
+    primaryRoleId: z.string().trim().min(1, "Primary role is required"),
+});
 
 export async function GET(
     _: Request,
@@ -30,11 +36,11 @@ export async function PUT(
     try {
         const { id } = await params;
         const userId = Number(id);
-        const { roleIds, primaryRoleId }: { roleIds: string[]; primaryRoleId: string } = await req.json();
-
-        if (!roleIds.length || !primaryRoleId) {
-            return NextResponse.json({ error: "roleIds and primaryRoleId are required" }, { status: 400 });
+        const parsed = userRolesSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user roles payload" }, { status: 400 });
         }
+        const { roleIds, primaryRoleId } = parsed.data;
         if (!roleIds.includes(primaryRoleId)) {
             return NextResponse.json({ error: "primaryRoleId must be in roleIds" }, { status: 400 });
         }

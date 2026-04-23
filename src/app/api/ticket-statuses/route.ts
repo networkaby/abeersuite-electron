@@ -1,6 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const ticketStatusSchema = z.object({
+    label: z.string().trim().min(1, "Label is required"),
+    color: z.string().trim().min(1).optional(),
+    order: z.coerce.number().int().nonnegative().optional(),
+    isTerminal: z.boolean().optional(),
+    allowedRoles: z.array(z.string().trim()).optional(),
+    notifyRoles: z.array(z.string().trim()).optional(),
+    actionLabel: z.string().optional().nullable(),
+    warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
+});
 
 export async function GET() {
     const { response } = await requireAuth();
@@ -26,7 +38,11 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
-        const body = await req.json();
+        const parsed = ticketStatusSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid status payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         // Generate next opaque ID: find highest numeric suffix among existing S* IDs
         const existing = await prisma.ticketStatus.findMany({ select: { id: true } });
@@ -46,6 +62,7 @@ export async function POST(req: Request) {
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles:  body.notifyRoles  ?? [],
                 actionLabel:  body.actionLabel  ?? null,
+                warrantyScope: body.warrantyScope ?? "any",
             },
         });
         return NextResponse.json(status, { status: 201 });

@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission, type ResolvedUser } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const userOverridesSchema = z.object({
+    overrides: z.array(z.object({
+        permissionId: z.string().trim().min(1),
+        granted: z.boolean().nullable(),
+    })),
+});
 
 export async function GET(
     _: Request,
@@ -56,7 +64,11 @@ export async function PUT(
 
         // overrides: array of { permissionId, granted: boolean | null }
         // null = remove override (revert to role default)
-        const { overrides }: { overrides: { permissionId: string; granted: boolean | null }[] } = await req.json();
+        const parsed = userOverridesSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user permissions payload" }, { status: 400 });
+        }
+        const { overrides } = parsed.data;
 
         for (const { permissionId, granted } of overrides) {
             if (granted === null) {

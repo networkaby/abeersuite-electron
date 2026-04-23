@@ -1,8 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
+
+const warrantySchema = z.object({
+    isWarranty: z.boolean().optional(),
+    warrantyStatus: z.string().trim().optional(),
+    voidReason: z.string().trim().optional().nullable(),
+    warrantyRef: z.string().trim().optional().nullable(),
+    purchaseDate: z.string().trim().optional().nullable(),
+    note: z.string().optional().nullable(),
+});
 
 export async function POST(req: Request, { params }: Params) {
     const { user, response } = await requirePermission("warranty:convert");
@@ -11,7 +21,11 @@ export async function POST(req: Request, { params }: Params) {
     try {
         const { id } = await params;
         const ticketId = Number(id);
-        const body = await req.json();
+        const parsed = warrantySchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid warranty payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },

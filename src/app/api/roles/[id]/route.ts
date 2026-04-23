@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const rolePatchSchema = z.object({
+    label: z.string().trim().min(1).optional(),
+    color: z.string().trim().min(1).optional(),
+});
 
 export async function PATCH(
     req: Request,
@@ -10,7 +16,11 @@ export async function PATCH(
     if (response) return response;
     try {
         const { id } = await params;
-        const body = await req.json();
+        const parsed = rolePatchSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid role payload" }, { status: 400 });
+        }
+        const body = parsed.data;
         const role = await prisma.role.update({
             where: { id },
             data: {

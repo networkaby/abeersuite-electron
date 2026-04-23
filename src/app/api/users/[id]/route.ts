@@ -2,6 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const userUpdateSchema = z.object({
+    name: z.string().trim().min(1, "Name is required"),
+    email: z.string().trim().email("Valid email is required"),
+    role: z.string().trim().min(1, "Role is required"),
+    managerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+});
 
 export async function PUT(
     req: Request,
@@ -11,7 +20,11 @@ export async function PUT(
     if (response) return response;
     try {
         const { id } = await params;
-        const body = await req.json();
+        const parsed = userUpdateSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         const primaryRole: string = body.role as string;
 

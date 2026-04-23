@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { z } from "zod";
+
+const subStatusUpdateSchema = z.object({
+    subStatusId: z.string().trim().min(1, "Sub-status is required"),
+    note: z.string().optional(),
+    visibility: z.enum(["internal", "public"]).optional(),
+});
 
 // PATCH /api/tickets/[id]/sub-status
 // Body: { subStatusId: string, note?: string, visibility?: string }
@@ -27,12 +34,11 @@ export async function PATCH(
 
         const { id } = await params;
         const ticketId = Number(id);
-        const body = await req.json();
-        const { subStatusId, note, visibility } = body as {
-            subStatusId: string;
-            note?: string;
-            visibility?: "internal" | "public";
-        };
+        const parsed = subStatusUpdateSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid sub-status payload" }, { status: 400 });
+        }
+        const { subStatusId, note, visibility } = parsed.data;
 
         const subStatus = await prisma.ticketSubStatus.findUnique({
             where: { id: subStatusId },

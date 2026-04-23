@@ -36,7 +36,7 @@ export async function GET(req: Request) {
                 if (seen.has(ss.id)) return false;
                 seen.add(ss.id);
                 if (!ss.applicableStatusIds.includes(statusId)) return false;
-                if (!isAdmin(user) && ss.allowedRoles.length > 0 && !ss.allowedRoles.includes(user.primaryRole)) return false;
+                if (!isAdmin(user) && ss.allowedRoles.length > 0 && !ss.allowedRoles.some((role) => user.roles.includes(role))) return false;
                 const scope = ss.warrantyScope ?? "any";
                 if (scope !== "any") {
                     if (scope === "warranty_only" && !isWarranty) return false;

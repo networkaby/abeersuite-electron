@@ -1,15 +1,31 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
+
+const ticketStatusPatchSchema = z.object({
+    label: z.string().trim().min(1).optional(),
+    color: z.string().trim().min(1).optional(),
+    order: z.coerce.number().int().nonnegative().optional(),
+    isTerminal: z.boolean().optional(),
+    allowedRoles: z.array(z.string().trim()).optional(),
+    notifyRoles: z.array(z.string().trim()).optional(),
+    actionLabel: z.string().optional().nullable(),
+    warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
+});
 
 export async function PATCH(req: Request, { params }: Params) {
     const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
         const { id } = await params;
-        const body = await req.json();
+        const parsed = ticketStatusPatchSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid status payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         const status = await prisma.ticketStatus.update({
             where: { id },

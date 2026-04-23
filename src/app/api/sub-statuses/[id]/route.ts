@@ -1,6 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const subStatusPatchSchema = z.object({
+    label: z.string().trim().min(1).optional(),
+    color: z.string().trim().min(1).optional(),
+    group: z.string().trim().min(1).optional(),
+    order: z.coerce.number().int().nonnegative().optional(),
+    applicableStatusIds: z.array(z.string().trim()).optional(),
+    allowedRoles: z.array(z.string().trim()).optional(),
+    notifyRoles: z.array(z.string().trim()).optional(),
+    triggerMap: z.record(z.string(), z.string()).optional(),
+    actionLabel: z.string().optional().nullable(),
+    warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
+    handoffRole: z.string().optional().nullable(),
+    autoRevertOnClear: z.boolean().optional(),
+});
 
 // DELETE /api/sub-statuses/[id]
 export async function DELETE(
@@ -37,7 +53,11 @@ export async function PATCH(
     if (response) return response;
     try {
         const { id } = await params;
-        const body = await req.json();
+        const parsed = subStatusPatchSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid sub-status payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         const updated = await prisma.ticketSubStatus.update({
             where: { id },

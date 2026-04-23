@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission, isAdmin } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const assignSchema = z.object({
+    action: z.enum(["claim", "pass", "reject"]),
+    toUserId: z.coerce.number().int().positive().optional(),
+});
 
 export async function POST(
     req: Request,
@@ -11,13 +17,13 @@ export async function POST(
 
     const { id } = await params;
     const ticketId = Number(id);
-    const body: { action: "claim" | "pass" | "reject"; toUserId?: number } = await req.json();
+    const parsed = assignSchema.safeParse(await req.json());
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid assignment payload" }, { status: 400 });
+    }
+    const body = parsed.data;
 
     const { action, toUserId } = body;
-
-    if (!["claim", "pass", "reject"].includes(action)) {
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-    }
 
     try {
         const ticket = await prisma.ticket.findUnique({
@@ -54,17 +60,17 @@ export async function POST(
             } catch {
                 return NextResponse.json({ error: "Ticket was claimed by someone else" }, { status: 409 });
             }
+            const updated = await prisma.ticket.findUnique({
+                where: { id: ticketId },
+                select: { status: true, primaryOwnerId: true, primaryOwner: { select: { id: true, name: true } } },
+            });
             await prisma.ticketLog.create({
                 data: {
                     ticketId,
-                    status: ticket.ticketStatus ? (await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } }))!.status : "S1",
-                    note: `Claimed by ${user.id}`,
+                    status: updated?.status ?? "S1",
+                    note: `Claimed by ${updated?.primaryOwner?.name ?? `user ${user.id}`}`,
                     userId: user.id,
                 },
-            });
-            const updated = await prisma.ticket.findUnique({
-                where: { id: ticketId },
-                select: { primaryOwnerId: true, primaryOwner: { select: { id: true, name: true } } },
             });
             return NextResponse.json({ ok: true, primaryOwnerId: updated?.primaryOwnerId, primaryOwner: updated?.primaryOwner });
         }
