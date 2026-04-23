@@ -157,7 +157,7 @@ export default async function ReceiptPage({
                         <div className="divider" />
                         <div className="row">
                             <span className="section-title">Estimated Cost</span>
-                            <span className="bold large">৳ {ticket.estimatedCost}</span>
+                            <span className="bold large">₹ {ticket.estimatedCost}</span>
                         </div>
                     </>
                 )}

@@ -1,7 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const createTicketSchema = z.object({
+    customerId: z.coerce.number().int().positive(),
+    deviceType: z.string().trim().min(1, "Device type is required"),
+    brand: z.string().trim().min(1, "Brand is required"),
+    model: z.string().trim().min(1, "Model is required"),
+    problem: z.string().trim().min(1, "Problem is required"),
+    priority: z.string().trim().optional(),
+    notes: z.string().trim().optional().or(z.literal("")),
+    accessInfo: z.string().trim().optional().or(z.literal("")),
+    estimatedCost: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().nonnegative().optional()
+    ),
+    primaryOwnerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.undefined()]),
+    isWarranty: z.boolean().optional(),
+    warrantyRef: z.string().trim().optional().or(z.literal("")),
+    purchaseDate: z.string().trim().optional().or(z.literal("")),
+});
 
 export async function GET() {
+    const { response } = await requireAuth();
+    if (response) return response;
     try {
         const tickets = await prisma.ticket.findMany({
             orderBy: { createdAt: "desc" },
@@ -24,8 +47,14 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    const { user, response } = await requirePermission("tickets:create");
+    if (response) return response;
     try {
-        const body = await req.json();
+        const parsed = createTicketSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid ticket payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         // Create device first
         const device = await prisma.device.create({
@@ -64,7 +93,7 @@ export async function POST(req: Request) {
                 ticketId: ticket.id,
                 status: "S1",
                 note: "Ticket created",
-                userId: Number(body.createdBy),
+                userId: user.id,
             },
         });
 

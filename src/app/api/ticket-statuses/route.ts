@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requireAuth, requirePermission } from "@/lib/auth-guard";
 
 export async function GET() {
+    const { response } = await requireAuth();
+    if (response) return response;
     try {
         const statuses = await prisma.ticketStatus.findMany({
             orderBy: { order: "asc" },

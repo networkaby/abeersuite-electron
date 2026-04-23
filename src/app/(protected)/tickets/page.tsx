@@ -119,7 +119,7 @@ export default function TicketsPage() {
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
 
         setFiltered(result);
-    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo]);
+    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
 
     const clearFilters = () => {
         setSearch("");

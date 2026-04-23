@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requireAuth, requirePermission } from "@/lib/auth-guard";
 
 // GET /api/sub-statuses?statusId=S3
 export async function GET(req: Request) {
+    const { response } = await requireAuth();
+    if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
         const statusId = searchParams.get("statusId");

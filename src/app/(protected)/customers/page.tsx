@@ -138,9 +138,7 @@ export default function CustomersPage() {
                         <tbody className="divide-y divide-gray-100">
                             {filtered.map((c) => (
                                 <tr key={c.id} className="hover:bg-gray-50">
-                                    {/* <td className="px-6 py-4 text-gray-400">{c.id}</td> */}
-
-
+                                    <td className="px-6 py-4 text-gray-400">{c.id}</td>
                                     <td className="px-6 py-4">
                                         <Link
                                             href={`/customers/${c.id}`}
@@ -149,10 +147,6 @@ export default function CustomersPage() {
                                             {c.name}
                                         </Link>
                                     </td>
-
-
-
-                                    <td className="px-6 py-4 font-medium">{c.name}</td>
                                     <td className="px-6 py-4">{c.phone}</td>
                                     <td className="px-6 py-4 text-gray-500">{c.email || "—"}</td>
                                     <td className="px-6 py-4">{c.devices.length}</td>

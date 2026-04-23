@@ -1,13 +1,31 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const reopenSchema = z.object({
+    priority: z.string().trim().optional(),
+    notes: z.string().trim().optional().or(z.literal("")),
+    estimatedCost: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().nonnegative().optional()
+    ),
+    reason: z.string().trim().optional().or(z.literal("")),
+});
 
 export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { user, response } = await requirePermission("tickets:status:set");
+    if (response) return response;
     try {
         const { id } = await params;
-        const body = await req.json();
+        const parsed = reopenSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid reopen payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         const original = await prisma.ticket.findUnique({
             where: { id: Number(id) },
@@ -36,7 +54,7 @@ export async function POST(
                 ticketId: newTicket.id,
                 status: "S1",
                 note: `Reopened from Ticket #${original.id} — ${body.reason || "Problem not resolved"}`,
-                userId: Number(body.userId),
+                userId: user.id,
             },
         });
 

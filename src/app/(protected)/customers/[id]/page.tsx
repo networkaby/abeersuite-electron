@@ -21,7 +21,7 @@ export default async function CustomerDetailPage({
                         include: {
                             primaryOwner: true,
                             serviceCenter: true,
-                            ticketStatus: { select: { label: true, color: true } },
+                            ticketStatus: { select: { label: true, color: true, isTerminal: true } },
                             ticketPriority: { select: { label: true, color: true } },
                         },
                     },
@@ -38,7 +38,7 @@ export default async function CustomerDetailPage({
     );
     const openTickets = customer.devices.reduce(
         (acc, d) =>
-            acc + d.tickets.filter((t) => t.status !== "S7").length,
+            acc + d.tickets.filter((t) => !t.ticketStatus.isTerminal).length,
         0
     );
 
@@ -170,7 +170,7 @@ export default async function CustomerDetailPage({
 
                                                 {ticket.estimatedCost && (
                                                     <div className="text-xs text-green-600 font-medium">
-                                                        Est. Cost: ৳ {ticket.estimatedCost}
+                                                        Est. Cost: ₹ {ticket.estimatedCost}
                                                     </div>
                                                 )}
 

@@ -1,6 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { z } from "zod";
+
+const ticketUpdateSchema = z.object({
+    status: z.string().trim().optional(),
+    priority: z.string().trim().optional(),
+    notes: z.string().optional(),
+    accessInfo: z.string().optional(),
+    estimatedCost: z.preprocess(
+        (value) => value === "" ? null : value,
+        z.union([z.coerce.number().nonnegative(), z.null()]).optional()
+    ),
+    primaryOwnerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    escalated: z.boolean().optional(),
+    escalatedAt: z.string().optional().nullable(),
+    expectedReturn: z.string().optional().nullable(),
+    receivedBackAt: z.string().optional().nullable(),
+    externalRef: z.string().optional(),
+    serviceCenterId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    isWarranty: z.boolean().optional(),
+    warrantyRef: z.string().optional(),
+    purchaseDate: z.string().optional().nullable(),
+    logNote: z.string().optional(),
+    visibility: z.enum(["internal", "public"]).optional(),
+});
 
 export async function GET(
     _: Request,
@@ -8,6 +32,8 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
+        const session = await auth();
+        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const ticket = await prisma.ticket.findUnique({
             where: { id: Number(id) },
             include: {
@@ -72,7 +98,11 @@ export async function PUT(
         const isAdmin = permissions.includes("admin:bypass");
 
         const { id } = await params;
-        const body = await req.json();
+        const parsed = ticketUpdateSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid ticket update payload" }, { status: 400 });
+        }
+        const body = parsed.data;
 
         // Enforce allowedRoles on main status change (Admin bypasses)
         if (body.status && !isAdmin) {
@@ -87,6 +117,10 @@ export async function PUT(
             ) {
                 return NextResponse.json({ error: "Your role cannot set this status." }, { status: 403 });
             }
+        }
+
+        if (body.primaryOwnerId !== undefined && !isAdmin && !permissions.includes("tickets:assign")) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         const ticket = await prisma.ticket.update({

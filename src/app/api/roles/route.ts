@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 
 export async function GET() {
+    const { response } = await requirePermission("roles:manage");
+    if (response) return response;
     try {
         const roles = await prisma.role.findMany({
             orderBy: { id: "asc" },
