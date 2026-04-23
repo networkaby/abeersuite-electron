@@ -4,9 +4,29 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
     Wrench, Phone, Package, CheckCircle, AlertCircle,
-    UserCheck, Users, User,
+    UserCheck, Users, User, ShieldAlert, ClipboardCheck,
 } from "lucide-react";
 import { TicketSection, type TicketCardData } from "@/components/assignments/TicketCard";
+
+const GROUP_OPTIONS = [
+    { value: "customer_comm", label: "Customer Communication" },
+    { value: "approval", label: "Quote & Approval" },
+    { value: "parts", label: "Parts" },
+    { value: "qc", label: "Quality Check" },
+    { value: "escalated", label: "Escalated" },
+    { value: "ready", label: "Ready for Collection" },
+    { value: "no_fix", label: "No Fix" },
+] as const;
+
+const GROUP_CARD_META = {
+    customer_comm: { icon: <Phone size={20} />, textColor: "text-blue-600" },
+    approval: { icon: <CheckCircle size={20} />, textColor: "text-yellow-600" },
+    parts: { icon: <Package size={20} />, textColor: "text-orange-600" },
+    qc: { icon: <ClipboardCheck size={20} />, textColor: "text-teal-600" },
+    escalated: { icon: <ShieldAlert size={20} />, textColor: "text-red-600" },
+    ready: { icon: <CheckCircle size={20} />, textColor: "text-green-600" },
+    no_fix: { icon: <AlertCircle size={20} />, textColor: "text-gray-600" },
+} satisfies Record<(typeof GROUP_OPTIONS)[number]["value"], { icon: React.ReactNode; textColor: string }>;
 
 // ── Shared include ────────────────────────────────────────────────────────────
 const TICKET_INCLUDE = {
@@ -14,7 +34,7 @@ const TICKET_INCLUDE = {
     primaryOwner: { select: { id: true, name: true } },
     serviceCenter: { select: { name: true } },
     ticketStatus: { select: { label: true, color: true, actionLabel: true, notifyRoles: true } },
-    ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true, notifyRoles: true } },
+    ticketSubStatus: { select: { id: true, label: true, color: true, group: true, actionLabel: true, notifyRoles: true } },
     participants: {
         where: { removedAt: null },
         select: { userId: true, user: { select: { id: true, name: true } } },
@@ -149,9 +169,12 @@ export default async function AssignmentsPage({
     }
 
     const total = cards.length;
-    const callCount = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R3")).length;
-    const despCount = cards.filter(t => t.ticketSubStatus?.notifyRoles?.includes("R4")).length;
-    const escCount = cards.filter(t => t.escalated).length;
+    const groupedSubStatusCounts = Object.fromEntries(
+        GROUP_OPTIONS.map(({ value }) => [
+            value,
+            raw.filter((ticket) => ticket.ticketSubStatus?.group === value).length,
+        ]),
+    ) as Record<(typeof GROUP_OPTIONS)[number]["value"], number>;
 
     // ── Tabs ───────────────────────────────────────────────────────────────────
     const TABS = [
@@ -228,30 +251,17 @@ export default async function AssignmentsPage({
             )}
 
             {/* Stats */}
-            <div className="grid grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
                 <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-gray-600" />
-                {scope === "me" ? (
-                    <>
-                        <StatCard label="Primary" value={myOwned.length} icon={<User size={20} />} textColor="text-blue-600" />
-                        <StatCard label="Secondary" value={mySecond.length} icon={<Users size={20} />} textColor="text-purple-600" />
-                        <StatCard label="Calls" value={callCount} icon={<Phone size={20} />} textColor="text-red-600" />
-                        <StatCard label="Despatch" value={despCount} icon={<Package size={20} />} textColor="text-orange-600" />
-                    </>
-                ) : scope === "team" ? (
-                    <>
-                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />} textColor="text-amber-600" />
-                        <StatCard label="Calls" value={callCount} icon={<Phone size={20} />} textColor="text-red-600" />
-                        <StatCard label="Despatch" value={despCount} icon={<Package size={20} />} textColor="text-orange-600" />
-                        <StatCard label="Escalated" value={escCount} icon={<AlertCircle size={20} />} textColor="text-red-500" />
-                    </>
-                ) : (
-                    <>
-                        <StatCard label="Unassigned" value={unassigned.length} icon={<UserCheck size={20} />} textColor="text-blue-600" />
-                        <StatCard label="Calls" value={callCount} icon={<Phone size={20} />} textColor="text-red-600" />
-                        <StatCard label="Despatch" value={despCount} icon={<Package size={20} />} textColor="text-orange-600" />
-                        <StatCard label="Escalated" value={escCount} icon={<AlertCircle size={20} />} textColor="text-red-500" />
-                    </>
-                )}
+                {GROUP_OPTIONS.map(({ value, label }) => (
+                    <StatCard
+                        key={value}
+                        label={label}
+                        value={groupedSubStatusCounts[value]}
+                        icon={GROUP_CARD_META[value].icon}
+                        textColor={GROUP_CARD_META[value].textColor}
+                    />
+                ))}
             </div>
 
             {/* Sections */}
