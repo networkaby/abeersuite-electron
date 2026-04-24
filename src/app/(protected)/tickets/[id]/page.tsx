@@ -180,15 +180,15 @@ export default function TicketDetailPage() {
             {/* Warranty banner */}
             {ticket.isWarranty && (
                 <div className={`mb-4 rounded-xl border px-5 py-3 flex items-center gap-3 text-sm ${
-                    ticket.warrantyStatus === "voided" ? "bg-red-50 border-red-200 text-red-700" :
-                    ticket.warrantyStatus === "confirmed" ? "bg-green-50 border-green-200 text-green-700" :
+                    ticket.warrantyStatus === "VOID" ? "bg-red-50 border-red-200 text-red-700" :
+                    ticket.warrantyStatus === "ACTIVE" ? "bg-green-50 border-green-200 text-green-700" :
                     "bg-amber-50 border-amber-200 text-amber-700"
                 }`}>
                     <WarrantyBadge isWarranty={ticket.isWarranty} warrantyStatus={ticket.warrantyStatus} />
                     <span className="flex-1">
-                        {ticket.warrantyStatus === "voided" && ticket.voidReason && `Void reason: ${ticket.voidReason.replace(/_/g, " ")}`}
-                        {ticket.warrantyStatus === "confirmed" && "Warranty confirmed — no charge to customer."}
-                        {ticket.warrantyStatus === "claimed" && "Warranty claim in progress."}
+                        {ticket.warrantyStatus === "VOID" && ticket.voidReason && `Void reason: ${ticket.voidReason.replace(/_/g, " ")}`}
+                        {ticket.warrantyStatus === "ACTIVE" && "Warranty confirmed — no charge to customer."}
+                        {ticket.warrantyStatus === "CLAIMED" && "Warranty claim in progress."}
                     </span>
                     {ticket.warrantyRef && <span className="text-xs opacity-70">Ref: {ticket.warrantyRef}</span>}
                 </div>
@@ -289,7 +289,7 @@ export default function TicketDetailPage() {
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
                                                     {wl.toWarranty
-                                                        ? wl.toStatus === "voided" ? "Warranty Voided" : "Converted to Warranty"
+                                                        ? wl.toStatus === "VOID" ? "Warranty Voided" : "Converted to Warranty"
                                                         : "Removed from Warranty"}
                                                 </span>
                                                 <span className="text-xs text-gray-400">by {wl.changedBy.name}</span>

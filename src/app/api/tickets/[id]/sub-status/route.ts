@@ -6,7 +6,7 @@ import { z } from "zod";
 const subStatusUpdateSchema = z.object({
     subStatusId: z.string().trim().min(1, "Sub-status is required"),
     note: z.string().optional(),
-    visibility: z.enum(["internal", "public"]).optional(),
+    visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
 });
 
 // PATCH /api/tickets/[id]/sub-status
@@ -130,7 +130,7 @@ export async function PATCH(
                     status: ticket.status,
                     subStatusId,
                     note: note || null,
-                    visibility: visibility === "public" ? "public" : "internal",
+                    visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                     userId,
                 },
             });

@@ -32,8 +32,8 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
     const [purchaseDate, setPurchaseDate] = useState(initDate ? initDate.slice(0, 10) : "");
     const [saving, setSaving] = useState(false);
 
-    const toWarranty = !isWarranty || (isWarranty && warrantyStatus === "voided");
-    const isVoidAction = isWarranty && warrantyStatus !== "voided" && voiding;
+    const toWarranty = !isWarranty || (isWarranty && warrantyStatus === "VOID");
+    const isVoidAction = isWarranty && warrantyStatus !== "VOID" && voiding;
 
     const handleSubmit = async () => {
         if (isVoidAction && !voidReason) {
@@ -44,7 +44,7 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
         try {
             await axios.post(`/api/tickets/${ticketId}/warranty`, {
                 isWarranty: isVoidAction ? true : toWarranty,
-                warrantyStatus: isVoidAction ? "voided" : (toWarranty ? "claimed" : "none"),
+                warrantyStatus: isVoidAction ? "VOID" : (toWarranty ? "CLAIMED" : "NONE"),
                 voidReason: isVoidAction ? voidReason : null,
                 note: note || null,
                 warrantyRef: warrantyRef || null,

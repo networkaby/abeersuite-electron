@@ -23,7 +23,7 @@ const ticketUpdateSchema = z.object({
     warrantyRef: z.string().optional(),
     purchaseDate: z.string().optional().nullable(),
     logNote: z.string().optional(),
-    visibility: z.enum(["internal", "public"]).optional(),
+    visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
 });
 
 export async function GET(
@@ -154,7 +154,7 @@ export async function PUT(
                     ticketId: ticket.id,
                     status: body.status,
                     note: body.logNote || null,
-                    visibility: body.visibility === "public" ? "public" : "internal",
+                    visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                     userId,
                 },
             });

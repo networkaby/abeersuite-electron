@@ -7,10 +7,10 @@ interface Props {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
-    claimed:   { label: "W Claimed",   classes: "bg-amber-100 text-amber-700 border-amber-200" },
-    confirmed: { label: "W Confirmed", classes: "bg-green-100 text-green-700 border-green-200" },
-    voided:    { label: "W Voided",    classes: "bg-red-100 text-red-600 border-red-200" },
-    none:      { label: "Warranty",    classes: "bg-amber-50 text-amber-600 border-amber-100" },
+    CLAIMED: { label: "W Claimed",   classes: "bg-amber-100 text-amber-700 border-amber-200" },
+    ACTIVE:  { label: "W Confirmed", classes: "bg-green-100 text-green-700 border-green-200" },
+    VOID:    { label: "W Voided",    classes: "bg-red-100 text-red-600 border-red-200" },
+    NONE:    { label: "Warranty",    classes: "bg-amber-50 text-amber-600 border-amber-100" },
 };
 
 export default function WarrantyBadge({ isWarranty, warrantyStatus, className = "" }: Props) {

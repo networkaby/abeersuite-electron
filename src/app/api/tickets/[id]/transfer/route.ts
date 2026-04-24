@@ -99,7 +99,7 @@ export async function POST(
                     ticketId: Number(id),
                     status: landingStatusId,
                     note: transferNote,
-                    visibility: "internal",
+                    visibility: "INTERNAL",
                     userId,
                 },
             }),

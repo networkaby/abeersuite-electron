@@ -12,7 +12,7 @@ interface Props {
 
 export default function AddNoteModal({ ticketId, onClose }: Props) {
     const [note, setNote] = useState("");
-    const [visibility, setVisibility] = useState<"internal" | "public">("internal");
+    const [visibility, setVisibility] = useState<"INTERNAL" | "PUBLIC">("INTERNAL");
     const [saving, setSaving] = useState(false);
 
     const handleSave = async () => {
@@ -55,9 +55,9 @@ export default function AddNoteModal({ ticketId, onClose }: Props) {
                         <div className="flex gap-2">
                             <button
                                 type="button"
-                                onClick={() => setVisibility("internal")}
+                                onClick={() => setVisibility("INTERNAL")}
                                 className={`flex items-center gap-2 flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                    visibility === "internal"
+                                    visibility === "INTERNAL"
                                         ? "border-gray-400 bg-gray-100 text-gray-700"
                                         : "border-gray-200 text-gray-400 hover:bg-gray-50"
                                 }`}
@@ -68,9 +68,9 @@ export default function AddNoteModal({ ticketId, onClose }: Props) {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setVisibility("public")}
+                                onClick={() => setVisibility("PUBLIC")}
                                 className={`flex items-center gap-2 flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                    visibility === "public"
+                                    visibility === "PUBLIC"
                                         ? "border-blue-400 bg-blue-50 text-blue-700"
                                         : "border-gray-200 text-gray-400 hover:bg-gray-50"
                                 }`}

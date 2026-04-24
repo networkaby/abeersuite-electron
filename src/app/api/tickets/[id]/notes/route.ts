@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const noteSchema = z.object({
     note: z.string().trim().min(1, "Note text is required"),
-    visibility: z.enum(["internal", "public"]).optional(),
+    visibility: z.enum(["INTERNAL", "PUBLIC"]).optional(),
 });
 
 // POST /api/tickets/[id]/notes
@@ -25,7 +25,7 @@ export async function POST(
         if (!parsed.success) {
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid note payload" }, { status: 400 });
         }
-        const { note, visibility = "internal" } = parsed.data;
+        const { note, visibility = "INTERNAL" } = parsed.data;
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
@@ -38,7 +38,7 @@ export async function POST(
                 ticketId,
                 status: ticket.status,
                 note,
-                visibility: visibility === "public" ? "public" : "internal",
+                visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                 userId,
             },
         });

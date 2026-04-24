@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: Params) {
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
         const toWarranty: boolean = body.isWarranty ?? !ticket.isWarranty;
-        const toStatus: string = body.warrantyStatus ?? (toWarranty ? "claimed" : "none");
+        const toStatus: string = body.warrantyStatus ?? (toWarranty ? "CLAIMED" : "NONE");
         const voidReason: string | null = body.voidReason ?? null;
 
         // Clear sub-status if it won't apply to the new warranty state
@@ -81,12 +81,7 @@ export async function POST(req: Request, { params }: Params) {
         // Notify all Front Desk users to call the customer
         // We find users who have the role R3 or permissions that match
         const frontDeskUsers = await prisma.user.findMany({
-            where: {
-                OR: [
-                    { role: "R3" },
-                    { userRoles: { some: { roleId: "R3" } } }
-                ]
-            },
+            where: { role: "R3" },
             select: { id: true },
         });
         if (frontDeskUsers.length > 0) {

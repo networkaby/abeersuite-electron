@@ -99,7 +99,7 @@ export async function POST(req: Request) {
                 estimatedCost:   body.estimatedCost ? Number(body.estimatedCost) : null,
                 primaryOwnerId:  body.primaryOwnerId ? Number(body.primaryOwnerId) : null,
                 isWarranty:      Boolean(body.isWarranty),
-                warrantyStatus:  body.isWarranty ? "claimed" : "none",
+                warrantyStatus:  body.isWarranty ? "CLAIMED" : "NONE",
                 warrantyRef:     body.warrantyRef || null,
                 purchaseDate:    body.purchaseDate ? new Date(body.purchaseDate) : null,
                 pipelineId:      body.pipelineId || "P1",

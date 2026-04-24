@@ -46,7 +46,7 @@ type FormData = {
     subStatusId: string;
     mainStatusId: string;
     note: string;
-    visibility: "internal" | "public";
+    visibility: "INTERNAL" | "PUBLIC";
 };
 
 export default function StatusUpdateCombined({ ticket, onClose }: Props) {
@@ -67,7 +67,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
             subStatusId: "",
             mainStatusId: nextMainStatuses[0]?.id ?? "",
             note: "",
-            visibility: "internal",
+            visibility: "INTERNAL",
         },
     });
 
