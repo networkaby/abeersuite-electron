@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "Invoice is already fully paid" }, { status: 409 });
     }
 
-    const amountDue = Number(invoice.amountDue);
+    const amountDue = Number(invoice.totalAmount) - Number(invoice.amountPaid);
     if (body.amount > amountDue + 0.005) {
         return NextResponse.json(
             { error: `Payment amount (${body.amount}) exceeds amount due (${amountDue.toFixed(2)})` },
@@ -100,7 +100,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             await tx.invoice.update({
                 where: { id: Number(id) },
-                data: { amountPaid: newPaid, amountDue: Math.max(0, newDue), status: newStatus },
+                data: { amountPaid: newPaid, status: newStatus },
             });
 
             return pmt;
