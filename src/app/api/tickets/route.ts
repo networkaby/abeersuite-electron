@@ -20,13 +20,19 @@ const createTicketSchema = z.object({
     isWarranty: z.boolean().optional(),
     warrantyRef: z.string().trim().optional().or(z.literal("")),
     purchaseDate: z.string().trim().optional().or(z.literal("")),
+    pipelineId: z.string().trim().optional(),
 });
 
-export async function GET() {
+// GET /api/tickets?pipelineId=P1
+export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
     try {
+        const { searchParams } = new URL(req.url);
+        const pipelineId = searchParams.get("pipelineId");
+
         const tickets = await prisma.ticket.findMany({
+            where: pipelineId ? { pipelineId } : undefined,
             orderBy: { createdAt: "desc" },
             include: {
                 device: {
@@ -37,6 +43,7 @@ export async function GET() {
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { label: true, color: true } },
                 ticketPriority: { select: { label: true, color: true } },
+                pipeline: { select: { id: true, label: true, color: true } },
             },
         });
         return NextResponse.json(tickets);
@@ -80,6 +87,7 @@ export async function POST(req: Request) {
                 warrantyStatus: body.isWarranty ? "claimed" : "none",
                 warrantyRef:   body.warrantyRef || null,
                 purchaseDate:  body.purchaseDate ? new Date(body.purchaseDate) : null,
+                pipelineId:    body.pipelineId || "P1",
             },
             include: {
                 device: { include: { customer: true } },

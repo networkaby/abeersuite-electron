@@ -11,6 +11,7 @@ interface Ticket {
     id: number;
     status: string;
     priority: string;
+    pipelineId: string | null;
     escalated: boolean;
     isWarranty: boolean;
     warrantyStatus: string;
@@ -18,6 +19,7 @@ interface Ticket {
     ticketStatus: { label: string; color: string };
     ticketSubStatus?: { label: string; color: string } | null;
     ticketPriority: { label: string; color: string };
+    pipeline?: { id: string; label: string; color: string } | null;
     device: {
         type: string;
         brand: string;
@@ -32,6 +34,7 @@ type Technician = { id: number; name: string };
 type ServiceCenter = { id: number; name: string };
 type StatusOption = { id: string; label: string };
 type PriorityOption = { id: string; label: string };
+type PipelineOption = { id: string; label: string; color: string };
 
 export default function TicketsPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -41,6 +44,7 @@ export default function TicketsPage() {
     const [serviceCenters, setServiceCenters] = useState<ServiceCenter[]>([]);
     const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [priorityOptions, setPriorityOptions] = useState<PriorityOption[]>([]);
+    const [pipelineOptions, setPipelineOptions] = useState<PipelineOption[]>([]);
 
     // Filters
     const [search, setSearch] = useState("");
@@ -51,6 +55,7 @@ export default function TicketsPage() {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
     const [warrantyFilter, setWarrantyFilter] = useState("");
+    const [pipelineFilter, setPipelineFilter] = useState("");
 
     const fetchTickets = async () => {
         try {
@@ -71,6 +76,7 @@ export default function TicketsPage() {
             setStatusOptions(r.data.map((s: { id: string; label: string }) => ({ id: s.id, label: s.label })))
         );
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
+        axios.get("/api/pipelines").then((r) => setPipelineOptions(r.data));
     }, []);
 
     // Apply filters
@@ -118,8 +124,10 @@ export default function TicketsPage() {
         if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
 
+        if (pipelineFilter) result = result.filter((t) => t.pipelineId === pipelineFilter);
+
         setFiltered(result);
-    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
+    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter, pipelineFilter]);
 
     const clearFilters = () => {
         setSearch("");
@@ -130,9 +138,10 @@ export default function TicketsPage() {
         setDateFrom("");
         setDateTo("");
         setWarrantyFilter("");
+        setPipelineFilter("");
     };
 
-    const hasFilters = search || statusFilter || priorityFilter || technicianFilter || serviceCenterFilter || dateFrom || dateTo || warrantyFilter;
+    const hasFilters = search || statusFilter || priorityFilter || technicianFilter || serviceCenterFilter || dateFrom || dateTo || warrantyFilter || pipelineFilter;
 
     return (
         <div>
@@ -154,6 +163,32 @@ export default function TicketsPage() {
                         className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
+
+                {/* Pipeline tabs — only show when multiple exist */}
+                {pipelineOptions.length > 1 && (
+                    <div className="flex gap-2 flex-wrap pb-1">
+                        <button
+                            onClick={() => setPipelineFilter("")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                !pipelineFilter ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            }`}
+                        >
+                            All Pipelines
+                        </button>
+                        {pipelineOptions.map((p) => (
+                            <button
+                                key={p.id}
+                                onClick={() => setPipelineFilter(p.id)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                    pipelineFilter === p.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${p.color.split(" ")[0]}`} />
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {/* Filter Row */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
@@ -269,6 +304,7 @@ export default function TicketsPage() {
                                 <th className="px-6 py-3 text-left">Problem</th>
                                 <th className="px-6 py-3 text-left">Priority</th>
                                 <th className="px-6 py-3 text-left">Status</th>
+                                {pipelineOptions.length > 1 && <th className="px-6 py-3 text-left">Pipeline</th>}
                                 <th className="px-6 py-3 text-left">Technician</th>
                                 <th className="px-6 py-3 text-left">Date</th>
                                 <th className="px-6 py-3 text-left">Actions</th>
@@ -307,6 +343,17 @@ export default function TicketsPage() {
                                             <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />
                                         </div>
                                     </td>
+                                    {pipelineOptions.length > 1 && (
+                                        <td className="px-6 py-4">
+                                            {t.pipeline ? (
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.pipeline.color}`}>
+                                                    {t.pipeline.label}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 text-xs">—</span>
+                                            )}
+                                        </td>
+                                    )}
                                     <td className="px-6 py-4 text-gray-500">
                                         {t.primaryOwner?.name || "—"}
                                     </td>

@@ -7,54 +7,71 @@ datasource db {
   provider = "postgresql"
 }
 
-model TicketStatus {
-  id             String   @id
-  label          String
-  color          String
-  order          Int
-  isTerminal     Boolean  @default(false)
-  allowedRoles   String[]
-  notifyRoles    String[]
-  actionLabel    String?
-  warrantyScope  String   @default("any")
+model Pipeline {
+  id          String   @id
+  name        String   @unique
+  label       String
+  description String?
+  color       String   @default("bg-gray-100 text-gray-600")
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
 
-  tickets         Ticket[]
-  logs            TicketLog[]
+  statuses    TicketStatus[]
+  subStatuses TicketSubStatus[]
+  tickets     Ticket[]
+}
+
+model TicketStatus {
+  id              String             @id
+  label           String
+  color           String
+  order           Int
+  isTerminal      Boolean            @default(false)
+  allowedRoles    String[]
+  notifyRoles     String[]
+  actionLabel     String?
+  warrantyScope   String             @default("any")
+  pipelineId      String?
+  pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
   fromTransitions StatusTransition[] @relation("FromStatus")
   toTransitions   StatusTransition[] @relation("ToStatus")
+  tickets         Ticket[]
+  logs            TicketLog[]
 }
 
 model TicketSubStatus {
-  id                  String  @id
+  id                  String                @id
   label               String
-  color               String  @default("bg-gray-100 text-gray-600")
+  color               String                @default("bg-gray-100 text-gray-600")
   group               String
   order               Int
   applicableStatusIds String[]
   allowedRoles        String[]
   notifyRoles         String[]
-  warrantyScope       String  @default("any")
+  triggerMap          Json                  @default("{}")
+  actionLabel         String?
+  autoRevertOnClear   Boolean               @default(true)
   handoffRole         String?
-  autoRevertOnClear   Boolean @default(true)
-
-  // triggerMap: JSON object { parentStatusId → targetStatusId }
-  // e.g. { "S2": "S3", "S4": "S5" }  — different advance per parent
-  triggerMap      Json  @default("{}")
-  actionLabel     String?
-
-  tickets         Ticket[]
-  logs            TicketLog[]
-  fromTransitions SubStatusTransition[] @relation("FromSubStatus")
-  toTransitions   SubStatusTransition[] @relation("ToSubStatus")
-  participants    TicketParticipant[]   @relation("ParticipantSubStatus")
+  warrantyScope       String                @default("any")
+  groupId             String?
+  pipelineId          String?
+  pipeline            Pipeline?             @relation(fields: [pipelineId], references: [id])
+  fromTransitions     SubStatusTransition[] @relation("FromSubStatus")
+  toTransitions       SubStatusTransition[] @relation("ToSubStatus")
+  tickets             Ticket[]
+  logs                TicketLog[]
+  participants        TicketParticipant[]   @relation("ParticipantSubStatus")
+  SubStatusGroup      SubStatusGroup?       @relation(fields: [groupId], references: [id])
 }
 
 model SubStatusTransition {
-  id               Int              @id @default(autoincrement())
-  fromSubStatusId  String?
-  toSubStatusId    String
-  from             TicketSubStatus? @relation("FromSubStatus", fields: [fromSubStatusId], references: [id], onDelete: Cascade)
-  to               TicketSubStatus  @relation("ToSubStatus",   fields: [toSubStatusId],   references: [id], onDelete: Cascade)
+  id              Int              @id @default(autoincrement())
+  fromSubStatusId String?
+  toSubStatusId   String
+  from            TicketSubStatus? @relation("FromSubStatus", fields: [fromSubStatusId], references: [id], onDelete: Cascade)
+  to              TicketSubStatus  @relation("ToSubStatus", fields: [toSubStatusId], references: [id], onDelete: Cascade)
 
   @@unique([fromSubStatusId, toSubStatusId])
 }
@@ -64,7 +81,7 @@ model StatusTransition {
   fromStatusId String
   toStatusId   String
   from         TicketStatus @relation("FromStatus", fields: [fromStatusId], references: [id], onDelete: Cascade)
-  to           TicketStatus @relation("ToStatus",   fields: [toStatusId],   references: [id], onDelete: Cascade)
+  to           TicketStatus @relation("ToStatus", fields: [toStatusId], references: [id], onDelete: Cascade)
 
   @@unique([fromStatusId, toStatusId])
 }
@@ -74,8 +91,8 @@ model Priority {
   label   String
   color   String
   order   Int
-  tickets Ticket[]
   tasks   Task[]
+  tickets Ticket[]
 }
 
 model Role {
@@ -93,8 +110,8 @@ model Permission {
   label       String
   description String?
   module      String               @default("core")
-  roleGrants  UserRolePermission[]
   userGrants  UserPermission[]
+  roleGrants  UserRolePermission[]
 }
 
 model UserRole {
@@ -102,8 +119,8 @@ model UserRole {
   roleId     String
   isPrimary  Boolean  @default(false)
   assignedAt DateTime @default(now())
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role       Role     @relation(fields: [roleId],  references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
   @@index([userId])
@@ -112,8 +129,8 @@ model UserRole {
 model UserRolePermission {
   roleId       String
   permissionId String
-  role         Role       @relation(fields: [roleId],       references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
 }
@@ -121,40 +138,40 @@ model UserRolePermission {
 model UserPermission {
   userId       Int
   permissionId String
-  granted      Boolean  @default(true)
+  granted      Boolean    @default(true)
   grantedBy    Int?
-  grantedAt    DateTime @default(now())
-  user         User     @relation("UserPermissionUser",    fields: [userId],    references: [id], onDelete: Cascade)
-  granter      User?    @relation("UserPermissionGranter", fields: [grantedBy], references: [id])
+  grantedAt    DateTime   @default(now())
+  granter      User?      @relation("UserPermissionGranter", fields: [grantedBy], references: [id])
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  user         User       @relation("UserPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, permissionId])
 }
 
 model User {
-  id            Int              @id @default(autoincrement())
-  name          String
-  email         String           @unique
-  password      String
-  role          String           @default("R2")
-  userRole      Role             @relation(fields: [role], references: [id])
-  managerId     Int?
-  manager       User?            @relation("UserHierarchy", fields: [managerId], references: [id])
-  reports       User[]           @relation("UserHierarchy")
-  userRoles            UserRole[]
-  permissions          UserPermission[]    @relation("UserPermissionUser")
-  grantedPerms         UserPermission[]    @relation("UserPermissionGranter")
-  ownedTickets         Ticket[]
-  ticketLogs           TicketLog[]
-  notifications        Notification[]
-  warrantyLogs         WarrantyLog[]       @relation("WarrantyLogUser")
-  assignedTasks        Task[]              @relation("TaskAssignee")
-  createdTasks         Task[]              @relation("TaskCreator")
-  pickedUpTasks        Task[]              @relation("TaskPickup")
-  taskLogs             TaskLog[]           @relation("TaskLogUser")
-  participantEntries   TicketParticipant[] @relation("ParticipantUser")
-  participantAdded     TicketParticipant[] @relation("ParticipantAddedBy")
-  createdAt            DateTime            @default(now())
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  email              String              @unique
+  password           String
+  role               String              @default("R2")
+  createdAt          DateTime            @default(now())
+  managerId          Int?
+  notifications      Notification[]
+  assignedTasks      Task[]              @relation("TaskAssignee")
+  createdTasks       Task[]              @relation("TaskCreator")
+  pickedUpTasks      Task[]              @relation("TaskPickup")
+  taskLogs           TaskLog[]           @relation("TaskLogUser")
+  ownedTickets       Ticket[]
+  ticketLogs         TicketLog[]
+  participantAdded   TicketParticipant[] @relation("ParticipantAddedBy")
+  participantEntries TicketParticipant[] @relation("ParticipantUser")
+  manager            User?               @relation("UserHierarchy", fields: [managerId], references: [id])
+  reports            User[]              @relation("UserHierarchy")
+  userRole           Role                @relation(fields: [role], references: [id])
+  grantedPerms       UserPermission[]    @relation("UserPermissionGranter")
+  permissions        UserPermission[]    @relation("UserPermissionUser")
+  userRoles          UserRole[]
+  warrantyLogs       WarrantyLog[]       @relation("WarrantyLogUser")
 }
 
 model Customer {
@@ -162,10 +179,10 @@ model Customer {
   name          String
   phone         String
   email         String?
-  devices       Device[]
   agreedToTerms Boolean   @default(false)
   agreedAt      DateTime?
   createdAt     DateTime  @default(now())
+  devices       Device[]
 }
 
 model Device {
@@ -174,52 +191,53 @@ model Device {
   brand      String
   model      String
   problem    String
-  customer   Customer @relation(fields: [customerId], references: [id])
   customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
   tickets    Ticket[]
 }
 
 model Ticket {
-  id              Int              @id @default(autoincrement())
-  status          String           @default("S1")
-  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
-  subStatusId     String?
-  ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
-  escalationType  String?
-  priority        String           @default("P2")
-  ticketPriority  Priority         @relation(fields: [priority], references: [id])
+  id              Int                 @id @default(autoincrement())
+  pipelineId      String?
+  pipeline        Pipeline?           @relation(fields: [pipelineId], references: [id])
+  status          String              @default("S1")
+  priority        String              @default("P2")
   notes           String?
   accessInfo      String?
   estimatedCost   Float?
-  device          Device           @relation(fields: [deviceId], references: [id])
   deviceId        Int
-  primaryOwner    User?            @relation(fields: [primaryOwnerId], references: [id])
-  primaryOwnerId  Int?
-  escalated       Boolean          @default(false)
+  escalated       Boolean             @default(false)
   escalatedAt     DateTime?
   expectedReturn  DateTime?
   receivedBackAt  DateTime?
   externalRef     String?
-  serviceCenter   ServiceCenter?   @relation(fields: [serviceCenterId], references: [id])
   serviceCenterId Int?
-  isWarranty      Boolean          @default(false)
-  warrantyStatus  String           @default("none")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  subStatusId     String?
+  escalationType  String?
+  isWarranty      Boolean             @default(false)
+  primaryOwnerId  Int?
+  purchaseDate    DateTime?
   voidReason      String?
   warrantyRef     String?
-  purchaseDate    DateTime?
-  logs            TicketLog[]
+  warrantyStatus  String              @default("none")
   notifications   Notification[]
-  warrantyLogs    WarrantyLog[]
   tasks           Task[]
+  device          Device              @relation(fields: [deviceId], references: [id])
+  primaryOwner    User?               @relation(fields: [primaryOwnerId], references: [id])
+  ticketPriority  Priority            @relation(fields: [priority], references: [id])
+  serviceCenter   ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
+  ticketStatus    TicketStatus        @relation(fields: [status], references: [id])
+  ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
+  logs            TicketLog[]
   participants    TicketParticipant[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  warrantyLogs    WarrantyLog[]
 }
 
 model WarrantyLog {
   id           Int      @id @default(autoincrement())
   ticketId     Int
-  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   fromWarranty Boolean
   toWarranty   Boolean
   fromStatus   String
@@ -227,24 +245,25 @@ model WarrantyLog {
   voidReason   String?
   note         String?
   changedById  Int
-  changedBy    User     @relation("WarrantyLogUser", fields: [changedById], references: [id])
   createdAt    DateTime @default(now())
+  changedBy    User     @relation("WarrantyLogUser", fields: [changedById], references: [id])
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 }
 
 model TicketParticipant {
   id                   Int              @id @default(autoincrement())
   ticketId             Int
-  ticket               Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   userId               Int
-  user                 User             @relation("ParticipantUser",    fields: [userId],    references: [id])
   addedById            Int
-  addedBy              User             @relation("ParticipantAddedBy", fields: [addedById], references: [id])
   addedForRole         String?
   addedBySubStatusId   String?
-  addedBySubStatus     TicketSubStatus? @relation("ParticipantSubStatus", fields: [addedBySubStatusId], references: [id])
   removedAt            DateTime?
   removedBySubStatusId String?
   createdAt            DateTime         @default(now())
+  addedBy              User             @relation("ParticipantAddedBy", fields: [addedById], references: [id])
+  addedBySubStatus     TicketSubStatus? @relation("ParticipantSubStatus", fields: [addedBySubStatusId], references: [id])
+  ticket               Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user                 User             @relation("ParticipantUser", fields: [userId], references: [id])
 
   @@unique([ticketId, userId, addedBySubStatusId])
   @@index([ticketId])
@@ -253,29 +272,29 @@ model TicketParticipant {
 
 model TicketLog {
   id              Int              @id @default(autoincrement())
-  ticket          Ticket           @relation(fields: [ticketId], references: [id])
   ticketId        Int
   status          String
-  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
-  subStatusId     String?
-  ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
   note            String?
-  visibility      String           @default("internal")
-  changedBy       User             @relation(fields: [userId], references: [id])
   userId          Int
   createdAt       DateTime         @default(now())
+  subStatusId     String?
+  visibility      String           @default("internal")
+  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
+  ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
+  ticket          Ticket           @relation(fields: [ticketId], references: [id])
+  changedBy       User             @relation(fields: [userId], references: [id])
 }
 
 model Notification {
   id        Int      @id @default(autoincrement())
   userId    Int
-  user      User     @relation(fields: [userId], references: [id])
   ticketId  Int
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
   message   String
   type      String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model ServiceCenter {
@@ -284,33 +303,33 @@ model ServiceCenter {
   phone     String
   email     String?
   address   String?
-  tickets   Ticket[]
   createdAt DateTime @default(now())
+  tickets   Ticket[]
 }
 
 model Task {
-  id            Int       @id @default(autoincrement())
-  title         String
-  description   String?
-  source        String    @default("manual")
-  status        String    @default("open")
-  priority      String    @default("P2")
-  taskPriority  Priority  @relation(fields: [priority], references: [id])
-  assignedToId  Int?
-  assignedTo    User?     @relation("TaskAssignee",  fields: [assignedToId],  references: [id])
-  assignedRole  String?
-  pickedUpById  Int?
-  pickedUpBy    User?     @relation("TaskPickup",    fields: [pickedUpById],  references: [id])
-  pickedUpAt    DateTime?
-  ticketId      Int?
-  ticket        Ticket?   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  createdById   Int
-  createdBy     User      @relation("TaskCreator",   fields: [createdById],   references: [id])
-  dueAt         DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  logs          TaskLog[]
+  id           Int       @id @default(autoincrement())
+  title        String
+  description  String?
+  source       String    @default("manual")
+  status       String    @default("open")
+  priority     String    @default("P2")
+  assignedToId Int?
+  assignedRole String?
+  pickedUpById Int?
+  pickedUpAt   DateTime?
+  ticketId     Int?
+  createdById  Int
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  assignedTo   User?     @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy    User      @relation("TaskCreator", fields: [createdById], references: [id])
+  pickedUpBy   User?     @relation("TaskPickup", fields: [pickedUpById], references: [id])
+  taskPriority Priority  @relation(fields: [priority], references: [id])
+  ticket       Ticket?   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  logs         TaskLog[]
 
   @@unique([ticketId, assignedRole, source, status])
 }
@@ -318,10 +337,17 @@ model Task {
 model TaskLog {
   id        Int      @id @default(autoincrement())
   taskId    Int
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   action    String
   note      String?
   byUserId  Int
-  byUser    User     @relation("TaskLogUser", fields: [byUserId], references: [id])
   createdAt DateTime @default(now())
+  byUser    User     @relation("TaskLogUser", fields: [byUserId], references: [id])
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model SubStatusGroup {
+  id              String            @id
+  label           String
+  order           Int               @default(0)
+  TicketSubStatus TicketSubStatus[]
 }

@@ -16,17 +16,20 @@ const subStatusSchema = z.object({
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
     handoffRole: z.string().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
+    pipelineId: z.string().optional().nullable(),
 });
 
-// GET /api/sub-statuses?statusId=S3
+// GET /api/sub-statuses?statusId=S3&pipelineId=P1
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
         const statusId = searchParams.get("statusId");
+        const pipelineId = searchParams.get("pipelineId");
 
         const all = await prisma.ticketSubStatus.findMany({
+            where: pipelineId ? { pipelineId } : undefined,
             orderBy: { order: "asc" },
             include: {
                 fromTransitions: {
@@ -78,6 +81,7 @@ export async function POST(req: Request) {
                 warrantyScope:      body.warrantyScope ?? "any",
                 handoffRole:        body.handoffRole ?? null,
                 autoRevertOnClear:  body.autoRevertOnClear ?? true,
+                pipelineId:         body.pipelineId ?? null,
             },
         });
 

@@ -51,6 +51,7 @@ export async function GET(
                     // include isTerminal so the client can conditionally show escalation
                 },
                 ticketSubStatus: { select: { id: true, label: true, color: true } },
+                pipeline: { select: { id: true, label: true, color: true } },
                 participants: {
                     where: { removedAt: null },
                     include: { user: { select: { id: true, name: true, role: true } } },

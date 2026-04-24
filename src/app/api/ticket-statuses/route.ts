@@ -12,13 +12,19 @@ const ticketStatusSchema = z.object({
     notifyRoles: z.array(z.string().trim()).optional(),
     actionLabel: z.string().optional().nullable(),
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
+    pipelineId: z.string().optional().nullable(),
 });
 
-export async function GET() {
+// GET /api/ticket-statuses?pipelineId=P1
+export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
     try {
+        const { searchParams } = new URL(req.url);
+        const pipelineId = searchParams.get("pipelineId");
+
         const statuses = await prisma.ticketStatus.findMany({
+            where: pipelineId ? { pipelineId } : undefined,
             orderBy: { order: "asc" },
             include: {
                 fromTransitions: {
@@ -63,6 +69,7 @@ export async function POST(req: Request) {
                 notifyRoles:  body.notifyRoles  ?? [],
                 actionLabel:  body.actionLabel  ?? null,
                 warrantyScope: body.warrantyScope ?? "any",
+                pipelineId:   body.pipelineId ?? null,
             },
         });
         return NextResponse.json(status, { status: 201 });

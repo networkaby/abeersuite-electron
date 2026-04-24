@@ -29,7 +29,12 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:60555/login)",
       "Bash(mkdir -p \"D:/our-own-website/service-mgmt-experiment/src/app/api/tasks/[id]/pickup\")",
       "Bash(mkdir -p \"D:/our-own-website/service-mgmt-experiment/src/app/api/tasks/[id]/help\")",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(find src *)",
+      "Bash(npx dotenvx *)",
+      "Bash(ls *.env*)",
+      "Bash(ls .env*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.gphtzbejvpijcfmvqpqo:uVh^+C8^*-G7z2Y@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require\" npx tsx prisma/seed-pipelines.ts)"
     ]
   }
 }

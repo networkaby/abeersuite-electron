@@ -5,6 +5,12 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, X, ArrowUpDown, GitMerge, Users } from "lucide-react";
 
+interface Pipeline {
+    id: string;
+    label: string;
+    color: string;
+}
+
 interface TicketStatus {
     id: string;
     label: string;
@@ -15,6 +21,7 @@ interface TicketStatus {
     notifyRoles: string[];
     actionLabel: string | null;
     warrantyScope: string;
+    pipelineId: string | null;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
 }
@@ -32,6 +39,8 @@ const COLOR_OPTIONS = [
 ];
 
 export default function StatusesPage() {
+    const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+    const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
     const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -61,14 +70,17 @@ export default function StatusesPage() {
     const [addingNew, setAddingNew] = useState(false);
     const [newStatus, setNewStatus] = useState({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
 
-    const fetchData = async () => {
+    const fetchData = async (pipelineId: string) => {
+        setLoading(true);
         try {
-            const [sRes, rRes] = await Promise.all([
-                axios.get("/api/ticket-statuses"),
-                axios.get("/api/roles")
+            const [sRes, rRes, pRes] = await Promise.all([
+                axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
+                axios.get("/api/roles"),
+                axios.get("/api/pipelines"),
             ]);
             setStatuses(sRes.data);
             setRoles(rRes.data);
+            setPipelines(pRes.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -76,7 +88,13 @@ export default function StatusesPage() {
         }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { fetchData(activePipelineId); }, [activePipelineId]);
+
+    const switchPipeline = (id: string) => {
+        setActivePipelineId(id);
+        setEditingId(null);
+        setAddingNew(false);
+    };
 
     // ── Inline edit ──
     const startEdit = (s: TicketStatus) => {
@@ -89,7 +107,7 @@ export default function StatusesPage() {
             await axios.patch(`/api/ticket-statuses/${id}`, editValues);
             toast.success("Status updated");
             setEditingId(null);
-            await fetchData();
+            await fetchData(activePipelineId);
         } catch {
             toast.error("Failed to update status");
         }
@@ -102,7 +120,7 @@ export default function StatusesPage() {
         try {
             await axios.delete(`/api/ticket-statuses/${id}`);
             toast.success("Status deleted");
-            await fetchData();
+            await fetchData(activePipelineId);
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
             toast.error(msg ?? "Failed to delete status");
@@ -121,7 +139,7 @@ export default function StatusesPage() {
             await axios.put(`/api/ticket-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
             setTransitionModalId(null);
-            await fetchData();
+            await fetchData(activePipelineId);
         } catch {
             toast.error("Failed to save transitions");
         } finally {
@@ -159,7 +177,7 @@ export default function StatusesPage() {
             });
             toast.success("Role settings saved");
             setRolesModalId(null);
-            await fetchData();
+            await fetchData(activePipelineId);
         } catch {
             toast.error("Failed to save role settings");
         } finally {
@@ -176,11 +194,12 @@ export default function StatusesPage() {
                 color: newStatus.color,
                 isTerminal: newStatus.isTerminal,
                 order: statuses.length + 1,
+                pipelineId: activePipelineId,
             });
             toast.success("Status added");
             setAddingNew(false);
             setNewStatus({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
-            await fetchData();
+            await fetchData(activePipelineId);
         } catch {
             toast.error("Failed to create status");
         }
@@ -188,13 +207,14 @@ export default function StatusesPage() {
 
     const transitionStatus = transitionModalId ? statuses.find((s) => s.id === transitionModalId) : null;
     const rolesStatus = rolesModalId ? statuses.find((s) => s.id === rolesModalId) : null;
+    const activePipeline = pipelines.find((p) => p.id === activePipelineId);
 
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold">Ticket Statuses</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage status labels, colors, transitions, and role permissions.</p>
+                    <p className="text-sm text-gray-500 mt-1">Manage status labels, colors, transitions, and role permissions per pipeline.</p>
                 </div>
                 <button
                     onClick={() => setAddingNew(true)}
@@ -204,10 +224,36 @@ export default function StatusesPage() {
                 </button>
             </div>
 
+            {/* Pipeline tabs */}
+            <div className="flex gap-2 mb-5 flex-wrap">
+                {pipelines.map((p) => (
+                    <button
+                        key={p.id}
+                        onClick={() => switchPipeline(p.id)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                            activePipelineId === p.id
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                        }`}
+                    >
+                        <span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.color.replace("text-", "bg-").split(" ")[1]}`} />
+                        {p.label}
+                    </button>
+                ))}
+            </div>
+
             {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <p className="text-gray-500">Loading…</p>
             ) : (
                 <div className="bg-white rounded-lg shadow overflow-hidden">
+                    {activePipeline && (
+                        <div className="px-6 py-3 bg-gray-50 border-b flex items-center gap-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${activePipeline.color}`}>
+                                {activePipeline.label}
+                            </span>
+                            <span className="text-xs text-gray-400">{statuses.length} stage{statuses.length !== 1 ? "s" : ""} in this pipeline</span>
+                        </div>
+                    )}
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
                             <tr>
@@ -226,6 +272,13 @@ export default function StatusesPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
+                            {statuses.length === 0 && (
+                                <tr>
+                                    <td colSpan={10} className="px-6 py-8 text-center text-gray-400 text-sm">
+                                        No statuses in this pipeline yet. Add the first one.
+                                    </td>
+                                </tr>
+                            )}
                             {statuses.map((s) => (
                                 <tr key={s.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 font-mono text-gray-400 text-xs">{s.id}</td>
@@ -507,7 +560,6 @@ export default function StatusesPage() {
                         </div>
 
                         <div className="space-y-5">
-                            {/* Who can set */}
                             <div>
                                 <p className="text-sm font-medium mb-2">Who can move a ticket to this status?</p>
                                 <p className="text-xs text-gray-400 mb-2">Leave all unchecked to allow any role. Admin always bypasses this.</p>
@@ -525,8 +577,6 @@ export default function StatusesPage() {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Who gets notified */}
                             <div>
                                 <p className="text-sm font-medium mb-2">Which roles see this as an action item?</p>
                                 <p className="text-xs text-gray-400 mb-2">These roles will see tickets in this status on their dashboard queue.</p>
@@ -544,8 +594,6 @@ export default function StatusesPage() {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Warranty scope */}
                             <div>
                                 <label className="block text-sm font-medium mb-1">Warranty scope</label>
                                 <select
@@ -557,10 +605,7 @@ export default function StatusesPage() {
                                     <option value="warranty_only">Warranty only</option>
                                     <option value="non_warranty_only">Non-warranty only</option>
                                 </select>
-                                <p className="text-xs text-gray-400 mt-1">Controls whether this status appears for warranty or non-warranty tickets.</p>
                             </div>
-
-                            {/* Action label */}
                             <div>
                                 <label className="block text-sm font-medium mb-1">
                                     Action label <span className="text-gray-400">(optional)</span>
@@ -571,9 +616,6 @@ export default function StatusesPage() {
                                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="e.g. New ticket received — assign a technician"
                                 />
-                                <p className="text-xs text-gray-400 mt-1">
-                                    Shown on the notified role&apos;s dashboard as the task description.
-                                </p>
                             </div>
                         </div>
 

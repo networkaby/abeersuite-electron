@@ -5,6 +5,12 @@ import axios from "axios";
 import { toast } from "sonner";
 import { ChevronRight, GitMerge, Pencil, Plus, Trash2, X } from "lucide-react";
 
+interface Pipeline {
+    id: string;
+    label: string;
+    color: string;
+}
+
 interface StatusItem {
     id: string;
     label: string;
@@ -324,6 +330,8 @@ function SubStatusFormModal({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SubStatusesPage() {
+    const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+    const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<StatusItem[]>([]);
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
     const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
@@ -347,18 +355,21 @@ export default function SubStatusesPage() {
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
-    const loadAll = async () => {
+    const loadAll = async (pipelineId: string) => {
+        setLoading(true);
         try {
-            const [statusRes, subRes, roleRes] = await Promise.all([
-                axios.get("/api/ticket-statuses"),
-                axios.get("/api/sub-statuses"),
+            const [statusRes, subRes, roleRes, pipeRes] = await Promise.all([
+                axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
+                axios.get(`/api/sub-statuses?pipelineId=${pipelineId}`),
                 axios.get("/api/roles"),
+                axios.get("/api/pipelines"),
             ]);
             setStatuses(
                 (statusRes.data as StatusItem[]).sort((a, b) => a.order - b.order)
             );
             setSubStatuses(subRes.data);
             setRoles(roleRes.data);
+            setPipelines(pipeRes.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -366,7 +377,7 @@ export default function SubStatusesPage() {
         }
     };
 
-    useEffect(() => { loadAll(); }, []);
+    useEffect(() => { loadAll(activePipelineId); }, [activePipelineId]);
 
     // ── Create ──
     const handleCreate = async () => {
@@ -376,11 +387,12 @@ export default function SubStatusesPage() {
                 ...createForm,
                 order: createForm.order ? Number(createForm.order) : undefined,
                 handoffRole: createForm.handoffRole || null,
+                pipelineId: activePipelineId,
             });
             toast.success("Sub-status created");
             setShowCreate(false);
             setCreateForm(BLANK_FORM);
-            loadAll();
+            loadAll(activePipelineId);
         } catch {
             toast.error("Failed to create");
         } finally {
@@ -427,7 +439,7 @@ export default function SubStatusesPage() {
             });
             toast.success("Sub-status updated");
             setEditId(null);
-            loadAll();
+            loadAll(activePipelineId);
         } catch {
             toast.error("Failed to update");
         } finally {
@@ -441,7 +453,7 @@ export default function SubStatusesPage() {
         try {
             await axios.delete(`/api/sub-statuses/${id}`);
             toast.success("Sub-status deleted");
-            loadAll();
+            loadAll(activePipelineId);
         } catch (err) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete";
             toast.error(msg ?? "Failed to delete");
@@ -464,7 +476,7 @@ export default function SubStatusesPage() {
             await axios.put(`/api/sub-statuses/${transitionModalId}/transitions`, { toIds: selectedToIds });
             toast.success("Transitions saved");
             setTransitionModalId(null);
-            loadAll();
+            loadAll(activePipelineId);
         } catch {
             toast.error("Failed to save transitions");
         } finally {
@@ -512,6 +524,23 @@ export default function SubStatusesPage() {
                 >
                     <Plus size={16} /> Add Sub-Status
                 </button>
+            </div>
+
+            {/* Pipeline tabs */}
+            <div className="flex gap-2 mb-5 flex-wrap">
+                {pipelines.map((p) => (
+                    <button
+                        key={p.id}
+                        onClick={() => { setActivePipelineId(p.id); setShowCreate(false); setEditId(null); }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                            activePipelineId === p.id
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                        }`}
+                    >
+                        {p.label}
+                    </button>
+                ))}
             </div>
 
             {loading ? (

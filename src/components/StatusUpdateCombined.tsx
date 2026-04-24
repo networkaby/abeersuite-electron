@@ -30,6 +30,7 @@ interface Props {
         id: number;
         status: string;
         subStatusId?: string | null;
+        pipelineId?: string | null;
         isWarranty?: boolean;
         ticketStatus: {
             label: string;
@@ -85,9 +86,10 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         else params.set("entryOnly", "true");
         if (ticket.isWarranty) params.set("isWarranty", "true");
 
+        const statusParams = ticket.pipelineId ? `?pipelineId=${ticket.pipelineId}` : "";
         Promise.all([
             axios.get(`/api/sub-statuses/next?${params}`),
-            axios.get("/api/ticket-statuses"),
+            axios.get(`/api/ticket-statuses${statusParams}`),
         ])
             .then(([subRes, statusRes]) => {
                 setNextSubStatuses(subRes.data);

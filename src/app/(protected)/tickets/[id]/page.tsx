@@ -28,6 +28,8 @@ interface Ticket {
     id: number;
     status: string;
     subStatusId?: string;
+    pipelineId?: string | null;
+    pipeline?: { id: string; label: string; color: string } | null;
     ticketSubStatus?: { id: string; label: string; color: string } | null;
     priority: string;
     ticketPriority: { label: string; color: string };
@@ -152,6 +154,11 @@ export default function TicketDetailPage() {
                     </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                    {ticket.pipeline && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.pipeline.color}`}>
+                            {ticket.pipeline.label}
+                        </span>
+                    )}
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketPriority.color}`}>
                         {ticket.ticketPriority.label}
                     </span>

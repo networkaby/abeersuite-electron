@@ -13,6 +13,7 @@ import { useQuickTicketStore, type Step } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
 
 type Priority = { id: string; label: string };
+type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
 
 const customerSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -44,6 +45,8 @@ export default function QuickTicketButton() {
     const { technicians, fetchTechnicians } = useReferenceStore();
     const [searching, setSearching] = useState(false);
     const [priorities, setPriorities] = useState<Priority[]>([]);
+    const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
+    const [selectedPipelineId, setSelectedPipelineId] = useState<string>("P1");
     const [isWarranty, setIsWarranty] = useState(false);
 
     const customerForm = useForm<CustomerFormData>({
@@ -62,9 +65,15 @@ export default function QuickTicketButton() {
         customerForm.reset();
         ticketForm.reset({ priority: "P2" });
         await fetchTechnicians();
-        if (priorities.length === 0) {
-            const r = await axios.get<Priority[]>("/api/priorities");
-            setPriorities(r.data);
+        const [prioRes, pipeRes] = await Promise.all([
+            priorities.length === 0 ? axios.get<Priority[]>("/api/priorities") : Promise.resolve(null),
+            pipelines.length === 0 ? axios.get<PipelineOption[]>("/api/pipelines") : Promise.resolve(null),
+        ]);
+        if (prioRes) setPriorities(prioRes.data);
+        if (pipeRes) {
+            setPipelines(pipeRes.data);
+            const def = pipeRes.data.find((p: PipelineOption) => p.isDefault);
+            if (def) setSelectedPipelineId(def.id);
         }
     };
 
@@ -116,6 +125,7 @@ export default function QuickTicketButton() {
                 isWarranty,
                 customerId: customer.id,
                 createdBy: session?.user?.id,
+                pipelineId: selectedPipelineId,
             });
             toast.success(`Ticket #${res.data.id} created!`);
             closeModal();
@@ -276,6 +286,30 @@ export default function QuickTicketButton() {
                                             Change
                                         </button>
                                     </div>
+
+                                    {/* Pipeline selector */}
+                                    {pipelines.length > 1 && (
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">Pipeline</label>
+                                            <div className="flex gap-2 flex-wrap">
+                                                {pipelines.filter((p) => p.isDefault || p.id !== "P1").map((p) => (
+                                                    <button
+                                                        key={p.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedPipelineId(p.id)}
+                                                        className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                                                            selectedPipelineId === p.id
+                                                                ? "bg-blue-600 text-white border-blue-600"
+                                                                : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                                        }`}
+                                                    >
+                                                        <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${p.color.split(" ")[0]}`} />
+                                                        {p.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Device Info */}
                                     <div className="grid grid-cols-3 gap-3">

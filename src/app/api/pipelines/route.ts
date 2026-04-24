@@ -1,0 +1,71 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const pipelineSchema = z.object({
+    name: z.string().trim().min(1, "Name is required").regex(/^[a-z0-9_-]+$/, "Name must be lowercase letters, numbers, hyphens or underscores"),
+    label: z.string().trim().min(1, "Label is required"),
+    description: z.string().optional().nullable(),
+    color: z.string().trim().optional(),
+    isActive: z.boolean().optional(),
+    order: z.coerce.number().int().nonnegative().optional(),
+});
+
+export async function GET() {
+    const { response } = await requireAuth();
+    if (response) return response;
+    try {
+        const pipelines = await prisma.pipeline.findMany({
+            orderBy: { order: "asc" },
+            include: {
+                _count: { select: { statuses: true, tickets: true } },
+            },
+        });
+        return NextResponse.json(pipelines);
+    } catch {
+        return NextResponse.json({ error: "Failed to fetch pipelines" }, { status: 500 });
+    }
+}
+
+export async function POST(req: Request) {
+    const { response } = await requirePermission("settings:statuses");
+    if (response) return response;
+    try {
+        const parsed = pipelineSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid pipeline payload" }, { status: 400 });
+        }
+        const body = parsed.data;
+
+        // Check name uniqueness
+        const existing = await prisma.pipeline.findUnique({ where: { name: body.name } });
+        if (existing) {
+            return NextResponse.json({ error: `A pipeline with name "${body.name}" already exists` }, { status: 409 });
+        }
+
+        // Generate next opaque ID
+        const all = await prisma.pipeline.findMany({ select: { id: true } });
+        const maxN = all.reduce((max, p) => {
+            const n = parseInt(p.id.replace(/\D/g, ""), 10);
+            return isNaN(n) ? max : Math.max(max, n);
+        }, 0);
+        const newId = `P${maxN + 1}`;
+
+        const pipeline = await prisma.pipeline.create({
+            data: {
+                id: newId,
+                name: body.name,
+                label: body.label,
+                description: body.description ?? null,
+                color: body.color ?? "bg-gray-100 text-gray-600",
+                isDefault: false,
+                isActive: body.isActive ?? true,
+                order: body.order ?? maxN + 1,
+            },
+        });
+        return NextResponse.json(pipeline, { status: 201 });
+    } catch {
+        return NextResponse.json({ error: "Failed to create pipeline" }, { status: 500 });
+    }
+}
