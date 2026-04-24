@@ -5,6 +5,7 @@ import axios from "axios";
 import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { formatDate } from "@/lib/format-date";
 import WarrantyBadge from "@/components/WarrantyBadge";
 interface Ticket {
@@ -37,6 +38,8 @@ type PriorityOption = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string };
 
 export default function TicketsPage() {
+    const searchParams = useSearchParams();
+    const requestedPipeline = searchParams.get("pipeline") ?? "";
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,18 +60,21 @@ export default function TicketsPage() {
     const [warrantyFilter, setWarrantyFilter] = useState("");
     const [pipelineFilter, setPipelineFilter] = useState("");
 
-    const fetchTickets = async () => {
-        try {
-            const res = await axios.get("/api/tickets");
-            setTickets(res.data);
-        } catch {
-            toast.error("Failed to load tickets");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
+        setLoading(true);
+        const fetchTickets = async () => {
+            try {
+                const res = await axios.get("/api/tickets", {
+                    params: requestedPipeline ? { pipelineId: requestedPipeline } : undefined,
+                });
+                setTickets(res.data);
+            } catch {
+                toast.error("Failed to load tickets");
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchTickets();
         axios.get("/api/users").then((r) => setTechnicians(r.data));
         axios.get("/api/service-centers").then((r) => setServiceCenters(r.data));
@@ -77,7 +83,11 @@ export default function TicketsPage() {
         );
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
         axios.get("/api/pipelines").then((r) => setPipelineOptions(r.data));
-    }, []);
+    }, [requestedPipeline]);
+
+    useEffect(() => {
+        setPipelineFilter(requestedPipeline);
+    }, [requestedPipeline]);
 
     // Apply filters
     useEffect(() => {
@@ -138,10 +148,20 @@ export default function TicketsPage() {
         setDateFrom("");
         setDateTo("");
         setWarrantyFilter("");
-        setPipelineFilter("");
+        setPipelineFilter(requestedPipeline);
     };
 
-    const hasFilters = search || statusFilter || priorityFilter || technicianFilter || serviceCenterFilter || dateFrom || dateTo || warrantyFilter || pipelineFilter;
+    const hasFilters = Boolean(
+        search ||
+        statusFilter ||
+        priorityFilter ||
+        technicianFilter ||
+        serviceCenterFilter ||
+        dateFrom ||
+        dateTo ||
+        warrantyFilter ||
+        pipelineFilter !== requestedPipeline
+    );
 
     return (
         <div>

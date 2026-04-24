@@ -7,10 +7,11 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     
     const canManageStatuses = permissions.includes("settings:statuses");
     const canManageRoles = permissions.includes("roles:manage");
+    const canManageUsers = permissions.includes("users:manage");
     const isAdmin = permissions.includes("admin:bypass");
 
-    if (!canManageStatuses && !canManageRoles && !isAdmin) {
-        redirect("/dashboard");
+    if (!canManageStatuses && !canManageRoles && !canManageUsers && !isAdmin) {
+        redirect("/assignments");
     }
     return <>{children}</>;
 }

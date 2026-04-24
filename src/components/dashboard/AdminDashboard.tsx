@@ -30,9 +30,11 @@ interface Props {
     allActiveTickets: TicketRow[];
     counts: { total: number; open: number; escalated: number; ready: number; actionItems: number };
     roles: { id: string; label: string; color: string }[];
+    contextLabel?: string | null;
+    ticketsHref?: string;
 }
 
-export default function AdminDashboard({ name, pipeline, allActiveTickets, counts, roles }: Props) {
+export default function AdminDashboard({ name, pipeline, allActiveTickets, counts, roles, contextLabel, ticketsHref = "/tickets" }: Props) {
     const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
 
@@ -55,7 +57,10 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
     return (
         <div>
             <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
-            <p className="text-gray-400 text-sm mb-6">Welcome back, {name}</p>
+            <p className="text-gray-400 text-sm mb-6">
+                Welcome back, {name}
+                {contextLabel ? ` · ${contextLabel}` : ""}
+            </p>
 
             {/* Summary bar */}
             <div className="flex flex-wrap gap-3 mb-6">
@@ -133,7 +138,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                             Clear filters
                         </button>
                     ) : (
-                        <Link href="/tickets" className="ml-auto text-xs text-blue-600 hover:underline">View all →</Link>
+                        <Link href={ticketsHref} className="ml-auto text-xs text-blue-600 hover:underline">View all →</Link>
                     )}
                 </div>
                 {filtered.length === 0 ? (

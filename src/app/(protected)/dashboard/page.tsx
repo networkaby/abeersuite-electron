@@ -6,26 +6,60 @@ import { timeAgo } from "@/lib/time-ago";
 import TechnicianDashboard from "@/components/dashboard/TechnicianDashboard";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 
-// ── Shared pipeline query helper ───────────────────────────────────────────────
-async function fetchPipeline() {
-    return prisma.ticketStatus.findMany({
-        where: { isTerminal: false },
-        orderBy: { order: "asc" },
-        select: { id: true, label: true, color: true, _count: { select: { tickets: true } } },
-    });
+type DashboardPageProps = {
+    searchParams: Promise<{ pipeline?: string }>;
+};
+
+type DashboardContext = {
+    pipelineId?: string;
+    pipelineLabel?: string | null;
+    ticketsHref: string;
+};
+
+function ticketWhere(context: DashboardContext) {
+    return context.pipelineId ? { pipelineId: context.pipelineId } : {};
 }
 
-// ── Admin Dashboard ────────────────────────────────────────────────────────────
-async function AdminDashboardServer({ name }: { name: string }) {
+async function fetchPipeline(context: DashboardContext) {
+    const statuses = await prisma.ticketStatus.findMany({
+        where: {
+            isTerminal: false,
+            ...(context.pipelineId ? { OR: [{ pipelineId: context.pipelineId }, { pipelineId: null }] } : {}),
+        },
+        orderBy: { order: "asc" },
+        select: { id: true, label: true, color: true },
+    });
+
+    const counts = await Promise.all(
+        statuses.map(async (status) => ({
+            id: status.id,
+            count: await prisma.ticket.count({
+                where: {
+                    ...ticketWhere(context),
+                    status: status.id,
+                },
+            }),
+        }))
+    );
+
+    const countMap = new Map(counts.map((item) => [item.id, item.count]));
+
+    return statuses.map((status) => ({
+        ...status,
+        _count: { tickets: countMap.get(status.id) ?? 0 },
+    }));
+}
+
+async function AdminDashboardServer({ name, context }: { name: string; context: DashboardContext }) {
     const [total, open, escalated, ready, actionItems, pipeline, rawTickets, roles] = await Promise.all([
-        prisma.ticket.count(),
-        prisma.ticket.count({ where: { ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { escalated: true } }),
-        prisma.ticket.count({ where: { status: "S6" } }),
-        prisma.ticket.count({ where: { subStatusId: { not: null } } }),
-        fetchPipeline(),
+        prisma.ticket.count({ where: ticketWhere(context) }),
+        prisma.ticket.count({ where: { ...ticketWhere(context), ticketStatus: { isTerminal: false } } }),
+        prisma.ticket.count({ where: { ...ticketWhere(context), escalated: true } }),
+        prisma.ticket.count({ where: { ...ticketWhere(context), status: "S6" } }),
+        prisma.ticket.count({ where: { ...ticketWhere(context), subStatusId: { not: null } } }),
+        fetchPipeline(context),
         prisma.ticket.findMany({
-            where: { ticketStatus: { isTerminal: false } },
+            where: { ...ticketWhere(context), ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
             take: 100,
             include: {
@@ -52,16 +86,17 @@ async function AdminDashboardServer({ name }: { name: string }) {
             allActiveTickets={allActiveTickets}
             counts={{ total, open, escalated, ready, actionItems }}
             roles={roles}
+            contextLabel={context.pipelineLabel}
+            ticketsHref={context.ticketsHref}
         />
     );
 }
 
-// ── Technician Dashboard ───────────────────────────────────────────────────────
-async function TechnicianDashboardServer({ name, userId }: { name: string; userId: number }) {
+async function TechnicianDashboardServer({ name, userId, context }: { name: string; userId: number; context: DashboardContext }) {
     const [pipeline, rawTickets, unassigned, roles] = await Promise.all([
-        fetchPipeline(),
+        fetchPipeline(context),
         prisma.ticket.findMany({
-            where: { ticketStatus: { isTerminal: false } },
+            where: { ...ticketWhere(context), ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
             include: {
                 device: { include: { customer: true } },
@@ -72,6 +107,7 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
         }),
         prisma.ticket.findMany({
             where: {
+                ...ticketWhere(context),
                 primaryOwnerId: null,
                 ticketStatus: { isTerminal: false, notifyRoles: { has: "R2" } },
             },
@@ -100,29 +136,29 @@ async function TechnicianDashboardServer({ name, userId }: { name: string; userI
             allActiveTickets={allActiveTickets}
             unassigned={unassigned}
             roles={roles}
+            contextLabel={context.pipelineLabel}
         />
     );
 }
 
-// ── Front Desk Dashboard ───────────────────────────────────────────────────────
-async function FrontDeskDashboard({ name }: { name: string }) {
+async function FrontDeskDashboard({ name, context }: { name: string; context: DashboardContext }) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const [subActionCount, statusActionCount, newToday] = await Promise.all([
         prisma.ticket.count({
-            where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
+            where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
         }),
         prisma.ticket.count({
-            where: { ticketStatus: { notifyRoles: { has: "R3" } } },
+            where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R3" } } },
         }),
-        prisma.ticket.count({ where: { createdAt: { gte: today } } }),
+        prisma.ticket.count({ where: { ...ticketWhere(context), createdAt: { gte: today } } }),
     ]);
     const actionCount = subActionCount + statusActionCount;
 
     const [actionQueue, statusQueue] = await Promise.all([
         prisma.ticket.findMany({
-            where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
+            where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
                 device: { include: { customer: true } },
@@ -132,7 +168,7 @@ async function FrontDeskDashboard({ name }: { name: string }) {
             },
         }),
         prisma.ticket.findMany({
-            where: { ticketStatus: { notifyRoles: { has: "R3" } } },
+            where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
                 device: { include: { customer: true } },
@@ -145,7 +181,10 @@ async function FrontDeskDashboard({ name }: { name: string }) {
     return (
         <div>
             <h1 className="text-2xl font-bold mb-1">Front Desk</h1>
-            <p className="text-gray-400 text-sm mb-6">Welcome back, {name}</p>
+            <p className="text-gray-400 text-sm mb-6">
+                Welcome back, {name}
+                {context.pipelineLabel ? ` · ${context.pipelineLabel}` : ""}
+            </p>
 
             <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-white rounded-xl shadow p-5 flex items-center gap-4">
@@ -261,22 +300,21 @@ async function FrontDeskDashboard({ name }: { name: string }) {
     );
 }
 
-// ── Despatch Dashboard ─────────────────────────────────────────────────────────
-async function DespatchDashboard({ name }: { name: string }) {
+async function DespatchDashboard({ name, context }: { name: string; context: DashboardContext }) {
     const [subPendingCount, statusPendingCount, inTransitCount] = await Promise.all([
         prisma.ticket.count({
-            where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
+            where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
         }),
         prisma.ticket.count({
-            where: { ticketStatus: { notifyRoles: { has: "R4" } } },
+            where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R4" } } },
         }),
-        prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
+        prisma.ticket.count({ where: { ...ticketWhere(context), escalated: true, status: "S4" } }),
     ]);
     const pendingCount = subPendingCount + statusPendingCount;
 
     const [pendingQueue, statusQueue] = await Promise.all([
         prisma.ticket.findMany({
-            where: { subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
+            where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
                 device: { include: { customer: true } },
@@ -287,7 +325,7 @@ async function DespatchDashboard({ name }: { name: string }) {
             },
         }),
         prisma.ticket.findMany({
-            where: { ticketStatus: { notifyRoles: { has: "R4" } } },
+            where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
                 device: { include: { customer: true } },
@@ -300,7 +338,10 @@ async function DespatchDashboard({ name }: { name: string }) {
     return (
         <div>
             <h1 className="text-2xl font-bold mb-1">Despatch</h1>
-            <p className="text-gray-400 text-sm mb-6">Welcome back, {name}</p>
+            <p className="text-gray-400 text-sm mb-6">
+                Welcome back, {name}
+                {context.pipelineLabel ? ` · ${context.pipelineLabel}` : ""}
+            </p>
 
             <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-white rounded-xl shadow p-5 flex items-center gap-4">
@@ -414,17 +455,30 @@ async function DespatchDashboard({ name }: { name: string }) {
     );
 }
 
-// ── Router ─────────────────────────────────────────────────────────────────────
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] })?.permissions ?? [];
     const name = session?.user?.name ?? "there";
     const userId = Number((session?.user as { id?: string })?.id ?? "0");
+    const { pipeline } = await searchParams;
 
-    if (permissions.includes("admin:bypass")) return <AdminDashboardServer name={name} />;
-    if (permissions.includes("warranty:convert")) return <TechnicianDashboardServer name={name} userId={userId} />;
-    if (permissions.includes("tickets:create")) return <FrontDeskDashboard name={name} />;
-    if (permissions.includes("tickets:substatus:set")) return <DespatchDashboard name={name} />;
-    
-    return <AdminDashboardServer name={name} />;
+    const selectedPipeline = pipeline
+        ? await prisma.pipeline.findFirst({
+            where: { id: pipeline, isActive: true },
+            select: { id: true, label: true },
+        })
+        : null;
+
+    const context: DashboardContext = {
+        pipelineId: selectedPipeline?.id,
+        pipelineLabel: selectedPipeline?.label ?? null,
+        ticketsHref: selectedPipeline ? `/tickets?pipeline=${selectedPipeline.id}` : "/tickets",
+    };
+
+    if (permissions.includes("admin:bypass")) return <AdminDashboardServer name={name} context={context} />;
+    if (permissions.includes("warranty:convert")) return <TechnicianDashboardServer name={name} userId={userId} context={context} />;
+    if (permissions.includes("tickets:create")) return <FrontDeskDashboard name={name} context={context} />;
+    if (permissions.includes("tickets:substatus:set")) return <DespatchDashboard name={name} context={context} />;
+
+    return <AdminDashboardServer name={name} context={context} />;
 }

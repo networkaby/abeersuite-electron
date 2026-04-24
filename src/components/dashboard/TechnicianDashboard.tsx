@@ -39,9 +39,10 @@ interface Props {
     allActiveTickets: TicketRow[];
     unassigned: UnassignedRow[];
     roles: { id: string; label: string; color: string }[];
+    contextLabel?: string | null;
 }
 
-export default function TechnicianDashboard({ name, userId, pipeline, allActiveTickets, unassigned, roles }: Props) {
+export default function TechnicianDashboard({ name, userId, pipeline, allActiveTickets, unassigned, roles, contextLabel }: Props) {
     const router = useRouter();
     const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<string | null>("R2");
@@ -78,7 +79,10 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
     return (
         <div>
             <h1 className="text-2xl font-bold mb-1">My Workbench</h1>
-            <p className="text-gray-400 text-sm mb-6">Welcome back, {name}</p>
+            <p className="text-gray-400 text-sm mb-6">
+                Welcome back, {name}
+                {contextLabel ? ` · ${contextLabel}` : ""}
+            </p>
 
             {/* Pipeline strip */}
             <div className="bg-white rounded-xl shadow p-4 mb-6">

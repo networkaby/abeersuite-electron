@@ -10,7 +10,7 @@ export default auth((req) => {
     }
 
     if (isAuthenticated && isLoginPage) {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
+        return NextResponse.redirect(new URL("/assignments", req.url));
     }
 
     return NextResponse.next();

@@ -5,7 +5,7 @@ export default async function UsersLayout({ children }: { children: React.ReactN
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     if (!permissions.includes("users:manage") && !permissions.includes("admin:bypass")) {
-        redirect("/dashboard");
+        redirect("/assignments");
     }
     return <>{children}</>;
 }

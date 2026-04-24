@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import axios from "axios";
 import {
-    LayoutDashboard,
     Users,
     Ticket,
     Building2,
@@ -21,6 +20,7 @@ import {
     GitBranch,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
+import { useQuickTicketStore } from "@/store/quickTicketStore";
 
 type SidebarUser = {
     name?: string | null;
@@ -29,17 +29,15 @@ type SidebarUser = {
     permissions?: string[] | null;
 };
 
-type Pipeline = { id: string; label: string; color: string; isActive: boolean };
+type Pipeline = { id: string; label: string; color: string; isActive: boolean; isDefault: boolean };
 
 const GLOBAL_NAV = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: null },
     { label: "Customers", href: "/customers", icon: Users, permission: null },
-    { label: "Service Centres", href: "/service-centers", icon: Building2, permission: "warranty:convert" },
-    { label: "Users", href: "/users", icon: UserCog, permission: "users:manage" },
 ] as const;
 
 const SETTINGS_NAV = [
+    { label: "Users", href: "/settings/users", icon: UserCog, permission: "users:manage" },
     { label: "Statuses", href: "/settings/statuses", icon: Settings, permission: "settings:statuses" },
     { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
     { label: "Pipelines", href: "/settings/pipelines", icon: GitBranch, permission: "settings:statuses" },
@@ -52,10 +50,14 @@ function colorDot(color: string) {
 
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const currentPipeline = searchParams.get("pipeline") ?? "";
     const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
     const permissions = user?.permissions ?? [];
     const primaryRole = user?.role ?? "";
     const isAdmin = permissions.includes("admin:bypass");
+    const canManageServiceCenters = isAdmin || permissions.includes("warranty:convert");
+    const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     const [collapsed, setCollapsed] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
@@ -67,16 +69,16 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             .then((r) => {
                 const active = r.data.filter((p) => p.isActive);
                 setPipelines(active);
-                // Auto-open the section whose tickets link matches current URL
                 const initial: Record<string, boolean> = {};
                 for (const p of active) {
-                    initial[p.id] = pathname.startsWith("/tickets");
+                    initial[p.id] =
+                        currentPipeline === p.id &&
+                        (pathname.startsWith("/tickets") || pathname.startsWith("/dashboard") || pathname.startsWith("/service-centers"));
                 }
                 setPipelineOpen(initial);
             })
             .catch(() => { });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [currentPipeline, pathname]);
 
     const visibleGlobal = GLOBAL_NAV.filter(
         (item) => item.permission === null || isAdmin || permissions.includes(item.permission)
@@ -99,8 +101,17 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         setPipelineOpen((prev) => ({ ...prev, [id]: !prev[id] }));
     };
 
+    const moduleIsActive = (pipelineId: string) =>
+        currentPipeline === pipelineId &&
+        (pathname.startsWith("/dashboard") || pathname.startsWith("/tickets") || pathname.startsWith("/service-centers"));
+
+    const openNewTicket = (pipelineId: string) => {
+        setInitialPipelineId(pipelineId);
+        openQuickTicket(true);
+    };
+
     return (
-        <aside className={`${collapsed ? "w-20" : "w-64"} bg-white shadow-md flex flex-col min-h-screen transition-all duration-300 relative`}>
+        <aside className={`${collapsed ? "w-20" : "w-72"} bg-white shadow-md flex flex-col min-h-screen transition-all duration-300 relative`}>
             {/* Collapse Toggle */}
             <button
                 onClick={() => setCollapsed(!collapsed)}
@@ -125,19 +136,26 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             </div>
 
             {/* Nav */}
-            <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 p-3 space-y-3 overflow-y-auto overflow-x-hidden">
 
                 {/* Global items */}
-                {visibleGlobal.map(({ label, href, icon: Icon }) => (
-                    <Link key={href} href={href} className={linkClass(href)} title={collapsed ? label : ""}>
-                        <Icon size={18} className="shrink-0" />
-                        {!collapsed && <span className="truncate">{label}</span>}
-                    </Link>
-                ))}
+                <div className="space-y-0.5">
+                    {!collapsed && (
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pb-1">
+                            Workspace
+                        </p>
+                    )}
+                    {visibleGlobal.map(({ label, href, icon: Icon }) => (
+                        <Link key={href} href={href} className={linkClass(href)} title={collapsed ? label : ""}>
+                            <Icon size={18} className="shrink-0" />
+                            {!collapsed && <span className="truncate">{label}</span>}
+                        </Link>
+                    ))}
+                </div>
 
                 {/* Pipeline sections */}
                 {pipelines.length > 0 && (
-                    <div className={`${collapsed ? "" : "pt-2"}`}>
+                    <div className="space-y-0.5">
                         {!collapsed && (
                             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pb-1">
                                 Modules
@@ -146,43 +164,52 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         {pipelines.map((p) => {
                             const dotClass = colorDot(p.color);
                             const isOpen = pipelineOpen[p.id] ?? false;
+                            const moduleHref = `/dashboard?pipeline=${p.id}`;
                             const ticketsHref = `/tickets?pipeline=${p.id}`;
+                            const moduleActive = moduleIsActive(p.id);
 
                             return (
                                 <div key={p.id}>
                                     {collapsed ? (
                                         <Link
-                                            href={ticketsHref}
-                                            className={linkClass("/tickets")}
+                                            href={moduleHref}
+                                            className={linkClass("/dashboard")}
                                             title={p.label}
                                         >
                                             <span className={`w-4 h-4 rounded-full shrink-0 ${dotClass}`} />
                                         </Link>
                                     ) : (
                                         <>
-                                            <button
-                                                onClick={() => togglePipeline(p.id)}
-                                                className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-gray-600 hover:bg-gray-100 w-full"
-                                            >
-                                                <Layers size={18} className="shrink-0" />
-                                                <span className="flex-1 text-left truncate">{p.label}</span>
-                                                <ChevronDown
-                                                    size={14}
-                                                    className={`transition-transform ${isOpen ? "rotate-180" : ""}`}
-                                                />
-                                            </button>
+                                            <div className={`flex items-center rounded-lg overflow-hidden ${moduleActive ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-100"}`}>
+                                                <Link
+                                                    href={moduleHref}
+                                                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all duration-200 flex-1 min-w-0"
+                                                >
+                                                    <Layers size={18} className="shrink-0" />
+                                                    <span className="flex-1 truncate">{p.label}</span>
+                                                </Link>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => togglePipeline(p.id)}
+                                                    className={`px-3 py-2.5 transition-colors ${moduleActive ? "hover:bg-blue-100" : "hover:bg-gray-200/70"}`}
+                                                    aria-label={`Toggle ${p.label} links`}
+                                                >
+                                                    <ChevronDown
+                                                        size={14}
+                                                        className={`transition-transform ${isOpen ? "rotate-180" : ""}`}
+                                                    />
+                                                </button>
+                                            </div>
                                             {isOpen && (
                                                 <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
-
-                                                    <Link
-                                                        href={ticketsHref}
-                                                        className={linkClass("/tickets")}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openNewTicket(p.id)}
+                                                        className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-gray-600 hover:bg-gray-100 w-full"
                                                     >
                                                         <Ticket size={16} className="shrink-0" />
-                                                        <span className="truncate"> New Tickets</span>
-                                                    </Link>
-
-
+                                                        <span className="truncate">New Ticket +</span>
+                                                    </button>
                                                     <Link
                                                         href={ticketsHref}
                                                         className={linkClass("/tickets")}
@@ -190,12 +217,16 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                         <Ticket size={16} className="shrink-0" />
                                                         <span className="truncate">Tickets</span>
                                                     </Link>
-
-
-
+                                                    {canManageServiceCenters && p.isDefault && (
+                                                        <Link
+                                                            href="/service-centers"
+                                                            className={linkClass("/service-centers")}
+                                                        >
+                                                            <Building2 size={16} className="shrink-0" />
+                                                            <span className="truncate">Service Centres</span>
+                                                        </Link>
+                                                    )}
                                                 </div>
-
-
                                             )}
                                         </>
                                     )}

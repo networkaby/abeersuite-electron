@@ -5,7 +5,7 @@ export default async function ServiceCentersLayout({ children }: { children: Rea
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     if (!permissions.includes("warranty:convert") && !permissions.includes("admin:bypass")) {
-        redirect("/dashboard");
+        redirect("/assignments");
     }
     return <>{children}</>;
 }
