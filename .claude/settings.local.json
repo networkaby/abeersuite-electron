@@ -43,7 +43,8 @@
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx prisma migrate dev --name finance-module)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx prisma db push)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx prisma generate)",
-      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx next build)"
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx next build)",
+      "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec grep -l \"\\\\\"SS36\\\\\"\\\\|\\\\\"SS37\\\\\"\\\\|\\\\\"R[1-4]\\\\\"\\\\|\\\\\"S[1-9]\\\\\"\\\\|\\\\\"P[1-4]\\\\\"\" {} \\\\;)"
     ]
   }
 }

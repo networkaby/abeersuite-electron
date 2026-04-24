@@ -7,6 +7,85 @@ datasource db {
   provider = "postgresql"
 }
 
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum WarrantyStatus {
+  NONE
+  ACTIVE
+  VOID
+  CLAIMED
+}
+
+enum EscalationType {
+  INTERNAL
+  EXTERNAL
+  VENDOR
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskSource {
+  MANUAL
+  AUTO
+  SYSTEM
+}
+
+enum LogVisibility {
+  INTERNAL
+  CUSTOMER
+  PUBLIC
+}
+
+// ── Finance enums ─────────────────────────────────────────────────────────────
+
+enum GlAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  VOIDED
+}
+
+enum EntryType {
+  DEBIT
+  CREDIT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  MOBILE_PAYMENT
+  OTHER
+}
+
+// ── Pipeline / Status ─────────────────────────────────────────────────────────
+
 model Pipeline {
   id          String   @id
   name        String   @unique
@@ -67,6 +146,13 @@ model TicketSubStatus {
   SubStatusGroup      SubStatusGroup?       @relation(fields: [groupId], references: [id])
 }
 
+model SubStatusGroup {
+  id              String            @id
+  label           String
+  order           Int               @default(0)
+  TicketSubStatus TicketSubStatus[]
+}
+
 model SubStatusTransition {
   id              Int              @id @default(autoincrement())
   fromSubStatusId String?
@@ -87,6 +173,8 @@ model StatusTransition {
   @@unique([fromStatusId, toStatusId])
 }
 
+// ── RBAC ──────────────────────────────────────────────────────────────────────
+
 model Priority {
   id      String   @id
   label   String
@@ -102,7 +190,6 @@ model Role {
   color       String
   isSystem    Boolean              @default(false)
   users       User[]
-  userRoles   UserRole[]
   permissions UserRolePermission[]
 }
 
@@ -113,18 +200,6 @@ model Permission {
   module      String               @default("core")
   userGrants  UserPermission[]
   roleGrants  UserRolePermission[]
-}
-
-model UserRole {
-  userId     Int
-  roleId     String
-  isPrimary  Boolean  @default(false)
-  assignedAt DateTime @default(now())
-  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([userId, roleId])
-  @@index([userId])
 }
 
 model UserRolePermission {
@@ -149,6 +224,8 @@ model UserPermission {
   @@id([userId, permissionId])
 }
 
+// ── Users ─────────────────────────────────────────────────────────────────────
+
 model User {
   id                 Int                 @id @default(autoincrement())
   name               String
@@ -171,7 +248,6 @@ model User {
   userRole           Role                @relation(fields: [role], references: [id])
   grantedPerms       UserPermission[]    @relation("UserPermissionGranter")
   permissions        UserPermission[]    @relation("UserPermissionUser")
-  userRoles          UserRole[]
   warrantyLogs       WarrantyLog[]       @relation("WarrantyLogUser")
   journalEntries     JournalEntry[]      @relation("JournalCreatedBy")
   invoices           Invoice[]           @relation("InvoiceCreatedBy")
@@ -191,9 +267,12 @@ model Customer {
   isActive      Boolean           @default(true)
   createdAt     DateTime          @default(now())
 
-  account       Account?
-  devices       Device[]
-  companies     CustomerCompany[]
+  account   Account?
+  devices   Device[]
+  companies CustomerCompany[]
+
+  @@index([phone])
+  @@index([email])
 }
 
 model Company {
@@ -207,9 +286,12 @@ model Company {
   isActive   Boolean           @default(true)
   createdAt  DateTime          @default(now())
 
-  account    Account?
-  devices    Device[]
-  customers  CustomerCompany[]
+  account   Account?
+  devices   Device[]
+  customers CustomerCompany[]
+
+  @@index([phone])
+  @@index([email])
 }
 
 model CustomerCompany {
@@ -228,10 +310,10 @@ model CustomerCompany {
 
 // Pure ledger — one Account per Customer or Company. Internal only.
 model Account {
-  id         Int       @id @default(autoincrement())
-  customerId Int?      @unique
-  companyId  Int?      @unique
-  createdAt  DateTime  @default(now())
+  id         Int      @id @default(autoincrement())
+  customerId Int?     @unique
+  companyId  Int?     @unique
+  createdAt  DateTime @default(now())
 
   customer      Customer? @relation(fields: [customerId], references: [id])
   company       Company?  @relation(fields: [companyId], references: [id])
@@ -251,37 +333,39 @@ model Device {
   customer   Customer? @relation(fields: [customerId], references: [id])
   company    Company?  @relation(fields: [companyId], references: [id])
   tickets    Ticket[]
+
+  @@index([customerId])
+  @@index([companyId])
 }
 
 model Ticket {
-  id              Int                 @id @default(autoincrement())
-  pipelineId      String?
-  pipeline        Pipeline?           @relation(fields: [pipelineId], references: [id])
-  status          String              @default("S1")
-  priority        String              @default("P2")
-  notes           String?
-  accessInfo      String?
-  estimatedCost   Float?
-  deviceId        Int
-  escalated       Boolean             @default(false)
-  escalatedAt     DateTime?
-  expectedReturn  DateTime?
-  receivedBackAt  DateTime?
-  externalRef     String?
-  serviceCenterId Int?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  subStatusId     String?
-  escalationType  String?
-  isWarranty      Boolean             @default(false)
-  primaryOwnerId  Int?
+  id               Int             @id @default(autoincrement())
+  pipelineId       String?
+  status           String          @default("S1")
+  priority         String          @default("P2")
+  notes            String?
+  accessInfo       String?
+  estimatedCost    Float?
+  deviceId         Int
+  escalated        Boolean         @default(false)
+  escalatedAt      DateTime?
+  escalationType   EscalationType?
+  expectedReturn   DateTime?
+  receivedBackAt   DateTime?
+  externalRef      String?
+  serviceCenterId  Int?
+  subStatusId      String?
+  isWarranty       Boolean         @default(false)
+  warrantyStatus   WarrantyStatus  @default(NONE)
+  warrantyRef      String?
+  purchaseDate     DateTime?
+  voidReason       String?
+  primaryOwnerId   Int?
   billingAccountId Int?
-  purchaseDate    DateTime?
-  voidReason      String?
-  warrantyRef     String?
-  warrantyStatus  String              @default("none")
-  notifications   Notification[]
-  tasks           Task[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  pipeline        Pipeline?           @relation(fields: [pipelineId], references: [id])
   device          Device              @relation(fields: [deviceId], references: [id])
   primaryOwner    User?               @relation(fields: [primaryOwnerId], references: [id])
   billingAccount  Account?            @relation("TicketBillingAccount", fields: [billingAccountId], references: [id])
@@ -289,9 +373,18 @@ model Ticket {
   serviceCenter   ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
   ticketStatus    TicketStatus        @relation(fields: [status], references: [id])
   ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
+  notifications   Notification[]
+  tasks           Task[]
   logs            TicketLog[]
   participants    TicketParticipant[]
   warrantyLogs    WarrantyLog[]
+
+  @@index([status])
+  @@index([pipelineId, status])
+  @@index([primaryOwnerId])
+  @@index([deviceId])
+  @@index([warrantyStatus])
+  @@index([createdAt])
 }
 
 model WarrantyLog {
@@ -307,6 +400,8 @@ model WarrantyLog {
   createdAt    DateTime @default(now())
   changedBy    User     @relation("WarrantyLogUser", fields: [changedById], references: [id])
   ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
 }
 
 model TicketParticipant {
@@ -330,18 +425,21 @@ model TicketParticipant {
 }
 
 model TicketLog {
-  id              Int              @id @default(autoincrement())
+  id              Int            @id @default(autoincrement())
   ticketId        Int
   status          String
   note            String?
   userId          Int
-  createdAt       DateTime         @default(now())
   subStatusId     String?
-  visibility      String           @default("internal")
-  ticketStatus    TicketStatus     @relation(fields: [status], references: [id])
+  visibility      LogVisibility  @default(INTERNAL)
+  createdAt       DateTime       @default(now())
+  ticketStatus    TicketStatus   @relation(fields: [status], references: [id])
   ticketSubStatus TicketSubStatus? @relation(fields: [subStatusId], references: [id])
-  ticket          Ticket           @relation(fields: [ticketId], references: [id])
-  changedBy       User             @relation(fields: [userId], references: [id])
+  ticket          Ticket         @relation(fields: [ticketId], references: [id])
+  changedBy       User           @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
 }
 
 model Notification {
@@ -354,6 +452,8 @@ model Notification {
   createdAt DateTime @default(now())
   ticket    Ticket   @relation(fields: [ticketId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
 }
 
 model ServiceCenter {
@@ -366,13 +466,15 @@ model ServiceCenter {
   tickets   Ticket[]
 }
 
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
 model Task {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   title        String
   description  String?
-  source       String    @default("manual")
-  status       String    @default("open")
-  priority     String    @default("P2")
+  source       TaskSource @default(MANUAL)
+  status       TaskStatus @default(OPEN)
+  priority     String     @default("P2")
   assignedToId Int?
   assignedRole String?
   pickedUpById Int?
@@ -381,16 +483,19 @@ model Task {
   createdById  Int
   dueAt        DateTime?
   completedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  assignedTo   User?     @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  createdBy    User      @relation("TaskCreator", fields: [createdById], references: [id])
-  pickedUpBy   User?     @relation("TaskPickup", fields: [pickedUpById], references: [id])
-  taskPriority Priority  @relation(fields: [priority], references: [id])
-  ticket       Ticket?   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  assignedTo   User?      @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id])
+  pickedUpBy   User?      @relation("TaskPickup", fields: [pickedUpById], references: [id])
+  taskPriority Priority   @relation(fields: [priority], references: [id])
+  ticket       Ticket?    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   logs         TaskLog[]
 
   @@unique([ticketId, assignedRole, source, status])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([ticketId])
 }
 
 model TaskLog {
@@ -402,59 +507,13 @@ model TaskLog {
   createdAt DateTime @default(now())
   byUser    User     @relation("TaskLogUser", fields: [byUserId], references: [id])
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-}
 
-model SubStatusGroup {
-  id              String            @id
-  label           String
-  order           Int               @default(0)
-  TicketSubStatus TicketSubStatus[]
+  @@index([taskId])
 }
 
 // ── Finance Module ─────────────────────────────────────────────────────────────
 // Standalone — no FK relations to Ticket/Account/Device.
 // Customer/Company references use loose partyType + partyId (no FK constraint).
-
-enum GlAccountType {
-  ASSET
-  LIABILITY
-  EQUITY
-  REVENUE
-  EXPENSE
-}
-
-enum NormalBalance {
-  DEBIT
-  CREDIT
-}
-
-enum JournalStatus {
-  DRAFT
-  POSTED
-  VOIDED
-}
-
-enum EntryType {
-  DEBIT
-  CREDIT
-}
-
-enum InvoiceStatus {
-  DRAFT
-  SENT
-  PARTIAL
-  PAID
-  VOID
-}
-
-enum PaymentMethod {
-  CASH
-  BANK_TRANSFER
-  CARD
-  CHEQUE
-  MOBILE_PAYMENT
-  OTHER
-}
 
 model GlAccount {
   id            Int           @id @default(autoincrement())
@@ -522,7 +581,6 @@ model Invoice {
   taxAmount   Decimal       @default(0) @db.Decimal(14, 2)
   totalAmount Decimal       @db.Decimal(14, 2)
   amountPaid  Decimal       @default(0) @db.Decimal(14, 2)
-  amountDue   Decimal       @db.Decimal(14, 2)
   createdById Int
   createdBy   User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
   lines       InvoiceLine[]
@@ -564,4 +622,5 @@ model Payment {
   createdAt      DateTime      @default(now())
 
   @@index([invoiceId])
+  @@index([journalEntryId])
 }
