@@ -29,7 +29,7 @@ export async function PATCH(
             permissions?: string[];
         };
         const userId = Number(sessionUser.id ?? 0);
-        const userRoles: string[] = sessionUser.roles ?? (sessionUser.role ? [sessionUser.role] : []);
+        const userRoles: string[] = sessionUser.role ? [sessionUser.role] : [];
         const permissions = sessionUser.permissions ?? [];
 
         const { id } = await params;
@@ -151,7 +151,7 @@ export async function PATCH(
         // ── Notifications (outside transaction, non-blocking) ──────────────────
         if (subStatus.notifyRoles.length > 0) {
             const usersToNotify = await prisma.user.findMany({
-                where: { userRoles: { some: { roleId: { in: subStatus.notifyRoles } } } },
+                where: { role: { in: subStatus.notifyRoles } },
                 select: { id: true },
             });
             const deviceLabel = `${ticket.device.brand} ${ticket.device.model}`;
@@ -167,7 +167,7 @@ export async function PATCH(
         // ── Handoff: auto-assign secondary if handoffRole set ──────────────────
         if (subStatus.handoffRole && newSubStatusId) {
             const candidates = await prisma.user.findMany({
-                where: { userRoles: { some: { roleId: subStatus.handoffRole } } },
+                where: { role: subStatus.handoffRole },
                 select: { id: true, name: true, role: true },
             });
 

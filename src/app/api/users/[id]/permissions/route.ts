@@ -20,21 +20,26 @@ export async function GET(
         const { id } = await params;
         const userId = Number(id);
 
-        const [userRoles, userOverrides, allPermissions] = await Promise.all([
-            prisma.userRole.findMany({
-                where: { userId },
-                include: { role: { include: { permissions: true } } },
+        const [userRecord, userOverrides, allPermissions] = await Promise.all([
+            prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    role: true,
+                    userRole: { include: { permissions: true } },
+                },
             }),
             prisma.userPermission.findMany({ where: { userId } }),
             prisma.permission.findMany({ orderBy: { module: "asc" } }),
         ]);
 
+        if (!userRecord) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
         // Compute effective permissions
         const roleGranted = new Set<string>();
-        for (const ur of userRoles) {
-            for (const rp of ur.role.permissions) {
-                roleGranted.add(rp.permissionId);
-            }
+        for (const rp of userRecord.userRole.permissions) {
+            roleGranted.add(rp.permissionId);
         }
         const overrideMap = new Map(userOverrides.map((o) => [o.permissionId, o.granted]));
 

@@ -26,10 +26,6 @@ export async function GET() {
                 managerId: true,
                 createdAt: true,
                 userRole: { select: { label: true, color: true } },
-                userRoles: {
-                    orderBy: { isPrimary: "desc" },
-                    include: { role: { select: { id: true, label: true, color: true } } },
-                },
                 manager: { select: { id: true, name: true } },
             },
         });
@@ -56,19 +52,15 @@ export async function POST(req: Request) {
             primaryRole = firstRole?.id || "R2";
         }
 
-        const user = await prisma.$transaction(async (tx) => {
-            const created = await tx.user.create({
-                data: {
-                    name: body.name,
-                    email: body.email,
-                    password,
-                    role: primaryRole,
-                    ...(body.managerId ? { managerId: Number(body.managerId) } : {}),
-                },
-                select: { id: true, name: true, email: true, role: true, createdAt: true, userRole: { select: { label: true, color: true } } },
-            });
-            await tx.userRole.create({ data: { userId: created.id, roleId: primaryRole, isPrimary: true } });
-            return created;
+        const user = await prisma.user.create({
+            data: {
+                name: body.name,
+                email: body.email,
+                password,
+                role: primaryRole,
+                ...(body.managerId ? { managerId: Number(body.managerId) } : {}),
+            },
+            select: { id: true, name: true, email: true, role: true, createdAt: true, userRole: { select: { label: true, color: true } } },
         });
 
         return NextResponse.json(user);

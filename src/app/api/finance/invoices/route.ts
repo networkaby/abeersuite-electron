@@ -92,7 +92,6 @@ export async function POST(req: Request) {
                     taxAmount,
                     totalAmount,
                     amountPaid: 0,
-                    amountDue: totalAmount,
                     createdById: user!.id,
                     lines: {
                         create: computedLines.map((l) => ({

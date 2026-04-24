@@ -49,11 +49,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const user = await prisma.user.findUnique({
                     where: { email: credentials.email as string },
                     include: {
-                        userRoles: {
+                        userRole: {
                             include: {
-                                role: {
-                                    include: { permissions: { include: { permission: true } } },
-                                },
+                                permissions: { include: { permission: true } },
                             },
                         },
                         permissions: { include: { permission: true } },
@@ -69,16 +67,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                 if (!isValid) return null;
 
-                const roles = user.userRoles.map((ur) => ur.roleId);
-                const primaryRole = user.userRoles.find((ur) => ur.isPrimary)?.roleId ?? user.role;
+                const roles = [user.role];
+                const primaryRole = user.role;
 
                 // Union of role-granted permissions
                 const rolePermIds = new Set<string>();
-                for (const ur of user.userRoles) {
-                    for (const rp of ur.role.permissions) {
-                        // Access permission.id from the included relation
-                        const permId = rp.permission?.id;
-                        if (permId) rolePermIds.add(permId);
+                for (const rp of user.userRole.permissions) {
+                    const permId = rp.permission?.id;
+                    if (permId) {
+                        rolePermIds.add(permId);
                     }
                 }
                 // Apply user-level overrides

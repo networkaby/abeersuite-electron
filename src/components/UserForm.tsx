@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, Check } from "lucide-react";
+import { X } from "lucide-react";
 
 type Role = { id: string; label: string; color: string };
 type UserOption = { id: number; name: string };
@@ -14,8 +14,7 @@ type UserOption = { id: number; name: string };
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email"),
-    roleIds: z.array(z.string()).min(1, "At least one role is required"),
-    primaryRole: z.string().min(1, "Primary role is required"),
+    role: z.string().min(1, "Role is required"),
     password: z.string().optional(),
     managerId: z.string().optional(),
 });
@@ -29,7 +28,6 @@ interface Props {
         email: string;
         role: string;
         managerId?: number | null;
-        userRoles?: { roleId: string; isPrimary: boolean }[];
     };
     onClose: () => void;
 }
@@ -42,16 +40,11 @@ export default function UserForm({ user, onClose }: Props) {
         register,
         handleSubmit,
         reset,
-        control,
-        setValue,
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { roleIds: [], primaryRole: "", managerId: "" },
+        defaultValues: { role: "", managerId: "" },
     });
-
-    const selectedRoleIds = useWatch({ control, name: "roleIds" }) ?? [];
-    const primaryRole = useWatch({ control, name: "primaryRole" });
 
     useEffect(() => {
         Promise.all([
@@ -68,66 +61,44 @@ export default function UserForm({ user, onClose }: Props) {
             
             if (!user && fetchedRoles.length > 0) {
                 const defaultRole = fetchedRoles.find(r => r.id === "R2")?.id || fetchedRoles[0].id;
-                setValue("roleIds", [defaultRole]);
-                setValue("primaryRole", defaultRole);
+                reset({
+                    name: "",
+                    email: "",
+                    role: defaultRole,
+                    password: "",
+                    managerId: "",
+                });
             }
         });
-    }, [user?.id, user, setValue]);
+    }, [user?.id, user, reset]);
 
     useEffect(() => {
         if (user) {
-            const existingRoleIds = user.userRoles?.map((r) => r.roleId) ?? [user.role];
             reset({
                 name: user.name,
                 email: user.email,
-                roleIds: existingRoleIds,
-                primaryRole: user.role,
+                role: user.role,
                 password: "",
                 managerId: user.managerId ? String(user.managerId) : "",
             });
         }
     }, [user, reset]);
 
-    const toggleRole = (roleId: string) => {
-        const nextRoleIds = selectedRoleIds.includes(roleId)
-            ? selectedRoleIds.length === 1
-                ? selectedRoleIds // must keep at least one
-                : selectedRoleIds.filter((id) => id !== roleId)
-            : [...selectedRoleIds, roleId];
-
-        setValue("roleIds", nextRoleIds, { shouldDirty: true, shouldValidate: true });
-
-        if (!nextRoleIds.includes(primaryRole)) {
-            setValue("primaryRole", nextRoleIds[0], { shouldDirty: true, shouldValidate: true });
-        }
-    };
-
     const onSubmit = async (data: FormData) => {
         try {
             const payload = {
                 name: data.name,
                 email: data.email,
-                role: data.primaryRole,
+                role: data.role,
                 managerId: data.managerId ? Number(data.managerId) : null,
                 ...(data.password ? { password: data.password } : {}),
             };
 
             if (user) {
                 await axios.put(`/api/users/${user.id}`, payload);
-                // Update multi-role assignment
-                await axios.put(`/api/users/${user.id}/roles`, {
-                    roleIds: selectedRoleIds,
-                    primaryRoleId: data.primaryRole,
-                });
                 toast.success("User updated");
             } else {
-                const created = await axios.post<{ id: number }>("/api/users", payload);
-                if (selectedRoleIds.length > 1) {
-                    await axios.put(`/api/users/${created.data.id}/roles`, {
-                        roleIds: selectedRoleIds,
-                        primaryRoleId: data.primaryRole,
-                    });
-                }
+                await axios.post<{ id: number }>("/api/users", payload);
                 toast.success("User created");
             }
             onClose();
@@ -167,48 +138,19 @@ export default function UserForm({ user, onClose }: Props) {
                         {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
                     </div>
 
-                    {/* Multi-role picker */}
                     <div>
-                        <label className="block text-sm font-medium mb-1">Roles</label>
-                        <div className="flex flex-wrap gap-2">
-                            {roles.map((r) => {
-                                const selected = selectedRoleIds.includes(r.id);
-                                return (
-                                    <button
-                                        key={r.id}
-                                        type="button"
-                                        onClick={() => toggleRole(r.id)}
-                                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                                            selected
-                                                ? `${r.color} border-current`
-                                                : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {selected && <Check size={11} />}
-                                        {r.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">Click to toggle. At least one role required.</p>
+                        <label className="block text-sm font-medium mb-1">Role</label>
+                        <select
+                            {...register("role")}
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">Select a role</option>
+                            {roles.map((r) => (
+                                <option key={r.id} value={r.id}>{r.label}</option>
+                            ))}
+                        </select>
+                        {errors.role && <p className="text-red-500 text-xs mt-1">{errors.role.message}</p>}
                     </div>
-
-                    {/* Primary role — only shown if multiple selected */}
-                    {selectedRoleIds.length > 1 && (
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Primary Role</label>
-                            <select
-                                {...register("primaryRole")}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {selectedRoleIds.map((rid) => {
-                                    const r = roles.find((x) => x.id === rid);
-                                    return <option key={rid} value={rid}>{r?.label ?? rid}</option>;
-                                })}
-                            </select>
-                            <p className="text-xs text-gray-400 mt-1">Used for dashboard and legacy role checks.</p>
-                        </div>
-                    )}
 
                     {/* Manager picker */}
                     <div>

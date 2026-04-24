@@ -61,11 +61,11 @@ export async function POST(
         // Validate user exists and still has the required role if addedForRole specified
         const targetUser = await prisma.user.findUnique({
             where: { id: body.userId },
-            select: { id: true, name: true, role: true, userRoles: { select: { roleId: true } } },
+            select: { id: true, name: true, role: true },
         });
         if (!targetUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
         if (body.addedForRole) {
-            const hasRole = targetUser.userRoles.some(r => r.roleId === body.addedForRole) || targetUser.role === body.addedForRole;
+            const hasRole = targetUser.role === body.addedForRole;
             if (!hasRole) return NextResponse.json({ error: "User no longer has the required role", code: "ROLE_MISMATCH" }, { status: 409 });
         }
 

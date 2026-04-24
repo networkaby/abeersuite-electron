@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 
 const warrantySchema = z.object({
     isWarranty: z.boolean().optional(),
-    warrantyStatus: z.string().trim().optional(),
+    warrantyStatus: z.enum(["NONE", "ACTIVE", "VOID", "CLAIMED"]).optional(),
     voidReason: z.string().trim().optional().nullable(),
     warrantyRef: z.string().trim().optional().nullable(),
     purchaseDate: z.string().trim().optional().nullable(),
@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: Params) {
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
         const toWarranty: boolean = body.isWarranty ?? !ticket.isWarranty;
-        const toStatus: string = body.warrantyStatus ?? (toWarranty ? "CLAIMED" : "NONE");
+        const toStatus = body.warrantyStatus ?? (toWarranty ? "CLAIMED" : "NONE");
         const voidReason: string | null = body.voidReason ?? null;
 
         // Clear sub-status if it won't apply to the new warranty state

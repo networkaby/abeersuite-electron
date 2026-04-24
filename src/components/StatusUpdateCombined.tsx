@@ -319,9 +319,9 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                         <div className="flex gap-2">
                             <button
                                 type="button"
-                                onClick={() => setValue("visibility", "internal")}
+                                onClick={() => setValue("visibility", "INTERNAL")}
                                 className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                                    visibility === "internal"
+                                    visibility === "INTERNAL"
                                         ? "border-gray-400 bg-gray-100 text-gray-700"
                                         : "border-gray-200 text-gray-400 hover:bg-gray-50"
                                 }`}
@@ -330,9 +330,9 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setValue("visibility", "public")}
+                                onClick={() => setValue("visibility", "PUBLIC")}
                                 className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                                    visibility === "public"
+                                    visibility === "PUBLIC"
                                         ? "border-blue-400 bg-blue-50 text-blue-700"
                                         : "border-gray-200 text-gray-400 hover:bg-gray-50"
                                 }`}
