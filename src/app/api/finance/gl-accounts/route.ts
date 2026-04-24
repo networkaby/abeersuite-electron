@@ -1,0 +1,73 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const createSchema = z.object({
+    code: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    type: z.enum(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]),
+    normalBalance: z.enum(["DEBIT", "CREDIT"]),
+    description: z.string().trim().optional(),
+    parentId: z.number().int().positive().optional(),
+});
+
+// GET /api/finance/gl-accounts
+export async function GET(req: Request) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get("type");
+    const activeOnly = searchParams.get("activeOnly") !== "false";
+
+    try {
+        const accounts = await prisma.glAccount.findMany({
+            where: {
+                ...(activeOnly ? { isActive: true } : {}),
+                ...(type ? { type: type as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE" } : {}),
+            },
+            orderBy: [{ code: "asc" }],
+            include: {
+                parent: { select: { id: true, code: true, name: true } },
+                _count: { select: { lines: true } },
+            },
+        });
+        return NextResponse.json(accounts);
+    } catch (err) {
+        console.error(err);
+        return NextResponse.json({ error: "Failed to fetch GL accounts" }, { status: 500 });
+    }
+}
+
+// POST /api/finance/gl-accounts
+export async function POST(req: Request) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const parsed = createSchema.safeParse(await req.json());
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    }
+    const body = parsed.data;
+
+    try {
+        const account = await prisma.glAccount.create({
+            data: {
+                code: body.code,
+                name: body.name,
+                type: body.type,
+                normalBalance: body.normalBalance,
+                description: body.description ?? null,
+                parentId: body.parentId ?? null,
+            },
+        });
+        return NextResponse.json(account, { status: 201 });
+    } catch (err: unknown) {
+        if (err instanceof Error && err.message.includes("Unique constraint")) {
+            return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
+        }
+        console.error(err);
+        return NextResponse.json({ error: "Failed to create GL account" }, { status: 500 });
+    }
+}

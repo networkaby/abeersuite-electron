@@ -39,7 +39,11 @@
       "Bash(grep -v \"^$\")",
       "Bash(sed -i 's/{ customer: true }/{ account: true }/g; s/device\\\\.customer/device.account/g' src/app/api/tickets/\\\\[id\\\\]/sub-status/route.ts src/app/receipt/\\\\[id\\\\]/page.tsx)",
       "Bash(sed -i 's/const { customer } = device;/const account = device.account;/g; s/customer\\\\.name/account.name/g; s/customer\\\\.phone/account.phone/g; s/customer\\\\.email/account.email/g' src/app/receipt/\\\\[id\\\\]/page.tsx)",
-      "Bash(grep -E \"\\\\.tsx$\")"
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx prisma migrate dev --name finance-module)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx prisma db push)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx prisma generate)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx next build)"
     ]
   }
 }

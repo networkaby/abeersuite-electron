@@ -1,0 +1,94 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-guard";
+import { z } from "zod";
+import { isBalanced } from "@/lib/finance/balance";
+
+const lineSchema = z.object({
+    glAccountId: z.number().int().positive(),
+    type: z.enum(["DEBIT", "CREDIT"]),
+    amount: z.number().positive(),
+    description: z.string().trim().optional(),
+});
+
+const updateSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    description: z.string().trim().min(1).optional(),
+    lines: z.array(lineSchema).min(2).optional(),
+});
+
+// GET /api/finance/journal-entries/[id]
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const { id } = await params;
+    const entry = await prisma.journalEntry.findUnique({
+        where: { id: Number(id) },
+        include: {
+            createdBy: { select: { id: true, name: true } },
+            lines: {
+                include: { glAccount: { select: { id: true, code: true, name: true, normalBalance: true } } },
+                orderBy: [{ type: "asc" }, { id: "asc" }],
+            },
+        },
+    });
+    if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(entry);
+}
+
+// PATCH /api/finance/journal-entries/[id] — update DRAFT only
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const { id } = await params;
+    const existing = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (existing.status !== "DRAFT") {
+        return NextResponse.json({ error: "Only DRAFT entries can be edited" }, { status: 409 });
+    }
+
+    const parsed = updateSchema.safeParse(await req.json());
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    }
+    const body = parsed.data;
+
+    if (body.lines && !isBalanced(body.lines)) {
+        return NextResponse.json({ error: "Journal entry is not balanced — debits must equal credits" }, { status: 422 });
+    }
+
+    try {
+        const updated = await prisma.$transaction(async (tx) => {
+            if (body.lines) {
+                await tx.journalLine.deleteMany({ where: { journalEntryId: Number(id) } });
+                await tx.journalLine.createMany({
+                    data: body.lines.map((l) => ({
+                        journalEntryId: Number(id),
+                        glAccountId: l.glAccountId,
+                        type: l.type,
+                        amount: l.amount,
+                        description: l.description ?? null,
+                    })),
+                });
+            }
+            return tx.journalEntry.update({
+                where: { id: Number(id) },
+                data: {
+                    ...(body.date ? { date: new Date(body.date) } : {}),
+                    ...(body.description ? { description: body.description } : {}),
+                },
+                include: {
+                    lines: {
+                        include: { glAccount: { select: { id: true, code: true, name: true, normalBalance: true } } },
+                    },
+                },
+            });
+        });
+        return NextResponse.json(updated);
+    } catch (err) {
+        console.error(err);
+        return NextResponse.json({ error: "Failed to update journal entry" }, { status: 500 });
+    }
+}

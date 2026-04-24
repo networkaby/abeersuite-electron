@@ -18,6 +18,10 @@ import {
     ClipboardList,
     Layers,
     GitBranch,
+    BookOpen,
+    FileText,
+    Receipt,
+    BarChart2,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
@@ -35,6 +39,13 @@ const GLOBAL_NAV = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
     { label: "Customers", href: "/customers", icon: Users, permission: null },
     { label: "Companies", href: "/companies", icon: Building2, permission: null },
+] as const;
+
+const FINANCE_NAV = [
+    { label: "Chart of Accounts", href: "/finance/chart-of-accounts", icon: BookOpen },
+    { label: "Journal Entries",   href: "/finance/journal-entries",   icon: FileText },
+    { label: "Invoices",          href: "/finance/invoices",          icon: Receipt },
+    { label: "Reports",           href: "/finance/reports",           icon: BarChart2 },
 ] as const;
 
 const SETTINGS_NAV = [
@@ -236,6 +247,21 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         })}
                     </div>
                 )}
+
+                {/* Finance section */}
+                <div className="pt-1 space-y-0.5">
+                    {!collapsed && (
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pb-1">
+                            Finance
+                        </p>
+                    )}
+                    {FINANCE_NAV.map(({ label, href, icon: Icon }) => (
+                        <Link key={href} href={href} className={linkClass(href)} title={collapsed ? label : ""}>
+                            <Icon size={18} className="shrink-0" />
+                            {!collapsed && <span className="truncate">{label}</span>}
+                        </Link>
+                    ))}
+                </div>
 
                 {/* Settings collapsible */}
                 {visibleSettings.length > 0 && (
