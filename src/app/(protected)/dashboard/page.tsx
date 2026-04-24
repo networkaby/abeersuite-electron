@@ -63,7 +63,7 @@ async function AdminDashboardServer({ name, context }: { name: string; context: 
             orderBy: { updatedAt: "desc" },
             take: 100,
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
@@ -99,7 +99,7 @@ async function TechnicianDashboardServer({ name, userId, context }: { name: stri
             where: { ...ticketWhere(context), ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
@@ -114,7 +114,7 @@ async function TechnicianDashboardServer({ name, userId, context }: { name: stri
             orderBy: { createdAt: "asc" },
             take: 10,
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
             },
         }),
@@ -161,7 +161,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 primaryOwner: { select: { name: true } },
@@ -171,7 +171,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
                 ticketSubStatus: { select: { label: true, color: true } },
             },
@@ -227,7 +227,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
                                     </div>
                                     <p className="text-sm font-medium text-gray-800 mt-1">
-                                        {t.device.customer.name}
+                                        {t.device.account.name}
                                         <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.brand} {t.device.model}</span>
                                     </p>
                                     {t.ticketStatus.actionLabel && (
@@ -272,8 +272,8 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
                                     </div>
                                     <p className="text-sm font-medium text-gray-800 mt-1">
-                                        {t.device.customer.name}
-                                        <span className="text-gray-400 font-normal"> · {t.device.customer.phone}</span>
+                                        {t.device.account.name}
+                                        <span className="text-gray-400 font-normal"> · {t.device.account.phone}</span>
                                     </p>
                                     <p className="text-xs text-gray-500 mt-0.5">
                                         {t.device.brand} {t.device.model}
@@ -317,7 +317,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
@@ -328,7 +328,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
             },
@@ -385,7 +385,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                     </div>
                                     <p className="text-sm font-medium text-gray-800 mt-1">
                                         {t.device.brand} {t.device.model}
-                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.customer.name}</span>
+                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.account.name}</span>
                                     </p>
                                     {t.serviceCenter && (
                                         <p className="text-xs text-gray-500 mt-0.5">Service Centre: {t.serviceCenter.name}</p>
@@ -433,7 +433,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                     </div>
                                     <p className="text-sm font-medium text-gray-800 mt-1">
                                         {t.device.brand} {t.device.model}
-                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.customer.name}</span>
+                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.account.name}</span>
                                     </p>
                                     {t.serviceCenter && (
                                         <p className="text-xs text-gray-500 mt-0.5">Service Centre: {t.serviceCenter.name}</p>

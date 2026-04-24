@@ -19,7 +19,7 @@ interface TicketRow {
     escalated: boolean;
     updatedAt: Date;
     pendingTeam: string[];
-    device: { brand: string; model: string; customer: { name: string } };
+    device: { brand: string; model: string; account: { name: string } };
     primaryOwner: { id: number; name: string } | null;
     ticketStatus: { id: string; label: string; color: string };
     ticketSubStatus: { label: string; color: string } | null;
@@ -28,7 +28,7 @@ interface TicketRow {
 interface UnassignedRow {
     id: number;
     createdAt: Date;
-    device: { brand: string; model: string; customer: { name: string } };
+    device: { brand: string; model: string; account: { name: string } };
     ticketStatus: { label: string; color: string; actionLabel: string | null };
 }
 
@@ -149,7 +149,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 <Link href={`/tickets/${t.id}`} className="text-blue-600 font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">
-                                        {t.device.customer.name} — {t.device.brand} {t.device.model}
+                                        {t.device.account.name} — {t.device.brand} {t.device.model}
                                     </p>
                                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
@@ -197,7 +197,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 <Link href={`/tickets/${t.id}`} className="text-blue-600 font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">
-                                        {t.device.customer.name} — {t.device.brand} {t.device.model}
+                                        {t.device.account.name} — {t.device.brand} {t.device.model}
                                     </p>
                                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>

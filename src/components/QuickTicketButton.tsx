@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, UserPlus, ArrowRight, ShieldCheck, Wrench } from "lucide-react";
+import { Search, UserPlus, ArrowRight, ShieldCheck, Wrench, Building2, User } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useForm, type Resolver } from "react-hook-form";
@@ -9,13 +9,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useQuickTicketStore, type Step } from "@/store/quickTicketStore";
+import { useQuickTicketStore, type Step, type BasicAccount } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
 
 type Priority = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
+type LinkedCompany = { id: number; company: { id: number; name: string } };
 
-const customerSchema = z.object({
+const accountSchema = z.object({
     name: z.string().min(1, "Name is required"),
     phone: z.string().min(1, "Phone is required"),
     email: z.string().email("Invalid email").optional().or(z.literal("")),
@@ -35,13 +36,18 @@ const ticketSchema = z.object({
     purchaseDate: z.string().optional(),
 });
 
-type CustomerFormData = z.infer<typeof customerSchema>;
+type AccountFormData = z.infer<typeof accountSchema>;
 type TicketFormData = z.infer<typeof ticketSchema>;
 
 export default function QuickTicketButton() {
     const router = useRouter();
     const { data: session } = useSession();
-    const { open, step, phone, customer, initialPipelineId, setOpen, setStep, setPhone, setCustomer, setInitialPipelineId, reset } = useQuickTicketStore();
+    const {
+        open, step, phone, account, billingAccountId,
+        initialPipelineId,
+        setOpen: _setOpen, setStep, setPhone, setAccount, setBillingAccountId,
+        setInitialPipelineId, reset,
+    } = useQuickTicketStore();
     const { technicians, fetchTechnicians } = useReferenceStore();
     const [searching, setSearching] = useState(false);
     const [priorities, setPriorities] = useState<Priority[]>([]);
@@ -49,9 +55,10 @@ export default function QuickTicketButton() {
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>("P1");
     const [isWarranty, setIsWarranty] = useState(false);
     const [dataLoaded, setDataLoaded] = useState(false);
+    const [linkedCompanies, setLinkedCompanies] = useState<LinkedCompany[]>([]);
 
-    const customerForm = useForm<CustomerFormData>({
-        resolver: zodResolver(customerSchema) as Resolver<CustomerFormData>,
+    const accountForm = useForm<AccountFormData>({
+        resolver: zodResolver(accountSchema) as Resolver<AccountFormData>,
     });
 
     const ticketForm = useForm<TicketFormData>({
@@ -62,10 +69,11 @@ export default function QuickTicketButton() {
     useEffect(() => {
         if (!open) return;
         setIsWarranty(false);
-        customerForm.reset();
+        accountForm.reset();
         ticketForm.reset({ priority: "P2" });
+        setLinkedCompanies([]);
+        setBillingAccountId(null);
 
-        // Capture initialPipelineId synchronously before any async work
         const pendingPipelineId = useQuickTicketStore.getState().initialPipelineId;
         if (pendingPipelineId) {
             setSelectedPipelineId(pendingPipelineId);
@@ -83,13 +91,12 @@ export default function QuickTicketButton() {
                 const fetched = pipeRes.data as PipelineOption[];
                 setPipelines(fetched);
                 setDataLoaded(true);
-                // Only fall back to default pipeline if nothing was pre-selected
                 if (!pendingPipelineId) {
-                    const def = fetched.find((p) => p.isDefault) ?? fetched[0];
+                    const def = fetched.find(p => p.isDefault) ?? fetched[0];
                     if (def) setSelectedPipelineId(def.id);
                 }
             } else if (!pendingPipelineId) {
-                const def = pipelines.find((p) => p.isDefault) ?? pipelines[0];
+                const def = pipelines.find(p => p.isDefault) ?? pipelines[0];
                 if (def) setSelectedPipelineId(def.id);
             }
         };
@@ -97,70 +104,81 @@ export default function QuickTicketButton() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    const closeModal = () => {
-        reset();
-    };
+    // When account is found, fetch their linked companies for billing selection
+    useEffect(() => {
+        if (!account || account.type !== "individual") return;
+        axios.get(`/api/accounts/${account.id}/relationships`)
+            .then(res => {
+                setLinkedCompanies(res.data);
+                setBillingAccountId(account.id); // default: bill to self
+            })
+            .catch(() => setBillingAccountId(account?.id ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [account]);
+
+    const closeModal = () => reset();
 
     const searchByPhone = async () => {
         if (!phone.trim()) return;
         setSearching(true);
         try {
-            const res = await axios.get(`/api/customers?phone=${phone.trim()}`);
+            const res = await axios.get(`/api/accounts?phone=${phone.trim()}`);
             if (res.data && res.data.length > 0) {
-                setCustomer(res.data[0]);
+                const found = res.data[0] as BasicAccount;
+                setAccount(found);
                 setStep("ticket");
-                toast.success(`Customer found: ${res.data[0].name}`);
+                toast.success(`Account found: ${found.name}`);
             } else {
-                customerForm.setValue("phone", phone.trim());
-                setStep("customer");
+                accountForm.setValue("phone", phone.trim());
+                setStep("account");
             }
         } catch {
-            customerForm.setValue("phone", phone.trim());
-            setStep("customer");
+            accountForm.setValue("phone", phone.trim());
+            setStep("account");
         } finally {
             setSearching(false);
         }
     };
 
-    const createCustomer = async (data: CustomerFormData) => {
+    const createAccount = async (data: AccountFormData) => {
         try {
-            const res = await axios.post("/api/customers", data);
-            setCustomer(res.data);
+            const res = await axios.post("/api/accounts", { ...data, type: "individual" });
+            setAccount(res.data as BasicAccount);
             setStep("ticket");
-            toast.success("Customer created!");
+            toast.success("Account created!");
         } catch {
-            toast.error("Failed to create customer");
+            toast.error("Failed to create account");
         }
     };
 
     const createTicket = async (data: TicketFormData) => {
-        if (!customer) {
-            toast.error("Customer is required");
-            return;
-        }
-
+        if (!account) { toast.error("Account is required"); return; }
         try {
             const res = await axios.post("/api/tickets", {
                 ...data,
                 isWarranty,
-                customerId: customer.id,
+                accountId: account.id,
+                billingAccountId: billingAccountId ?? account.id,
                 createdBy: session?.user?.id,
                 pipelineId: selectedPipelineId,
             });
             toast.success(`Ticket #${res.data.id} created!`);
             closeModal();
-            // Open receipt in new tab immediately
             window.open(`/receipt/${res.data.id}`, "_blank");
-            // Also navigate to ticket detail
             router.push(`/tickets/${res.data.id}`);
         } catch {
             toast.error("Failed to create ticket");
         }
     };
 
+    const stepLabels: { key: Step; label: string }[] = [
+        { key: "phone", label: "Search" },
+        { key: "account", label: "Account" },
+        { key: "ticket", label: "Ticket" },
+    ];
+
     return (
         <>
-            {/* Modal */}
             {open && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -170,20 +188,19 @@ export default function QuickTicketButton() {
                             <div>
                                 <h2 className="text-lg font-semibold">New Ticket</h2>
                                 <div className="flex items-center gap-2 mt-1">
-                                    {(["phone", "customer", "ticket"] as Step[]).map((s, i) => (
-                                        <div key={s} className="flex items-center gap-1">
-                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${step === s
-                                                ? "bg-blue-600 text-white"
-                                                : (["phone", "customer", "ticket"] as Step[]).indexOf(step) > i
-                                                    ? "bg-green-500 text-white"
-                                                    : "bg-gray-200 text-gray-500"
-                                                }`}>
+                                    {stepLabels.map((s, i) => (
+                                        <div key={s.key} className="flex items-center gap-1">
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                                                step === s.key
+                                                    ? "bg-blue-600 text-white"
+                                                    : stepLabels.findIndex(x => x.key === step) > i
+                                                        ? "bg-green-500 text-white"
+                                                        : "bg-gray-200 text-gray-500"
+                                            }`}>
                                                 {i + 1}
                                             </div>
-                                            <span className="text-xs text-gray-500 capitalize">
-                                                {s === "phone" ? "Search" : s}
-                                            </span>
-                                            {i < 2 && <ArrowRight size={10} className="text-gray-300" />}
+                                            <span className="text-xs text-gray-500">{s.label}</span>
+                                            {i < stepLabels.length - 1 && <ArrowRight size={10} className="text-gray-300" />}
                                         </div>
                                     ))}
                                 </div>
@@ -191,21 +208,20 @@ export default function QuickTicketButton() {
                             <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
                         </div>
 
-                        {/* Body — scrollable */}
                         <div className="p-5 overflow-y-auto flex-1">
 
                             {/* Step 1: Phone Search */}
                             {step === "phone" && (
                                 <div className="space-y-4">
-                                    <p className="text-sm text-gray-500">Search customer by phone number to get started.</p>
+                                    <p className="text-sm text-gray-500">Search account by phone number to get started.</p>
                                     <div className="flex gap-2">
                                         <div className="relative flex-1">
                                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                             <input
                                                 type="text"
                                                 value={phone}
-                                                onChange={(e) => setPhone(e.target.value)}
-                                                onKeyDown={(e) => e.key === "Enter" && searchByPhone()}
+                                                onChange={e => setPhone(e.target.value)}
+                                                onKeyDown={e => e.key === "Enter" && searchByPhone()}
                                                 placeholder="Enter phone number..."
                                                 className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 autoFocus
@@ -219,91 +235,108 @@ export default function QuickTicketButton() {
                                             {searching ? "Searching..." : "Search"}
                                         </button>
                                     </div>
-                                    <p className="text-xs text-gray-400">
-                                        If not found, you&apos;ll be prompted to create a new customer.
-                                    </p>
+                                    <p className="text-xs text-gray-400">If not found, you&apos;ll create a new account.</p>
                                 </div>
                             )}
 
-                            {/* Step 2: Create Customer */}
-                            {step === "customer" && (
-                                <form onSubmit={customerForm.handleSubmit(createCustomer)} className="space-y-4">
+                            {/* Step 2: Create Account */}
+                            {step === "account" && (
+                                <form onSubmit={accountForm.handleSubmit(createAccount)} className="space-y-4">
                                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700">
-                                        No customer found for <strong>{phone}</strong>. Fill in details to create one.
+                                        No account found for <strong>{phone}</strong>. Fill in details to create one.
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Name</label>
                                         <input
-                                            {...customerForm.register("name")}
+                                            {...accountForm.register("name")}
                                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             placeholder="Full name"
                                             autoFocus
                                         />
-                                        {customerForm.formState.errors.name && (
-                                            <p className="text-red-500 text-xs mt-1">{customerForm.formState.errors.name.message}</p>
+                                        {accountForm.formState.errors.name && (
+                                            <p className="text-red-500 text-xs mt-1">{accountForm.formState.errors.name.message}</p>
                                         )}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Phone</label>
                                         <input
-                                            {...customerForm.register("phone")}
+                                            {...accountForm.register("phone")}
                                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
-                                        {customerForm.formState.errors.phone && (
-                                            <p className="text-red-500 text-xs mt-1">{customerForm.formState.errors.phone.message}</p>
+                                        {accountForm.formState.errors.phone && (
+                                            <p className="text-red-500 text-xs mt-1">{accountForm.formState.errors.phone.message}</p>
                                         )}
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">
-                                            Email <span className="text-gray-400">(optional)</span>
-                                        </label>
+                                        <label className="block text-sm font-medium mb-1">Email <span className="text-gray-400">(optional)</span></label>
                                         <input
-                                            {...customerForm.register("email")}
+                                            {...accountForm.register("email")}
                                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             placeholder="email@example.com"
                                         />
                                     </div>
                                     <div className="flex gap-3 pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setStep("phone")}
-                                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                                        >
-                                            Back
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={customerForm.formState.isSubmitting}
-                                            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-                                        >
-                                            {customerForm.formState.isSubmitting ? "Creating..." : "Create & Continue →"}
+                                        <button type="button" onClick={() => setStep("phone")} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Back</button>
+                                        <button type="submit" disabled={accountForm.formState.isSubmitting} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50">
+                                            {accountForm.formState.isSubmitting ? "Creating..." : "Create & Continue →"}
                                         </button>
                                     </div>
                                 </form>
                             )}
 
-                            {/* Step 3: Full Ticket Form */}
+                            {/* Step 3: Ticket Form */}
                             {step === "ticket" && (
                                 <form onSubmit={ticketForm.handleSubmit(createTicket)} className="space-y-4">
-                                    {/* Customer Badge */}
+
+                                    {/* Account badge */}
                                     <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 flex items-center gap-2">
                                         <UserPlus size={15} />
-                                        <span><strong>{customer?.name}</strong> — {customer?.phone}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setStep("phone")}
-                                            className="ml-auto text-xs text-green-600 underline hover:text-green-800"
-                                        >
-                                            Change
-                                        </button>
+                                        <span><strong>{account?.name}</strong> {account?.phone && `— ${account.phone}`}</span>
+                                        <button type="button" onClick={() => setStep("phone")} className="ml-auto text-xs text-green-600 underline hover:text-green-800">Change</button>
                                     </div>
+
+                                    {/* Billing Account selector — shown only when individual has linked companies */}
+                                    {account && linkedCompanies.length > 0 && (
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1.5">Bill To <span className="text-gray-400 font-normal">(select account)</span></label>
+                                            <div className="space-y-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBillingAccountId(account.id)}
+                                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-sm text-left transition-colors ${
+                                                        billingAccountId === account.id
+                                                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                            : "border-gray-200 hover:border-gray-300"
+                                                    }`}
+                                                >
+                                                    <User size={14} className="shrink-0" />
+                                                    <span>{account.name} <span className="text-xs text-gray-400">(personal)</span></span>
+                                                </button>
+                                                {linkedCompanies.map(lc => (
+                                                    <button
+                                                        key={lc.id}
+                                                        type="button"
+                                                        onClick={() => setBillingAccountId(lc.company.id)}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-sm text-left transition-colors ${
+                                                            billingAccountId === lc.company.id
+                                                                ? "border-purple-500 bg-purple-50 text-purple-700"
+                                                                : "border-gray-200 hover:border-gray-300"
+                                                        }`}
+                                                    >
+                                                        <Building2 size={14} className="shrink-0" />
+                                                        <span>{lc.company.name}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Pipeline selector */}
                                     {pipelines.length > 1 && (
                                         <div>
                                             <label className="block text-sm font-medium mb-2">Pipeline</label>
                                             <div className="flex gap-2 flex-wrap">
-                                                {pipelines.filter((p) => p.isDefault || p.id !== "P1").map((p) => (
+                                                {pipelines.map(p => (
                                                     <button
                                                         key={p.id}
                                                         type="button"
@@ -326,187 +359,90 @@ export default function QuickTicketButton() {
                                     <div className="grid grid-cols-3 gap-3">
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Device Type</label>
-                                            <input
-                                                {...ticketForm.register("deviceType")}
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="Laptop, Printer..."
-                                                autoFocus
-                                            />
-                                            {ticketForm.formState.errors.deviceType && (
-                                                <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.deviceType.message}</p>
-                                            )}
+                                            <input {...ticketForm.register("deviceType")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Laptop, Printer..." autoFocus />
+                                            {ticketForm.formState.errors.deviceType && <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.deviceType.message}</p>}
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Brand</label>
-                                            <input
-                                                {...ticketForm.register("brand")}
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="HP, Dell..."
-                                            />
-                                            {ticketForm.formState.errors.brand && (
-                                                <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.brand.message}</p>
-                                            )}
+                                            <input {...ticketForm.register("brand")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="HP, Dell..." />
+                                            {ticketForm.formState.errors.brand && <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.brand.message}</p>}
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Model</label>
-                                            <input
-                                                {...ticketForm.register("model")}
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="Model number"
-                                            />
-                                            {ticketForm.formState.errors.model && (
-                                                <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.model.message}</p>
-                                            )}
+                                            <input {...ticketForm.register("model")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Model number" />
+                                            {ticketForm.formState.errors.model && <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.model.message}</p>}
                                         </div>
                                     </div>
 
-                                    {/* Problem */}
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Problem Description</label>
-                                        <textarea
-                                            {...ticketForm.register("problem")}
-                                            rows={3}
-                                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Describe the issue..."
-                                        />
-                                        {ticketForm.formState.errors.problem && (
-                                            <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.problem.message}</p>
-                                        )}
+                                        <textarea {...ticketForm.register("problem")} rows={3} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Describe the issue..." />
+                                        {ticketForm.formState.errors.problem && <p className="text-red-500 text-xs mt-1">{ticketForm.formState.errors.problem.message}</p>}
                                     </div>
 
-                                    {/* Job Type — Warranty Toggle */}
+                                    {/* Job Type */}
                                     <div>
                                         <label className="block text-sm font-medium mb-2">Job Type</label>
                                         <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => { setIsWarranty(false); ticketForm.setValue("warrantyRef", ""); ticketForm.setValue("purchaseDate", ""); }}
-                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                                    !isWarranty
-                                                        ? "bg-blue-600 border-blue-600 text-white"
-                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                                                }`}
-                                            >
-                                                <Wrench size={14} />
-                                                Paid Repair
+                                            <button type="button" onClick={() => { setIsWarranty(false); ticketForm.setValue("warrantyRef", ""); ticketForm.setValue("purchaseDate", ""); }}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${!isWarranty ? "bg-blue-600 border-blue-600 text-white" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                                                <Wrench size={14} /> Paid Repair
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsWarranty(true)}
-                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                                    isWarranty
-                                                        ? "bg-amber-500 border-amber-500 text-white"
-                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                                                }`}
-                                            >
-                                                <ShieldCheck size={14} />
-                                                Warranty Claim
+                                            <button type="button" onClick={() => setIsWarranty(true)}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${isWarranty ? "bg-amber-500 border-amber-500 text-white" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                                                <ShieldCheck size={14} /> Warranty Claim
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Warranty Details */}
                                     {isWarranty && (
                                         <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
                                             <div>
                                                 <label className="block text-sm font-medium mb-1">Serial / Purchase Ref <span className="text-gray-400">(optional)</span></label>
-                                                <input
-                                                    {...ticketForm.register("warrantyRef")}
-                                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                                                    placeholder="Serial number or receipt ref"
-                                                />
+                                                <input {...ticketForm.register("warrantyRef")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white" placeholder="Serial or receipt ref" />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium mb-1">Purchase Date <span className="text-gray-400">(optional)</span></label>
-                                                <input
-                                                    {...ticketForm.register("purchaseDate")}
-                                                    type="date"
-                                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                                                />
+                                                <input {...ticketForm.register("purchaseDate")} type="date" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white" />
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* Priority + Technician */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Priority</label>
-                                            <select
-                                                {...ticketForm.register("priority")}
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            >
-                                                {priorities.map((p) => (
-                                                    <option key={p.id} value={p.id}>{p.label}</option>
-                                                ))}
+                                            <select {...ticketForm.register("priority")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                {priorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium mb-1">
-                                                Primary Owner <span className="text-gray-400">(optional)</span>
-                                            </label>
-                                            <select
-                                                {...ticketForm.register("primaryOwnerId")}
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            >
+                                            <label className="block text-sm font-medium mb-1">Primary Owner <span className="text-gray-400">(optional)</span></label>
+                                            <select {...ticketForm.register("primaryOwnerId")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                                                 <option value="">Unassigned</option>
-                                                {technicians.map((t) => (
-                                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                                ))}
+                                                {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                             </select>
                                         </div>
                                     </div>
 
-                                    {/* Access Info + Estimated Cost */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-sm font-medium mb-1">
-                                                Access Info <span className="text-gray-400">(PIN/Password)</span>
-                                            </label>
-                                            <input
-                                                {...ticketForm.register("accessInfo")}
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="Device PIN or password"
-                                            />
+                                            <label className="block text-sm font-medium mb-1">Access Info <span className="text-gray-400">(PIN/Password)</span></label>
+                                            <input {...ticketForm.register("accessInfo")} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Device PIN or password" />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium mb-1">
-                                                Estimated Cost <span className="text-gray-400">(optional)</span>
-                                            </label>
-                                            <input
-                                                {...ticketForm.register("estimatedCost")}
-                                                type="number"
-                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                placeholder="0.00"
-                                            />
+                                            <label className="block text-sm font-medium mb-1">Estimated Cost <span className="text-gray-400">(optional)</span></label>
+                                            <input {...ticketForm.register("estimatedCost")} type="number" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                                         </div>
                                     </div>
 
-                                    {/* Notes */}
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">
-                                            Notes <span className="text-gray-400">(optional)</span>
-                                        </label>
-                                        <textarea
-                                            {...ticketForm.register("notes")}
-                                            rows={2}
-                                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Internal notes..."
-                                        />
+                                        <label className="block text-sm font-medium mb-1">Notes <span className="text-gray-400">(optional)</span></label>
+                                        <textarea {...ticketForm.register("notes")} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Internal notes..." />
                                     </div>
 
                                     <div className="flex gap-3 pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={closeModal}
-                                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={ticketForm.formState.isSubmitting}
-                                            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-                                        >
+                                        <button type="button" onClick={closeModal} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
+                                        <button type="submit" disabled={ticketForm.formState.isSubmitting} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50">
                                             {ticketForm.formState.isSubmitting ? "Creating..." : "Create Ticket"}
                                         </button>
                                     </div>

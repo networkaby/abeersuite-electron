@@ -26,7 +26,7 @@ interface Ticket {
         brand: string;
         model: string;
         problem: string;
-        customer: { name: string; phone: string };
+        account: { name: string; phone?: string | null };
     };
     primaryOwner?: { name: string };
     serviceCenter?: { name: string };
@@ -97,8 +97,8 @@ export default function TicketsPage() {
             const s = search.toLowerCase();
             result = result.filter(
                 (t) =>
-                    t.device.customer.name.toLowerCase().includes(s) ||
-                    t.device.customer.phone.includes(s) ||
+                    t.device.account.name.toLowerCase().includes(s) ||
+                    (t.device.account.phone ?? "").includes(s) ||
                     t.device.brand.toLowerCase().includes(s) ||
                     t.device.model.toLowerCase().includes(s) ||
                     String(t.id).includes(s)
@@ -335,8 +335,8 @@ export default function TicketsPage() {
                                 <tr key={t.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 text-gray-400">{t.id}</td>
                                     <td className="px-6 py-4">
-                                        <p className="font-medium">{t.device.customer.name}</p>
-                                        <p className="text-gray-400 text-xs">{t.device.customer.phone}</p>
+                                        <p className="font-medium">{t.device.account.name}</p>
+                                        <p className="text-gray-400 text-xs">{t.device.account.phone}</p>
                                     </td>
                                     <td className="px-6 py-4">
                                         <p>{t.device.brand} {t.device.model}</p>

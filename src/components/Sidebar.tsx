@@ -33,7 +33,7 @@ type Pipeline = { id: string; label: string; color: string; isActive: boolean; i
 
 const GLOBAL_NAV = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
-    { label: "Customers", href: "/customers", icon: Users, permission: null },
+    { label: "Accounts", href: "/accounts", icon: Users, permission: null },
 ] as const;
 
 const SETTINGS_NAV = [

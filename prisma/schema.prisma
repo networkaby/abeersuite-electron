@@ -29,6 +29,7 @@ model TicketStatus {
   color           String
   order           Int
   isTerminal      Boolean            @default(false)
+  isEntryPoint    Boolean            @default(false)
   allowedRoles    String[]
   notifyRoles     String[]
   actionLabel     String?
@@ -174,26 +175,51 @@ model User {
   warrantyLogs       WarrantyLog[]       @relation("WarrantyLogUser")
 }
 
-model Customer {
+model Account {
   id            Int       @id @default(autoincrement())
+  type          String    @default("individual") // "individual" | "company"
   name          String
-  phone         String
+  phone         String?
   email         String?
+  address       String?
+  companyReg    String?   // company registration / trade licence
+  taxId         String?   // GST / VAT number
   agreedToTerms Boolean   @default(false)
   agreedAt      DateTime?
+  isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
-  devices       Device[]
+
+  devices         Device[]
+  billedTickets   Ticket[]              @relation("TicketBillingAccount")
+  asIndividual    AccountRelationship[] @relation("RelIndividual")
+  asCompany       AccountRelationship[] @relation("RelCompany")
+
+  @@map("Customer")
+}
+
+model AccountRelationship {
+  id           Int       @id @default(autoincrement())
+  individualId Int
+  companyId    Int
+  role         String?   // "owner" | "employee" | "manager" | "contact"
+  linkedAt     DateTime  @default(now())
+  unlinkedAt   DateTime? // null = active; set on unlink (never delete)
+  individual   Account   @relation("RelIndividual", fields: [individualId], references: [id])
+  company      Account   @relation("RelCompany", fields: [companyId], references: [id])
+
+  @@index([individualId])
+  @@index([companyId])
 }
 
 model Device {
-  id         Int      @id @default(autoincrement())
-  type       String
-  brand      String
-  model      String
-  problem    String
-  customerId Int
-  customer   Customer @relation(fields: [customerId], references: [id])
-  tickets    Ticket[]
+  id        Int     @id @default(autoincrement())
+  type      String
+  brand     String
+  model     String
+  problem   String
+  accountId Int     @map("customerId")
+  account   Account @relation(fields: [accountId], references: [id])
+  tickets   Ticket[]
 }
 
 model Ticket {
@@ -212,12 +238,13 @@ model Ticket {
   receivedBackAt  DateTime?
   externalRef     String?
   serviceCenterId Int?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  subStatusId     String?
-  escalationType  String?
-  isWarranty      Boolean             @default(false)
-  primaryOwnerId  Int?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  subStatusId       String?
+  escalationType    String?
+  isWarranty        Boolean             @default(false)
+  primaryOwnerId    Int?
+  billingAccountId  Int?
   purchaseDate    DateTime?
   voidReason      String?
   warrantyRef     String?
@@ -226,6 +253,7 @@ model Ticket {
   tasks           Task[]
   device          Device              @relation(fields: [deviceId], references: [id])
   primaryOwner    User?               @relation(fields: [primaryOwnerId], references: [id])
+  billingAccount  Account?            @relation("TicketBillingAccount", fields: [billingAccountId], references: [id])
   ticketPriority  Priority            @relation(fields: [priority], references: [id])
   serviceCenter   ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
   ticketStatus    TicketStatus        @relation(fields: [status], references: [id])

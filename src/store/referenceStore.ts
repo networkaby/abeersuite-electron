@@ -16,7 +16,7 @@ export const useReferenceStore = create<ReferenceStore>((set, get) => ({
     technicians: [],
     fetchCustomers: async () => {
         if (get().customers.length > 0) return;
-        const { data } = await axios.get<Customer[]>("/api/customers");
+        const { data } = await axios.get<Customer[]>("/api/accounts");
         set({ customers: data });
     },
     fetchTechnicians: async () => {

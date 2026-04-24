@@ -30,7 +30,7 @@ const GROUP_CARD_META = {
 
 // ── Shared include ────────────────────────────────────────────────────────────
 const TICKET_INCLUDE = {
-    device: { include: { customer: true } },
+    device: { include: { account: true } },
     primaryOwner: { select: { id: true, name: true } },
     serviceCenter: { select: { name: true } },
     ticketStatus: { select: { label: true, color: true, actionLabel: true, notifyRoles: true } },
@@ -51,7 +51,7 @@ function toCard(t: RawTicket): TicketCardData {
         device: {
             brand: t.device.brand,
             model: t.device.model,
-            customer: { name: t.device.customer.name, phone: t.device.customer.phone },
+            account: { name: t.device.account.name, phone: t.device.account.phone },
         },
         primaryOwner: t.primaryOwner,
         serviceCenter: t.serviceCenter,

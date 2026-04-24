@@ -17,6 +17,7 @@ interface TicketStatus {
     color: string;
     order: number;
     isTerminal: boolean;
+    isEntryPoint: boolean;
     allowedRoles: string[];
     notifyRoles: string[];
     actionLabel: string | null;
@@ -47,8 +48,8 @@ export default function StatusesPage() {
 
     // Inline edit
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [editValues, setEditValues] = useState<{ label: string; color: string; order: number; isTerminal: boolean }>({
-        label: "", color: "", order: 0, isTerminal: false,
+    const [editValues, setEditValues] = useState<{ label: string; color: string; order: number; isTerminal: boolean; isEntryPoint: boolean }>({
+        label: "", color: "", order: 0, isTerminal: false, isEntryPoint: false,
     });
 
     // Transitions modal
@@ -99,7 +100,7 @@ export default function StatusesPage() {
     // ── Inline edit ──
     const startEdit = (s: TicketStatus) => {
         setEditingId(s.id);
-        setEditValues({ label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal });
+        setEditValues({ label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint });
     };
     const cancelEdit = () => setEditingId(null);
     const saveEdit = async (id: string) => {
@@ -263,7 +264,7 @@ export default function StatusesPage() {
                                 <th className="px-6 py-3 text-left w-20">
                                     <span className="flex items-center gap-1"><ArrowUpDown size={12} />Order</span>
                                 </th>
-                                <th className="px-6 py-3 text-left">Terminal</th>
+                                <th className="px-6 py-3 text-left">Flags</th>
                                 <th className="px-6 py-3 text-left">Who can set</th>
                                 <th className="px-6 py-3 text-left">Notifies</th>
                                 <th className="px-6 py-3 text-left">Transitions To</th>
@@ -316,12 +317,26 @@ export default function StatusesPage() {
                                                 />
                                             </td>
                                             <td className="px-6 py-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={editValues.isTerminal}
-                                                    onChange={(e) => setEditValues((v) => ({ ...v, isTerminal: e.target.checked }))}
-                                                    className="w-4 h-4"
-                                                />
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={editValues.isTerminal}
+                                                            onChange={(e) => setEditValues((v) => ({ ...v, isTerminal: e.target.checked }))}
+                                                            className="w-4 h-4"
+                                                        />
+                                                        Terminal
+                                                    </label>
+                                                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={editValues.isEntryPoint}
+                                                            onChange={(e) => setEditValues((v) => ({ ...v, isEntryPoint: e.target.checked }))}
+                                                            className="w-4 h-4"
+                                                        />
+                                                        Entry Point
+                                                    </label>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-3 text-gray-400 text-xs" colSpan={2}>—</td>
                                             <td className="px-6 py-3 text-gray-400 text-xs">—</td>
@@ -353,11 +368,17 @@ export default function StatusesPage() {
                                             <td className="px-6 py-4 text-gray-400 text-xs font-mono">{s.color}</td>
                                             <td className="px-6 py-4 text-gray-600">{s.order}</td>
                                             <td className="px-6 py-4">
-                                                {s.isTerminal ? (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-600 font-medium">Yes</span>
-                                                ) : (
-                                                    <span className="text-gray-400 text-xs">No</span>
-                                                )}
+                                                <div className="flex flex-col gap-1">
+                                                    {s.isTerminal && (
+                                                        <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-600 font-medium w-fit">Terminal</span>
+                                                    )}
+                                                    {s.isEntryPoint && (
+                                                        <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-600 font-medium w-fit">Entry Point</span>
+                                                    )}
+                                                    {!s.isTerminal && !s.isEntryPoint && (
+                                                        <span className="text-gray-400 text-xs">—</span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {s.allowedRoles.length === 0 ? (

@@ -37,7 +37,7 @@ export async function GET(
         const ticket = await prisma.ticket.findUnique({
             where: { id: Number(id) },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 primaryOwner: true,
                 serviceCenter: true,
                 ticketPriority: { select: { label: true, color: true } },

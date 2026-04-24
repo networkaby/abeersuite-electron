@@ -4,7 +4,8 @@ import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const createTicketSchema = z.object({
-    customerId: z.coerce.number().int().positive(),
+    accountId: z.coerce.number().int().positive(),
+    billingAccountId: z.coerce.number().int().positive().optional(),
     deviceType: z.string().trim().min(1, "Device type is required"),
     brand: z.string().trim().min(1, "Brand is required"),
     model: z.string().trim().min(1, "Model is required"),
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
             orderBy: { createdAt: "desc" },
             include: {
                 device: {
-                    include: { customer: true },
+                    include: { account: true },
                 },
                 primaryOwner: true,
                 serviceCenter: true,
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
                 brand: body.brand,
                 model: body.model,
                 problem: body.problem,
-                customerId: Number(body.customerId),
+                accountId: Number(body.accountId),
             },
         });
 
@@ -88,9 +89,10 @@ export async function POST(req: Request) {
                 warrantyRef:   body.warrantyRef || null,
                 purchaseDate:  body.purchaseDate ? new Date(body.purchaseDate) : null,
                 pipelineId:    body.pipelineId || "P1",
+                billingAccountId: body.billingAccountId ? Number(body.billingAccountId) : null,
             },
             include: {
-                device: { include: { customer: true } },
+                device: { include: { account: true } },
                 primaryOwner: true,
             },
         });

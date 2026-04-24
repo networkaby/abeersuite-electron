@@ -15,6 +15,7 @@ import {
     Lock,
     Eye,
     NotebookPen,
+    ArrowRightLeft,
 } from "lucide-react";
 import Link from "next/link";
 import TicketEscalation from "@/components/TicketEscalation";
@@ -23,6 +24,7 @@ import AddNoteModal from "@/components/AddNoteModal";
 import WarrantyBadge from "@/components/WarrantyBadge";
 import WarrantyConvertModal from "@/components/WarrantyConvertModal";
 import TicketOwnershipPanel from "@/components/TicketOwnershipPanel";
+import PipelineTransferModal from "@/components/PipelineTransferModal";
 import { useSession } from "next-auth/react";
 interface Ticket {
     id: number;
@@ -59,7 +61,7 @@ interface Ticket {
         brand: string;
         model: string;
         problem: string;
-        customer: { name: string; phone: string; email?: string };
+        account: { name: string; phone?: string | null; email?: string | null };
     };
     primaryOwner?: { id: number; name: string };
     participants?: { user: { id: number; name: string; role: string }; addedForRole?: string | null }[];
@@ -97,6 +99,7 @@ export default function TicketDetailPage() {
     const [showEscalation, setShowEscalation] = useState(false);
     const [showAddNote, setShowAddNote] = useState(false);
     const [showWarrantyModal, setShowWarrantyModal] = useState(false);
+    const [showTransferModal, setShowTransferModal] = useState(false);
     const [showRefEdit, setShowRefEdit] = useState(false);
     const [refValue, setRefValue] = useState("");
     const [savingRef, setSavingRef] = useState(false);
@@ -106,6 +109,7 @@ export default function TicketDetailPage() {
     const currentUserId = Number(sessionUser?.id ?? "0");
     const canConvertWarranty = permissions.includes("warranty:convert") || permissions.includes("admin:bypass");
     const canManageOwnership = permissions.includes("tickets:manage-participants") || permissions.includes("admin:bypass");
+    const canTransfer = permissions.includes("tickets:transfer") || permissions.includes("admin:bypass");
 
     const saveRef = async () => {
         if (!ticket) return;
@@ -202,10 +206,10 @@ export default function TicketDetailPage() {
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                                 <p className="text-gray-400 text-xs uppercase mb-1">Customer</p>
-                                <p className="font-medium">{ticket.device.customer.name}</p>
-                                <p className="text-gray-500">{ticket.device.customer.phone}</p>
-                                {ticket.device.customer.email && (
-                                    <p className="text-gray-500">{ticket.device.customer.email}</p>
+                                <p className="font-medium">{ticket.device.account.name}</p>
+                                <p className="text-gray-500">{ticket.device.account.phone}</p>
+                                {ticket.device.account.email && (
+                                    <p className="text-gray-500">{ticket.device.account.email}</p>
                                 )}
                             </div>
                             <div>
@@ -381,6 +385,16 @@ export default function TicketDetailPage() {
                             Add Note
                         </button>
 
+                        {canTransfer && !ticket.ticketStatus.isTerminal && (
+                            <button
+                                onClick={() => setShowTransferModal(true)}
+                                className="w-full border border-indigo-300 text-indigo-600 rounded-lg py-2 text-sm hover:bg-indigo-50 flex items-center justify-center gap-2"
+                            >
+                                <ArrowRightLeft size={15} />
+                                Transfer Pipeline
+                            </button>
+                        )}
+
                         {canConvertWarranty && ticket.status !== "S7" && ticket.status !== "S8" && (
                             <button
                                 onClick={() => setShowWarrantyModal(true)}
@@ -476,6 +490,17 @@ export default function TicketDetailPage() {
                     ticketId={ticket.id}
                     onClose={() => {
                         setShowAddNote(false);
+                        fetchTicket();
+                    }}
+                />
+            )}
+
+            {showTransferModal && (
+                <PipelineTransferModal
+                    ticketId={ticket.id}
+                    currentPipelineLabel={ticket.pipeline?.label}
+                    onClose={() => {
+                        setShowTransferModal(false);
                         fetchTicket();
                     }}
                 />

@@ -13,7 +13,7 @@ export interface TicketCardData {
     id: number;
     escalated: boolean;
     updatedAt: Date | string;
-    device: { brand: string; model: string; customer: { name: string; phone: string } };
+    device: { brand: string; model: string; account: { name: string; phone?: string | null } };
     primaryOwner: { id: number; name: string } | null;
     serviceCenter: { name: string } | null;
     ticketStatus: { label: string; color: string; actionLabel: string | null };
@@ -90,10 +90,10 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                         )}
                     </div>
                     <p className="text-sm font-medium text-gray-800 mt-1">
-                        {ticket.device.customer.name}
+                        {ticket.device.account.name}
                         <span className="text-gray-400 font-normal text-xs ml-2">· {ticket.device.brand} {ticket.device.model}</span>
-                        {ticket.device.customer.phone && (
-                            <span className="text-gray-400 font-normal text-xs ml-2">· {ticket.device.customer.phone}</span>
+                        {ticket.device.account.phone && (
+                            <span className="text-gray-400 font-normal text-xs ml-2">· {ticket.device.account.phone}</span>
                         )}
                     </p>
                     {ticket.primaryOwner && (
