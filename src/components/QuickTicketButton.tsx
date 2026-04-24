@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search, UserPlus, ArrowRight, ShieldCheck, Wrench } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, UserPlus, ArrowRight, ShieldCheck, Wrench } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useForm, type Resolver } from "react-hook-form";
@@ -41,13 +41,14 @@ type TicketFormData = z.infer<typeof ticketSchema>;
 export default function QuickTicketButton() {
     const router = useRouter();
     const { data: session } = useSession();
-    const { open, step, phone, customer, setOpen, setStep, setPhone, setCustomer, reset } = useQuickTicketStore();
+    const { open, step, phone, customer, initialPipelineId, setOpen, setStep, setPhone, setCustomer, setInitialPipelineId, reset } = useQuickTicketStore();
     const { technicians, fetchTechnicians } = useReferenceStore();
     const [searching, setSearching] = useState(false);
     const [priorities, setPriorities] = useState<Priority[]>([]);
     const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>("P1");
     const [isWarranty, setIsWarranty] = useState(false);
+    const [dataLoaded, setDataLoaded] = useState(false);
 
     const customerForm = useForm<CustomerFormData>({
         resolver: zodResolver(customerSchema) as Resolver<CustomerFormData>,
@@ -58,24 +59,43 @@ export default function QuickTicketButton() {
         defaultValues: { priority: "P2" },
     });
 
-    const openModal = async () => {
-        reset();
-        setOpen(true);
+    useEffect(() => {
+        if (!open) return;
         setIsWarranty(false);
         customerForm.reset();
         ticketForm.reset({ priority: "P2" });
-        await fetchTechnicians();
-        const [prioRes, pipeRes] = await Promise.all([
-            priorities.length === 0 ? axios.get<Priority[]>("/api/priorities") : Promise.resolve(null),
-            pipelines.length === 0 ? axios.get<PipelineOption[]>("/api/pipelines") : Promise.resolve(null),
-        ]);
-        if (prioRes) setPriorities(prioRes.data);
-        if (pipeRes) {
-            setPipelines(pipeRes.data);
-            const def = pipeRes.data.find((p: PipelineOption) => p.isDefault);
-            if (def) setSelectedPipelineId(def.id);
+
+        // Capture initialPipelineId synchronously before any async work
+        const pendingPipelineId = useQuickTicketStore.getState().initialPipelineId;
+        if (pendingPipelineId) {
+            setSelectedPipelineId(pendingPipelineId);
+            setInitialPipelineId(null);
         }
-    };
+
+        const load = async () => {
+            await fetchTechnicians();
+            const [prioRes, pipeRes] = await Promise.all([
+                !dataLoaded ? axios.get<Priority[]>("/api/priorities") : Promise.resolve(null),
+                !dataLoaded ? axios.get<PipelineOption[]>("/api/pipelines") : Promise.resolve(null),
+            ]);
+            if (prioRes) setPriorities(prioRes.data);
+            if (pipeRes) {
+                const fetched = pipeRes.data as PipelineOption[];
+                setPipelines(fetched);
+                setDataLoaded(true);
+                // Only fall back to default pipeline if nothing was pre-selected
+                if (!pendingPipelineId) {
+                    const def = fetched.find((p) => p.isDefault) ?? fetched[0];
+                    if (def) setSelectedPipelineId(def.id);
+                }
+            } else if (!pendingPipelineId) {
+                const def = pipelines.find((p) => p.isDefault) ?? pipelines[0];
+                if (def) setSelectedPipelineId(def.id);
+            }
+        };
+        load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     const closeModal = () => {
         reset();
@@ -140,15 +160,6 @@ export default function QuickTicketButton() {
 
     return (
         <>
-            {/* Floating Button */}
-            <button
-                onClick={openModal}
-                className="fixed bottom-8 right-8 bg-blue-600 text-white rounded-full shadow-lg px-5 py-3 flex items-center gap-2 hover:bg-blue-700 transition-all z-40 text-sm font-medium"
-            >
-                <Plus size={18} />
-                New Ticket
-            </button>
-
             {/* Modal */}
             {open && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

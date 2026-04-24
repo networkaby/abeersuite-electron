@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/components/SessionWrapper";
 import QuickTicketButton from "@/components/QuickTicketButton";
+import UniversalCreateMenu from "@/components/UniversalCreateMenu";
 
 export default async function ProtectedLayout({
     children,
@@ -32,6 +33,7 @@ export default async function ProtectedLayout({
                 <main className="flex-1 p-8 overflow-auto">{children}</main>
                 <Toaster richColors />
                 <QuickTicketButton />
+                <UniversalCreateMenu />
             </div>
         </SessionWrapper>
     );
