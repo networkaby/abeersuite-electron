@@ -4,7 +4,8 @@ import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const createTicketSchema = z.object({
-    accountId: z.coerce.number().int().positive(),
+    customerId: z.coerce.number().int().positive().optional(),
+    companyId: z.coerce.number().int().positive().optional(),
     billingAccountId: z.coerce.number().int().positive().optional(),
     deviceType: z.string().trim().min(1, "Device type is required"),
     brand: z.string().trim().min(1, "Brand is required"),
@@ -22,6 +23,8 @@ const createTicketSchema = z.object({
     warrantyRef: z.string().trim().optional().or(z.literal("")),
     purchaseDate: z.string().trim().optional().or(z.literal("")),
     pipelineId: z.string().trim().optional(),
+}).refine(d => d.customerId || d.companyId, {
+    message: "Either customerId or companyId is required",
 });
 
 // GET /api/tickets?pipelineId=P1
@@ -37,7 +40,7 @@ export async function GET(req: Request) {
             orderBy: { createdAt: "desc" },
             include: {
                 device: {
-                    include: { account: true },
+                    include: { customer: true, company: true },
                 },
                 primaryOwner: true,
                 serviceCenter: true,
@@ -47,7 +50,17 @@ export async function GET(req: Request) {
                 pipeline: { select: { id: true, label: true, color: true } },
             },
         });
-        return NextResponse.json(tickets);
+
+        // Normalise: expose a top-level `account` shape for client compatibility
+        const normalised = tickets.map(t => ({
+            ...t,
+            device: {
+                ...t.device,
+                account: t.device.customer ?? t.device.company ?? null,
+            },
+        }));
+
+        return NextResponse.json(normalised);
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
@@ -71,28 +84,29 @@ export async function POST(req: Request) {
                 brand: body.brand,
                 model: body.model,
                 problem: body.problem,
-                accountId: Number(body.accountId),
+                ...(body.customerId ? { customerId: Number(body.customerId) } : {}),
+                ...(body.companyId ? { companyId: Number(body.companyId) } : {}),
             },
         });
 
         // Create ticket
         const ticket = await prisma.ticket.create({
             data: {
-                deviceId:      device.id,
-                priority:      body.priority || "P2",
-                notes:         body.notes || null,
-                accessInfo:    body.accessInfo || null,
-                estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null,
-                primaryOwnerId: body.primaryOwnerId ? Number(body.primaryOwnerId) : null,
-                isWarranty:    Boolean(body.isWarranty),
-                warrantyStatus: body.isWarranty ? "claimed" : "none",
-                warrantyRef:   body.warrantyRef || null,
-                purchaseDate:  body.purchaseDate ? new Date(body.purchaseDate) : null,
-                pipelineId:    body.pipelineId || "P1",
+                deviceId:        device.id,
+                priority:        body.priority || "P2",
+                notes:           body.notes || null,
+                accessInfo:      body.accessInfo || null,
+                estimatedCost:   body.estimatedCost ? Number(body.estimatedCost) : null,
+                primaryOwnerId:  body.primaryOwnerId ? Number(body.primaryOwnerId) : null,
+                isWarranty:      Boolean(body.isWarranty),
+                warrantyStatus:  body.isWarranty ? "claimed" : "none",
+                warrantyRef:     body.warrantyRef || null,
+                purchaseDate:    body.purchaseDate ? new Date(body.purchaseDate) : null,
+                pipelineId:      body.pipelineId || "P1",
                 billingAccountId: body.billingAccountId ? Number(body.billingAccountId) : null,
             },
             include: {
-                device: { include: { account: true } },
+                device: { include: { customer: true, company: true } },
                 primaryOwner: true,
             },
         });

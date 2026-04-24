@@ -18,7 +18,7 @@ interface TicketRow {
     escalated: boolean;
     updatedAt: Date;
     pendingTeam: string[];
-    device: { brand: string; model: string; account: { name: string } };
+    device: { brand: string; model: string; customer: { name: string } | null; company: { name: string } | null };
     primaryOwner: { id: number; name: string } | null;
     ticketStatus: { id: string; label: string; color: string };
     ticketSubStatus: { label: string; color: string } | null;
@@ -162,7 +162,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                                     <td className="px-5 py-3">
                                         <Link href={`/tickets/${t.id}`} className="text-blue-600 font-medium hover:underline">#{t.id}</Link>
                                     </td>
-                                    <td className="px-5 py-3 font-medium">{t.device.account.name}</td>
+                                    <td className="px-5 py-3 font-medium">{(t.device.customer ?? t.device.company)?.name}</td>
                                     <td className="px-5 py-3 text-gray-500">{t.device.brand} {t.device.model}</td>
                                     <td className="px-5 py-3">
                                         <div className="flex flex-col gap-0.5">

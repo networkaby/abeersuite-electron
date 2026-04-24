@@ -9,12 +9,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useQuickTicketStore, type Step, type BasicAccount } from "@/store/quickTicketStore";
+import { useQuickTicketStore, type Step, type BasicIdentity } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
 
 type Priority = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
-type LinkedCompany = { id: number; company: { id: number; name: string } };
+type LinkedCompany = { id: number; name: string; accountId: number | null };
 
 const accountSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -43,9 +43,9 @@ export default function QuickTicketButton() {
     const router = useRouter();
     const { data: session } = useSession();
     const {
-        open, step, phone, account, billingAccountId,
+        open, step, phone, identity, billingAccountId,
         initialPipelineId,
-        setOpen: _setOpen, setStep, setPhone, setAccount, setBillingAccountId,
+        setOpen: _setOpen, setStep, setPhone, setIdentity, setBillingAccountId,
         setInitialPipelineId, reset,
     } = useQuickTicketStore();
     const { technicians, fetchTechnicians } = useReferenceStore();
@@ -104,17 +104,17 @@ export default function QuickTicketButton() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    // When account is found, fetch their linked companies for billing selection
+    // When identity is found, set billing defaults and linked companies
     useEffect(() => {
-        if (!account || account.type !== "individual") return;
-        axios.get(`/api/accounts/${account.id}/relationships`)
-            .then(res => {
-                setLinkedCompanies(res.data);
-                setBillingAccountId(account.id); // default: bill to self
-            })
-            .catch(() => setBillingAccountId(account?.id ?? null));
+        if (!identity) return;
+        setBillingAccountId(identity.accountId);
+        if (identity.type === "customer") {
+            setLinkedCompanies(identity.linkedCompanies ?? []);
+        } else {
+            setLinkedCompanies([]);
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [account]);
+    }, [identity]);
 
     const closeModal = () => reset();
 
@@ -122,12 +122,12 @@ export default function QuickTicketButton() {
         if (!phone.trim()) return;
         setSearching(true);
         try {
-            const res = await axios.get(`/api/accounts?phone=${phone.trim()}`);
+            const res = await axios.get(`/api/customers?phone=${phone.trim()}`);
             if (res.data && res.data.length > 0) {
-                const found = res.data[0] as BasicAccount;
-                setAccount(found);
+                const found = res.data[0] as BasicIdentity;
+                setIdentity(found);
                 setStep("ticket");
-                toast.success(`Account found: ${found.name}`);
+                toast.success(`Found: ${found.name}`);
             } else {
                 accountForm.setValue("phone", phone.trim());
                 setStep("account");
@@ -142,23 +142,24 @@ export default function QuickTicketButton() {
 
     const createAccount = async (data: AccountFormData) => {
         try {
-            const res = await axios.post("/api/accounts", { ...data, type: "individual" });
-            setAccount(res.data as BasicAccount);
+            const res = await axios.post("/api/customers", data);
+            const created = res.data as BasicIdentity;
+            setIdentity(created);
             setStep("ticket");
-            toast.success("Account created!");
+            toast.success("Customer created!");
         } catch {
-            toast.error("Failed to create account");
+            toast.error("Failed to create customer");
         }
     };
 
     const createTicket = async (data: TicketFormData) => {
-        if (!account) { toast.error("Account is required"); return; }
+        if (!identity) { toast.error("Customer or company is required"); return; }
         try {
             const res = await axios.post("/api/tickets", {
                 ...data,
                 isWarranty,
-                accountId: account.id,
-                billingAccountId: billingAccountId ?? account.id,
+                ...(identity.type === "customer" ? { customerId: identity.id } : { companyId: identity.id }),
+                billingAccountId: billingAccountId ?? identity.accountId,
                 createdBy: session?.user?.id,
                 pipelineId: selectedPipelineId,
             });
@@ -288,43 +289,43 @@ export default function QuickTicketButton() {
                             {step === "ticket" && (
                                 <form onSubmit={ticketForm.handleSubmit(createTicket)} className="space-y-4">
 
-                                    {/* Account badge */}
+                                    {/* Identity badge */}
                                     <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 flex items-center gap-2">
                                         <UserPlus size={15} />
-                                        <span><strong>{account?.name}</strong> {account?.phone && `— ${account.phone}`}</span>
+                                        <span><strong>{identity?.name}</strong> {identity?.phone && `— ${identity.phone}`}</span>
                                         <button type="button" onClick={() => setStep("phone")} className="ml-auto text-xs text-green-600 underline hover:text-green-800">Change</button>
                                     </div>
 
-                                    {/* Billing Account selector — shown only when individual has linked companies */}
-                                    {account && linkedCompanies.length > 0 && (
+                                    {/* Billing Account selector — shown only when customer has linked companies */}
+                                    {identity && linkedCompanies.length > 0 && (
                                         <div>
                                             <label className="block text-sm font-medium mb-1.5">Bill To <span className="text-gray-400 font-normal">(select account)</span></label>
                                             <div className="space-y-1.5">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setBillingAccountId(account.id)}
+                                                    onClick={() => setBillingAccountId(identity.accountId)}
                                                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-sm text-left transition-colors ${
-                                                        billingAccountId === account.id
+                                                        billingAccountId === identity.accountId
                                                             ? "border-blue-500 bg-blue-50 text-blue-700"
                                                             : "border-gray-200 hover:border-gray-300"
                                                     }`}
                                                 >
                                                     <User size={14} className="shrink-0" />
-                                                    <span>{account.name} <span className="text-xs text-gray-400">(personal)</span></span>
+                                                    <span>{identity.name} <span className="text-xs text-gray-400">(personal)</span></span>
                                                 </button>
                                                 {linkedCompanies.map(lc => (
                                                     <button
                                                         key={lc.id}
                                                         type="button"
-                                                        onClick={() => setBillingAccountId(lc.company.id)}
+                                                        onClick={() => setBillingAccountId(lc.accountId)}
                                                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-sm text-left transition-colors ${
-                                                            billingAccountId === lc.company.id
+                                                            billingAccountId === lc.accountId
                                                                 ? "border-purple-500 bg-purple-50 text-purple-700"
                                                                 : "border-gray-200 hover:border-gray-300"
                                                         }`}
                                                     >
                                                         <Building2 size={14} className="shrink-0" />
-                                                        <span>{lc.company.name}</span>
+                                                        <span>{lc.name}</span>
                                                     </button>
                                                 ))}
                                             </div>

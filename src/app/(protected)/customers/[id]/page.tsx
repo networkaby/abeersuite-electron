@@ -1,6 +1,143 @@
-import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { formatDate } from "@/lib/format-date";
+import { ArrowLeft, User, Building2, Smartphone, Eye } from "lucide-react";
+import CustomerLinkPanel from "@/components/customers/CustomerLinkPanel";
 
-export default async function CustomerDetailRedirect({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerDetailPage({
+    params,
+}: {
+    params: Promise<{ id: string }>;
+}) {
     const { id } = await params;
-    redirect(`/accounts/${id}`);
+
+    const customer = await prisma.customer.findUnique({
+        where: { id: Number(id) },
+        include: {
+            account: { select: { id: true } },
+            devices: {
+                include: {
+                    tickets: {
+                        orderBy: { createdAt: "desc" },
+                        take: 5,
+                        include: {
+                            ticketStatus: { select: { label: true, color: true } },
+                            ticketPriority: { select: { label: true, color: true } },
+                        },
+                    },
+                },
+            },
+            companies: {
+                where: { unlinkedAt: null },
+                include: {
+                    company: { select: { id: true, name: true, phone: true } },
+                },
+            },
+        },
+    });
+
+    if (!customer || !customer.isActive) notFound();
+
+    return (
+        <div>
+            <div className="flex items-center gap-3 mb-6">
+                <Link href="/customers" className="text-gray-400 hover:text-gray-600">
+                    <ArrowLeft size={20} />
+                </Link>
+                <div className="flex items-center gap-3">
+                    <User size={22} className="text-blue-600" />
+                    <div>
+                        <h1 className="text-2xl font-bold">{customer.name}</h1>
+                        <p className="text-gray-400 text-sm">Customer #{customer.id}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Contact Info */}
+                <div className="bg-white rounded-xl shadow p-5 space-y-3">
+                    <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Contact Info</h2>
+                    <div className="space-y-2 text-sm">
+                        {customer.phone && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Phone</span>
+                                <span className="font-medium">{customer.phone}</span>
+                            </div>
+                        )}
+                        {customer.email && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Email</span>
+                                <span className="font-medium">{customer.email}</span>
+                            </div>
+                        )}
+                        {customer.address && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Address</span>
+                                <span className="font-medium text-right max-w-[200px]">{customer.address}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Customer since</span>
+                            <span className="font-medium">{formatDate(customer.createdAt.toISOString())}</span>
+                        </div>
+                        {customer.account && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Account #</span>
+                                <span className="font-medium text-gray-400">{customer.account.id}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Linked Companies */}
+                <div className="bg-white rounded-xl shadow p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide flex items-center gap-2">
+                            <Building2 size={14} /> Linked Companies
+                        </h2>
+                    </div>
+                    <CustomerLinkPanel customerId={customer.id} initialLinks={customer.companies.map(cc => ({
+                        id: cc.id,
+                        company: { id: cc.company.id, name: cc.company.name, phone: cc.company.phone },
+                    }))} />
+                </div>
+
+                {/* Devices & Tickets */}
+                <div className="bg-white rounded-xl shadow p-5">
+                    <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
+                        <Smartphone size={14} /> Devices & Tickets
+                    </h2>
+                    {customer.devices.length === 0 ? (
+                        <p className="text-sm text-gray-400">No devices yet.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {customer.devices.map(d => (
+                                <div key={d.id} className="border rounded-lg p-3">
+                                    <p className="font-medium text-sm">{d.brand} {d.model}</p>
+                                    <p className="text-xs text-gray-400">{d.type}</p>
+                                    <div className="mt-2 space-y-1">
+                                        {d.tickets.map(t => (
+                                            <div key={t.id} className="flex items-center justify-between text-xs">
+                                                <Link href={`/tickets/${t.id}`} className="text-blue-600 hover:underline">
+                                                    #{t.id}
+                                                </Link>
+                                                <span className={`px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                                    {t.ticketStatus.label}
+                                                </span>
+                                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-blue-600">
+                                                    <Eye size={12} />
+                                                </Link>
+                                            </div>
+                                        ))}
+                                        {d.tickets.length === 0 && <p className="text-gray-400 text-xs">No tickets</p>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }

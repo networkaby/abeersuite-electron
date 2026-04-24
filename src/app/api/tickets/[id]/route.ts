@@ -37,7 +37,7 @@ export async function GET(
         const ticket = await prisma.ticket.findUnique({
             where: { id: Number(id) },
             include: {
-                device: { include: { account: true } },
+                device: { include: { customer: true, company: true } },
                 primaryOwner: true,
                 serviceCenter: true,
                 ticketPriority: { select: { label: true, color: true } },
@@ -72,7 +72,10 @@ export async function GET(
             },
         });
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(ticket);
+        return NextResponse.json({
+            ...ticket,
+            device: { ...ticket.device, account: ticket.device.customer ?? ticket.device.company ?? null },
+        });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: "Failed to fetch ticket" }, { status: 500 });

@@ -175,51 +175,79 @@ model User {
   warrantyLogs       WarrantyLog[]       @relation("WarrantyLogUser")
 }
 
-model Account {
-  id            Int       @id @default(autoincrement())
-  type          String    @default("individual") // "individual" | "company"
+// ── Identity models ───────────────────────────────────────────────────────────
+
+model Customer {
+  id            Int               @id @default(autoincrement())
   name          String
   phone         String?
   email         String?
   address       String?
-  companyReg    String?   // company registration / trade licence
-  taxId         String?   // GST / VAT number
-  agreedToTerms Boolean   @default(false)
+  agreedToTerms Boolean           @default(false)
   agreedAt      DateTime?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
 
-  devices         Device[]
-  billedTickets   Ticket[]              @relation("TicketBillingAccount")
-  asIndividual    AccountRelationship[] @relation("RelIndividual")
-  asCompany       AccountRelationship[] @relation("RelCompany")
-
-  @@map("Customer")
+  account       Account?
+  devices       Device[]
+  companies     CustomerCompany[]
 }
 
-model AccountRelationship {
-  id           Int       @id @default(autoincrement())
-  individualId Int
-  companyId    Int
-  role         String?   // "owner" | "employee" | "manager" | "contact"
-  linkedAt     DateTime  @default(now())
-  unlinkedAt   DateTime? // null = active; set on unlink (never delete)
-  individual   Account   @relation("RelIndividual", fields: [individualId], references: [id])
-  company      Account   @relation("RelCompany", fields: [companyId], references: [id])
+model Company {
+  id         Int               @id @default(autoincrement())
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  companyReg String?
+  taxId      String?
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
 
-  @@index([individualId])
+  account    Account?
+  devices    Device[]
+  customers  CustomerCompany[]
+}
+
+model CustomerCompany {
+  id         Int       @id @default(autoincrement())
+  customerId Int
+  companyId  Int
+  role       String?
+  linkedAt   DateTime  @default(now())
+  unlinkedAt DateTime?
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  company    Company   @relation(fields: [companyId], references: [id])
+
+  @@index([customerId])
   @@index([companyId])
 }
 
+// Pure ledger — one Account per Customer or Company. Internal only.
+model Account {
+  id         Int       @id @default(autoincrement())
+  customerId Int?      @unique
+  companyId  Int?      @unique
+  createdAt  DateTime  @default(now())
+
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  company       Company?  @relation(fields: [companyId], references: [id])
+  billedTickets Ticket[]  @relation("TicketBillingAccount")
+}
+
+// ── Device / Ticket ───────────────────────────────────────────────────────────
+
 model Device {
-  id        Int     @id @default(autoincrement())
-  type      String
-  brand     String
-  model     String
-  problem   String
-  accountId Int     @map("customerId")
-  account   Account @relation(fields: [accountId], references: [id])
-  tickets   Ticket[]
+  id         Int       @id @default(autoincrement())
+  type       String
+  brand      String
+  model      String
+  problem    String
+  customerId Int?
+  companyId  Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  company    Company?  @relation(fields: [companyId], references: [id])
+  tickets    Ticket[]
 }
 
 model Ticket {
@@ -238,13 +266,13 @@ model Ticket {
   receivedBackAt  DateTime?
   externalRef     String?
   serviceCenterId Int?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  subStatusId       String?
-  escalationType    String?
-  isWarranty        Boolean             @default(false)
-  primaryOwnerId    Int?
-  billingAccountId  Int?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  subStatusId     String?
+  escalationType  String?
+  isWarranty      Boolean             @default(false)
+  primaryOwnerId  Int?
+  billingAccountId Int?
   purchaseDate    DateTime?
   voidReason      String?
   warrantyRef     String?

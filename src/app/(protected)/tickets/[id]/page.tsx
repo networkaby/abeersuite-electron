@@ -61,7 +61,7 @@ interface Ticket {
         brand: string;
         model: string;
         problem: string;
-        account: { name: string; phone?: string | null; email?: string | null };
+        account: { name: string; phone?: string | null; email?: string | null } | null;
     };
     primaryOwner?: { id: number; name: string };
     participants?: { user: { id: number; name: string; role: string }; addedForRole?: string | null }[];
@@ -206,9 +206,9 @@ export default function TicketDetailPage() {
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                                 <p className="text-gray-400 text-xs uppercase mb-1">Customer</p>
-                                <p className="font-medium">{ticket.device.account.name}</p>
-                                <p className="text-gray-500">{ticket.device.account.phone}</p>
-                                {ticket.device.account.email && (
+                                <p className="font-medium">{ticket.device.account?.name}</p>
+                                <p className="text-gray-500">{ticket.device.account?.phone}</p>
+                                {ticket.device.account?.email && (
                                     <p className="text-gray-500">{ticket.device.account.email}</p>
                                 )}
                             </div>
