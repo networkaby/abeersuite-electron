@@ -16,6 +16,7 @@ const subStatusPatchSchema = z.object({
     warrantyScope: z.enum(["any", "warranty_only", "non_warranty_only"]).optional(),
     handoffRole: z.string().optional().nullable(),
     autoRevertOnClear: z.boolean().optional(),
+    isEntryPoint: z.boolean().optional(),
 });
 
 // DELETE /api/sub-statuses/[id]
@@ -76,6 +77,19 @@ export async function PATCH(
                 ...("autoRevertOnClear"  in body && { autoRevertOnClear: body.autoRevertOnClear }),
             },
         });
+
+        // Manage the null → id entry-point transition
+        if (body.isEntryPoint === true) {
+            await prisma.subStatusTransition.upsert({
+                where: { fromSubStatusId_toSubStatusId: { fromSubStatusId: null as unknown as string, toSubStatusId: id } },
+                update: {},
+                create: { fromSubStatusId: null, toSubStatusId: id },
+            });
+        } else if (body.isEntryPoint === false) {
+            await prisma.subStatusTransition.deleteMany({
+                where: { fromSubStatusId: null, toSubStatusId: id },
+            });
+        }
 
         return NextResponse.json(updated);
     } catch (error) {

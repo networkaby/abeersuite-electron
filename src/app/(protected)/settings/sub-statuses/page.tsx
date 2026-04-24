@@ -31,6 +31,7 @@ interface SubStatus {
     actionLabel: string | null;
     handoffRole: string | null;
     autoRevertOnClear: boolean;
+    isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
 }
 
@@ -47,13 +48,14 @@ type FormValues = {
     warrantyScope: string;
     handoffRole: string;
     autoRevertOnClear: boolean;
+    isEntryPoint: boolean;
 };
 
 const BLANK_FORM: FormValues = {
     label: "", color: "bg-gray-100 text-gray-600", group: "customer_comm",
     order: "", applicableStatusIds: [], allowedRoles: [], notifyRoles: [], triggerMap: {},
     actionLabel: "", warrantyScope: "any",
-    handoffRole: "", autoRevertOnClear: true,
+    handoffRole: "", autoRevertOnClear: true, isEntryPoint: true,
 };
 
 const GROUP_OPTIONS = [
@@ -184,17 +186,31 @@ function SubStatusFormModal({
                             </select>
                             <p className="text-xs text-gray-400 mt-1">Auto-assigns a secondary owner with this role when the sub-status is set.</p>
                         </div>
-                        <div className="flex flex-col justify-center">
-                            <label className="flex items-center gap-2 cursor-pointer mt-5">
-                                <input
-                                    type="checkbox"
-                                    checked={form.autoRevertOnClear}
-                                    onChange={(e) => setForm({ ...form, autoRevertOnClear: e.target.checked })}
-                                    className="accent-blue-600 w-4 h-4"
-                                />
-                                <span className="text-sm font-medium">Auto-remove participant on clear</span>
-                            </label>
-                            <p className="text-xs text-gray-400 mt-1 ml-6">Soft-deletes the assigned participant when this sub-status changes away.</p>
+                        <div className="flex flex-col justify-center gap-3">
+                            <div>
+                                <label className="flex items-center gap-2 cursor-pointer mt-5">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.autoRevertOnClear}
+                                        onChange={(e) => setForm({ ...form, autoRevertOnClear: e.target.checked })}
+                                        className="accent-blue-600 w-4 h-4"
+                                    />
+                                    <span className="text-sm font-medium">Auto-remove participant on clear</span>
+                                </label>
+                                <p className="text-xs text-gray-400 mt-1 ml-6">Soft-deletes the assigned participant when this sub-status changes away.</p>
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.isEntryPoint}
+                                        onChange={(e) => setForm({ ...form, isEntryPoint: e.target.checked })}
+                                        className="accent-green-600 w-4 h-4"
+                                    />
+                                    <span className="text-sm font-medium">Entry point</span>
+                                </label>
+                                <p className="text-xs text-gray-400 mt-1 ml-6">Available when no sub-status is currently set on the ticket.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -388,6 +404,7 @@ export default function SubStatusesPage() {
                 order: createForm.order ? Number(createForm.order) : undefined,
                 handoffRole: createForm.handoffRole || null,
                 pipelineId: activePipelineId,
+                isEntryPoint: createForm.isEntryPoint,
             });
             toast.success("Sub-status created");
             setShowCreate(false);
@@ -415,6 +432,7 @@ export default function SubStatusesPage() {
             warrantyScope: (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
             handoffRole: ss.handoffRole ?? "",
             autoRevertOnClear: ss.autoRevertOnClear ?? true,
+            isEntryPoint: ss.isEntryPoint ?? false,
         });
         setEditId(ss.id);
     };
@@ -436,6 +454,7 @@ export default function SubStatusesPage() {
                 warrantyScope: editForm.warrantyScope,
                 handoffRole: editForm.handoffRole || null,
                 autoRevertOnClear: editForm.autoRevertOnClear,
+                isEntryPoint: editForm.isEntryPoint,
             });
             toast.success("Sub-status updated");
             setEditId(null);
@@ -577,6 +596,11 @@ export default function SubStatusesPage() {
                                                 <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
                                                     {GROUP_LABELS[ss.group] ?? ss.group}
                                                 </span>
+                                                {ss.isEntryPoint && (
+                                                    <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded font-medium">
+                                                        entry point
+                                                    </span>
+                                                )}
                                                 {ss.triggerMap[status.id] && (
                                                     <span className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
                                                         <ChevronRight size={11} />
