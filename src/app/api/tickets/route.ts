@@ -6,7 +6,10 @@ import { z } from "zod";
 const createTicketSchema = z.object({
     customerId: z.coerce.number().int().positive().optional(),
     companyId: z.coerce.number().int().positive().optional(),
-    billingAccountId: z.coerce.number().int().positive().optional(),
+    billingAccountId: z.preprocess(
+        (val) => (val == null || val === "") ? undefined : val,
+        z.coerce.number().int().positive().optional()
+    ),
     deviceType: z.string().trim().min(1, "Device type is required"),
     brand: z.string().trim().min(1, "Brand is required"),
     model: z.string().trim().min(1, "Model is required"),

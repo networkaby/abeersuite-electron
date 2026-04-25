@@ -143,8 +143,15 @@ export default function QuickTicketButton() {
     const createAccount = async (data: AccountFormData) => {
         try {
             const res = await axios.post("/api/customers", data);
-            const created = res.data as BasicIdentity;
-            setIdentity(created);
+            const raw = res.data;
+            setIdentity({
+                id: raw.id,
+                name: raw.name,
+                phone: raw.phone ?? null,
+                type: "customer",
+                accountId: raw.account?.id ?? null,
+                linkedCompanies: [],
+            });
             setStep("ticket");
             toast.success("Customer created!");
         } catch {
