@@ -44,8 +44,7 @@ export default function QuickTicketButton() {
     const { data: session } = useSession();
     const {
         open, step, phone, identity, billingAccountId,
-        initialPipelineId,
-        setOpen: _setOpen, setStep, setPhone, setIdentity, setBillingAccountId,
+        setStep, setPhone, setIdentity, setBillingAccountId,
         setInitialPipelineId, reset,
     } = useQuickTicketStore();
     const { technicians, fetchTechnicians } = useReferenceStore();
@@ -63,14 +62,14 @@ export default function QuickTicketButton() {
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
-        defaultValues: { priority: "P2" },
+        defaultValues: { priority: "MEDIUM" },
     });
 
     useEffect(() => {
         if (!open) return;
         setIsWarranty(false);
         accountForm.reset();
-        ticketForm.reset({ priority: "P2" });
+        ticketForm.reset({ priority: "MEDIUM" });
         setLinkedCompanies([]);
         setBillingAccountId(null);
 

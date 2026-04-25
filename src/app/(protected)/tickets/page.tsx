@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatDate } from "@/lib/format-date";
 import WarrantyBadge from "@/components/WarrantyBadge";
+import { PRIORITY_META } from "@/utils/constants";
 interface Ticket {
     id: number;
     status: string;
@@ -19,7 +20,6 @@ interface Ticket {
     createdAt: string;
     ticketStatus: { label: string; color: string };
     ticketSubStatus?: { label: string; color: string } | null;
-    ticketPriority: { label: string; color: string };
     pipeline?: { id: string; label: string; color: string } | null;
     device: {
         type: string;
@@ -346,8 +346,8 @@ export default function TicketsPage() {
                                         {t.device.problem}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${t.ticketPriority.color}`}>
-                                            {t.ticketPriority.label}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${PRIORITY_META[t.priority]?.color ?? ""}`}>
+                                            {PRIORITY_META[t.priority]?.label ?? t.priority}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">

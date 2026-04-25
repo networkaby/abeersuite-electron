@@ -34,12 +34,21 @@ export async function GET(req: Request) {
             },
             orderBy: { createdAt: "desc" },
             include: {
-                account: { select: { id: true } },
-                _count: { select: { customers: true, devices: true } },
+                _count: { select: { customers: true } },
+                account: {
+                    select: { id: true, _count: { select: { devices: true } } },
+                },
             },
         });
 
-        return NextResponse.json(companies);
+        const normalised = companies.map(c => ({
+            ...c,
+            _count: {
+                customers: c._count.customers,
+                devices: c.account?._count?.devices ?? 0,
+            },
+        }));
+        return NextResponse.json(normalised);
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: "Failed to fetch companies" }, { status: 500 });

@@ -161,19 +161,6 @@ const ROLES = [
     { id: "R4", label: "Despatch", color: "bg-purple-100 text-purple-600", isSystem: true },
 ] as const;
 
-const PRIORITIES = [
-    { id: "P1", label: "Low", color: "bg-gray-100 text-gray-500", order: 1 },
-    { id: "P2", label: "Normal", color: "bg-blue-50 text-blue-500", order: 2 },
-    { id: "P3", label: "High", color: "bg-orange-100 text-orange-500", order: 3 },
-    { id: "P4", label: "Urgent", color: "bg-red-100 text-red-600", order: 4 },
-] as const;
-
-const LEGACY_PRIORITY_ID_MAP: Record<string, string> = {
-    PRI1: "P1",
-    PRI2: "P2",
-    PRI3: "P3",
-    PRI4: "P4",
-};
 
 const PERMISSIONS = [
     { id: "admin:bypass", label: "Admin bypass all checks", module: "core", description: null },
@@ -411,36 +398,6 @@ async function upsertRoles() {
     }
 }
 
-async function upsertPriorities() {
-    for (const priority of PRIORITIES) {
-        await prisma.priority.upsert({
-            where: { id: priority.id },
-            update: {
-                label: priority.label,
-                color: priority.color,
-                order: priority.order,
-            },
-            create: priority,
-        });
-    }
-}
-
-async function migrateLegacyPriorities() {
-    for (const [legacyId, newId] of Object.entries(LEGACY_PRIORITY_ID_MAP)) {
-        await prisma.ticket.updateMany({
-            where: { priority: legacyId },
-            data: { priority: newId },
-        });
-        await prisma.task.updateMany({
-            where: { priority: legacyId },
-            data: { priority: newId },
-        });
-    }
-
-    await prisma.priority.deleteMany({
-        where: { id: { in: Object.keys(LEGACY_PRIORITY_ID_MAP) } },
-    });
-}
 
 async function upsertPermissions() {
     for (const permission of PERMISSIONS) {
@@ -459,7 +416,7 @@ async function upsertPermissions() {
 async function syncRolePermissions() {
     const seededRoleIds = Object.keys(ROLE_PERMISSIONS);
 
-    await prisma.userRolePermission.deleteMany({
+    await prisma.rolePermission.deleteMany({
         where: { roleId: { in: seededRoleIds } },
     });
 
@@ -467,7 +424,7 @@ async function syncRolePermissions() {
         permissionIds.map((permissionId) => ({ roleId, permissionId }))
     );
 
-    await prisma.userRolePermission.createMany({
+    await prisma.rolePermission.createMany({
         data: rolePermGrants,
         skipDuplicates: true,
     });
@@ -597,9 +554,7 @@ async function main() {
     await upsertRoles();
     console.log(`  Seeded ${ROLES.length} roles`);
 
-    await upsertPriorities();
-    await migrateLegacyPriorities();
-    console.log(`  Seeded ${PRIORITIES.length} priorities and migrated legacy IDs`);
+    // Priority is now a Prisma enum (LOW/MEDIUM/HIGH/URGENT) — no DB seeding needed
 
     await upsertPermissions();
     await syncRolePermissions();

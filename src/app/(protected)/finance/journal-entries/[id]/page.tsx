@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, CheckCircle, XCircle } from "lucide-react";
@@ -41,7 +41,6 @@ function fmt(n: number) {
 
 export default function JournalEntryDetailPage() {
     const { id } = useParams<{ id: string }>();
-    const router = useRouter();
     const [entry, setEntry] = useState<JournalEntry | null>(null);
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);

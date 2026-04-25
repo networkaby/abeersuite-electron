@@ -18,6 +18,7 @@ import {
     ArrowRightLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { PRIORITY_META } from "@/utils/constants";
 import TicketEscalation from "@/components/TicketEscalation";
 import StatusUpdateCombined from "@/components/StatusUpdateCombined";
 import AddNoteModal from "@/components/AddNoteModal";
@@ -34,7 +35,6 @@ interface Ticket {
     pipeline?: { id: string; label: string; color: string } | null;
     ticketSubStatus?: { id: string; label: string; color: string } | null;
     priority: string;
-    ticketPriority: { label: string; color: string };
     notes?: string;
     accessInfo?: string;
     estimatedCost?: number;
@@ -76,17 +76,6 @@ interface Ticket {
         changedBy: { name: string };
         ticketStatus: { label: string; color: string };
         ticketSubStatus?: { label: string; color: string } | null;
-    }[];
-    warrantyLogs: {
-        id: number;
-        fromWarranty: boolean;
-        toWarranty: boolean;
-        fromStatus: string;
-        toStatus: string;
-        voidReason?: string | null;
-        note?: string | null;
-        createdAt: string;
-        changedBy: { name: string };
     }[];
 }
 
@@ -163,8 +152,8 @@ export default function TicketDetailPage() {
                             {ticket.pipeline.label}
                         </span>
                     )}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketPriority.color}`}>
-                        {ticket.ticketPriority.label}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
+                        {PRIORITY_META[ticket.priority]?.label ?? ticket.priority}
                     </span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketStatus.color}`}>
                         {ticket.ticketStatus.label}
@@ -280,36 +269,9 @@ export default function TicketDetailPage() {
                         <h2 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
                             <Clock size={16} /> Timeline
                         </h2>
-                        {ticket.warrantyLogs.length > 0 && (
-                            <div className="mb-4 space-y-3">
-                                {ticket.warrantyLogs.map((wl) => (
-                                    <div key={wl.id} className="flex gap-3">
-                                        <div className="w-2 h-2 rounded-full mt-2 shrink-0 bg-amber-400" />
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                                                    {wl.toWarranty
-                                                        ? wl.toStatus === "VOID" ? "Warranty Voided" : "Converted to Warranty"
-                                                        : "Removed from Warranty"}
-                                                </span>
-                                                <span className="text-xs text-gray-400">by {wl.changedBy.name}</span>
-                                                <span className="text-xs text-gray-400">{formatDateTime(wl.createdAt)}</span>
-                                            </div>
-                                            {(wl.voidReason || wl.note) && (
-                                                <p className="text-sm text-gray-500 mt-0.5">
-                                                    {wl.voidReason && <span>Reason: {wl.voidReason.replace(/_/g, " ")}. </span>}
-                                                    {wl.note}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                                <hr className="border-dashed border-gray-200" />
-                            </div>
-                        )}
-                        {ticket.logs.length === 0 && ticket.warrantyLogs.length === 0 ? (
+                        {ticket.logs.length === 0 ? (
                             <p className="text-gray-400 text-sm">No history yet.</p>
-                        ) : ticket.logs.length === 0 ? null : (
+                        ) : (
                             <div className="space-y-4">
                                 {ticket.logs.map((log) => {
                                     const isNoteOnly = !log.subStatusId && log.note && log.status === ticket.status;

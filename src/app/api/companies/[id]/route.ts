@@ -23,14 +23,17 @@ export async function GET(
     const company = await prisma.company.findUnique({
         where: { id: Number(id) },
         include: {
-            account: { select: { id: true } },
-            devices: {
+            account: {
+                select: { id: true },
                 include: {
-                    tickets: {
-                        orderBy: { createdAt: "desc" },
+                    devices: {
                         include: {
-                            ticketStatus: { select: { label: true, color: true } },
-                            ticketPriority: { select: { label: true, color: true } },
+                            tickets: {
+                                orderBy: { createdAt: "desc" },
+                                include: {
+                                    ticketStatus: { select: { label: true, color: true } },
+                                },
+                            },
                         },
                     },
                 },
@@ -50,7 +53,11 @@ export async function GET(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json(company);
+    // Normalise: expose devices at the top level for client compatibility
+    return NextResponse.json({
+        ...company,
+        devices: company.account?.devices ?? [],
+    });
 }
 
 export async function PUT(
@@ -94,7 +101,7 @@ export async function DELETE(
     if (response) return response;
 
     const { id } = await params;
-    const hasDevices = await prisma.device.count({ where: { companyId: Number(id) } });
+    const hasDevices = await prisma.device.count({ where: { account: { companyId: Number(id) } } });
     if (hasDevices > 0) {
         return NextResponse.json({ error: "Cannot deactivate a company with devices" }, { status: 409 });
     }

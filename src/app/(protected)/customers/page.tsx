@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/format-date";
+import { PRIORITY_META } from "@/utils/constants";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,9 +23,9 @@ interface CustomerListItem {
 
 interface Ticket {
     id: number;
+    priority: string;
     createdAt: string;
     ticketStatus: { label: string; color: string };
-    ticketPriority: { label: string; color: string };
 }
 
 interface Device {
@@ -429,8 +430,8 @@ export default function CustomersPage() {
                                                             </span>
                                                         </td>
                                                         <td className="px-4 py-3">
-                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${t.ticketPriority.color}`}>
-                                                                {t.ticketPriority.label}
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_META[t.priority]?.color ?? ""}`}>
+                                                                {PRIORITY_META[t.priority]?.label ?? t.priority}
                                                             </span>
                                                         </td>
                                                         <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(t.createdAt)}</td>

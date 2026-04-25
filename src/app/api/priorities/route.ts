@@ -1,14 +1,14 @@
-import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
+import { PRIORITY_META } from "@/utils/constants";
 
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
-    try {
-        const priorities = await prisma.priority.findMany({ orderBy: { order: "asc" } });
-        return NextResponse.json(priorities);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch priorities" }, { status: 500 });
-    }
+
+    const priorities = Object.entries(PRIORITY_META).map(([id, meta]) => ({
+        id,
+        label: meta.label,
+    }));
+    return NextResponse.json(priorities);
 }

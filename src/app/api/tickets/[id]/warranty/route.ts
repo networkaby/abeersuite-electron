@@ -65,42 +65,22 @@ export async function POST(req: Request, { params }: Params) {
             },
         });
 
-        await prisma.warrantyLog.create({
+        // Record the change in TicketLog (who / why / when)
+        const logNote = voidReason
+            ? `Warranty voided: ${voidReason}${body.note ? ` — ${body.note}` : ""}`
+            : toWarranty
+            ? `Converted to warranty${body.note ? ` — ${body.note}` : ""}`
+            : `Converted to paid repair${body.note ? ` — ${body.note}` : ""}`;
+
+        await prisma.ticketLog.create({
             data: {
                 ticketId,
-                fromWarranty: ticket.isWarranty,
-                toWarranty,
-                fromStatus: ticket.warrantyStatus,
-                toStatus,
-                voidReason: voidReason,
-                note: body.note ?? null,
-                changedById: user.id,
+                status:     updated.status,
+                note:       logNote,
+                userId:     user.id,
+                visibility: "INTERNAL",
             },
         });
-
-        // Notify all Front Desk users to call the customer
-        // We find users who have the role R3 or permissions that match
-        const frontDeskUsers = await prisma.user.findMany({
-            where: { role: "R3" },
-            select: { id: true },
-        });
-        if (frontDeskUsers.length > 0) {
-            const message = voidReason
-                ? `Ticket #${ticketId}: Warranty voided (${voidReason}). Customer approval needed for paid repair.`
-                : toWarranty
-                ? `Ticket #${ticketId}: Confirmed under warranty. Inform customer — no charge.`
-                : `Ticket #${ticketId}: Converted to non-warranty. Customer notification needed.`;
-
-            await prisma.notification.createMany({
-                data: frontDeskUsers.map((u) => ({
-                    userId: u.id,
-                    ticketId,
-                    message,
-                    type: "warranty",
-                })),
-                skipDuplicates: true,
-            });
-        }
 
         return NextResponse.json(updated);
     } catch (e) {

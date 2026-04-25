@@ -15,7 +15,7 @@ async function main() {
     console.log(`Creating accounts for ${customers.length} customers without accounts...`);
 
     for (const c of customers) {
-        await prisma.account.create({ data: { customerId: c.id } });
+        await prisma.account.create({ data: { customerId: c.id, name: c.name } });
         console.log(`  Created account for customer #${c.id} (${c.name})`);
     }
 

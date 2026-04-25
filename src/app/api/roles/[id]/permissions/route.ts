@@ -22,9 +22,9 @@ export async function PUT(
         const { permissionIds } = parsed.data;
 
         // Replace full permission set for this role
-        await prisma.userRolePermission.deleteMany({ where: { roleId } });
+        await prisma.rolePermission.deleteMany({ where: { roleId } });
         if (permissionIds.length > 0) {
-            await prisma.userRolePermission.createMany({
+            await prisma.rolePermission.createMany({
                 data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
                 skipDuplicates: true,
             });

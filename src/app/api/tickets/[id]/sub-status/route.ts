@@ -49,7 +49,7 @@ export async function PATCH(
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            include: { device: { include: { customer: true, company: true } } },
+            include: { device: { include: { account: { include: { customer: true, company: true } } } } },
         });
         if (!ticket) {
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -147,22 +147,6 @@ export async function PATCH(
                 });
             }
         });
-
-        // ── Notifications (outside transaction, non-blocking) ──────────────────
-        if (subStatus.notifyRoles.length > 0) {
-            const usersToNotify = await prisma.user.findMany({
-                where: { role: { in: subStatus.notifyRoles } },
-                select: { id: true },
-            });
-            const deviceLabel = `${ticket.device.brand} ${ticket.device.model}`;
-            const message = `Ticket #${ticketId} (${deviceLabel}): ${subStatus.label}`;
-            if (usersToNotify.length > 0) {
-                await prisma.notification.createMany({
-                    data: usersToNotify.map((u) => ({ userId: u.id, ticketId, message, type: "sub_status" })),
-                    skipDuplicates: true,
-                });
-            }
-        }
 
         // ── Handoff: auto-assign secondary if handoffRole set ──────────────────
         if (subStatus.handoffRole && newSubStatusId) {

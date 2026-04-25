@@ -14,7 +14,6 @@ model Permission {
   label       String
   description String?
   module      String           @default("core")
-  // userGrants  UserPermission[]
   roleGrants  RolePermission[]
 }
 
@@ -26,16 +25,3 @@ model RolePermission {
 
   @@id([roleId, permissionId])
 }
-
-// model UserPermission {
-//   userId       Int
-//   permissionId String
-//   granted      Boolean    @default(true)
-//   grantedBy    Int?
-//   grantedAt    DateTime   @default(now())
-//   granter      User?      @relation("UserPermissionGranter", fields: [grantedBy], references: [id])
-//   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-//   user         User       @relation("UserPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
-
-//   @@id([userId, permissionId])
-// }

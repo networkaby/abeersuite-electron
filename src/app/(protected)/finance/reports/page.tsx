@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -81,13 +81,13 @@ export default function ReportsPage() {
             .catch(() => { });
     }, []);
 
-    const loadTrialBalance = () => {
+    const loadTrialBalance = useCallback(() => {
         setTbLoading(true);
         axios.get<TrialBalanceData>(`/api/finance/reports/trial-balance?asOf=${asOf}`)
             .then((r) => setTbData(r.data))
             .catch(() => toast.error("Failed to load trial balance"))
             .finally(() => setTbLoading(false));
-    };
+    }, [asOf]);
 
     const loadLedger = () => {
         if (!selectedAccount) { toast.error("Select an account"); return; }
@@ -99,8 +99,9 @@ export default function ReportsPage() {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (tab === "trial-balance") loadTrialBalance();
-    }, [tab]);
+    }, [tab, loadTrialBalance]);
 
     const grouped = TYPE_ORDER.map((type) => ({
         type,

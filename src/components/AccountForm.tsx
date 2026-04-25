@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
@@ -39,7 +39,7 @@ export default function AccountForm({ account, defaultType = "individual", onClo
     const {
         register,
         handleSubmit,
-        watch,
+        control,
         reset,
         setValue,
         formState: { errors, isSubmitting },
@@ -48,7 +48,7 @@ export default function AccountForm({ account, defaultType = "individual", onClo
         defaultValues: { type: defaultType },
     });
 
-    const type = watch("type");
+    const type = useWatch({ control, name: "type" });
 
     useEffect(() => {
         if (account) {

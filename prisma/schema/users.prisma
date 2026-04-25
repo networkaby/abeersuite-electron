@@ -8,11 +8,6 @@ model User {
   role               String              @default("R2")
   createdAt          DateTime            @default(now())
   managerId          Int?
-  // notifications      Notification[]
-  // assignedTasks      Task[]              @relation("TaskAssignee")
-  // createdTasks       Task[]              @relation("TaskCreator")
-  // pickedUpTasks      Task[]              @relation("TaskPickup")
-  // taskLogs           TaskLog[]           @relation("TaskLogUser")
   ownedTickets       Ticket[]
   ticketLogs         TicketLog[]
   participantAdded   TicketParticipant[] @relation("ParticipantAddedBy")
@@ -20,9 +15,6 @@ model User {
   manager            User?               @relation("UserHierarchy", fields: [managerId], references: [id])
   reports            User[]              @relation("UserHierarchy")
   userRole           Role                @relation(fields: [role], references: [id])
-  // grantedPerms       UserPermission[]    @relation("UserPermissionGranter")
-  // permissions        UserPermission[]    @relation("UserPermissionUser")
-  // warrantyLogs       WarrantyLog[]       @relation("WarrantyLogUser")
   journalEntries     JournalEntry[]      @relation("JournalCreatedBy")
   invoices           Invoice[]           @relation("InvoiceCreatedBy")
   payments           Payment[]           @relation("PaymentCreatedBy")

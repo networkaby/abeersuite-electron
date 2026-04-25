@@ -15,15 +15,18 @@ export default async function CustomerDetailPage({
     const customer = await prisma.customer.findUnique({
         where: { id: Number(id) },
         include: {
-            account: { select: { id: true } },
-            devices: {
+            account: {
+                select: { id: true },
                 include: {
-                    tickets: {
-                        orderBy: { createdAt: "desc" },
-                        take: 5,
+                    devices: {
                         include: {
-                            ticketStatus: { select: { label: true, color: true } },
-                            ticketPriority: { select: { label: true, color: true } },
+                            tickets: {
+                                orderBy: { createdAt: "desc" },
+                                take: 5,
+                                include: {
+                                    ticketStatus: { select: { label: true, color: true } },
+                                },
+                            },
                         },
                     },
                 },
@@ -108,11 +111,11 @@ export default async function CustomerDetailPage({
                     <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
                         <Smartphone size={14} /> Devices & Tickets
                     </h2>
-                    {customer.devices.length === 0 ? (
+                    {(customer.account?.devices ?? []).length === 0 ? (
                         <p className="text-sm text-gray-400">No devices yet.</p>
                     ) : (
                         <div className="space-y-4">
-                            {customer.devices.map(d => (
+                            {(customer.account?.devices ?? []).map(d => (
                                 <div key={d.id} className="border rounded-lg p-3">
                                     <p className="font-medium text-sm">{d.brand} {d.model}</p>
                                     <p className="text-xs text-gray-400">{d.type}</p>

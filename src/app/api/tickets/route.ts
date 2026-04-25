@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import { Priority } from "@/generated/prisma/enums";
 
 const createTicketSchema = z.object({
     customerId: z.coerce.number().int().positive().optional(),
@@ -14,7 +15,7 @@ const createTicketSchema = z.object({
     brand: z.string().trim().min(1, "Brand is required"),
     model: z.string().trim().min(1, "Model is required"),
     problem: z.string().trim().min(1, "Problem is required"),
-    priority: z.string().trim().optional(),
+    priority: z.nativeEnum(Priority).optional(),
     notes: z.string().trim().optional().or(z.literal("")),
     accessInfo: z.string().trim().optional().or(z.literal("")),
     estimatedCost: z.preprocess(
@@ -43,23 +44,33 @@ export async function GET(req: Request) {
             orderBy: { createdAt: "desc" },
             include: {
                 device: {
-                    include: { customer: true, company: true },
+                    include: {
+                        account: {
+                            select: {
+                                id: true, name: true,
+                                customer: { select: { phone: true } },
+                                company:  { select: { phone: true } },
+                            },
+                        },
+                    },
                 },
                 primaryOwner: true,
                 serviceCenter: true,
-                ticketStatus: { select: { label: true, color: true } },
+                ticketStatus:    { select: { label: true, color: true } },
                 ticketSubStatus: { select: { label: true, color: true } },
-                ticketPriority: { select: { label: true, color: true } },
-                pipeline: { select: { id: true, label: true, color: true } },
+                pipeline:        { select: { id: true, label: true, color: true } },
             },
         });
 
-        // Normalise: expose a top-level `account` shape for client compatibility
+        // Expose a flat phone on device.account for client compatibility
         const normalised = tickets.map(t => ({
             ...t,
             device: {
                 ...t.device,
-                account: t.device.customer ?? t.device.company ?? null,
+                account: t.device.account ? {
+                    ...t.device.account,
+                    phone: t.device.account.customer?.phone ?? t.device.account.company?.phone ?? null,
+                } : null,
             },
         }));
 
@@ -80,7 +91,7 @@ export async function POST(req: Request) {
         }
         const body = parsed.data;
 
-        // Create device first — linked to the billing account (unified account for customer or company)
+        // Create device — linked to the billing account
         const device = await prisma.device.create({
             data: {
                 type: body.deviceType,
@@ -94,21 +105,21 @@ export async function POST(req: Request) {
         // Create ticket
         const ticket = await prisma.ticket.create({
             data: {
-                deviceId:        device.id,
-                priority:        body.priority || "P2",
-                notes:           body.notes || null,
-                accessInfo:      body.accessInfo || null,
-                estimatedCost:   body.estimatedCost ? Number(body.estimatedCost) : null,
-                primaryOwnerId:  body.primaryOwnerId ? Number(body.primaryOwnerId) : null,
-                isWarranty:      Boolean(body.isWarranty),
-                warrantyStatus:  body.isWarranty ? "CLAIMED" : "NONE",
-                warrantyRef:     body.warrantyRef || null,
-                purchaseDate:    body.purchaseDate ? new Date(body.purchaseDate) : null,
-                pipelineId:      body.pipelineId || "P1",
+                deviceId:         device.id,
+                priority:         body.priority ?? Priority.MEDIUM,
+                notes:            body.notes || null,
+                accessInfo:       body.accessInfo || null,
+                estimatedCost:    body.estimatedCost ? Number(body.estimatedCost) : null,
+                primaryOwnerId:   body.primaryOwnerId ? Number(body.primaryOwnerId) : null,
+                isWarranty:       Boolean(body.isWarranty),
+                warrantyStatus:   body.isWarranty ? "CLAIMED" : "NONE",
+                warrantyRef:      body.warrantyRef || null,
+                purchaseDate:     body.purchaseDate ? new Date(body.purchaseDate) : null,
+                pipelineId:       body.pipelineId || "P1",
                 billingAccountId: body.billingAccountId ? Number(body.billingAccountId) : null,
             },
             include: {
-                device: { include: { customer: true, company: true } },
+                device: { include: { account: { select: { id: true, name: true } } } },
                 primaryOwner: true,
             },
         });
@@ -117,9 +128,9 @@ export async function POST(req: Request) {
         await prisma.ticketLog.create({
             data: {
                 ticketId: ticket.id,
-                status: "S1",
-                note: "Ticket created",
-                userId: user.id,
+                status:   "S1",
+                note:     "Ticket created",
+                userId:   user.id,
             },
         });
 

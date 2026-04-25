@@ -84,12 +84,21 @@ export async function GET(req: Request) {
             },
             orderBy: { createdAt: "desc" },
             include: {
-                account: { select: { id: true } },
-                _count: { select: { companies: true, devices: true } },
+                _count: { select: { companies: true } },
+                account: {
+                    select: { id: true, _count: { select: { devices: true } } },
+                },
             },
         });
 
-        return NextResponse.json(customers);
+        const normalised = customers.map(c => ({
+            ...c,
+            _count: {
+                companies: c._count.companies,
+                devices: c.account?._count?.devices ?? 0,
+            },
+        }));
+        return NextResponse.json(normalised);
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });

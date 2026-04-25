@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowLeft, User, Building2, Link2, Unlink, Plus, Pencil } from "lucide-react";
+import { PRIORITY_META } from "@/utils/constants";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/format-date";
 import AccountForm from "@/components/AccountForm";
@@ -37,9 +38,9 @@ interface Account {
         problem: string;
         tickets: {
             id: number;
+            priority: string;
             createdAt: string;
             ticketStatus: { label: string; color: string };
-            ticketPriority: { label: string; color: string };
             pipeline: { label: string; color: string } | null;
         }[];
     }[];
@@ -192,7 +193,7 @@ export default function AccountDetailPage() {
                                                             <span className={`px-1.5 py-0.5 rounded-full text-xs ${t.pipeline.color}`}>{t.pipeline.label}</span>
                                                         )}
                                                         <span className={`px-1.5 py-0.5 rounded-full ${t.ticketStatus.color}`}>{t.ticketStatus.label}</span>
-                                                        <span className={`px-1.5 py-0.5 rounded-full ${t.ticketPriority.color}`}>{t.ticketPriority.label}</span>
+                                                        <span className={`px-1.5 py-0.5 rounded-full ${PRIORITY_META[t.priority]?.color ?? ""}`}>{PRIORITY_META[t.priority]?.label ?? t.priority}</span>
                                                         <span className="text-gray-400 ml-auto">{formatDateTime(t.createdAt)}</span>
                                                     </div>
                                                 ))}

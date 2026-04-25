@@ -54,7 +54,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 permissions: { include: { permission: true } },
                             },
                         },
-                        permissions: { include: { permission: true } },
                     },
                 });
 
@@ -78,16 +77,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         rolePermIds.add(permId);
                     }
                 }
-                // Apply user-level overrides
-                for (const up of user.permissions) {
-                    const permId = up.permission?.id;
-                    if (!permId) continue;
-                    if (up.granted) {
-                        rolePermIds.add(permId);
-                    } else {
-                        rolePermIds.delete(permId);
-                    }
-                }
+                // Per-user permission overrides removed — role-based only
 
                 return {
                     id: String(user.id),

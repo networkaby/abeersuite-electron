@@ -22,9 +22,9 @@ interface CompanyListItem {
 
 interface Ticket {
     id: number;
+    priority: string;
     createdAt: string;
     ticketStatus: { label: string; color: string };
-    ticketPriority: { label: string; color: string };
 }
 
 interface Device {

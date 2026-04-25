@@ -2,10 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { Priority } from "@/generated/prisma/enums";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
-    priority: z.string().trim().optional(),
+    priority: z.nativeEnum(Priority).optional(),
     notes: z.string().optional(),
     accessInfo: z.string().optional(),
     estimatedCost: z.preprocess(
@@ -34,13 +35,23 @@ export async function GET(
         const { id } = await params;
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
         const ticket = await prisma.ticket.findUnique({
             where: { id: Number(id) },
             include: {
-                device: { include: { customer: true, company: true } },
+                device: {
+                    include: {
+                        account: {
+                            select: {
+                                id: true, name: true,
+                                customer: { select: { phone: true } },
+                                company:  { select: { phone: true } },
+                            },
+                        },
+                    },
+                },
                 primaryOwner: true,
                 serviceCenter: true,
-                ticketPriority: { select: { label: true, color: true } },
                 ticketStatus: {
                     include: {
                         fromTransitions: {
@@ -48,10 +59,9 @@ export async function GET(
                             orderBy: { toStatusId: "asc" },
                         },
                     },
-                    // include isTerminal so the client can conditionally show escalation
                 },
                 ticketSubStatus: { select: { id: true, label: true, color: true } },
-                pipeline: { select: { id: true, label: true, color: true } },
+                pipeline:        { select: { id: true, label: true, color: true } },
                 participants: {
                     where: { removedAt: null },
                     include: { user: { select: { id: true, name: true, role: true } } },
@@ -60,21 +70,25 @@ export async function GET(
                 logs: {
                     include: {
                         changedBy: true,
-                        ticketStatus: { select: { label: true, color: true } },
+                        ticketStatus:    { select: { label: true, color: true } },
                         ticketSubStatus: { select: { label: true, color: true } },
                     },
                     orderBy: { createdAt: "desc" },
                 },
-                warrantyLogs: {
-                    include: { changedBy: { select: { name: true } } },
-                    orderBy: { createdAt: "desc" },
-                },
             },
         });
+
         if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
         return NextResponse.json({
             ...ticket,
-            device: { ...ticket.device, account: ticket.device.customer ?? ticket.device.company ?? null },
+            device: {
+                ...ticket.device,
+                account: ticket.device.account ? {
+                    ...ticket.device.account,
+                    phone: ticket.device.account.customer?.phone ?? ticket.device.account.company?.phone ?? null,
+                } : null,
+            },
         });
     } catch (error) {
         console.error(error);
@@ -130,20 +144,20 @@ export async function PUT(
         const ticket = await prisma.ticket.update({
             where: { id: Number(id) },
             data: {
-                ...(body.status !== undefined && { status: body.status }),
-                ...(body.priority !== undefined && { priority: body.priority }),
-                ...(body.notes !== undefined && { notes: body.notes }),
-                ...(body.accessInfo !== undefined && { accessInfo: body.accessInfo }),
+                ...(body.status !== undefined       && { status: body.status }),
+                ...(body.priority !== undefined     && { priority: body.priority }),
+                ...(body.notes !== undefined        && { notes: body.notes }),
+                ...(body.accessInfo !== undefined   && { accessInfo: body.accessInfo }),
                 ...(body.estimatedCost !== undefined && { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null }),
                 ...(body.primaryOwnerId !== undefined && { primaryOwnerId: body.primaryOwnerId ? Number(body.primaryOwnerId) : null }),
-                ...(body.escalated !== undefined && { escalated: body.escalated }),
-                ...(body.escalatedAt !== undefined && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
+                ...(body.escalated !== undefined    && { escalated: body.escalated }),
+                ...(body.escalatedAt !== undefined  && { escalatedAt: body.escalatedAt ? new Date(body.escalatedAt) : null }),
                 ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
                 ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
-                ...(body.externalRef !== undefined && { externalRef: body.externalRef || null }),
+                ...(body.externalRef !== undefined  && { externalRef: body.externalRef || null }),
                 ...(body.serviceCenterId !== undefined && { serviceCenterId: body.serviceCenterId ? Number(body.serviceCenterId) : null }),
-                ...(body.isWarranty !== undefined && { isWarranty: Boolean(body.isWarranty) }),
-                ...(body.warrantyRef !== undefined && { warrantyRef: body.warrantyRef || null }),
+                ...(body.isWarranty !== undefined   && { isWarranty: Boolean(body.isWarranty) }),
+                ...(body.warrantyRef !== undefined  && { warrantyRef: body.warrantyRef || null }),
                 ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
             },
         });
@@ -151,16 +165,14 @@ export async function PUT(
         if (body.status) {
             await prisma.ticketLog.create({
                 data: {
-                    ticketId: ticket.id,
-                    status: body.status,
-                    note: body.logNote || null,
+                    ticketId:   ticket.id,
+                    status:     body.status,
+                    note:       body.logNote || null,
                     visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
                     userId,
                 },
             });
         }
-
-
 
         return NextResponse.json(ticket);
     } catch (error) {

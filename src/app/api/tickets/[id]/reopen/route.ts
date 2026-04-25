@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import { Priority } from "@/generated/prisma/enums";
 
 const reopenSchema = z.object({
-    priority: z.string().trim().optional(),
+    priority: z.nativeEnum(Priority).optional(),
     notes: z.string().trim().optional().or(z.literal("")),
     estimatedCost: z.preprocess(
         (value) => value === "" ? undefined : value,
