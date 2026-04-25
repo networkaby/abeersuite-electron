@@ -12,7 +12,7 @@ interface JournalLine {
     type: "DEBIT" | "CREDIT";
     amount: number;
     description: string | null;
-    glAccount: { id: number; code: string; name: string; normalBalance: string };
+    account: { id: number; code: string; name: string; normalBalance: string };
 }
 
 interface JournalEntry {
@@ -187,8 +187,8 @@ export default function JournalEntryDetailPage() {
                         {entry.lines.map((l) => (
                             <tr key={l.id} className="border-b last:border-0 hover:bg-gray-50">
                                 <td className="px-5 py-3">
-                                    <span className="font-mono text-gray-500 mr-2">{l.glAccount.code}</span>
-                                    <span className="font-medium text-gray-800">{l.glAccount.name}</span>
+                                    <span className="font-mono text-gray-500 mr-2">{l.account.code}</span>
+                                    <span className="font-medium text-gray-800">{l.account.name}</span>
                                 </td>
                                 <td className="px-5 py-3 text-gray-400 text-xs">{l.description ?? "—"}</td>
                                 <td className="px-5 py-3 text-right font-mono">

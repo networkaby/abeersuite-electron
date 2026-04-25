@@ -17,26 +17,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
     const to = toParam ? new Date(toParam) : new Date();
     to.setHours(23, 59, 59, 999);
 
-    const account = await prisma.glAccount.findUnique({ where: { id: Number(accountId) } });
+    const account = await prisma.account.findUnique({ where: { id: Number(accountId) } });
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
     try {
         // Opening balance: all posted lines before the 'from' date
         const openingLines = await prisma.journalLine.findMany({
             where: {
-                glAccountId: Number(accountId),
+                accountId: Number(accountId),
                 journalEntry: { status: "POSTED", date: { lt: from } },
             },
             select: { type: true, amount: true },
         });
         const openingBalance = openingLines.reduce((bal, l) => {
-            return bal + balanceDelta(account.normalBalance, l.type, toNumber(l.amount));
+            return bal + balanceDelta(account.normalBalance!, l.type, toNumber(l.amount));
         }, 0);
 
         // Lines within the date range
         const lines = await prisma.journalLine.findMany({
             where: {
-                glAccountId: Number(accountId),
+                accountId: Number(accountId),
                 journalEntry: { status: "POSTED", date: { gte: from, lte: to } },
             },
             orderBy: [{ journalEntry: { date: "asc" } }, { id: "asc" }],
@@ -50,7 +50,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         // Compute running balance
         let runningBalance = openingBalance;
         const rows = lines.map((l) => {
-            const delta = balanceDelta(account.normalBalance, l.type, toNumber(l.amount));
+            const delta = balanceDelta(account.normalBalance!, l.type, toNumber(l.amount));
             runningBalance += delta;
             return {
                 id: l.id,

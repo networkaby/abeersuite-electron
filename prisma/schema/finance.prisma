@@ -1,25 +1,6 @@
 // ── Finance Module ─────────────────────────────────────────────────────────────
-// Standalone — no FK relations to Ticket/Account/Device.
-// Customer/Company references use loose partyType + partyId (no FK constraint).
-
-model GlAccount {
-  id            Int           @id @default(autoincrement())
-  code          String        @unique
-  name          String
-  type          GlAccountType
-  normalBalance NormalBalance
-  description   String?
-  isActive      Boolean       @default(true)
-  balance       Decimal       @default(0) @db.Decimal(14, 2)
-  parentId      Int?
-  parent        GlAccount?    @relation("GlAccountHierarchy", fields: [parentId], references: [id])
-  children      GlAccount[]   @relation("GlAccountHierarchy")
-  lines         JournalLine[]
-  createdAt     DateTime      @default(now())
-
-  @@index([type])
-  @@index([isActive])
-}
+// GlAccount is unified into Account (see accounts.prisma).
+// Customer/Company references on Invoice use loose partyType + partyId (no FK).
 
 model JournalEntry {
   id          Int           @id @default(autoincrement())
@@ -44,14 +25,14 @@ model JournalLine {
   id             Int          @id @default(autoincrement())
   journalEntryId Int
   journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  glAccountId    Int
-  glAccount      GlAccount    @relation(fields: [glAccountId], references: [id])
+  accountId      Int
+  account        Account      @relation(fields: [accountId], references: [id])
   type           EntryType
   amount         Decimal      @db.Decimal(14, 2)
   description    String?
 
-  @@index([glAccountId])
-  @@index([glAccountId, journalEntryId])
+  @@index([accountId])
+  @@index([accountId, journalEntryId])
 }
 
 model Invoice {

@@ -13,6 +13,7 @@ const createSchema = z.object({
 });
 
 // GET /api/finance/gl-accounts
+// Returns only pure GL accounts (no customer/company identity linkage).
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -22,8 +23,10 @@ export async function GET(req: Request) {
     const activeOnly = searchParams.get("activeOnly") !== "false";
 
     try {
-        const accounts = await prisma.glAccount.findMany({
+        const accounts = await prisma.account.findMany({
             where: {
+                customerId: null,
+                companyId: null,
                 ...(activeOnly ? { isActive: true } : {}),
                 ...(type ? { type: type as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE" } : {}),
             },
@@ -52,7 +55,7 @@ export async function POST(req: Request) {
     const body = parsed.data;
 
     try {
-        const account = await prisma.glAccount.create({
+        const account = await prisma.account.create({
             data: {
                 code: body.code,
                 name: body.name,

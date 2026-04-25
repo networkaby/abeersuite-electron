@@ -35,21 +35,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     description: { contains: invoice.number },
                 },
                 include: {
-                    lines: { include: { glAccount: { select: { normalBalance: true } } } },
+                    lines: { include: { account: { select: { normalBalance: true } } } },
                 },
             });
 
             for (const je of relatedJes) {
-                // Reverse GL balances
+                // Reverse account balances
                 for (const line of je.lines) {
-                    const delta = balanceDelta(line.glAccount.normalBalance, line.type, toNumber(line.amount));
-                    await tx.glAccount.update({ where: { id: line.glAccountId }, data: { balance: { decrement: delta } } });
+                    const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
+                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { decrement: delta } } });
                 }
 
                 // Create reversal entry
                 const reversalRef = await nextRef(tx, "journalEntry", "JE");
                 const reversalLines = je.lines.map((l) => ({
-                    glAccountId: l.glAccountId,
+                    accountId: l.accountId,
                     type: l.type === "DEBIT" ? "CREDIT" : "DEBIT" as "DEBIT" | "CREDIT",
                     amount: l.amount,
                     description: `Void reversal — Invoice ${invoice.number}`,
@@ -65,13 +65,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         createdById: user!.id,
                         lines: { create: reversalLines },
                     },
-                    include: { lines: { include: { glAccount: { select: { normalBalance: true } } } } },
+                    include: { lines: { include: { account: { select: { normalBalance: true } } } } },
                 });
 
                 // Apply reversal balance changes
                 for (const line of reversalJe.lines) {
-                    const delta = balanceDelta(line.glAccount.normalBalance, line.type, toNumber(line.amount));
-                    await tx.glAccount.update({ where: { id: line.glAccountId }, data: { balance: { increment: delta } } });
+                    const delta = balanceDelta(line.account.normalBalance!, line.type, toNumber(line.amount));
+                    await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
                 }
 
                 // Mark original JE as voided

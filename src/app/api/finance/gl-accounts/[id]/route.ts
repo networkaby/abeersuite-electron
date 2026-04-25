@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const account = await prisma.glAccount.findUnique({
+    const account = await prisma.account.findUnique({
         where: { id: Number(id) },
         include: {
             parent: { select: { id: true, code: true, name: true } },
@@ -39,7 +39,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     try {
-        const updated = await prisma.glAccount.update({
+        const updated = await prisma.account.update({
             where: { id: Number(id) },
             data: parsed.data,
         });
@@ -55,12 +55,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (response) return response;
 
     const { id } = await params;
-    const lineCount = await prisma.journalLine.count({ where: { glAccountId: Number(id) } });
+    const lineCount = await prisma.journalLine.count({ where: { accountId: Number(id) } });
     if (lineCount > 0) {
         return NextResponse.json({ error: "Cannot deactivate — account has posted journal lines" }, { status: 409 });
     }
 
-    const updated = await prisma.glAccount.update({
+    const updated = await prisma.account.update({
         where: { id: Number(id) },
         data: { isActive: false },
     });

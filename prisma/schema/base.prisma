@@ -6,3 +6,55 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ── Identity models ───────────────────────────────────────────────────────────
+
+model Customer {
+  id            Int       @id @default(autoincrement())
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  agreedToTerms Boolean   @default(false)
+  agreedAt      DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  account   Account?
+  companies CustomerCompany[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+model Company {
+  id         Int      @id @default(autoincrement())
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  companyReg String?
+  taxId      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  account   Account?
+  customers CustomerCompany[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+model CustomerCompany {
+  id         Int       @id @default(autoincrement())
+  customerId Int
+  companyId  Int
+  role       String?
+  linkedAt   DateTime  @default(now())
+  unlinkedAt DateTime?
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  company    Company   @relation(fields: [companyId], references: [id])
+
+  @@index([customerId])
+  @@index([companyId])
+}

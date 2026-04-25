@@ -557,7 +557,7 @@ async function backfillPipelineIds() {
 
 async function upsertChartOfAccounts() {
     for (const account of CHART_OF_ACCOUNTS) {
-        await prisma.glAccount.upsert({
+        await prisma.account.upsert({
             where: { code: account.code },
             update: {
                 name: account.name,

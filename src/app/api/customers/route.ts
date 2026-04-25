@@ -119,8 +119,8 @@ export async function POST(req: Request) {
                     agreedAt: body.agreedToTerms ? new Date() : null,
                 },
             });
-            // Auto-create ledger account
-            await tx.account.create({ data: { customerId: c.id } });
+            // Auto-create ledger account (name mirrors customer name)
+            await tx.account.create({ data: { customerId: c.id, name: c.name } });
             return c;
         });
 

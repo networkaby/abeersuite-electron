@@ -14,8 +14,12 @@ export async function GET(req: Request) {
     asOf.setHours(23, 59, 59, 999);
 
     try {
-        const accounts = await prisma.glAccount.findMany({
-            where: { isActive: true },
+        const accounts = await prisma.account.findMany({
+            where: {
+                isActive: true,
+                type: { not: null },        // only accounts with a GL type
+                normalBalance: { not: null },
+            },
             orderBy: { code: "asc" },
             include: {
                 lines: {

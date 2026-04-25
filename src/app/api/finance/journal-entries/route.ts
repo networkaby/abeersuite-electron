@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isBalanced, nextRef } from "@/lib/finance/balance";
 
 const lineSchema = z.object({
-    glAccountId: z.number().int().positive(),
+    accountId: z.number().int().positive(),
     type: z.enum(["DEBIT", "CREDIT"]),
     amount: z.number().positive(),
     description: z.string().trim().optional(),
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
                     createdById: user!.id,
                     lines: {
                         create: body.lines.map((l) => ({
-                            glAccountId: l.glAccountId,
+                            accountId: l.accountId,
                             type: l.type,
                             amount: l.amount,
                             description: l.description ?? null,

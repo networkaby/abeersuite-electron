@@ -1,0 +1,34 @@
+// ── Account (unified chart-of-accounts + identity ledger) ────────────────────
+//
+// Every row is a proper ledger account. Customer/company accounts have
+// customerId / companyId set and are created automatically on signup.
+// Pure GL accounts (Cash, Revenue, etc.) leave those fields null.
+
+model Account {
+  id            Int            @id @default(autoincrement())
+  name          String
+  code          String?        @unique
+  type          GlAccountType?
+  normalBalance NormalBalance?
+  description   String?
+  isActive      Boolean        @default(true)
+  balance       Decimal        @default(0) @db.Decimal(14, 2)
+  parentId      Int?
+  // Identity linkage — set only for customer / company accounts
+  customerId    Int?           @unique
+  companyId     Int?           @unique
+  createdAt     DateTime       @default(now())
+
+  parent        Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children      Account[]     @relation("AccountHierarchy")
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  company       Company?      @relation(fields: [companyId], references: [id])
+  lines         JournalLine[]
+  billedTickets Ticket[]      @relation("TicketBillingAccount")
+  devices       Device[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([customerId])
+  @@index([companyId])
+}

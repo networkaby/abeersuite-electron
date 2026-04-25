@@ -13,7 +13,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const entry = await prisma.journalEntry.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: { include: { glAccount: { select: { normalBalance: true } } } },
+            lines: { include: { account: { select: { normalBalance: true } } } },
         },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -27,15 +27,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Update each GL account balance atomically
+            // Update each account balance atomically
             for (const line of entry.lines) {
                 const delta = balanceDelta(
-                    line.glAccount.normalBalance,
+                    line.account.normalBalance!,
                     line.type,
                     toNumber(line.amount),
                 );
-                await tx.glAccount.update({
-                    where: { id: line.glAccountId },
+                await tx.account.update({
+                    where: { id: line.accountId },
                     data: { balance: { increment: delta } },
                 });
             }
@@ -47,7 +47,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         const posted = await prisma.journalEntry.findUnique({
             where: { id: Number(id) },
-            include: { lines: { include: { glAccount: { select: { id: true, code: true, name: true } } } } },
+            include: { lines: { include: { account: { select: { id: true, code: true, name: true } } } } },
         });
         return NextResponse.json(posted);
     } catch (err) {

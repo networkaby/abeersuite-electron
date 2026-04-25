@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const entry = await prisma.journalEntry.findUnique({
         where: { id: Number(id) },
         include: {
-            lines: { include: { glAccount: { select: { normalBalance: true } } } },
+            lines: { include: { account: { select: { normalBalance: true } } } },
         },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -32,15 +32,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Reverse each GL account balance
+            // Reverse each account balance
             for (const line of entry.lines) {
                 const delta = balanceDelta(
-                    line.glAccount.normalBalance,
+                    line.account.normalBalance!,
                     line.type,
                     toNumber(line.amount),
                 );
-                await tx.glAccount.update({
-                    where: { id: line.glAccountId },
+                await tx.account.update({
+                    where: { id: line.accountId },
                     data: { balance: { decrement: delta } },
                 });
             }
@@ -57,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     createdById: user!.id,
                     lines: {
                         create: entry.lines.map((l) => ({
-                            glAccountId: l.glAccountId,
+                            accountId: l.accountId,
                             type: l.type === "DEBIT" ? "CREDIT" : "DEBIT",
                             amount: l.amount,
                             description: `Reversal of ${entry.reference}`,
@@ -70,12 +70,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             for (const line of entry.lines) {
                 const reversedType = line.type === "DEBIT" ? "CREDIT" : "DEBIT";
                 const delta = balanceDelta(
-                    line.glAccount.normalBalance,
+                    line.account.normalBalance!,
                     reversedType,
                     toNumber(line.amount),
                 );
-                await tx.glAccount.update({
-                    where: { id: line.glAccountId },
+                await tx.account.update({
+                    where: { id: line.accountId },
                     data: { balance: { increment: delta } },
                 });
             }

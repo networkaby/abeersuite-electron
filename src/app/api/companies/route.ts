@@ -69,7 +69,7 @@ export async function POST(req: Request) {
                     taxId: body.taxId || null,
                 },
             });
-            await tx.account.create({ data: { companyId: c.id } });
+            await tx.account.create({ data: { companyId: c.id, name: c.name } });
             return c;
         });
 

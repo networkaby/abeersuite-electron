@@ -17,7 +17,7 @@ interface JournalEntry {
     createdBy: { name: string };
 }
 
-type LineInput = { glAccountId: number; type: "DEBIT" | "CREDIT"; amount: string; description: string };
+type LineInput = { accountId: number; type: "DEBIT" | "CREDIT"; amount: string; description: string };
 
 interface GlAccount { id: number; code: string; name: string; type: string }
 
@@ -43,8 +43,8 @@ export default function JournalEntriesPage() {
         date: new Date().toISOString().slice(0, 10),
         description: "",
         lines: [
-            { glAccountId: 0, type: "DEBIT" as "DEBIT" | "CREDIT", amount: "", description: "" },
-            { glAccountId: 0, type: "CREDIT" as "DEBIT" | "CREDIT", amount: "", description: "" },
+            { accountId: 0, type: "DEBIT" as "DEBIT" | "CREDIT", amount: "", description: "" },
+            { accountId: 0, type: "CREDIT" as "DEBIT" | "CREDIT", amount: "", description: "" },
         ] as LineInput[],
     });
 
@@ -67,7 +67,7 @@ export default function JournalEntriesPage() {
 
     const addLine = () => setForm((f) => ({
         ...f,
-        lines: [...f.lines, { glAccountId: 0, type: "DEBIT", amount: "", description: "" }],
+        lines: [...f.lines, { accountId: 0, type: "DEBIT", amount: "", description: "" }],
     }));
 
     const removeLine = (i: number) => setForm((f) => ({ ...f, lines: f.lines.filter((_, idx) => idx !== i) }));
@@ -83,7 +83,7 @@ export default function JournalEntriesPage() {
         if (!form.description.trim()) { toast.error("Description required"); return; }
         if (!balanced) { toast.error("Debits must equal credits"); return; }
         const lines = form.lines.map((l) => ({
-            glAccountId: Number(l.glAccountId),
+            accountId: Number(l.accountId),
             type: l.type,
             amount: parseFloat(l.amount),
             description: l.description || undefined,
@@ -164,8 +164,8 @@ export default function JournalEntriesPage() {
                                     <tr key={i} className="border-t">
                                         <td className="px-3 py-2">
                                             <select
-                                                value={line.glAccountId}
-                                                onChange={(e) => updateLine(i, { glAccountId: Number(e.target.value) })}
+                                                value={line.accountId}
+                                                onChange={(e) => updateLine(i, { accountId: Number(e.target.value) })}
                                                 className="w-full border rounded px-2 py-1 text-sm"
                                             >
                                                 <option value={0}>Select account</option>

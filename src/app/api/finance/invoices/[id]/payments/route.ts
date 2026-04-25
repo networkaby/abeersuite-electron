@@ -10,7 +10,7 @@ const paymentSchema = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     reference: z.string().trim().optional(),
     notes: z.string().trim().optional(),
-    // Which cash/bank GL account to debit (defaults to 1000 Cash)
+    // Which cash/bank account to debit (defaults to 1000 Cash)
     cashGlAccountCode: z.string().default("1000"),
 });
 
@@ -45,20 +45,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         const payment = await prisma.$transaction(async (tx) => {
-            // Fetch GL accounts
+            // Fetch accounts
             const [cashAcct, arAcct] = await Promise.all([
-                tx.glAccount.findFirst({ where: { code: body.cashGlAccountCode } }),
-                tx.glAccount.findFirst({ where: { code: "1100" } }),
+                tx.account.findFirst({ where: { code: body.cashGlAccountCode } }),
+                tx.account.findFirst({ where: { code: "1100" } }),
             ]);
             if (!cashAcct || !arAcct) {
-                throw new Error("Required GL accounts not found. Run the finance seed first.");
+                throw new Error("Required accounts not found. Run the finance seed first.");
             }
 
             // Post JE: DR Cash / CR Accounts Receivable
             const jeRef = await nextRef(tx, "journalEntry", "JE");
             const jeLines = [
-                { glAccountId: cashAcct.id, type: "DEBIT" as const,  amount: body.amount, description: `Payment for ${invoice.number}` },
-                { glAccountId: arAcct.id,   type: "CREDIT" as const, amount: body.amount, description: `Payment for ${invoice.number}` },
+                { accountId: cashAcct.id, type: "DEBIT" as const,  amount: body.amount, description: `Payment for ${invoice.number}` },
+                { accountId: arAcct.id,   type: "CREDIT" as const, amount: body.amount, description: `Payment for ${invoice.number}` },
             ];
             const je = await tx.journalEntry.create({
                 data: {
@@ -72,11 +72,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
             });
 
-            // Update GL balances
+            // Update account balances
             for (const line of jeLines) {
-                const acct = line.glAccountId === cashAcct.id ? cashAcct : arAcct;
-                const delta = balanceDelta(acct.normalBalance, line.type, line.amount);
-                await tx.glAccount.update({ where: { id: line.glAccountId }, data: { balance: { increment: delta } } });
+                const acct = line.accountId === cashAcct.id ? cashAcct : arAcct;
+                const delta = balanceDelta(acct.normalBalance!, line.type, line.amount);
+                await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
             }
 
             // Create payment record
@@ -93,7 +93,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
             });
 
-            // Update invoice amountPaid / amountDue / status
+            // Update invoice amountPaid / status
             const newPaid = Number(invoice.amountPaid) + body.amount;
             const newDue = Number(invoice.totalAmount) - newPaid;
             const newStatus = newDue <= 0.005 ? "PAID" : "PARTIAL";

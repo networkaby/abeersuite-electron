@@ -1,33 +1,24 @@
 // ── RBAC ──────────────────────────────────────────────────────────────────────
 
-model Priority {
-  id      String   @id
-  label   String
-  color   String
-  order   Int
-  tasks   Task[]
-  tickets Ticket[]
-}
-
 model Role {
-  id          String               @id
+  id          String           @id
   label       String
   color       String
-  isSystem    Boolean              @default(false)
+  isSystem    Boolean          @default(false)
   users       User[]
-  permissions UserRolePermission[]
+  permissions RolePermission[]
 }
 
 model Permission {
-  id          String               @id
+  id          String           @id
   label       String
   description String?
-  module      String               @default("core")
-  userGrants  UserPermission[]
-  roleGrants  UserRolePermission[]
+  module      String           @default("core")
+  // userGrants  UserPermission[]
+  roleGrants  RolePermission[]
 }
 
-model UserRolePermission {
+model RolePermission {
   roleId       String
   permissionId String
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
@@ -36,15 +27,15 @@ model UserRolePermission {
   @@id([roleId, permissionId])
 }
 
-model UserPermission {
-  userId       Int
-  permissionId String
-  granted      Boolean    @default(true)
-  grantedBy    Int?
-  grantedAt    DateTime   @default(now())
-  granter      User?      @relation("UserPermissionGranter", fields: [grantedBy], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  user         User       @relation("UserPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
+// model UserPermission {
+//   userId       Int
+//   permissionId String
+//   granted      Boolean    @default(true)
+//   grantedBy    Int?
+//   grantedAt    DateTime   @default(now())
+//   granter      User?      @relation("UserPermissionGranter", fields: [grantedBy], references: [id])
+//   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+//   user         User       @relation("UserPermissionUser", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([userId, permissionId])
-}
+//   @@id([userId, permissionId])
+// }

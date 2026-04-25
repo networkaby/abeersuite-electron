@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isBalanced } from "@/lib/finance/balance";
 
 const lineSchema = z.object({
-    glAccountId: z.number().int().positive(),
+    accountId: z.number().int().positive(),
     type: z.enum(["DEBIT", "CREDIT"]),
     amount: z.number().positive(),
     description: z.string().trim().optional(),
@@ -28,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         include: {
             createdBy: { select: { id: true, name: true } },
             lines: {
-                include: { glAccount: { select: { id: true, code: true, name: true, normalBalance: true } } },
+                include: { account: { select: { id: true, code: true, name: true, normalBalance: true } } },
                 orderBy: [{ type: "asc" }, { id: "asc" }],
             },
         },
@@ -66,7 +66,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 await tx.journalLine.createMany({
                     data: body.lines.map((l) => ({
                         journalEntryId: Number(id),
-                        glAccountId: l.glAccountId,
+                        accountId: l.accountId,
                         type: l.type,
                         amount: l.amount,
                         description: l.description ?? null,
@@ -81,7 +81,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 },
                 include: {
                     lines: {
-                        include: { glAccount: { select: { id: true, code: true, name: true, normalBalance: true } } },
+                        include: { account: { select: { id: true, code: true, name: true, normalBalance: true } } },
                     },
                 },
             });

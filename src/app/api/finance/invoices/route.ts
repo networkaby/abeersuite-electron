@@ -134,9 +134,9 @@ export async function postInvoiceJe(
     userId: number,
 ) {
     const [ar, revenue, taxPayable] = await Promise.all([
-        tx.glAccount.findFirst({ where: { code: "1100" } }),
-        tx.glAccount.findFirst({ where: { code: "4000" } }),
-        taxAmount > 0 ? tx.glAccount.findFirst({ where: { code: "2100" } }) : Promise.resolve(null),
+        tx.account.findFirst({ where: { code: "1100" } }),
+        tx.account.findFirst({ where: { code: "4000" } }),
+        taxAmount > 0 ? tx.account.findFirst({ where: { code: "2100" } }) : Promise.resolve(null),
     ]);
 
     if (!ar || !revenue) {
@@ -145,11 +145,11 @@ export async function postInvoiceJe(
 
     const jeRef = await nextRef(tx, "journalEntry", "JE");
     const lines = [
-        { glAccountId: ar.id, type: "DEBIT",  amount: totalAmount, description: `Invoice ${invoiceNumber}` },
-        { glAccountId: revenue.id, type: "CREDIT", amount: subtotal, description: `Invoice ${invoiceNumber}` },
+        { accountId: ar.id, type: "DEBIT",  amount: totalAmount, description: `Invoice ${invoiceNumber}` },
+        { accountId: revenue.id, type: "CREDIT", amount: subtotal, description: `Invoice ${invoiceNumber}` },
     ];
     if (taxAmount > 0 && taxPayable) {
-        lines.push({ glAccountId: taxPayable.id, type: "CREDIT", amount: taxAmount, description: `Tax on ${invoiceNumber}` });
+        lines.push({ accountId: taxPayable.id, type: "CREDIT", amount: taxAmount, description: `Tax on ${invoiceNumber}` });
     }
 
     const je = await tx.journalEntry.create({
@@ -164,12 +164,12 @@ export async function postInvoiceJe(
         },
     });
 
-    // Update GL balances
+    // Update account balances
     for (const line of lines) {
-        const acct = lines === lines ? await tx.glAccount.findUnique({ where: { id: line.glAccountId } }) : null;
+        const acct = await tx.account.findUnique({ where: { id: line.accountId } });
         if (!acct) continue;
-        const delta = balanceDelta(acct.normalBalance, line.type as "DEBIT" | "CREDIT", line.amount);
-        await tx.glAccount.update({ where: { id: line.glAccountId }, data: { balance: { increment: delta } } });
+        const delta = balanceDelta(acct.normalBalance!, line.type as "DEBIT" | "CREDIT", line.amount);
+        await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
     }
 
     // Link invoice to je via a note (loose — we don't store the je id on invoice to keep isolation)

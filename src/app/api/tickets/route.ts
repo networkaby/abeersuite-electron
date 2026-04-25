@@ -26,8 +26,8 @@ const createTicketSchema = z.object({
     warrantyRef: z.string().trim().optional().or(z.literal("")),
     purchaseDate: z.string().trim().optional().or(z.literal("")),
     pipelineId: z.string().trim().optional(),
-}).refine(d => d.customerId || d.companyId, {
-    message: "Either customerId or companyId is required",
+}).refine(d => d.customerId || d.companyId || d.billingAccountId, {
+    message: "Either customerId, companyId, or billingAccountId is required",
 });
 
 // GET /api/tickets?pipelineId=P1
@@ -80,15 +80,14 @@ export async function POST(req: Request) {
         }
         const body = parsed.data;
 
-        // Create device first
+        // Create device first — linked to the billing account (unified account for customer or company)
         const device = await prisma.device.create({
             data: {
                 type: body.deviceType,
                 brand: body.brand,
                 model: body.model,
                 problem: body.problem,
-                ...(body.customerId ? { customerId: Number(body.customerId) } : {}),
-                ...(body.companyId ? { companyId: Number(body.companyId) } : {}),
+                ...(body.billingAccountId ? { accountId: Number(body.billingAccountId) } : {}),
             },
         });
 
