@@ -5,7 +5,7 @@ dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
+  schema: "prisma/schema",
   datasource: {
     url: (process.env.DIRECT_URL ?? process.env.DATABASE_URL)!,
   },

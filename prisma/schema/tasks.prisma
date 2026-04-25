@@ -1,0 +1,44 @@
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+model Task {
+  id           Int        @id @default(autoincrement())
+  title        String
+  description  String?
+  source       TaskSource @default(MANUAL)
+  status       TaskStatus @default(OPEN)
+  priority     String     @default("P2")
+  assignedToId Int?
+  assignedRole String?
+  pickedUpById Int?
+  pickedUpAt   DateTime?
+  ticketId     Int?
+  createdById  Int
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  assignedTo   User?      @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id])
+  pickedUpBy   User?      @relation("TaskPickup", fields: [pickedUpById], references: [id])
+  taskPriority Priority   @relation(fields: [priority], references: [id])
+  ticket       Ticket?    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  logs         TaskLog[]
+
+  @@unique([ticketId, assignedRole, source, status])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([ticketId])
+}
+
+model TaskLog {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  action    String
+  note      String?
+  byUserId  Int
+  createdAt DateTime @default(now())
+  byUser    User     @relation("TaskLogUser", fields: [byUserId], references: [id])
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}

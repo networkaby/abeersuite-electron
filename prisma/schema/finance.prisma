@@ -1,0 +1,113 @@
+// ── Finance Module ─────────────────────────────────────────────────────────────
+// Standalone — no FK relations to Ticket/Account/Device.
+// Customer/Company references use loose partyType + partyId (no FK constraint).
+
+model GlAccount {
+  id            Int           @id @default(autoincrement())
+  code          String        @unique
+  name          String
+  type          GlAccountType
+  normalBalance NormalBalance
+  description   String?
+  isActive      Boolean       @default(true)
+  balance       Decimal       @default(0) @db.Decimal(14, 2)
+  parentId      Int?
+  parent        GlAccount?    @relation("GlAccountHierarchy", fields: [parentId], references: [id])
+  children      GlAccount[]   @relation("GlAccountHierarchy")
+  lines         JournalLine[]
+  createdAt     DateTime      @default(now())
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model JournalEntry {
+  id          Int           @id @default(autoincrement())
+  date        DateTime      @db.Date
+  reference   String        @unique
+  description String
+  status      JournalStatus @default(DRAFT)
+  postedAt    DateTime?
+  voidedAt    DateTime?
+  voidReason  String?
+  createdById Int
+  createdBy   User          @relation("JournalCreatedBy", fields: [createdById], references: [id])
+  lines       JournalLine[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, date])
+  @@index([date])
+}
+
+model JournalLine {
+  id             Int          @id @default(autoincrement())
+  journalEntryId Int
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  glAccountId    Int
+  glAccount      GlAccount    @relation(fields: [glAccountId], references: [id])
+  type           EntryType
+  amount         Decimal      @db.Decimal(14, 2)
+  description    String?
+
+  @@index([glAccountId])
+  @@index([glAccountId, journalEntryId])
+}
+
+model Invoice {
+  id          Int           @id @default(autoincrement())
+  number      String        @unique
+  status      InvoiceStatus @default(DRAFT)
+  issueDate   DateTime      @db.Date
+  dueDate     DateTime      @db.Date
+  notes       String?
+  partyName   String
+  partyType   String
+  partyId     Int
+  subtotal    Decimal       @db.Decimal(14, 2)
+  taxAmount   Decimal       @default(0) @db.Decimal(14, 2)
+  totalAmount Decimal       @db.Decimal(14, 2)
+  amountPaid  Decimal       @default(0) @db.Decimal(14, 2)
+  createdById Int
+  createdBy   User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  lines       InvoiceLine[]
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@index([partyType, partyId])
+  @@index([issueDate])
+}
+
+model InvoiceLine {
+  id          Int     @id @default(autoincrement())
+  invoiceId   Int
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Decimal @db.Decimal(10, 3)
+  unitPrice   Decimal @db.Decimal(14, 2)
+  taxRate     Decimal @default(0) @db.Decimal(5, 2)
+  taxAmount   Decimal @default(0) @db.Decimal(14, 2)
+  amount      Decimal @db.Decimal(14, 2)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id             Int           @id @default(autoincrement())
+  invoiceId      Int
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  amount         Decimal       @db.Decimal(14, 2)
+  method         PaymentMethod
+  reference      String?
+  date           DateTime      @db.Date
+  notes          String?
+  journalEntryId Int?
+  createdById    Int
+  createdBy      User          @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([invoiceId])
+  @@index([journalEntryId])
+}

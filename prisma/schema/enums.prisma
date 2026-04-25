@@ -1,0 +1,76 @@
+// ── Ticket enums ──────────────────────────────────────────────────────────────
+
+enum WarrantyStatus {
+  NONE
+  ACTIVE
+  VOID
+  CLAIMED
+}
+
+enum EscalationType {
+  INTERNAL
+  EXTERNAL
+  VENDOR
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskSource {
+  MANUAL
+  AUTO
+  SYSTEM
+}
+
+enum LogVisibility {
+  INTERNAL
+  CUSTOMER
+  PUBLIC
+}
+
+// ── Finance enums ─────────────────────────────────────────────────────────────
+
+enum GlAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  VOIDED
+}
+
+enum EntryType {
+  DEBIT
+  CREDIT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  MOBILE_PAYMENT
+  OTHER
+}

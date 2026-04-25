@@ -1,0 +1,88 @@
+// ── Pipeline / Status ─────────────────────────────────────────────────────────
+
+model Pipeline {
+  id          String   @id
+  name        String   @unique
+  label       String
+  description String?
+  color       String   @default("bg-gray-100 text-gray-600")
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  statuses    TicketStatus[]
+  subStatuses TicketSubStatus[]
+  tickets     Ticket[]
+}
+
+model TicketStatus {
+  id              String             @id
+  label           String
+  color           String
+  order           Int
+  isTerminal      Boolean            @default(false)
+  isEntryPoint    Boolean            @default(false)
+  allowedRoles    String[]
+  notifyRoles     String[]
+  actionLabel     String?
+  warrantyScope   String             @default("any")
+  pipelineId      String?
+  pipeline        Pipeline?          @relation(fields: [pipelineId], references: [id])
+  fromTransitions StatusTransition[] @relation("FromStatus")
+  toTransitions   StatusTransition[] @relation("ToStatus")
+  tickets         Ticket[]
+  logs            TicketLog[]
+}
+
+model TicketSubStatus {
+  id                  String                @id
+  label               String
+  color               String                @default("bg-gray-100 text-gray-600")
+  group               String
+  order               Int
+  applicableStatusIds String[]
+  allowedRoles        String[]
+  notifyRoles         String[]
+  triggerMap          Json                  @default("{}")
+  actionLabel         String?
+  autoRevertOnClear   Boolean               @default(true)
+  handoffRole         String?
+  warrantyScope       String                @default("any")
+  groupId             String?
+  pipelineId          String?
+  pipeline            Pipeline?             @relation(fields: [pipelineId], references: [id])
+  fromTransitions     SubStatusTransition[] @relation("FromSubStatus")
+  toTransitions       SubStatusTransition[] @relation("ToSubStatus")
+  tickets             Ticket[]
+  logs                TicketLog[]
+  participants        TicketParticipant[]   @relation("ParticipantSubStatus")
+  SubStatusGroup      SubStatusGroup?       @relation(fields: [groupId], references: [id])
+}
+
+model SubStatusGroup {
+  id              String            @id
+  label           String
+  order           Int               @default(0)
+  TicketSubStatus TicketSubStatus[]
+}
+
+model SubStatusTransition {
+  id              Int              @id @default(autoincrement())
+  fromSubStatusId String?
+  toSubStatusId   String
+  from            TicketSubStatus? @relation("FromSubStatus", fields: [fromSubStatusId], references: [id], onDelete: Cascade)
+  to              TicketSubStatus  @relation("ToSubStatus", fields: [toSubStatusId], references: [id], onDelete: Cascade)
+
+  @@unique([fromSubStatusId, toSubStatusId])
+}
+
+model StatusTransition {
+  id           Int          @id @default(autoincrement())
+  fromStatusId String
+  toStatusId   String
+  from         TicketStatus @relation("FromStatus", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  to           TicketStatus @relation("ToStatus", fields: [toStatusId], references: [id], onDelete: Cascade)
+
+  @@unique([fromStatusId, toStatusId])
+}

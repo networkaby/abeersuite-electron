@@ -1,0 +1,145 @@
+// ── Device / Ticket ───────────────────────────────────────────────────────────
+
+model Device {
+  id         Int       @id @default(autoincrement())
+  type       String
+  brand      String
+  model      String
+  problem    String
+  customerId Int?
+  companyId  Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  company    Company?  @relation(fields: [companyId], references: [id])
+  tickets    Ticket[]
+
+  @@index([customerId])
+  @@index([companyId])
+}
+
+model Ticket {
+  id               Int             @id @default(autoincrement())
+  pipelineId       String?
+  status           String          @default("S1")
+  priority         String          @default("P2")
+  notes            String?
+  accessInfo       String?
+  estimatedCost    Float?
+  deviceId         Int
+  escalated        Boolean         @default(false)
+  escalatedAt      DateTime?
+  escalationType   EscalationType?
+  expectedReturn   DateTime?
+  receivedBackAt   DateTime?
+  externalRef      String?
+  serviceCenterId  Int?
+  subStatusId      String?
+  isWarranty       Boolean         @default(false)
+  warrantyStatus   WarrantyStatus  @default(NONE)
+  warrantyRef      String?
+  purchaseDate     DateTime?
+  voidReason       String?
+  primaryOwnerId   Int?
+  billingAccountId Int?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  pipeline        Pipeline?           @relation(fields: [pipelineId], references: [id])
+  device          Device              @relation(fields: [deviceId], references: [id])
+  primaryOwner    User?               @relation(fields: [primaryOwnerId], references: [id])
+  billingAccount  Account?            @relation("TicketBillingAccount", fields: [billingAccountId], references: [id])
+  ticketPriority  Priority            @relation(fields: [priority], references: [id])
+  serviceCenter   ServiceCenter?      @relation(fields: [serviceCenterId], references: [id])
+  ticketStatus    TicketStatus        @relation(fields: [status], references: [id])
+  ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
+  notifications   Notification[]
+  tasks           Task[]
+  logs            TicketLog[]
+  participants    TicketParticipant[]
+  warrantyLogs    WarrantyLog[]
+
+  @@index([status])
+  @@index([pipelineId, status])
+  @@index([primaryOwnerId])
+  @@index([deviceId])
+  @@index([warrantyStatus])
+  @@index([createdAt])
+}
+
+model WarrantyLog {
+  id           Int      @id @default(autoincrement())
+  ticketId     Int
+  fromWarranty Boolean
+  toWarranty   Boolean
+  fromStatus   String
+  toStatus     String
+  voidReason   String?
+  note         String?
+  changedById  Int
+  createdAt    DateTime @default(now())
+  changedBy    User     @relation("WarrantyLogUser", fields: [changedById], references: [id])
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model TicketParticipant {
+  id                   Int              @id @default(autoincrement())
+  ticketId             Int
+  userId               Int
+  addedById            Int
+  addedForRole         String?
+  addedBySubStatusId   String?
+  removedAt            DateTime?
+  removedBySubStatusId String?
+  createdAt            DateTime         @default(now())
+  addedBy              User             @relation("ParticipantAddedBy", fields: [addedById], references: [id])
+  addedBySubStatus     TicketSubStatus? @relation("ParticipantSubStatus", fields: [addedBySubStatusId], references: [id])
+  ticket               Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user                 User             @relation("ParticipantUser", fields: [userId], references: [id])
+
+  @@unique([ticketId, userId, addedBySubStatusId])
+  @@index([ticketId])
+  @@index([userId])
+}
+
+model TicketLog {
+  id              Int               @id @default(autoincrement())
+  ticketId        Int
+  status          String
+  note            String?
+  userId          Int
+  subStatusId     String?
+  visibility      LogVisibility     @default(INTERNAL)
+  createdAt       DateTime          @default(now())
+  ticketStatus    TicketStatus      @relation(fields: [status], references: [id])
+  ticketSubStatus TicketSubStatus?  @relation(fields: [subStatusId], references: [id])
+  ticket          Ticket            @relation(fields: [ticketId], references: [id])
+  changedBy       User              @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  ticketId  Int
+  message   String
+  type      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+}
+
+model ServiceCenter {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+  tickets   Ticket[]
+}

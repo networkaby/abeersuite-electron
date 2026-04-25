@@ -46,7 +46,9 @@
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx next build)",
       "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec grep -l \"\\\\\"SS36\\\\\"\\\\|\\\\\"SS37\\\\\"\\\\|\\\\\"R[1-4]\\\\\"\\\\|\\\\\"S[1-9]\\\\\"\\\\|\\\\\"P[1-4]\\\\\"\" {} \\\\;)",
       "Bash(find /d/our-own-website/service-mgmt-experiment/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) ! -path \"*/generated/*\" -exec grep -l \"Task\" {} \\\\;)",
-      "Bash(find /d/our-own-website/service-mgmt-experiment/src -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) -exec grep -l \"create.*ticket\\\\|Failed to create\" {} \\\\;)"
+      "Bash(find /d/our-own-website/service-mgmt-experiment/src -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) -exec grep -l \"create.*ticket\\\\|Failed to create\" {} \\\\;)",
+      "Bash(node -e \"const p = require\\('./node_modules/next/dist/docs'\\); console.log\\(Object.keys\\(p || {}\\)\\)\")",
+      "Bash(node -e \"const p = require\\('D:/our-own-website/service-mgmt-experiment/node_modules/prisma/config'\\); console.log\\(typeof p.defineConfig\\)\")"
     ]
   }
 }
