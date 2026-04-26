@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `ccode`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-24 16:30
+**Last Updated:** 2026-04-27 12:45
 
 ---
 
@@ -37,6 +37,23 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 ---
 
 ## ✅ Completed Work
+
+### 2026-04-27 — Supabase Realtime + Slack layout + build fix
+- **Supabase Realtime**: `@supabase/supabase-js` installed via pnpm; `src/lib/supabase-client.ts` singleton; `InboxModule` subscribes to `ChatMessage INSERT` per active room — messages appear instantly across all users with no polling
+- **Optimistic send**: message appears immediately with "sending…" label; Realtime replaces it with the confirmed DB record on success, rolls back on failure
+- **Slack-style layout**: full-width messages, avatar + bold name + timestamp per group, consecutive messages from same sender grouped, own messages have `bg-primary/5` row tint
+- **Notifications**: Web Notifications API (browser permission requested on mount) + Web Audio API "ding" sound for incoming messages from other users
+- **Avatar colour fix**: own avatar = `bg-primary/20 text-primary`; others = `bg-muted text-foreground` — no more red circles for other users
+- **Timestamp fix**: Supabase Realtime omits UTC 'Z' suffix — normalised before `new Date()` parse
+- **Personal Inbox removed**: `PERSONAL_INBOX` rooms no longer created; filtered from all queries
+- **Build fix**: `QuickTicketButton.tsx` line 669 — `technician.id` wrapped in `String()` for `SelectItem.value`
+- Files: `src/components/InboxModule.tsx`, `src/lib/supabase-client.ts`, `src/lib/inbox.ts`, `src/app/(protected)/inbox/page.tsx`, `src/components/QuickTicketButton.tsx`, `.env`
+
+### 2026-04-26 — Inbox UI overhaul + expandable sidebar nav
+- **InboxModule rewrite**: rooms now grouped by type (System / Personal / Groups / Others) with collapsible sections; proper chat bubble layout (own messages right, others left, system centered); auto-scroll to bottom; Enter to send / Shift+Enter for newline; relative timestamps ("2m ago")
+- **Sidebar Inbox section**: Inbox moved from flat WORKSPACE_NAV link to an expandable accordion — shows System / Personal / Groups sub-sections each with live unread counts fetched from `/api/inbox/rooms`; total unread badge on the Inbox header
+- **Inbox page**: now passes `currentUserId` (from session) to InboxModule so own messages are aligned right; wrapped in Suspense for `useSearchParams` compatibility
+- Files: `src/components/InboxModule.tsx`, `src/components/Sidebar.tsx`, `src/utils/constants.ts`, `src/app/(protected)/inbox/page.tsx`
 
 ### 2026-04-24 — Customer + Company model split (Milestone 11 finale)
 - **Separated Account → Customer + Company**: `Customer` model (individuals) + `Company` model (businesses) + `CustomerCompany` join table for many-to-many links; `Account` model retained as legacy bridge
@@ -128,7 +145,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ## 🔄 In Progress
 
-_(Nothing actively in progress — codebase is clean as of 2026-04-24)_
+_(Nothing actively in progress — codebase is clean as of 2026-04-26)_
 
 ---
 

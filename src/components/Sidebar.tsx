@@ -8,7 +8,7 @@ import { useTheme } from "next-themes";
 import axios from "axios";
 import {
     Settings, ChevronDown, LogOut,
-    ChevronLeft, ChevronRight, Sun, Moon,
+    ChevronLeft, ChevronRight, Sun, Moon, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/components/NotificationBell";
@@ -29,6 +29,8 @@ type SidebarUser = {
 
 type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
+type InboxRoom = { unreadCount: number };
+
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const { resolvedTheme, setTheme } = useTheme();
@@ -39,6 +41,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const [collapsed, setCollapsed] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
+    const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
         repair: pathname.startsWith("/tickets") || pathname.startsWith("/service-centers") || pathname.startsWith("/dashboard"),
         tally: false,
@@ -57,6 +60,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             })
             .catch(() => { });
     }, []);
+
+    useEffect(() => {
+        axios
+            .get<InboxRoom[]>("/api/inbox/rooms")
+            .then((res) => setInboxRooms(res.data))
+            .catch(() => { });
+    }, []);
+
+    const totalInboxUnread = inboxRooms.reduce((sum, r) => sum + r.unreadCount, 0);
 
     const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");
 
@@ -132,6 +144,23 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
             {/* Nav */}
             <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-2">
+
+                {/* Inbox */}
+                <section>
+                    <Link href="/inbox" className={linkClass("/inbox")} title={collapsed ? "Inbox" : ""}>
+                        <Bell size={17} className="shrink-0" />
+                        {!collapsed && (
+                            <>
+                                <span className="flex-1 truncate">Inbox</span>
+                                {totalInboxUnread > 0 && (
+                                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
+                                        {totalInboxUnread}
+                                    </span>
+                                )}
+                            </>
+                        )}
+                    </Link>
+                </section>
 
                 {/* Workspace */}
                 <section>

@@ -1,15 +1,20 @@
+import { Suspense } from "react";
+import { auth } from "@/auth";
 import InboxModule from "@/components/InboxModule";
+import { Loader2 } from "lucide-react";
 
-export default function InboxPage() {
+export default async function InboxPage() {
+    const session = await auth();
+    const userId   = session?.user?.id   ? parseInt(session.user.id, 10) : undefined;
+    const userName = session?.user?.name ?? undefined;
+
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold">Inbox</h1>
-                <p className="text-sm text-muted-foreground">
-                    System inbox, personal inbox, role groups, and the organisation group in one place.
-                </p>
+        <Suspense fallback={
+            <div className="-m-8 flex h-screen items-center justify-center">
+                <Loader2 size={24} className="animate-spin text-muted-foreground" />
             </div>
-            <InboxModule />
-        </div>
+        }>
+            <InboxModule currentUserId={userId} currentUserName={userName} />
+        </Suspense>
     );
 }

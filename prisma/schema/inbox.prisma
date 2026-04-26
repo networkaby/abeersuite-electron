@@ -3,6 +3,7 @@ enum ChatRoomType {
   PERSONAL_INBOX
   ROLE_GROUP
   ORG_GROUP
+  DIRECT_MESSAGE
 }
 
 enum ChatMessageType {

@@ -2,16 +2,17 @@ import { prisma } from "@/lib/prisma";
 import type { ResolvedUser } from "@/lib/auth-guard";
 
 const ROOM_KEY = {
-    system: (userId: number) => `system:${userId}`,
-    personal: (userId: number) => `personal:${userId}`,
-    role: (roleId: string) => `role:${roleId}`,
-    org: () => "org:all",
+    system:  (userId: number)              => `system:${userId}`,
+    personal:(userId: number)              => `personal:${userId}`,
+    role:    (roleId: string)              => `role:${roleId}`,
+    org:     ()                            => "org:all",
+    dm:      (a: number, b: number)        => `dm:${Math.min(a,b)}:${Math.max(a,b)}`,
 } as const;
 
 type RoomSeed = {
     key: string;
     name: string;
-    type: "SYSTEM_INBOX" | "PERSONAL_INBOX" | "ROLE_GROUP" | "ORG_GROUP";
+    type: "SYSTEM_INBOX" | "PERSONAL_INBOX" | "ROLE_GROUP" | "ORG_GROUP" | "DIRECT_MESSAGE";
     ownerUserId?: number | null;
     roleId?: string | null;
 };
@@ -51,12 +52,6 @@ export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id" | "ro
         type: "SYSTEM_INBOX",
         ownerUserId: user.id,
     });
-    const personalRoom = await ensureRoom({
-        key: ROOM_KEY.personal(user.id),
-        name: "Personal Inbox",
-        type: "PERSONAL_INBOX",
-        ownerUserId: user.id,
-    });
     const orgRoom = await ensureRoom({
         key: ROOM_KEY.org(),
         name: "Organisation Group",
@@ -65,7 +60,6 @@ export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id" | "ro
 
     await Promise.all([
         ensureMembership(systemRoom.id, user.id),
-        ensureMembership(personalRoom.id, user.id),
         ensureMembership(orgRoom.id, user.id),
         ...user.roles
             .filter(Boolean)
@@ -81,16 +75,39 @@ export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id" | "ro
     ]);
 }
 
+export async function ensureDirectMessageRoom(userA: number, userB: number) {
+    const key = ROOM_KEY.dm(userA, userB);
+    const [nameA, nameB] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userA }, select: { name: true } }),
+        prisma.user.findUnique({ where: { id: userB }, select: { name: true } }),
+    ]);
+    const room = await ensureRoom({
+        key,
+        name: `${nameA?.name ?? userA} ↔ ${nameB?.name ?? userB}`,
+        type: "DIRECT_MESSAGE",
+    });
+    await Promise.all([
+        ensureMembership(room.id, userA),
+        ensureMembership(room.id, userB),
+    ]);
+    return room;
+}
+
 export async function listAccessibleRooms(user: ResolvedUser) {
     await ensureCoreRoomsForUser(user);
 
     const rooms = await prisma.chatRoom.findMany({
         where: {
             isActive: true,
+            type: { not: "PERSONAL_INBOX" },
             OR: [
                 { ownerUserId: user.id },
                 { type: "ORG_GROUP" },
                 { roleId: { in: user.roles.filter(Boolean) } },
+                {
+                    type: "DIRECT_MESSAGE",
+                    members: { some: { userId: user.id } },
+                },
             ],
         },
         include: {
@@ -164,6 +181,10 @@ export async function getAccessibleRoom(user: ResolvedUser, roomId: string) {
                 { ownerUserId: user.id },
                 { type: "ORG_GROUP" },
                 { roleId: { in: user.roles.filter(Boolean) } },
+                {
+                    type: "DIRECT_MESSAGE",
+                    members: { some: { userId: user.id } },
+                },
             ],
         },
     });

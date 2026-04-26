@@ -666,7 +666,7 @@ export default function QuickTicketButton() {
                                         <SelectContent>
                                             <SelectItem value="__unassigned__">Unassigned</SelectItem>
                                             {technicians.map((technician) => (
-                                                <SelectItem key={technician.id} value={technician.id}>
+                                                <SelectItem key={technician.id} value={String(technician.id)}>
                                                     {technician.name}
                                                 </SelectItem>
                                             ))}
