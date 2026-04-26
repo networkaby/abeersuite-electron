@@ -11,6 +11,7 @@ import {
     Plus,
     FileText,
     Calculator,
+    Bell,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -69,6 +70,7 @@ export type ButtonBarAction = {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 export const WORKSPACE_NAV: NavItem[] = [
+    { label: "Inbox",          href: "/inbox",       icon: Bell,          permission: null },
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
     { label: "Customers",      href: "/customers",   icon: Users,         permission: "customers:view" },
     { label: "Companies",      href: "/companies",   icon: Building2,     permission: "customers:view" },

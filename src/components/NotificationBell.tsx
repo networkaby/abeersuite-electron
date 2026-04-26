@@ -12,7 +12,7 @@ interface Notification {
     type: string;
     read: boolean;
     createdAt: string;
-    ticket: { id: number };
+    link?: string | null;
 }
 
 export default function NotificationBell() {
@@ -96,7 +96,7 @@ export default function NotificationBell() {
                             notifications.map((n) => (
                                 <Link
                                     key={n.id}
-                                    href={`/tickets/${n.ticket.id}`}
+                                    href={n.link ?? "/inbox"}
                                     onClick={() => {
                                         markOneRead(n.id);
                                         setOpen(false);

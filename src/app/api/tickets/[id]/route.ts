@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createSystemInboxNotifications } from "@/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
@@ -126,7 +127,7 @@ export async function PUT(
         if (body.status && !isAdmin) {
             const targetStatus = await prisma.ticketStatus.findUnique({
                 where: { id: body.status },
-                select: { allowedRoles: true },
+                select: { allowedRoles: true, label: true, notifyRoles: true },
             });
             if (
                 targetStatus &&
@@ -163,6 +164,11 @@ export async function PUT(
         });
 
         if (body.status) {
+            const targetStatus = await prisma.ticketStatus.findUnique({
+                where: { id: body.status },
+                select: { id: true, label: true, notifyRoles: true },
+            });
+
             await prisma.ticketLog.create({
                 data: {
                     ticketId:   ticket.id,
@@ -172,6 +178,16 @@ export async function PUT(
                     userId,
                 },
             });
+
+            if (targetStatus?.notifyRoles.length) {
+                await createSystemInboxNotifications({
+                    roleIds: targetStatus.notifyRoles,
+                    actorUserId: userId,
+                    title: `Ticket #${ticket.id} moved to ${targetStatus.label}`,
+                    body: `Next action is now with ${targetStatus.notifyRoles.join(", ")}.`,
+                    link: `/tickets/${ticket.id}`,
+                });
+            }
         }
 
         return NextResponse.json(ticket);

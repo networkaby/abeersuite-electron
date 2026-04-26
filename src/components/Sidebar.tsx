@@ -11,7 +11,6 @@ import {
     ChevronLeft, ChevronRight, Sun, Moon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/NotificationBell";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
@@ -56,7 +55,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     null;
                 setDefaultPipeline(def);
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");

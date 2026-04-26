@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createSystemInboxNotifications } from "@/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
@@ -82,6 +83,10 @@ export async function PATCH(
         const triggerStatusId = triggerMap[ticket.status] ?? null;
         const newMainStatus = triggerStatusId ?? ticket.status;
         const newSubStatusId = triggerStatusId ? null : subStatusId;
+        const fallbackStatus = await prisma.ticketStatus.findUnique({
+            where: { id: newMainStatus },
+            select: { label: true, notifyRoles: true },
+        });
 
         // ── Transaction: update ticket + auto-revert old participants ───────────
         await prisma.$transaction(async (tx) => {
@@ -189,6 +194,22 @@ export async function PATCH(
                 });
             }
             // candidates.length === 0: skip silently
+        }
+
+        const effectiveNotifyRoles = subStatus.notifyRoles.length > 0
+            ? subStatus.notifyRoles
+            : (fallbackStatus?.notifyRoles ?? []);
+
+        if (effectiveNotifyRoles.length > 0) {
+            await createSystemInboxNotifications({
+                roleIds: effectiveNotifyRoles,
+                actorUserId: userId,
+                title: `Ticket #${ticketId} updated to ${subStatus.label}`,
+                body: triggerStatusId && fallbackStatus
+                    ? `Auto-advanced to ${fallbackStatus.label}. Next action is with ${effectiveNotifyRoles.join(", ")}.`
+                    : `Next action is with ${effectiveNotifyRoles.join(", ")}.`,
+                link: `/tickets/${ticketId}`,
+            });
         }
 
         return NextResponse.json({ ok: true });
