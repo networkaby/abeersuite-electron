@@ -51,7 +51,8 @@
       "Bash(node -e \"const p = require\\('D:/our-own-website/service-mgmt-experiment/node_modules/prisma/config'\\); console.log\\(typeof p.defineConfig\\)\")",
       "Bash(grep -v \"//.*glAccount\")",
       "Bash(npm run *)",
-      "Bash(grep -E \"\\\\.\\(ts|js|prisma\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|js|prisma\\)$\")",
+      "Bash(npm install *)"
     ]
   }
 }

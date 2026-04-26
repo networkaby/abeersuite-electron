@@ -4,9 +4,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
 import axios from "axios";
-import { Settings, ChevronDown, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+    Settings, ChevronDown, LogOut,
+    ChevronLeft, ChevronRight, Sun, Moon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/NotificationBell";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
@@ -27,6 +32,7 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
+    const { resolvedTheme, setTheme } = useTheme();
     const permissions = user?.permissions ?? [];
     const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
     const isAdmin = permissions.includes("admin:bypass");
@@ -53,14 +59,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             .catch(() => {});
     }, []);
 
-    const roleLabel =
-        userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");
+    const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");
 
     const linkClass = (href: string) => {
         const active = pathname.startsWith(href);
         return [
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-            active ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+            active
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
             collapsed ? "justify-center px-2" : "",
         ].join(" ");
     };
@@ -92,32 +99,32 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         <aside
             className={[
                 collapsed ? "w-16" : "w-64",
-                "relative flex min-h-screen flex-col border-r bg-white shadow-sm transition-all duration-300",
+                "relative flex min-h-screen flex-col border-r border-border bg-card transition-all duration-300",
             ].join(" ")}
         >
             {/* Collapse toggle */}
             <button
                 onClick={() => setCollapsed((c) => !c)}
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="absolute -right-3 top-8 z-10 flex h-6 w-6 items-center justify-center rounded-full border bg-white shadow-sm text-gray-400 hover:text-blue-600 transition-colors"
+                className="absolute -right-3 top-8 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card shadow-sm text-muted-foreground hover:text-foreground transition-colors"
             >
                 {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
             </button>
 
             {/* Brand */}
-            <div className={`border-b p-4 ${collapsed ? "px-3" : ""}`}>
+            <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
                 {collapsed ? (
                     <div className="flex justify-center">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                             S
                         </div>
                     </div>
                 ) : (
                     <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                            <h1 className="truncate text-base font-bold text-blue-600">ServiceMgmt</h1>
-                            <p className="mt-0.5 truncate text-xs font-medium text-gray-700">{user?.name}</p>
-                            <p className="truncate text-xs text-gray-400">{roleLabel}</p>
+                            <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                            <p className="mt-0.5 truncate text-xs font-medium text-foreground">{user?.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{roleLabel}</p>
                         </div>
                         <NotificationBell />
                     </div>
@@ -130,7 +137,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 {/* Workspace */}
                 <section>
                     {!collapsed && (
-                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
                             Workspace
                         </p>
                     )}
@@ -157,7 +164,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 {/* Modules */}
                 <section>
                     {!collapsed && (
-                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
                             Modules
                         </p>
                     )}
@@ -175,8 +182,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             className={[
                                                 "flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
                                                 mod.disabled
-                                                    ? "cursor-not-allowed text-gray-300"
-                                                    : "text-gray-500 hover:bg-gray-100",
+                                                    ? "cursor-not-allowed text-muted-foreground/30"
+                                                    : "text-muted-foreground hover:bg-muted",
                                             ].join(" ")}
                                         >
                                             <Icon size={17} />
@@ -196,17 +203,14 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                 className={[
                                                     "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                     mod.disabled
-                                                        ? "cursor-not-allowed text-gray-300"
-                                                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+                                                        ? "cursor-not-allowed text-muted-foreground/30"
+                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                                 ].join(" ")}
                                             >
                                                 <Icon size={17} className="shrink-0" />
                                                 <span className="flex-1 truncate text-left">{mod.label}</span>
                                                 {mod.disabled ? (
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="h-4 px-1.5 text-[10px]"
-                                                    >
+                                                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
                                                         Soon
                                                     </Badge>
                                                 ) : (
@@ -218,7 +222,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             </button>
 
                                             {isOpen && (
-                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
                                                     {mod.children
                                                         .filter(canViewChild)
                                                         .map((child) => {
@@ -238,17 +242,14 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                         className={[
                                                                             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                                             child.disabled
-                                                                                ? "cursor-not-allowed text-gray-300"
-                                                                                : "text-gray-600 hover:bg-gray-100",
+                                                                                ? "cursor-not-allowed text-muted-foreground/30"
+                                                                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                                                         ].join(" ")}
                                                                     >
                                                                         <CIcon size={15} className="shrink-0" />
                                                                         <span className="truncate">{child.label}</span>
                                                                         {child.disabled && (
-                                                                            <Badge
-                                                                                variant="secondary"
-                                                                                className="h-4 px-1 text-[10px]"
-                                                                            >
+                                                                            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
                                                                                 Soon
                                                                             </Badge>
                                                                         )}
@@ -263,20 +264,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                     className={[
                                                                         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                                         isActiveChild
-                                                                            ? "bg-blue-50 text-blue-600"
-                                                                            : "text-gray-600 hover:bg-gray-100",
-                                                                        child.disabled
-                                                                            ? "pointer-events-none opacity-40"
-                                                                            : "",
+                                                                            ? "bg-primary/10 text-primary"
+                                                                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                                        child.disabled ? "pointer-events-none opacity-40" : "",
                                                                     ].join(" ")}
                                                                 >
                                                                     <CIcon size={15} className="shrink-0" />
                                                                     <span className="truncate">{child.label}</span>
                                                                     {child.disabled && (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="h-4 px-1 text-[10px]"
-                                                                        >
+                                                                        <Badge variant="secondary" className="h-4 px-1 text-[10px]">
                                                                             Soon
                                                                         </Badge>
                                                                     )}
@@ -314,7 +310,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         </button>
 
                         {settingsOpen && !collapsed && (
-                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
                                 {visibleSettings.map(({ label, href, icon: Icon }) => (
                                     <Link key={href} href={href} className={linkClass(href)}>
                                         <Icon size={15} className="shrink-0" />
@@ -327,13 +323,34 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 )}
             </nav>
 
-            {/* Sign out */}
-            <div className="border-t p-2">
+            {/* Bottom — theme toggle + sign out */}
+            <div className="border-t border-border p-2 space-y-1">
+                {/* Theme toggle */}
+                <button
+                    onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                    title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                    className={[
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground",
+                        collapsed ? "justify-center px-2" : "",
+                    ].join(" ")}
+                >
+                    {resolvedTheme === "dark"
+                        ? <Sun size={17} className="shrink-0" />
+                        : <Moon size={17} className="shrink-0" />
+                    }
+                    {!collapsed && (
+                        <span className="truncate">
+                            {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                        </span>
+                    )}
+                </button>
+
+                {/* Sign out */}
                 <button
                     onClick={() => signOut({ callbackUrl: "/login" })}
                     title={collapsed ? "Sign Out" : ""}
                     className={[
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-all duration-150 hover:bg-red-50",
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",
                         collapsed ? "justify-center px-2" : "",
                     ].join(" ")}
                 >

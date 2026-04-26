@@ -23,7 +23,7 @@ export default async function ProtectedLayout({
 
     return (
         <SessionWrapper>
-            <div className="flex min-h-screen bg-gray-100">
+            <div className="flex min-h-screen bg-background">
                 <Sidebar user={{
                     name: user.name,
                     role: user.role,
