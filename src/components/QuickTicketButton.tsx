@@ -15,11 +15,16 @@ import { useReferenceStore } from "@/store/referenceStore";
 type Priority = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
 type LinkedCompany = { id: number; name: string; accountId: number | null };
+type SearchSuggestion = BasicIdentity;
 
 const accountSchema = z.object({
+    type: z.enum(["individual", "company"]),
     name: z.string().min(1, "Name is required"),
     phone: z.string().min(1, "Phone is required"),
     email: z.string().email("Invalid email").optional().or(z.literal("")),
+    address: z.string().optional().or(z.literal("")),
+    companyReg: z.string().optional().or(z.literal("")),
+    taxId: z.string().optional().or(z.literal("")),
 });
 
 const ticketSchema = z.object({
@@ -55,10 +60,16 @@ export default function QuickTicketButton() {
     const [isWarranty, setIsWarranty] = useState(false);
     const [dataLoaded, setDataLoaded] = useState(false);
     const [linkedCompanies, setLinkedCompanies] = useState<LinkedCompany[]>([]);
+    const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [lookupLoading, setLookupLoading] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     const accountForm = useForm<AccountFormData>({
         resolver: zodResolver(accountSchema) as Resolver<AccountFormData>,
+        defaultValues: { type: "individual" },
     });
+    const accountType = accountForm.watch("type") ?? "individual";
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
@@ -72,6 +83,10 @@ export default function QuickTicketButton() {
         ticketForm.reset({ priority: "MEDIUM" });
         setLinkedCompanies([]);
         setBillingAccountId(null);
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setLookupLoading(false);
+        setHighlightedIndex(-1);
 
         const pendingPipelineId = useQuickTicketStore.getState().initialPipelineId;
         if (pendingPipelineId) {
@@ -117,22 +132,64 @@ export default function QuickTicketButton() {
 
     const closeModal = () => reset();
 
+    useEffect(() => {
+        if (!open || step !== "phone") return;
+
+        const query = phone.trim();
+        if (query.length < 2) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            setLookupLoading(false);
+            setHighlightedIndex(-1);
+            return;
+        }
+
+        const timer = window.setTimeout(async () => {
+            setLookupLoading(true);
+            try {
+                const res = await axios.get<SearchSuggestion[]>(`/api/customers?lookup=${encodeURIComponent(query)}`);
+                setSuggestions(res.data);
+                setShowSuggestions(true);
+                setHighlightedIndex(res.data.length > 0 ? 0 : -1);
+            } catch {
+                setSuggestions([]);
+                setShowSuggestions(false);
+                setHighlightedIndex(-1);
+            } finally {
+                setLookupLoading(false);
+            }
+        }, 250);
+
+        return () => window.clearTimeout(timer);
+    }, [open, phone, step]);
+
+    const selectIdentity = (found: BasicIdentity) => {
+        setPhone(found.phone ?? found.name);
+        setIdentity(found);
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setHighlightedIndex(-1);
+        setStep("ticket");
+        toast.success(`Found: ${found.name}`);
+    };
+
     const searchByPhone = async () => {
         if (!phone.trim()) return;
         setSearching(true);
         try {
-            const res = await axios.get(`/api/customers?phone=${phone.trim()}`);
+            const res = await axios.get<BasicIdentity[]>(`/api/customers?lookup=${encodeURIComponent(phone.trim())}`);
             if (res.data && res.data.length > 0) {
-                const found = res.data[0] as BasicIdentity;
-                setIdentity(found);
-                setStep("ticket");
-                toast.success(`Found: ${found.name}`);
+                selectIdentity(res.data[0]);
             } else {
                 accountForm.setValue("phone", phone.trim());
+                setSuggestions([]);
+                setShowSuggestions(false);
                 setStep("account");
             }
         } catch {
             accountForm.setValue("phone", phone.trim());
+            setSuggestions([]);
+            setShowSuggestions(false);
             setStep("account");
         } finally {
             setSearching(false);
@@ -141,7 +198,35 @@ export default function QuickTicketButton() {
 
     const createAccount = async (data: AccountFormData) => {
         try {
-            const res = await axios.post("/api/customers", data);
+            if (data.type === "company") {
+                const res = await axios.post("/api/companies", {
+                    name: data.name,
+                    phone: data.phone,
+                    email: data.email,
+                    address: data.address,
+                    companyReg: data.companyReg,
+                    taxId: data.taxId,
+                });
+                const raw = res.data;
+                setIdentity({
+                    id: raw.id,
+                    name: raw.name,
+                    phone: raw.phone ?? null,
+                    type: "company",
+                    accountId: raw.account?.id ?? null,
+                    linkedCompanies: [],
+                });
+                setStep("ticket");
+                toast.success("Company created!");
+                return;
+            }
+
+            const res = await axios.post("/api/customers", {
+                name: data.name,
+                phone: data.phone,
+                email: data.email,
+                address: data.address,
+            });
             const raw = res.data;
             setIdentity({
                 id: raw.id,
@@ -154,7 +239,7 @@ export default function QuickTicketButton() {
             setStep("ticket");
             toast.success("Customer created!");
         } catch {
-            toast.error("Failed to create customer");
+            toast.error(data.type === "company" ? "Failed to create company" : "Failed to create customer");
         }
     };
 
@@ -220,19 +305,81 @@ export default function QuickTicketButton() {
                             {/* Step 1: Phone Search */}
                             {step === "phone" && (
                                 <div className="space-y-4">
-                                    <p className="text-sm text-gray-500">Search account by phone number to get started.</p>
+                                    <p className="text-sm text-gray-500">Search account by mobile number or name to get started.</p>
                                     <div className="flex gap-2">
                                         <div className="relative flex-1">
                                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                             <input
                                                 type="text"
                                                 value={phone}
-                                                onChange={e => setPhone(e.target.value)}
-                                                onKeyDown={e => e.key === "Enter" && searchByPhone()}
-                                                placeholder="Enter phone number..."
+                                                onChange={e => {
+                                                    setPhone(e.target.value);
+                                                    setShowSuggestions(true);
+                                                }}
+                                                onFocus={() => {
+                                                    if (suggestions.length > 0) setShowSuggestions(true);
+                                                }}
+                                                onKeyDown={e => {
+                                                    if (e.key === "ArrowDown" && suggestions.length > 0) {
+                                                        e.preventDefault();
+                                                        setShowSuggestions(true);
+                                                        setHighlightedIndex(prev => (prev + 1) % suggestions.length);
+                                                        return;
+                                                    }
+
+                                                    if (e.key === "ArrowUp" && suggestions.length > 0) {
+                                                        e.preventDefault();
+                                                        setShowSuggestions(true);
+                                                        setHighlightedIndex(prev => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+                                                        return;
+                                                    }
+
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        if (showSuggestions && highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+                                                            selectIdentity(suggestions[highlightedIndex]);
+                                                            return;
+                                                        }
+                                                        searchByPhone();
+                                                        return;
+                                                    }
+
+                                                    if (e.key === "Escape") {
+                                                        setShowSuggestions(false);
+                                                    }
+                                                }}
+                                                placeholder="Enter mobile or name..."
                                                 className="w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 autoFocus
                                             />
+                                            {showSuggestions && (suggestions.length > 0 || (phone.trim().length >= 2 && !lookupLoading)) && (
+                                                <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-10 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                                                    {suggestions.length > 0 ? (
+                                                        suggestions.map((suggestion, index) => (
+                                                            <button
+                                                                key={`${suggestion.type}-${suggestion.id}`}
+                                                                type="button"
+                                                                onMouseDown={(e) => e.preventDefault()}
+                                                                onClick={() => selectIdentity(suggestion)}
+                                                                className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors ${
+                                                                    highlightedIndex === index ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50"
+                                                                }`}
+                                                            >
+                                                                <span className="truncate font-medium">
+                                                                    {suggestion.name} - {suggestion.phone ?? "No mobile"}
+                                                                </span>
+                                                                <span className="ml-3 shrink-0 text-xs uppercase text-gray-400">
+                                                                    {suggestion.type}
+                                                                </span>
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <div className="px-4 py-3 text-sm text-gray-400">
+                                                            No matching account found.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         <button
                                             onClick={searchByPhone}
@@ -242,7 +389,9 @@ export default function QuickTicketButton() {
                                             {searching ? "Searching..." : "Search"}
                                         </button>
                                     </div>
-                                    <p className="text-xs text-gray-400">If not found, you&apos;ll create a new account.</p>
+                                    <p className="text-xs text-gray-400">
+                                        {lookupLoading ? "Searching suggestions..." : "If not found, you&apos;ll create a new account."}
+                                    </p>
                                 </div>
                             )}
 
@@ -250,42 +399,111 @@ export default function QuickTicketButton() {
                             {step === "account" && (
                                 <form onSubmit={accountForm.handleSubmit(createAccount)} className="space-y-4">
                                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700">
-                                        No account found for <strong>{phone}</strong>. Fill in details to create one.
+                                        No account found for <strong>{phone}</strong>. Choose individual or company, then fill in the details.
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Name</label>
+                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Account Type</label>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => accountForm.setValue("type", "individual")}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                                                    accountType === "individual"
+                                                        ? "bg-blue-600 text-white border-blue-600"
+                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                                }`}
+                                            >
+                                                <User size={15} /> Individual
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => accountForm.setValue("type", "company")}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                                                    accountType === "company"
+                                                        ? "bg-purple-600 text-white border-purple-600"
+                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                                }`}
+                                            >
+                                                <Building2 size={15} /> Company
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">
+                                            {accountType === "company" ? "Company Name" : "Full Name"}
+                                        </label>
                                         <input
                                             {...accountForm.register("name")}
                                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Full name"
+                                            placeholder={accountType === "company" ? "ABC Pvt Ltd" : "Full name"}
                                             autoFocus
                                         />
                                         {accountForm.formState.errors.name && (
                                             <p className="text-red-500 text-xs mt-1">{accountForm.formState.errors.name.message}</p>
                                         )}
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Phone</label>
-                                        <input
-                                            {...accountForm.register("phone")}
-                                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        {accountForm.formState.errors.phone && (
-                                            <p className="text-red-500 text-xs mt-1">{accountForm.formState.errors.phone.message}</p>
-                                        )}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Phone</label>
+                                            <input
+                                                {...accountForm.register("phone")}
+                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            {accountForm.formState.errors.phone && (
+                                                <p className="text-red-500 text-xs mt-1">{accountForm.formState.errors.phone.message}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Email <span className="text-gray-400">(optional)</span></label>
+                                            <input
+                                                {...accountForm.register("email")}
+                                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="email@example.com"
+                                            />
+                                        </div>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Email <span className="text-gray-400">(optional)</span></label>
+                                        <label className="block text-sm font-medium mb-1">Address <span className="text-gray-400">(optional)</span></label>
                                         <input
-                                            {...accountForm.register("email")}
+                                            {...accountForm.register("address")}
                                             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="email@example.com"
+                                            placeholder="Street, City"
                                         />
                                     </div>
+                                    {accountType === "company" && (
+                                        <div className="grid grid-cols-2 gap-3 rounded-lg border border-purple-100 bg-purple-50 p-3">
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Company Reg # <span className="text-gray-400">(optional)</span></label>
+                                                <input
+                                                    {...accountForm.register("companyReg")}
+                                                    className="w-full border rounded-lg bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                                    placeholder="Trade licence / Reg no."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Tax / VAT ID <span className="text-gray-400">(optional)</span></label>
+                                                <input
+                                                    {...accountForm.register("taxId")}
+                                                    className="w-full border rounded-lg bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                                    placeholder="GST / VAT number"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex gap-3 pt-1">
                                         <button type="button" onClick={() => setStep("phone")} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Back</button>
-                                        <button type="submit" disabled={accountForm.formState.isSubmitting} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50">
-                                            {accountForm.formState.isSubmitting ? "Creating..." : "Create & Continue →"}
+                                        <button
+                                            type="submit"
+                                            disabled={accountForm.formState.isSubmitting}
+                                            className={`flex-1 rounded-lg py-2 text-sm text-white disabled:opacity-50 ${
+                                                accountType === "company" ? "bg-purple-600 hover:bg-purple-700" : "bg-blue-600 hover:bg-blue-700"
+                                            }`}
+                                        >
+                                            {accountForm.formState.isSubmitting
+                                                ? "Creating..."
+                                                : accountType === "company"
+                                                    ? "Create Company & Continue →"
+                                                    : "Create Individual & Continue →"}
                                         </button>
                                     </div>
                                 </form>

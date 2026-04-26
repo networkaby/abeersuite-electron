@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import SessionWrapper from "@/components/SessionWrapper";
 import QuickTicketButton from "@/components/QuickTicketButton";
 import UniversalCreateMenu from "@/components/UniversalCreateMenu";
+import ButtonBar from "@/components/ButtonBar";
 
 export default async function ProtectedLayout({
     children,
@@ -31,8 +32,14 @@ export default async function ProtectedLayout({
                     permissions: user.permissions,
                 }} />
                 <main className="flex-1 p-8 overflow-auto">{children}</main>
+                <ButtonBar user={{
+                    name: user.name,
+                    role: user.role,
+                    roles: user.roles,
+                    permissions: user.permissions,
+                }} />
                 <Toaster richColors />
-                <QuickTicketButton />
+                {/* <QuickTicketButton /> */}
                 <UniversalCreateMenu />
             </div>
         </SessionWrapper>

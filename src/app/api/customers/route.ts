@@ -11,7 +11,78 @@ const createCustomerSchema = z.object({
     agreedToTerms: z.boolean().optional(),
 });
 
-// GET /api/customers?phone=...&q=...
+type LookupResult = {
+    id: number;
+    name: string;
+    phone: string | null;
+    type: "customer" | "company";
+    accountId: number | null;
+    linkedCompanies: { id: number; name: string; accountId: number | null }[];
+};
+
+async function lookupAccounts(term: string): Promise<LookupResult[]> {
+    const [customers, companies] = await Promise.all([
+        prisma.customer.findMany({
+            where: {
+                isActive: true,
+                OR: [
+                    { name: { contains: term, mode: "insensitive" } },
+                    { phone: { contains: term } },
+                ],
+            },
+            include: {
+                account: { select: { id: true } },
+                companies: {
+                    where: { unlinkedAt: null },
+                    include: {
+                        company: {
+                            select: { id: true, name: true, account: { select: { id: true } } },
+                        },
+                    },
+                },
+            },
+            take: 8,
+            orderBy: { createdAt: "desc" },
+        }),
+        prisma.company.findMany({
+            where: {
+                isActive: true,
+                OR: [
+                    { name: { contains: term, mode: "insensitive" } },
+                    { phone: { contains: term } },
+                ],
+            },
+            include: { account: { select: { id: true } } },
+            take: 8,
+            orderBy: { createdAt: "desc" },
+        }),
+    ]);
+
+    return [
+        ...customers.map(c => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            type: "customer" as const,
+            accountId: c.account?.id ?? null,
+            linkedCompanies: c.companies.map(lc => ({
+                id: lc.company.id,
+                name: lc.company.name,
+                accountId: lc.company.account?.id ?? null,
+            })),
+        })),
+        ...companies.map(c => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            type: "company" as const,
+            accountId: c.account?.id ?? null,
+            linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],
+        })),
+    ].slice(0, 8);
+}
+
+// GET /api/customers?phone=...&q=...&lookup=...
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -19,55 +90,15 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const phone = searchParams.get("phone")?.trim();
     const q = searchParams.get("q")?.trim();
+    const lookup = searchParams.get("lookup")?.trim();
 
     try {
         if (phone) {
-            // Unified phone search across customers AND companies
-            const [customers, companies] = await Promise.all([
-                prisma.customer.findMany({
-                    where: { phone: { contains: phone }, isActive: true },
-                    include: {
-                        account: { select: { id: true } },
-                        companies: {
-                            where: { unlinkedAt: null },
-                            include: {
-                                company: {
-                                    select: { id: true, name: true, account: { select: { id: true } } },
-                                },
-                            },
-                        },
-                    },
-                }),
-                prisma.company.findMany({
-                    where: { phone: { contains: phone }, isActive: true },
-                    include: { account: { select: { id: true } } },
-                }),
-            ]);
+            return NextResponse.json(await lookupAccounts(phone));
+        }
 
-            const results = [
-                ...customers.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    phone: c.phone,
-                    type: "customer" as const,
-                    accountId: c.account?.id ?? null,
-                    linkedCompanies: c.companies.map(lc => ({
-                        id: lc.company.id,
-                        name: lc.company.name,
-                        accountId: lc.company.account?.id ?? null,
-                    })),
-                })),
-                ...companies.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    phone: c.phone,
-                    type: "company" as const,
-                    accountId: c.account?.id ?? null,
-                    linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],
-                })),
-            ];
-
-            return NextResponse.json(results);
+        if (lookup) {
+            return NextResponse.json(await lookupAccounts(lookup));
         }
 
         // General list / search
