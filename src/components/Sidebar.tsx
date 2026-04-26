@@ -2,29 +2,19 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import axios from "axios";
-import {
-    Users,
-    Ticket,
-    Building2,
-    UserCog,
-    Settings,
-    ShieldCheck,
-    ChevronDown,
-    LogOut,
-    ChevronLeft,
-    ClipboardList,
-    Layers,
-    GitBranch,
-    BookOpen,
-    FileText,
-    Receipt,
-    BarChart2,
-} from "lucide-react";
+import { Settings, ChevronDown, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/components/NotificationBell";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
+import {
+    WORKSPACE_NAV,
+    MODULE_SECTIONS,
+    SETTINGS_NAV,
+    type ModuleChild,
+} from "@/utils/constants";
 
 type SidebarUser = {
     name?: string | null;
@@ -33,211 +23,266 @@ type SidebarUser = {
     permissions?: string[] | null;
 };
 
-type Pipeline = { id: string; label: string; color: string; isActive: boolean; isDefault: boolean };
-
-const GLOBAL_NAV = [
-    { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
-    { label: "Customers", href: "/customers", icon: Users, permission: null },
-    { label: "Companies", href: "/companies", icon: Building2, permission: null },
-] as const;
-
-const FINANCE_NAV = [
-    { label: "Chart of Accounts", href: "/finance/chart-of-accounts", icon: BookOpen },
-    { label: "Journal Entries",   href: "/finance/journal-entries",   icon: FileText },
-    { label: "Invoices",          href: "/finance/invoices",          icon: Receipt },
-    { label: "Reports",           href: "/finance/reports",           icon: BarChart2 },
-] as const;
-
-const SETTINGS_NAV = [
-    { label: "Users", href: "/settings/users", icon: UserCog, permission: "users:manage" },
-    { label: "Statuses", href: "/settings/statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Pipelines", href: "/settings/pipelines", icon: GitBranch, permission: "settings:statuses" },
-    { label: "Roles", href: "/settings/roles", icon: ShieldCheck, permission: "roles:manage" },
-] as const;
-
-function colorDot(color: string) {
-    return color.split(" ")[0];
-}
+type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
-    const currentPipeline = searchParams.get("pipeline") ?? "";
-    const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
     const permissions = user?.permissions ?? [];
-    const primaryRole = user?.role ?? "";
+    const userRoles = user?.roles ?? (user?.role ? [user.role] : []);
     const isAdmin = permissions.includes("admin:bypass");
-    const canManageServiceCenters = isAdmin || permissions.includes("warranty:convert");
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     const [collapsed, setCollapsed] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
-    const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-    const [pipelineOpen, setPipelineOpen] = useState<Record<string, boolean>>({});
+    const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
+        repair: pathname.startsWith("/tickets") || pathname.startsWith("/service-centers") || pathname.startsWith("/dashboard"),
+        tally: false,
+    });
+    const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
 
     useEffect(() => {
-        axios.get<Pipeline[]>("/api/pipelines")
-            .then((r) => {
-                const active = r.data.filter((p) => p.isActive);
-                setPipelines(active);
-                const initial: Record<string, boolean> = {};
-                for (const p of active) {
-                    initial[p.id] =
-                        currentPipeline === p.id &&
-                        (pathname.startsWith("/tickets") || pathname.startsWith("/dashboard") || pathname.startsWith("/service-centers"));
-                }
-                setPipelineOpen(initial);
+        axios
+            .get<Pipeline[]>("/api/pipelines")
+            .then((res) => {
+                const def =
+                    res.data.find((p) => p.isDefault && p.isActive) ??
+                    res.data.find((p) => p.isActive) ??
+                    null;
+                setDefaultPipeline(def);
             })
-            .catch(() => { });
-    }, [currentPipeline, pathname]);
+            .catch(() => {});
+    }, []);
 
-    const visibleGlobal = GLOBAL_NAV.filter(
-        (item) => item.permission === null || isAdmin || permissions.includes(item.permission)
-    );
+    const roleLabel =
+        userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");
+
+    const linkClass = (href: string) => {
+        const active = pathname.startsWith(href);
+        return [
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+            active ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+            collapsed ? "justify-center px-2" : "",
+        ].join(" ");
+    };
+
+    const resolveHref = (child: ModuleChild): string | undefined => {
+        if (!child.href) return undefined;
+        if (child.pipelineRef === "default" && defaultPipeline) {
+            return `${child.href}?pipeline=${defaultPipeline.id}`;
+        }
+        return child.href;
+    };
+
+    const handleChildAction = (child: ModuleChild) => {
+        if (child.disabled || !defaultPipeline) return;
+        if (child.action === "new-ticket" && child.pipelineRef === "default") {
+            setInitialPipelineId(defaultPipeline.id);
+            openQuickTicket(true);
+        }
+    };
+
+    const canViewChild = (child: ModuleChild) =>
+        !child.permission || isAdmin || permissions.includes(child.permission);
 
     const visibleSettings = SETTINGS_NAV.filter(
         (item) => isAdmin || permissions.includes(item.permission)
     );
 
-    const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : primaryRole;
-
-    const linkClass = (href: string, exact = false) => {
-        const active = exact ? pathname === href : pathname.startsWith(href);
-        return `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${active ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-100"
-            } ${collapsed ? "justify-center px-2" : ""}`;
-    };
-
-    const togglePipeline = (id: string) => {
-        if (collapsed) return;
-        setPipelineOpen((prev) => ({ ...prev, [id]: !prev[id] }));
-    };
-
-    const moduleIsActive = (pipelineId: string) =>
-        currentPipeline === pipelineId &&
-        (pathname.startsWith("/dashboard") || pathname.startsWith("/tickets") || pathname.startsWith("/service-centers"));
-
-    const openNewTicket = (pipelineId: string) => {
-        setInitialPipelineId(pipelineId);
-        openQuickTicket(true);
-    };
-
     return (
-        <aside className={`${collapsed ? "w-20" : "w-72"} bg-white shadow-md flex flex-col min-h-screen transition-all duration-300 relative`}>
-            {/* Collapse Toggle */}
+        <aside
+            className={[
+                collapsed ? "w-16" : "w-64",
+                "relative flex min-h-screen flex-col border-r bg-white shadow-sm transition-all duration-300",
+            ].join(" ")}
+        >
+            {/* Collapse toggle */}
             <button
-                onClick={() => setCollapsed(!collapsed)}
-                className="absolute -right-3 top-10 bg-white border shadow-sm rounded-full p-1 text-gray-400 hover:text-blue-600 z-10"
+                onClick={() => setCollapsed((c) => !c)}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                className="absolute -right-3 top-8 z-10 flex h-6 w-6 items-center justify-center rounded-full border bg-white shadow-sm text-gray-400 hover:text-blue-600 transition-colors"
             >
-                <ChevronLeft size={16} className={`transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`} />
+                {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
             </button>
 
-            {/* Logo */}
-            <div className={`p-5 border-b overflow-hidden ${collapsed ? "px-2" : ""}`}>
-                <div className="flex items-center justify-between">
-                    {!collapsed && <h1 className="text-lg font-bold text-blue-600 truncate">ServiceMgmt</h1>}
-                    {collapsed && <div className="w-full flex justify-center"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">S</div></div>}
-                    {!collapsed && <NotificationBell />}
-                </div>
-                {!collapsed && (
-                    <>
-                        <p className="text-xs text-gray-600 font-medium mt-1 truncate">{user?.name}</p>
-                        <p className="text-xs text-gray-400 truncate">{roleLabel}</p>
-                    </>
+            {/* Brand */}
+            <div className={`border-b p-4 ${collapsed ? "px-3" : ""}`}>
+                {collapsed ? (
+                    <div className="flex justify-center">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
+                            S
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                            <h1 className="truncate text-base font-bold text-blue-600">ServiceMgmt</h1>
+                            <p className="mt-0.5 truncate text-xs font-medium text-gray-700">{user?.name}</p>
+                            <p className="truncate text-xs text-gray-400">{roleLabel}</p>
+                        </div>
+                        <NotificationBell />
+                    </div>
                 )}
             </div>
 
             {/* Nav */}
-            <nav className="flex-1 p-3 space-y-3 overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-2">
 
-                {/* Global items */}
-                <div className="space-y-0.5">
+                {/* Workspace */}
+                <section>
                     {!collapsed && (
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pb-1">
+                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                             Workspace
                         </p>
                     )}
-                    {visibleGlobal.map(({ label, href, icon: Icon }) => (
-                        <Link key={href} href={href} className={linkClass(href)} title={collapsed ? label : ""}>
-                            <Icon size={18} className="shrink-0" />
-                            {!collapsed && <span className="truncate">{label}</span>}
-                        </Link>
-                    ))}
-                </div>
-
-                {/* Pipeline sections */}
-                {pipelines.length > 0 && (
                     <div className="space-y-0.5">
-                        {!collapsed && (
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pb-1">
-                                Modules
-                            </p>
-                        )}
-                        {pipelines.map((p) => {
-                            const dotClass = colorDot(p.color);
-                            const isOpen = pipelineOpen[p.id] ?? false;
-                            const moduleHref = `/dashboard?pipeline=${p.id}`;
-                            const ticketsHref = `/tickets?pipeline=${p.id}`;
-                            const moduleActive = moduleIsActive(p.id);
+                        {WORKSPACE_NAV.filter(
+                            (item) =>
+                                item.permission === null ||
+                                isAdmin ||
+                                permissions.includes(item.permission ?? "")
+                        ).map(({ label, href, icon: Icon }) => (
+                            <Link
+                                key={href}
+                                href={href}
+                                className={linkClass(href)}
+                                title={collapsed ? label : ""}
+                            >
+                                <Icon size={17} className="shrink-0" />
+                                {!collapsed && <span className="truncate">{label}</span>}
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+
+                {/* Modules */}
+                <section>
+                    {!collapsed && (
+                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                            Modules
+                        </p>
+                    )}
+                    <div className="space-y-0.5">
+                        {MODULE_SECTIONS.map((mod) => {
+                            const Icon = mod.icon;
+                            const isOpen = moduleOpen[mod.key] ?? false;
 
                             return (
-                                <div key={p.id}>
+                                <div key={mod.key}>
                                     {collapsed ? (
-                                        <Link
-                                            href={moduleHref}
-                                            className={linkClass("/dashboard")}
-                                            title={p.label}
+                                        <button
+                                            type="button"
+                                            title={mod.label}
+                                            className={[
+                                                "flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
+                                                mod.disabled
+                                                    ? "cursor-not-allowed text-gray-300"
+                                                    : "text-gray-500 hover:bg-gray-100",
+                                            ].join(" ")}
                                         >
-                                            <span className={`w-4 h-4 rounded-full shrink-0 ${dotClass}`} />
-                                        </Link>
+                                            <Icon size={17} />
+                                        </button>
                                     ) : (
                                         <>
-                                            <div className={`flex items-center rounded-lg overflow-hidden ${moduleActive ? "bg-blue-50 text-blue-600" : "text-gray-600 hover:bg-gray-100"}`}>
-                                                <Link
-                                                    href={moduleHref}
-                                                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all duration-200 flex-1 min-w-0"
-                                                >
-                                                    <Layers size={18} className="shrink-0" />
-                                                    <span className="flex-1 truncate">{p.label}</span>
-                                                </Link>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => togglePipeline(p.id)}
-                                                    className={`px-3 py-2.5 transition-colors ${moduleActive ? "hover:bg-blue-100" : "hover:bg-gray-200/70"}`}
-                                                    aria-label={`Toggle ${p.label} links`}
-                                                >
+                                            <button
+                                                type="button"
+                                                disabled={mod.disabled}
+                                                onClick={() =>
+                                                    !mod.disabled &&
+                                                    setModuleOpen((prev) => ({
+                                                        ...prev,
+                                                        [mod.key]: !prev[mod.key],
+                                                    }))
+                                                }
+                                                className={[
+                                                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                    mod.disabled
+                                                        ? "cursor-not-allowed text-gray-300"
+                                                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+                                                ].join(" ")}
+                                            >
+                                                <Icon size={17} className="shrink-0" />
+                                                <span className="flex-1 truncate text-left">{mod.label}</span>
+                                                {mod.disabled ? (
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="h-4 px-1.5 text-[10px]"
+                                                    >
+                                                        Soon
+                                                    </Badge>
+                                                ) : (
                                                     <ChevronDown
-                                                        size={14}
-                                                        className={`transition-transform ${isOpen ? "rotate-180" : ""}`}
+                                                        size={13}
+                                                        className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                                                     />
-                                                </button>
-                                            </div>
+                                                )}
+                                            </button>
+
                                             {isOpen && (
-                                                <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openNewTicket(p.id)}
-                                                        className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-gray-600 hover:bg-gray-100 w-full"
-                                                    >
-                                                        <Ticket size={16} className="shrink-0" />
-                                                        <span className="truncate">New Ticket +</span>
-                                                    </button>
-                                                    <Link
-                                                        href={ticketsHref}
-                                                        className={linkClass("/tickets")}
-                                                    >
-                                                        <Ticket size={16} className="shrink-0" />
-                                                        <span className="truncate">Tickets</span>
-                                                    </Link>
-                                                    {canManageServiceCenters && p.isDefault && (
-                                                        <Link
-                                                            href="/service-centers"
-                                                            className={linkClass("/service-centers")}
-                                                        >
-                                                            <Building2 size={16} className="shrink-0" />
-                                                            <span className="truncate">Service Centres</span>
-                                                        </Link>
-                                                    )}
+                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                                                    {mod.children
+                                                        .filter(canViewChild)
+                                                        .map((child) => {
+                                                            const CIcon = child.icon;
+                                                            const href = resolveHref(child);
+                                                            const basePath = href?.split("?")[0] ?? "";
+                                                            const isActiveChild =
+                                                                !!basePath && pathname.startsWith(basePath);
+
+                                                            if (child.action) {
+                                                                return (
+                                                                    <button
+                                                                        key={child.label}
+                                                                        type="button"
+                                                                        disabled={child.disabled}
+                                                                        onClick={() => handleChildAction(child)}
+                                                                        className={[
+                                                                            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                            child.disabled
+                                                                                ? "cursor-not-allowed text-gray-300"
+                                                                                : "text-gray-600 hover:bg-gray-100",
+                                                                        ].join(" ")}
+                                                                    >
+                                                                        <CIcon size={15} className="shrink-0" />
+                                                                        <span className="truncate">{child.label}</span>
+                                                                        {child.disabled && (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="h-4 px-1 text-[10px]"
+                                                                            >
+                                                                                Soon
+                                                                            </Badge>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            }
+
+                                                            return href ? (
+                                                                <Link
+                                                                    key={child.label}
+                                                                    href={href}
+                                                                    className={[
+                                                                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                        isActiveChild
+                                                                            ? "bg-blue-50 text-blue-600"
+                                                                            : "text-gray-600 hover:bg-gray-100",
+                                                                        child.disabled
+                                                                            ? "pointer-events-none opacity-40"
+                                                                            : "",
+                                                                    ].join(" ")}
+                                                                >
+                                                                    <CIcon size={15} className="shrink-0" />
+                                                                    <span className="truncate">{child.label}</span>
+                                                                    {child.disabled && (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="h-4 px-1 text-[10px]"
+                                                                        >
+                                                                            Soon
+                                                                        </Badge>
+                                                                    )}
+                                                                </Link>
+                                                            ) : null;
+                                                        })}
                                                 </div>
                                             )}
                                         </>
@@ -246,65 +291,53 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             );
                         })}
                     </div>
-                )}
+                </section>
 
-                {/* Finance section */}
-                <div className="pt-1 space-y-0.5">
-                    {!collapsed && (
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pb-1">
-                            Finance
-                        </p>
-                    )}
-                    {FINANCE_NAV.map(({ label, href, icon: Icon }) => (
-                        <Link key={href} href={href} className={linkClass(href)} title={collapsed ? label : ""}>
-                            <Icon size={18} className="shrink-0" />
-                            {!collapsed && <span className="truncate">{label}</span>}
-                        </Link>
-                    ))}
-                </div>
-
-                {/* Settings collapsible */}
+                {/* Settings */}
                 {visibleSettings.length > 0 && (
-                    <div className="pt-1">
+                    <section>
                         <button
                             onClick={() => !collapsed && setSettingsOpen((o) => !o)}
                             className={linkClass("/settings")}
                             title={collapsed ? "Settings" : ""}
                         >
-                            <Settings size={18} className="shrink-0" />
+                            <Settings size={17} className="shrink-0" />
                             {!collapsed && (
                                 <>
-                                    <span className="flex-1 text-left truncate">Settings</span>
+                                    <span className="flex-1 truncate text-left">Settings</span>
                                     <ChevronDown
-                                        size={14}
-                                        className={`transition-transform ${settingsOpen ? "rotate-180" : ""}`}
+                                        size={13}
+                                        className={`shrink-0 transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`}
                                     />
                                 </>
                             )}
                         </button>
 
                         {settingsOpen && !collapsed && (
-                            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
+                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-100 pl-3">
                                 {visibleSettings.map(({ label, href, icon: Icon }) => (
                                     <Link key={href} href={href} className={linkClass(href)}>
-                                        <Icon size={16} className="shrink-0" />
+                                        <Icon size={15} className="shrink-0" />
                                         <span className="truncate">{label}</span>
                                     </Link>
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </section>
                 )}
             </nav>
 
-            {/* Logout */}
-            <div className={`p-3 border-t overflow-hidden ${collapsed ? "px-2" : ""}`}>
+            {/* Sign out */}
+            <div className="border-t p-2">
                 <button
                     onClick={() => signOut({ callbackUrl: "/login" })}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 w-full transition-all duration-200 ${collapsed ? "justify-center px-2" : ""}`}
                     title={collapsed ? "Sign Out" : ""}
+                    className={[
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition-all duration-150 hover:bg-red-50",
+                        collapsed ? "justify-center px-2" : "",
+                    ].join(" ")}
                 >
-                    <LogOut size={18} className="shrink-0" />
+                    <LogOut size={17} className="shrink-0" />
                     {!collapsed && <span className="truncate">Sign Out</span>}
                 </button>
             </div>

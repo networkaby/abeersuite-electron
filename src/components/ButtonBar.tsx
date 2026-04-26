@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Ticket } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Zap } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { BUTTON_BAR_ACTIONS, type ButtonBarAction } from "@/utils/constants";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 
 type UserType = {
@@ -13,71 +14,116 @@ type UserType = {
     permissions?: string[];
 };
 
-type PipelineOption = {
-    id: string;
-    label: string;
-    color: string;
-    isActive: boolean;
-    isDefault: boolean;
-};
-
-function colorDot(color: string) {
-    return color.split(" ")[0];
-}
+type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
 export default function ButtonBar({ user }: { user?: UserType }) {
-    const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
+    const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     useEffect(() => {
-        axios.get<PipelineOption[]>("/api/pipelines")
-            .then((response) => {
-                setPipelines(response.data.filter((pipeline) => pipeline.isActive));
+        axios
+            .get<Pipeline[]>("/api/pipelines")
+            .then((res) => {
+                const def =
+                    res.data.find((p) => p.isDefault && p.isActive) ??
+                    res.data.find((p) => p.isActive) ??
+                    null;
+                setDefaultPipeline(def);
             })
-            .catch(() => {
-                setPipelines([]);
-            });
+            .catch(() => { });
     }, []);
 
-    const handleNewTicket = (pipelineId: string) => {
-        setInitialPipelineId(pipelineId);
-        openQuickTicket(true);
+    const handleAction = (action: ButtonBarAction) => {
+        if (action.disabled) return;
+        if (action.action === "new-ticket" && action.pipelineRef === "default" && defaultPipeline) {
+            setInitialPipelineId(defaultPipeline.id);
+            openQuickTicket(true);
+        }
     };
 
     return (
-        <aside className="w-52 border-l bg-white">
-            <div className="border-b p-4">
-                <h2 className="text-sm font-semibold text-gray-700">Actions</h2>
-                <p className="truncate text-xs text-gray-400">{user?.name}</p>
+        <aside className="flex w-46 flex-col border-l bg-white">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 border-b px-4 py-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+                    <Zap size={14} />
+                </div>
+                <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-800">Quick Actions</p>
+                    {user?.name && (
+                        <p className="truncate text-xs text-gray-400">{user.name}</p>
+                    )}
+                </div>
             </div>
 
-            <div className="space-y-2 p-3">
-                {pipelines.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-center text-xs text-gray-400">
-                        No active ticket actions
-                    </p>
-                ) : (
-                    pipelines.map((pipeline) => (
-                        <Button
-                            key={pipeline.id}
+            {/* Action buttons */}
+            <div className="flex-1 space-y-1.5 p-3">
+                {BUTTON_BAR_ACTIONS.map((action) => {
+                    const Icon = action.icon;
+                    const isPrimary = action.variant === "default" && !action.disabled;
+
+                    return (
+                        <button
+                            key={action.label}
                             type="button"
-                            variant={pipeline.isDefault ? "default" : "outline"}
-                            className="h-auto w-full items-start justify-start gap-3 px-3 py-3 text-left"
-                            onClick={() => handleNewTicket(pipeline.id)}
+                            disabled={action.disabled}
+                            onClick={() => handleAction(action)}
+                            className={[
+                                "group w-full rounded-xl border text-left transition-all duration-150",
+                                action.disabled
+                                    ? "cursor-not-allowed border-gray-100 bg-gray-50 opacity-60"
+                                    : isPrimary
+                                        ? "border-blue-200 bg-blue-50 hover:border-blue-300 hover:bg-blue-100 active:scale-[0.98]"
+                                        : "border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50 active:scale-[0.98]",
+                            ].join(" ")}
                         >
-                            <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${colorDot(pipeline.color)}`} />
-                            <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium">
-                                    New {pipeline.label}
-                                </span>
-                                <span className="mt-0.5 block truncate text-xs opacity-70">
-                                    Open ticket intake
-                                </span>
-                            </span>
-                            <Ticket size={16} className="mt-0.5 shrink-0" />
-                        </Button>
-                    ))
-                )}
+                            <div className="flex items-center gap-3 px-3 py-2.5">
+                                {/* Icon badge */}
+                                <div
+                                    className={[
+                                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+                                        action.disabled
+                                            ? "bg-gray-100 text-gray-400"
+                                            : isPrimary
+                                                ? "bg-blue-600 text-white shadow-sm"
+                                                : "bg-gray-100 text-gray-500 group-hover:bg-gray-200",
+                                    ].join(" ")}
+                                >
+                                    <Icon size={15} />
+                                </div>
+
+                                {/* Label + subtitle */}
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <span
+                                            className={[
+                                                "block truncate text-sm font-semibold",
+                                                action.disabled
+                                                    ? "text-gray-400"
+                                                    : isPrimary
+                                                        ? "text-blue-700"
+                                                        : "text-gray-700",
+                                            ].join(" ")}
+                                        >
+                                            {action.label}
+                                        </span>
+                                        {action.disabled && (
+                                            <Badge
+                                                variant="secondary"
+                                                className="h-4 shrink-0 px-1.5 text-[10px]"
+                                            >
+                                                Soon
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <span className="block truncate text-xs text-gray-400">
+                                        {action.subtitle}
+                                    </span>
+                                </div>
+                            </div>
+                        </button>
+                    );
+                })}
             </div>
         </aside>
     );
