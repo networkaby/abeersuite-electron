@@ -3,7 +3,28 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ChevronRight, GitMerge, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronRight, GitMerge, Pencil, Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface Pipeline {
     id: string;
@@ -52,10 +73,19 @@ type FormValues = {
 };
 
 const BLANK_FORM: FormValues = {
-    label: "", color: "bg-gray-100 text-gray-600", group: "customer_comm",
-    order: "", applicableStatusIds: [], allowedRoles: [], notifyRoles: [], triggerMap: {},
-    actionLabel: "", warrantyScope: "any",
-    handoffRole: "", autoRevertOnClear: true, isEntryPoint: true,
+    label: "",
+    color: "bg-gray-100 text-gray-600",
+    group: "customer_comm",
+    order: "",
+    applicableStatusIds: [],
+    allowedRoles: [],
+    notifyRoles: [],
+    triggerMap: {},
+    actionLabel: "",
+    warrantyScope: "any",
+    handoffRole: "",
+    autoRevertOnClear: true,
+    isEntryPoint: true,
 };
 
 const GROUP_OPTIONS = [
@@ -66,9 +96,9 @@ const GROUP_OPTIONS = [
     { value: "escalated", label: "Escalated" },
     { value: "ready", label: "Ready for Collection" },
     { value: "no_fix", label: "No Fix" },
-];
+] as const;
 
-const GROUP_LABELS = Object.fromEntries(GROUP_OPTIONS.map((g) => [g.value, g.label]));
+const GROUP_LABELS = Object.fromEntries(GROUP_OPTIONS.map((group) => [group.value, group.label]));
 
 const COLOR_OPTIONS = [
     { label: "Gray", value: "bg-gray-100 text-gray-600" },
@@ -79,12 +109,10 @@ const COLOR_OPTIONS = [
     { label: "Green", value: "bg-green-100 text-green-700" },
     { label: "Red", value: "bg-red-100 text-red-600" },
     { label: "Teal", value: "bg-teal-100 text-teal-600" },
-];
+] as const;
 
-
-
-// ── Form modal ────────────────────────────────────────────────────────────────
 function SubStatusFormModal({
+    open,
     title,
     form,
     setForm,
@@ -94,21 +122,22 @@ function SubStatusFormModal({
     statuses,
     roles,
 }: {
+    open: boolean;
     title: string;
     form: FormValues;
-    setForm: (f: FormValues) => void;
+    setForm: (form: FormValues) => void;
     onSave: () => void;
     onClose: () => void;
     saving: boolean;
     statuses: StatusItem[];
     roles: { id: string; label: string }[];
 }) {
-    const toggle = (field: "applicableStatusIds" | "allowedRoles" | "notifyRoles", val: string) =>
+    const toggle = (field: "applicableStatusIds" | "allowedRoles" | "notifyRoles", value: string) =>
         setForm({
             ...form,
-            [field]: form[field].includes(val)
-                ? form[field].filter((x) => x !== val)
-                : [...form[field], val],
+            [field]: form[field].includes(value)
+                ? form[field].filter((item) => item !== value)
+                : [...form[field], value],
         });
 
     const setTrigger = (statusId: string, targetId: string) => {
@@ -119,232 +148,214 @@ function SubStatusFormModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-base font-semibold">{title}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                </div>
+        <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>
+                        Configure where this sub-status appears, who can use it, and how it hands off work.
+                    </DialogDescription>
+                </DialogHeader>
 
-                <div className="space-y-4">
-                    {/* Label */}
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Label</label>
-                        <input
+                <div className="space-y-5">
+                    <div className="space-y-2">
+                        <Label>Label</Label>
+                        <Input
                             value={form.label}
                             onChange={(e) => setForm({ ...form, label: e.target.value })}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="e.g. Waiting for Parts"
                         />
                     </div>
 
-                    {/* Warranty scope */}
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Warranty scope</label>
-                        <select
-                            value={form.warrantyScope}
-                            onChange={(e) => setForm({ ...form, warrantyScope: e.target.value })}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="any">Any (shown for all tickets)</option>
-                            <option value="warranty_only">Warranty only</option>
-                            <option value="non_warranty_only">Non-warranty only</option>
-                        </select>
+                    <div className="space-y-2">
+                        <Label>Warranty scope</Label>
+                        <Select value={form.warrantyScope} onValueChange={(value) => setForm({ ...form, warrantyScope: value })}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="any">Any (shown for all tickets)</SelectItem>
+                                <SelectItem value="warranty_only">Warranty only</SelectItem>
+                                <SelectItem value="non_warranty_only">Non-warranty only</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
-                    {/* Action label */}
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
-                            Action label <span className="text-gray-400">(optional)</span>
-                        </label>
-                        <input
+                    <div className="space-y-2">
+                        <Label>Action label</Label>
+                        <Input
                             value={form.actionLabel}
                             onChange={(e) => setForm({ ...form, actionLabel: e.target.value })}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="e.g. Call customer — quote ready for approval"
                         />
-                        <p className="text-xs text-gray-400 mt-1">
-                            Shown on role dashboards as the task description (Front Desk / Despatch).
+                        <p className="text-xs text-muted-foreground">
+                            Shown on role dashboards as the task description.
                         </p>
                     </div>
 
-                    {/* Handoff role + auto-revert */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">
-                                Handoff role <span className="text-gray-400">(optional)</span>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Handoff role</Label>
+                            <Select value={form.handoffRole || "__none__"} onValueChange={(value) => setForm({ ...form, handoffRole: value === "__none__" ? "" : value })}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {roles.map((role) => (
+                                        <SelectItem key={role.id} value={role.id}>{role.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Auto-assigns a secondary owner with this role when the sub-status is set.
+                            </p>
+                        </div>
+                        <div className="space-y-3 pt-6">
+                            <label className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                    checked={form.autoRevertOnClear}
+                                    onCheckedChange={(checked) => setForm({ ...form, autoRevertOnClear: checked === true })}
+                                />
+                                Auto-remove participant on clear
                             </label>
-                            <select
-                                value={form.handoffRole}
-                                onChange={(e) => setForm({ ...form, handoffRole: e.target.value })}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="">— none —</option>
-                                {roles.map((r) => (
-                                    <option key={r.id} value={r.id}>{r.label}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-400 mt-1">Auto-assigns a secondary owner with this role when the sub-status is set.</p>
-                        </div>
-                        <div className="flex flex-col justify-center gap-3">
-                            <div>
-                                <label className="flex items-center gap-2 cursor-pointer mt-5">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.autoRevertOnClear}
-                                        onChange={(e) => setForm({ ...form, autoRevertOnClear: e.target.checked })}
-                                        className="accent-blue-600 w-4 h-4"
-                                    />
-                                    <span className="text-sm font-medium">Auto-remove participant on clear</span>
-                                </label>
-                                <p className="text-xs text-gray-400 mt-1 ml-6">Soft-deletes the assigned participant when this sub-status changes away.</p>
-                            </div>
-                            <div>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.isEntryPoint}
-                                        onChange={(e) => setForm({ ...form, isEntryPoint: e.target.checked })}
-                                        className="accent-green-600 w-4 h-4"
-                                    />
-                                    <span className="text-sm font-medium">Entry point</span>
-                                </label>
-                                <p className="text-xs text-gray-400 mt-1 ml-6">Available when no sub-status is currently set on the ticket.</p>
-                            </div>
+                            <label className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                    checked={form.isEntryPoint}
+                                    onCheckedChange={(checked) => setForm({ ...form, isEntryPoint: checked === true })}
+                                />
+                                Entry point
+                            </label>
                         </div>
                     </div>
 
-                    {/* Color + Group row */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Color</label>
-                            <select
-                                value={form.color}
-                                onChange={(e) => setForm({ ...form, color: e.target.value })}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {COLOR_OPTIONS.map((c) => (
-                                    <option key={c.value} value={c.value}>{c.label}</option>
-                                ))}
-                            </select>
-                            <span className={`mt-1 inline-block text-xs px-2 py-0.5 rounded-full ${form.color}`}>
-                                Preview
-                            </span>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Color</Label>
+                            <Select value={form.color} onValueChange={(value) => setForm({ ...form, color: value })}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {COLOR_OPTIONS.map((color) => (
+                                        <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Badge className={form.color}>Preview</Badge>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Group</label>
-                            <select
-                                value={form.group}
-                                onChange={(e) => setForm({ ...form, group: e.target.value })}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {GROUP_OPTIONS.map((g) => (
-                                    <option key={g.value} value={g.value}>{g.label}</option>
-                                ))}
-                            </select>
+                        <div className="space-y-2">
+                            <Label>Group</Label>
+                            <Select value={form.group} onValueChange={(value) => setForm({ ...form, group: value })}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {GROUP_OPTIONS.map((group) => (
+                                        <SelectItem key={group.value} value={group.value}>{group.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
-                    {/* Applies to — fetched main statuses with per-parent trigger */}
-                    <div>
-                        <label className="block text-sm font-medium mb-2">Applies to (main status)</label>
+                    <div className="space-y-3">
+                        <Label>Applies to (main status)</Label>
                         {statuses.length === 0 ? (
-                            <p className="text-xs text-gray-400">Loading statuses…</p>
+                            <p className="text-xs text-muted-foreground">Loading statuses…</p>
                         ) : (
-                            <div className="space-y-1">
-                                {statuses.map((s) => (
-                                    <div key={s.id} className="flex items-center gap-2 flex-wrap">
-                                        <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-xs min-w-[160px]">
-                                            <input
-                                                type="checkbox"
-                                                checked={form.applicableStatusIds.includes(s.id)}
-                                                onChange={() => toggle("applicableStatusIds", s.id)}
-                                                className="accent-blue-600"
-                                            />
-                                            <span className={`px-1.5 py-0.5 rounded-full font-medium ${s.color}`}>{s.label}</span>
-                                        </label>
-                                        {form.applicableStatusIds.includes(s.id) && (
-                                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                <span className="text-gray-400">→ auto-advance to:</span>
-                                                <select
-                                                    value={form.triggerMap[s.id] ?? ""}
-                                                    onChange={(e) => setTrigger(s.id, e.target.value)}
-                                                    className="border rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                >
-                                                    <option value="">— none —</option>
-                                                    {statuses.filter((t) => t.id !== s.id).map((t) => (
-                                                        <option key={t.id} value={t.id}>{t.label}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        )}
+                            <div className="space-y-2">
+                                {statuses.map((status) => (
+                                    <div key={status.id} className="rounded-xl border p-3">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <label className="flex items-center gap-2 text-sm">
+                                                <Checkbox
+                                                    checked={form.applicableStatusIds.includes(status.id)}
+                                                    onCheckedChange={() => toggle("applicableStatusIds", status.id)}
+                                                />
+                                                <Badge className={status.color}>{status.label}</Badge>
+                                            </label>
+                                            {form.applicableStatusIds.includes(status.id) && (
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                    <span>Auto-advance to</span>
+                                                    <Select
+                                                        value={form.triggerMap[status.id] ?? "__none__"}
+                                                        onValueChange={(value) => setTrigger(status.id, value === "__none__" ? "" : value)}
+                                                    >
+                                                        <SelectTrigger className="w-48">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="__none__">— none —</SelectItem>
+                                                            {statuses.filter((candidate) => candidate.id !== status.id).map((candidate) => (
+                                                                <SelectItem key={candidate.id} value={candidate.id}>{candidate.label}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
 
-                    {/* Roles row */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Who can set it</label>
-                            {roles.map((r) => (
-                                <label key={r.id} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.allowedRoles.includes(r.id)}
-                                        onChange={() => toggle("allowedRoles", r.id)}
-                                        className="accent-blue-600"
-                                    />
-                                    {r.label}
-                                </label>
-                            ))}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Who can set it</Label>
+                            <div className="space-y-2">
+                                {roles.map((role) => (
+                                    <label key={role.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                        <Checkbox
+                                            checked={form.allowedRoles.includes(role.id)}
+                                            onCheckedChange={() => toggle("allowedRoles", role.id)}
+                                        />
+                                        {role.label}
+                                    </label>
+                                ))}
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Notifies</label>
-                            {roles.map((r) => (
-                                <label key={r.id} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.notifyRoles.includes(r.id)}
-                                        onChange={() => toggle("notifyRoles", r.id)}
-                                        className="accent-blue-600"
-                                    />
-                                    {r.label}
-                                </label>
-                            ))}
+                        <div className="space-y-2">
+                            <Label>Notifies</Label>
+                            <div className="space-y-2">
+                                {roles.map((role) => (
+                                    <label key={role.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                        <Checkbox
+                                            checked={form.notifyRoles.includes(role.id)}
+                                            onCheckedChange={() => toggle("notifyRoles", role.id)}
+                                        />
+                                        {role.label}
+                                    </label>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Order */}
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Order <span className="text-gray-400">(optional)</span></label>
-                        <input
+                    <div className="space-y-2">
+                        <Label>Order</Label>
+                        <Input
                             type="number"
                             value={form.order}
                             onChange={(e) => setForm({ ...form, order: e.target.value })}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Auto-assigned if blank"
                         />
                     </div>
                 </div>
 
-                <div className="flex gap-3 pt-5 border-t mt-5">
-                    <button onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
-                    <button
-                        onClick={onSave}
-                        disabled={saving || !form.label.trim()}
-                        className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-                    >
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button type="button" onClick={onSave} disabled={saving || !form.label.trim()}>
                         {saving ? "Saving…" : "Save"}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function SubStatusesPage() {
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
     const [activePipelineId, setActivePipelineId] = useState<string>("P1");
@@ -353,20 +364,16 @@ export default function SubStatusesPage() {
     const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Create modal
     const [showCreate, setShowCreate] = useState(false);
     const [createForm, setCreateForm] = useState<FormValues>(BLANK_FORM);
     const [creating, setCreating] = useState(false);
 
-    // Edit modal
     const [editId, setEditId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<FormValues>(BLANK_FORM);
     const [editing, setEditing] = useState(false);
 
-    // Delete
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    // Transitions modal
     const [transitionModalId, setTransitionModalId] = useState<string | null>(null);
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
@@ -374,18 +381,16 @@ export default function SubStatusesPage() {
     const loadAll = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [statusRes, subRes, roleRes, pipeRes] = await Promise.all([
+            const [statusResponse, subStatusResponse, roleResponse, pipelineResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
                 axios.get(`/api/sub-statuses?pipelineId=${pipelineId}`),
                 axios.get("/api/roles"),
                 axios.get("/api/pipelines"),
             ]);
-            setStatuses(
-                (statusRes.data as StatusItem[]).sort((a, b) => a.order - b.order)
-            );
-            setSubStatuses(subRes.data);
-            setRoles(roleRes.data);
-            setPipelines(pipeRes.data);
+            setStatuses((statusResponse.data as StatusItem[]).sort((a, b) => a.order - b.order));
+            setSubStatuses(subStatusResponse.data);
+            setRoles(roleResponse.data);
+            setPipelines(pipelineResponse.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -395,7 +400,6 @@ export default function SubStatusesPage() {
 
     useEffect(() => { loadAll(activePipelineId); }, [activePipelineId]);
 
-    // ── Create ──
     const handleCreate = async () => {
         setCreating(true);
         try {
@@ -417,24 +421,23 @@ export default function SubStatusesPage() {
         }
     };
 
-    // ── Edit ──
-    const openEdit = (ss: SubStatus) => {
+    const openEdit = (subStatus: SubStatus) => {
         setEditForm({
-            label: ss.label,
-            color: ss.color,
-            group: ss.group,
-            order: String(ss.order),
-            applicableStatusIds: ss.applicableStatusIds,
-            allowedRoles: ss.allowedRoles,
-            notifyRoles: ss.notifyRoles,
-            triggerMap: (ss.triggerMap ?? {}) as Record<string, string>,
-            actionLabel: ss.actionLabel ?? "",
-            warrantyScope: (ss as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
-            handoffRole: ss.handoffRole ?? "",
-            autoRevertOnClear: ss.autoRevertOnClear ?? true,
-            isEntryPoint: ss.isEntryPoint ?? false,
+            label: subStatus.label,
+            color: subStatus.color,
+            group: subStatus.group,
+            order: String(subStatus.order),
+            applicableStatusIds: subStatus.applicableStatusIds,
+            allowedRoles: subStatus.allowedRoles,
+            notifyRoles: subStatus.notifyRoles,
+            triggerMap: (subStatus.triggerMap ?? {}) as Record<string, string>,
+            actionLabel: subStatus.actionLabel ?? "",
+            warrantyScope: (subStatus as SubStatus & { warrantyScope?: string }).warrantyScope ?? "any",
+            handoffRole: subStatus.handoffRole ?? "",
+            autoRevertOnClear: subStatus.autoRevertOnClear ?? true,
+            isEntryPoint: subStatus.isEntryPoint ?? false,
         });
-        setEditId(ss.id);
+        setEditId(subStatus.id);
     };
 
     const handleEdit = async () => {
@@ -466,7 +469,6 @@ export default function SubStatusesPage() {
         }
     };
 
-    // ── Delete ──
     const handleDelete = async (id: string) => {
         setDeletingId(id);
         try {
@@ -474,17 +476,16 @@ export default function SubStatusesPage() {
             toast.success("Sub-status deleted");
             loadAll(activePipelineId);
         } catch (err) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete";
-            toast.error(msg ?? "Failed to delete");
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete";
+            toast.error(message ?? "Failed to delete");
         } finally {
             setDeletingId(null);
         }
     };
 
-    // ── Transitions ──
     const openTransitionModal = (id: string) => {
-        const ss = subStatuses.find((s) => s.id === id);
-        setSelectedToIds(ss?.fromTransitions.map((t) => t.to.id) ?? []);
+        const subStatus = subStatuses.find((item) => item.id === id);
+        setSelectedToIds(subStatus?.fromTransitions.map((transition) => transition.to.id) ?? []);
         setTransitionModalId(id);
     };
 
@@ -504,253 +505,231 @@ export default function SubStatusesPage() {
     };
 
     const toggleTo = (id: string) =>
-        setSelectedToIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+        setSelectedToIds((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
 
-    const modalSubStatus = subStatuses.find((s) => s.id === transitionModalId);
+    const modalSubStatus = subStatuses.find((subStatus) => subStatus.id === transitionModalId);
     const transitionCandidates = modalSubStatus
-        ? subStatuses.filter((s) =>
-            s.id !== modalSubStatus.id &&
-            s.applicableStatusIds.some((sid) => modalSubStatus.applicableStatusIds.includes(sid))
+        ? subStatuses.filter((subStatus) =>
+            subStatus.id !== modalSubStatus.id &&
+            subStatus.applicableStatusIds.some((statusId) => modalSubStatus.applicableStatusIds.includes(statusId))
         )
         : [];
 
-    // ── Parent-wise grouping (uses fetched statuses) ──
-    const statusLabelMap = Object.fromEntries(statuses.map((s) => [s.id, s.label]));
-    const roleLabelMap = Object.fromEntries(roles.map((r) => [r.id, r.label]));
+    const statusLabelMap = Object.fromEntries(statuses.map((status) => [status.id, status.label]));
+    const roleLabelMap = Object.fromEntries(roles.map((role) => [role.id, role.label]));
 
     const byParent = statuses.map((status) => ({
         status,
         children: subStatuses
-            .filter((ss) => ss.applicableStatusIds.includes(status.id))
+            .filter((subStatus) => subStatus.applicableStatusIds.includes(status.id))
             .sort((a, b) => a.order - b.order),
-    })).filter((p) => p.children.length > 0);
+    })).filter((entry) => entry.children.length > 0);
 
-    const unassigned = subStatuses.filter((ss) => ss.applicableStatusIds.length === 0);
+    const unassigned = subStatuses.filter((subStatus) => subStatus.applicableStatusIds.length === 0);
 
     return (
-        <div className="max-w-5xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+        <div className="mx-auto max-w-5xl space-y-6">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Sub-Statuses</h1>
-                    <p className="text-gray-400 text-sm mt-1">
-                        Organised by main status — showing which sub-statuses apply at each stage.
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Organised by main status, showing which sub-statuses apply at each stage.
                     </p>
                 </div>
-                <button
-                    onClick={() => { setCreateForm(BLANK_FORM); setShowCreate(true); }}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
-                >
+                <Button type="button" onClick={() => { setCreateForm(BLANK_FORM); setShowCreate(true); }}>
                     <Plus size={16} /> Add Sub-Status
-                </button>
+                </Button>
             </div>
 
-            {/* Pipeline tabs */}
-            <div className="flex gap-2 mb-5 flex-wrap">
-                {pipelines.map((p) => (
-                    <button
-                        key={p.id}
-                        onClick={() => { setActivePipelineId(p.id); setShowCreate(false); setEditId(null); }}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                            activePipelineId === p.id
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                        }`}
+            <div className="flex flex-wrap gap-2">
+                {pipelines.map((pipeline) => (
+                    <Button
+                        key={pipeline.id}
+                        type="button"
+                        size="sm"
+                        variant={activePipelineId === pipeline.id ? "default" : "outline"}
+                        onClick={() => { setActivePipelineId(pipeline.id); setShowCreate(false); setEditId(null); }}
                     >
-                        {p.label}
-                    </button>
+                        {pipeline.label}
+                    </Button>
                 ))}
             </div>
 
             {loading ? (
-                <p className="text-gray-400">Loading...</p>
+                <p className="text-sm text-muted-foreground">Loading...</p>
             ) : (
                 <div className="space-y-5">
                     {byParent.map(({ status, children }) => (
-                        <div key={status.id} className="bg-white rounded-xl shadow overflow-hidden">
-                            {/* Parent header */}
-                            <div className="flex items-center gap-3 px-6 py-3 bg-gray-50 border-b">
-                                <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${status.color}`}>
-                                    {status.id}
-                                </span>
-                                <span className="font-semibold text-gray-700">{status.label}</span>
-                                <span className="ml-auto text-xs text-gray-400">{children.length} sub-status{children.length !== 1 ? "es" : ""}</span>
-                            </div>
+                        <Card key={status.id}>
+                            <CardHeader className="border-b">
+                                <div className="flex items-center gap-3">
+                                    <Badge className={status.color}>{status.id}</Badge>
+                                    <CardTitle>{status.label}</CardTitle>
+                                    <CardDescription className="ml-auto">
+                                        {children.length} sub-status{children.length !== 1 ? "es" : ""}
+                                    </CardDescription>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-0 px-0 pt-0">
+                                {children.map((subStatus) => (
+                                    <div key={subStatus.id} className="flex items-start gap-3 border-b px-6 py-4 last:border-b-0">
+                                        <Badge className={subStatus.color}>{subStatus.id}</Badge>
 
-                            {/* Children rows */}
-                            <div className="divide-y">
-                                {children.map((ss) => (
-                                    <div key={ss.id} className="flex items-start gap-3 px-6 py-3.5">
-                                        <div className="flex flex-col items-center pt-1 shrink-0">
-                                            <div className="w-px h-2 bg-gray-200" />
-                                            <div className="w-3 h-px bg-gray-200" />
-                                        </div>
-
-                                        <span className={`mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${ss.color}`}>
-                                            {ss.id}
-                                        </span>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-sm font-medium text-gray-800">{ss.label}</span>
-                                                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                                                    {GROUP_LABELS[ss.group] ?? ss.group}
-                                                </span>
-                                                {ss.isEntryPoint && (
-                                                    <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded font-medium">
-                                                        entry point
-                                                    </span>
-                                                )}
-                                                {ss.triggerMap[status.id] && (
-                                                    <span className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-sm font-medium">{subStatus.label}</span>
+                                                <Badge variant="outline">{GROUP_LABELS[subStatus.group] ?? subStatus.group}</Badge>
+                                                {subStatus.isEntryPoint && <Badge className="bg-green-100 text-green-700">Entry point</Badge>}
+                                                {subStatus.triggerMap[status.id] && (
+                                                    <Badge className="bg-orange-100 text-orange-700">
                                                         <ChevronRight size={11} />
-                                                        → {statusLabelMap[ss.triggerMap[status.id]] ?? ss.triggerMap[status.id]}
+                                                        {statusLabelMap[subStatus.triggerMap[status.id]] ?? subStatus.triggerMap[status.id]}
+                                                    </Badge>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                {subStatus.allowedRoles.length > 0 && (
+                                                    <span>
+                                                        <span className="font-medium text-foreground">Set by:</span>{" "}
+                                                        {subStatus.allowedRoles.map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
                                                     </span>
                                                 )}
-                                                {ss.applicableStatusIds.length > 1 && (
-                                                    <span className="text-xs text-gray-400">
-                                                        also in: {ss.applicableStatusIds
-                                                            .filter((sid) => sid !== status.id)
-                                                            .map((sid) => statusLabelMap[sid] ?? sid)
-                                                            .join(", ")}
+                                                {subStatus.notifyRoles.length > 0 && (
+                                                    <span>
+                                                        <span className="font-medium text-foreground">Notifies:</span>{" "}
+                                                        {subStatus.notifyRoles.map((roleId) => roleLabelMap[roleId] ?? roleId).join(", ")}
                                                     </span>
                                                 )}
                                             </div>
 
-                                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-gray-500">
-                                                {ss.allowedRoles.length > 0 && (
-                                                    <span>
-                                                        <span className="font-medium text-gray-600">Set by:</span>{" "}
-                                                        {ss.allowedRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
-                                                    </span>
-                                                )}
-                                                {ss.notifyRoles.length > 0 && (
-                                                    <span>
-                                                        <span className="font-medium text-gray-600">Notifies:</span>{" "}
-                                                        {ss.notifyRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {ss.fromTransitions.length > 0 && (
-                                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                                    <span className="text-xs text-gray-400">Next:</span>
-                                                    {ss.fromTransitions.map((t) => (
-                                                        <span key={t.to.id} className={`text-xs px-2 py-0.5 rounded-full ${t.to.color}`}>
-                                                            {t.to.label}
-                                                        </span>
+                                            {subStatus.fromTransitions.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                                    <span className="text-xs text-muted-foreground">Next:</span>
+                                                    {subStatus.fromTransitions.map((transition) => (
+                                                        <Badge key={transition.to.id} className={transition.to.color}>
+                                                            {transition.to.label}
+                                                        </Badge>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            <button onClick={() => openTransitionModal(ss.id)} title="Transitions" className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50">
-                                                <GitMerge size={13} />
-                                                <span className="hidden sm:inline">Flow</span>
-                                            </button>
-                                            <button onClick={() => openEdit(ss)} title="Edit" className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50">
-                                                <Pencil size={13} />
-                                                <span className="hidden sm:inline">Edit</span>
-                                            </button>
-                                            <button onClick={() => handleDelete(ss.id)} disabled={deletingId === ss.id} title="Delete" className="flex items-center gap-1 text-xs border border-red-200 rounded-lg px-2 py-1.5 text-red-500 hover:bg-red-50 disabled:opacity-40">
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openTransitionModal(subStatus.id)}>
+                                                <GitMerge size={13} /> Flow
+                                            </Button>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
+                                                <Pencil size={13} /> Edit
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="destructive"
+                                                onClick={() => handleDelete(subStatus.id)}
+                                                disabled={deletingId === subStatus.id}
+                                            >
                                                 <Trash2 size={13} />
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     ))}
 
                     {unassigned.length > 0 && (
-                        <div className="bg-white rounded-xl shadow overflow-hidden">
-                            <div className="flex items-center gap-3 px-6 py-3 bg-yellow-50 border-b">
-                                <span className="text-xs font-semibold text-yellow-700">Unassigned</span>
-                                <span className="text-xs text-yellow-600">Not linked to any main status — edit to assign.</span>
-                            </div>
-                            <div className="divide-y">
-                                {unassigned.map((ss) => (
-                                    <div key={ss.id} className="flex items-center gap-3 px-6 py-3.5">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ss.color}`}>{ss.id}</span>
-                                        <span className="text-sm text-gray-700 flex-1">{ss.label}</span>
-                                        <div className="flex items-center gap-1.5">
-                                            <button onClick={() => openEdit(ss)} className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 hover:bg-gray-50">
-                                                <Pencil size={13} /><span className="hidden sm:inline">Edit</span>
-                                            </button>
-                                            <button onClick={() => handleDelete(ss.id)} disabled={deletingId === ss.id} className="flex items-center gap-1 text-xs border border-red-200 rounded-lg px-2 py-1.5 text-red-500 hover:bg-red-50 disabled:opacity-40">
+                        <Card>
+                            <CardHeader className="border-b">
+                                <div className="flex items-center gap-3">
+                                    <Badge className="bg-yellow-100 text-yellow-700">Unassigned</Badge>
+                                    <CardDescription>Not linked to any main status yet.</CardDescription>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-0 px-0 pt-0">
+                                {unassigned.map((subStatus) => (
+                                    <div key={subStatus.id} className="flex items-center gap-3 border-b px-6 py-4 last:border-b-0">
+                                        <Badge className={subStatus.color}>{subStatus.id}</Badge>
+                                        <span className="flex-1 text-sm">{subStatus.label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openEdit(subStatus)}>
+                                                <Pencil size={13} /> Edit
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="destructive"
+                                                onClick={() => handleDelete(subStatus.id)}
+                                                disabled={deletingId === subStatus.id}
+                                            >
                                                 <Trash2 size={13} />
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     )}
                 </div>
             )}
 
-            {showCreate && (
-                <SubStatusFormModal
-                    title="Add Sub-Status"
-                    form={createForm}
-                    setForm={setCreateForm}
-                    onSave={handleCreate}
-                    onClose={() => setShowCreate(false)}
-                    saving={creating}
-                    statuses={statuses}
-                    roles={roles}
-                />
-            )}
+            <SubStatusFormModal
+                open={showCreate}
+                title="Add Sub-Status"
+                form={createForm}
+                setForm={setCreateForm}
+                onSave={handleCreate}
+                onClose={() => setShowCreate(false)}
+                saving={creating}
+                statuses={statuses}
+                roles={roles}
+            />
 
-            {editId && (
-                <SubStatusFormModal
-                    title={`Edit — ${subStatuses.find((s) => s.id === editId)?.id}`}
-                    form={editForm}
-                    setForm={setEditForm}
-                    onSave={handleEdit}
-                    onClose={() => setEditId(null)}
-                    saving={editing}
-                    statuses={statuses}
-                    roles={roles}
-                />
-            )}
+            <SubStatusFormModal
+                open={!!editId}
+                title={`Edit — ${subStatuses.find((subStatus) => subStatus.id === editId)?.id ?? ""}`}
+                form={editForm}
+                setForm={setEditForm}
+                onSave={handleEdit}
+                onClose={() => setEditId(null)}
+                saving={editing}
+                statuses={statuses}
+                roles={roles}
+            />
 
-            {transitionModalId && modalSubStatus && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[80vh] flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
-                            <div>
-                                <h2 className="text-base font-semibold">Step flow from</h2>
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium mt-1 inline-block ${modalSubStatus.color}`}>
-                                    {modalSubStatus.label}
-                                </span>
-                            </div>
-                            <button onClick={() => setTransitionModalId(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-3">Which sub-statuses can come after this one?</p>
-                        <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-                            {transitionCandidates.length === 0 ? (
-                                <p className="text-sm text-gray-400">No compatible sub-statuses in the same stage.</p>
-                            ) : (
-                                transitionCandidates.map((c) => (
-                                    <label key={c.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-                                        <input type="checkbox" checked={selectedToIds.includes(c.id)} onChange={() => toggleTo(c.id)} className="accent-blue-600" />
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.color}`}>{c.id}</span>
-                                        <span className="text-sm text-gray-700">{c.label}</span>
-                                    </label>
-                                ))
-                            )}
-                        </div>
-                        <div className="flex gap-3 pt-4 border-t mt-4">
-                            <button onClick={() => setTransitionModalId(null)} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
-                            <button onClick={saveTransitions} disabled={savingTransitions} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50">
-                                {savingTransitions ? "Saving..." : "Save Flow"}
-                            </button>
-                        </div>
+            <Dialog open={!!transitionModalId && !!modalSubStatus} onOpenChange={(isOpen) => { if (!isOpen) setTransitionModalId(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Step Flow</DialogTitle>
+                        <DialogDescription>
+                            {modalSubStatus ? `Choose which sub-statuses can come after ${modalSubStatus.label}.` : ""}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="max-h-72 space-y-2 overflow-y-auto">
+                        {transitionCandidates.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No compatible sub-statuses in the same stage.</p>
+                        ) : (
+                            transitionCandidates.map((candidate) => (
+                                <label key={candidate.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                                    <Checkbox checked={selectedToIds.includes(candidate.id)} onCheckedChange={() => toggleTo(candidate.id)} />
+                                    <Badge className={candidate.color}>{candidate.id}</Badge>
+                                    <span className="text-sm">{candidate.label}</span>
+                                </label>
+                            ))
+                        )}
                     </div>
-                </div>
-            )}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setTransitionModalId(null)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={saveTransitions} disabled={savingTransitions}>
+                            {savingTransitions ? "Saving..." : "Save Flow"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -6,7 +6,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -24,6 +34,12 @@ interface Props {
         email?: string;
     };
     onClose: () => void;
+}
+
+function FieldError({ message }: { message?: string }) {
+    if (!message) return null;
+
+    return <p className="text-xs text-destructive">{message}</p>;
 }
 
 export default function CustomerForm({ customer, onClose }: Props) {
@@ -62,66 +78,44 @@ export default function CustomerForm({ customer, onClose }: Props) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">
-                        {customer ? "Edit Customer" : "Add Customer"}
-                    </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <X size={20} />
-                    </button>
-                </div>
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{customer ? "Edit Customer" : "Add Customer"}</DialogTitle>
+                    <DialogDescription>
+                        Capture the customer’s contact details for service intake and follow-up.
+                    </DialogDescription>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Name</label>
-                        <input
-                            {...register("name")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Full name"
-                        />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input {...register("name")} placeholder="Full name" />
+                        <FieldError message={errors.name?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Phone</label>
-                        <input
-                            {...register("phone")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Phone number"
-                        />
-                        {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input {...register("phone")} placeholder="Phone number" />
+                        <FieldError message={errors.phone?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Email <span className="text-gray-400">(optional)</span></label>
-                        <input
-                            {...register("email")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="email@example.com"
-                        />
-                        {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input {...register("email")} placeholder="email@example.com" />
+                        <FieldError message={errors.email?.message} />
                     </div>
 
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                        >
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose}>
                             Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-                        >
+                        </Button>
+                        <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? "Saving..." : customer ? "Update" : "Add Customer"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

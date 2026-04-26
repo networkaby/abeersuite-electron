@@ -6,7 +6,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, User, Building2 } from "lucide-react";
+import { User, Building2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const schema = z.object({
     type: z.enum(["individual", "company"]),
@@ -33,6 +44,12 @@ interface Props {
     };
     defaultType?: "individual" | "company";
     onClose: (created?: { id: number; name: string; type: string }) => void;
+}
+
+function FieldError({ message }: { message?: string }) {
+    if (!message) return null;
+
+    return <p className="text-xs text-destructive">{message}</p>;
 }
 
 export default function AccountForm({ account, defaultType = "individual", onClose }: Props) {
@@ -67,13 +84,13 @@ export default function AccountForm({ account, defaultType = "individual", onClo
     const onSubmit = async (data: FormData) => {
         try {
             if (account) {
-                const res = await axios.put(`/api/accounts/${account.id}`, data);
+                const response = await axios.put(`/api/accounts/${account.id}`, data);
                 toast.success("Account updated");
-                onClose(res.data);
+                onClose(response.data);
             } else {
-                const res = await axios.post("/api/accounts", data);
+                const response = await axios.post("/api/accounts", data);
                 toast.success(data.type === "company" ? "Company created" : "Account created");
-                onClose(res.data);
+                onClose(response.data);
             }
         } catch {
             toast.error("Something went wrong");
@@ -81,131 +98,89 @@ export default function AccountForm({ account, defaultType = "individual", onClo
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-lg font-semibold">
-                        {account ? "Edit Account" : "New Account"}
-                    </h2>
-                    <button onClick={() => onClose()} className="text-gray-400 hover:text-gray-600">
-                        <X size={20} />
-                    </button>
-                </div>
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>{account ? "Edit Account" : "New Account"}</DialogTitle>
+                    <DialogDescription>
+                        Create or update the billing identity used across customers, companies, and tickets.
+                    </DialogDescription>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    {/* Type toggle */}
                     {!account && (
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Account Type</label>
-                            <div className="flex gap-2">
-                                <button
+                        <div className="space-y-2">
+                            <Label>Account Type</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
                                     type="button"
+                                    variant={type === "individual" ? "default" : "outline"}
+                                    className="justify-center"
                                     onClick={() => setValue("type", "individual")}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                                        type === "individual"
-                                            ? "bg-blue-600 text-white border-blue-600"
-                                            : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                                    }`}
                                 >
                                     <User size={15} /> Individual
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                     type="button"
+                                    variant={type === "company" ? "default" : "outline"}
+                                    className="justify-center"
                                     onClick={() => setValue("type", "company")}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                                        type === "company"
-                                            ? "bg-purple-600 text-white border-purple-600"
-                                            : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                                    }`}
                                 >
                                     <Building2 size={15} /> Company
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
-                            {type === "company" ? "Company Name" : "Full Name"}
-                        </label>
-                        <input
+                    <div className="space-y-2">
+                        <Label>{type === "company" ? "Company Name" : "Full Name"}</Label>
+                        <Input
                             {...register("name")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder={type === "company" ? "ABC Pvt Ltd" : "Full name"}
                         />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+                        <FieldError message={errors.name?.message} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Phone <span className="text-gray-400">(optional)</span></label>
-                            <input
-                                {...register("phone")}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="+880..."
-                            />
+                        <div className="space-y-2">
+                            <Label>Phone</Label>
+                            <Input {...register("phone")} placeholder="+880..." />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Email <span className="text-gray-400">(optional)</span></label>
-                            <input
-                                {...register("email")}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="email@example.com"
-                            />
-                            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+                        <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input {...register("email")} placeholder="email@example.com" />
+                            <FieldError message={errors.email?.message} />
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Address <span className="text-gray-400">(optional)</span></label>
-                        <input
-                            {...register("address")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Street, City"
-                        />
+                    <div className="space-y-2">
+                        <Label>Address</Label>
+                        <Input {...register("address")} placeholder="Street, City" />
                     </div>
 
                     {type === "company" && (
-                        <div className="grid grid-cols-2 gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Company Reg # <span className="text-gray-400">(optional)</span></label>
-                                <input
-                                    {...register("companyReg")}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
-                                    placeholder="Trade licence / Reg no."
-                                />
+                        <div className="grid grid-cols-2 gap-3 rounded-xl border bg-muted/40 p-4">
+                            <div className="space-y-2">
+                                <Label>Company Reg #</Label>
+                                <Input {...register("companyReg")} placeholder="Trade licence / Reg no." />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Tax / VAT ID <span className="text-gray-400">(optional)</span></label>
-                                <input
-                                    {...register("taxId")}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
-                                    placeholder="GST / VAT number"
-                                />
+                            <div className="space-y-2">
+                                <Label>Tax / VAT ID</Label>
+                                <Input {...register("taxId")} placeholder="GST / VAT number" />
                             </div>
                         </div>
                     )}
 
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={() => onClose()}
-                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                        >
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => onClose()}>
                             Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${
-                                type === "company" ? "bg-purple-600 hover:bg-purple-700" : "bg-blue-600 hover:bg-blue-700"
-                            }`}
-                        >
+                        </Button>
+                        <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? "Saving..." : account ? "Update" : type === "company" ? "Create Company" : "Create Account"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -3,7 +3,36 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, X, ArrowUpDown, GitMerge, Users } from "lucide-react";
+import { Plus, Trash2, Save, ArrowUpDown, GitMerge, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 interface Pipeline {
     id: string;
@@ -37,7 +66,7 @@ const COLOR_OPTIONS = [
     { label: "Red", value: "bg-red-100 text-red-600" },
     { label: "Teal", value: "bg-teal-100 text-teal-600" },
     { label: "Dim gray", value: "bg-gray-100 text-gray-400" },
-];
+] as const;
 
 export default function StatusesPage() {
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -46,18 +75,15 @@ export default function StatusesPage() {
     const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Inline edit
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValues, setEditValues] = useState<{ label: string; color: string; order: number; isTerminal: boolean; isEntryPoint: boolean }>({
         label: "", color: "", order: 0, isTerminal: false, isEntryPoint: false,
     });
 
-    // Transitions modal
     const [transitionModalId, setTransitionModalId] = useState<string | null>(null);
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
-    // Roles modal
     const [rolesModalId, setRolesModalId] = useState<string | null>(null);
     const [rolesForm, setRolesForm] = useState<{
         allowedRoles: string[];
@@ -67,21 +93,20 @@ export default function StatusesPage() {
     }>({ allowedRoles: [], notifyRoles: [], actionLabel: "", warrantyScope: "any" });
     const [savingRoles, setSavingRoles] = useState(false);
 
-    // Add new
     const [addingNew, setAddingNew] = useState(false);
     const [newStatus, setNewStatus] = useState({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
 
     const fetchData = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [sRes, rRes, pRes] = await Promise.all([
+            const [statusesResponse, rolesResponse, pipelinesResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
                 axios.get("/api/roles"),
                 axios.get("/api/pipelines"),
             ]);
-            setStatuses(sRes.data);
-            setRoles(rRes.data);
-            setPipelines(pRes.data);
+            setStatuses(statusesResponse.data);
+            setRoles(rolesResponse.data);
+            setPipelines(pipelinesResponse.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -97,12 +122,19 @@ export default function StatusesPage() {
         setAddingNew(false);
     };
 
-    // ── Inline edit ──
-    const startEdit = (s: TicketStatus) => {
-        setEditingId(s.id);
-        setEditValues({ label: s.label, color: s.color, order: s.order, isTerminal: s.isTerminal, isEntryPoint: s.isEntryPoint });
+    const startEdit = (status: TicketStatus) => {
+        setEditingId(status.id);
+        setEditValues({
+            label: status.label,
+            color: status.color,
+            order: status.order,
+            isTerminal: status.isTerminal,
+            isEntryPoint: status.isEntryPoint,
+        });
     };
+
     const cancelEdit = () => setEditingId(null);
+
     const saveEdit = async (id: string) => {
         try {
             await axios.patch(`/api/ticket-statuses/${id}`, editValues);
@@ -114,25 +146,29 @@ export default function StatusesPage() {
         }
     };
 
-    // ── Delete ──
     const deleteStatus = async (id: string, ticketCount: number) => {
-        if (ticketCount > 0) { toast.error(`Cannot delete: ${ticketCount} ticket(s) use this status.`); return; }
+        if (ticketCount > 0) {
+            toast.error(`Cannot delete: ${ticketCount} ticket(s) use this status.`);
+            return;
+        }
+
         if (!confirm("Delete this status? This cannot be undone.")) return;
+
         try {
             await axios.delete(`/api/ticket-statuses/${id}`);
             toast.success("Status deleted");
             await fetchData(activePipelineId);
         } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
-            toast.error(msg ?? "Failed to delete status");
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : null;
+            toast.error(message ?? "Failed to delete status");
         }
     };
 
-    // ── Transitions modal ──
-    const openTransitions = (s: TicketStatus) => {
-        setTransitionModalId(s.id);
-        setSelectedToIds(s.fromTransitions.map((t) => t.toStatusId));
+    const openTransitions = (status: TicketStatus) => {
+        setTransitionModalId(status.id);
+        setSelectedToIds(status.fromTransitions.map((transition) => transition.toStatusId));
     };
+
     const saveTransitions = async () => {
         if (!transitionModalId) return;
         setSavingTransitions(true);
@@ -148,24 +184,25 @@ export default function StatusesPage() {
         }
     };
 
-    // ── Roles modal ──
-    const openRoles = (s: TicketStatus) => {
-        setRolesModalId(s.id);
+    const openRoles = (status: TicketStatus) => {
+        setRolesModalId(status.id);
         setRolesForm({
-            allowedRoles: s.allowedRoles,
-            notifyRoles: s.notifyRoles,
-            actionLabel: s.actionLabel ?? "",
-            warrantyScope: s.warrantyScope ?? "any",
+            allowedRoles: status.allowedRoles,
+            notifyRoles: status.notifyRoles,
+            actionLabel: status.actionLabel ?? "",
+            warrantyScope: status.warrantyScope ?? "any",
         });
     };
+
     const toggleRole = (field: "allowedRoles" | "notifyRoles", id: string) => {
         setRolesForm((prev) => ({
             ...prev,
             [field]: prev[field].includes(id)
-                ? prev[field].filter((r) => r !== id)
+                ? prev[field].filter((roleId) => roleId !== id)
                 : [...prev[field], id],
         }));
     };
+
     const saveRoles = async () => {
         if (!rolesModalId) return;
         setSavingRoles(true);
@@ -186,9 +223,12 @@ export default function StatusesPage() {
         }
     };
 
-    // ── Add new ──
     const addStatus = async () => {
-        if (!newStatus.label.trim()) { toast.error("Label is required"); return; }
+        if (!newStatus.label.trim()) {
+            toast.error("Label is required");
+            return;
+        }
+
         try {
             await axios.post("/api/ticket-statuses", {
                 label: newStatus.label.trim(),
@@ -206,455 +246,424 @@ export default function StatusesPage() {
         }
     };
 
-    const transitionStatus = transitionModalId ? statuses.find((s) => s.id === transitionModalId) : null;
-    const rolesStatus = rolesModalId ? statuses.find((s) => s.id === rolesModalId) : null;
-    const activePipeline = pipelines.find((p) => p.id === activePipelineId);
+    const transitionStatus = transitionModalId ? statuses.find((status) => status.id === transitionModalId) : null;
+    const rolesStatus = rolesModalId ? statuses.find((status) => status.id === rolesModalId) : null;
+    const activePipeline = pipelines.find((pipeline) => pipeline.id === activePipelineId);
 
     return (
-        <div>
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold">Ticket Statuses</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage status labels, colors, transitions, and role permissions per pipeline.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Manage status labels, colors, transitions, and role permissions per pipeline.
+                    </p>
                 </div>
-                <button
-                    onClick={() => setAddingNew(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
-                >
+                <Button type="button" onClick={() => setAddingNew(true)}>
                     <Plus size={16} /> Add Status
-                </button>
+                </Button>
             </div>
 
-            {/* Pipeline tabs */}
-            <div className="flex gap-2 mb-5 flex-wrap">
-                {pipelines.map((p) => (
-                    <button
-                        key={p.id}
-                        onClick={() => switchPipeline(p.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                            activePipelineId === p.id
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                        }`}
+            <div className="flex flex-wrap gap-2">
+                {pipelines.map((pipeline) => (
+                    <Button
+                        key={pipeline.id}
+                        type="button"
+                        size="sm"
+                        variant={activePipelineId === pipeline.id ? "default" : "outline"}
+                        onClick={() => switchPipeline(pipeline.id)}
                     >
-                        <span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.color.replace("text-", "bg-").split(" ")[1]}`} />
-                        {p.label}
-                    </button>
+                        <span className={`h-2 w-2 rounded-full ${pipeline.color.replace("text-", "bg-").split(" ")[1] ?? "bg-gray-300"}`} />
+                        {pipeline.label}
+                    </Button>
                 ))}
             </div>
 
-            {loading ? (
-                <p className="text-gray-500">Loading…</p>
-            ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    {activePipeline && (
-                        <div className="px-6 py-3 bg-gray-50 border-b flex items-center gap-2">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${activePipeline.color}`}>
-                                {activePipeline.label}
-                            </span>
-                            <span className="text-xs text-gray-400">{statuses.length} stage{statuses.length !== 1 ? "s" : ""} in this pipeline</span>
+            <Card>
+                {activePipeline && (
+                    <CardHeader className="border-b">
+                        <div className="flex items-center gap-2">
+                            <Badge className={activePipeline.color}>{activePipeline.label}</Badge>
+                            <CardDescription>
+                                {statuses.length} stage{statuses.length !== 1 ? "s" : ""} in this pipeline
+                            </CardDescription>
                         </div>
-                    )}
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                            <tr>
-                                <th className="px-6 py-3 text-left w-16">ID</th>
-                                <th className="px-6 py-3 text-left">Label</th>
-                                <th className="px-6 py-3 text-left">Color</th>
-                                <th className="px-6 py-3 text-left w-20">
-                                    <span className="flex items-center gap-1"><ArrowUpDown size={12} />Order</span>
-                                </th>
-                                <th className="px-6 py-3 text-left">Flags</th>
-                                <th className="px-6 py-3 text-left">Who can set</th>
-                                <th className="px-6 py-3 text-left">Notifies</th>
-                                <th className="px-6 py-3 text-left">Transitions To</th>
-                                <th className="px-6 py-3 text-left">Tickets</th>
-                                <th className="px-6 py-3 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {statuses.length === 0 && (
-                                <tr>
-                                    <td colSpan={10} className="px-6 py-8 text-center text-gray-400 text-sm">
-                                        No statuses in this pipeline yet. Add the first one.
-                                    </td>
-                                </tr>
-                            )}
-                            {statuses.map((s) => (
-                                <tr key={s.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 font-mono text-gray-400 text-xs">{s.id}</td>
+                    </CardHeader>
+                )}
+                <CardContent className="pt-4">
+                    {loading ? (
+                        <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-20">ID</TableHead>
+                                    <TableHead>Label</TableHead>
+                                    <TableHead>Color</TableHead>
+                                    <TableHead className="w-24">
+                                        <span className="flex items-center gap-1"><ArrowUpDown size={12} /> Order</span>
+                                    </TableHead>
+                                    <TableHead>Flags</TableHead>
+                                    <TableHead>Who can set</TableHead>
+                                    <TableHead>Notifies</TableHead>
+                                    <TableHead>Transitions To</TableHead>
+                                    <TableHead>Tickets</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {statuses.length === 0 && !addingNew && (
+                                    <TableRow>
+                                        <TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
+                                            No statuses in this pipeline yet. Add the first one.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
 
-                                    {editingId === s.id ? (
-                                        <>
-                                            <td className="px-6 py-3">
-                                                <input
-                                                    autoFocus
-                                                    value={editValues.label}
-                                                    onChange={(e) => setEditValues((v) => ({ ...v, label: e.target.value }))}
-                                                    className="border rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                            </td>
-                                            <td className="px-6 py-3">
-                                                <select
-                                                    value={editValues.color}
-                                                    onChange={(e) => setEditValues((v) => ({ ...v, color: e.target.value }))}
-                                                    className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                {statuses.map((status) => (
+                                    <TableRow key={status.id}>
+                                        <TableCell className="font-mono text-xs text-muted-foreground">{status.id}</TableCell>
+
+                                        {editingId === status.id ? (
+                                            <>
+                                                <TableCell>
+                                                    <Input
+                                                        autoFocus
+                                                        value={editValues.label}
+                                                        onChange={(e) => setEditValues((prev) => ({ ...prev, label: e.target.value }))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <Select
+                                                            value={editValues.color}
+                                                            onValueChange={(value) => setEditValues((prev) => ({ ...prev, color: value }))}
+                                                        >
+                                                            <SelectTrigger className="w-48">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {COLOR_OPTIONS.map((color) => (
+                                                                    <SelectItem key={color.value} value={color.value}>
+                                                                        {color.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <Badge className={editValues.color}>Preview</Badge>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input
+                                                        type="number"
+                                                        value={editValues.order}
+                                                        onChange={(e) => setEditValues((prev) => ({ ...prev, order: Number(e.target.value) }))}
+                                                        className="w-20"
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="space-y-2">
+                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Checkbox
+                                                                checked={editValues.isTerminal}
+                                                                onCheckedChange={(checked) => setEditValues((prev) => ({ ...prev, isTerminal: checked === true }))}
+                                                            />
+                                                            Terminal
+                                                        </label>
+                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Checkbox
+                                                                checked={editValues.isEntryPoint}
+                                                                onCheckedChange={(checked) => setEditValues((prev) => ({ ...prev, isEntryPoint: checked === true }))}
+                                                            />
+                                                            Entry Point
+                                                        </label>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell colSpan={2} className="text-xs text-muted-foreground">—</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">—</TableCell>
+                                                <TableCell>{status._count.tickets}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex gap-2">
+                                                        <Button type="button" size="sm" onClick={() => saveEdit(status.id)}>
+                                                            <Save size={12} /> Save
+                                                        </Button>
+                                                        <Button type="button" size="sm" variant="outline" onClick={cancelEdit}>
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <TableCell>
+                                                    <Badge className={status.color}>{status.label}</Badge>
+                                                </TableCell>
+                                                <TableCell className="font-mono text-xs text-muted-foreground">{status.color}</TableCell>
+                                                <TableCell>{status.order}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col gap-1">
+                                                        {status.isTerminal && <Badge className="bg-red-100 text-red-700">Terminal</Badge>}
+                                                        {status.isEntryPoint && <Badge className="bg-indigo-100 text-indigo-700">Entry Point</Badge>}
+                                                        {!status.isTerminal && !status.isEntryPoint && (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {status.allowedRoles.length === 0 ? (
+                                                        <span className="text-xs text-muted-foreground">Anyone</span>
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {status.allowedRoles.map((roleId) => (
+                                                                <Badge key={roleId} variant="outline">
+                                                                    {roles.find((role) => role.id === roleId)?.label ?? roleId}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {status.notifyRoles.length === 0 ? (
+                                                        <span className="text-xs text-muted-foreground">None</span>
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {status.notifyRoles.map((roleId) => (
+                                                                <Badge key={roleId} className="bg-orange-100 text-orange-700">
+                                                                    {roles.find((role) => role.id === roleId)?.label ?? roleId}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {status.fromTransitions.length === 0 ? (
+                                                        <span className="text-xs text-muted-foreground">None</span>
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {status.fromTransitions.map((transition) => (
+                                                                <Badge key={transition.toStatusId} variant="secondary">
+                                                                    {transition.to.label}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{status._count.tickets}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <Button type="button" size="sm" variant="outline" onClick={() => startEdit(status)}>
+                                                            Edit
+                                                        </Button>
+                                                        <Button type="button" size="sm" variant="outline" onClick={() => openRoles(status)}>
+                                                            <Users size={12} /> Roles
+                                                        </Button>
+                                                        <Button type="button" size="sm" variant="outline" onClick={() => openTransitions(status)}>
+                                                            <GitMerge size={12} /> Transitions
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="icon-sm"
+                                                            variant="destructive"
+                                                            onClick={() => deleteStatus(status.id, status._count.tickets)}
+                                                            disabled={status._count.tickets > 0}
+                                                            title={status._count.tickets > 0 ? `${status._count.tickets} tickets use this status` : "Delete"}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </>
+                                        )}
+                                    </TableRow>
+                                ))}
+
+                                {addingNew && (
+                                    <TableRow>
+                                        <TableCell className="font-mono text-xs text-muted-foreground">auto</TableCell>
+                                        <TableCell>
+                                            <Input
+                                                autoFocus
+                                                value={newStatus.label}
+                                                onChange={(e) => setNewStatus((prev) => ({ ...prev, label: e.target.value }))}
+                                                placeholder="Label"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={newStatus.color}
+                                                    onValueChange={(value) => setNewStatus((prev) => ({ ...prev, color: value }))}
                                                 >
-                                                    {COLOR_OPTIONS.map((c) => (
-                                                        <option key={c.value} value={c.value}>{c.label}</option>
-                                                    ))}
-                                                </select>
-                                                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${editValues.color}`}>
-                                                    preview
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-3">
-                                                <input
-                                                    type="number"
-                                                    value={editValues.order}
-                                                    onChange={(e) => setEditValues((v) => ({ ...v, order: Number(e.target.value) }))}
-                                                    className="border rounded px-2 py-1 text-sm w-16 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    <SelectTrigger className="w-48">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {COLOR_OPTIONS.map((color) => (
+                                                            <SelectItem key={color.value} value={color.value}>
+                                                                {color.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Badge className={newStatus.color}>Preview</Badge>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">auto</TableCell>
+                                        <TableCell>
+                                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <Checkbox
+                                                    checked={newStatus.isTerminal}
+                                                    onCheckedChange={(checked) => setNewStatus((prev) => ({ ...prev, isTerminal: checked === true }))}
                                                 />
-                                            </td>
-                                            <td className="px-6 py-3">
-                                                <div className="flex flex-col gap-1.5">
-                                                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editValues.isTerminal}
-                                                            onChange={(e) => setEditValues((v) => ({ ...v, isTerminal: e.target.checked }))}
-                                                            className="w-4 h-4"
-                                                        />
-                                                        Terminal
-                                                    </label>
-                                                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editValues.isEntryPoint}
-                                                            onChange={(e) => setEditValues((v) => ({ ...v, isEntryPoint: e.target.checked }))}
-                                                            className="w-4 h-4"
-                                                        />
-                                                        Entry Point
-                                                    </label>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-3 text-gray-400 text-xs" colSpan={2}>—</td>
-                                            <td className="px-6 py-3 text-gray-400 text-xs">—</td>
-                                            <td className="px-6 py-3 text-gray-400">{s._count.tickets}</td>
-                                            <td className="px-6 py-3">
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => saveEdit(s.id)}
-                                                        className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                                                    >
-                                                        <Save size={12} /> Save
-                                                    </button>
-                                                    <button
-                                                        onClick={cancelEdit}
-                                                        className="flex items-center gap-1 px-3 py-1 border rounded text-xs text-gray-600 hover:bg-gray-50"
-                                                    >
-                                                        <X size={12} /> Cancel
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.color}`}>
-                                                    {s.label}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-400 text-xs font-mono">{s.color}</td>
-                                            <td className="px-6 py-4 text-gray-600">{s.order}</td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    {s.isTerminal && (
-                                                        <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-600 font-medium w-fit">Terminal</span>
-                                                    )}
-                                                    {s.isEntryPoint && (
-                                                        <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-600 font-medium w-fit">Entry Point</span>
-                                                    )}
-                                                    {!s.isTerminal && !s.isEntryPoint && (
-                                                        <span className="text-gray-400 text-xs">—</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {s.allowedRoles.length === 0 ? (
-                                                    <span className="text-gray-400 text-xs">Anyone</span>
-                                                ) : (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {s.allowedRoles.map((r) => (
-                                                            <span key={r} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{roles.find((x) => x.id === r)?.label ?? r}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {s.notifyRoles.length === 0 ? (
-                                                    <span className="text-gray-400 text-xs">None</span>
-                                                ) : (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {s.notifyRoles.map((r) => (
-                                                            <span key={r} className="px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-xs">{roles.find((x) => x.id === r)?.label ?? r}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {s.fromTransitions.length === 0 ? (
-                                                    <span className="text-gray-400 text-xs">None</span>
-                                                ) : (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {s.fromTransitions.map((t) => (
-                                                            <span key={t.toStatusId} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                                                                {t.to.label}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-500">{s._count.tickets}</td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex gap-2 flex-wrap">
-                                                    <button
-                                                        onClick={() => startEdit(s)}
-                                                        className="px-3 py-1 border rounded text-xs text-gray-600 hover:bg-gray-50"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openRoles(s)}
-                                                        className="flex items-center gap-1 px-3 py-1 border rounded text-xs text-purple-600 hover:bg-purple-50"
-                                                    >
-                                                        <Users size={12} /> Roles
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openTransitions(s)}
-                                                        className="flex items-center gap-1 px-3 py-1 border rounded text-xs text-blue-600 hover:bg-blue-50"
-                                                    >
-                                                        <GitMerge size={12} /> Transitions
-                                                    </button>
-                                                    <button
-                                                        onClick={() => deleteStatus(s.id, s._count.tickets)}
-                                                        disabled={s._count.tickets > 0}
-                                                        className="p-1.5 rounded text-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                        title={s._count.tickets > 0 ? `${s._count.tickets} tickets use this status` : "Delete"}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </>
-                                    )}
-                                </tr>
+                                                Terminal
+                                            </label>
+                                        </TableCell>
+                                        <TableCell colSpan={3} className="text-xs text-muted-foreground">
+                                            Set roles after creation
+                                        </TableCell>
+                                        <TableCell>0</TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-2">
+                                                <Button type="button" size="sm" onClick={addStatus}>
+                                                    <Save size={12} /> Add
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setAddingNew(false);
+                                                        setNewStatus({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false });
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Dialog open={!!transitionModalId && !!transitionStatus} onOpenChange={(isOpen) => { if (!isOpen) setTransitionModalId(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Transitions</DialogTitle>
+                        <DialogDescription>
+                            {transitionStatus ? `Select which statuses ${transitionStatus.label} can move to.` : ""}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-64 space-y-2 overflow-y-auto">
+                        {statuses
+                            .filter((status) => status.id !== transitionModalId)
+                            .map((status) => (
+                                <label key={status.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                                    <Checkbox
+                                        checked={selectedToIds.includes(status.id)}
+                                        onCheckedChange={(checked) => {
+                                            setSelectedToIds((prev) =>
+                                                checked === true ? [...prev, status.id] : prev.filter((id) => id !== status.id)
+                                            );
+                                        }}
+                                    />
+                                    <Badge className={status.color}>{status.label}</Badge>
+                                    <span className="text-xs font-mono text-muted-foreground">{status.id}</span>
+                                </label>
                             ))}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setTransitionModalId(null)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={saveTransitions} disabled={savingTransitions}>
+                            {savingTransitions ? "Saving…" : "Save Transitions"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-                            {/* Add new row */}
-                            {addingNew && (
-                                <tr className="bg-blue-50">
-                                    <td className="px-6 py-3 text-gray-400 text-xs font-mono">auto</td>
-                                    <td className="px-6 py-3">
-                                        <input
-                                            autoFocus
-                                            value={newStatus.label}
-                                            onChange={(e) => setNewStatus((v) => ({ ...v, label: e.target.value }))}
-                                            placeholder="Label"
-                                            className="border rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <select
-                                            value={newStatus.color}
-                                            onChange={(e) => setNewStatus((v) => ({ ...v, color: e.target.value }))}
-                                            className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        >
-                                            {COLOR_OPTIONS.map((c) => (
-                                                <option key={c.value} value={c.value}>{c.label}</option>
-                                            ))}
-                                        </select>
-                                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${newStatus.color}`}>
-                                            preview
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-3 text-gray-400 text-xs">auto</td>
-                                    <td className="px-6 py-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={newStatus.isTerminal}
-                                            onChange={(e) => setNewStatus((v) => ({ ...v, isTerminal: e.target.checked }))}
-                                            className="w-4 h-4"
-                                        />
-                                    </td>
-                                    <td className="px-6 py-3 text-gray-400 text-xs" colSpan={3}>Set roles after creation</td>
-                                    <td className="px-6 py-3 text-gray-400">0</td>
-                                    <td className="px-6 py-3">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={addStatus}
-                                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                                            >
-                                                <Save size={12} /> Add
-                                            </button>
-                                            <button
-                                                onClick={() => { setAddingNew(false); setNewStatus({ label: "", color: "bg-gray-100 text-gray-600", isTerminal: false }); }}
-                                                className="flex items-center gap-1 px-3 py-1 border rounded text-xs text-gray-600 hover:bg-gray-50"
-                                            >
-                                                <X size={12} /> Cancel
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+            <Dialog open={!!rolesModalId && !!rolesStatus} onOpenChange={(isOpen) => { if (!isOpen) setRolesModalId(null); }}>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Role Settings</DialogTitle>
+                        <DialogDescription>
+                            {rolesStatus ? `Configure access and notifications for ${rolesStatus.label}.` : ""}
+                        </DialogDescription>
+                    </DialogHeader>
 
-            {/* Transitions modal */}
-            {transitionModalId && transitionStatus && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold">
-                                Transitions from{" "}
-                                <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${transitionStatus.color}`}>
-                                    {transitionStatus.label}
-                                </span>
-                            </h2>
-                            <button onClick={() => setTransitionModalId(null)} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <p className="text-xs text-gray-500 mb-3">Select which statuses this status can transition to:</p>
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                            {statuses
-                                .filter((s) => s.id !== transitionModalId)
-                                .map((s) => (
-                                    <label key={s.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedToIds.includes(s.id)}
-                                            onChange={(e) => {
-                                                setSelectedToIds((prev) =>
-                                                    e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
-                                                );
-                                            }}
-                                            className="w-4 h-4"
+                    <div className="space-y-5">
+                        <div className="space-y-2">
+                            <Label>Who can move a ticket to this status?</Label>
+                            <p className="text-xs text-muted-foreground">Leave all unchecked to allow any role. Admin always bypasses this.</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                {roles.map((role) => (
+                                    <label key={role.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                        <Checkbox
+                                            checked={rolesForm.allowedRoles.includes(role.id)}
+                                            onCheckedChange={() => toggleRole("allowedRoles", role.id)}
                                         />
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>
-                                        <span className="text-xs text-gray-400 font-mono">{s.id}</span>
+                                        {role.label}
                                     </label>
                                 ))}
+                            </div>
                         </div>
-                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-                            <button onClick={() => setTransitionModalId(null)} className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50">
-                                Cancel
-                            </button>
-                            <button
-                                onClick={saveTransitions}
-                                disabled={savingTransitions}
-                                className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-60"
+
+                        <div className="space-y-2">
+                            <Label>Which roles see this as an action item?</Label>
+                            <p className="text-xs text-muted-foreground">These roles will see tickets in this status on their dashboard queue.</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                {roles.map((role) => (
+                                    <label key={role.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                        <Checkbox
+                                            checked={rolesForm.notifyRoles.includes(role.id)}
+                                            onCheckedChange={() => toggleRole("notifyRoles", role.id)}
+                                        />
+                                        {role.label}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Warranty scope</Label>
+                            <Select
+                                value={rolesForm.warrantyScope}
+                                onValueChange={(value) => setRolesForm((prev) => ({ ...prev, warrantyScope: value }))}
                             >
-                                {savingTransitions ? "Saving…" : "Save Transitions"}
-                            </button>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="any">Any (warranty + non-warranty)</SelectItem>
+                                    <SelectItem value="warranty_only">Warranty only</SelectItem>
+                                    <SelectItem value="non_warranty_only">Non-warranty only</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Action label</Label>
+                            <Input
+                                value={rolesForm.actionLabel}
+                                onChange={(e) => setRolesForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
+                                placeholder="e.g. New ticket received — assign a technician"
+                            />
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* Roles modal */}
-            {rolesModalId && rolesStatus && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold">
-                                Role settings —{" "}
-                                <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${rolesStatus.color}`}>
-                                    {rolesStatus.label}
-                                </span>
-                            </h2>
-                            <button onClick={() => setRolesModalId(null)} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="space-y-5">
-                            <div>
-                                <p className="text-sm font-medium mb-2">Who can move a ticket to this status?</p>
-                                <p className="text-xs text-gray-400 mb-2">Leave all unchecked to allow any role. Admin always bypasses this.</p>
-                                <div className="grid grid-cols-2 gap-1">
-                                    {roles.map((r) => (
-                                        <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={rolesForm.allowedRoles.includes(r.id)}
-                                                onChange={() => toggleRole("allowedRoles", r.id)}
-                                                className="accent-blue-600"
-                                            />
-                                            {r.label}
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium mb-2">Which roles see this as an action item?</p>
-                                <p className="text-xs text-gray-400 mb-2">These roles will see tickets in this status on their dashboard queue.</p>
-                                <div className="grid grid-cols-2 gap-1">
-                                    {roles.map((r) => (
-                                        <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={rolesForm.notifyRoles.includes(r.id)}
-                                                onChange={() => toggleRole("notifyRoles", r.id)}
-                                                className="accent-orange-500"
-                                            />
-                                            {r.label}
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Warranty scope</label>
-                                <select
-                                    value={rolesForm.warrantyScope}
-                                    onChange={(e) => setRolesForm((prev) => ({ ...prev, warrantyScope: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="any">Any (warranty + non-warranty)</option>
-                                    <option value="warranty_only">Warranty only</option>
-                                    <option value="non_warranty_only">Non-warranty only</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">
-                                    Action label <span className="text-gray-400">(optional)</span>
-                                </label>
-                                <input
-                                    value={rolesForm.actionLabel}
-                                    onChange={(e) => setRolesForm((prev) => ({ ...prev, actionLabel: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="e.g. New ticket received — assign a technician"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-                            <button onClick={() => setRolesModalId(null)} className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50">
-                                Cancel
-                            </button>
-                            <button
-                                onClick={saveRoles}
-                                disabled={savingRoles}
-                                className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-60"
-                            >
-                                {savingRoles ? "Saving…" : "Save Role Settings"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setRolesModalId(null)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={saveRoles} disabled={savingRoles}>
+                            {savingRoles ? "Saving…" : "Save Role Settings"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
