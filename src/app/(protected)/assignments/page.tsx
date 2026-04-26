@@ -90,10 +90,10 @@ function StatCard({
     label, value, icon, textColor,
 }: { label: string; value: number; icon: React.ReactNode; textColor: string }) {
     return (
-        <div className="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+        <div className="border-2 border-border bg-card shadow p-4 flex items-center gap-3">
             <div className={textColor}>{icon}</div>
             <div>
-                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
                 <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
             </div>
         </div>
@@ -211,13 +211,13 @@ export default async function AssignmentsPage({
             </div>
 
             {/* Scope tabs */}
-            <div className="mb-6 rounded-xl bg-card p-1 shadow">
+            <div className="mb-6 border-2 border-border bg-card shadow p-1">
                 <div className="flex gap-1">
                     {TABS.map(tab => (
                         <Link
                             key={tab.id}
                             href={`?scope=${tab.id}`}
-                            className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${scope === tab.id
+                            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${scope === tab.id
                                 ? "bg-primary text-primary-foreground"
                                 : "text-muted-foreground hover:bg-muted"
                                 }`}
@@ -233,7 +233,7 @@ export default async function AssignmentsPage({
 
             {/* Scope banner */}
             {scope === "me" && (
-                <div className="mb-6 rounded-lg border border-primary/20 bg-primary/8 p-4">
+                <div className="mb-6 border-2 border-border bg-secondary/30 p-4">
                     <div className="flex items-center gap-2 text-foreground">
                         <UserCheck size={16} className="text-primary" />
                         <span className="text-sm font-medium">Your named assignments</span>
@@ -244,23 +244,23 @@ export default async function AssignmentsPage({
                 </div>
             )}
             {scope === "team" && (
-                <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-green-800">
-                        <Users size={16} className="text-green-600" />
+                <div className="mb-6 border-2 border-border bg-card p-4">
+                    <div className="flex items-center gap-2 text-foreground">
+                        <Users size={16} className="text-primary" />
                         <span className="text-sm font-medium">Team view — {userRoles.join(", ")}</span>
                     </div>
-                    <p className="text-xs text-green-600 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                         All active tickets routed to your role, whether assigned to someone or not.
                     </p>
                 </div>
             )}
             {scope === "org" && (
-                <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-gray-800">
-                        <AlertCircle size={16} className="text-gray-600" />
+                <div className="mb-6 border-2 border-border bg-muted p-4">
+                    <div className="flex items-center gap-2 text-foreground">
+                        <AlertCircle size={16} className="text-primary" />
                         <span className="text-sm font-medium">Organisation view</span>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">All active tickets across every role.</p>
+                    <p className="text-xs text-muted-foreground mt-1">All active tickets across every role.</p>
                 </div>
             )}
 
@@ -385,7 +385,7 @@ export default async function AssignmentsPage({
             )}
 
             {total === 0 && (
-                <div className="rounded-xl bg-card p-16 text-center shadow">
+                <div className="border-2 border-border bg-card p-16 text-center shadow">
                     <CheckCircle size={48} className="text-green-400 mx-auto mb-4" />
                     <h3 className="mb-2 text-lg font-medium text-foreground">All caught up!</h3>
                     <p className="text-sm text-muted-foreground">No tickets need your attention right now.</p>

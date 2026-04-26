@@ -42,7 +42,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     };
 
     return (
-        <aside className="flex w-52 flex-col border-l border-border bg-card">
+        <aside className="flex w-52 flex-col border-l border-border bg-sidebar">
             {/* Header */}
             <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">

@@ -99,7 +99,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         <aside
             className={[
                 collapsed ? "w-16" : "w-64",
-                "relative flex min-h-screen flex-col border-r border-border bg-card transition-all duration-300",
+                "relative flex min-h-screen flex-col border-r border-border bg-sidebar transition-all duration-300",
             ].join(" ")}
         >
             {/* Collapse toggle */}
