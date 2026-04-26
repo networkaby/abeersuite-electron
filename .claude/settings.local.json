@@ -52,7 +52,10 @@
       "Bash(grep -v \"//.*glAccount\")",
       "Bash(npm run *)",
       "Bash(grep -E \"\\\\.\\(ts|js|prisma\\)$\")",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(pnpm dlx *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
