@@ -66,7 +66,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         return [
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
             active
-                ? "bg-primary/10 text-primary"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             collapsed ? "justify-center px-2" : "",
         ].join(" ");
@@ -264,7 +264,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                     className={[
                                                                         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                                         isActiveChild
-                                                                            ? "bg-primary/10 text-primary"
+                                                                            ? "bg-primary text-primary-foreground"
                                                                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                                                         child.disabled ? "pointer-events-none opacity-40" : "",
                                                                     ].join(" ")}
