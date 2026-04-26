@@ -163,23 +163,51 @@ const ROLES = [
 
 
 const PERMISSIONS = [
-    { id: "admin:bypass", label: "Admin bypass all checks", module: "core", description: null },
-    { id: "tickets:create", label: "Create tickets", module: "service", description: null },
-    { id: "tickets:status:set", label: "Set ticket status", module: "service", description: null },
-    { id: "tickets:substatus:set", label: "Set ticket sub-status", module: "service", description: null },
-    { id: "tickets:assign", label: "Assign Tickets", module: "tickets", description: "Claim, pass, or reject ticket primary ownership" },
-    { id: "tickets:manage-participants", label: "Manage Ticket Participants", module: "tickets", description: "Add or remove secondary owners on tickets" },
-    { id: "warranty:convert", label: "Convert warranty status", module: "service", description: null },
-    { id: "users:manage", label: "Create/edit/delete users", module: "admin", description: null },
-    { id: "roles:manage", label: "Create/edit custom roles", module: "admin", description: null },
-    { id: "settings:statuses", label: "Manage ticket statuses", module: "admin", description: null },
+    // core
+    { id: "admin:bypass",                  label: "Bypass all permission checks",      module: "core",        description: "Grants full access to everything. Skips every permission check in the system." },
+    // customers
+    { id: "customers:view",                label: "View customers & companies",        module: "customers",   description: "Access the Customers and Companies pages and view records." },
+    { id: "customers:manage",              label: "Manage customers",                  module: "customers",   description: "Create, edit, and delete customer records." },
+    { id: "companies:manage",              label: "Manage companies",                  module: "customers",   description: "Create, edit, and delete company records." },
+    // tickets
+    { id: "tickets:create",                label: "Create tickets",                    module: "tickets",     description: "Open and submit new tickets." },
+    { id: "tickets:status:set",            label: "Set ticket status",                 module: "tickets",     description: "Move a ticket between pipeline statuses." },
+    { id: "tickets:substatus:set",         label: "Set ticket sub-status",             module: "tickets",     description: "Set the sub-status on a ticket." },
+    { id: "tickets:assign",                label: "Assign tickets",                    module: "tickets",     description: "Claim, pass, or reject primary ownership of a ticket." },
+    { id: "tickets:manage-participants",   label: "Manage ticket participants",        module: "tickets",     description: "Add or remove secondary owners on a ticket." },
+    { id: "warranty:convert",              label: "Edit warranty status",              module: "tickets",     description: "Change the warranty field on a ticket (in-warranty / out-of-warranty)." },
+    // assignments
+    { id: "assignments:view-team",         label: "View team assignments",             module: "assignments", description: "See the My Team tab — all tickets routed to your role." },
+    { id: "assignments:view-org",          label: "View organisation assignments",     module: "assignments", description: "See the All Organisation tab — every active ticket across all roles." },
+    // service
+    { id: "service-centers:view",          label: "View service centers",              module: "service",     description: "Access the Service Centers page in the sidebar." },
+    { id: "service-centers:manage",        label: "Manage service centers",            module: "service",     description: "Add, edit, and delete service center records." },
+    // admin
+    { id: "users:manage",                  label: "Manage users",                      module: "admin",       description: "Create, edit, and delete user accounts." },
+    { id: "roles:manage",                  label: "Manage roles",                      module: "admin",       description: "Create and edit roles and their permission sets." },
+    { id: "settings:statuses",             label: "Manage statuses & sub-statuses",    module: "admin",       description: "Create, edit, and delete ticket statuses and sub-statuses." },
+    { id: "settings:pipelines",            label: "Manage pipelines",                  module: "admin",       description: "Create, edit, and configure pipelines." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-    R1: PERMISSIONS.map((permission) => permission.id),
-    R2: ["tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign", "tickets:manage-participants", "warranty:convert"],
-    R3: ["tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign"],
-    R4: ["tickets:substatus:set", "tickets:assign"],
+    R1: PERMISSIONS.map((p) => p.id),
+    R2: [
+        "customers:view",
+        "tickets:create", "tickets:status:set", "tickets:substatus:set",
+        "tickets:assign", "tickets:manage-participants", "warranty:convert",
+        "assignments:view-team",
+        "service-centers:view",
+    ],
+    R3: [
+        "customers:view", "customers:manage", "companies:manage",
+        "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
+        "assignments:view-team",
+    ],
+    R4: [
+        "customers:view",
+        "tickets:substatus:set", "tickets:assign",
+        "assignments:view-team",
+    ],
 };
 
 const STATUS_TRANSITIONS = [

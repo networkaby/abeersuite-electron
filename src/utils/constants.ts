@@ -70,8 +70,8 @@ export type ButtonBarAction = {
 
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
-    { label: "Customers",      href: "/customers",   icon: Users,         permission: null },
-    { label: "Companies",      href: "/companies",   icon: Building2,     permission: null },
+    { label: "Customers",      href: "/customers",   icon: Users,         permission: "customers:view" },
+    { label: "Companies",      href: "/companies",   icon: Building2,     permission: "customers:view" },
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [
@@ -82,7 +82,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "New Repair +",    icon: Plus,          action: "new-ticket", pipelineRef: "default" },
             { label: "All Repair",      icon: ClipboardList, href: "/tickets",     pipelineRef: "default" },
-            { label: "Service Centers", icon: Building2,     href: "/service-centers", permission: "warranty:convert" },
+            { label: "Service Centers", icon: Building2,     href: "/service-centers", permission: "service-centers:view" },
         ],
     },
     {
@@ -101,7 +101,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Users",        href: "/settings/users",        icon: UserCog,     permission: "users:manage" },
     { label: "Statuses",     href: "/settings/statuses",     icon: Settings,    permission: "settings:statuses" },
     { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings,    permission: "settings:statuses" },
-    { label: "Pipelines",    href: "/settings/pipelines",    icon: GitBranch,   permission: "settings:statuses" },
+    { label: "Pipelines",    href: "/settings/pipelines",    icon: GitBranch,   permission: "settings:pipelines" },
     { label: "Roles",        href: "/settings/roles",        icon: ShieldCheck, permission: "roles:manage" },
 ];
 
