@@ -122,7 +122,7 @@ export default function UserForm({ user, onClose }: Props) {
                         <label className="block text-sm font-medium mb-1">Name</label>
                         <input
                             {...register("name")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder="Full name"
                         />
                         {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
@@ -132,7 +132,7 @@ export default function UserForm({ user, onClose }: Props) {
                         <label className="block text-sm font-medium mb-1">Email</label>
                         <input
                             {...register("email")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder="email@example.com"
                         />
                         {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
@@ -142,7 +142,7 @@ export default function UserForm({ user, onClose }: Props) {
                         <label className="block text-sm font-medium mb-1">Role</label>
                         <select
                             {...register("role")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         >
                             <option value="">Select a role</option>
                             {roles.map((r) => (
@@ -157,7 +157,7 @@ export default function UserForm({ user, onClose }: Props) {
                         <label className="block text-sm font-medium mb-1">Reports to <span className="text-gray-400">(optional)</span></label>
                         <select
                             {...register("managerId")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         >
                             <option value="">— None —</option>
                             {users.map((u) => (
@@ -173,7 +173,7 @@ export default function UserForm({ user, onClose }: Props) {
                         <input
                             {...register("password")}
                             type="password"
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder={user ? "Leave blank to keep current" : "Password"}
                         />
                     </div>
@@ -189,7 +189,7 @@ export default function UserForm({ user, onClose }: Props) {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                            className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                         >
                             {isSubmitting ? "Saving..." : user ? "Update" : "Add User"}
                         </button>

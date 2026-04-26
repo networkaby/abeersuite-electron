@@ -119,7 +119,7 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
                                                     {/* Checkbox visual */}
                                                     <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${
                                                         effective
-                                                            ? "bg-blue-600 border-blue-600"
+                                                            ? "bg-primary border-primary"
                                                             : "border-gray-300"
                                                     }`}>
                                                         {effective && <div className="w-2 h-2 bg-white rounded-sm" />}
@@ -158,7 +158,7 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
                     <button
                         onClick={save}
                         disabled={saving || overrides.size === 0}
-                        className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 flex items-center justify-center gap-2"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
                     >
                         {saving && <Loader2 size={14} className="animate-spin" />}
                         {overrides.size === 0 ? "No changes" : `Save ${overrides.size} change${overrides.size !== 1 ? "s" : ""}`}
@@ -206,7 +206,7 @@ export default function UsersPage() {
                 <h1 className="text-3xl font-bold">Users</h1>
                 <button
                     onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
                 >
                     <Plus size={18} />
                     Add User
@@ -262,7 +262,7 @@ export default function UsersPage() {
                                             </button>
                                             <button
                                                 onClick={() => setEditUser(u)}
-                                                className="p-1.5 rounded hover:bg-blue-50 text-blue-600"
+                                                className="rounded p-1.5 text-primary hover:bg-primary/10"
                                             >
                                                 <Pencil size={15} />
                                             </button>

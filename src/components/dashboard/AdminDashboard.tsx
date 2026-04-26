@@ -66,7 +66,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
             <div className="flex flex-wrap gap-3 mb-6">
                 {[
                     { label: "Total", value: counts.total, color: "text-gray-700" },
-                    { label: "Open", value: counts.open, color: "text-blue-600" },
+                    { label: "Open", value: counts.open, color: "text-primary" },
                     { label: "Escalated", value: counts.escalated, color: "text-orange-600" },
                     { label: "Ready for Pickup", value: counts.ready, color: "text-green-600" },
                 ].map(stat => (
@@ -94,7 +94,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                                 className={`flex flex-col items-center px-4 py-3 rounded-lg border transition-all min-w-[90px]
                                     ${stage._count.tickets === 0 ? "opacity-40" : ""}
                                     ${selectedStageId === stage.id
-                                        ? "border-blue-400 bg-blue-50 ring-1 ring-blue-400"
+                                        ? "border-primary/40 bg-primary/10 ring-1 ring-primary/30"
                                         : "border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
                             >
                                 <span className={`text-2xl font-bold ${stage._count.tickets > 0 ? "text-gray-800" : "text-gray-400"}`}>
@@ -120,7 +120,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                                 onClick={() => setSelectedTeam(tab.key)}
                                 className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors
                                     ${selectedTeam === tab.key
-                                        ? "bg-blue-600 text-white"
+                                        ? "bg-primary text-primary-foreground"
                                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                             >
                                 {tab.label}
@@ -138,7 +138,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                             Clear filters
                         </button>
                     ) : (
-                        <Link href={ticketsHref} className="ml-auto text-xs text-blue-600 hover:underline">View all →</Link>
+                        <Link href={ticketsHref} className="ml-auto text-xs text-primary hover:underline">View all →</Link>
                     )}
                 </div>
                 {filtered.length === 0 ? (
@@ -160,7 +160,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                             {filtered.map(t => (
                                 <tr key={t.id} className={`hover:bg-gray-50 ${t.escalated ? "bg-orange-50/30" : ""}`}>
                                     <td className="px-5 py-3">
-                                        <Link href={`/tickets/${t.id}`} className="text-blue-600 font-medium hover:underline">#{t.id}</Link>
+                                        <Link href={`/tickets/${t.id}`} className="text-primary font-medium hover:underline">#{t.id}</Link>
                                     </td>
                                     <td className="px-5 py-3 font-medium">{(t.device.customer ?? t.device.company)?.name}</td>
                                     <td className="px-5 py-3 text-gray-500">{t.device.brand} {t.device.model}</td>

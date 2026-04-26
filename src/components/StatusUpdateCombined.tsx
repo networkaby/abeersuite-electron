@@ -196,7 +196,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 type="button"
                                 onClick={() => setValue("mode", "substatus")}
                                 className={`flex-1 py-2 font-medium transition-colors ${mode === "substatus"
-                                    ? "bg-blue-600 text-white"
+                                    ? "bg-primary text-primary-foreground"
                                     : "bg-white text-gray-500 hover:bg-gray-50"}`}
                             >
                                 Within this stage
@@ -205,7 +205,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 type="button"
                                 onClick={() => setValue("mode", "mainstatus")}
                                 className={`flex-1 py-2 font-medium transition-colors border-l ${mode === "mainstatus"
-                                    ? "bg-blue-600 text-white"
+                                    ? "bg-primary text-primary-foreground"
                                     : "bg-white text-gray-500 hover:bg-gray-50"}`}
                             >
                                 Advance stage
@@ -228,14 +228,14 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                         <label
                                             key={ss.id}
                                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${selectedSubId === ss.id
-                                                ? "border-blue-500 bg-blue-50"
+                                                ? "border-primary/40 bg-primary/10"
                                                 : "border-gray-200 hover:bg-gray-50"}`}
                                         >
                                             <input
                                                 type="radio"
                                                 value={ss.id}
                                                 {...register("subStatusId")}
-                                                className="accent-blue-600"
+                                                className="accent-primary"
                                             />
                                             <div className="flex-1">
                                                 <span className="text-sm text-gray-700">{ss.label}</span>
@@ -254,7 +254,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             )}
 
                             {selectedSub?.notifyRoles && selectedSub.notifyRoles.length > 0 && (
-                                <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2 text-sm text-blue-700">
+                                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 flex items-center gap-2 text-sm text-primary">
                                     <ArrowRight size={13} />
                                     Notifies: {selectedSub.notifyRoles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
                                 </div>
@@ -271,7 +271,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                     {(mode === "mainstatus" || isTerminalReopen) && (
                         <div>
                             {isTerminalReopen && (
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 mb-3">
+                                <div className="mb-3 rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
                                     ↩ This will reopen the ticket and start a new repair cycle.
                                 </div>
                             )}
@@ -283,14 +283,14 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                         <label
                                             key={s.id}
                                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${selectedMainId === s.id
-                                                ? "border-blue-500 bg-blue-50"
+                                                ? "border-primary/40 bg-primary/10"
                                                 : "border-gray-200 hover:bg-gray-50"}`}
                                         >
                                             <input
                                                 type="radio"
                                                 value={s.id}
                                                 {...register("mainStatusId")}
-                                                className="accent-blue-600"
+                                                className="accent-primary"
                                             />
                                             <span className="text-sm text-gray-700">{s.label}</span>
                                         </label>
@@ -314,7 +314,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             {...register("note")}
                             rows={2}
                             placeholder="Add context — part number, customer quote, courier details..."
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                         <div className="flex gap-2">
                             <button
@@ -333,7 +333,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 onClick={() => setValue("visibility", "PUBLIC")}
                                 className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                                     visibility === "PUBLIC"
-                                        ? "border-blue-400 bg-blue-50 text-blue-700"
+                                        ? "border-primary/40 bg-primary/10 text-primary"
                                         : "border-gray-200 text-gray-400 hover:bg-gray-50"
                                 }`}
                             >
@@ -349,7 +349,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                            className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                         >
                             {isSubmitting ? "Saving..." : isTerminalReopen ? "↩ Reopen Ticket" : "Update Status"}
                         </button>

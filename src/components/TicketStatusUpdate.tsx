@@ -73,7 +73,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
                         {ticket.status === "S7" && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                            <div className="rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
                                 ↩️ This will <strong>reopen</strong> the ticket and start a new repair cycle.
                             </div>
                         )}
@@ -82,7 +82,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                             <label className="block text-sm font-medium mb-1">New Status</label>
                             <select
                                 {...register("status")}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             >
                                 {nextStatuses.map((s) => (
                                     <option key={s.id} value={s.id}>
@@ -99,7 +99,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                             <textarea
                                 {...register("logNote")}
                                 rows={3}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 placeholder={
                                     ticket.status === "S7"
                                         ? "Why is this being reopened?"
@@ -119,10 +119,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className={`flex-1 text-white rounded-lg py-2 text-sm disabled:opacity-50 ${ticket.status === "S7"
-                                        ? "bg-blue-500 hover:bg-blue-600"
-                                        : "bg-blue-600 hover:bg-blue-700"
-                                    }`}
+                                className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {isSubmitting
                                     ? "Saving..."

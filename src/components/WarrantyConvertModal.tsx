@@ -123,7 +123,7 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
                                     value={warrantyRef}
                                     onChange={(e) => setWarrantyRef(e.target.value)}
                                     placeholder="e.g. SN-12345 or receipt number"
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 />
                             </div>
                             <div>
@@ -132,7 +132,7 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
                                     type="date"
                                     value={purchaseDate}
                                     onChange={(e) => setPurchaseDate(e.target.value)}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 />
                             </div>
                         </>
@@ -146,7 +146,7 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
                             onChange={(e) => setNote(e.target.value)}
                             rows={2}
                             placeholder="Add context for the log..."
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                     </div>
 

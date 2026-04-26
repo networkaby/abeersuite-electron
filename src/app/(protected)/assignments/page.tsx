@@ -202,28 +202,28 @@ export default async function AssignmentsPage({
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <Wrench size={24} className="text-blue-600" />
+                    <Wrench size={24} className="text-primary" />
                     <div>
                         <h1 className="text-3xl font-bold">Work Inbox</h1>
-                        <p className="text-gray-400 text-sm">Process tickets that need your attention</p>
+                        <p className="text-sm text-muted-foreground">Process tickets that need your attention</p>
                     </div>
                 </div>
             </div>
 
             {/* Scope tabs */}
-            <div className="bg-white rounded-xl shadow p-1 mb-6">
+            <div className="mb-6 rounded-xl bg-card p-1 shadow">
                 <div className="flex gap-1">
                     {TABS.map(tab => (
                         <Link
                             key={tab.id}
                             href={`?scope=${tab.id}`}
                             className={`flex-1 px-4 py-3 rounded-md text-sm font-medium transition-colors flex flex-col items-center justify-center gap-1 ${scope === tab.id
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-600 hover:bg-gray-100"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:bg-muted"
                                 }`}
                         >
                             <span className="font-medium">{tab.label}</span>
-                            <span className={`text-xs ${scope === tab.id ? "text-blue-100" : "text-gray-400"}`}>
+                            <span className={`text-xs ${scope === tab.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
                                 {tab.desc}
                             </span>
                         </Link>
@@ -233,12 +233,12 @@ export default async function AssignmentsPage({
 
             {/* Scope banner */}
             {scope === "me" && (
-                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-blue-800">
-                        <UserCheck size={16} className="text-blue-600" />
+                <div className="mb-6 rounded-lg border border-primary/20 bg-primary/8 p-4">
+                    <div className="flex items-center gap-2 text-foreground">
+                        <UserCheck size={16} className="text-primary" />
                         <span className="text-sm font-medium">Your named assignments</span>
                     </div>
-                    <p className="text-xs text-blue-600 mt-1">
+                    <p className="mt-1 text-xs text-muted-foreground">
                         Tickets where you are the primary owner or a named secondary participant.
                     </p>
                 </div>
@@ -385,10 +385,10 @@ export default async function AssignmentsPage({
             )}
 
             {total === 0 && (
-                <div className="bg-white rounded-xl shadow p-16 text-center">
+                <div className="rounded-xl bg-card p-16 text-center shadow">
                     <CheckCircle size={48} className="text-green-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">All caught up!</h3>
-                    <p className="text-sm text-gray-400">No tickets need your attention right now.</p>
+                    <h3 className="mb-2 text-lg font-medium text-foreground">All caught up!</h3>
+                    <p className="text-sm text-muted-foreground">No tickets need your attention right now.</p>
                 </div>
             )}
         </div>

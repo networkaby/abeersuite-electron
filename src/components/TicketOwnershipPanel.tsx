@@ -100,7 +100,7 @@ export default function TicketOwnershipPanel({
                     {canManage && !isTerminal && !showReassign && (
                         <button
                             onClick={() => { setShowReassign(true); setShowAddParticipant(false); setSelectedUserId(null); }}
-                            className="text-xs text-blue-600 hover:underline"
+                            className="text-xs text-primary hover:underline"
                         >
                             Reassign
                         </button>
@@ -115,11 +115,11 @@ export default function TicketOwnershipPanel({
                                     key={u.id}
                                     onClick={() => setSelectedUserId(u.id)}
                                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors ${
-                                        selectedUserId === u.id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"
+                                        selectedUserId === u.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-50 text-gray-700"
                                     }`}
                                 >
                                     <span className="font-medium">{u.name}</span>
-                                    <span className={`ml-auto ${selectedUserId === u.id ? "text-blue-100" : "text-gray-400"}`}>{u.role}</span>
+                                    <span className={`ml-auto ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-gray-400"}`}>{u.role}</span>
                                 </button>
                             ))}
                         </div>
@@ -128,7 +128,7 @@ export default function TicketOwnershipPanel({
                             <button
                                 onClick={handleReassign}
                                 disabled={submitting || !selectedUserId}
-                                className="flex-1 bg-blue-600 text-white rounded py-1 text-xs hover:bg-blue-700 disabled:opacity-50"
+                                className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {submitting ? "…" : "Confirm"}
                             </button>
@@ -146,7 +146,7 @@ export default function TicketOwnershipPanel({
                     {canManage && !isTerminal && !showAddParticipant && (
                         <button
                             onClick={() => { setShowAddParticipant(true); setShowReassign(false); setSelectedUserId(null); }}
-                            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                            className="text-xs text-primary hover:underline flex items-center gap-1"
                         >
                             <Plus size={11} /> Add
                         </button>
@@ -185,11 +185,11 @@ export default function TicketOwnershipPanel({
                                         key={u.id}
                                         onClick={() => setSelectedUserId(u.id)}
                                         className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors ${
-                                            selectedUserId === u.id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"
+                                            selectedUserId === u.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-50 text-gray-700"
                                         }`}
                                     >
                                         <span className="font-medium">{u.name}</span>
-                                        <span className={`ml-auto ${selectedUserId === u.id ? "text-blue-100" : "text-gray-400"}`}>{u.role}</span>
+                                        <span className={`ml-auto ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-gray-400"}`}>{u.role}</span>
                                     </button>
                                 ))}
                         </div>
@@ -198,7 +198,7 @@ export default function TicketOwnershipPanel({
                             <button
                                 onClick={handleAddParticipant}
                                 disabled={submitting || !selectedUserId}
-                                className="flex-1 bg-blue-600 text-white rounded py-1 text-xs hover:bg-blue-700 disabled:opacity-50"
+                                className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {submitting ? "…" : "Add"}
                             </button>

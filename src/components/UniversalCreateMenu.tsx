@@ -55,7 +55,7 @@ export default function UniversalCreateMenu() {
                             <button
                                 key={p.id}
                                 onClick={() => handleNewTicket(p.id)}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left"
+                                className="w-full text-left flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-primary/10 hover:text-primary"
                             >
                                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${p.color.split(" ")[0]}`} />
                                 <Ticket size={14} className="shrink-0 text-gray-400" />
@@ -80,7 +80,7 @@ export default function UniversalCreateMenu() {
             {/* FAB */}
             <button
                 onClick={() => setMenuOpen((o) => !o)}
-                className={`bg-blue-600 text-white rounded-full shadow-lg px-5 py-3 flex items-center gap-2 hover:bg-blue-700 transition-all text-sm font-medium ${menuOpen ? "ring-2 ring-blue-300 ring-offset-1" : ""}`}
+                className={`flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 ${menuOpen ? "ring-2 ring-primary/30 ring-offset-1" : ""}`}
             >
                 <Plus size={18} className={`transition-transform duration-200 ${menuOpen ? "rotate-45" : ""}`} />
                 New

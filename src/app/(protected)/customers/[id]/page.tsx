@@ -122,13 +122,13 @@ export default async function CustomerDetailPage({
                                     <div className="mt-2 space-y-1">
                                         {d.tickets.map(t => (
                                             <div key={t.id} className="flex items-center justify-between text-xs">
-                                                <Link href={`/tickets/${t.id}`} className="text-blue-600 hover:underline">
+                                                <Link href={`/tickets/${t.id}`} className="text-primary hover:underline">
                                                     #{t.id}
                                                 </Link>
                                                 <span className={`px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
                                                     {t.ticketStatus.label}
                                                 </span>
-                                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-blue-600">
+                                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-primary">
                                                     <Eye size={12} />
                                                 </Link>
                                             </div>

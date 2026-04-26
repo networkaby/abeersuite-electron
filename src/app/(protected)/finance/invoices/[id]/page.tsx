@@ -158,7 +158,7 @@ export default function InvoiceDetailPage() {
                 <div className="flex gap-2">
                     {canSend && (
                         <button onClick={sendInvoice} disabled={sending}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                             {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send & Post JE
                         </button>
                     )}

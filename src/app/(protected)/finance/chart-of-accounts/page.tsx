@@ -132,7 +132,7 @@ export default function ChartOfAccountsPage() {
                 </div>
                 <button
                     onClick={() => setShowAdd((v) => !v)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                 >
                     <Plus size={16} /> New Account
                 </button>
@@ -201,7 +201,7 @@ export default function ChartOfAccountsPage() {
                         <button
                             onClick={addAccount}
                             disabled={saving}
-                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                         >
                             {saving && <Loader2 size={14} className="animate-spin" />} Save
                         </button>
@@ -284,7 +284,7 @@ export default function ChartOfAccountsPage() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <button onClick={() => startEdit(a)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
+                                                    <button onClick={() => startEdit(a)} className="rounded p-1.5 text-gray-400 hover:bg-primary/10 hover:text-primary">
                                                         <Pencil size={14} />
                                                     </button>
                                                     <button

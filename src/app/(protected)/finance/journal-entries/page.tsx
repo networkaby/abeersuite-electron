@@ -111,7 +111,7 @@ export default function JournalEntriesPage() {
                 </div>
                 <button
                     onClick={() => setShowCreate((v) => !v)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                 >
                     <Plus size={16} /> New Entry
                 </button>
@@ -123,7 +123,7 @@ export default function JournalEntriesPage() {
                     <button
                         key={s}
                         onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${statusFilter === s ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                        className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                     >
                         {s || "All"}
                     </button>
@@ -223,13 +223,13 @@ export default function JournalEntriesPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <button onClick={addLine} className="text-sm text-blue-600 hover:underline">+ Add line</button>
+                        <button onClick={addLine} className="text-sm text-primary hover:underline">+ Add line</button>
                         <div className="flex gap-2">
                             <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
                             <button
                                 onClick={submit}
                                 disabled={saving || !balanced}
-                                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {saving && <Loader2 size={14} className="animate-spin" />} Save as Draft
                             </button>
@@ -261,7 +261,7 @@ export default function JournalEntriesPage() {
                             <tbody>
                                 {entries.map((e) => (
                                     <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
-                                        <td className="px-5 py-3 font-mono text-blue-600">{e.reference}</td>
+                                        <td className="px-5 py-3 font-mono text-primary">{e.reference}</td>
                                         <td className="px-5 py-3 text-gray-600">{new Date(e.date).toLocaleDateString()}</td>
                                         <td className="px-5 py-3 text-gray-700">{e.description}</td>
                                         <td className="px-5 py-3 text-right font-mono">{fmt(e.totalDebit)}</td>
@@ -272,7 +272,7 @@ export default function JournalEntriesPage() {
                                         </td>
                                         <td className="px-5 py-3 text-gray-400 text-xs">{e.createdBy.name}</td>
                                         <td className="px-5 py-3 text-right">
-                                            <Link href={`/finance/journal-entries/${e.id}`} className="text-gray-300 hover:text-blue-600">
+                                            <Link href={`/finance/journal-entries/${e.id}`} className="text-gray-300 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

@@ -334,7 +334,7 @@ export default function TicketDetailPage() {
 
                         <button
                             onClick={() => setShowStatusUpdate(true)}
-                            className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700"
+                            className="w-full rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90"
                         >
                             Update Status
                         </button>
@@ -392,12 +392,12 @@ export default function TicketDetailPage() {
                                         value={refValue}
                                         onChange={e => setRefValue(e.target.value)}
                                         placeholder="Job #, RMA code…"
-                                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        className="w-full rounded border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                         autoFocus
                                     />
                                     <div className="flex gap-2">
                                         <button onClick={() => setShowRefEdit(false)} className="flex-1 text-xs py-1.5 border rounded hover:bg-gray-50">Cancel</button>
-                                        <button onClick={saveRef} disabled={savingRef} className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+                                        <button onClick={saveRef} disabled={savingRef} className="flex-1 rounded bg-primary py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                                             {savingRef ? "Saving…" : "Save"}
                                         </button>
                                     </div>

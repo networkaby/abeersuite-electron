@@ -121,7 +121,7 @@ export default function ReportsPage() {
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === key ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                        className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}
                     >
                         {label}
                     </button>
@@ -138,7 +138,7 @@ export default function ReportsPage() {
                                 className="mt-1 block border rounded-lg px-3 py-2 text-sm" />
                         </div>
                         <button onClick={loadTrialBalance}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                             Run Report
                         </button>
                     </div>
@@ -227,7 +227,7 @@ export default function ReportsPage() {
                                 className="mt-1 block border rounded-lg px-3 py-2 text-sm" />
                         </div>
                         <button onClick={loadLedger}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                             Run Report
                         </button>
                     </div>
@@ -248,7 +248,7 @@ export default function ReportsPage() {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs text-gray-400">Closing Balance</p>
-                                        <p className="font-mono font-semibold text-blue-700">{fmt(ledgerData.closingBalance)}</p>
+                                        <p className="font-mono font-semibold text-primary">{fmt(ledgerData.closingBalance)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -270,7 +270,7 @@ export default function ReportsPage() {
                                         {ledgerData.rows.map((row) => (
                                             <tr key={row.id} className="border-b last:border-0 hover:bg-gray-50">
                                                 <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{new Date(row.date).toLocaleDateString()}</td>
-                                                <td className="px-5 py-3 font-mono text-blue-600">{row.reference}</td>
+                                                <td className="px-5 py-3 font-mono text-primary">{row.reference}</td>
                                                 <td className="px-5 py-3 text-gray-700">
                                                     <p>{row.description}</p>
                                                     {row.lineDescription && <p className="text-xs text-gray-400">{row.lineDescription}</p>}

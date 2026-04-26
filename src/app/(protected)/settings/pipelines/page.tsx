@@ -151,7 +151,7 @@ export default function PipelinesPage() {
                 </div>
                 <button
                     onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                 >
                     <Plus size={16} /> Add Pipeline
                 </button>
@@ -171,7 +171,7 @@ export default function PipelinesPage() {
                                     <span className="text-xs font-mono text-gray-400">{p.id}</span>
                                     <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{p.name}</span>
                                     {p.isDefault && (
-                                        <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">Default</span>
+                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Default</span>
                                     )}
                                     {!p.isActive && (
                                         <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inactive</span>
@@ -226,7 +226,7 @@ export default function PipelinesPage() {
                                 <input
                                     value={createForm.name}
                                     onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "_") }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                                     placeholder="e.g. manufacturing"
                                 />
                                 <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens and underscores only.</p>
@@ -236,7 +236,7 @@ export default function PipelinesPage() {
                                 <input
                                     value={createForm.label}
                                     onChange={(e) => setCreateForm((v) => ({ ...v, label: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                     placeholder="e.g. Manufacturing"
                                 />
                             </div>
@@ -245,7 +245,7 @@ export default function PipelinesPage() {
                                 <input
                                     value={createForm.description}
                                     onChange={(e) => setCreateForm((v) => ({ ...v, description: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                     placeholder="Brief description of what this pipeline is for"
                                 />
                             </div>
@@ -254,7 +254,7 @@ export default function PipelinesPage() {
                                 <select
                                     value={createForm.color}
                                     onChange={(e) => setCreateForm((v) => ({ ...v, color: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 >
                                     {COLOR_OPTIONS.map((c) => (
                                         <option key={c.value} value={c.value}>{c.label}</option>
@@ -270,7 +270,7 @@ export default function PipelinesPage() {
                             <button
                                 onClick={handleCreate}
                                 disabled={creating || !createForm.name.trim() || !createForm.label.trim()}
-                                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 <Save size={14} /> {creating ? "Creating…" : "Create Pipeline"}
                             </button>
@@ -293,7 +293,7 @@ export default function PipelinesPage() {
                                 <input
                                     value={editForm.label}
                                     onChange={(e) => setEditForm((v) => ({ ...v, label: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 />
                             </div>
                             <div>
@@ -301,7 +301,7 @@ export default function PipelinesPage() {
                                 <input
                                     value={editForm.description}
                                     onChange={(e) => setEditForm((v) => ({ ...v, description: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 />
                             </div>
                             <div>
@@ -309,7 +309,7 @@ export default function PipelinesPage() {
                                 <select
                                     value={editForm.color}
                                     onChange={(e) => setEditForm((v) => ({ ...v, color: e.target.value }))}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 >
                                     {COLOR_OPTIONS.map((c) => (
                                         <option key={c.value} value={c.value}>{c.label}</option>
@@ -325,7 +325,7 @@ export default function PipelinesPage() {
                             <button
                                 onClick={handleEdit}
                                 disabled={editing || !editForm.label.trim()}
-                                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 <Save size={14} /> {editing ? "Saving…" : "Save Changes"}
                             </button>

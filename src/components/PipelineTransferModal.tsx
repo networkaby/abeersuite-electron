@@ -105,7 +105,7 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                         onClick={() => handlePipelineChange(p.id)}
                                         className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
                                             selectedPipelineId === p.id
-                                                ? "border-blue-500 bg-blue-50"
+                                                ? "border-primary/40 bg-primary/10"
                                                 : "border-gray-200 hover:border-gray-300"
                                         }`}
                                     >
@@ -128,7 +128,7 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                 <select
                                     value={selectedStatusId}
                                     onChange={e => setSelectedStatusId(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 >
                                     {selectedPipeline.statuses.map(s => (
                                         <option key={s.id} value={s.id}>
@@ -151,7 +151,7 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                 onChange={e => setNote(e.target.value)}
                                 rows={2}
                                 placeholder="e.g. Repair is more complex than expected"
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
 
@@ -165,7 +165,7 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                             <button
                                 onClick={handleSubmit}
                                 disabled={submitting || !selectedStatusId}
-                                className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                                className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {submitting ? "Transferring…" : "Transfer Ticket"}
                             </button>

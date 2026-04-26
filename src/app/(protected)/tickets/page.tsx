@@ -180,7 +180,7 @@ export default function TicketsPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by customer name, phone, device, ticket #..."
-                        className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full rounded-lg border py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </div>
 
@@ -190,7 +190,7 @@ export default function TicketsPage() {
                         <button
                             onClick={() => setPipelineFilter("")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                                !pipelineFilter ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                                !pipelineFilter ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
                             }`}
                         >
                             All Pipelines
@@ -200,7 +200,7 @@ export default function TicketsPage() {
                                 key={p.id}
                                 onClick={() => setPipelineFilter(p.id)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                                    pipelineFilter === p.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                                    pipelineFilter === p.id ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
                                 }`}
                             >
                                 <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${p.color.split(" ")[0]}`} />
@@ -216,7 +216,7 @@ export default function TicketsPage() {
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                         <option value="">All Status</option>
                         {statusOptions.map((s) => (
@@ -228,7 +228,7 @@ export default function TicketsPage() {
                     <select
                         value={priorityFilter}
                         onChange={(e) => setPriorityFilter(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                         <option value="">All Priority</option>
                         {priorityOptions.map((p) => (
@@ -240,7 +240,7 @@ export default function TicketsPage() {
                     <select
                         value={technicianFilter}
                         onChange={(e) => setTechnicianFilter(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                         <option value="">All Technicians</option>
                         {technicians.map((t) => (
@@ -252,7 +252,7 @@ export default function TicketsPage() {
                     <select
                         value={serviceCenterFilter}
                         onChange={(e) => setServiceCenterFilter(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                         <option value="">All Service Centers</option>
                         {serviceCenters.map((s) => (
@@ -264,7 +264,7 @@ export default function TicketsPage() {
                     <select
                         value={warrantyFilter}
                         onChange={(e) => setWarrantyFilter(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                         <option value="">All Warranty</option>
                         <option value="warranty">Warranty only</option>
@@ -276,7 +276,7 @@ export default function TicketsPage() {
                         type="date"
                         value={dateFrom}
                         onChange={(e) => setDateFrom(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
 
                     {/* Date To */}
@@ -284,7 +284,7 @@ export default function TicketsPage() {
                         type="date"
                         value={dateTo}
                         onChange={(e) => setDateTo(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </div>
 
@@ -383,7 +383,7 @@ export default function TicketsPage() {
                                     <td className="px-6 py-4">
                                         <Link
                                             href={`/tickets/${t.id}`}
-                                            className="p-1.5 rounded hover:bg-blue-50 text-blue-600 inline-flex"
+                                            className="inline-flex rounded p-1.5 text-primary hover:bg-primary/10"
                                         >
                                             <Eye size={15} />
                                         </Link>

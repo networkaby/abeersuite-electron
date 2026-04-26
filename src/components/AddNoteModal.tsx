@@ -46,7 +46,7 @@ export default function AddNoteModal({ ticketId, onClose }: Props) {
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
                         placeholder="e.g. Called customer — no answer. Will try again tomorrow."
-                        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        className="w-full resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
 
                     {/* Visibility toggle */}
@@ -71,7 +71,7 @@ export default function AddNoteModal({ ticketId, onClose }: Props) {
                                 onClick={() => setVisibility("PUBLIC")}
                                 className={`flex items-center gap-2 flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
                                     visibility === "PUBLIC"
-                                        ? "border-blue-400 bg-blue-50 text-blue-700"
+                                        ? "border-primary/40 bg-primary/10 text-primary"
                                         : "border-gray-200 text-gray-400 hover:bg-gray-50"
                                 }`}
                             >
@@ -93,7 +93,7 @@ export default function AddNoteModal({ ticketId, onClose }: Props) {
                     <button
                         onClick={handleSave}
                         disabled={saving || !note.trim()}
-                        className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                        className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                     >
                         {saving ? "Saving..." : "Save Note"}
                     </button>

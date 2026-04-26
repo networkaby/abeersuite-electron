@@ -210,7 +210,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                     <div className="text-gray-400"><Package size={22} /></div>
                     <div>
                         <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">New Today</p>
-                        <p className="text-3xl font-bold mt-0.5 text-blue-600">{newToday}</p>
+                        <p className="text-3xl font-bold mt-0.5 text-primary">{newToday}</p>
                     </div>
                 </div>
             </div>
@@ -230,7 +230,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                 <div className="shrink-0 mt-0.5"><CheckCircle size={16} className="text-green-400" /></div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
@@ -246,7 +246,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <p className="text-xs text-green-700 mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
@@ -275,7 +275,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                 <div className="shrink-0 mt-0.5"><Phone size={16} className="text-red-400" /></div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketSubStatus!.color}`}>
@@ -295,7 +295,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <p className="text-xs text-red-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
@@ -367,7 +367,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                     <div className="text-gray-400"><AlertCircle size={22} /></div>
                     <div>
                         <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Escalated (In Repair)</p>
-                        <p className="text-3xl font-bold mt-0.5 text-blue-600">{inTransitCount}</p>
+                        <p className="text-3xl font-bold mt-0.5 text-primary">{inTransitCount}</p>
                     </div>
                 </div>
             </div>
@@ -387,7 +387,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                 <Package size={16} className="text-orange-400 mt-0.5 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
@@ -406,7 +406,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                         <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
@@ -435,7 +435,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                 <Package size={16} className="text-orange-400 mt-0.5 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                                        <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketSubStatus!.color}`}>
@@ -457,7 +457,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                         <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>

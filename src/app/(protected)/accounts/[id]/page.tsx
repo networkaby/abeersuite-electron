@@ -186,7 +186,7 @@ export default function AccountDetailPage() {
                                             <div className="space-y-1.5">
                                                 {d.tickets.map(t => (
                                                     <div key={t.id} className="flex items-center gap-2 text-xs">
-                                                        <Link href={`/tickets/${t.id}`} className="font-medium text-blue-600 hover:underline">
+                                                        <Link href={`/tickets/${t.id}`} className="font-medium text-primary hover:underline">
                                                             #{t.id}
                                                         </Link>
                                                         {t.pipeline && (
@@ -216,7 +216,7 @@ export default function AccountDetailPage() {
                             </h2>
                             <button
                                 onClick={() => setShowLinkModal(true)}
-                                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                                className="text-xs flex items-center gap-1 text-primary hover:text-primary/80"
                             >
                                 <Plus size={13} /> Link
                             </button>
@@ -233,7 +233,7 @@ export default function AccountDetailPage() {
                                             <div>
                                                 <Link
                                                     href={`/accounts/${linked?.id}`}
-                                                    className="text-sm font-medium text-blue-600 hover:underline"
+                                                    className="text-sm font-medium text-primary hover:underline"
                                                 >
                                                     {linked?.name}
                                                 </Link>
@@ -282,11 +282,11 @@ export default function AccountDetailPage() {
                                     onChange={e => setLinkSearch(e.target.value)}
                                     onKeyDown={e => e.key === "Enter" && searchForLink()}
                                     placeholder={`Search ${isCompany ? "individual" : "company"} by name or phone…`}
-                                    className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                 />
                                 <button
                                     onClick={searchForLink}
-                                    className="bg-blue-600 text-white px-4 rounded-lg text-sm hover:bg-blue-700"
+                                    className="rounded-lg bg-primary px-4 text-sm text-primary-foreground hover:bg-primary/90"
                                 >
                                     Search
                                 </button>
@@ -300,7 +300,7 @@ export default function AccountDetailPage() {
                                             value={linkRole}
                                             onChange={e => setLinkRole(e.target.value)}
                                             placeholder="e.g. Owner, Employee, Contact"
-                                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                         />
                                     </div>
                                     <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
@@ -309,7 +309,7 @@ export default function AccountDetailPage() {
                                                 key={r.id}
                                                 onClick={() => linkTo(r.id)}
                                                 disabled={linking}
-                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 text-left text-sm disabled:opacity-50"
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-primary/10 disabled:opacity-50"
                                             >
                                                 {r.type === "company" ? <Building2 size={14} className="text-purple-500 shrink-0" /> : <User size={14} className="text-blue-500 shrink-0" />}
                                                 <div>

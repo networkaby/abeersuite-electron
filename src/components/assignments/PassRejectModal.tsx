@@ -3,7 +3,16 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, UserCheck } from "lucide-react";
+import { UserCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 interface User { id: number; name: string; role: string }
 
@@ -47,53 +56,55 @@ export default function PassRejectModal({ ticketId, action, onClose, onDone }: P
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-                <div className="flex items-center justify-between p-5 border-b">
-                    <h2 className="font-semibold text-gray-800">
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>
                         {action === "pass" ? "Pass Ticket" : "Reject Assignment"}
-                    </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                </div>
-                <div className="p-5">
+                    </DialogTitle>
+                    <DialogDescription>
+                        {action === "pass"
+                            ? "Choose who should take over this ticket."
+                            : "Return this ticket to the unassigned pool so someone else can claim it."}
+                    </DialogDescription>
+                </DialogHeader>
+                <div>
                     {action === "reject" ? (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                             This will return the ticket to the unassigned pool. Someone else can claim it.
                         </p>
                     ) : (
                         <div className="space-y-3">
-                            <p className="text-sm text-gray-600">Select who to pass this ticket to:</p>
+                            <p className="text-sm text-muted-foreground">Select who to pass this ticket to:</p>
                             <div className="max-h-56 overflow-y-auto space-y-1 border rounded-lg p-2">
                                 {users.map(u => (
-                                    <button
+                                    <Button
                                         key={u.id}
                                         onClick={() => setSelectedId(u.id)}
-                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-                                            selectedId === u.id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"
-                                        }`}
+                                        variant={selectedId === u.id ? "default" : "ghost"}
+                                        className="w-full justify-start gap-3 text-left"
                                     >
                                         <UserCheck size={14} className="shrink-0" />
                                         <span className="font-medium">{u.name}</span>
-                                        <span className={`ml-auto text-xs ${selectedId === u.id ? "text-blue-100" : "text-gray-400"}`}>{u.role}</span>
-                                    </button>
+                                        <span className={`ml-auto text-xs ${selectedId === u.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{u.role}</span>
+                                    </Button>
                                 ))}
                             </div>
                         </div>
                     )}
                 </div>
-                <div className="flex gap-3 px-5 pb-5">
-                    <button onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
-                    <button
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button
+                        type="button"
                         onClick={handleSubmit}
                         disabled={submitting || (action === "pass" && !selectedId)}
-                        className={`flex-1 rounded-lg py-2 text-sm text-white disabled:opacity-50 ${
-                            action === "reject" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
-                        }`}
+                        variant={action === "reject" ? "destructive" : "default"}
                     >
                         {submitting ? "…" : action === "pass" ? "Pass Ticket" : "Return to Pool"}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

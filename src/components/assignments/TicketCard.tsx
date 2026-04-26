@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Phone, Package, CheckCircle, AlertCircle, UserCheck, Users } from "lucide-react";
 import { timeAgo } from "@/lib/time-ago";
+import { Button } from "@/components/ui/button";
 import PassRejectModal from "./PassRejectModal";
 
 export interface TicketCardData {
@@ -72,7 +73,7 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                 <div className="shrink-0 mt-0.5">{TYPE_ICON[type]}</div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <Link href={`/tickets/${ticket.id}`} className="font-semibold text-blue-600 hover:underline text-sm">
+                        <Link href={`/tickets/${ticket.id}`} className="text-sm font-semibold text-primary hover:underline">
                             Ticket #{ticket.id}
                         </Link>
                         {ticket.ticketSubStatus ? (
@@ -84,22 +85,22 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                                 {ticket.ticketStatus.label}
                             </span>
                         )}
-                        <span className="text-xs text-gray-400">{timeAgo(ticket.updatedAt)}</span>
+                        <span className="text-xs text-muted-foreground">{timeAgo(ticket.updatedAt)}</span>
                         {ticket.escalated && (
                             <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">Escalated</span>
                         )}
                     </div>
-                    <p className="text-sm font-medium text-gray-800 mt-1">
+                    <p className="mt-1 text-sm font-medium text-foreground">
                         {(ticket.device.customer ?? ticket.device.company)?.name}
-                        <span className="text-gray-400 font-normal text-xs ml-2">· {ticket.device.brand} {ticket.device.model}</span>
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">· {ticket.device.brand} {ticket.device.model}</span>
                         {(ticket.device.customer ?? ticket.device.company)?.phone && (
-                            <span className="text-gray-400 font-normal text-xs ml-2">· {(ticket.device.customer ?? ticket.device.company)?.phone}</span>
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">· {(ticket.device.customer ?? ticket.device.company)?.phone}</span>
                         )}
                     </p>
                     {ticket.primaryOwner && (
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                             Owner: {ticket.primaryOwner.name}
-                            {ticket.primaryOwner.id === currentUserId && <span className="ml-1 text-blue-500">(you)</span>}
+                            {ticket.primaryOwner.id === currentUserId && <span className="ml-1 text-primary">(you)</span>}
                         </p>
                     )}
                     {ticket.activeParticipants && ticket.activeParticipants.length > 0 && (
@@ -108,43 +109,45 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                         </p>
                     )}
                     {ticket.serviceCenter && (
-                        <p className="text-xs text-gray-500 mt-0.5">Service Centre: {ticket.serviceCenter.name}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Service Centre: {ticket.serviceCenter.name}</p>
                     )}
                     {(ticket.ticketSubStatus?.actionLabel || ticket.ticketStatus.actionLabel) && (
-                        <p className="text-xs text-blue-600 mt-1 font-medium">
+                        <p className="mt-1 text-xs font-medium text-primary">
                             → {ticket.ticketSubStatus?.actionLabel || ticket.ticketStatus.actionLabel}
                         </p>
                     )}
                 </div>
                 <div className="shrink-0 flex gap-2 items-center">
                     {isUnassigned && (
-                        <button
+                        <Button
                             onClick={handleClaim}
                             disabled={claiming}
-                            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                            size="sm"
                         >
                             {claiming ? "…" : "Claim"}
-                        </button>
+                        </Button>
                     )}
                     {isPrimaryOwner && (
                         <>
-                            <button
+                            <Button
                                 onClick={() => setModal("pass")}
-                                className="text-xs border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50"
+                                size="sm"
+                                variant="outline"
                             >
                                 Pass
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 onClick={() => setModal("reject")}
-                                className="text-xs border border-red-200 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-50"
+                                size="sm"
+                                variant="destructive"
                             >
                                 Reject
-                            </button>
+                            </Button>
                         </>
                     )}
-                    <Link href={`/tickets/${ticket.id}`} className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200">
-                        Open
-                    </Link>
+                    <Button asChild size="sm" variant="secondary">
+                        <Link href={`/tickets/${ticket.id}`}>Open</Link>
+                    </Button>
                 </div>
             </div>
 
@@ -172,12 +175,13 @@ export function TicketSection({
     currentUserId: number;
 }) {
     if (tickets.length === 0) return null;
+    const themedHeader = color === "text-blue-700" && bgColor === "bg-blue-50";
     return (
-        <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
-            <div className={`px-6 py-4 border-b ${bgColor} flex items-center gap-2`}>
+        <div className="mb-6 overflow-hidden rounded-xl bg-card shadow">
+            <div className={`flex items-center gap-2 border-b px-6 py-4 ${themedHeader ? "bg-primary/8" : bgColor}`}>
                 {icon}
-                <h2 className={`font-semibold ${color}`}>{title}</h2>
-                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${bgColor} ${color}`}>
+                <h2 className={`font-semibold ${themedHeader ? "text-primary" : color}`}>{title}</h2>
+                <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-bold ${themedHeader ? "bg-primary/12 text-primary" : `${bgColor} ${color}`}`}>
                     {tickets.length} pending
                 </span>
             </div>

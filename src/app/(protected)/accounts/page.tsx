@@ -84,7 +84,7 @@ export default function AccountsPage() {
                 </div>
                 <button
                     onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
                 >
                     <Plus size={18} /> New Account
                 </button>
@@ -104,7 +104,7 @@ export default function AccountsPage() {
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Search by name, phone, email, company reg…"
-                            className="w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border py-2 pl-9 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                         {search && (
                             <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -119,7 +119,7 @@ export default function AccountsPage() {
                                 onClick={() => setTypeFilter(f.value)}
                                 className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
                                     typeFilter === f.value
-                                        ? "bg-blue-600 text-white border-blue-600"
+                                        ? "bg-primary text-primary-foreground border-primary"
                                         : "border-gray-200 text-gray-500 hover:bg-gray-50"
                                 }`}
                             >
@@ -160,7 +160,7 @@ export default function AccountsPage() {
                                 <tr key={a.id} className={`hover:bg-gray-50 ${!a.isActive ? "opacity-50" : ""}`}>
                                     <td className="px-6 py-4 text-gray-400">{a.id}</td>
                                     <td className="px-6 py-4">
-                                        <Link href={`/accounts/${a.id}`} className="font-medium hover:text-blue-600 hover:underline">
+                                        <Link href={`/accounts/${a.id}`} className="font-medium hover:text-primary hover:underline">
                                             {a.name}
                                         </Link>
                                         {a.companyReg && <p className="text-xs text-gray-400">{a.companyReg}</p>}
@@ -192,7 +192,7 @@ export default function AccountsPage() {
                                     <td className="px-6 py-4">
                                         <button
                                             onClick={() => setEditAccount(a)}
-                                            className="p-1.5 rounded hover:bg-blue-50 text-blue-600"
+                                            className="rounded p-1.5 text-primary hover:bg-primary/10"
                                         >
                                             <Pencil size={15} />
                                         </button>

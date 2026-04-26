@@ -116,7 +116,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                             <label
                                                 key={ss.id}
                                                 className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${selectedId === ss.id
-                                                    ? "border-blue-500 bg-blue-50"
+                                                    ? "border-primary/40 bg-primary/10"
                                                     : "border-gray-200 hover:bg-gray-50"
                                                     }`}
                                             >
@@ -145,7 +145,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                         </div>
 
                         {selected && selected.notifyRoles.length > 0 && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2 text-sm text-blue-700">
+                            <div className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 flex items-center gap-2 text-sm text-primary">
                                 <ArrowRight size={14} />
                                 Notifies:{" "}
                                 {selected.notifyRoles
@@ -169,7 +169,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                 {...register("note")}
                                 rows={3}
                                 placeholder="Add context — missing item, part number, customer quote, etc."
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
 
@@ -184,7 +184,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                             <button
                                 type="submit"
                                 disabled={isSubmitting || !selectedId}
-                                className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+                                className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {isSubmitting ? "Saving..." : "Update Sub-Status"}
                             </button>

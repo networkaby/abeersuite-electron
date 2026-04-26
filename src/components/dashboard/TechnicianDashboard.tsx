@@ -95,7 +95,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 className={`flex flex-col items-center px-4 py-3 rounded-lg border transition-all min-w-[90px]
                                     ${stage._count.tickets === 0 ? "opacity-40" : ""}
                                     ${selectedStageId === stage.id
-                                        ? "border-blue-400 bg-blue-50 ring-1 ring-blue-400"
+                                        ? "border-primary/40 bg-primary/10 ring-1 ring-primary/30"
                                         : "border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
                             >
                                 <span className={`text-2xl font-bold ${stage._count.tickets > 0 ? "text-gray-800" : "text-gray-400"}`}>
@@ -121,7 +121,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 onClick={() => setSelectedTeam(tab.key)}
                                 className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors
                                     ${selectedTeam === tab.key
-                                        ? "bg-blue-600 text-white"
+                                        ? "bg-primary text-primary-foreground"
                                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                             >
                                 {tab.label}
@@ -146,7 +146,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                     <div className="divide-y">
                         {filtered.map(t => (
                             <div key={t.id} className={`flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 ${t.escalated ? "bg-orange-50/30" : ""}`}>
-                                <Link href={`/tickets/${t.id}`} className="text-blue-600 font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
+                                <Link href={`/tickets/${t.id}`} className="text-primary font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">
                                         {(t.device.customer ?? t.device.company)?.name} — {t.device.brand} {t.device.model}
@@ -169,7 +169,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 </div>
                                 <span className="text-xs text-gray-400 shrink-0">{t.primaryOwner?.name ?? "Unassigned"}</span>
                                 <span className="text-xs text-gray-400 shrink-0">{timeAgo(t.updatedAt)}</span>
-                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-blue-600">
+                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-primary">
                                     <ArrowRight size={16} />
                                 </Link>
                             </div>
@@ -181,20 +181,20 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
             {/* Action queue — unassigned tickets needing a technician */}
             {unassigned.length > 0 && (
                 <div className="bg-white rounded-xl shadow overflow-hidden">
-                    <div className="px-6 py-4 border-b bg-blue-50 flex items-center gap-2">
-                        <Wrench size={16} className="text-blue-500" />
+                    <div className="px-6 py-4 border-b bg-primary/10 flex items-center gap-2">
+                        <Wrench size={16} className="text-primary" />
                         <div>
-                            <h2 className="font-semibold text-blue-700">Action Required — Needs Attention</h2>
-                            <p className="text-xs text-blue-500 mt-0.5">Unassigned tickets in technician-action statuses</p>
+                            <h2 className="font-semibold text-primary">Action Required — Needs Attention</h2>
+                            <p className="text-xs text-primary/80 mt-0.5">Unassigned tickets in technician-action statuses</p>
                         </div>
-                        <span className="ml-auto bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                        <span className="ml-auto bg-primary/15 text-primary text-xs font-bold px-2 py-0.5 rounded-full">
                             {unassigned.length} tickets
                         </span>
                     </div>
                     <div className="divide-y">
                         {unassigned.map(t => (
-                            <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-blue-50/30">
-                                <Link href={`/tickets/${t.id}`} className="text-blue-600 font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
+                            <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-primary/5">
+                                <Link href={`/tickets/${t.id}`} className="text-primary font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 truncate">
                                         {(t.device.customer ?? t.device.company)?.name} — {t.device.brand} {t.device.model}
@@ -204,7 +204,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                             {t.ticketStatus.label}
                                         </span>
                                         {t.ticketStatus.actionLabel && (
-                                            <span className="text-xs text-blue-600 font-medium">
+                                            <span className="text-xs text-primary font-medium">
                                                 → {t.ticketStatus.actionLabel}
                                             </span>
                                         )}
@@ -214,7 +214,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 <button
                                     onClick={() => handleClaim(t.id)}
                                     disabled={claiming === t.id}
-                                    className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                    className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                                 >
                                     {claiming === t.id ? "Claiming…" : "Claim"}
                                 </button>

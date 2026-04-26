@@ -3,6 +3,10 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -31,40 +35,42 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
-            <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-                <h1 className="text-2xl font-bold text-center mb-6">Service Management</h1>
+        <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
+            <Card className="w-full max-w-md">
+                <CardHeader>
+                    <CardTitle className="text-center">Service Management</CardTitle>
+                </CardHeader>
+                <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Email</label>
-                        <input
+                    <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Password</label>
-                        <input
+                    <div className="space-y-2">
+                        <Label>Password</Label>
+                        <Input
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         />
                     </div>
                     {error && <p className="text-red-500 text-sm">{error}</p>}
-                    <button
+                    <Button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        className="w-full"
                     >
                         {loading ? "Signing in..." : "Sign In"}
-                    </button>
+                    </Button>
                 </form>
-            </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

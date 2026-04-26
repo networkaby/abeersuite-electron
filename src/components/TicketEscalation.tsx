@@ -76,7 +76,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                         <label className="block text-sm font-medium mb-1">Service Center</label>
                         <select
                             {...register("serviceCenterId")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         >
                             <option value="">Select service center...</option>
                             {serviceCenters.map((s) => (
@@ -93,7 +93,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                         </label>
                         <input
                             {...register("externalRef")}
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder="Job number from service center"
                         />
                     </div>
@@ -104,7 +104,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                             <input
                                 type="date"
                                 {...register("escalatedAt")}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
                         <div>
@@ -114,7 +114,7 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                             <input
                                 type="date"
                                 {...register("expectedReturn")}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
                     </div>
