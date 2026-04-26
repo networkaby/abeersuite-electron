@@ -1,20 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Search, UserPlus, ArrowRight, ShieldCheck, Wrench, Building2, User, LucidePlus } from "lucide-react";
-type ActionItem =
-    | {
-        label: string;
-        type: "link";
-        href: string;
-    }
-    | {
-        label: string;
-        type: "action";
-        onClick: () => void;
-    };
-
+import { useQuickTicketStore } from "@/store/quickTicketStore";
 
 type UserType = {
     name?: string | null;
@@ -23,66 +13,72 @@ type UserType = {
     permissions?: string[];
 };
 
+type PipelineOption = {
+    id: string;
+    label: string;
+    color: string;
+    isActive: boolean;
+    isDefault: boolean;
+};
+
+function colorDot(color: string) {
+    return color.split(" ")[0];
+}
+
 export default function ButtonBar({ user }: { user?: UserType }) {
+    const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
+    const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
+    useEffect(() => {
+        axios.get<PipelineOption[]>("/api/pipelines")
+            .then((response) => {
+                setPipelines(response.data.filter((pipeline) => pipeline.isActive));
+            })
+            .catch(() => {
+                setPipelines([]);
+            });
+    }, []);
 
-
-    // 👉 SAMPLE DATA (edit this freely)
-    const ACTIONS: ActionItem[] = [
-        {
-            label: " Repair",
-            type: "action",
-            icon: LucidePlus,
-            variant: "default",
-            onClick: () => console.log("Create Ticket"),
-        },
-
-
-
-    ];
+    const handleNewTicket = (pipelineId: string) => {
+        setInitialPipelineId(pipelineId);
+        openQuickTicket(true);
+    };
 
     return (
-        <div className="w-36 bg-white border-l flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b">
-                <h2 className="text-sm font-semibold text-gray-600">Actions</h2>
-                <p className="text-xs text-gray-400">{user?.name}</p>
+        <aside className="w-52 border-l bg-white">
+            <div className="border-b p-4">
+                <h2 className="text-sm font-semibold text-gray-700">Actions</h2>
+                <p className="truncate text-xs text-gray-400">{user?.name}</p>
             </div>
 
-            {/* Buttons */}
-            <div className="flex-1 p-3 space-y-2 overflow-y-auto">
-                {ACTIONS.map((item, index) => {
-                    const Icon = item.icon;
-
-                    if (item.type === "link") {
-                        return (
-                            <Button
-                                key={index}
-                                asChild
-                                variant={item.variant || "Primary"}
-                                className="w-full justify-start gap-2"
-                            >
-                                <Link href={item.href}>
-                                    <Icon size={16} />
-                                    {item.label}
-                                </Link>
-                            </Button>
-                        );
-                    }
-
-                    return (
+            <div className="space-y-2 p-3">
+                {pipelines.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-center text-xs text-gray-400">
+                        No active ticket actions
+                    </p>
+                ) : (
+                    pipelines.map((pipeline) => (
                         <Button
-                            key={index}
-                            onClick={item.onClick}
-                            variant={item.variant || "default"}
-                            className="w-full justify-start gap-2"
+                            key={pipeline.id}
+                            type="button"
+                            variant={pipeline.isDefault ? "default" : "outline"}
+                            className="h-auto w-full items-start justify-start gap-3 px-3 py-3 text-left"
+                            onClick={() => handleNewTicket(pipeline.id)}
                         >
-                            <Icon size={16} />
-                            {item.label}
+                            <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${colorDot(pipeline.color)}`} />
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">
+                                    New {pipeline.label}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs opacity-70">
+                                    Open ticket intake
+                                </span>
+                            </span>
+                            <Ticket size={16} className="mt-0.5 shrink-0" />
                         </Button>
-                    );
-                })}
+                    ))
+                )}
             </div>
-        </div>
+        </aside>
     );
 }

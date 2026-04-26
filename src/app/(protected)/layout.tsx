@@ -4,7 +4,6 @@ import Sidebar from "@/components/Sidebar";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/components/SessionWrapper";
 import QuickTicketButton from "@/components/QuickTicketButton";
-import UniversalCreateMenu from "@/components/UniversalCreateMenu";
 import ButtonBar from "@/components/ButtonBar";
 
 export default async function ProtectedLayout({
@@ -39,8 +38,7 @@ export default async function ProtectedLayout({
                     permissions: user.permissions,
                 }} />
                 <Toaster richColors />
-                {/* <QuickTicketButton /> */}
-                <UniversalCreateMenu />
+                <QuickTicketButton />
             </div>
         </SessionWrapper>
     );
