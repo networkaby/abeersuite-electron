@@ -68,6 +68,18 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             .catch(() => { });
     }, []);
 
+    // Re-fetch inbox rooms whenever GlobalInboxListener signals a new message
+    useEffect(() => {
+        const handler = () => {
+            axios
+                .get<InboxRoom[]>("/api/inbox/rooms")
+                .then((res) => setInboxRooms(res.data))
+                .catch(() => { });
+        };
+        window.addEventListener("inbox:unread", handler);
+        return () => window.removeEventListener("inbox:unread", handler);
+    }, []);
+
     const totalInboxUnread = inboxRooms.reduce((sum, r) => sum + r.unreadCount, 0);
 
     const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");

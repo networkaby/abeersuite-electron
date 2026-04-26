@@ -69,8 +69,14 @@ export async function POST(
             body: parsed.data.body,
         });
 
+        // Re-fetch with senderUser so the client can broadcast the full shape
+        const fullMessage = await prisma.chatMessage.findUnique({
+            where: { id: message.id },
+            include: { senderUser: { select: { id: true, name: true, role: true } } },
+        });
+
         await markRoomRead(user.id, room.id, message.createdAt);
-        return NextResponse.json(message, { status: 201 });
+        return NextResponse.json(fullMessage, { status: 201 });
     } catch (error) {
         console.error("[inbox room messages POST]", error);
         return NextResponse.json({ error: "Failed to send message" }, { status: 500 });

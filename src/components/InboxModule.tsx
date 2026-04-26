@@ -6,6 +6,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Send, Users2, Monitor, User, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
+import { supabase } from "@/lib/supabase-client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -185,17 +186,86 @@ export default function InboxModule({
         loadMessages(activeRoomId);
     }, [activeRoomId, loadMessages]);
 
+    // Tell GlobalInboxListener which room we have open so it skips it (no double-notify)
+    useEffect(() => {
+        window.dispatchEvent(
+            new CustomEvent("inbox:active-room", { detail: { roomId: activeRoomId || null } })
+        );
+        return () => {
+            // On unmount (user left /inbox), clear the active room
+            window.dispatchEvent(
+                new CustomEvent("inbox:active-room", { detail: { roomId: null } })
+            );
+        };
+    }, [activeRoomId]);
+
+    // When GlobalInboxListener signals a new message on a background room, refresh
+    // the rooms list so the left-panel unread badges stay accurate
+    useEffect(() => {
+        const handler = () => { void loadRooms(); };
+        window.addEventListener("inbox:unread", handler);
+        return () => window.removeEventListener("inbox:unread", handler);
+    }, [loadRooms]);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // ── Live polling (2-second interval) ────────────────────────────────────────
-    // Replaces Supabase postgres_changes which is unreliable with Prisma camelCase schemas.
-    // Tracks the highest confirmed message ID so we only trigger notifications for truly new ones.
+    // ── Supabase Broadcast — real-time WebSocket delivery ────────────────────────
+    // Uses Broadcast (pure pub/sub), NOT postgres_changes — avoids Prisma camelCase issues.
+    // Flow: sender POSTs → gets full message back → broadcasts on channel "room:<id>"
+    //       → all subscribers receive it instantly via WebSocket.
+
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+    useEffect(() => {
+        if (!activeRoomId) return;
+
+        const channel = supabase
+            .channel(`room:${activeRoomId}`)
+            .on("broadcast", { event: "new_message" }, ({ payload }) => {
+                const msg = payload as Message;
+                setMessages((prev) => {
+                    // Already confirmed — skip (own message was added directly after send)
+                    if (prev.some((m) => !m.pending && m.id === msg.id)) return prev;
+                    // Remove matching optimistic (same body + sender) — replaced by confirmed msg
+                    const deduped = prev.filter(
+                        (m) => !(m.pending && m.body === msg.body && m.senderUser?.id === msg.senderUser?.id)
+                    );
+                    // Notification for messages from others
+                    if (msg.senderUser?.id !== currentUserId && msg.messageType === "USER") {
+                        playNotificationSound();
+                        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+                            const notif = new Notification(
+                                `${msg.senderUser?.name ?? "Someone"} — ServiceMgmt`,
+                                {
+                                    body: msg.body.length > 100 ? msg.body.slice(0, 100) + "…" : msg.body,
+                                    icon: "/favicon.ico",
+                                    tag:  `msg-${msg.id}`,
+                                }
+                            );
+                            notif.onclick = () => { window.focus(); notif.close(); };
+                        }
+                    }
+                    return [...deduped, msg];
+                });
+            })
+            .subscribe();
+
+        channelRef.current = channel;
+
+        return () => {
+            void supabase.removeChannel(channel);
+            channelRef.current = null;
+        };
+    }, [activeRoomId, currentUserId]);
+
+    // ── 30-second fallback poll ───────────────────────────────────────────────────
+    // Safety net: catches messages if the WebSocket was briefly disconnected.
+    // Uses lastKnownIdRef so it never fires duplicate sound/notifications.
 
     const lastKnownIdRef = useRef<number>(0);
 
-    // Keep ref in sync with confirmed messages
     useEffect(() => {
         const confirmed = messages.filter((m) => !m.pending);
         if (confirmed.length > 0) {
@@ -203,10 +273,7 @@ export default function InboxModule({
         }
     }, [messages]);
 
-    // Reset lastKnownId when room changes (so we don't misfire notifications on initial load)
-    useEffect(() => {
-        lastKnownIdRef.current = 0;
-    }, [activeRoomId]);
+    useEffect(() => { lastKnownIdRef.current = 0; }, [activeRoomId]);
 
     useEffect(() => {
         if (!activeRoomId) return;
@@ -221,12 +288,11 @@ export default function InboxModule({
 
                 setMessages((prev) => {
                     const prevMaxId = Math.max(...prev.filter((m) => !m.pending).map((m) => m.id), 0);
-                    if (maxIncoming <= prevMaxId) return prev; // nothing new
+                    if (maxIncoming <= prevMaxId) return prev; // nothing new — Broadcast already handled it
 
-                    // Find genuinely new messages
                     const newMsgs = incoming.filter((m) => m.id > prevMaxId);
 
-                    // Sound + notification for messages from others (skip on first load)
+                    // Notify only if we actually missed something (prevMaxId > 0 guard avoids load-time noise)
                     if (prevMaxId > 0) {
                         for (const msg of newMsgs) {
                             if (msg.senderUser?.id !== currentUserId && msg.messageType === "USER") {
@@ -246,17 +312,15 @@ export default function InboxModule({
                         }
                     }
 
-                    // Merge: server data is source of truth; preserve any still-pending optimistics
                     const pendingNotYetConfirmed = prev.filter(
                         (p) => p.pending && !incoming.some((m) => m.body === p.body && m.senderUser?.id === p.senderUser?.id)
                     );
                     return [...incoming, ...pendingNotYetConfirmed];
                 });
-            } catch { /* silent — don't toast on background poll failure */ }
+            } catch { /* silent */ }
         };
 
-        // Poll every 2 seconds
-        const interval = setInterval(poll, 2000);
+        const interval = setInterval(poll, 30_000); // 30s — fallback only
         return () => clearInterval(interval);
     }, [activeRoomId, currentUserId]);
 
@@ -285,8 +349,18 @@ export default function InboxModule({
         setMessages((prev) => [...prev, optimistic]);
 
         try {
-            await axios.post(`/api/inbox/rooms/${activeRoom.id}/messages`, { body });
-            // Realtime will replace the pending message via the subscription handler
+            const res = await axios.post<Message>(`/api/inbox/rooms/${activeRoom.id}/messages`, { body });
+            const saved = res.data;
+
+            // Replace the optimistic message with the confirmed one
+            setMessages((prev) => [...prev.filter((m) => m.id !== tempId), saved]);
+
+            // Broadcast to all other subscribers in this room — they receive it via WebSocket
+            void channelRef.current?.send({
+                type: "broadcast",
+                event: "new_message",
+                payload: saved,
+            });
         } catch (error) {
             // Rollback optimistic
             setMessages((prev) => prev.filter((m) => m.id !== tempId));

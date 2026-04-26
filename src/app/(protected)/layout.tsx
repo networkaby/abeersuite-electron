@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import SessionWrapper from "@/components/SessionWrapper";
 import QuickTicketButton from "@/components/QuickTicketButton";
 import ButtonBar from "@/components/ButtonBar";
+import GlobalInboxListener from "@/components/GlobalInboxListener";
 
 export default async function ProtectedLayout({
     children,
@@ -15,11 +16,14 @@ export default async function ProtectedLayout({
     if (!session) redirect("/login");
 
     const user = session.user as {
+        id?: string | null;
         name?: string | null;
         role?: string;
         roles?: string[];
         permissions?: string[];
     };
+
+    const userId = user.id ? parseInt(user.id, 10) : undefined;
 
     return (
         <SessionWrapper>
@@ -39,6 +43,8 @@ export default async function ProtectedLayout({
                 }} />
                 <Toaster richColors />
                 <QuickTicketButton />
+                {/* Always-on inbox listener — fires notifications on any page */}
+                <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>
     );
