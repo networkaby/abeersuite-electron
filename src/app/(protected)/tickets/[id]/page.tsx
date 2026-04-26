@@ -6,16 +6,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate, formatDateTime } from "@/lib/format-date";
 import {
-    ArrowLeft,
-    Clock,
-    User,
-    Building2,
-    AlertTriangle,
-    Printer,
-    Lock,
-    Eye,
-    NotebookPen,
-    ArrowRightLeft,
+    ArrowLeft, Clock, User, Building2, AlertTriangle,
+    Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { PRIORITY_META } from "@/utils/constants";
@@ -27,6 +19,7 @@ import WarrantyConvertModal from "@/components/WarrantyConvertModal";
 import TicketOwnershipPanel from "@/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/components/PipelineTransferModal";
 import { useSession } from "next-auth/react";
+
 interface Ticket {
     id: number;
     status: string;
@@ -79,7 +72,6 @@ interface Ticket {
     }[];
 }
 
-
 export default function TicketDetailPage() {
     const { id } = useParams();
     const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -126,40 +118,38 @@ export default function TicketDetailPage() {
         }
     }, [id]);
 
-    useEffect(() => {
-        fetchTicket();
-    }, [fetchTicket]);
+    useEffect(() => { fetchTicket(); }, [fetchTicket]);
 
-    if (loading) return <p className="text-gray-500">Loading...</p>;
-    if (!ticket) return <p className="text-gray-500">Ticket not found.</p>;
+    if (loading) return <p className="text-muted-foreground">Loading...</p>;
+    if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;
+
+    const actionBtnBase = "w-full border-2 border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted";
 
     return (
         <div className="max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex items-center gap-4 mb-6">
-                <Link href="/tickets" className="text-gray-400 hover:text-gray-600">
+                <Link href="/tickets" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
                     <h1 className="text-2xl font-bold">Ticket #{ticket.id}</h1>
-                    <p className="text-gray-400 text-sm">
-                        Created {formatDateTime(ticket.createdAt)}
-                    </p>
+                    <p className="text-muted-foreground text-sm">Created {formatDateTime(ticket.createdAt)}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     {ticket.pipeline && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.pipeline.color}`}>
+                        <span className={`px-3 py-1 text-xs font-medium border border-border ${ticket.pipeline.color}`}>
                             {ticket.pipeline.label}
                         </span>
                     )}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
+                    <span className={`px-3 py-1 text-xs font-medium border border-border ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
                         {PRIORITY_META[ticket.priority]?.label ?? ticket.priority}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketStatus.color}`}>
+                    <span className={`px-3 py-1 text-xs font-medium border border-border ${ticket.ticketStatus.color}`}>
                         {ticket.ticketStatus.label}
                     </span>
                     {ticket.ticketSubStatus && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.ticketSubStatus.color}`}>
+                        <span className={`px-3 py-1 text-xs font-medium border border-border ${ticket.ticketSubStatus.color}`}>
                             {ticket.ticketSubStatus.label}
                         </span>
                     )}
@@ -168,10 +158,10 @@ export default function TicketDetailPage() {
 
             {/* Warranty banner */}
             {ticket.isWarranty && (
-                <div className={`mb-4 rounded-xl border px-5 py-3 flex items-center gap-3 text-sm ${
-                    ticket.warrantyStatus === "VOID" ? "bg-red-50 border-red-200 text-red-700" :
-                    ticket.warrantyStatus === "ACTIVE" ? "bg-green-50 border-green-200 text-green-700" :
-                    "bg-amber-50 border-amber-200 text-amber-700"
+                <div className={`mb-4 border-2 border-border px-5 py-3 flex items-center gap-3 text-sm ${
+                    ticket.warrantyStatus === "VOID" ? "bg-destructive/10 text-destructive" :
+                    ticket.warrantyStatus === "ACTIVE" ? "bg-secondary/40 text-foreground" :
+                    "bg-primary/10 text-primary"
                 }`}>
                     <WarrantyBadge isWarranty={ticket.isWarranty} warrantyStatus={ticket.warrantyStatus} />
                     <span className="flex-1">
@@ -188,44 +178,44 @@ export default function TicketDetailPage() {
                 <div className="col-span-2 space-y-6">
 
                     {/* Customer & Device */}
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                    <div className="border-2 border-border shadow bg-card p-6">
+                        <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <User size={16} /> Customer & Device
                         </h2>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                                <p className="text-gray-400 text-xs uppercase mb-1">Customer</p>
+                                <p className="text-muted-foreground text-xs uppercase mb-1">Customer</p>
                                 <p className="font-medium">{ticket.device.account?.name}</p>
-                                <p className="text-gray-500">{ticket.device.account?.phone}</p>
+                                <p className="text-muted-foreground">{ticket.device.account?.phone}</p>
                                 {ticket.device.account?.email && (
-                                    <p className="text-gray-500">{ticket.device.account.email}</p>
+                                    <p className="text-muted-foreground">{ticket.device.account.email}</p>
                                 )}
                             </div>
                             <div>
-                                <p className="text-gray-400 text-xs uppercase mb-1">Device</p>
+                                <p className="text-muted-foreground text-xs uppercase mb-1">Device</p>
                                 <p className="font-medium">{ticket.device.brand} {ticket.device.model}</p>
-                                <p className="text-gray-500">{ticket.device.type}</p>
+                                <p className="text-muted-foreground">{ticket.device.type}</p>
                             </div>
                             <div className="col-span-2">
-                                <p className="text-gray-400 text-xs uppercase mb-1">Problem</p>
-                                <p className="text-gray-700">{ticket.device.problem}</p>
+                                <p className="text-muted-foreground text-xs uppercase mb-1">Problem</p>
+                                <p className="text-foreground">{ticket.device.problem}</p>
                             </div>
                             {ticket.accessInfo && (
                                 <div>
-                                    <p className="text-gray-400 text-xs uppercase mb-1">Access Info</p>
-                                    <p className="font-mono bg-gray-50 px-2 py-1 rounded text-gray-700">{ticket.accessInfo}</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">Access Info</p>
+                                    <p className="font-mono bg-muted px-2 py-1 text-foreground">{ticket.accessInfo}</p>
                                 </div>
                             )}
                             {ticket.estimatedCost && (
                                 <div>
-                                    <p className="text-gray-400 text-xs uppercase mb-1">Estimated Cost</p>
-                                    <p className="font-medium text-green-600">₹ {ticket.estimatedCost}</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">Estimated Cost</p>
+                                    <p className="font-medium text-primary">₹ {ticket.estimatedCost}</p>
                                 </div>
                             )}
                             {ticket.notes && (
                                 <div className="col-span-2">
-                                    <p className="text-gray-400 text-xs uppercase mb-1">Notes</p>
-                                    <p className="text-gray-600">{ticket.notes}</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">Notes</p>
+                                    <p className="text-foreground">{ticket.notes}</p>
                                 </div>
                             )}
                         </div>
@@ -233,30 +223,30 @@ export default function TicketDetailPage() {
 
                     {/* Escalation Info */}
                     {ticket.escalated && (
-                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
-                            <h2 className="font-semibold text-orange-700 mb-4 flex items-center gap-2">
+                        <div className="border-2 border-border bg-muted p-6">
+                            <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                                 <Building2 size={16} /> Escalated to External
                             </h2>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                    <p className="text-gray-400 text-xs uppercase mb-1">Service Center</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">Service Center</p>
                                     <p className="font-medium">{ticket.serviceCenter?.name || "—"}</p>
                                 </div>
                                 <div>
-                                    <p className="text-gray-400 text-xs uppercase mb-1">External Ref</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">External Ref</p>
                                     <p className="font-medium">{ticket.externalRef || "—"}</p>
                                 </div>
                                 <div>
-                                    <p className="text-gray-400 text-xs uppercase mb-1">Escalated At</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">Escalated At</p>
                                     <p>{ticket.escalatedAt ? formatDate(ticket.escalatedAt) : "—"}</p>
                                 </div>
                                 <div>
-                                    <p className="text-gray-400 text-xs uppercase mb-1">Expected Return</p>
+                                    <p className="text-muted-foreground text-xs uppercase mb-1">Expected Return</p>
                                     <p>{ticket.expectedReturn ? formatDate(ticket.expectedReturn) : "—"}</p>
                                 </div>
                                 {ticket.receivedBackAt && (
                                     <div>
-                                        <p className="text-gray-400 text-xs uppercase mb-1">Received Back</p>
+                                        <p className="text-muted-foreground text-xs uppercase mb-1">Received Back</p>
                                         <p>{formatDate(ticket.receivedBackAt)}</p>
                                     </div>
                                 )}
@@ -265,43 +255,43 @@ export default function TicketDetailPage() {
                     )}
 
                     {/* Timeline */}
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                    <div className="border-2 border-border shadow bg-card p-6">
+                        <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Clock size={16} /> Timeline
                         </h2>
                         {ticket.logs.length === 0 ? (
-                            <p className="text-gray-400 text-sm">No history yet.</p>
+                            <p className="text-muted-foreground text-sm">No history yet.</p>
                         ) : (
                             <div className="space-y-4">
                                 {ticket.logs.map((log) => {
                                     const isNoteOnly = !log.subStatusId && log.note && log.status === ticket.status;
                                     return (
                                         <div key={log.id} className="flex gap-3">
-                                            <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
-                                                log.subStatusId ? "bg-purple-400" : isNoteOnly ? "bg-green-400" : "bg-blue-400"
+                                            <div className={`w-2 h-2 mt-2 shrink-0 ${
+                                                log.subStatusId ? "bg-accent" : isNoteOnly ? "bg-primary" : "bg-muted-foreground"
                                             }`} />
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketStatus.color}`}>
+                                                    <span className={`px-2 py-0.5 text-xs font-medium ${log.ticketStatus.color}`}>
                                                         {log.ticketStatus.label}
                                                     </span>
                                                     {log.ticketSubStatus && (
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.ticketSubStatus.color}`}>
+                                                        <span className={`px-2 py-0.5 text-xs font-medium ${log.ticketSubStatus.color}`}>
                                                             {log.ticketSubStatus.label}
                                                         </span>
                                                     )}
-                                                    <span className="text-xs text-gray-400">by {log.changedBy.name}</span>
-                                                    <span className="text-xs text-gray-400">{formatDateTime(log.createdAt)}</span>
+                                                    <span className="text-xs text-muted-foreground">by {log.changedBy.name}</span>
+                                                    <span className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</span>
                                                 </div>
                                                 {log.note && (
                                                     <div className="flex items-start gap-2 mt-1">
-                                                        <p className="text-sm text-gray-600 flex-1">{log.note}</p>
+                                                        <p className="text-sm text-foreground flex-1">{log.note}</p>
                                                         {log.visibility === "public" ? (
-                                                            <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+                                                            <span className="flex items-center gap-1 text-xs text-primary bg-primary/10 px-1.5 py-0.5 shrink-0">
                                                                 <Eye size={10} /> Public
                                                             </span>
                                                         ) : (
-                                                            <span className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                                                            <span className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 shrink-0">
                                                                 <Lock size={10} /> Internal
                                                             </span>
                                                         )}
@@ -329,75 +319,54 @@ export default function TicketDetailPage() {
                     />
 
                     {/* Actions */}
-                    <div className="bg-white rounded-xl shadow p-4 space-y-2">
-                        <h2 className="font-semibold text-gray-700 mb-3 text-sm">Actions</h2>
+                    <div className="border-2 border-border shadow bg-card p-4 space-y-2">
+                        <h2 className="font-semibold text-foreground mb-3 text-sm">Actions</h2>
 
                         <button
                             onClick={() => setShowStatusUpdate(true)}
-                            className="w-full rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90"
+                            className="w-full border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 shadow active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
                         >
                             Update Status
                         </button>
 
-                        <button
-                            onClick={() => setShowAddNote(true)}
-                            className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
-                        >
-                            <NotebookPen size={15} />
-                            Add Note
+                        <button onClick={() => setShowAddNote(true)} className={actionBtnBase}>
+                            <NotebookPen size={15} /> Add Note
                         </button>
 
                         {canTransfer && !ticket.ticketStatus.isTerminal && (
-                            <button
-                                onClick={() => setShowTransferModal(true)}
-                                className="w-full border border-indigo-300 text-indigo-600 rounded-lg py-2 text-sm hover:bg-indigo-50 flex items-center justify-center gap-2"
-                            >
-                                <ArrowRightLeft size={15} />
-                                Transfer Pipeline
+                            <button onClick={() => setShowTransferModal(true)} className={actionBtnBase}>
+                                <ArrowRightLeft size={15} /> Transfer Pipeline
                             </button>
                         )}
 
                         {canConvertWarranty && ticket.status !== "S7" && ticket.status !== "S8" && (
-                            <button
-                                onClick={() => setShowWarrantyModal(true)}
-                                className={`w-full border rounded-lg py-2 text-sm flex items-center justify-center gap-2 ${
-                                    ticket.isWarranty
-                                        ? "border-red-300 text-red-600 hover:bg-red-50"
-                                        : "border-amber-300 text-amber-600 hover:bg-amber-50"
-                                }`}
-                            >
+                            <button onClick={() => setShowWarrantyModal(true)} className={actionBtnBase}>
                                 {ticket.isWarranty ? "⚙ Manage Warranty" : "⚙ Mark as Warranty"}
                             </button>
                         )}
 
-                        {/* Escalate — only when not yet escalated and status can transition to S4 */}
                         {!ticket.escalated && !ticket.ticketStatus.isTerminal &&
                             ticket.ticketStatus.fromTransitions.some(t => t.to.id === "S4") && (
-                            <button
-                                onClick={() => setShowEscalation(true)}
-                                className="w-full border border-orange-400 text-orange-500 rounded-lg py-2 text-sm hover:bg-orange-50 flex items-center justify-center gap-2"
-                            >
-                                <AlertTriangle size={15} />
-                                Escalate to Service Centre
+                            <button onClick={() => setShowEscalation(true)} className={actionBtnBase}>
+                                <AlertTriangle size={15} /> Escalate to Service Centre
                             </button>
                         )}
 
-                        {/* Update Ref # — visible when already escalated */}
                         {ticket.escalated && (
                             showRefEdit ? (
-                                <div className="border border-gray-200 rounded-lg p-3 space-y-2">
-                                    <p className="text-xs text-gray-500 font-medium">External Ref # / RMA</p>
+                                <div className="border-2 border-border p-3 space-y-2">
+                                    <p className="text-xs text-muted-foreground font-medium">External Ref # / RMA</p>
                                     <input
                                         type="text"
                                         value={refValue}
                                         onChange={e => setRefValue(e.target.value)}
                                         placeholder="Job #, RMA code…"
-                                        className="w-full rounded border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                        className="w-full border-2 border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                                         autoFocus
                                     />
                                     <div className="flex gap-2">
-                                        <button onClick={() => setShowRefEdit(false)} className="flex-1 text-xs py-1.5 border rounded hover:bg-gray-50">Cancel</button>
-                                        <button onClick={saveRef} disabled={savingRef} className="flex-1 rounded bg-primary py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                                        <button onClick={() => setShowRefEdit(false)} className="flex-1 text-xs py-1.5 border-2 border-border hover:bg-muted">Cancel</button>
+                                        <button onClick={saveRef} disabled={savingRef} className="flex-1 border-2 border-primary bg-primary py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                                             {savingRef ? "Saving…" : "Save"}
                                         </button>
                                     </div>
@@ -405,7 +374,7 @@ export default function TicketDetailPage() {
                             ) : (
                                 <button
                                     onClick={() => { setRefValue(ticket.externalRef ?? ""); setShowRefEdit(true); }}
-                                    className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                                    className={actionBtnBase}
                                 >
                                     <Building2 size={15} />
                                     {ticket.externalRef ? `Ref: ${ticket.externalRef}` : "Add External Ref # / RMA"}
@@ -416,58 +385,31 @@ export default function TicketDetailPage() {
                         <Link
                             href={`/receipt/${ticket.id}`}
                             target="_blank"
-                            className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 flex items-center justify-center gap-2"
+                            className={actionBtnBase}
                         >
-                            <Printer size={15} />
-                            Print Receipt
+                            <Printer size={15} /> Print Receipt
                         </Link>
                     </div>
-
                 </div>
             </div>
 
             {/* Modals */}
             {showStatusUpdate && (
-                <StatusUpdateCombined
-                    ticket={ticket}
-                    onClose={() => {
-                        setShowStatusUpdate(false);
-                        fetchTicket();
-                    }}
-                />
+                <StatusUpdateCombined ticket={ticket} onClose={() => { setShowStatusUpdate(false); fetchTicket(); }} />
             )}
-
             {showEscalation && (
-                <TicketEscalation
-                    ticket={ticket}
-                    onClose={() => {
-                        setShowEscalation(false);
-                        fetchTicket();
-                    }}
-                />
+                <TicketEscalation ticket={ticket} onClose={() => { setShowEscalation(false); fetchTicket(); }} />
             )}
-
             {showAddNote && (
-                <AddNoteModal
-                    ticketId={ticket.id}
-                    onClose={() => {
-                        setShowAddNote(false);
-                        fetchTicket();
-                    }}
-                />
+                <AddNoteModal ticketId={ticket.id} onClose={() => { setShowAddNote(false); fetchTicket(); }} />
             )}
-
             {showTransferModal && (
                 <PipelineTransferModal
                     ticketId={ticket.id}
                     currentPipelineLabel={ticket.pipeline?.label}
-                    onClose={() => {
-                        setShowTransferModal(false);
-                        fetchTicket();
-                    }}
+                    onClose={() => { setShowTransferModal(false); fetchTicket(); }}
                 />
             )}
-
             {showWarrantyModal && (
                 <WarrantyConvertModal
                     ticketId={ticket.id}
@@ -475,13 +417,9 @@ export default function TicketDetailPage() {
                     warrantyStatus={ticket.warrantyStatus}
                     warrantyRef={ticket.warrantyRef}
                     purchaseDate={ticket.purchaseDate}
-                    onClose={() => {
-                        setShowWarrantyModal(false);
-                        fetchTicket();
-                    }}
+                    onClose={() => { setShowWarrantyModal(false); fetchTicket(); }}
                 />
             )}
-
         </div>
     );
 }

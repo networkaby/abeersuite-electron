@@ -49,7 +49,6 @@ export default function TicketsPage() {
     const [priorityOptions, setPriorityOptions] = useState<PriorityOption[]>([]);
     const [pipelineOptions, setPipelineOptions] = useState<PipelineOption[]>([]);
 
-    // Filters
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [priorityFilter, setPriorityFilter] = useState("");
@@ -74,7 +73,6 @@ export default function TicketsPage() {
                 setLoading(false);
             }
         };
-
         fetchTickets();
         axios.get("/api/users").then((r) => setTechnicians(r.data));
         axios.get("/api/service-centers").then((r) => setServiceCenters(r.data));
@@ -89,10 +87,8 @@ export default function TicketsPage() {
         setPipelineFilter(requestedPipeline);
     }, [requestedPipeline]);
 
-    // Apply filters
     useEffect(() => {
         let result = [...tickets];
-
         if (search) {
             const s = search.toLowerCase();
             result = result.filter(
@@ -104,93 +100,63 @@ export default function TicketsPage() {
                     String(t.id).includes(s)
             );
         }
-
-        if (statusFilter) {
-            result = result.filter((t) => t.status === statusFilter);
-        }
-
-        if (priorityFilter) {
-            result = result.filter((t) => t.priority === priorityFilter);
-        }
-
-        if (technicianFilter) {
-            result = result.filter((t) => t.primaryOwner?.name === technicianFilter);
-        }
-
-        if (serviceCenterFilter) {
-            result = result.filter((t) => t.serviceCenter?.name === serviceCenterFilter);
-        }
-
-        if (dateFrom) {
-            result = result.filter((t) => new Date(t.createdAt) >= new Date(dateFrom));
-        }
-
-        if (dateTo) {
-            result = result.filter(
-                (t) => new Date(t.createdAt) <= new Date(dateTo + "T23:59:59")
-            );
-        }
-
+        if (statusFilter) result = result.filter((t) => t.status === statusFilter);
+        if (priorityFilter) result = result.filter((t) => t.priority === priorityFilter);
+        if (technicianFilter) result = result.filter((t) => t.primaryOwner?.name === technicianFilter);
+        if (serviceCenterFilter) result = result.filter((t) => t.serviceCenter?.name === serviceCenterFilter);
+        if (dateFrom) result = result.filter((t) => new Date(t.createdAt) >= new Date(dateFrom));
+        if (dateTo) result = result.filter((t) => new Date(t.createdAt) <= new Date(dateTo + "T23:59:59"));
         if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
-
         if (pipelineFilter) result = result.filter((t) => t.pipelineId === pipelineFilter);
-
         setFiltered(result);
     }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter, pipelineFilter]);
 
     const clearFilters = () => {
-        setSearch("");
-        setStatusFilter("");
-        setPriorityFilter("");
-        setTechnicianFilter("");
-        setServiceCenterFilter("");
-        setDateFrom("");
-        setDateTo("");
-        setWarrantyFilter("");
+        setSearch(""); setStatusFilter(""); setPriorityFilter("");
+        setTechnicianFilter(""); setServiceCenterFilter("");
+        setDateFrom(""); setDateTo(""); setWarrantyFilter("");
         setPipelineFilter(requestedPipeline);
     };
 
     const hasFilters = Boolean(
-        search ||
-        statusFilter ||
-        priorityFilter ||
-        technicianFilter ||
-        serviceCenterFilter ||
-        dateFrom ||
-        dateTo ||
-        warrantyFilter ||
+        search || statusFilter || priorityFilter || technicianFilter ||
+        serviceCenterFilter || dateFrom || dateTo || warrantyFilter ||
         pipelineFilter !== requestedPipeline
     );
+
+    const selectClass = "border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring w-full";
 
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold">Tickets</h1>
-                <span className="text-sm text-gray-500">{tickets.length} total</span>
+                <span className="text-sm text-muted-foreground">{tickets.length} total</span>
             </div>
 
             {/* Search & Filters */}
-            <div className="bg-white rounded-lg shadow p-4 mb-4 space-y-3">
+            <div className="border-2 border-border bg-card shadow p-4 mb-4 space-y-3">
                 {/* Search */}
                 <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by customer name, phone, device, ticket #..."
-                        className="w-full rounded-lg border py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="w-full border-2 border-border bg-background py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </div>
 
-                {/* Pipeline tabs — only show when multiple exist */}
+                {/* Pipeline tabs */}
                 {pipelineOptions.length > 1 && (
                     <div className="flex gap-2 flex-wrap pb-1">
                         <button
                             onClick={() => setPipelineFilter("")}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                                !pipelineFilter ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            className={`px-3 py-1.5 text-xs font-medium border-2 transition-colors ${
+                                !pipelineFilter
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-card text-muted-foreground border-border hover:bg-muted"
                             }`}
                         >
                             All Pipelines
@@ -199,11 +165,12 @@ export default function TicketsPage() {
                             <button
                                 key={p.id}
                                 onClick={() => setPipelineFilter(p.id)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                                    pipelineFilter === p.id ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                                className={`px-3 py-1.5 text-xs font-medium border-2 transition-colors ${
+                                    pipelineFilter === p.id
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-card text-muted-foreground border-border hover:bg-muted"
                                 }`}
                             >
-                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${p.color.split(" ")[0]}`} />
                                 {p.label}
                             </button>
                         ))}
@@ -212,95 +179,40 @@ export default function TicketsPage() {
 
                 {/* Filter Row */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
-                    {/* Status */}
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
+                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
                         <option value="">All Status</option>
-                        {statusOptions.map((s) => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                        ))}
+                        {statusOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
-
-                    {/* Priority */}
-                    <select
-                        value={priorityFilter}
-                        onChange={(e) => setPriorityFilter(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
+                    <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className={selectClass}>
                         <option value="">All Priority</option>
-                        {priorityOptions.map((p) => (
-                            <option key={p.id} value={p.id}>{p.label}</option>
-                        ))}
+                        {priorityOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                     </select>
-
-                    {/* Technician */}
-                    <select
-                        value={technicianFilter}
-                        onChange={(e) => setTechnicianFilter(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
+                    <select value={technicianFilter} onChange={(e) => setTechnicianFilter(e.target.value)} className={selectClass}>
                         <option value="">All Technicians</option>
-                        {technicians.map((t) => (
-                            <option key={t.id} value={t.name}>{t.name}</option>
-                        ))}
+                        {technicians.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
                     </select>
-
-                    {/* Service Center */}
-                    <select
-                        value={serviceCenterFilter}
-                        onChange={(e) => setServiceCenterFilter(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
+                    <select value={serviceCenterFilter} onChange={(e) => setServiceCenterFilter(e.target.value)} className={selectClass}>
                         <option value="">All Service Centers</option>
-                        {serviceCenters.map((s) => (
-                            <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
+                        {serviceCenters.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                     </select>
-
-                    {/* Warranty */}
-                    <select
-                        value={warrantyFilter}
-                        onChange={(e) => setWarrantyFilter(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
+                    <select value={warrantyFilter} onChange={(e) => setWarrantyFilter(e.target.value)} className={selectClass}>
                         <option value="">All Warranty</option>
                         <option value="warranty">Warranty only</option>
                         <option value="non_warranty">Non-warranty only</option>
                     </select>
-
-                    {/* Date From */}
-                    <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-
-                    {/* Date To */}
-                    <input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={selectClass} />
+                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={selectClass} />
                 </div>
 
                 {/* Results count + clear */}
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                        Showing <span className="font-medium text-gray-700">{filtered.length}</span> of{" "}
-                        <span className="font-medium text-gray-700">{tickets.length}</span> tickets
+                        Showing <span className="font-medium text-foreground">{filtered.length}</span> of{" "}
+                        <span className="font-medium text-foreground">{tickets.length}</span> tickets
                     </span>
                     {hasFilters && (
-                        <button
-                            onClick={clearFilters}
-                            className="flex items-center gap-1 text-red-500 hover:text-red-700"
-                        >
-                            <X size={14} />
-                            Clear filters
+                        <button onClick={clearFilters} className="flex items-center gap-1 text-destructive hover:opacity-80">
+                            <X size={14} /> Clear filters
                         </button>
                     )}
                 </div>
@@ -308,15 +220,15 @@ export default function TicketsPage() {
 
             {/* Table */}
             {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <p className="text-muted-foreground">Loading...</p>
             ) : filtered.length === 0 ? (
-                <div className="bg-white rounded-lg shadow p-12 text-center text-gray-400">
+                <div className="border-2 border-border shadow p-12 text-center text-muted-foreground">
                     {hasFilters ? "No tickets match your filters." : "No tickets yet. Create your first one!"}
                 </div>
             ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="border-2 border-border shadow overflow-hidden">
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                        <thead className="bg-muted text-muted-foreground uppercase text-xs border-b-2 border-border">
                             <tr>
                                 <th className="px-6 py-3 text-left">#</th>
                                 <th className="px-6 py-3 text-left">Customer</th>
@@ -330,33 +242,33 @@ export default function TicketsPage() {
                                 <th className="px-6 py-3 text-left">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-border">
                             {filtered.map((t) => (
-                                <tr key={t.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-gray-400">{t.id}</td>
+                                <tr key={t.id} className="hover:bg-muted/50">
+                                    <td className="px-6 py-4 text-muted-foreground">{t.id}</td>
                                     <td className="px-6 py-4">
                                         <p className="font-medium">{t.device.account?.name}</p>
-                                        <p className="text-gray-400 text-xs">{t.device.account?.phone}</p>
+                                        <p className="text-muted-foreground text-xs">{t.device.account?.phone}</p>
                                     </td>
                                     <td className="px-6 py-4">
                                         <p>{t.device.brand} {t.device.model}</p>
-                                        <p className="text-gray-400 text-xs">{t.device.type}</p>
+                                        <p className="text-muted-foreground text-xs">{t.device.type}</p>
                                     </td>
-                                    <td className="px-6 py-4 max-w-[150px] truncate text-gray-600">
+                                    <td className="px-6 py-4 max-w-[150px] truncate text-muted-foreground">
                                         {t.device.problem}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${PRIORITY_META[t.priority]?.color ?? ""}`}>
+                                        <span className={`px-2 py-0.5 text-xs font-medium ${PRIORITY_META[t.priority]?.color ?? ""}`}>
                                             {PRIORITY_META[t.priority]?.label ?? t.priority}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col gap-1">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${t.ticketStatus.color}`}>
+                                            <span className={`px-2 py-0.5 text-xs font-medium w-fit ${t.ticketStatus.color}`}>
                                                 {t.ticketStatus.label}
                                             </span>
                                             {t.ticketSubStatus && (
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${t.ticketSubStatus.color}`}>
+                                                <span className={`px-2 py-0.5 text-xs font-medium w-fit ${t.ticketSubStatus.color}`}>
                                                     {t.ticketSubStatus.label}
                                                 </span>
                                             )}
@@ -366,25 +278,18 @@ export default function TicketsPage() {
                                     {pipelineOptions.length > 1 && (
                                         <td className="px-6 py-4">
                                             {t.pipeline ? (
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.pipeline.color}`}>
+                                                <span className={`px-2 py-0.5 text-xs font-medium ${t.pipeline.color}`}>
                                                     {t.pipeline.label}
                                                 </span>
                                             ) : (
-                                                <span className="text-gray-400 text-xs">—</span>
+                                                <span className="text-muted-foreground text-xs">—</span>
                                             )}
                                         </td>
                                     )}
-                                    <td className="px-6 py-4 text-gray-500">
-                                        {t.primaryOwner?.name || "—"}
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-400">
-                                        {formatDate(t.createdAt)}
-                                    </td>
+                                    <td className="px-6 py-4 text-muted-foreground">{t.primaryOwner?.name || "—"}</td>
+                                    <td className="px-6 py-4 text-muted-foreground">{formatDate(t.createdAt)}</td>
                                     <td className="px-6 py-4">
-                                        <Link
-                                            href={`/tickets/${t.id}`}
-                                            className="inline-flex rounded p-1.5 text-primary hover:bg-primary/10"
-                                        >
+                                        <Link href={`/tickets/${t.id}`} className="inline-flex p-1.5 text-primary hover:bg-primary/10">
                                             <Eye size={15} />
                                         </Link>
                                     </td>
