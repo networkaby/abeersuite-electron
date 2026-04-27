@@ -53,6 +53,9 @@ const accountSchema = z.object({
     phone: z.string().trim().min(1, "Phone is required"),
     email: z.string().email("Invalid email").optional().or(z.literal("")),
     address: z.string().optional().or(z.literal("")),
+    companyPhone: z.string().trim().optional().or(z.literal("")),
+    companyEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+    companyAddress: z.string().optional().or(z.literal("")),
     companyReg: z.string().optional().or(z.literal("")),
     taxId: z.string().optional().or(z.literal("")),
 });
@@ -124,10 +127,16 @@ export default function QuickTicketButton() {
 
     const accountForm = useForm<AccountFormData>({
         resolver: zodResolver(accountSchema) as Resolver<AccountFormData>,
-        defaultValues: { companyName: "" },
+        defaultValues: { companyName: "", companyPhone: "", companyEmail: "", companyAddress: "" },
     });
     const companyName = accountForm.watch("companyName") ?? "";
     const hasCompanyInput = companyName.trim().length > 0;
+    const customerPhone = accountForm.watch("phone") ?? "";
+    const customerEmail = accountForm.watch("email") ?? "";
+    const customerAddress = accountForm.watch("address") ?? "";
+    const companyPhone = accountForm.watch("companyPhone") ?? "";
+    const companyEmail = accountForm.watch("companyEmail") ?? "";
+    const companyAddress = accountForm.watch("companyAddress") ?? "";
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
@@ -198,6 +207,9 @@ export default function QuickTicketButton() {
             setSelectedCompany(null);
             setCompanySuggestions([]);
             setShowCompanySuggestions(false);
+            accountForm.setValue("companyPhone", "");
+            accountForm.setValue("companyEmail", "");
+            accountForm.setValue("companyAddress", "");
             accountForm.setValue("companyReg", "");
             accountForm.setValue("taxId", "");
             return;
@@ -207,6 +219,30 @@ export default function QuickTicketButton() {
             setSelectedCompany(null);
         }
     }, [accountForm, companyName, hasCompanyInput, selectedCompany]);
+
+    useEffect(() => {
+        if (!hasCompanyInput || selectedCompany) return;
+
+        if (!companyPhone.trim() && customerPhone.trim()) {
+            accountForm.setValue("companyPhone", customerPhone, { shouldDirty: false });
+        }
+        if (!companyEmail.trim() && customerEmail.trim()) {
+            accountForm.setValue("companyEmail", customerEmail, { shouldDirty: false });
+        }
+        if (!companyAddress.trim() && customerAddress.trim()) {
+            accountForm.setValue("companyAddress", customerAddress, { shouldDirty: false });
+        }
+    }, [
+        accountForm,
+        companyAddress,
+        companyEmail,
+        companyPhone,
+        customerAddress,
+        customerEmail,
+        customerPhone,
+        hasCompanyInput,
+        selectedCompany,
+    ]);
 
     const closeModal = () => reset();
 
@@ -316,6 +352,9 @@ export default function QuickTicketButton() {
                     ? { data: selectedCompany }
                     : await axios.post("/api/companies", {
                         name: data.companyName,
+                        phone: data.companyPhone,
+                        email: data.companyEmail,
+                        address: data.companyAddress,
                         companyReg: data.companyReg,
                         taxId: data.taxId,
                     });
@@ -540,25 +579,31 @@ export default function QuickTicketButton() {
                                 Fields marked <span className="font-semibold text-destructive">*</span> are required.
                             </p>
 
-                            <div className="space-y-2">
-                                <FieldLabel required>Full Name</FieldLabel>
-                                <Input
-                                    {...accountForm.register("name")}
-                                    placeholder="Full name"
-                                    className={invalidFieldClass(Boolean(accountForm.formState.errors.name))}
-                                    autoFocus
-                                />
-                                <FieldError message={accountForm.formState.errors.name?.message} />
-                            </div>
-
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-2">
-                                    <FieldLabel required>Phone</FieldLabel>
+                                    <FieldLabel required>Mobile No</FieldLabel>
                                     <Input
                                         {...accountForm.register("phone")}
                                         className={invalidFieldClass(Boolean(accountForm.formState.errors.phone))}
                                     />
                                     <FieldError message={accountForm.formState.errors.phone?.message} />
+                                </div>
+                                <div className="space-y-2">
+                                    <FieldLabel required>Full Name</FieldLabel>
+                                    <Input
+                                        {...accountForm.register("name")}
+                                        placeholder="Full name"
+                                        className={invalidFieldClass(Boolean(accountForm.formState.errors.name))}
+                                        autoFocus
+                                    />
+                                    <FieldError message={accountForm.formState.errors.name?.message} />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                    <FieldLabel>Address</FieldLabel>
+                                    <Input {...accountForm.register("address")} placeholder="Street, City" />
                                 </div>
                                 <div className="space-y-2">
                                     <FieldLabel>Email</FieldLabel>
@@ -569,11 +614,6 @@ export default function QuickTicketButton() {
                                     />
                                     <FieldError message={accountForm.formState.errors.email?.message} />
                                 </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <FieldLabel>Address</FieldLabel>
-                                <Input {...accountForm.register("address")} placeholder="Street, City" />
                             </div>
 
                             <div className="space-y-2">
@@ -600,6 +640,9 @@ export default function QuickTicketButton() {
                                                     onClick={() => {
                                                         setSelectedCompany(company);
                                                         accountForm.setValue("companyName", company.name, { shouldValidate: true });
+                                                        accountForm.setValue("companyPhone", company.phone ?? "");
+                                                        accountForm.setValue("companyEmail", company.email ?? "");
+                                                        accountForm.setValue("companyAddress", company.address ?? "");
                                                         accountForm.setValue("companyReg", company.companyReg ?? "");
                                                         accountForm.setValue("taxId", company.taxId ?? "");
                                                         setShowCompanySuggestions(false);
@@ -624,21 +667,44 @@ export default function QuickTicketButton() {
                                 </p>
                             </div>
 
-                            {hasCompanyInput && !selectedCompany && (
-                                <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
-                                    <div className="space-y-2">
-                                        <FieldLabel>Company Reg #</FieldLabel>
-                                        <Input
-                                            {...accountForm.register("companyReg")}
-                                            placeholder="Trade licence / Reg no."
-                                        />
+                            {hasCompanyInput && (
+                                <div className="space-y-4 border-2 border-border bg-muted p-4">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <FieldLabel>Company Phone</FieldLabel>
+                                            <Input {...accountForm.register("companyPhone")} placeholder="Company phone" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FieldLabel>Company Email</FieldLabel>
+                                            <Input
+                                                {...accountForm.register("companyEmail")}
+                                                placeholder="company@example.com"
+                                                className={invalidFieldClass(Boolean(accountForm.formState.errors.companyEmail))}
+                                            />
+                                            <FieldError message={accountForm.formState.errors.companyEmail?.message} />
+                                        </div>
                                     </div>
+
                                     <div className="space-y-2">
-                                        <FieldLabel>Tax / VAT ID</FieldLabel>
-                                        <Input
-                                            {...accountForm.register("taxId")}
-                                            placeholder="GST / VAT number"
-                                        />
+                                        <FieldLabel>Company Address</FieldLabel>
+                                        <Input {...accountForm.register("companyAddress")} placeholder="Company address" />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <FieldLabel>Company Reg #</FieldLabel>
+                                            <Input
+                                                {...accountForm.register("companyReg")}
+                                                placeholder="Trade licence / Reg no."
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FieldLabel>Tax / VAT ID</FieldLabel>
+                                            <Input
+                                                {...accountForm.register("taxId")}
+                                                placeholder="GST / VAT number"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             )}
