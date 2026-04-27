@@ -363,9 +363,9 @@ export default function CompaniesPage() {
                                                             {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
                                                         </div>
                                                     </div>
-                                                    <Button asChild variant="link" size="sm">
+                                                    {/* <Button asChild variant="link" size="sm">
                                                         <Link href={`/customers/${companyContact.customer.id}`}>View</Link>
-                                                    </Button>
+                                                    </Button>  // breaking*/}
                                                 </CardContent>
                                             </Card>
                                         ))}

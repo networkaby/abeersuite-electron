@@ -373,9 +373,9 @@ export default function CustomersPage() {
                                                             <TableCell><Badge className={PRIORITY_META[ticket.priority]?.color ?? ""}>{PRIORITY_META[ticket.priority]?.label ?? ticket.priority}</Badge></TableCell>
                                                             <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
                                                             <TableCell className="text-right">
-                                                                <Button asChild variant="link" size="sm">
+                                                                {/* <Button asChild variant="link" size="sm">
                                                                     <Link href={`/tickets/${ticket.id}`}>View</Link>
-                                                                </Button>
+                                                                </Button> //breaking*/}
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
