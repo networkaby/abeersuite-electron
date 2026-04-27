@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
-import { balanceDelta, toNumber } from "@/lib/finance/balance";
+import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
 
 // GET /api/finance/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {

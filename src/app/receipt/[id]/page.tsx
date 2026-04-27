@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import ReceiptButtons from "@/components/ReceiptButtons";
+import ReceiptButtons from "@/modules/shared/components/ReceiptButtons";
 import { formatDateTime } from "@/lib/format-date";
 
 export default async function ReceiptPage({

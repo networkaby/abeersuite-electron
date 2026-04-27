@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
-import { nextRef, balanceDelta } from "@/lib/finance/balance";
+import { nextRef, balanceDelta } from "@/modules/tally/lib/balance";
 
 const lineSchema = z.object({
     description: z.string().trim().min(1),

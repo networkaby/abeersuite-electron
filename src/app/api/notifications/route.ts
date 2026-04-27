@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { ensureCoreRoomsForUser, markRoomRead } from "@/lib/inbox";
+import { ensureCoreRoomsForUser, markRoomRead } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 
 export async function GET() {

@@ -1,11 +1,11 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
+import Sidebar from "@/modules/shared/components/Sidebar";
 import { Toaster } from "sonner";
-import SessionWrapper from "@/components/SessionWrapper";
-import QuickTicketButton from "@/components/QuickTicketButton";
-import ButtonBar from "@/components/ButtonBar";
-import GlobalInboxListener from "@/components/GlobalInboxListener";
+import SessionWrapper from "@/modules/shared/components/SessionWrapper";
+import QuickTicketButton from "@/modules/shared/components/QuickTicketButton";
+import ButtonBar from "@/modules/shared/components/ButtonBar";
+import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 
 export default async function ProtectedLayout({
     children,

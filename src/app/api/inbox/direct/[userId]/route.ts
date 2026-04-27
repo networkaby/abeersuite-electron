@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
-import { ensureDirectMessageRoom } from "@/lib/inbox";
+import { ensureDirectMessageRoom } from "@/modules/message/lib/inbox";
 
 export async function POST(
     _req: Request,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { createSystemInboxNotifications } from "@/lib/inbox";
+import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";

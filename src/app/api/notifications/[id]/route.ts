@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { markRoomRead } from "@/lib/inbox";
+import { markRoomRead } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 
 export async function PATCH(

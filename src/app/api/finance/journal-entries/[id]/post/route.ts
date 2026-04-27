@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
-import { isBalanced, balanceDelta, toNumber } from "@/lib/finance/balance";
+import { isBalanced, balanceDelta, toNumber } from "@/modules/tally/lib/balance";
 
 // POST /api/finance/journal-entries/[id]/post
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {

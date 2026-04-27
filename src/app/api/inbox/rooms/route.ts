@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
-import { listAccessibleRooms } from "@/lib/inbox";
+import { listAccessibleRooms } from "@/modules/message/lib/inbox";
 
 export async function GET() {
     const { user, response } = await requireAuth();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth-guard";
-import { createRoomMessage, getAccessibleRoom, markRoomRead } from "@/lib/inbox";
+import { createRoomMessage, getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
 import { prisma } from "@/lib/prisma";
 
 const messageSchema = z.object({

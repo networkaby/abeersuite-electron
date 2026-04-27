@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
-import { isBalanced, nextRef } from "@/lib/finance/balance";
+import { isBalanced, nextRef } from "@/modules/tally/lib/balance";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
