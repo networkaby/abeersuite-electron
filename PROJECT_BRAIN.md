@@ -3,9 +3,9 @@
 > Internal service management system for an electronics repair shop — tracking tickets, team handoffs, and customer communication across Front Desk, Technician, Despatch, and Admin roles.
 
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod  
-**Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `ccode`)  
+**Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `UI-Update`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-27 12:45
+**Last Updated:** 2026-04-28 10:00
 
 ---
 
@@ -37,6 +37,28 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 ---
 
 ## ✅ Completed Work
+
+### 2026-04-28 — Message creation optimisation + Sentry setup
+- **Messaging**: Replaced `createRoomMessage` helper with direct `prisma.chatMessage.create`; concurrent `updatedAt` write to `ChatRoom` in same operation for consistency; removed redundant `ensureCoreRooms` call on `getAccessibleRoom`
+- **Sentry**: `@sentry/nextjs` version pinned to `10`; `next.config.ts` updated with org/project details, Vercel Cron Monitor auto-instrumentation, improved source-map handling; `sentry.server.config.ts` + `sentry.edge.config.ts` created; `.env.sentry-build-plugin` added to `.gitignore`
+- Files: `src/app/api/inbox/rooms/[id]/messages/route.ts`, `src/lib/prisma.ts`, `src/modules/message/lib/inbox.ts`, `next.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`
+
+### 2026-04-27 — Domain module restructure + route groups
+- **`src/modules/`** introduced: `core`, `customer`, `message`, `repairing`, `tally`, `shared` — domain-specific components and lib files moved into respective modules
+- **Route groups** added inside `(protected)/`: `(admin)`, `(core)`, `(customer)`, `(message)`, `(repairing)`, `(tally)` — pages reorganised but URLs unchanged
+- `assignments/` moved from `(repairing)` → `(core)` (cross-module work queue, not repairing-specific)
+- **Constants centralised** into `src/utils/constants.ts`: `COLOR_OPTIONS`, `fmt()`, `INVOICE_STATUS_COLORS`, `JOURNAL_STATUS_COLORS`, `GL_TYPE_COLORS`, `GL_TYPE_ORDER`, `GlAccountType`, `WARRANTY_SCOPE_OPTIONS` — all local duplicates removed
+- **Role labels**: Removed hardcoded `ROLE_LABELS`; new `GET /api/roles/labels` endpoint; `StatusUpdateCombined` + `SubStatusUpdate` fetch labels dynamically via `roleLabelMap`
+- Files: `src/modules/*/`, `src/app/(protected)/(*/`, `src/utils/constants.ts`, `src/app/api/roles/labels/route.ts`
+
+### 2026-04-27 — Neo Brutalism UI theme
+- All `rounded-*` classes removed from every UI element (flat, sharp corners throughout)
+- Raw colour values (`bg-white`, `bg-gray-*`, `text-gray-*`) replaced with Tailwind theme vars (`bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`)
+- All containers and inputs use `border-2 border-border`
+- Raw modals converted to shadcn `Dialog` on accounts + finance detail pages
+- shadcn primitives (`dialog`, `select`, `tabs`, `textarea`, `dropdown-menu`) patched to remove border-radius
+- Tickets list + detail pages fully rewritten for the new theme
+- Files: virtually all page and component files, `src/components/ui/*`
 
 ### 2026-04-27 — Supabase Realtime + Slack layout + build fix
 - **Supabase Realtime**: `@supabase/supabase-js` installed via pnpm; `src/lib/supabase-client.ts` singleton; `InboxModule` subscribes to `ChatMessage INSERT` per active room — messages appear instantly across all users with no polling
@@ -145,7 +167,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ## 🔄 In Progress
 
-_(Nothing actively in progress — codebase is clean as of 2026-04-26)_
+_(Nothing actively in progress — codebase is clean as of 2026-04-28; branch: UI-Update)_
 
 ---
 
@@ -192,6 +214,8 @@ _(Nothing actively in progress — codebase is clean as of 2026-04-26)_
 - **`@@unique` with nullable fields**: PostgreSQL treats NULL as distinct; `skipDuplicates` may not work reliably. Use `findFirst` + `create` pattern.
 - **Account model**: Still present in schema alongside `Customer` and `Company` — acts as a legacy bridge. The `Customer` and `Company` models are the source of truth going forward. `Account` may be cleaned up later.
 - **Tasks feature removed**: `Task`/`TaskLog` models are still in `schema.prisma` (not dropped from DB) but all application code has been deleted. Safe to drop the tables when convenient.
+- **Sentry example files**: `src/app/api/sentry-example-api/route.ts` and `src/app/sentry-example-page/page.tsx` were added by Sentry setup — remove before production deploy if not needed.
+- **Module migration incomplete**: Some components may still live in `src/components/` rather than their domain module. Gradual migration is fine; no functional impact.
 
 ---
 
@@ -221,6 +245,9 @@ _(Nothing actively in progress — codebase is clean as of 2026-04-26)_
 | Customer/Company split | Separate `Customer` + `Company` + `CustomerCompany` join | Single `Account` with type flag | Cleaner relations; companies have their own full pages + many-to-many with customers |
 | Default post-login redirect | `/assignments` | `/dashboard` | Assignments page is the primary work surface for all roles |
 | Concurrent claim | `update where { primaryOwnerId: null }` optimistic lock | Application-level check | Database atomicity; throws RecordNotFound on race condition |
+| Codebase structure | `src/modules/<domain>/` + Next.js route groups | Flat `src/components/` + `src/app/(protected)/` | Codebase grew large enough to need domain boundaries; route groups keep URLs unchanged |
+| UI theme | Neo Brutalism (sharp corners, `border-2`, theme vars only) | Default shadcn rounded style | Design decision for shop context; enforced by removing all `rounded-*` classes |
+| Role labels | Dynamic fetch from `/api/roles/labels` | Hardcoded `ROLE_LABELS` constant | Roles are DB-driven; hardcoding would break when roles are renamed in settings |
 
 ---
 
@@ -230,65 +257,63 @@ _(Nothing actively in progress — codebase is clean as of 2026-04-26)_
 src/
 ├── app/
 │   ├── (protected)/
-│   │   ├── layout.tsx             # ProtectedLayout with UniversalCreateMenu
-│   │   ├── dashboard/             # Role-specific dashboards (pipeline context)
-│   │   ├── assignments/           # Primary work surface; me/team/org scopes
-│   │   ├── tickets/               # Ticket list (pipeline-filtered) + detail
-│   │   ├── customers/             # Individual customer list + detail
-│   │   ├── companies/             # Company list + detail
-│   │   ├── accounts/              # Legacy account pages (bridge)
-│   │   ├── service-centers/       # Service centre CRUD
-│   │   ├── users/                 # User management + permissions modal
-│   │   └── settings/
-│   │       ├── pipelines/         # Pipeline CRUD
-│   │       ├── statuses/          # Main status settings (pipeline-scoped)
-│   │       ├── sub-statuses/      # Sub-status settings + isEntryPoint
-│   │       ├── roles/             # Role + permission management
-│   │       └── users/             # User settings
+│   │   ├── layout.tsx               # ProtectedLayout with UniversalCreateMenu
+│   │   ├── (core)/
+│   │   │   ├── assignments/         # Primary work surface; me/team/org scopes
+│   │   │   └── accounts/            # Legacy account pages (bridge)
+│   │   ├── (repairing)/
+│   │   │   ├── dashboard/           # Role-specific dashboards (pipeline context)
+│   │   │   ├── tickets/             # Ticket list (pipeline-filtered) + detail
+│   │   │   ├── service-centers/     # Service centre CRUD
+│   │   │   └── settings/            # pipelines, statuses, sub-statuses, roles
+│   │   ├── (customer)/
+│   │   │   ├── customers/           # Individual customer list + detail
+│   │   │   └── companies/           # Company list + detail
+│   │   ├── (message)/
+│   │   │   └── inbox/               # Real-time inbox (Supabase Realtime)
+│   │   ├── (tally)/
+│   │   │   └── finance/             # Chart of accounts, journal entries, invoices, reports
+│   │   └── (admin)/
+│   │       └── users/               # User management + permissions modal
 │   ├── api/
-│   │   ├── tickets/[id]/          # GET, PUT, sub-status, warranty, reopen, notes, assign, participants, transfer
-│   │   ├── sub-statuses/          # CRUD + transitions + next (pipeline/warranty filtered)
-│   │   ├── ticket-statuses/       # Main status CRUD + transitions
-│   │   ├── pipelines/             # Pipeline CRUD
-│   │   ├── customers/[id]/        # Customer CRUD
-│   │   ├── companies/[id]/        # Company CRUD + links
-│   │   ├── accounts/[id]/         # Legacy account endpoints + relationships
-│   │   ├── users/[id]/            # roles, permissions endpoints
-│   │   └── roles/[id]/            # permissions endpoint
+│   │   ├── tickets/[id]/            # GET, PUT, sub-status, warranty, reopen, notes, assign, participants, transfer
+│   │   ├── sub-statuses/            # CRUD + transitions + next (pipeline/warranty filtered)
+│   │   ├── ticket-statuses/         # Main status CRUD + transitions
+│   │   ├── pipelines/               # Pipeline CRUD
+│   │   ├── customers/[id]/          # Customer CRUD
+│   │   ├── companies/[id]/          # Company CRUD + links
+│   │   ├── accounts/[id]/           # Legacy account endpoints + relationships
+│   │   ├── inbox/rooms/             # Room listing + messages (Supabase-backed)
+│   │   ├── users/[id]/              # roles, permissions endpoints
+│   │   └── roles/[id]/              # permissions + labels endpoints
 │   └── login/
-├── components/
-│   ├── dashboard/                 # AdminDashboard, TechnicianDashboard
-│   ├── assignments/               # TicketCard, PassRejectModal, HandoffPickerModal
-│   ├── companies/                 # CompanyLinkPanel
-│   ├── customers/                 # CustomerLinkPanel
-│   ├── UniversalCreateMenu.tsx    # Floating "+" create menu in layout
-│   ├── StatusUpdateCombined.tsx   # Handles requiresAssignment response
-│   ├── TicketOwnershipPanel.tsx   # Primary + secondary owners UI
-│   ├── PipelineTransferModal.tsx  # Move ticket between pipelines
-│   ├── AccountForm.tsx            # Reusable account/customer form
-│   ├── WarrantyBadge.tsx
-│   ├── WarrantyConvertModal.tsx
-│   ├── TicketEscalation.tsx
-│   ├── NotificationBell.tsx
-│   ├── QuickTicketButton.tsx      # Pipeline-aware quick ticket creation
-│   └── Sidebar.tsx                # Collapsible Settings; dynamic pipeline nav
+├── modules/                         # Domain modules (introduced 2026-04-27)
+│   ├── core/                        # Shared business logic
+│   ├── customer/                    # Customer + Company components/lib
+│   ├── message/                     # Inbox components + lib/inbox.ts
+│   ├── repairing/                   # Ticket, assignment, dashboard components
+│   ├── tally/                       # Finance/accounting components
+│   └── shared/                      # Cross-module shared utilities
+├── components/                      # App-level shared components
+│   ├── UniversalCreateMenu.tsx      # Floating "+" create menu in layout
+│   ├── QuickTicketButton.tsx        # Pipeline-aware quick ticket creation
+│   ├── Sidebar.tsx                  # Collapsible Settings; dynamic pipeline nav
+│   ├── InboxModule.tsx              # Slack-style real-time chat UI
+│   └── ui/                          # shadcn primitives (Neo Brutalism patched)
 ├── lib/
 │   ├── prisma.ts
 │   ├── permissions.ts
-│   ├── auth-guard.ts              # requirePermission() (replaces requireRole)
-│   ├── format-date.ts
-│   └── time-ago.ts
-├── auth.ts
-├── auth.d.ts
-└── proxy.ts                       # Auth middleware; redirects to /assignments
+│   ├── auth-guard.ts                # requirePermission() (replaces requireRole)
+│   ├── supabase-client.ts           # Supabase singleton for Realtime
+│   └── format-date.ts / time-ago.ts
+├── utils/
+│   └── constants.ts                 # Centralised: COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS, GL types, fmt()
+├── auth.ts / auth.d.ts
+└── proxy.ts                         # Auth middleware; redirects to /assignments
 prisma/
-├── schema.prisma                  # Pipeline, Customer, Company, CustomerCompany, Account, TicketParticipant…
+├── schema.prisma                    # Pipeline, Customer, Company, CustomerCompany, Account, TicketParticipant…
 ├── prisma.config.ts
-├── seed.ts
-├── seed-phase1.ts + seed-phase2.ts
-├── seed-assignments.ts
-├── seed-pipelines.ts
-├── seed-business-pipelines.ts
+├── seed*.ts                         # seed, seed-phase1/2, seed-assignments, seed-pipelines, seed-business-pipelines
 └── migrate-accounts.ts
 ```
 
