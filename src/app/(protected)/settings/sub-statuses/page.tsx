@@ -44,6 +44,7 @@ interface SubStatus {
     label: string;
     color: string;
     group: string;
+    groupId: string | null;
     order: number;
     applicableStatusIds: string[];
     allowedRoles: string[];
@@ -54,6 +55,12 @@ interface SubStatus {
     autoRevertOnClear: boolean;
     isEntryPoint: boolean;
     fromTransitions: { to: { id: string; label: string; color: string } }[];
+}
+
+interface SubStatusGroup {
+    id: string;
+    label: string;
+    order: number;
 }
 
 type FormValues = {
@@ -75,7 +82,7 @@ type FormValues = {
 const BLANK_FORM: FormValues = {
     label: "",
     color: "bg-gray-100 text-gray-600",
-    group: "customer_comm",
+    group: "",
     order: "",
     applicableStatusIds: [],
     allowedRoles: [],
@@ -87,18 +94,6 @@ const BLANK_FORM: FormValues = {
     autoRevertOnClear: true,
     isEntryPoint: true,
 };
-
-const GROUP_OPTIONS = [
-    { value: "customer_comm", label: "Call Customer" },
-    { value: "approval", label: "Quote & Approval" },
-    { value: "parts", label: "Parts" },
-    { value: "qc", label: "Quality Check" },
-    { value: "escalated", label: "Escalated" },
-    { value: "ready", label: "Ready for Collection" },
-    { value: "no_fix", label: "No Fix" },
-] as const;
-
-const GROUP_LABELS = Object.fromEntries(GROUP_OPTIONS.map((group) => [group.value, group.label]));
 
 const COLOR_OPTIONS = [
     { label: "Gray", value: "bg-gray-100 text-gray-600" },
@@ -121,6 +116,7 @@ function SubStatusFormModal({
     saving,
     statuses,
     roles,
+    groups,
 }: {
     open: boolean;
     title: string;
@@ -131,6 +127,7 @@ function SubStatusFormModal({
     saving: boolean;
     statuses: StatusItem[];
     roles: { id: string; label: string }[];
+    groups: SubStatusGroup[];
 }) {
     const toggle = (field: "applicableStatusIds" | "allowedRoles" | "notifyRoles", value: string) =>
         setForm({
@@ -246,13 +243,14 @@ function SubStatusFormModal({
                         </div>
                         <div className="space-y-2">
                             <Label>Group</Label>
-                            <Select value={form.group} onValueChange={(value) => setForm({ ...form, group: value })}>
+                            <Select value={form.group || "__none__"} onValueChange={(value) => setForm({ ...form, group: value === "__none__" ? "" : value })}>
                                 <SelectTrigger className="w-full">
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select group" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {GROUP_OPTIONS.map((group) => (
-                                        <SelectItem key={group.value} value={group.value}>{group.label}</SelectItem>
+                                    <SelectItem value="__none__">— none —</SelectItem>
+                                    {groups.map((g) => (
+                                        <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -362,6 +360,7 @@ export default function SubStatusesPage() {
     const [statuses, setStatuses] = useState<StatusItem[]>([]);
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
     const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
+    const [groups, setGroups] = useState<SubStatusGroup[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [showCreate, setShowCreate] = useState(false);
@@ -378,19 +377,38 @@ export default function SubStatusesPage() {
     const [selectedToIds, setSelectedToIds] = useState<string[]>([]);
     const [savingTransitions, setSavingTransitions] = useState(false);
 
+    // Group CRUD state
+    const [showGroupCreate, setShowGroupCreate] = useState(false);
+    const [groupCreateLabel, setGroupCreateLabel] = useState("");
+    const [groupCreateOrder, setGroupCreateOrder] = useState("");
+    const [savingGroup, setSavingGroup] = useState(false);
+    const [groupEditId, setGroupEditId] = useState<string | null>(null);
+    const [groupEditLabel, setGroupEditLabel] = useState("");
+    const [groupEditOrder, setGroupEditOrder] = useState("");
+    const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+
+    const groupLabelMap = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+
+    const loadGroups = async () => {
+        const res = await axios.get("/api/sub-status-groups");
+        setGroups(res.data);
+    };
+
     const loadAll = async (pipelineId: string) => {
         setLoading(true);
         try {
-            const [statusResponse, subStatusResponse, roleResponse, pipelineResponse] = await Promise.all([
+            const [statusResponse, subStatusResponse, roleResponse, pipelineResponse, groupResponse] = await Promise.all([
                 axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
                 axios.get(`/api/sub-statuses?pipelineId=${pipelineId}`),
                 axios.get("/api/roles"),
                 axios.get("/api/pipelines"),
+                axios.get("/api/sub-status-groups"),
             ]);
             setStatuses((statusResponse.data as StatusItem[]).sort((a, b) => a.order - b.order));
             setSubStatuses(subStatusResponse.data);
             setRoles(roleResponse.data);
             setPipelines(pipelineResponse.data);
+            setGroups(groupResponse.data);
         } catch {
             toast.error("Failed to load data");
         } finally {
@@ -409,6 +427,7 @@ export default function SubStatusesPage() {
                 handoffRole: createForm.handoffRole || null,
                 pipelineId: activePipelineId,
                 isEntryPoint: createForm.isEntryPoint,
+                groupId: createForm.group || null,
             });
             toast.success("Sub-status created");
             setShowCreate(false);
@@ -425,7 +444,7 @@ export default function SubStatusesPage() {
         setEditForm({
             label: subStatus.label,
             color: subStatus.color,
-            group: subStatus.group,
+            group: subStatus.groupId ?? subStatus.group,
             order: String(subStatus.order),
             applicableStatusIds: subStatus.applicableStatusIds,
             allowedRoles: subStatus.allowedRoles,
@@ -447,7 +466,8 @@ export default function SubStatusesPage() {
             await axios.patch(`/api/sub-statuses/${editId}`, {
                 label: editForm.label,
                 color: editForm.color,
-                group: editForm.group,
+                group: editForm.group || null,
+                groupId: editForm.group || null,
                 order: editForm.order ? Number(editForm.order) : undefined,
                 applicableStatusIds: editForm.applicableStatusIds,
                 allowedRoles: editForm.allowedRoles,
@@ -480,6 +500,65 @@ export default function SubStatusesPage() {
             toast.error(message ?? "Failed to delete");
         } finally {
             setDeletingId(null);
+        }
+    };
+
+    const handleGroupCreate = async () => {
+        setSavingGroup(true);
+        try {
+            await axios.post("/api/sub-status-groups", {
+                label: groupCreateLabel,
+                order: groupCreateOrder ? Number(groupCreateOrder) : undefined,
+            });
+            toast.success("Group created");
+            setShowGroupCreate(false);
+            setGroupCreateLabel("");
+            setGroupCreateOrder("");
+            loadGroups();
+        } catch (err) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to create group";
+            toast.error(message ?? "Failed to create group");
+        } finally {
+            setSavingGroup(false);
+        }
+    };
+
+    const openGroupEdit = (group: SubStatusGroup) => {
+        setGroupEditId(group.id);
+        setGroupEditLabel(group.label);
+        setGroupEditOrder(String(group.order));
+    };
+
+    const handleGroupEdit = async () => {
+        if (!groupEditId) return;
+        setSavingGroup(true);
+        try {
+            await axios.patch(`/api/sub-status-groups/${groupEditId}`, {
+                label: groupEditLabel,
+                order: groupEditOrder ? Number(groupEditOrder) : undefined,
+            });
+            toast.success("Group updated");
+            setGroupEditId(null);
+            loadGroups();
+        } catch (err) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to update group";
+            toast.error(message ?? "Failed to update group");
+        } finally {
+            setSavingGroup(false);
+        }
+    };
+
+    const handleGroupDelete = async (id: string) => {
+        setDeletingGroupId(id);
+        try {
+            await axios.delete(`/api/sub-status-groups/${id}`);
+            toast.success("Group deleted");
+            loadGroups();
+        } catch (err) {
+            const message = axios.isAxiosError(err) ? err.response?.data?.error : "Failed to delete group";
+            toast.error(message ?? "Failed to delete group");
+        } finally {
+            setDeletingGroupId(null);
         }
     };
 
@@ -541,6 +620,49 @@ export default function SubStatusesPage() {
                 </Button>
             </div>
 
+            {/* Groups management */}
+            <Card>
+                <CardHeader className="border-b">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Groups</CardTitle>
+                            <CardDescription>Categories that organise sub-statuses.</CardDescription>
+                        </div>
+                        <Button type="button" size="sm" onClick={() => setShowGroupCreate(true)}>
+                            <Plus size={14} /> Add Group
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="px-0 pt-0">
+                    {groups.length === 0 ? (
+                        <p className="px-6 py-4 text-sm text-muted-foreground">No groups yet.</p>
+                    ) : (
+                        groups.map((group) => (
+                            <div key={group.id} className="flex items-center gap-3 border-b px-6 py-3 last:border-b-0">
+                                <div className="flex-1">
+                                    <span className="text-sm font-medium">{group.label}</span>
+                                    <span className="ml-2 text-xs text-muted-foreground">id: {group.id}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => openGroupEdit(group)}>
+                                        <Pencil size={13} /> Edit
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="icon-sm"
+                                        variant="destructive"
+                                        onClick={() => handleGroupDelete(group.id)}
+                                        disabled={deletingGroupId === group.id}
+                                    >
+                                        <Trash2 size={13} />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </CardContent>
+            </Card>
+
             <div className="flex flex-wrap gap-2">
                 {pipelines.map((pipeline) => (
                     <Button
@@ -578,7 +700,11 @@ export default function SubStatusesPage() {
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-sm font-medium">{subStatus.label}</span>
-                                                <Badge variant="outline">{GROUP_LABELS[subStatus.group] ?? subStatus.group}</Badge>
+                                                {(subStatus.groupId ?? subStatus.group) && (
+                                                    <Badge variant="outline">
+                                                        {groupLabelMap[subStatus.groupId ?? subStatus.group] ?? subStatus.groupId ?? subStatus.group}
+                                                    </Badge>
+                                                )}
                                                 {subStatus.isEntryPoint && <Badge className="bg-green-100 text-green-700">Entry point</Badge>}
                                                 {subStatus.triggerMap[status.id] && (
                                                     <Badge className="bg-orange-100 text-orange-700">
@@ -673,6 +799,7 @@ export default function SubStatusesPage() {
                 </div>
             )}
 
+            {/* Sub-status modals */}
             <SubStatusFormModal
                 open={showCreate}
                 title="Add Sub-Status"
@@ -683,6 +810,7 @@ export default function SubStatusesPage() {
                 saving={creating}
                 statuses={statuses}
                 roles={roles}
+                groups={groups}
             />
 
             <SubStatusFormModal
@@ -695,8 +823,62 @@ export default function SubStatusesPage() {
                 saving={editing}
                 statuses={statuses}
                 roles={roles}
+                groups={groups}
             />
 
+            {/* Group create dialog */}
+            <Dialog open={showGroupCreate} onOpenChange={(isOpen) => { if (!isOpen) { setShowGroupCreate(false); setGroupCreateLabel(""); setGroupCreateOrder(""); } }}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Add Group</DialogTitle>
+                        <DialogDescription>The group id is auto-generated from the label.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Label</Label>
+                            <Input value={groupCreateLabel} onChange={(e) => setGroupCreateLabel(e.target.value)} placeholder="e.g. Customer Communication" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Order</Label>
+                            <Input type="number" value={groupCreateOrder} onChange={(e) => setGroupCreateOrder(e.target.value)} placeholder="Auto-assigned if blank" />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setShowGroupCreate(false)}>Cancel</Button>
+                        <Button type="button" onClick={handleGroupCreate} disabled={savingGroup || !groupCreateLabel.trim()}>
+                            {savingGroup ? "Saving…" : "Save"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Group edit dialog */}
+            <Dialog open={!!groupEditId} onOpenChange={(isOpen) => { if (!isOpen) setGroupEditId(null); }}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Edit Group</DialogTitle>
+                        <DialogDescription>id: {groupEditId} (immutable)</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Label</Label>
+                            <Input value={groupEditLabel} onChange={(e) => setGroupEditLabel(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Order</Label>
+                            <Input type="number" value={groupEditOrder} onChange={(e) => setGroupEditOrder(e.target.value)} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setGroupEditId(null)}>Cancel</Button>
+                        <Button type="button" onClick={handleGroupEdit} disabled={savingGroup || !groupEditLabel.trim()}>
+                            {savingGroup ? "Saving…" : "Save"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Transitions dialog */}
             <Dialog open={!!transitionModalId && !!modalSubStatus} onOpenChange={(isOpen) => { if (!isOpen) setTransitionModalId(null); }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>

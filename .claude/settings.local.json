@@ -60,7 +60,10 @@
       "Bash(node -e \"require\\('@supabase/supabase-js'\\); console.log\\('ok'\\)\")",
       "Bash(pnpm add *)",
       "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)",
-      "Bash(Write-Host \"Done\")"
+      "Bash(Write-Host \"Done\")",
+      "Bash(grep -r \"^[[:space:]]*//.*\" /d/our-own-website/service-mgmt-experiment/src --include=\"*.tsx\" --include=\"*.ts\" -n)",
+      "Bash(xargs wc *)",
+      "Bash(grep -r \"//\" /d/our-own-website/service-mgmt-experiment/src --include=\"*.tsx\" --include=\"*.ts\" -n)"
     ]
   }
 }

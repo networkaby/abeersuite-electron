@@ -23,19 +23,10 @@ interface SubStatus {
     label: string;
     color: string;
     group: string;
+    groupId: string | null;
     notifyRoles: string[];
     triggerStatus: { id: string; label: string } | null;
 }
-
-const GROUP_LABELS: Record<string, string> = {
-    customer_comm: "Customer Communication",
-    approval: "Quote & Approval",
-    parts: "Parts",
-    qc: "Quality Check",
-    escalated: "Escalated",
-    ready: "Ready for Collection",
-    no_fix: "No Fix",
-};
 
 const ROLE_LABELS: Record<string, string> = {
     R1: "Admin", R2: "Technician", R3: "Front Desk", R4: "Despatch",
@@ -50,31 +41,44 @@ type FormData = { subStatusId: string; note: string };
 
 export default function SubStatusUpdate({ ticket, onClose }: Props) {
     const { data: session } = useSession();
-    const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const { register, handleSubmit, watch, formState: { isSubmitting } } = useForm<FormData>({
+    const { register, handleSubmit, watch, setValue, formState: { isSubmitting } } = useForm<FormData>({
         defaultValues: { subStatusId: "", note: "" },
     });
 
+    const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
+    const [groupLabels, setGroupLabels] = useState<Record<string, string>>({});
+    const [loading, setLoading] = useState(true);
+
     const selectedId = watch("subStatusId");
-    const selected = subStatuses.find((ss) => ss.id === selectedId);
 
     useEffect(() => {
-        axios
-            .get(`/api/sub-statuses?statusId=${ticket.status}`)
-            .then((r) => setSubStatuses(r.data))
-            .catch(() => toast.error("Failed to load sub-statuses"))
-            .finally(() => setLoading(false));
+        Promise.all([
+            axios.get(`/api/sub-statuses?statusId=${ticket.status}`),
+            axios.get("/api/sub-status-groups"),
+        ]).then(([ssRes, grRes]) => {
+            setSubStatuses(ssRes.data);
+            const map: Record<string, string> = {};
+            for (const g of grRes.data) map[g.id] = g.label;
+            setGroupLabels(map);
+        }).catch(() => {
+            toast.error("Failed to load sub-statuses");
+        }).finally(() => setLoading(false));
     }, [ticket.status]);
 
+    const grouped = subStatuses.reduce<Record<string, SubStatus[]>>((acc, ss) => {
+        const key = ss.groupId ?? ss.group ?? "__none__";
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(ss);
+        return acc;
+    }, {});
+
+    const userRoles: string[] = (session?.user as { roles?: string[] } | undefined)?.roles ?? [];
+
     const onSubmit = async (data: FormData) => {
-        if (!data.subStatusId) { toast.error("Please select a sub-status"); return; }
         try {
-            await axios.patch(`/api/tickets/${ticket.id}/sub-status`, {
-                subStatusId: data.subStatusId,
-                note: data.note || undefined,
-                changedBy: session?.user?.id,
+            await axios.post(`/api/tickets/${ticket.id}/sub-status`, {
+                subStatusId: data.subStatusId || null,
+                note: data.note,
             });
             toast.success("Sub-status updated");
             onClose();
@@ -83,89 +87,83 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
         }
     };
 
-    const grouped = subStatuses.reduce<Record<string, SubStatus[]>>((acc, ss) => {
-        (acc[ss.group] ??= []).push(ss);
-        return acc;
-    }, {});
+    const selected = subStatuses.find((ss) => ss.id === selectedId);
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Update Sub-Status</DialogTitle>
-                    <DialogDescription>Add detail or trigger a handoff</DialogDescription>
+                    <DialogDescription>Choose the current work stage for this ticket.</DialogDescription>
                 </DialogHeader>
 
                 {loading ? (
-                    <p className="text-sm text-muted-foreground py-4">Loading...</p>
-                ) : subStatuses.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4">No sub-statuses available for this status.</p>
+                    <p className="text-sm text-muted-foreground">Loading…</p>
                 ) : (
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                        <div className="space-y-3">
-                            {Object.entries(grouped).map(([group, items]) => (
-                                <div key={group}>
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-                                        {GROUP_LABELS[group] ?? group}
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                            <label className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm cursor-pointer">
+                                <input
+                                    type="radio"
+                                    {...register("subStatusId")}
+                                    value=""
+                                    className="accent-primary"
+                                />
+                                <span className="text-muted-foreground">— Clear sub-status —</span>
+                            </label>
+
+                            {Object.entries(grouped).map(([groupKey, items]) => (
+                                <div key={groupKey}>
+                                    <p className="px-1 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                        {groupLabels[groupKey] ?? groupKey}
                                     </p>
-                                    <div className="space-y-1">
-                                        {items.map((ss) => (
+                                    {items.map((ss) => {
+                                        const canSet = ss.notifyRoles.length === 0 || ss.notifyRoles.some(r => userRoles.includes(r));
+                                        return (
                                             <label
                                                 key={ss.id}
-                                                className={`flex items-center gap-3 px-3 py-2 border-2 cursor-pointer transition-colors ${
-                                                    selectedId === ss.id
-                                                        ? "border-primary bg-primary/10"
-                                                        : "border-border hover:bg-muted"
-                                                }`}
+                                                className={`flex items-center gap-2 border-2 border-border px-3 py-2 text-sm cursor-pointer ${!canSet ? "opacity-50 cursor-not-allowed" : ""}`}
                                             >
                                                 <input
                                                     type="radio"
-                                                    value={ss.id}
                                                     {...register("subStatusId")}
+                                                    value={ss.id}
+                                                    disabled={!canSet}
                                                     className="accent-primary"
                                                 />
-                                                <div className="flex-1">
-                                                    <span className="text-sm text-foreground">{ss.label}</span>
-                                                    {ss.triggerStatus && (
-                                                        <span className="ml-2 text-xs text-primary font-medium">
-                                                            → {ss.triggerStatus.label}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <span className={`text-xs px-2 py-0.5 ${ss.color}`}>{ss.id}</span>
+                                                <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${ss.color}`}>{ss.label}</span>
+                                                {ss.triggerStatus && (
+                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                        <ArrowRight size={12} /> {ss.triggerStatus.label}
+                                                    </span>
+                                                )}
+                                                {ss.notifyRoles.length > 0 && (
+                                                    <span className="ml-auto text-xs text-muted-foreground">
+                                                        {ss.notifyRoles.map(r => ROLE_LABELS[r] ?? r).join(", ")}
+                                                    </span>
+                                                )}
                                             </label>
-                                        ))}
-                                    </div>
+                                        );
+                                    })}
                                 </div>
                             ))}
                         </div>
 
-                        {selected && selected.notifyRoles.length > 0 && (
-                            <div className="border-2 border-primary bg-primary/10 px-3 py-2 flex items-center gap-2 text-sm text-primary">
-                                <ArrowRight size={14} />
-                                Notifies: {selected.notifyRoles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
-                            </div>
-                        )}
-
                         {selected?.triggerStatus && (
-                            <div className="border-2 border-border bg-muted px-3 py-2 text-sm text-foreground">
-                                Status will auto-advance to <strong>{selected.triggerStatus.label}</strong>
-                            </div>
+                            <p className="text-xs text-amber-600">
+                                Selecting this will advance the ticket to <strong>{selected.triggerStatus.label}</strong>.
+                            </p>
                         )}
 
-                        <div className="space-y-2">
-                            <Label>Note <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Textarea
-                                {...register("note")}
-                                rows={3}
-                                placeholder="Add context — missing item, part number, customer quote, etc."
-                            />
+                        <div className="space-y-1">
+                            <Label htmlFor="note">Note (optional)</Label>
+                            <Textarea id="note" {...register("note")} placeholder="Add a note…" rows={3} />
                         </div>
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                            <Button type="submit" disabled={isSubmitting || !selectedId}>
-                                {isSubmitting ? "Saving..." : "Update Sub-Status"}
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting ? "Saving…" : "Save"}
                             </Button>
                         </DialogFooter>
                     </form>

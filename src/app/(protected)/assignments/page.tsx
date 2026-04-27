@@ -8,17 +8,7 @@ import {
 } from "lucide-react";
 import { TicketSection, type TicketCardData } from "@/components/assignments/TicketCard";
 
-const GROUP_OPTIONS = [
-    { value: "customer_comm", label: "Call" },
-    { value: "approval", label: "Quote" },
-    { value: "parts", label: "Parts" },
-    { value: "qc", label: "QC" },
-    { value: "escalated", label: "Escalated" },
-    { value: "ready", label: "Ready" },
-    { value: "no_fix", label: "No Fix" },
-] as const;
-
-const GROUP_CARD_META = {
+const GROUP_CARD_META: Record<string, { icon: React.ReactNode; textColor: string }> = {
     customer_comm: { icon: <Phone size={20} />, textColor: "text-blue-600" },
     approval: { icon: <CheckCircle size={20} />, textColor: "text-yellow-600" },
     parts: { icon: <Package size={20} />, textColor: "text-orange-600" },
@@ -26,7 +16,7 @@ const GROUP_CARD_META = {
     escalated: { icon: <ShieldAlert size={20} />, textColor: "text-red-600" },
     ready: { icon: <CheckCircle size={20} />, textColor: "text-green-600" },
     no_fix: { icon: <AlertCircle size={20} />, textColor: "text-muted-foreground" },
-} satisfies Record<(typeof GROUP_OPTIONS)[number]["value"], { icon: React.ReactNode; textColor: string }>;
+};
 
 // ── Shared include ────────────────────────────────────────────────────────────
 const TICKET_INCLUDE = {
@@ -131,24 +121,26 @@ export default async function AssignmentsPage({
     if (rawScope === "org" && !canViewOrg) redirect("/assignments?scope=me");
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
-    const raw = await (scope === "me"
-        ? prisma.ticket.findMany({
-            where: {
-                ticketStatus: { isTerminal: false },
-                OR: [
-                    { primaryOwnerId: userId },
-                    { participants: { some: { userId, removedAt: null } } },
-                ],
-            },
-            orderBy: { updatedAt: "asc" },
-            include: TICKET_INCLUDE,
-        })
-        : prisma.ticket.findMany({
-            where: { ticketStatus: { isTerminal: false } },
-            orderBy: { updatedAt: "asc" },
-            include: TICKET_INCLUDE,
-        })
-    );
+    const [raw, groups] = await Promise.all([
+        scope === "me"
+            ? prisma.ticket.findMany({
+                where: {
+                    ticketStatus: { isTerminal: false },
+                    OR: [
+                        { primaryOwnerId: userId },
+                        { participants: { some: { userId, removedAt: null } } },
+                    ],
+                },
+                orderBy: { updatedAt: "asc" },
+                include: TICKET_INCLUDE,
+            })
+            : prisma.ticket.findMany({
+                where: { ticketStatus: { isTerminal: false } },
+                orderBy: { updatedAt: "asc" },
+                include: TICKET_INCLUDE,
+            }),
+        prisma.subStatusGroup.findMany({ orderBy: { order: "asc" } }),
+    ]);
 
     const cards = raw.map(toCard);
 
@@ -164,7 +156,6 @@ export default async function AssignmentsPage({
         myOwned = cards.filter(t => t.primaryOwner?.id === userId);
         mySecond = cards.filter(t => t.primaryOwner?.id !== userId);
     } else if (scope === "team") {
-        // Dynamic: Show any ticket where at least one of MY roles is in notifyRoles
         const myTeamTickets = cards.filter((_, idx) => {
             const t = raw[idx];
             return t.ticketSubStatus?.notifyRoles?.some(r => userRoles.includes(r)) ||
@@ -184,11 +175,11 @@ export default async function AssignmentsPage({
 
     const total = cards.length;
     const groupedSubStatusCounts = Object.fromEntries(
-        GROUP_OPTIONS.map(({ value }) => [
-            value,
-            raw.filter((ticket) => ticket.ticketSubStatus?.group === value).length,
+        groups.map(({ id }) => [
+            id,
+            raw.filter((ticket) => ticket.ticketSubStatus?.group === id).length,
         ]),
-    ) as Record<(typeof GROUP_OPTIONS)[number]["value"], number>;
+    );
 
     // ── Tabs ───────────────────────────────────────────────────────────────────
     const TABS = [
@@ -267,15 +258,19 @@ export default async function AssignmentsPage({
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
                 <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-muted-foreground" />
-                {GROUP_OPTIONS.map(({ value, label }) => (
-                    <StatCard
-                        key={value}
-                        label={label}
-                        value={groupedSubStatusCounts[value]}
-                        icon={GROUP_CARD_META[value].icon}
-                        textColor={GROUP_CARD_META[value].textColor}
-                    />
-                ))}
+                {groups.map(({ id, label }) => {
+                    const meta = GROUP_CARD_META[id];
+                    if (!meta) return null;
+                    return (
+                        <StatCard
+                            key={id}
+                            label={label}
+                            value={groupedSubStatusCounts[id] ?? 0}
+                            icon={meta.icon}
+                            textColor={meta.textColor}
+                        />
+                    );
+                })}
             </div>
 
             {/* Sections */}

@@ -6,7 +6,8 @@ import { z } from "zod";
 const subStatusPatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().min(1).optional(),
-    group: z.string().trim().min(1).optional(),
+    group: z.string().trim().optional().nullable(),
+    groupId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),
     applicableStatusIds: z.array(z.string().trim()).optional(),
     allowedRoles: z.array(z.string().trim()).optional(),
@@ -65,7 +66,8 @@ export async function PATCH(
             data: {
                 ...(body.label !== undefined              && { label: body.label }),
                 ...(body.color !== undefined              && { color: body.color }),
-                ...(body.group !== undefined              && { group: body.group }),
+                ...("group"   in body                    && { group: body.group ?? "" }),
+                ...("groupId" in body                    && { groupId: body.groupId ?? null }),
                 ...(body.order !== undefined              && { order: body.order }),
                 ...(body.applicableStatusIds !== undefined && { applicableStatusIds: body.applicableStatusIds }),
                 ...(body.allowedRoles !== undefined       && { allowedRoles: body.allowedRoles }),
