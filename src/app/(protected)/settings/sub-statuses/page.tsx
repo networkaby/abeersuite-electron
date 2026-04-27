@@ -89,7 +89,7 @@ const BLANK_FORM: FormValues = {
 };
 
 const GROUP_OPTIONS = [
-    { value: "customer_comm", label: "Customer Communication" },
+    { value: "customer_comm", label: "Call Customer" },
     { value: "approval", label: "Quote & Approval" },
     { value: "parts", label: "Parts" },
     { value: "qc", label: "Quality Check" },

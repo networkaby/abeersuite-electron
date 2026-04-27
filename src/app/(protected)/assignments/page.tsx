@@ -9,12 +9,12 @@ import {
 import { TicketSection, type TicketCardData } from "@/components/assignments/TicketCard";
 
 const GROUP_OPTIONS = [
-    { value: "customer_comm", label: "Customer Communication" },
-    { value: "approval", label: "Quote & Approval" },
+    { value: "customer_comm", label: "Call" },
+    { value: "approval", label: "Quote" },
     { value: "parts", label: "Parts" },
-    { value: "qc", label: "Quality Check" },
+    { value: "qc", label: "QC" },
     { value: "escalated", label: "Escalated" },
-    { value: "ready", label: "Ready for Collection" },
+    { value: "ready", label: "Ready" },
     { value: "no_fix", label: "No Fix" },
 ] as const;
 
