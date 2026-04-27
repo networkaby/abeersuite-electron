@@ -191,111 +191,112 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
     ]);
 
     return (
-        <div>
-            <h1 className="text-2xl font-bold mb-1">Front Desk</h1>
-            <p className="text-gray-400 text-sm mb-6">
-                Welcome back, {name}
-                {context.pipelineLabel ? ` · ${context.pipelineLabel}` : ""}
-            </p>
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold mb-1">Front Desk</h1>
+                <p className="text-muted-foreground text-sm">
+                    Welcome back, {name}{context.pipelineLabel ? ` · ${context.pipelineLabel}` : ""}
+                </p>
+            </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="bg-white rounded-xl shadow p-5 flex items-center gap-4">
-                    <div className="text-gray-400"><Phone size={22} /></div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                    <Phone size={22} className="text-muted-foreground" />
                     <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Action Required</p>
-                        <p className={`text-3xl font-bold mt-0.5 ${actionCount > 0 ? "text-red-600" : "text-gray-800"}`}>{actionCount}</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Action Required</p>
+                        <p className={`text-3xl font-bold mt-0.5 ${actionCount > 0 ? "text-destructive" : "text-foreground"}`}>{actionCount}</p>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl shadow p-5 flex items-center gap-4">
-                    <div className="text-gray-400"><Package size={22} /></div>
+                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                    <Package size={22} className="text-muted-foreground" />
                     <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">New Today</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">New Today</p>
                         <p className="text-3xl font-bold mt-0.5 text-primary">{newToday}</p>
                     </div>
                 </div>
             </div>
 
             {statusQueue.length > 0 && (
-                <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
-                    <div className="px-6 py-4 border-b bg-green-50 flex items-center gap-2">
-                        <CheckCircle size={16} className="text-green-600" />
-                        <h2 className="font-semibold text-green-700">Status Actions</h2>
-                        <span className="ml-auto bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                <div className="border-2 border-border shadow overflow-hidden">
+                    <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+                        <CheckCircle size={16} className="text-primary" />
+                        <h2 className="font-semibold text-foreground">Status Actions</h2>
+                        <span className="ml-auto border border-border bg-primary/10 text-primary text-xs font-bold px-2 py-0.5">
                             {statusQueue.length} pending
                         </span>
                     </div>
-                    <div className="divide-y">
+                    <div className="divide-y divide-border">
                         {statusQueue.map((t) => (
-                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-green-50/30">
-                                <div className="shrink-0 mt-0.5"><CheckCircle size={16} className="text-green-400" /></div>
+                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-muted/40">
+                                <CheckCircle size={16} className="text-primary mt-0.5 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                        <span className={`text-xs px-2 py-0.5 font-medium ${t.ticketStatus.color}`}>
                                             {t.ticketStatus.label}
                                         </span>
-                                        <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
+                                        <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>
                                     </div>
-                                    <p className="text-sm font-medium text-gray-800 mt-1">
+                                    <p className="text-sm font-medium text-foreground mt-1">
                                         {(t.device.account?.customer ?? t.device.account?.company)?.name}
-                                        <span className="text-gray-400 font-normal text-xs ml-2">· {t.device.brand} {t.device.model}</span>
+                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {t.device.brand} {t.device.model}</span>
                                     </p>
                                     {t.ticketStatus.actionLabel && (
-                                        <p className="text-xs text-green-700 mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
+                                        <p className="text-xs text-primary mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
-                <div className="px-6 py-4 border-b bg-red-50 flex items-center gap-2">
-                    <Phone size={16} className="text-red-500" />
-                    <h2 className="font-semibold text-red-700">Call Queue</h2>
+            <div className="border-2 border-border shadow overflow-hidden">
+                <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+                    <Phone size={16} className="text-muted-foreground" />
+                    <h2 className="font-semibold text-foreground">Call Queue</h2>
                     {subActionCount > 0 && (
-                        <span className="ml-auto bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                        <span className="ml-auto border border-border bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5">
                             {subActionCount} pending
                         </span>
                     )}
                 </div>
                 {actionQueue.length === 0 ? (
                     <div className="px-6 py-10 text-center">
-                        <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">All clear — no pending calls.</p>
+                        <CheckCircle size={32} className="text-primary mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">All clear — no pending calls.</p>
                     </div>
                 ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-border">
                         {actionQueue.map((t) => (
-                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-red-50/30">
-                                <div className="shrink-0 mt-0.5"><Phone size={16} className="text-red-400" /></div>
+                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-muted/40">
+                                <Phone size={16} className="text-muted-foreground mt-0.5 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketSubStatus!.color}`}>
+                                        <span className={`text-xs px-2 py-0.5 font-medium ${t.ticketSubStatus!.color}`}>
                                             {t.ticketSubStatus!.label}
                                         </span>
-                                        <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
+                                        <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>
                                     </div>
-                                    <p className="text-sm font-medium text-gray-800 mt-1">
+                                    <p className="text-sm font-medium text-foreground mt-1">
                                         {(t.device.account?.customer ?? t.device.account?.company)?.name}
-                                        <span className="text-gray-400 font-normal"> · {(t.device.account?.customer ?? t.device.account?.company)?.phone}</span>
+                                        <span className="text-muted-foreground font-normal"> · {(t.device.account?.customer ?? t.device.account?.company)?.phone}</span>
                                     </p>
-                                    <p className="text-xs text-gray-500 mt-0.5">
+                                    <p className="text-xs text-muted-foreground mt-0.5">
                                         {t.device.brand} {t.device.model}
-                                        {t.primaryOwner && <span className="ml-2 text-gray-400">· Tech: {t.primaryOwner.name}</span>}
+                                        {t.primaryOwner && <span className="ml-2">· Tech: {t.primaryOwner.name}</span>}
                                     </p>
                                     {t.ticketSubStatus!.actionLabel && (
-                                        <p className="text-xs text-red-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
+                                        <p className="text-xs text-destructive mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
@@ -303,9 +304,9 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             </div>
 
             {statusQueue.length === 0 && actionQueue.length === 0 && (
-                <div className="px-6 py-10 text-center bg-white rounded-xl shadow">
-                    <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">All clear — no pending actions.</p>
+                <div className="px-6 py-10 text-center border-2 border-border shadow bg-card">
+                    <CheckCircle size={32} className="text-primary mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">All clear — no pending actions.</p>
                 </div>
             )}
         </div>
@@ -348,116 +349,117 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
     ]);
 
     return (
-        <div>
-            <h1 className="text-2xl font-bold mb-1">Despatch</h1>
-            <p className="text-gray-400 text-sm mb-6">
-                Welcome back, {name}
-                {context.pipelineLabel ? ` · ${context.pipelineLabel}` : ""}
-            </p>
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold mb-1">Despatch</h1>
+                <p className="text-muted-foreground text-sm">
+                    Welcome back, {name}{context.pipelineLabel ? ` · ${context.pipelineLabel}` : ""}
+                </p>
+            </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="bg-white rounded-xl shadow p-5 flex items-center gap-4">
-                    <div className="text-gray-400"><Package size={22} /></div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                    <Package size={22} className="text-muted-foreground" />
                     <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Pending Action</p>
-                        <p className={`text-3xl font-bold mt-0.5 ${pendingCount > 0 ? "text-orange-600" : "text-gray-800"}`}>{pendingCount}</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pending Action</p>
+                        <p className={`text-3xl font-bold mt-0.5 ${pendingCount > 0 ? "text-primary" : "text-foreground"}`}>{pendingCount}</p>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl shadow p-5 flex items-center gap-4">
-                    <div className="text-gray-400"><AlertCircle size={22} /></div>
+                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                    <AlertCircle size={22} className="text-muted-foreground" />
                     <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Escalated (In Repair)</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Escalated (In Repair)</p>
                         <p className="text-3xl font-bold mt-0.5 text-primary">{inTransitCount}</p>
                     </div>
                 </div>
             </div>
 
             {statusQueue.length > 0 && (
-                <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
-                    <div className="px-6 py-4 border-b bg-orange-50 flex items-center gap-2">
-                        <Package size={16} className="text-orange-500" />
-                        <h2 className="font-semibold text-orange-700">Status Actions</h2>
-                        <span className="ml-auto bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                <div className="border-2 border-border shadow overflow-hidden">
+                    <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+                        <Package size={16} className="text-muted-foreground" />
+                        <h2 className="font-semibold text-foreground">Status Actions</h2>
+                        <span className="ml-auto border border-border bg-primary/10 text-primary text-xs font-bold px-2 py-0.5">
                             {statusQueue.length} pending
                         </span>
                     </div>
-                    <div className="divide-y">
+                    <div className="divide-y divide-border">
                         {statusQueue.map((t) => (
-                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-orange-50/30">
-                                <Package size={16} className="text-orange-400 mt-0.5 shrink-0" />
+                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-muted/40">
+                                <Package size={16} className="text-muted-foreground mt-0.5 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                        <span className={`text-xs px-2 py-0.5 font-medium ${t.ticketStatus.color}`}>
                                             {t.ticketStatus.label}
                                         </span>
-                                        <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
+                                        <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>
                                     </div>
-                                    <p className="text-sm font-medium text-gray-800 mt-1">
+                                    <p className="text-sm font-medium text-foreground mt-1">
                                         {t.device.brand} {t.device.model}
-                                        <span className="text-gray-400 font-normal text-xs ml-2">· {(t.device.account?.customer ?? t.device.account?.company)?.name}</span>
+                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {(t.device.account?.customer ?? t.device.account?.company)?.name}</span>
                                     </p>
                                     {t.serviceCenter && (
-                                        <p className="text-xs text-gray-500 mt-0.5">Service Centre: {t.serviceCenter.name}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Service Centre: {t.serviceCenter.name}</p>
                                     )}
                                     {t.ticketStatus.actionLabel && (
-                                        <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
+                                        <p className="text-xs text-primary mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="px-6 py-4 border-b bg-orange-50 flex items-center gap-2">
-                    <Package size={16} className="text-orange-500" />
-                    <h2 className="font-semibold text-orange-700">Despatch Queue</h2>
+            <div className="border-2 border-border shadow overflow-hidden">
+                <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+                    <Package size={16} className="text-muted-foreground" />
+                    <h2 className="font-semibold text-foreground">Despatch Queue</h2>
                     {subPendingCount > 0 && (
-                        <span className="ml-auto bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                        <span className="ml-auto border border-border bg-primary/10 text-primary text-xs font-bold px-2 py-0.5">
                             {subPendingCount} pending
                         </span>
                     )}
                 </div>
                 {pendingQueue.length === 0 ? (
                     <div className="px-6 py-10 text-center">
-                        <CheckCircle size={32} className="text-green-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">No pending despatch tasks.</p>
+                        <CheckCircle size={32} className="text-primary mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">No pending despatch tasks.</p>
                     </div>
                 ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-border">
                         {pendingQueue.map((t) => (
-                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-orange-50/30">
-                                <Package size={16} className="text-orange-400 mt-0.5 shrink-0" />
+                            <div key={t.id} className="flex items-start gap-4 px-6 py-4 hover:bg-muted/40">
+                                <Package size={16} className="text-muted-foreground mt-0.5 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Link href={`/tickets/${t.id}`} className="font-semibold text-primary hover:underline text-sm">
                                             Ticket #{t.id}
                                         </Link>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.ticketSubStatus!.color}`}>
+                                        <span className={`text-xs px-2 py-0.5 font-medium ${t.ticketSubStatus!.color}`}>
                                             {t.ticketSubStatus!.label}
                                         </span>
-                                        <span className="text-xs text-gray-400">{timeAgo(t.updatedAt)}</span>
+                                        <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>
                                     </div>
-                                    <p className="text-sm font-medium text-gray-800 mt-1">
+                                    <p className="text-sm font-medium text-foreground mt-1">
                                         {t.device.brand} {t.device.model}
-                                        <span className="text-gray-400 font-normal text-xs ml-2">· {(t.device.account?.customer ?? t.device.account?.company)?.name}</span>
+                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {(t.device.account?.customer ?? t.device.account?.company)?.name}</span>
                                     </p>
                                     {t.serviceCenter && (
-                                        <p className="text-xs text-gray-500 mt-0.5">Service Centre: {t.serviceCenter.name}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Service Centre: {t.serviceCenter.name}</p>
                                     )}
                                     {t.primaryOwner && (
-                                        <p className="text-xs text-gray-400">Technician: {t.primaryOwner.name}</p>
+                                        <p className="text-xs text-muted-foreground">Technician: {t.primaryOwner.name}</p>
                                     )}
                                     {t.ticketSubStatus!.actionLabel && (
-                                        <p className="text-xs text-orange-600 mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
+                                        <p className="text-xs text-primary mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>

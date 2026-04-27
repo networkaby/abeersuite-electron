@@ -6,6 +6,24 @@ import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/components/UserForm";
 import { formatDate } from "@/lib/format-date";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 interface User {
     id: number;
@@ -30,7 +48,6 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
     const [perms, setPerms] = useState<PermRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    // local overrides: permissionId → true | false | null (null = clear override)
     const [overrides, setOverrides] = useState<Map<string, boolean | null>>(new Map());
 
     useEffect(() => {
@@ -44,16 +61,12 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
         setOverrides(prev => {
             const next = new Map(prev);
             if (current === null) {
-                // No override → grant explicitly
                 next.set(permId, true);
             } else if (current === true && !roleGranted) {
-                // Explicit grant (not from role) → deny
                 next.set(permId, false);
             } else if (current === false) {
-                // Explicit deny → clear override
                 next.set(permId, null);
             } else {
-                // Role-granted & true → deny
                 next.set(permId, false);
             }
             return next;
@@ -75,97 +88,81 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
         }
     };
 
-    // Group by module
     const grouped = perms.reduce<Record<string, PermRow[]>>((acc, p) => {
         (acc[p.module] ??= []).push(p);
         return acc;
     }, {});
 
     return (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
-                <div className="flex items-center justify-between px-6 py-4 border-b">
-                    <div>
-                        <h2 className="font-semibold text-gray-800">Permissions — {user.name}</h2>
-                        <p className="text-xs text-gray-400 mt-0.5">Role grants are read-only. Overrides add or deny individual permissions.</p>
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                </div>
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Permissions — {user.name}</DialogTitle>
+                    <DialogDescription>
+                        Role grants are read-only. Overrides add or deny individual permissions.
+                    </DialogDescription>
+                </DialogHeader>
 
-                <div className="overflow-y-auto flex-1 px-6 py-4">
+                <div className="overflow-y-auto flex-1 space-y-5 pr-1">
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 size={24} className="animate-spin text-gray-400" />
+                            <Loader2 size={24} className="animate-spin text-muted-foreground" />
                         </div>
                     ) : (
-                        <div className="space-y-5">
-                            {Object.entries(grouped).map(([module, rows]) => (
-                                <div key={module}>
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{module}</p>
-                                    <div className="space-y-1">
-                                        {rows.map(p => {
-                                            const localOverride = overrides.get(p.id);
-                                            const displayOverride = localOverride !== undefined ? localOverride : p.userOverride;
-                                            const effective = displayOverride !== null ? !!displayOverride : p.roleGranted;
+                        Object.entries(grouped).map(([module, rows]) => (
+                            <div key={module}>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{module}</p>
+                                <div className="space-y-1">
+                                    {rows.map(p => {
+                                        const localOverride = overrides.get(p.id);
+                                        const displayOverride = localOverride !== undefined ? localOverride : p.userOverride;
+                                        const effective = displayOverride !== null ? !!displayOverride : p.roleGranted;
 
-                                            return (
-                                                <div
-                                                    key={p.id}
-                                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50 ${
-                                                        effective ? "opacity-100" : "opacity-50"
-                                                    }`}
-                                                    onClick={() => toggle(p.id, displayOverride, p.roleGranted)}
-                                                >
-                                                    {/* Checkbox visual */}
-                                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${
-                                                        effective
-                                                            ? "bg-primary border-primary"
-                                                            : "border-gray-300"
-                                                    }`}>
-                                                        {effective && <div className="w-2 h-2 bg-white rounded-sm" />}
-                                                    </div>
-
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium text-gray-700">{p.label}</p>
-                                                        {p.description && <p className="text-xs text-gray-400 truncate">{p.description}</p>}
-                                                    </div>
-
-                                                    {/* Source badge */}
-                                                    <div className="shrink-0 flex gap-1">
-                                                        {p.roleGranted && (
-                                                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">Role</span>
-                                                        )}
-                                                        {displayOverride !== null && (
-                                                            <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                                                displayOverride ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-600"
-                                                            }`}>
-                                                                {displayOverride ? "+Grant" : "Deny"}
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                        return (
+                                            <div
+                                                key={p.id}
+                                                className={`flex items-center gap-3 px-3 py-2 border-2 border-border cursor-pointer hover:bg-muted transition-colors ${
+                                                    effective ? "opacity-100" : "opacity-50"
+                                                }`}
+                                                onClick={() => toggle(p.id, displayOverride, p.roleGranted)}
+                                            >
+                                                <div className={`w-4 h-4 border-2 flex items-center justify-center shrink-0 ${
+                                                    effective ? "bg-primary border-primary" : "border-border"
+                                                }`}>
+                                                    {effective && <div className="w-2 h-2 bg-primary-foreground" />}
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-foreground">{p.label}</p>
+                                                    {p.description && <p className="text-xs text-muted-foreground truncate">{p.description}</p>}
+                                                </div>
+                                                <div className="shrink-0 flex gap-1">
+                                                    {p.roleGranted && <Badge className="bg-primary/10 text-primary border-primary/20">Role</Badge>}
+                                                    {displayOverride !== null && (
+                                                        <Badge className={displayOverride ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}>
+                                                            {displayOverride ? "+Grant" : "Deny"}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ))
                     )}
                 </div>
 
-                <div className="px-6 py-4 border-t flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                    <button
-                        onClick={save}
-                        disabled={saving || overrides.size === 0}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-                    >
+                <DialogFooter className="pt-2 border-t border-border">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        <X size={14} /> Cancel
+                    </Button>
+                    <Button type="button" onClick={save} disabled={saving || overrides.size === 0}>
                         {saving && <Loader2 size={14} className="animate-spin" />}
                         {overrides.size === 0 ? "No changes" : `Save ${overrides.size} change${overrides.size !== 1 ? "s" : ""}`}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -201,16 +198,12 @@ export default function UsersPage() {
     };
 
     return (
-        <div>
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Users</h1>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-                >
-                    <Plus size={18} />
-                    Add User
-                </button>
+                <Button type="button" onClick={() => setShowForm(true)}>
+                    <Plus size={16} /> Add User
+                </Button>
             </div>
 
             {(showForm || editUser) && (
@@ -221,63 +214,67 @@ export default function UsersPage() {
             )}
 
             {permUser && (
-                <PermissionsModal user={permUser} onClose={() => setPermUser(null)} />
+                <PermissionsModal user={permUser} onClose={() => { setPermUser(null); fetchUsers(); }} />
             )}
 
             {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <p className="text-sm text-muted-foreground">Loading...</p>
             ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
-                            <tr>
-                                <th className="px-6 py-3 text-left">#</th>
-                                <th className="px-6 py-3 text-left">Name</th>
-                                <th className="px-6 py-3 text-left">Email</th>
-                                <th className="px-6 py-3 text-left">Role</th>
-                                <th className="px-6 py-3 text-left">Joined</th>
-                                <th className="px-6 py-3 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
+                <div className="border-2 border-border shadow overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-12">#</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Joined</TableHead>
+                                <TableHead>Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {users.map((u) => (
-                                <tr key={u.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-gray-400">{u.id}</td>
-                                    <td className="px-6 py-4 font-medium">{u.name}</td>
-                                    <td className="px-6 py-4 text-gray-500">{u.email}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.userRole.color}`}>
-                                            {u.userRole.label}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-400">{formatDate(u.createdAt)}</td>
-                                    <td className="px-6 py-4">
+                                <TableRow key={u.id}>
+                                    <TableCell className="text-muted-foreground">{u.id}</TableCell>
+                                    <TableCell className="font-medium">{u.name}</TableCell>
+                                    <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                                    <TableCell>
+                                        <Badge className={u.userRole.color}>{u.userRole.label}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
+                                    <TableCell>
                                         <div className="flex gap-2">
-                                            <button
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon-sm"
                                                 onClick={() => setPermUser(u)}
-                                                className="p-1.5 rounded hover:bg-purple-50 text-purple-500"
                                                 title="Manage permissions"
                                             >
-                                                <ShieldCheck size={15} />
-                                            </button>
-                                            <button
+                                                <ShieldCheck size={14} />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon-sm"
                                                 onClick={() => setEditUser(u)}
-                                                className="rounded p-1.5 text-primary hover:bg-primary/10"
                                             >
-                                                <Pencil size={15} />
-                                            </button>
-                                            <button
+                                                <Pencil size={14} />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="icon-sm"
                                                 onClick={() => handleDelete(u.id)}
-                                                className="p-1.5 rounded hover:bg-red-50 text-red-500"
                                             >
-                                                <Trash2 size={15} />
-                                            </button>
+                                                <Trash2 size={14} />
+                                            </Button>
                                         </div>
-                                    </td>
-                                </tr>
+                                    </TableCell>
+                                </TableRow>
                             ))}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             )}
         </div>

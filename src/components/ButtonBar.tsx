@@ -45,7 +45,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         <aside className="flex w-52 flex-col border-l border-border bg-sidebar">
             {/* Header */}
             <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-primary/10 text-primary">
                     <Zap size={14} />
                 </div>
                 <div className="min-w-0">
@@ -69,7 +69,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                             disabled={action.disabled}
                             onClick={() => handleAction(action)}
                             className={[
-                                "group w-full rounded-xl border text-left transition-all duration-150",
+                                "group w-full border-2 border-border text-left transition-all duration-150",
                                 action.disabled
                                     ? "cursor-not-allowed border-border bg-muted opacity-50"
                                     : isPrimary
@@ -80,7 +80,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                             <div className="flex items-center gap-3 px-3 py-2.5">
                                 {/* Icon */}
                                 <div className={[
-                                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
+                                    "flex h-8 w-8 shrink-0 items-center justify-center transition-colors",
                                     action.disabled
                                         ? "bg-muted text-muted-foreground"
                                         : isPrimary

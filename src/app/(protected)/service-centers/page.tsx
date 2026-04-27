@@ -5,6 +5,15 @@ import axios from "axios";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ServiceCenterForm from "@/components/ServiceCenterForm";
+import { Button } from "@/components/ui/button";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 interface ServiceCenter {
     id: number;
@@ -32,9 +41,7 @@ export default function ServiceCentersPage() {
         }
     };
 
-    useEffect(() => {
-        fetchServiceCenters();
-    }, []);
+    useEffect(() => { fetchServiceCenters(); }, []);
 
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this service center?")) return;
@@ -48,78 +55,74 @@ export default function ServiceCentersPage() {
     };
 
     return (
-        <div>
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Service Centers</h1>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-                >
-                    <Plus size={18} />
-                    Add Service Center
-                </button>
+                <Button type="button" onClick={() => setShowForm(true)}>
+                    <Plus size={16} /> Add Service Center
+                </Button>
             </div>
 
             {(showForm || editItem) && (
                 <ServiceCenterForm
                     serviceCenter={editItem ?? undefined}
-                    onClose={() => {
-                        setShowForm(false);
-                        setEditItem(null);
-                        fetchServiceCenters();
-                    }}
+                    onClose={() => { setShowForm(false); setEditItem(null); fetchServiceCenters(); }}
                 />
             )}
 
             {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <p className="text-sm text-muted-foreground">Loading...</p>
             ) : serviceCenters.length === 0 ? (
-                <div className="bg-white rounded-lg shadow p-12 text-center text-gray-400">
+                <div className="border-2 border-border shadow bg-card p-12 text-center text-muted-foreground">
                     No service centers yet. Add your first one!
                 </div>
             ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
-                            <tr>
-                                <th className="px-6 py-3 text-left">#</th>
-                                <th className="px-6 py-3 text-left">Name</th>
-                                <th className="px-6 py-3 text-left">Phone</th>
-                                <th className="px-6 py-3 text-left">Email</th>
-                                <th className="px-6 py-3 text-left">Address</th>
-                                <th className="px-6 py-3 text-left">Tickets</th>
-                                <th className="px-6 py-3 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
+                <div className="border-2 border-border shadow overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-12">#</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Phone</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Address</TableHead>
+                                <TableHead>Tickets</TableHead>
+                                <TableHead>Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {serviceCenters.map((s) => (
-                                <tr key={s.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-gray-400">{s.id}</td>
-                                    <td className="px-6 py-4 font-medium">{s.name}</td>
-                                    <td className="px-6 py-4">{s.phone}</td>
-                                    <td className="px-6 py-4 text-gray-500">{s.email || "—"}</td>
-                                    <td className="px-6 py-4 text-gray-500">{s.address || "—"}</td>
-                                    <td className="px-6 py-4">{s._count.tickets}</td>
-                                    <td className="px-6 py-4">
+                                <TableRow key={s.id}>
+                                    <TableCell className="text-muted-foreground">{s.id}</TableCell>
+                                    <TableCell className="font-medium">{s.name}</TableCell>
+                                    <TableCell>{s.phone}</TableCell>
+                                    <TableCell className="text-muted-foreground">{s.email || "—"}</TableCell>
+                                    <TableCell className="text-muted-foreground">{s.address || "—"}</TableCell>
+                                    <TableCell>{s._count.tickets}</TableCell>
+                                    <TableCell>
                                         <div className="flex gap-2">
-                                            <button
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon-sm"
                                                 onClick={() => setEditItem(s)}
-                                                className="rounded p-1.5 text-primary hover:bg-primary/10"
                                             >
-                                                <Pencil size={15} />
-                                            </button>
-                                            <button
+                                                <Pencil size={14} />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="icon-sm"
                                                 onClick={() => handleDelete(s.id)}
-                                                className="p-1.5 rounded hover:bg-red-50 text-red-500"
                                             >
-                                                <Trash2 size={15} />
-                                            </button>
+                                                <Trash2 size={14} />
+                                            </Button>
                                         </div>
-                                    </td>
-                                </tr>
+                                    </TableCell>
+                                </TableRow>
                             ))}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             )}
         </div>

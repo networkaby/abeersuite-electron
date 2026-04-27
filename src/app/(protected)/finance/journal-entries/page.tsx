@@ -5,6 +5,9 @@ import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, Loader2, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface JournalEntry {
     id: number;
@@ -24,8 +27,11 @@ interface GlAccount { id: number; code: string; name: string; type: string }
 const STATUS_COLORS = {
     DRAFT:  "bg-yellow-100 text-yellow-700",
     POSTED: "bg-green-100 text-green-700",
-    VOIDED: "bg-gray-100 text-gray-500",
+    VOIDED: "bg-muted text-muted-foreground",
 };
+
+const fieldClass = "w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+const cellClass  = "w-full border-2 border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
 function fmt(n: number) {
     return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2 }).format(n);
@@ -106,24 +112,25 @@ export default function JournalEntriesPage() {
         <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Journal Entries</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">Double-entry bookkeeping records</p>
+                    <h1 className="text-2xl font-bold text-foreground">Journal Entries</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">Double-entry bookkeeping records</p>
                 </div>
-                <button
-                    onClick={() => setShowCreate((v) => !v)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
+                <Button onClick={() => setShowCreate((v) => !v)}>
                     <Plus size={16} /> New Entry
-                </button>
+                </Button>
             </div>
 
             {/* Filters */}
-            <div className="flex gap-2">
+            <div className="flex gap-1">
                 {(["", "DRAFT", "POSTED", "VOIDED"] as const).map((s) => (
                     <button
                         key={s}
                         onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                        className={`px-3 py-1.5 text-xs border-2 font-medium transition-colors ${
+                            statusFilter === s
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card text-muted-foreground hover:bg-muted"
+                        }`}
                     >
                         {s || "All"}
                     </button>
@@ -132,25 +139,31 @@ export default function JournalEntriesPage() {
 
             {/* Create form */}
             {showCreate && (
-                <div className="bg-white border rounded-xl p-5 shadow-sm space-y-4">
-                    <h2 className="font-semibold text-gray-800">New Journal Entry</h2>
+                <div className="border-2 border-border shadow bg-card p-5 space-y-4">
+                    <h2 className="font-semibold text-foreground">New Journal Entry</h2>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Date</label>
-                            <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" />
+                        <div className="space-y-1.5">
+                            <Label>Date</Label>
+                            <Input
+                                type="date"
+                                value={form.date}
+                                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                            />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Description</label>
-                            <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" placeholder="Narration" />
+                        <div className="space-y-1.5">
+                            <Label>Description</Label>
+                            <Input
+                                value={form.description}
+                                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                                placeholder="Narration"
+                            />
                         </div>
                     </div>
 
                     {/* Lines */}
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border-2 border-border overflow-hidden">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-xs text-gray-500">
+                            <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Account</th>
                                     <th className="px-3 py-2 text-left font-medium w-24">Type</th>
@@ -161,12 +174,12 @@ export default function JournalEntriesPage() {
                             </thead>
                             <tbody>
                                 {form.lines.map((line, i) => (
-                                    <tr key={i} className="border-t">
+                                    <tr key={i} className="border-t border-border">
                                         <td className="px-3 py-2">
                                             <select
                                                 value={line.accountId}
                                                 onChange={(e) => updateLine(i, { accountId: Number(e.target.value) })}
-                                                className="w-full border rounded px-2 py-1 text-sm"
+                                                className={cellClass}
                                             >
                                                 <option value={0}>Select account</option>
                                                 {accounts.map((a) => (
@@ -178,7 +191,7 @@ export default function JournalEntriesPage() {
                                             <select
                                                 value={line.type}
                                                 onChange={(e) => updateLine(i, { type: e.target.value as "DEBIT" | "CREDIT" })}
-                                                className="w-full border rounded px-2 py-1 text-sm"
+                                                className={cellClass}
                                             >
                                                 <option>DEBIT</option>
                                                 <option>CREDIT</option>
@@ -189,17 +202,24 @@ export default function JournalEntriesPage() {
                                                 type="number" min="0" step="0.01"
                                                 value={line.amount}
                                                 onChange={(e) => updateLine(i, { amount: e.target.value })}
-                                                className="w-full border rounded px-2 py-1 text-sm text-right"
+                                                className={`${cellClass} text-right`}
                                                 placeholder="0.00"
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input value={line.description} onChange={(e) => updateLine(i, { description: e.target.value })}
-                                                className="w-full border rounded px-2 py-1 text-sm" placeholder="Optional" />
+                                            <input
+                                                value={line.description}
+                                                onChange={(e) => updateLine(i, { description: e.target.value })}
+                                                className={cellClass}
+                                                placeholder="Optional"
+                                            />
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                             {form.lines.length > 2 && (
-                                                <button onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600">
+                                                <button
+                                                    onClick={() => removeLine(i)}
+                                                    className="text-destructive hover:text-destructive/80"
+                                                >
                                                     ×
                                                 </button>
                                             )}
@@ -207,14 +227,14 @@ export default function JournalEntriesPage() {
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot className="bg-gray-50 border-t text-xs font-medium">
+                            <tfoot className="bg-muted border-t-2 border-border text-xs font-medium">
                                 <tr>
-                                    <td colSpan={2} className="px-3 py-2 text-gray-500">Totals</td>
+                                    <td colSpan={2} className="px-3 py-2 text-muted-foreground">Totals</td>
                                     <td className="px-3 py-2 text-right">
-                                        <div className={balanced ? "text-green-600" : "text-red-600"}>
+                                        <div className={balanced ? "text-green-600" : "text-destructive"}>
                                             DR {fmt(totalDebits)} / CR {fmt(totalCredits)}
                                         </div>
-                                        {!balanced && <div className="text-red-500">Not balanced</div>}
+                                        {!balanced && <div className="text-destructive">Not balanced</div>}
                                     </td>
                                     <td colSpan={2} />
                                 </tr>
@@ -225,14 +245,10 @@ export default function JournalEntriesPage() {
                     <div className="flex items-center justify-between">
                         <button onClick={addLine} className="text-sm text-primary hover:underline">+ Add line</button>
                         <div className="flex gap-2">
-                            <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
-                            <button
-                                onClick={submit}
-                                disabled={saving || !balanced}
-                                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            >
+                            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                            <Button onClick={submit} disabled={saving || !balanced}>
                                 {saving && <Loader2 size={14} className="animate-spin" />} Save as Draft
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -240,14 +256,16 @@ export default function JournalEntriesPage() {
 
             {/* List */}
             {loading ? (
-                <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={28} /></div>
+                <div className="flex justify-center py-12">
+                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                </div>
             ) : (
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <div className="border-2 border-border shadow bg-card overflow-hidden">
                     {entries.length === 0 ? (
-                        <div className="text-center py-16 text-gray-400">No journal entries yet</div>
+                        <div className="text-center py-16 text-muted-foreground">No journal entries yet</div>
                     ) : (
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+                            <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
                                 <tr>
                                     <th className="px-5 py-3 text-left font-medium">Reference</th>
                                     <th className="px-5 py-3 text-left font-medium">Date</th>
@@ -260,19 +278,19 @@ export default function JournalEntriesPage() {
                             </thead>
                             <tbody>
                                 {entries.map((e) => (
-                                    <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
+                                    <tr key={e.id} className="border-b last:border-0 hover:bg-muted/40">
                                         <td className="px-5 py-3 font-mono text-primary">{e.reference}</td>
-                                        <td className="px-5 py-3 text-gray-600">{new Date(e.date).toLocaleDateString()}</td>
-                                        <td className="px-5 py-3 text-gray-700">{e.description}</td>
+                                        <td className="px-5 py-3 text-muted-foreground">{new Date(e.date).toLocaleDateString()}</td>
+                                        <td className="px-5 py-3 text-foreground">{e.description}</td>
                                         <td className="px-5 py-3 text-right font-mono">{fmt(e.totalDebit)}</td>
                                         <td className="px-5 py-3 text-center">
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[e.status]}`}>
+                                            <span className={`text-xs px-2 py-0.5 font-medium ${STATUS_COLORS[e.status]}`}>
                                                 {e.status}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-3 text-gray-400 text-xs">{e.createdBy.name}</td>
+                                        <td className="px-5 py-3 text-muted-foreground text-xs">{e.createdBy.name}</td>
                                         <td className="px-5 py-3 text-right">
-                                            <Link href={`/finance/journal-entries/${e.id}`} className="text-gray-300 hover:text-primary">
+                                            <Link href={`/finance/journal-entries/${e.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

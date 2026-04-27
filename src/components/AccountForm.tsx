@@ -159,7 +159,7 @@ export default function AccountForm({ account, defaultType = "individual", onClo
                     </div>
 
                     {type === "company" && (
-                        <div className="grid grid-cols-2 gap-3 rounded-xl border bg-muted/40 p-4">
+                        <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
                             <div className="space-y-2">
                                 <Label>Company Reg #</Label>
                                 <Input {...register("companyReg")} placeholder="Trade licence / Reg no." />

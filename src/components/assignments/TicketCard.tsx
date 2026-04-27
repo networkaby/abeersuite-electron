@@ -77,17 +77,17 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                             Ticket #{ticket.id}
                         </Link>
                         {ticket.ticketSubStatus ? (
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ticket.ticketSubStatus.color}`}>
+                            <span className={`text-xs px-2 py-0.5 font-medium ${ticket.ticketSubStatus.color}`}>
                                 {ticket.ticketSubStatus.label}
                             </span>
                         ) : (
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ticket.ticketStatus.color}`}>
+                            <span className={`text-xs px-2 py-0.5 font-medium ${ticket.ticketStatus.color}`}>
                                 {ticket.ticketStatus.label}
                             </span>
                         )}
                         <span className="text-xs text-muted-foreground">{timeAgo(ticket.updatedAt)}</span>
                         {ticket.escalated && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">Escalated</span>
+                            <span className="text-xs px-1.5 py-0.5 bg-destructive/10 text-destructive font-medium">Escalated</span>
                         )}
                     </div>
                     <p className="mt-1 text-sm font-medium text-foreground">
@@ -177,11 +177,11 @@ export function TicketSection({
     if (tickets.length === 0) return null;
     const themedHeader = color === "text-blue-700" && bgColor === "bg-blue-50";
     return (
-        <div className="mb-6 overflow-hidden rounded-xl bg-card shadow">
-            <div className={`flex items-center gap-2 border-b px-6 py-4 ${themedHeader ? "bg-primary/8" : bgColor}`}>
+        <div className="mb-6 overflow-hidden border-2 border-border shadow bg-card">
+            <div className={`flex items-center gap-2 border-b-2 border-border px-6 py-4 ${themedHeader ? "bg-primary/8" : bgColor}`}>
                 {icon}
                 <h2 className={`font-semibold ${themedHeader ? "text-primary" : color}`}>{title}</h2>
-                <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-bold ${themedHeader ? "bg-primary/12 text-primary" : `${bgColor} ${color}`}`}>
+                <span className={`ml-auto px-2 py-0.5 text-xs font-bold border border-current/20 ${themedHeader ? "bg-primary/12 text-primary" : `${bgColor} ${color}`}`}>
                     {tickets.length} pending
                 </span>
             </div>
@@ -202,5 +202,5 @@ export function TicketSection({
 }
 
 export function AlertCircleIcon() {
-    return <AlertCircle size={16} className="text-gray-400" />;
+    return <AlertCircle size={16} className="text-muted-foreground" />;
 }

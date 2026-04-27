@@ -165,7 +165,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             <>
                                 <span className="flex-1 truncate">Inbox</span>
                                 {totalInboxUnread > 0 && (
-                                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
+                                    <span className="bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
                                         {totalInboxUnread}
                                     </span>
                                 )}

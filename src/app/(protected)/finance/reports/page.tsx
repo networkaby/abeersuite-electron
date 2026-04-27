@@ -4,6 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 type GlAccountType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
 
@@ -111,17 +117,21 @@ export default function ReportsPage() {
     return (
         <div className="max-w-5xl mx-auto space-y-6">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Financial Reports</h1>
-                <p className="text-sm text-gray-500 mt-0.5">Trial Balance & General Ledger</p>
+                <h1 className="text-2xl font-bold text-foreground">Financial Reports</h1>
+                <p className="text-sm text-muted-foreground mt-0.5">Trial Balance &amp; General Ledger</p>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 border-b">
+            <div className="flex gap-1 border-b-2 border-border">
                 {([["trial-balance", "Trial Balance"], ["ledger", "General Ledger"]] as [TabType, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                        className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-[2px] transition-colors ${
+                            tab === key
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
                     >
                         {label}
                     </button>
@@ -132,30 +142,35 @@ export default function ReportsPage() {
             {tab === "trial-balance" && (
                 <div className="space-y-5">
                     <div className="flex items-end gap-3">
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">As of Date</label>
-                            <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)}
-                                className="mt-1 block border rounded-lg px-3 py-2 text-sm" />
+                        <div className="space-y-1">
+                            <Label>As of Date</Label>
+                            <Input
+                                type="date"
+                                value={asOf}
+                                onChange={(e) => setAsOf(e.target.value)}
+                                className="w-auto"
+                            />
                         </div>
-                        <button onClick={loadTrialBalance}
-                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-                            Run Report
-                        </button>
+                        <Button onClick={loadTrialBalance}>Run Report</Button>
                     </div>
 
                     {tbLoading ? (
-                        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={28} /></div>
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                        </div>
                     ) : tbData ? (
                         <div className="space-y-4">
-                            <p className="text-xs text-gray-400">As at {new Date(tbData.asOf).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                            <p className="text-xs text-muted-foreground">
+                                As at {new Date(tbData.asOf).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+                            </p>
 
                             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                                <div key={type} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                                    <div className={`px-5 py-2.5 border-b ${TYPE_COLORS[type]}`}>
+                                <div key={type} className="border-2 border-border shadow bg-card overflow-hidden">
+                                    <div className={`px-5 py-2.5 border-b-2 border-border ${TYPE_COLORS[type]}`}>
                                         <span className="text-xs font-bold uppercase tracking-wider">{type}</span>
                                     </div>
                                     <table className="w-full text-sm">
-                                        <thead className="text-xs text-gray-400 bg-gray-50 border-b">
+                                        <thead className="text-xs text-muted-foreground bg-muted border-b-2 border-border">
                                             <tr>
                                                 <th className="px-5 py-2 text-left font-medium">Code</th>
                                                 <th className="px-5 py-2 text-left font-medium">Account</th>
@@ -166,12 +181,16 @@ export default function ReportsPage() {
                                         </thead>
                                         <tbody>
                                             {rows.map((r) => (
-                                                <tr key={r.id} className="border-b last:border-0 hover:bg-gray-50">
-                                                    <td className="px-5 py-3 font-mono text-gray-500">{r.code}</td>
-                                                    <td className="px-5 py-3 font-medium text-gray-800">{r.name}</td>
-                                                    <td className="px-5 py-3 text-right font-mono">{r.totalDebits > 0 ? fmt(r.totalDebits) : <span className="text-gray-300">—</span>}</td>
-                                                    <td className="px-5 py-3 text-right font-mono">{r.totalCredits > 0 ? fmt(r.totalCredits) : <span className="text-gray-300">—</span>}</td>
-                                                    <td className={`px-5 py-3 text-right font-mono font-semibold ${r.balance < 0 ? "text-red-600" : "text-gray-900"}`}>
+                                                <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
+                                                    <td className="px-5 py-3 font-mono text-muted-foreground">{r.code}</td>
+                                                    <td className="px-5 py-3 font-medium text-foreground">{r.name}</td>
+                                                    <td className="px-5 py-3 text-right font-mono">
+                                                        {r.totalDebits > 0 ? fmt(r.totalDebits) : <span className="text-muted-foreground/40">—</span>}
+                                                    </td>
+                                                    <td className="px-5 py-3 text-right font-mono">
+                                                        {r.totalCredits > 0 ? fmt(r.totalCredits) : <span className="text-muted-foreground/40">—</span>}
+                                                    </td>
+                                                    <td className={`px-5 py-3 text-right font-mono font-semibold ${r.balance < 0 ? "text-destructive" : "text-foreground"}`}>
                                                         {fmt(r.balance)}
                                                     </td>
                                                 </tr>
@@ -182,18 +201,18 @@ export default function ReportsPage() {
                             ))}
 
                             {/* Totals */}
-                            <div className="bg-white rounded-xl border shadow-sm p-5 flex justify-end gap-12 text-sm font-semibold">
+                            <div className="border-2 border-border shadow bg-card p-5 flex justify-end gap-12 text-sm font-semibold">
                                 <div className="text-right">
-                                    <p className="text-xs text-gray-400 mb-1">Total Debits</p>
-                                    <p className="font-mono text-gray-900">{fmt(tbData.totalDebits)}</p>
+                                    <p className="text-xs text-muted-foreground mb-1">Total Debits</p>
+                                    <p className="font-mono text-foreground">{fmt(tbData.totalDebits)}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs text-gray-400 mb-1">Total Credits</p>
-                                    <p className="font-mono text-gray-900">{fmt(tbData.totalCredits)}</p>
+                                    <p className="text-xs text-muted-foreground mb-1">Total Credits</p>
+                                    <p className="font-mono text-foreground">{fmt(tbData.totalCredits)}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs text-gray-400 mb-1">Difference</p>
-                                    <p className={`font-mono ${Math.abs(tbData.totalDebits - tbData.totalCredits) < 0.005 ? "text-green-600" : "text-red-600"}`}>
+                                    <p className="text-xs text-muted-foreground mb-1">Difference</p>
+                                    <p className={`font-mono ${Math.abs(tbData.totalDebits - tbData.totalCredits) < 0.005 ? "text-green-600" : "text-destructive"}`}>
                                         {fmt(Math.abs(tbData.totalDebits - tbData.totalCredits))}
                                         {Math.abs(tbData.totalDebits - tbData.totalCredits) < 0.005 && " ✓"}
                                     </p>
@@ -208,55 +227,59 @@ export default function ReportsPage() {
             {tab === "ledger" && (
                 <div className="space-y-5">
                     <div className="flex items-end gap-3 flex-wrap">
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Account</label>
-                            <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}
-                                className="mt-1 block border rounded-lg px-3 py-2 text-sm min-w-56">
-                                <option value="">Select account</option>
-                                {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
-                            </select>
+                        <div className="space-y-1">
+                            <Label>Account</Label>
+                            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                                <SelectTrigger className="min-w-56">
+                                    <SelectValue placeholder="Select account" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {accounts.map((a) => (
+                                        <SelectItem key={a.id} value={String(a.id)}>
+                                            {a.code} — {a.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">From</label>
-                            <input type="date" value={ledgerFrom} onChange={(e) => setLedgerFrom(e.target.value)}
-                                className="mt-1 block border rounded-lg px-3 py-2 text-sm" />
+                        <div className="space-y-1">
+                            <Label>From</Label>
+                            <Input type="date" value={ledgerFrom} onChange={(e) => setLedgerFrom(e.target.value)} className="w-auto" />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">To</label>
-                            <input type="date" value={ledgerTo} onChange={(e) => setLedgerTo(e.target.value)}
-                                className="mt-1 block border rounded-lg px-3 py-2 text-sm" />
+                        <div className="space-y-1">
+                            <Label>To</Label>
+                            <Input type="date" value={ledgerTo} onChange={(e) => setLedgerTo(e.target.value)} className="w-auto" />
                         </div>
-                        <button onClick={loadLedger}
-                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-                            Run Report
-                        </button>
+                        <Button onClick={loadLedger}>Run Report</Button>
                     </div>
 
                     {ledgerLoading ? (
-                        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={28} /></div>
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                        </div>
                     ) : ledgerData ? (
-                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                            <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+                        <div className="border-2 border-border shadow bg-card overflow-hidden">
+                            <div className="px-5 py-3 border-b-2 border-border bg-muted flex items-center justify-between">
                                 <div>
-                                    <span className="font-mono text-gray-500 mr-2">{ledgerData.account.code}</span>
-                                    <span className="font-semibold text-gray-800">{ledgerData.account.name}</span>
+                                    <span className="font-mono text-muted-foreground mr-2">{ledgerData.account.code}</span>
+                                    <span className="font-semibold text-foreground">{ledgerData.account.name}</span>
                                 </div>
                                 <div className="flex gap-8 text-sm">
                                     <div className="text-right">
-                                        <p className="text-xs text-gray-400">Opening Balance</p>
+                                        <p className="text-xs text-muted-foreground">Opening Balance</p>
                                         <p className="font-mono font-semibold">{fmt(ledgerData.openingBalance)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs text-gray-400">Closing Balance</p>
+                                        <p className="text-xs text-muted-foreground">Closing Balance</p>
                                         <p className="font-mono font-semibold text-primary">{fmt(ledgerData.closingBalance)}</p>
                                     </div>
                                 </div>
                             </div>
                             {ledgerData.rows.length === 0 ? (
-                                <div className="text-center py-10 text-gray-400 text-sm">No transactions in this period</div>
+                                <div className="text-center py-10 text-muted-foreground text-sm">No transactions in this period</div>
                             ) : (
                                 <table className="w-full text-sm">
-                                    <thead className="text-xs text-gray-400 border-b bg-gray-50">
+                                    <thead className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
                                         <tr>
                                             <th className="px-5 py-2 text-left font-medium">Date</th>
                                             <th className="px-5 py-2 text-left font-medium">Reference</th>
@@ -268,20 +291,20 @@ export default function ReportsPage() {
                                     </thead>
                                     <tbody>
                                         {ledgerData.rows.map((row) => (
-                                            <tr key={row.id} className="border-b last:border-0 hover:bg-gray-50">
-                                                <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{new Date(row.date).toLocaleDateString()}</td>
+                                            <tr key={row.id} className="border-b last:border-0 hover:bg-muted/40">
+                                                <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">{new Date(row.date).toLocaleDateString()}</td>
                                                 <td className="px-5 py-3 font-mono text-primary">{row.reference}</td>
-                                                <td className="px-5 py-3 text-gray-700">
+                                                <td className="px-5 py-3 text-foreground">
                                                     <p>{row.description}</p>
-                                                    {row.lineDescription && <p className="text-xs text-gray-400">{row.lineDescription}</p>}
+                                                    {row.lineDescription && <p className="text-xs text-muted-foreground">{row.lineDescription}</p>}
                                                 </td>
                                                 <td className="px-5 py-3 text-right font-mono">
-                                                    {row.debit != null ? fmt(row.debit) : <span className="text-gray-300">—</span>}
+                                                    {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/40">—</span>}
                                                 </td>
                                                 <td className="px-5 py-3 text-right font-mono">
-                                                    {row.credit != null ? fmt(row.credit) : <span className="text-gray-300">—</span>}
+                                                    {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/40">—</span>}
                                                 </td>
-                                                <td className={`px-5 py-3 text-right font-mono font-semibold ${row.balance < 0 ? "text-red-600" : "text-gray-900"}`}>
+                                                <td className={`px-5 py-3 text-right font-mono font-semibold ${row.balance < 0 ? "text-destructive" : "text-foreground"}`}>
                                                     {fmt(row.balance)}
                                                 </td>
                                             </tr>

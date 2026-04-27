@@ -25,7 +25,7 @@ const GROUP_CARD_META = {
     qc: { icon: <ClipboardCheck size={20} />, textColor: "text-teal-600" },
     escalated: { icon: <ShieldAlert size={20} />, textColor: "text-red-600" },
     ready: { icon: <CheckCircle size={20} />, textColor: "text-green-600" },
-    no_fix: { icon: <AlertCircle size={20} />, textColor: "text-gray-600" },
+    no_fix: { icon: <AlertCircle size={20} />, textColor: "text-muted-foreground" },
 } satisfies Record<(typeof GROUP_OPTIONS)[number]["value"], { icon: React.ReactNode; textColor: string }>;
 
 // ── Shared include ────────────────────────────────────────────────────────────
@@ -266,7 +266,7 @@ export default async function AssignmentsPage({
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
-                <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-gray-600" />
+                <StatCard label="Total" value={total} icon={<AlertCircle size={20} />} textColor="text-muted-foreground" />
                 {GROUP_OPTIONS.map(({ value, label }) => (
                     <StatCard
                         key={value}
@@ -335,9 +335,9 @@ export default async function AssignmentsPage({
                         title="Active Tickets"
                         tickets={general}
                         type="status"
-                        color="text-gray-700"
-                        bgColor="bg-gray-50"
-                        icon={<CheckCircle size={16} className="text-gray-500" />}
+                        color="text-foreground"
+                        bgColor="bg-muted"
+                        icon={<CheckCircle size={16} className="text-muted-foreground" />}
                         currentUserId={userId}
                     />
                 </>
@@ -376,9 +376,9 @@ export default async function AssignmentsPage({
                         title="All Active Tickets"
                         tickets={general}
                         type="status"
-                        color="text-gray-700"
-                        bgColor="bg-gray-50"
-                        icon={<AlertCircle size={16} className="text-gray-500" />}
+                        color="text-foreground"
+                        bgColor="bg-muted"
+                        icon={<AlertCircle size={16} className="text-muted-foreground" />}
                         currentUserId={userId}
                     />
                 </>

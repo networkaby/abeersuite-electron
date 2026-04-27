@@ -7,17 +7,17 @@ interface Props {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
-    CLAIMED: { label: "W Claimed",   classes: "bg-amber-100 text-amber-700 border-amber-200" },
-    ACTIVE:  { label: "W Confirmed", classes: "bg-green-100 text-green-700 border-green-200" },
-    VOID:    { label: "W Voided",    classes: "bg-red-100 text-red-600 border-red-200" },
-    NONE:    { label: "Warranty",    classes: "bg-amber-50 text-amber-600 border-amber-100" },
+    CLAIMED: { label: "W Claimed",   classes: "bg-secondary/60 text-secondary-foreground border-border" },
+    ACTIVE:  { label: "W Confirmed", classes: "bg-primary/10 text-primary border-primary/40" },
+    VOID:    { label: "W Voided",    classes: "bg-destructive/10 text-destructive border-destructive/40" },
+    NONE:    { label: "Warranty",    classes: "bg-secondary/40 text-secondary-foreground border-border" },
 };
 
 export default function WarrantyBadge({ isWarranty, warrantyStatus, className = "" }: Props) {
     if (!isWarranty) return null;
-    const cfg = STATUS_CONFIG[warrantyStatus] ?? STATUS_CONFIG.none;
+    const cfg = STATUS_CONFIG[warrantyStatus] ?? STATUS_CONFIG.NONE;
     return (
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.classes} ${className}`}>
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 border ${cfg.classes} ${className}`}>
             <span>⚙</span> {cfg.label}
         </span>
     );

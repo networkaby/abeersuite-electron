@@ -228,7 +228,7 @@ export default function CompaniesPage() {
                                 onClick={() => setSelectedId(company.id)}
                             >
                                 <div className="flex w-full items-center gap-3 text-left">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
                                         {initials(company.name)}
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -261,7 +261,7 @@ export default function CompaniesPage() {
                         <div className="border-b bg-card px-6 py-4">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
                                         {initials(detail.name)}
                                     </div>
                                     <div>
@@ -355,7 +355,7 @@ export default function CompaniesPage() {
                                             <Card key={companyContact.id}>
                                                 <CardContent className="flex items-center justify-between pt-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-none bg-muted">
                                                             <User size={14} className="text-muted-foreground" />
                                                         </div>
                                                         <div>
@@ -442,7 +442,7 @@ export default function CompaniesPage() {
                                 <Input type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 rounded-xl border bg-muted/40 p-4">
+                        <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
                             <div className="space-y-2">
                                 <Label>Company Reg</Label>
                                 <Input value={form.companyReg} onChange={(e) => setForm((prev) => ({ ...prev, companyReg: e.target.value }))} />

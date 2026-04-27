@@ -18,6 +18,8 @@ interface Props {
     onClose: () => void;
 }
 
+const fieldClass = "w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+
 export default function PipelineTransferModal({ ticketId, currentPipelineLabel, onClose }: Props) {
     const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
     const [loading, setLoading] = useState(true);
@@ -71,31 +73,31 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="border-2 border-border shadow bg-card w-full max-w-md p-6">
                 <div className="flex items-center justify-between mb-5">
-                    <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <h2 className="font-semibold text-foreground flex items-center gap-2">
                         <ArrowRightLeft size={17} />
                         Transfer to Another Pipeline
                     </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
                         <X size={18} />
                     </button>
                 </div>
 
                 {loading ? (
-                    <p className="text-sm text-gray-400">Loading pipelines…</p>
+                    <p className="text-sm text-muted-foreground">Loading pipelines…</p>
                 ) : pipelines.length === 0 ? (
-                    <p className="text-sm text-gray-500">No other active pipelines available.</p>
+                    <p className="text-sm text-muted-foreground">No other active pipelines available.</p>
                 ) : (
                     <div className="space-y-4">
                         {currentPipelineLabel && (
-                            <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                                Currently in: <span className="font-medium text-gray-600">{currentPipelineLabel}</span>
+                            <div className="text-xs text-muted-foreground border-2 border-border bg-muted px-3 py-2">
+                                Currently in: <span className="font-medium text-foreground">{currentPipelineLabel}</span>
                             </div>
                         )}
 
                         <div>
-                            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1.5">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
                                 Transfer To
                             </label>
                             <div className="grid grid-cols-1 gap-2">
@@ -103,16 +105,16 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                     <button
                                         key={p.id}
                                         onClick={() => handlePipelineChange(p.id)}
-                                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                                        className={`flex items-center gap-3 px-4 py-3 border-2 text-left transition-colors ${
                                             selectedPipelineId === p.id
-                                                ? "border-primary/40 bg-primary/10"
-                                                : "border-gray-200 hover:border-gray-300"
+                                                ? "border-primary bg-primary/10"
+                                                : "border-border hover:bg-muted"
                                         }`}
                                     >
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.color}`}>
+                                        <span className={`px-2 py-0.5 text-xs font-medium ${p.color}`}>
                                             {p.label}
                                         </span>
-                                        <span className="text-xs text-gray-400">
+                                        <span className="text-xs text-muted-foreground">
                                             {p.statuses.length} stage{p.statuses.length !== 1 ? "s" : ""}
                                         </span>
                                     </button>
@@ -122,13 +124,13 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
 
                         {selectedPipeline && selectedPipeline.statuses.length > 0 && (
                             <div>
-                                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1.5">
+                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
                                     Land On Stage
                                 </label>
                                 <select
                                     value={selectedStatusId}
                                     onChange={e => setSelectedStatusId(e.target.value)}
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                    className={fieldClass}
                                 >
                                     {selectedPipeline.statuses.map(s => (
                                         <option key={s.id} value={s.id}>
@@ -137,13 +139,13 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                     ))}
                                 </select>
                                 {selectedPipeline.statuses.some(s => s.isEntryPoint) && (
-                                    <p className="text-xs text-gray-400 mt-1">★ = default entry point</p>
+                                    <p className="text-xs text-muted-foreground mt-1">★ = default entry point</p>
                                 )}
                             </div>
                         )}
 
                         <div>
-                            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1.5">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
                                 Reason / Note <span className="font-normal normal-case">(optional)</span>
                             </label>
                             <textarea
@@ -151,21 +153,21 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                 onChange={e => setNote(e.target.value)}
                                 rows={2}
                                 placeholder="e.g. Repair is more complex than expected"
-                                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                className="w-full resize-none border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
 
                         <div className="flex gap-2 pt-1">
                             <button
                                 onClick={onClose}
-                                className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50"
+                                className="flex-1 border-2 border-border py-2 text-sm hover:bg-muted"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSubmit}
                                 disabled={submitting || !selectedStatusId}
-                                className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                className="flex-1 border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
                                 {submitting ? "Transferring…" : "Transfer Ticket"}
                             </button>

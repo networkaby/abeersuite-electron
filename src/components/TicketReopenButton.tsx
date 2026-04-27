@@ -5,16 +5,25 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { RotateCcw, X } from "lucide-react";
+import { RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
-interface Props {
-    ticketId: number;
-}
+interface Props { ticketId: number; }
 
 export default function TicketReopenButton({ ticketId }: Props) {
     const { data: session } = useSession();
     const router = useRouter();
-    const [showModal, setShowModal] = useState(false);
+    const [open, setOpen] = useState(false);
     const [reason, setReason] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -26,8 +35,7 @@ export default function TicketReopenButton({ ticketId }: Props) {
                 userId: session?.user?.id,
             });
             toast.success(`New Ticket #${res.data.id} created!`);
-            setShowModal(false);
-            // Open receipt for new ticket
+            setOpen(false);
             window.open(`/receipt/${res.data.id}`, "_blank");
             router.push(`/tickets/${res.data.id}`);
         } catch {
@@ -39,61 +47,47 @@ export default function TicketReopenButton({ ticketId }: Props) {
 
     return (
         <>
-            <button
-                onClick={() => setShowModal(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 py-2 text-sm text-primary hover:bg-primary/10"
+            <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setOpen(true)}
             >
                 <RotateCcw size={15} />
                 Reopen / Same Problem
-            </button>
+            </Button>
 
-            {showModal && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold">Reopen Ticket</h2>
-                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Reopen Ticket</DialogTitle>
+                        <DialogDescription>
                             This will create a <strong>new ticket</strong> for the same device, linked to this ticket&apos;s history.
-                        </div>
+                        </DialogDescription>
+                    </DialogHeader>
 
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">
-                                    Reason <span className="text-gray-400">(optional)</span>
-                                </label>
-                                <textarea
-                                    value={reason}
-                                    onChange={(e) => setReason(e.target.value)}
-                                    rows={3}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                    placeholder="e.g. Problem still exists after repair..."
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-1">
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleReopen}
-                                    disabled={loading}
-                                    className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                    {loading ? "Creating..." : "Create New Ticket"}
-                                </button>
-                            </div>
-                        </div>
+                    <div className="border-2 border-primary bg-primary/10 p-3 text-sm text-primary">
+                        A new ticket will be opened and linked to this one.
                     </div>
-                </div>
-            )}
+
+                    <div className="space-y-2">
+                        <Label>Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Textarea
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            rows={3}
+                            placeholder="e.g. Problem still exists after repair..."
+                        />
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                        <Button type="button" onClick={handleReopen} disabled={loading}>
+                            {loading ? "Creating..." : "Create New Ticket"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

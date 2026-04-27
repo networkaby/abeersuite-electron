@@ -3,7 +3,18 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, X, Pencil } from "lucide-react";
+import { Plus, Trash2, Save, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+    DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 interface Pipeline {
     id: string;
@@ -18,16 +29,16 @@ interface Pipeline {
 }
 
 const COLOR_OPTIONS = [
-    { label: "Gray", value: "bg-gray-100 text-gray-600" },
-    { label: "Blue", value: "bg-blue-100 text-blue-600" },
+    { label: "Gray",   value: "bg-gray-100 text-gray-600" },
+    { label: "Blue",   value: "bg-blue-100 text-blue-600" },
     { label: "Yellow", value: "bg-yellow-100 text-yellow-600" },
     { label: "Orange", value: "bg-orange-100 text-orange-600" },
     { label: "Purple", value: "bg-purple-100 text-purple-600" },
-    { label: "Green", value: "bg-green-100 text-green-600" },
-    { label: "Red", value: "bg-red-100 text-red-600" },
-    { label: "Teal", value: "bg-teal-100 text-teal-600" },
+    { label: "Green",  value: "bg-green-100 text-green-600" },
+    { label: "Red",    value: "bg-red-100 text-red-600" },
+    { label: "Teal",   value: "bg-teal-100 text-teal-600" },
     { label: "Indigo", value: "bg-indigo-100 text-indigo-600" },
-    { label: "Pink", value: "bg-pink-100 text-pink-600" },
+    { label: "Pink",   value: "bg-pink-100 text-pink-600" },
 ];
 
 const BLANK_FORM = {
@@ -145,194 +156,212 @@ export default function PipelinesPage() {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold">Pipelines</h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         Each pipeline has its own independent set of statuses, sub-statuses, and workflow graph.
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
+                <Button onClick={() => setShowCreate(true)}>
                     <Plus size={16} /> Add Pipeline
-                </button>
+                </Button>
             </div>
 
             {loading ? (
-                <p className="text-gray-500">Loading…</p>
+                <p className="text-muted-foreground">Loading…</p>
             ) : (
                 <div className="grid gap-4">
                     {pipelines.map((p) => (
-                        <div key={p.id} className="bg-white rounded-xl shadow p-5 flex items-start gap-4">
+                        <div key={p.id} className="border-2 border-border shadow bg-card p-5 flex items-start gap-4">
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-3 flex-wrap">
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${p.color}`}>
+                                    <span className={`px-2.5 py-1 text-xs font-semibold ${p.color}`}>
                                         {p.label}
                                     </span>
-                                    <span className="text-xs font-mono text-gray-400">{p.id}</span>
-                                    <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{p.name}</span>
+                                    <span className="text-xs font-mono text-muted-foreground">{p.id}</span>
+                                    <span className="text-xs font-mono text-muted-foreground bg-muted border border-border px-2 py-0.5">{p.name}</span>
                                     {p.isDefault && (
-                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Default</span>
+                                        <span className="border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Default</span>
                                     )}
                                     {!p.isActive && (
-                                        <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inactive</span>
+                                        <span className="text-xs bg-muted text-muted-foreground border border-border px-2 py-0.5">Inactive</span>
                                     )}
                                 </div>
                                 {p.description && (
-                                    <p className="text-sm text-gray-500 mt-1.5">{p.description}</p>
+                                    <p className="text-sm text-muted-foreground mt-1.5">{p.description}</p>
                                 )}
-                                <div className="flex gap-4 mt-2 text-xs text-gray-400">
+                                <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
                                     <span>{p._count.statuses} stage{p._count.statuses !== 1 ? "s" : ""}</span>
                                     <span>{p._count.tickets} ticket{p._count.tickets !== 1 ? "s" : ""}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                                <button
+                                <Button
+                                    variant="outline"
+                                    size="sm"
                                     onClick={() => toggleActive(p)}
-                                    className={`text-xs px-3 py-1.5 border rounded-lg ${p.isActive ? "text-gray-500 hover:bg-gray-50" : "text-green-600 border-green-200 hover:bg-green-50"}`}
                                 >
                                     {p.isActive ? "Deactivate" : "Activate"}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
                                     onClick={() => openEdit(p)}
-                                    className="flex items-center gap-1 text-xs border rounded-lg px-3 py-1.5 text-gray-500 hover:bg-gray-50"
                                 >
                                     <Pencil size={13} /> Edit
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
                                     onClick={() => handleDelete(p)}
                                     disabled={p.isDefault || p._count.tickets > 0}
-                                    className="p-1.5 rounded text-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-30"
                                     title={p.isDefault ? "Cannot delete default pipeline" : p._count.tickets > 0 ? `${p._count.tickets} tickets use this pipeline` : "Delete"}
                                 >
                                     <Trash2 size={15} />
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* Create modal */}
-            {showCreate && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <div className="flex items-center justify-between mb-5">
-                            <h2 className="text-base font-semibold">New Pipeline</h2>
-                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            {/* Create Dialog */}
+            <Dialog open={showCreate} onOpenChange={(open) => { if (!open) { setShowCreate(false); setCreateForm(BLANK_FORM); } }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>New Pipeline</DialogTitle>
+                        <DialogDescription>
+                            Create a new independent pipeline with its own statuses and workflow.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="create-name">
+                                Name <span className="text-muted-foreground font-normal">(slug, e.g. manufacturing)</span>
+                            </Label>
+                            <Input
+                                id="create-name"
+                                value={createForm.name}
+                                onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "_") }))}
+                                placeholder="e.g. manufacturing"
+                                className="font-mono"
+                            />
+                            <p className="text-xs text-muted-foreground">Lowercase letters, numbers, hyphens and underscores only.</p>
                         </div>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Name <span className="text-gray-400">(slug, e.g. manufacturing)</span></label>
-                                <input
-                                    value={createForm.name}
-                                    onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "_") }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                                    placeholder="e.g. manufacturing"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens and underscores only.</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Label</label>
-                                <input
-                                    value={createForm.label}
-                                    onChange={(e) => setCreateForm((v) => ({ ...v, label: e.target.value }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                    placeholder="e.g. Manufacturing"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Description <span className="text-gray-400">(optional)</span></label>
-                                <input
-                                    value={createForm.description}
-                                    onChange={(e) => setCreateForm((v) => ({ ...v, description: e.target.value }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                    placeholder="Brief description of what this pipeline is for"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Color</label>
-                                <select
-                                    value={createForm.color}
-                                    onChange={(e) => setCreateForm((v) => ({ ...v, color: e.target.value }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                >
-                                    {COLOR_OPTIONS.map((c) => (
-                                        <option key={c.value} value={c.value}>{c.label}</option>
-                                    ))}
-                                </select>
-                                <span className={`mt-1 inline-block text-xs px-2 py-0.5 rounded-full ${createForm.color}`}>
-                                    {createForm.label || "Preview"}
-                                </span>
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="create-label">Label</Label>
+                            <Input
+                                id="create-label"
+                                value={createForm.label}
+                                onChange={(e) => setCreateForm((v) => ({ ...v, label: e.target.value }))}
+                                placeholder="e.g. Manufacturing"
+                            />
                         </div>
-                        <div className="flex gap-3 pt-5 border-t mt-5">
-                            <button onClick={() => setShowCreate(false)} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
-                            <button
-                                onClick={handleCreate}
-                                disabled={creating || !createForm.name.trim() || !createForm.label.trim()}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        <div className="space-y-2">
+                            <Label htmlFor="create-desc">
+                                Description <span className="text-muted-foreground font-normal">(optional)</span>
+                            </Label>
+                            <Input
+                                id="create-desc"
+                                value={createForm.description}
+                                onChange={(e) => setCreateForm((v) => ({ ...v, description: e.target.value }))}
+                                placeholder="Brief description of what this pipeline is for"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Color</Label>
+                            <Select
+                                value={createForm.color}
+                                onValueChange={(v) => setCreateForm((f) => ({ ...f, color: v }))}
                             >
-                                <Save size={14} /> {creating ? "Creating…" : "Create Pipeline"}
-                            </button>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {COLOR_OPTIONS.map((c) => (
+                                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {createForm.label && (
+                                <Badge className={createForm.color}>{createForm.label}</Badge>
+                            )}
                         </div>
                     </div>
-                </div>
-            )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setShowCreate(false); setCreateForm(BLANK_FORM); }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleCreate}
+                            disabled={creating || !createForm.name.trim() || !createForm.label.trim()}
+                        >
+                            <Save size={14} /> {creating ? "Creating…" : "Create Pipeline"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-            {/* Edit modal */}
-            {editId && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <div className="flex items-center justify-between mb-5">
-                            <h2 className="text-base font-semibold">Edit Pipeline</h2>
-                            <button onClick={() => setEditId(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            {/* Edit Dialog */}
+            <Dialog open={!!editId} onOpenChange={(open) => { if (!open) setEditId(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit Pipeline</DialogTitle>
+                        <DialogDescription>
+                            Update the label, description, and color of this pipeline.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-label">Label</Label>
+                            <Input
+                                id="edit-label"
+                                value={editForm.label}
+                                onChange={(e) => setEditForm((v) => ({ ...v, label: e.target.value }))}
+                            />
                         </div>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Label</label>
-                                <input
-                                    value={editForm.label}
-                                    onChange={(e) => setEditForm((v) => ({ ...v, label: e.target.value }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Description <span className="text-gray-400">(optional)</span></label>
-                                <input
-                                    value={editForm.description}
-                                    onChange={(e) => setEditForm((v) => ({ ...v, description: e.target.value }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Color</label>
-                                <select
-                                    value={editForm.color}
-                                    onChange={(e) => setEditForm((v) => ({ ...v, color: e.target.value }))}
-                                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                >
-                                    {COLOR_OPTIONS.map((c) => (
-                                        <option key={c.value} value={c.value}>{c.label}</option>
-                                    ))}
-                                </select>
-                                <span className={`mt-1 inline-block text-xs px-2 py-0.5 rounded-full ${editForm.color}`}>
-                                    {editForm.label || "Preview"}
-                                </span>
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-desc">
+                                Description <span className="text-muted-foreground font-normal">(optional)</span>
+                            </Label>
+                            <Input
+                                id="edit-desc"
+                                value={editForm.description}
+                                onChange={(e) => setEditForm((v) => ({ ...v, description: e.target.value }))}
+                            />
                         </div>
-                        <div className="flex gap-3 pt-5 border-t mt-5">
-                            <button onClick={() => setEditId(null)} className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
-                            <button
-                                onClick={handleEdit}
-                                disabled={editing || !editForm.label.trim()}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        <div className="space-y-2">
+                            <Label>Color</Label>
+                            <Select
+                                value={editForm.color}
+                                onValueChange={(v) => setEditForm((f) => ({ ...f, color: v }))}
                             >
-                                <Save size={14} /> {editing ? "Saving…" : "Save Changes"}
-                            </button>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {COLOR_OPTIONS.map((c) => (
+                                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {editForm.label && (
+                                <Badge className={editForm.color}>{editForm.label}</Badge>
+                            )}
                         </div>
                     </div>
-                </div>
-            )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditId(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleEdit}
+                            disabled={editing || !editForm.label.trim()}
+                        >
+                            <Save size={14} /> {editing ? "Saving…" : "Save Changes"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

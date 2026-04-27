@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 type GlAccountType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
@@ -29,6 +35,8 @@ const TYPE_COLORS: Record<GlAccountType, string> = {
 };
 
 const TYPE_ORDER: GlAccountType[] = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"];
+
+const cellClass = "w-full border-2 border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
 function fmt(n: number) {
     return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -119,7 +127,7 @@ export default function ChartOfAccountsPage() {
 
     if (loading) return (
         <div className="flex items-center justify-center h-64">
-            <Loader2 className="animate-spin text-gray-400" size={32} />
+            <Loader2 className="animate-spin text-muted-foreground" size={32} />
         </div>
     );
 
@@ -127,98 +135,91 @@ export default function ChartOfAccountsPage() {
         <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Chart of Accounts</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">General Ledger master list</p>
+                    <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">General Ledger master list</p>
                 </div>
-                <button
-                    onClick={() => setShowAdd((v) => !v)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
+                <Button onClick={() => setShowAdd((v) => !v)}>
                     <Plus size={16} /> New Account
-                </button>
+                </Button>
             </div>
 
             {/* Add form */}
             {showAdd && (
-                <div className="bg-white border rounded-xl p-5 shadow-sm space-y-4">
-                    <h2 className="font-semibold text-gray-800">New GL Account</h2>
+                <div className="border-2 border-border shadow bg-card p-5 space-y-4">
+                    <h2 className="font-semibold text-foreground">New GL Account</h2>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Code</label>
-                            <input
+                        <div className="space-y-1.5">
+                            <Label>Code</Label>
+                            <Input
                                 value={newForm.code}
                                 onChange={(e) => setNewForm((f) => ({ ...f, code: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm"
                                 placeholder="e.g. 1100"
                             />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Name</label>
-                            <input
+                        <div className="space-y-1.5">
+                            <Label>Name</Label>
+                            <Input
                                 value={newForm.name}
                                 onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm"
                                 placeholder="Account name"
                             />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Type</label>
-                            <select
+                        <div className="space-y-1.5">
+                            <Label>Type</Label>
+                            <Select
                                 value={newForm.type}
-                                onChange={(e) => {
-                                    const t = e.target.value as GlAccountType;
+                                onValueChange={(t) => {
                                     const nb: NormalBalance = ["ASSET", "EXPENSE"].includes(t) ? "DEBIT" : "CREDIT";
-                                    setNewForm((f) => ({ ...f, type: t, normalBalance: nb }));
+                                    setNewForm((f) => ({ ...f, type: t as GlAccountType, normalBalance: nb }));
                                 }}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm"
                             >
-                                {TYPE_ORDER.map((t) => <option key={t}>{t}</option>)}
-                            </select>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {TYPE_ORDER.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Normal Balance</label>
-                            <select
+                        <div className="space-y-1.5">
+                            <Label>Normal Balance</Label>
+                            <Select
                                 value={newForm.normalBalance}
-                                onChange={(e) => setNewForm((f) => ({ ...f, normalBalance: e.target.value as NormalBalance }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm"
+                                onValueChange={(v) => setNewForm((f) => ({ ...f, normalBalance: v as NormalBalance }))}
                             >
-                                <option>DEBIT</option>
-                                <option>CREDIT</option>
-                            </select>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="DEBIT">DEBIT</SelectItem>
+                                    <SelectItem value="CREDIT">CREDIT</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <div className="col-span-2">
-                            <label className="text-xs font-medium text-gray-600">Description</label>
-                            <input
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Description</Label>
+                            <Input
                                 value={newForm.description}
                                 onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm"
                                 placeholder="Optional"
                             />
                         </div>
                     </div>
                     <div className="flex gap-2 justify-end">
-                        <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
-                        <button
-                            onClick={addAccount}
-                            disabled={saving}
-                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                        >
+                        <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+                        <Button onClick={addAccount} disabled={saving}>
                             {saving && <Loader2 size={14} className="animate-spin" />} Save
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
 
             {/* Account groups */}
             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                <div key={type} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className={`px-5 py-3 flex items-center justify-between ${TYPE_COLORS[type].replace("text-", "border-b border-")} border-b`}>
-                        <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-full ${TYPE_COLORS[type]}`}>{type}</span>
-                        <span className="text-xs text-gray-400">{rows.length} accounts</span>
+                <div key={type} className="border-2 border-border shadow bg-card overflow-hidden">
+                    <div className={`px-5 py-3 border-b-2 border-border flex items-center justify-between ${TYPE_COLORS[type]}`}>
+                        <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 border border-current/20 ${TYPE_COLORS[type]}`}>{type}</span>
+                        <span className="text-xs opacity-70">{rows.length} accounts</span>
                     </div>
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="text-xs text-gray-400 border-b bg-gray-50">
+                            <tr className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
                                 <th className="px-5 py-2 text-left font-medium">Code</th>
                                 <th className="px-5 py-2 text-left font-medium">Name</th>
                                 <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
@@ -230,44 +231,44 @@ export default function ChartOfAccountsPage() {
                         </thead>
                         <tbody>
                             {rows.map((a) => (
-                                <tr key={a.id} className={`border-b last:border-0 hover:bg-gray-50 ${!a.isActive ? "opacity-50" : ""}`}>
-                                    <td className="px-5 py-3 font-mono text-gray-700">{a.code}</td>
+                                <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/40 ${!a.isActive ? "opacity-50" : ""}`}>
+                                    <td className="px-5 py-3 font-mono text-foreground">{a.code}</td>
                                     <td className="px-5 py-3">
                                         {editingId === a.id ? (
                                             <input
                                                 value={editName}
                                                 onChange={(e) => setEditName(e.target.value)}
-                                                className="border rounded px-2 py-1 text-sm w-full"
+                                                className={cellClass}
                                                 autoFocus
                                             />
                                         ) : (
-                                            <span className="font-medium text-gray-800">{a.name}</span>
+                                            <span className="font-medium text-foreground">{a.name}</span>
                                         )}
                                         {a.description && editingId !== a.id && (
-                                            <p className="text-xs text-gray-400 mt-0.5">{a.description}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
                                         )}
                                         {editingId === a.id && (
                                             <input
                                                 value={editDesc}
                                                 onChange={(e) => setEditDesc(e.target.value)}
-                                                className="border rounded px-2 py-1 text-xs w-full mt-1"
+                                                className={`${cellClass} mt-1`}
                                                 placeholder="Description"
                                             />
                                         )}
                                     </td>
                                     <td className="px-5 py-3">
-                                        <span className="text-xs text-gray-500">{a.normalBalance}</span>
+                                        <span className="text-xs text-muted-foreground">{a.normalBalance}</span>
                                     </td>
                                     <td className="px-5 py-3 text-right font-mono">
-                                        <span className={a.balance < 0 ? "text-red-600" : "text-gray-800"}>
+                                        <span className={a.balance < 0 ? "text-destructive" : "text-foreground"}>
                                             {a.balance < 0 && <TrendingDown size={12} className="inline mr-1" />}
                                             {a.balance > 0 && <TrendingUp size={12} className="inline mr-1 text-green-500" />}
                                             {fmt(a.balance)}
                                         </span>
                                     </td>
-                                    <td className="px-5 py-3 text-right text-gray-400">{a._count.lines}</td>
+                                    <td className="px-5 py-3 text-right text-muted-foreground">{a._count.lines}</td>
                                     <td className="px-5 py-3 text-center">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full ${a.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                                        <span className={`text-xs px-2 py-0.5 border font-medium ${a.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground border-border"}`}>
                                             {a.isActive ? "Active" : "Inactive"}
                                         </span>
                                     </td>
@@ -275,21 +276,31 @@ export default function ChartOfAccountsPage() {
                                         <div className="flex items-center gap-1 justify-end">
                                             {editingId === a.id ? (
                                                 <>
-                                                    <button onClick={() => saveEdit(a.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded" disabled={saving}>
+                                                    <button
+                                                        onClick={() => saveEdit(a.id)}
+                                                        className="p-1.5 text-green-600 hover:bg-green-50"
+                                                        disabled={saving}
+                                                    >
                                                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                                     </button>
-                                                    <button onClick={() => setEditingId(null)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
+                                                    <button
+                                                        onClick={() => setEditingId(null)}
+                                                        className="p-1.5 text-muted-foreground hover:bg-muted"
+                                                    >
                                                         <X size={14} />
                                                     </button>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <button onClick={() => startEdit(a)} className="rounded p-1.5 text-gray-400 hover:bg-primary/10 hover:text-primary">
+                                                    <button
+                                                        onClick={() => startEdit(a)}
+                                                        className="p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                    >
                                                         <Pencil size={14} />
                                                     </button>
                                                     <button
                                                         onClick={() => toggleActive(a)}
-                                                        className={`p-1.5 rounded text-xs ${a.isActive ? "text-red-400 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
+                                                        className={`p-1.5 text-xs ${a.isActive ? "text-destructive hover:bg-destructive/10" : "text-green-600 hover:bg-green-50"}`}
                                                     >
                                                         {a.isActive ? <X size={14} /> : <Check size={14} />}
                                                     </button>

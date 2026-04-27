@@ -307,7 +307,7 @@ export default function QuickTicketButton() {
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) closeModal(); }}>
             <DialogContent showCloseButton={false} className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
-                <DialogHeader className="border-b px-6 py-5">
+                <DialogHeader className="border-b-2 border-border px-6 py-5">
                     <div className="flex items-start justify-between gap-4">
                         <div className="space-y-3">
                             <div>
@@ -391,7 +391,7 @@ export default function QuickTicketButton() {
                                         autoFocus
                                     />
                                     {showSuggestions && (suggestions.length > 0 || (phone.trim().length >= 2 && !lookupLoading)) && (
-                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden rounded-xl border bg-popover shadow-md">
+                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden border-2 border-border shadow bg-popover">
                                             {suggestions.length > 0 ? (
                                                 suggestions.map((suggestion, index) => (
                                                     <button
@@ -432,7 +432,7 @@ export default function QuickTicketButton() {
 
                     {step === "account" && (
                         <form onSubmit={accountForm.handleSubmit(createAccount)} className="space-y-4">
-                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            <div className="border-2 border-secondary/50 bg-secondary/30 px-4 py-3 text-sm text-foreground">
                                 No account found for <strong>{phone}</strong>. Choose individual or company, then fill in the details.
                             </div>
 
@@ -486,7 +486,7 @@ export default function QuickTicketButton() {
                             </div>
 
                             {accountType === "company" && (
-                                <div className="grid grid-cols-2 gap-3 rounded-xl border border-primary/15 bg-muted/40 p-4">
+                                <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
                                     <div className="space-y-2">
                                         <Label>Company Reg #</Label>
                                         <Input {...accountForm.register("companyReg")} placeholder="Trade licence / Reg no." />
@@ -515,10 +515,10 @@ export default function QuickTicketButton() {
 
                     {step === "ticket" && (
                         <form onSubmit={ticketForm.handleSubmit(createTicket)} className="space-y-5">
-                            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                            <div className="flex items-center gap-2 border-2 border-border bg-muted/60 px-4 py-3 text-sm text-foreground">
                                 <UserPlus size={15} />
                                 <span><strong>{identity?.name}</strong> {identity?.phone && `— ${identity.phone}`}</span>
-                                <Button type="button" variant="link" className="ml-auto h-auto px-0 text-xs text-emerald-700" onClick={() => setStep("phone")}>
+                                <Button type="button" variant="link" className="ml-auto h-auto px-0 text-xs text-muted-foreground" onClick={() => setStep("phone")}>
                                     Change
                                 </Button>
                             </div>
@@ -564,7 +564,7 @@ export default function QuickTicketButton() {
                                                 size="sm"
                                                 onClick={() => setSelectedPipelineId(p.id)}
                                             >
-                                                <span className={`h-2 w-2 rounded-full ${colorDot(p.color)}`} />
+                                                <span className={`h-2 w-2 ${colorDot(p.color)}`} />
                                                 {p.label}
                                             </Button>
                                         ))}
@@ -623,7 +623,7 @@ export default function QuickTicketButton() {
                             </div>
 
                             {isWarranty && (
-                                <div className="grid grid-cols-2 gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                <div className="grid grid-cols-2 gap-3 border-2 border-secondary/50 bg-secondary/30 p-4">
                                     <div className="space-y-2">
                                         <Label>Serial / Purchase Ref</Label>
                                         <Input {...ticketForm.register("warrantyRef")} placeholder="Serial or receipt ref" />

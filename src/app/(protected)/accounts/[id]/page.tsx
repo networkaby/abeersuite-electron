@@ -9,6 +9,13 @@ import { PRIORITY_META } from "@/utils/constants";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/format-date";
 import AccountForm from "@/components/AccountForm";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
 
 interface Relationship {
     id: number;
@@ -114,8 +121,8 @@ export default function AccountDetailPage() {
         }
     };
 
-    if (loading) return <p className="text-gray-500">Loading…</p>;
-    if (!account) return <p className="text-gray-500">Account not found.</p>;
+    if (loading) return <p className="text-muted-foreground">Loading…</p>;
+    if (!account) return <p className="text-muted-foreground">Account not found.</p>;
 
     const relationships = account.type === "individual" ? account.asIndividual : account.asCompany;
     const isCompany = account.type === "company";
@@ -124,33 +131,30 @@ export default function AccountDetailPage() {
         <div className="max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex items-center gap-4 mb-6">
-                <Link href="/accounts" className="text-gray-400 hover:text-gray-600">
+                <Link href="/accounts" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold">{account.name}</h1>
                         {isCompany ? (
-                            <span className="flex items-center gap-1 text-xs font-medium text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-xs font-medium text-purple-600 bg-purple-50 border border-purple-200 px-2 py-0.5">
                                 <Building2 size={11} /> Company
                             </span>
                         ) : (
-                            <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5">
                                 <User size={11} /> Individual
                             </span>
                         )}
                         {!account.isActive && (
-                            <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Inactive</span>
+                            <span className="text-xs text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5">Inactive</span>
                         )}
                     </div>
-                    <p className="text-gray-400 text-sm">Account #{account.id} · Created {formatDateTime(account.createdAt)}</p>
+                    <p className="text-muted-foreground text-sm">Account #{account.id} · Created {formatDateTime(account.createdAt)}</p>
                 </div>
-                <button
-                    onClick={() => setShowEdit(true)}
-                    className="flex items-center gap-2 border border-gray-300 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                >
+                <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
                     <Pencil size={14} /> Edit
-                </button>
+                </Button>
             </div>
 
             <div className="grid grid-cols-3 gap-6">
@@ -158,30 +162,32 @@ export default function AccountDetailPage() {
                 <div className="col-span-2 space-y-6">
 
                     {/* Contact Info */}
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="font-semibold text-gray-700 mb-4 text-sm uppercase tracking-wide">Contact Details</h2>
+                    <div className="border-2 border-border shadow bg-card p-6">
+                        <h2 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">Contact Details</h2>
                         <div className="grid grid-cols-2 gap-4 text-sm">
-                            {account.phone && <div><p className="text-gray-400 text-xs mb-0.5">Phone</p><p>{account.phone}</p></div>}
-                            {account.email && <div><p className="text-gray-400 text-xs mb-0.5">Email</p><p>{account.email}</p></div>}
-                            {account.address && <div className="col-span-2"><p className="text-gray-400 text-xs mb-0.5">Address</p><p>{account.address}</p></div>}
-                            {account.companyReg && <div><p className="text-gray-400 text-xs mb-0.5">Company Reg</p><p className="font-mono">{account.companyReg}</p></div>}
-                            {account.taxId && <div><p className="text-gray-400 text-xs mb-0.5">Tax / VAT ID</p><p className="font-mono">{account.taxId}</p></div>}
+                            {account.phone && <div><p className="text-muted-foreground text-xs mb-0.5">Phone</p><p>{account.phone}</p></div>}
+                            {account.email && <div><p className="text-muted-foreground text-xs mb-0.5">Email</p><p>{account.email}</p></div>}
+                            {account.address && <div className="col-span-2"><p className="text-muted-foreground text-xs mb-0.5">Address</p><p>{account.address}</p></div>}
+                            {account.companyReg && <div><p className="text-muted-foreground text-xs mb-0.5">Company Reg</p><p className="font-mono">{account.companyReg}</p></div>}
+                            {account.taxId && <div><p className="text-muted-foreground text-xs mb-0.5">Tax / VAT ID</p><p className="font-mono">{account.taxId}</p></div>}
                         </div>
                     </div>
 
                     {/* Devices & Tickets */}
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="font-semibold text-gray-700 mb-4 text-sm uppercase tracking-wide">Devices & Tickets</h2>
+                    <div className="border-2 border-border shadow bg-card p-6">
+                        <h2 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">Devices &amp; Tickets</h2>
                         {account.devices.length === 0 ? (
-                            <p className="text-gray-400 text-sm">No devices yet.</p>
+                            <p className="text-muted-foreground text-sm">No devices yet.</p>
                         ) : (
                             <div className="space-y-4">
                                 {account.devices.map(d => (
-                                    <div key={d.id} className="border border-gray-100 rounded-lg p-4">
-                                        <p className="font-medium text-sm">{d.brand} {d.model} <span className="text-gray-400">({d.type})</span></p>
-                                        <p className="text-xs text-gray-500 mb-3">{d.problem}</p>
+                                    <div key={d.id} className="border-2 border-border p-4">
+                                        <p className="font-medium text-sm">
+                                            {d.brand} {d.model} <span className="text-muted-foreground">({d.type})</span>
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mb-3">{d.problem}</p>
                                         {d.tickets.length === 0 ? (
-                                            <p className="text-xs text-gray-400">No tickets</p>
+                                            <p className="text-xs text-muted-foreground">No tickets</p>
                                         ) : (
                                             <div className="space-y-1.5">
                                                 {d.tickets.map(t => (
@@ -190,11 +196,11 @@ export default function AccountDetailPage() {
                                                             #{t.id}
                                                         </Link>
                                                         {t.pipeline && (
-                                                            <span className={`px-1.5 py-0.5 rounded-full text-xs ${t.pipeline.color}`}>{t.pipeline.label}</span>
+                                                            <span className={`px-1.5 py-0.5 text-xs ${t.pipeline.color}`}>{t.pipeline.label}</span>
                                                         )}
-                                                        <span className={`px-1.5 py-0.5 rounded-full ${t.ticketStatus.color}`}>{t.ticketStatus.label}</span>
-                                                        <span className={`px-1.5 py-0.5 rounded-full ${PRIORITY_META[t.priority]?.color ?? ""}`}>{PRIORITY_META[t.priority]?.label ?? t.priority}</span>
-                                                        <span className="text-gray-400 ml-auto">{formatDateTime(t.createdAt)}</span>
+                                                        <span className={`px-1.5 py-0.5 ${t.ticketStatus.color}`}>{t.ticketStatus.label}</span>
+                                                        <span className={`px-1.5 py-0.5 ${PRIORITY_META[t.priority]?.color ?? ""}`}>{PRIORITY_META[t.priority]?.label ?? t.priority}</span>
+                                                        <span className="text-muted-foreground ml-auto">{formatDateTime(t.createdAt)}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -208,9 +214,9 @@ export default function AccountDetailPage() {
 
                 {/* Right: Relationships */}
                 <div className="space-y-4">
-                    <div className="bg-white rounded-xl shadow p-5">
+                    <div className="border-2 border-border shadow bg-card p-5">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
+                            <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
                                 <Link2 size={15} />
                                 {isCompany ? "Linked Individuals" : "Linked Companies"}
                             </h2>
@@ -223,13 +229,13 @@ export default function AccountDetailPage() {
                         </div>
 
                         {relationships.length === 0 ? (
-                            <p className="text-xs text-gray-400">No links yet.</p>
+                            <p className="text-xs text-muted-foreground">No links yet.</p>
                         ) : (
                             <div className="space-y-2">
                                 {relationships.map(rel => {
                                     const linked = isCompany ? rel.individual : rel.company;
                                     return (
-                                        <div key={rel.id} className="flex items-start justify-between gap-2 py-2 border-b border-gray-50 last:border-0">
+                                        <div key={rel.id} className="flex items-start justify-between gap-2 py-2 border-b border-border last:border-0">
                                             <div>
                                                 <Link
                                                     href={`/accounts/${linked?.id}`}
@@ -237,12 +243,12 @@ export default function AccountDetailPage() {
                                                 >
                                                     {linked?.name}
                                                 </Link>
-                                                {linked?.phone && <p className="text-xs text-gray-400">{linked.phone}</p>}
-                                                {rel.role && <span className="text-xs text-gray-400 italic">{rel.role}</span>}
+                                                {linked?.phone && <p className="text-xs text-muted-foreground">{linked.phone}</p>}
+                                                {rel.role && <span className="text-xs text-muted-foreground italic">{rel.role}</span>}
                                             </div>
                                             <button
                                                 onClick={() => unlink(rel.id)}
-                                                className="text-gray-300 hover:text-red-400 shrink-0 mt-0.5"
+                                                className="text-muted-foreground/40 hover:text-destructive shrink-0 mt-0.5"
                                                 title="Unlink"
                                             >
                                                 <Unlink size={13} />
@@ -267,73 +273,74 @@ export default function AccountDetailPage() {
                 />
             )}
 
-            {/* Link Modal */}
-            {showLinkModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <h2 className="font-semibold mb-4 flex items-center gap-2">
+            {/* Link Dialog */}
+            <Dialog open={showLinkModal} onOpenChange={(open) => {
+                if (!open) { setShowLinkModal(false); setLinkSearch(""); setLinkResults([]); setLinkRole(""); }
+            }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
                             <Link2 size={16} />
                             Link to a {isCompany ? "Person" : "Company"}
-                        </h2>
-                        <div className="space-y-3">
-                            <div className="flex gap-2">
-                                <input
-                                    value={linkSearch}
-                                    onChange={e => setLinkSearch(e.target.value)}
-                                    onKeyDown={e => e.key === "Enter" && searchForLink()}
-                                    placeholder={`Search ${isCompany ? "individual" : "company"} by name or phone…`}
-                                    className="flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                />
-                                <button
-                                    onClick={searchForLink}
-                                    className="rounded-lg bg-primary px-4 text-sm text-primary-foreground hover:bg-primary/90"
-                                >
-                                    Search
-                                </button>
-                            </div>
-
-                            {linkResults.length > 0 && (
-                                <>
-                                    <div>
-                                        <label className="text-xs text-gray-500 block mb-1">Role <span className="font-normal">(optional)</span></label>
-                                        <input
-                                            value={linkRole}
-                                            onChange={e => setLinkRole(e.target.value)}
-                                            placeholder="e.g. Owner, Employee, Contact"
-                                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                        />
-                                    </div>
-                                    <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
-                                        {linkResults.map(r => (
-                                            <button
-                                                key={r.id}
-                                                onClick={() => linkTo(r.id)}
-                                                disabled={linking}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-primary/10 disabled:opacity-50"
-                                            >
-                                                {r.type === "company" ? <Building2 size={14} className="text-purple-500 shrink-0" /> : <User size={14} className="text-blue-500 shrink-0" />}
-                                                <div>
-                                                    <p className="font-medium">{r.name}</p>
-                                                    {r.phone && <p className="text-xs text-gray-400">{r.phone}</p>}
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-
-                            <div className="flex gap-2 pt-1">
-                                <button
-                                    onClick={() => { setShowLinkModal(false); setLinkSearch(""); setLinkResults([]); setLinkRole(""); }}
-                                    className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
+                        </DialogTitle>
+                        <DialogDescription>
+                            Search and select an account to link.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <div className="flex gap-2">
+                            <Input
+                                value={linkSearch}
+                                onChange={e => setLinkSearch(e.target.value)}
+                                onKeyDown={e => e.key === "Enter" && searchForLink()}
+                                placeholder={`Search ${isCompany ? "individual" : "company"} by name or phone…`}
+                                className="flex-1"
+                            />
+                            <Button onClick={searchForLink}>Search</Button>
                         </div>
+
+                        {linkResults.length > 0 && (
+                            <>
+                                <div className="space-y-1.5">
+                                    <Label>Role <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                                    <Input
+                                        value={linkRole}
+                                        onChange={e => setLinkRole(e.target.value)}
+                                        placeholder="e.g. Owner, Employee, Contact"
+                                    />
+                                </div>
+                                <div className="border-2 border-border divide-y divide-border max-h-48 overflow-y-auto">
+                                    {linkResults.map(r => (
+                                        <button
+                                            key={r.id}
+                                            onClick={() => linkTo(r.id)}
+                                            disabled={linking}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-primary/10 disabled:opacity-50"
+                                        >
+                                            {r.type === "company"
+                                                ? <Building2 size={14} className="text-purple-500 shrink-0" />
+                                                : <User size={14} className="text-primary shrink-0" />
+                                            }
+                                            <div>
+                                                <p className="font-medium">{r.name}</p>
+                                                {r.phone && <p className="text-xs text-muted-foreground">{r.phone}</p>}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => { setShowLinkModal(false); setLinkSearch(""); setLinkResults([]); setLinkRole(""); }}
+                        >
+                            Cancel
+                        </Button>
                     </div>
-                </div>
-            )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -45,58 +45,58 @@ export default async function CustomerDetailPage({
     return (
         <div>
             <div className="flex items-center gap-3 mb-6">
-                <Link href="/customers" className="text-gray-400 hover:text-gray-600">
+                <Link href="/customers" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex items-center gap-3">
-                    <User size={22} className="text-blue-600" />
+                    <User size={22} className="text-primary" />
                     <div>
                         <h1 className="text-2xl font-bold">{customer.name}</h1>
-                        <p className="text-gray-400 text-sm">Customer #{customer.id}</p>
+                        <p className="text-muted-foreground text-sm">Customer #{customer.id}</p>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Contact Info */}
-                <div className="bg-white rounded-xl shadow p-5 space-y-3">
-                    <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Contact Info</h2>
+                <div className="border-2 border-border shadow bg-card p-5 space-y-3">
+                    <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">Contact Info</h2>
                     <div className="space-y-2 text-sm">
                         {customer.phone && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Phone</span>
+                                <span className="text-muted-foreground">Phone</span>
                                 <span className="font-medium">{customer.phone}</span>
                             </div>
                         )}
                         {customer.email && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Email</span>
+                                <span className="text-muted-foreground">Email</span>
                                 <span className="font-medium">{customer.email}</span>
                             </div>
                         )}
                         {customer.address && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Address</span>
+                                <span className="text-muted-foreground">Address</span>
                                 <span className="font-medium text-right max-w-[200px]">{customer.address}</span>
                             </div>
                         )}
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Customer since</span>
+                            <span className="text-muted-foreground">Customer since</span>
                             <span className="font-medium">{formatDate(customer.createdAt.toISOString())}</span>
                         </div>
                         {customer.account && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Account #</span>
-                                <span className="font-medium text-gray-400">{customer.account.id}</span>
+                                <span className="text-muted-foreground">Account #</span>
+                                <span className="font-medium text-muted-foreground">{customer.account.id}</span>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* Linked Companies */}
-                <div className="bg-white rounded-xl shadow p-5">
+                <div className="border-2 border-border shadow bg-card p-5">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide flex items-center gap-2">
+                        <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
                             <Building2 size={14} /> Linked Companies
                         </h2>
                     </div>
@@ -107,33 +107,33 @@ export default async function CustomerDetailPage({
                 </div>
 
                 {/* Devices & Tickets */}
-                <div className="bg-white rounded-xl shadow p-5">
-                    <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
-                        <Smartphone size={14} /> Devices & Tickets
+                <div className="border-2 border-border shadow bg-card p-5">
+                    <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
+                        <Smartphone size={14} /> Devices &amp; Tickets
                     </h2>
                     {(customer.account?.devices ?? []).length === 0 ? (
-                        <p className="text-sm text-gray-400">No devices yet.</p>
+                        <p className="text-sm text-muted-foreground">No devices yet.</p>
                     ) : (
                         <div className="space-y-4">
                             {(customer.account?.devices ?? []).map(d => (
-                                <div key={d.id} className="border rounded-lg p-3">
+                                <div key={d.id} className="border-2 border-border p-3">
                                     <p className="font-medium text-sm">{d.brand} {d.model}</p>
-                                    <p className="text-xs text-gray-400">{d.type}</p>
+                                    <p className="text-xs text-muted-foreground">{d.type}</p>
                                     <div className="mt-2 space-y-1">
                                         {d.tickets.map(t => (
                                             <div key={t.id} className="flex items-center justify-between text-xs">
                                                 <Link href={`/tickets/${t.id}`} className="text-primary hover:underline">
                                                     #{t.id}
                                                 </Link>
-                                                <span className={`px-2 py-0.5 rounded-full font-medium ${t.ticketStatus.color}`}>
+                                                <span className={`px-2 py-0.5 font-medium ${t.ticketStatus.color}`}>
                                                     {t.ticketStatus.label}
                                                 </span>
-                                                <Link href={`/tickets/${t.id}`} className="text-gray-400 hover:text-primary">
+                                                <Link href={`/tickets/${t.id}`} className="text-muted-foreground hover:text-primary">
                                                     <Eye size={12} />
                                                 </Link>
                                             </div>
                                         ))}
-                                        {d.tickets.length === 0 && <p className="text-gray-400 text-xs">No tickets</p>}
+                                        {d.tickets.length === 0 && <p className="text-muted-foreground text-xs">No tickets</p>}
                                     </div>
                                 </div>
                             ))}

@@ -229,7 +229,7 @@ export default function CustomersPage() {
                                 onClick={() => setSelectedId(customer.id)}
                             >
                                 <div className="flex w-full items-center gap-3 text-left">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
                                         {initials(customer.name)}
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -262,7 +262,7 @@ export default function CustomersPage() {
                         <div className="border-b bg-card px-6 py-4">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
                                         {initials(detail.name)}
                                     </div>
                                     <div>

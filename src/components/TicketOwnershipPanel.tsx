@@ -47,11 +47,8 @@ export default function TicketOwnershipPanel({
             setShowReassign(false);
             setSelectedUserId(null);
             onChanged();
-        } catch {
-            toast.error("Failed to reassign");
-        } finally {
-            setSubmitting(false);
-        }
+        } catch { toast.error("Failed to reassign"); }
+        finally { setSubmitting(false); }
     };
 
     const handleAddParticipant = async () => {
@@ -66,9 +63,7 @@ export default function TicketOwnershipPanel({
         } catch (err: unknown) {
             const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
             toast.error(msg ?? "Failed to add participant");
-        } finally {
-            setSubmitting(false);
-        }
+        } finally { setSubmitting(false); }
     };
 
     const handleRemove = async (userId: number) => {
@@ -77,59 +72,49 @@ export default function TicketOwnershipPanel({
             await axios.delete(`/api/tickets/${ticketId}/participants/${userId}`);
             toast.success("Participant removed");
             onChanged();
-        } catch {
-            toast.error("Failed to remove");
-        } finally {
-            setRemovingId(null);
-        }
+        } catch { toast.error("Failed to remove"); }
+        finally { setRemovingId(null); }
     };
 
+    const userPickerClass = (id: number) =>
+        `w-full flex items-center gap-2 px-2 py-1.5 text-xs text-left transition-colors ${
+            selectedUserId === id ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"
+        }`;
+
     return (
-        <div className="bg-white rounded-xl shadow p-4 space-y-3">
-            <h2 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
+        <div className="border-2 border-border shadow bg-card p-4 space-y-3">
+            <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
                 <UserCheck size={15} /> Ownership
             </h2>
 
             {/* Primary Owner */}
             <div>
-                <p className="text-xs text-gray-400 uppercase mb-1">Primary Owner</p>
+                <p className="text-xs text-muted-foreground uppercase mb-1">Primary Owner</p>
                 <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm text-gray-800 font-medium">
-                        {primaryOwner?.name ?? <span className="text-gray-400 font-normal">Unassigned</span>}
+                    <p className="text-sm text-foreground font-medium">
+                        {primaryOwner?.name ?? <span className="text-muted-foreground font-normal">Unassigned</span>}
                     </p>
                     {canManage && !isTerminal && !showReassign && (
-                        <button
-                            onClick={() => { setShowReassign(true); setShowAddParticipant(false); setSelectedUserId(null); }}
-                            className="text-xs text-primary hover:underline"
-                        >
+                        <button onClick={() => { setShowReassign(true); setShowAddParticipant(false); setSelectedUserId(null); }}
+                            className="text-xs text-primary hover:underline">
                             Reassign
                         </button>
                     )}
                 </div>
-
                 {showReassign && (
-                    <div className="mt-2 border rounded-lg p-2 space-y-1.5">
-                        <div className="max-h-40 overflow-y-auto space-y-1">
+                    <div className="mt-2 border-2 border-border p-2 space-y-1.5">
+                        <div className="max-h-40 overflow-y-auto space-y-0.5">
                             {allUsers.map(u => (
-                                <button
-                                    key={u.id}
-                                    onClick={() => setSelectedUserId(u.id)}
-                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors ${
-                                        selectedUserId === u.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-50 text-gray-700"
-                                    }`}
-                                >
+                                <button key={u.id} onClick={() => setSelectedUserId(u.id)} className={userPickerClass(u.id)}>
                                     <span className="font-medium">{u.name}</span>
-                                    <span className={`ml-auto ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-gray-400"}`}>{u.role}</span>
+                                    <span className={`ml-auto text-xs ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{u.role}</span>
                                 </button>
                             ))}
                         </div>
                         <div className="flex gap-2 pt-1">
-                            <button onClick={() => setShowReassign(false)} className="flex-1 border rounded py-1 text-xs hover:bg-gray-50">Cancel</button>
-                            <button
-                                onClick={handleReassign}
-                                disabled={submitting || !selectedUserId}
-                                className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            >
+                            <button onClick={() => setShowReassign(false)} className="flex-1 border-2 border-border py-1 text-xs hover:bg-muted">Cancel</button>
+                            <button onClick={handleReassign} disabled={submitting || !selectedUserId}
+                                className="flex-1 border-2 border-primary bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                                 {submitting ? "…" : "Confirm"}
                             </button>
                         </div>
@@ -140,33 +125,28 @@ export default function TicketOwnershipPanel({
             {/* Participants */}
             <div>
                 <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs text-gray-400 uppercase flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground uppercase flex items-center gap-1">
                         <Users size={11} /> Participants
                     </p>
                     {canManage && !isTerminal && !showAddParticipant && (
-                        <button
-                            onClick={() => { setShowAddParticipant(true); setShowReassign(false); setSelectedUserId(null); }}
-                            className="text-xs text-primary hover:underline flex items-center gap-1"
-                        >
+                        <button onClick={() => { setShowAddParticipant(true); setShowReassign(false); setSelectedUserId(null); }}
+                            className="text-xs text-primary hover:underline flex items-center gap-1">
                             <Plus size={11} /> Add
                         </button>
                     )}
                 </div>
 
                 {participants.length === 0 ? (
-                    <p className="text-xs text-gray-400">None</p>
+                    <p className="text-xs text-muted-foreground">None</p>
                 ) : (
                     <div className="space-y-1">
                         {participants.map(p => (
                             <div key={p.user.id} className="flex items-center gap-2 text-sm">
-                                <span className="flex-1 text-gray-700">{p.user.name}</span>
-                                {p.addedForRole && <span className="text-xs text-gray-400">{p.addedForRole}</span>}
+                                <span className="flex-1 text-foreground">{p.user.name}</span>
+                                {p.addedForRole && <span className="text-xs text-muted-foreground">{p.addedForRole}</span>}
                                 {(canManage || p.user.id === currentUserId) && (
-                                    <button
-                                        onClick={() => handleRemove(p.user.id)}
-                                        disabled={removingId === p.user.id}
-                                        className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
-                                    >
+                                    <button onClick={() => handleRemove(p.user.id)} disabled={removingId === p.user.id}
+                                        className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50">
                                         <X size={13} />
                                     </button>
                                 )}
@@ -176,30 +156,19 @@ export default function TicketOwnershipPanel({
                 )}
 
                 {showAddParticipant && (
-                    <div className="mt-2 border rounded-lg p-2 space-y-1.5">
-                        <div className="max-h-40 overflow-y-auto space-y-1">
-                            {allUsers
-                                .filter(u => u.id !== primaryOwner?.id && !participantIds.has(u.id))
-                                .map(u => (
-                                    <button
-                                        key={u.id}
-                                        onClick={() => setSelectedUserId(u.id)}
-                                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors ${
-                                            selectedUserId === u.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-50 text-gray-700"
-                                        }`}
-                                    >
-                                        <span className="font-medium">{u.name}</span>
-                                        <span className={`ml-auto ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-gray-400"}`}>{u.role}</span>
-                                    </button>
-                                ))}
+                    <div className="mt-2 border-2 border-border p-2 space-y-1.5">
+                        <div className="max-h-40 overflow-y-auto space-y-0.5">
+                            {allUsers.filter(u => u.id !== primaryOwner?.id && !participantIds.has(u.id)).map(u => (
+                                <button key={u.id} onClick={() => setSelectedUserId(u.id)} className={userPickerClass(u.id)}>
+                                    <span className="font-medium">{u.name}</span>
+                                    <span className={`ml-auto text-xs ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{u.role}</span>
+                                </button>
+                            ))}
                         </div>
                         <div className="flex gap-2 pt-1">
-                            <button onClick={() => setShowAddParticipant(false)} className="flex-1 border rounded py-1 text-xs hover:bg-gray-50">Cancel</button>
-                            <button
-                                onClick={handleAddParticipant}
-                                disabled={submitting || !selectedUserId}
-                                className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            >
+                            <button onClick={() => setShowAddParticipant(false)} className="flex-1 border-2 border-border py-1 text-xs hover:bg-muted">Cancel</button>
+                            <button onClick={handleAddParticipant} disabled={submitting || !selectedUserId}
+                                className="flex-1 border-2 border-primary bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                                 {submitting ? "…" : "Add"}
                             </button>
                         </div>

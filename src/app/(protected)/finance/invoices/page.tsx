@@ -5,6 +5,13 @@ import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, Loader2, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 interface Invoice {
     id: number;
@@ -24,12 +31,14 @@ interface Invoice {
 type LineInput = { description: string; quantity: string; unitPrice: string; taxRate: string };
 
 const STATUS_COLORS: Record<string, string> = {
-    DRAFT:   "bg-gray-100 text-gray-600",
+    DRAFT:   "bg-muted text-muted-foreground",
     SENT:    "bg-blue-100 text-blue-700",
     PARTIAL: "bg-yellow-100 text-yellow-700",
     PAID:    "bg-green-100 text-green-700",
-    VOID:    "bg-red-100 text-red-500",
+    VOID:    "bg-destructive/10 text-destructive",
 };
+
+const cellClass = "w-full border-2 border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
 function fmt(n: number) {
     return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2 }).format(n);
@@ -117,24 +126,25 @@ export default function InvoicesPage() {
         <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">Customer billing records</p>
+                    <h1 className="text-2xl font-bold text-foreground">Invoices</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">Customer billing records</p>
                 </div>
-                <button
-                    onClick={() => setShowCreate((v) => !v)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
+                <Button onClick={() => setShowCreate((v) => !v)}>
                     <Plus size={16} /> New Invoice
-                </button>
+                </Button>
             </div>
 
             {/* Status filters */}
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-1 flex-wrap">
                 {(["", "DRAFT", "SENT", "PARTIAL", "PAID", "VOID"] as const).map((s) => (
                     <button
                         key={s}
                         onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                        className={`px-3 py-1.5 text-xs border-2 font-medium transition-colors ${
+                            statusFilter === s
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card text-muted-foreground hover:bg-muted"
+                        }`}
                     >
                         {s || "All"}
                     </button>
@@ -143,49 +153,71 @@ export default function InvoicesPage() {
 
             {/* Create form */}
             {showCreate && (
-                <div className="bg-white border rounded-xl p-5 shadow-sm space-y-5">
-                    <h2 className="font-semibold text-gray-800">New Invoice</h2>
+                <div className="border-2 border-border shadow bg-card p-5 space-y-5">
+                    <h2 className="font-semibold text-foreground">New Invoice</h2>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Party Type</label>
-                            <select value={form.partyType} onChange={(e) => setForm((f) => ({ ...f, partyType: e.target.value as "customer" | "company" }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm">
-                                <option value="customer">Customer</option>
-                                <option value="company">Company</option>
-                            </select>
+                        <div className="space-y-1.5">
+                            <Label>Party Type</Label>
+                            <Select
+                                value={form.partyType}
+                                onValueChange={(v) => setForm((f) => ({ ...f, partyType: v as "customer" | "company" }))}
+                            >
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="customer">Customer</SelectItem>
+                                    <SelectItem value="company">Company</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Party ID</label>
-                            <input type="number" value={form.partyId} onChange={(e) => setForm((f) => ({ ...f, partyId: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" placeholder="Customer or Company ID" />
+                        <div className="space-y-1.5">
+                            <Label>Party ID</Label>
+                            <Input
+                                type="number"
+                                value={form.partyId}
+                                onChange={(e) => setForm((f) => ({ ...f, partyId: e.target.value }))}
+                                placeholder="Customer or Company ID"
+                            />
                         </div>
-                        <div className="col-span-2">
-                            <label className="text-xs font-medium text-gray-600">Bill To (Name)</label>
-                            <input value={form.partyName} onChange={(e) => setForm((f) => ({ ...f, partyName: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" placeholder="Customer or company name" />
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Bill To (Name)</Label>
+                            <Input
+                                value={form.partyName}
+                                onChange={(e) => setForm((f) => ({ ...f, partyName: e.target.value }))}
+                                placeholder="Customer or company name"
+                            />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Issue Date</label>
-                            <input type="date" value={form.issueDate} onChange={(e) => setForm((f) => ({ ...f, issueDate: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" />
+                        <div className="space-y-1.5">
+                            <Label>Issue Date</Label>
+                            <Input
+                                type="date"
+                                value={form.issueDate}
+                                onChange={(e) => setForm((f) => ({ ...f, issueDate: e.target.value }))}
+                            />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Due Date</label>
-                            <input type="date" value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
-                                className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" />
+                        <div className="space-y-1.5">
+                            <Label>Due Date</Label>
+                            <Input
+                                type="date"
+                                value={form.dueDate}
+                                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                            />
                         </div>
-                        <div className="col-span-2">
-                            <label className="text-xs font-medium text-gray-600">Notes</label>
-                            <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                                rows={2} className="mt-1 block w-full border rounded-lg px-3 py-2 text-sm" placeholder="Optional" />
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Notes</Label>
+                            <Textarea
+                                value={form.notes}
+                                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                                rows={2}
+                                placeholder="Optional"
+                            />
                         </div>
                     </div>
 
                     {/* Line items */}
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border-2 border-border overflow-hidden">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-xs text-gray-500">
+                            <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Description</th>
                                     <th className="px-3 py-2 text-right font-medium w-20">Qty</th>
@@ -197,38 +229,52 @@ export default function InvoicesPage() {
                             </thead>
                             <tbody>
                                 {form.lines.map((l, i) => (
-                                    <tr key={i} className="border-t">
+                                    <tr key={i} className="border-t border-border">
                                         <td className="px-3 py-2">
-                                            <input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })}
-                                                className="w-full border rounded px-2 py-1 text-sm" placeholder="Service description" />
+                                            <input
+                                                value={l.description}
+                                                onChange={(e) => updateLine(i, { description: e.target.value })}
+                                                className={cellClass}
+                                                placeholder="Service description"
+                                            />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" step="0.001" value={l.quantity}
+                                            <input
+                                                type="number" min="0" step="0.001"
+                                                value={l.quantity}
                                                 onChange={(e) => updateLine(i, { quantity: e.target.value })}
-                                                className="w-full border rounded px-2 py-1 text-sm text-right" />
+                                                className={`${cellClass} text-right`}
+                                            />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" step="0.01" value={l.unitPrice}
+                                            <input
+                                                type="number" min="0" step="0.01"
+                                                value={l.unitPrice}
                                                 onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
-                                                className="w-full border rounded px-2 py-1 text-sm text-right" placeholder="0.00" />
+                                                className={`${cellClass} text-right`}
+                                                placeholder="0.00"
+                                            />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" max="100" step="0.5" value={l.taxRate}
+                                            <input
+                                                type="number" min="0" max="100" step="0.5"
+                                                value={l.taxRate}
                                                 onChange={(e) => updateLine(i, { taxRate: e.target.value })}
-                                                className="w-full border rounded px-2 py-1 text-sm text-right" />
+                                                className={`${cellClass} text-right`}
+                                            />
                                         </td>
-                                        <td className="px-3 py-2 text-right font-mono text-gray-700">{fmt(lineTotal(l))}</td>
+                                        <td className="px-3 py-2 text-right font-mono text-foreground">{fmt(lineTotal(l))}</td>
                                         <td className="px-3 py-2 text-center">
                                             {form.lines.length > 1 && (
-                                                <button onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600">×</button>
+                                                <button onClick={() => removeLine(i)} className="text-destructive hover:text-destructive/80">×</button>
                                             )}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot className="bg-gray-50 border-t font-semibold">
+                            <tfoot className="bg-muted border-t-2 border-border font-semibold">
                                 <tr>
-                                    <td colSpan={4} className="px-3 py-2 text-right text-gray-600">Grand Total</td>
+                                    <td colSpan={4} className="px-3 py-2 text-right text-muted-foreground">Grand Total</td>
                                     <td className="px-3 py-2 text-right font-mono">{fmt(grandTotal)}</td>
                                     <td />
                                 </tr>
@@ -239,19 +285,25 @@ export default function InvoicesPage() {
 
                     <div className="flex items-center justify-between pt-2">
                         <div className="flex items-center gap-3">
-                            <label className="text-sm font-medium text-gray-600">Create as</label>
-                            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "DRAFT" | "SENT" }))}
-                                className="border rounded-lg px-3 py-1.5 text-sm">
-                                <option value="DRAFT">Draft (no JE yet)</option>
-                                <option value="SENT">Sent (auto-post AR/Revenue JE)</option>
-                            </select>
+                            <Label>Create as</Label>
+                            <Select
+                                value={form.status}
+                                onValueChange={(v) => setForm((f) => ({ ...f, status: v as "DRAFT" | "SENT" }))}
+                            >
+                                <SelectTrigger className="w-auto">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="DRAFT">Draft (no JE yet)</SelectItem>
+                                    <SelectItem value="SENT">Sent (auto-post AR/Revenue JE)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
-                            <button onClick={submit} disabled={saving}
-                                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                            <Button onClick={submit} disabled={saving}>
                                 {saving && <Loader2 size={14} className="animate-spin" />} Create Invoice
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -259,14 +311,16 @@ export default function InvoicesPage() {
 
             {/* List */}
             {loading ? (
-                <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={28} /></div>
+                <div className="flex justify-center py-12">
+                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                </div>
             ) : (
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <div className="border-2 border-border shadow bg-card overflow-hidden">
                     {invoices.length === 0 ? (
-                        <div className="text-center py-16 text-gray-400">No invoices yet</div>
+                        <div className="text-center py-16 text-muted-foreground">No invoices yet</div>
                     ) : (
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+                            <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
                                 <tr>
                                     <th className="px-5 py-3 text-left font-medium">Invoice #</th>
                                     <th className="px-5 py-3 text-left font-medium">Billed To</th>
@@ -280,23 +334,23 @@ export default function InvoicesPage() {
                             </thead>
                             <tbody>
                                 {invoices.map((inv) => (
-                                    <tr key={inv.id} className="border-b last:border-0 hover:bg-gray-50">
+                                    <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/40">
                                         <td className="px-5 py-3 font-mono text-primary">{inv.number}</td>
                                         <td className="px-5 py-3">
-                                            <p className="font-medium text-gray-800">{inv.partyName}</p>
-                                            <p className="text-xs text-gray-400 capitalize">{inv.partyType}</p>
+                                            <p className="font-medium text-foreground">{inv.partyName}</p>
+                                            <p className="text-xs text-muted-foreground capitalize">{inv.partyType}</p>
                                         </td>
-                                        <td className="px-5 py-3 text-gray-600">{new Date(inv.issueDate).toLocaleDateString()}</td>
-                                        <td className="px-5 py-3 text-gray-600">{new Date(inv.dueDate).toLocaleDateString()}</td>
+                                        <td className="px-5 py-3 text-muted-foreground">{new Date(inv.issueDate).toLocaleDateString()}</td>
+                                        <td className="px-5 py-3 text-muted-foreground">{new Date(inv.dueDate).toLocaleDateString()}</td>
                                         <td className="px-5 py-3 text-right font-mono">{fmt(Number(inv.totalAmount))}</td>
                                         <td className="px-5 py-3 text-right font-mono text-orange-600">{fmt(Number(inv.amountDue))}</td>
                                         <td className="px-5 py-3 text-center">
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[inv.status]}`}>
+                                            <span className={`text-xs px-2 py-0.5 font-medium ${STATUS_COLORS[inv.status]}`}>
                                                 {inv.status}
                                             </span>
                                         </td>
                                         <td className="px-5 py-3 text-right">
-                                            <Link href={`/finance/invoices/${inv.id}`} className="text-gray-300 hover:text-primary">
+                                            <Link href={`/finance/invoices/${inv.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

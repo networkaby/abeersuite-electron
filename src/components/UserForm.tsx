@@ -6,7 +6,24 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type Role = { id: string; label: string; color: string };
 type UserOption = { id: number; name: string };
@@ -32,6 +49,11 @@ interface Props {
     onClose: () => void;
 }
 
+function FieldError({ message }: { message?: string }) {
+    if (!message) return null;
+    return <p className="text-xs text-destructive">{message}</p>;
+}
+
 export default function UserForm({ user, onClose }: Props) {
     const [roles, setRoles] = useState<Role[]>([]);
     const [users, setUsers] = useState<UserOption[]>([]);
@@ -40,11 +62,16 @@ export default function UserForm({ user, onClose }: Props) {
         register,
         handleSubmit,
         reset,
+        setValue,
+        watch,
         formState: { errors, isSubmitting },
     } = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: { role: "", managerId: "" },
     });
+
+    const roleValue = watch("role");
+    const managerValue = watch("managerId");
 
     useEffect(() => {
         Promise.all([
@@ -58,16 +85,10 @@ export default function UserForm({ user, onClose }: Props) {
             const fetchedRoles = rolesRes.data;
             setRoles(fetchedRoles);
             setUsers(usersRes);
-            
+
             if (!user && fetchedRoles.length > 0) {
                 const defaultRole = fetchedRoles.find(r => r.id === "R2")?.id || fetchedRoles[0].id;
-                reset({
-                    name: "",
-                    email: "",
-                    role: defaultRole,
-                    password: "",
-                    managerId: "",
-                });
+                reset({ name: "", email: "", role: defaultRole, password: "", managerId: "" });
             }
         });
     }, [user?.id, user, reset]);
@@ -93,7 +114,6 @@ export default function UserForm({ user, onClose }: Props) {
                 managerId: data.managerId ? Number(data.managerId) : null,
                 ...(data.password ? { password: data.password } : {}),
             };
-
             if (user) {
                 await axios.put(`/api/users/${user.id}`, payload);
                 toast.success("User updated");
@@ -108,94 +128,78 @@ export default function UserForm({ user, onClose }: Props) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">{user ? "Edit User" : "Add User"}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <X size={20} />
-                    </button>
-                </div>
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{user ? "Edit User" : "Add User"}</DialogTitle>
+                    <DialogDescription>
+                        Manage staff accounts and their access roles.
+                    </DialogDescription>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Name</label>
-                        <input
-                            {...register("name")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="Full name"
-                        />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input {...register("name")} placeholder="Full name" />
+                        <FieldError message={errors.name?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Email</label>
-                        <input
-                            {...register("email")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="email@example.com"
-                        />
-                        {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input {...register("email")} placeholder="email@example.com" />
+                        <FieldError message={errors.email?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Role</label>
-                        <select
-                            {...register("role")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        >
-                            <option value="">Select a role</option>
-                            {roles.map((r) => (
-                                <option key={r.id} value={r.id}>{r.label}</option>
-                            ))}
-                        </select>
-                        {errors.role && <p className="text-red-500 text-xs mt-1">{errors.role.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Role</Label>
+                        <Select value={roleValue} onValueChange={(v) => setValue("role", v)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {roles.map((r) => (
+                                    <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FieldError message={errors.role?.message} />
                     </div>
 
-                    {/* Manager picker */}
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Reports to <span className="text-gray-400">(optional)</span></label>
-                        <select
-                            {...register("managerId")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        >
-                            <option value="">— None —</option>
-                            {users.map((u) => (
-                                <option key={u.id} value={String(u.id)}>{u.name}</option>
-                            ))}
-                        </select>
+                    <div className="space-y-2">
+                        <Label>Reports to <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Select value={managerValue ?? ""} onValueChange={(v) => setValue("managerId", v)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="— None —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">— None —</SelectItem>
+                                {users.map((u) => (
+                                    <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
-                            Password {user && <span className="text-gray-400">(leave blank to keep current)</span>}
-                        </label>
-                        <input
+                    <div className="space-y-2">
+                        <Label>
+                            Password{" "}
+                            {user && <span className="text-muted-foreground font-normal">(leave blank to keep current)</span>}
+                        </Label>
+                        <Input
                             {...register("password")}
                             type="password"
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder={user ? "Leave blank to keep current" : "Password"}
                         />
                     </div>
 
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                        >
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? "Saving..." : user ? "Update" : "Add User"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

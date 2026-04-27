@@ -6,6 +6,17 @@ import { Plus, Pencil, Search, X, User, Building2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import AccountForm from "@/components/AccountForm";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 interface Account {
     id: number;
@@ -74,20 +85,17 @@ export default function AccountsPage() {
     const companies = accounts.filter(a => a.type === "company").length;
 
     return (
-        <div>
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold">Accounts</h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                         {individuals} individual{individuals !== 1 ? "s" : ""} · {companies} compan{companies !== 1 ? "ies" : "y"}
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-                >
-                    <Plus size={18} /> New Account
-                </button>
+                <Button type="button" onClick={() => setShowForm(true)}>
+                    <Plus size={16} /> New Account
+                </Button>
             </div>
 
             {(showForm || editAccount) && (
@@ -95,112 +103,112 @@ export default function AccountsPage() {
             )}
 
             {/* Search + Filter */}
-            <div className="bg-white rounded-lg shadow p-4 mb-4 space-y-3">
+            <div className="border-2 border-border shadow bg-card p-4 space-y-3">
                 <div className="flex gap-2">
                     <div className="relative flex-1">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Search by name, phone, email, company reg…"
-                            className="w-full rounded-lg border py-2 pl-9 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="pl-9"
                         />
                         {search && (
-                            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                                 <X size={15} />
                             </button>
                         )}
                     </div>
                     <div className="flex gap-1">
                         {TYPE_FILTERS.map(f => (
-                            <button
+                            <Button
                                 key={f.value}
+                                type="button"
+                                size="sm"
+                                variant={typeFilter === f.value ? "default" : "outline"}
                                 onClick={() => setTypeFilter(f.value)}
-                                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                                    typeFilter === f.value
-                                        ? "bg-primary text-primary-foreground border-primary"
-                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                                }`}
                             >
                                 {f.label}
-                            </button>
+                            </Button>
                         ))}
                     </div>
                 </div>
-                <p className="text-sm text-gray-500">
-                    Showing <span className="font-medium text-gray-700">{filtered.length}</span> of{" "}
-                    <span className="font-medium text-gray-700">{accounts.length}</span> accounts
+                <p className="text-sm text-muted-foreground">
+                    Showing <span className="font-medium text-foreground">{filtered.length}</span> of{" "}
+                    <span className="font-medium text-foreground">{accounts.length}</span> accounts
                 </p>
             </div>
 
             {loading ? (
-                <p className="text-gray-500">Loading…</p>
+                <p className="text-sm text-muted-foreground">Loading…</p>
             ) : filtered.length === 0 ? (
-                <div className="bg-white rounded-lg shadow p-12 text-center text-gray-400">
+                <div className="border-2 border-border shadow bg-card p-12 text-center text-muted-foreground">
                     {search || typeFilter ? "No accounts match your filter." : "No accounts yet. Add your first one!"}
                 </div>
             ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
-                            <tr>
-                                <th className="px-6 py-3 text-left w-12">#</th>
-                                <th className="px-6 py-3 text-left">Name</th>
-                                <th className="px-6 py-3 text-left">Type</th>
-                                <th className="px-6 py-3 text-left">Phone</th>
-                                <th className="px-6 py-3 text-left">Email</th>
-                                <th className="px-6 py-3 text-left">Links</th>
-                                <th className="px-6 py-3 text-left">Devices</th>
-                                <th className="px-6 py-3 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
+                <div className="border-2 border-border shadow overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-12">#</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Phone</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Links</TableHead>
+                                <TableHead>Devices</TableHead>
+                                <TableHead>Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {filtered.map(a => (
-                                <tr key={a.id} className={`hover:bg-gray-50 ${!a.isActive ? "opacity-50" : ""}`}>
-                                    <td className="px-6 py-4 text-gray-400">{a.id}</td>
-                                    <td className="px-6 py-4">
+                                <TableRow key={a.id} className={!a.isActive ? "opacity-50" : ""}>
+                                    <TableCell className="text-muted-foreground">{a.id}</TableCell>
+                                    <TableCell>
                                         <Link href={`/accounts/${a.id}`} className="font-medium hover:text-primary hover:underline">
                                             {a.name}
                                         </Link>
-                                        {a.companyReg && <p className="text-xs text-gray-400">{a.companyReg}</p>}
-                                    </td>
-                                    <td className="px-6 py-4">
+                                        {a.companyReg && <p className="text-xs text-muted-foreground">{a.companyReg}</p>}
+                                    </TableCell>
+                                    <TableCell>
                                         {a.type === "company" ? (
-                                            <span className="flex items-center gap-1 text-xs font-medium text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full w-fit">
+                                            <Badge className="bg-primary/10 text-primary border-primary/20">
                                                 <Building2 size={11} /> Company
-                                            </span>
+                                            </Badge>
                                         ) : (
-                                            <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full w-fit">
+                                            <Badge variant="outline">
                                                 <User size={11} /> Individual
-                                            </span>
+                                            </Badge>
                                         )}
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-500">{a.phone || "—"}</td>
-                                    <td className="px-6 py-4 text-gray-500">{a.email || "—"}</td>
-                                    <td className="px-6 py-4">
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{a.phone || "—"}</TableCell>
+                                    <TableCell className="text-muted-foreground">{a.email || "—"}</TableCell>
+                                    <TableCell>
                                         {(a._count.asIndividual + a._count.asCompany) > 0 ? (
-                                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                 <Link2 size={12} />
                                                 {a.type === "individual" ? `${a._count.asIndividual} co.` : `${a._count.asCompany} people`}
                                             </span>
                                         ) : (
-                                            <span className="text-gray-300 text-xs">—</span>
+                                            <span className="text-muted-foreground text-xs">—</span>
                                         )}
-                                    </td>
-                                    <td className="px-6 py-4">{a.devices.length}</td>
-                                    <td className="px-6 py-4">
-                                        <button
+                                    </TableCell>
+                                    <TableCell>{a.devices.length}</TableCell>
+                                    <TableCell>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon-sm"
                                             onClick={() => setEditAccount(a)}
-                                            className="rounded p-1.5 text-primary hover:bg-primary/10"
                                         >
-                                            <Pencil size={15} />
-                                        </button>
-                                    </td>
-                                </tr>
+                                            <Pencil size={14} />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
                             ))}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             )}
         </div>

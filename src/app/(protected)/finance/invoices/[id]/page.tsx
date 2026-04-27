@@ -6,6 +6,17 @@ import axios from "axios";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Send, XCircle, Plus } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+    DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 interface InvoiceLine {
     id: number;
@@ -50,11 +61,11 @@ interface Invoice {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-    DRAFT:   "bg-gray-100 text-gray-600 border-gray-200",
+    DRAFT:   "bg-muted text-muted-foreground border-border",
     SENT:    "bg-blue-100 text-blue-700 border-blue-200",
     PARTIAL: "bg-yellow-100 text-yellow-700 border-yellow-200",
     PAID:    "bg-green-100 text-green-700 border-green-200",
-    VOID:    "bg-red-100 text-red-500 border-red-200",
+    VOID:    "bg-destructive/10 text-destructive border-destructive/20",
 };
 
 const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "CHEQUE", "MOBILE_PAYMENT", "OTHER"];
@@ -136,8 +147,12 @@ export default function InvoiceDetailPage() {
         } finally { setPaying(false); }
     };
 
-    if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-gray-400" size={32} /></div>;
-    if (!invoice) return <div className="text-center py-24 text-gray-400">Not found</div>;
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <Loader2 className="animate-spin text-muted-foreground" size={32} />
+        </div>
+    );
+    if (!invoice) return <div className="text-center py-24 text-muted-foreground">Not found</div>;
 
     const canSend = invoice.status === "DRAFT";
     const canPay  = ["SENT", "PARTIAL"].includes(invoice.status);
@@ -147,32 +162,37 @@ export default function InvoiceDetailPage() {
         <div className="max-w-3xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/finance/invoices" className="text-gray-400 hover:text-gray-600"><ArrowLeft size={20} /></Link>
+                <Link href="/finance/invoices" className="text-muted-foreground hover:text-foreground">
+                    <ArrowLeft size={20} />
+                </Link>
                 <div className="flex-1">
                     <div className="flex items-center gap-3">
-                        <h1 className="text-xl font-bold text-gray-900 font-mono">{invoice.number}</h1>
-                        <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${STATUS_COLORS[invoice.status]}`}>{invoice.status}</span>
+                        <h1 className="text-xl font-bold text-foreground font-mono">{invoice.number}</h1>
+                        <span className={`text-xs px-2.5 py-1 border font-medium ${STATUS_COLORS[invoice.status]}`}>
+                            {invoice.status}
+                        </span>
                     </div>
-                    <p className="text-sm text-gray-500 mt-0.5">{invoice.partyName} · {invoice.partyType}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">{invoice.partyName} · {invoice.partyType}</p>
                 </div>
                 <div className="flex gap-2">
                     {canSend && (
-                        <button onClick={sendInvoice} disabled={sending}
-                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                            {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send & Post JE
-                        </button>
+                        <Button onClick={sendInvoice} disabled={sending}>
+                            {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                            Send &amp; Post JE
+                        </Button>
                     )}
                     {canPay && (
-                        <button onClick={() => setShowPayment(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">
+                        <Button
+                            onClick={() => setShowPayment(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white border-green-600"
+                        >
                             <Plus size={14} /> Record Payment
-                        </button>
+                        </Button>
                     )}
                     {canVoid && (
-                        <button onClick={() => setShowVoid(true)}
-                            className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50">
+                        <Button variant="outline" onClick={() => setShowVoid(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10">
                             <XCircle size={14} /> Void
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>
@@ -180,32 +200,46 @@ export default function InvoiceDetailPage() {
             {/* Summary cards */}
             <div className="grid grid-cols-3 gap-4">
                 {[
-                    { label: "Total", value: fmt(Number(invoice.totalAmount)), color: "text-gray-900" },
-                    { label: "Paid", value: fmt(Number(invoice.amountPaid)), color: "text-green-700" },
-                    { label: "Due", value: fmt(Number(invoice.amountDue)), color: "text-orange-600" },
+                    { label: "Total",  value: fmt(Number(invoice.totalAmount)), color: "text-foreground" },
+                    { label: "Paid",   value: fmt(Number(invoice.amountPaid)),  color: "text-green-700" },
+                    { label: "Due",    value: fmt(Number(invoice.amountDue)),   color: "text-orange-600" },
                 ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-white border rounded-xl p-4 text-center shadow-sm">
-                        <p className="text-xs text-gray-400 mb-1">{label}</p>
+                    <div key={label} className="border-2 border-border shadow bg-card p-4 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">{label}</p>
                         <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
                     </div>
                 ))}
             </div>
 
             {/* Meta */}
-            <div className="bg-white rounded-xl border shadow-sm p-5 grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-xs text-gray-400 mb-1">Issue Date</p><p className="font-medium">{new Date(invoice.issueDate).toLocaleDateString()}</p></div>
-                <div><p className="text-xs text-gray-400 mb-1">Due Date</p><p className="font-medium">{new Date(invoice.dueDate).toLocaleDateString()}</p></div>
-                <div><p className="text-xs text-gray-400 mb-1">Created by</p><p className="font-medium">{invoice.createdBy.name}</p></div>
-                {invoice.notes && <div className="col-span-2"><p className="text-xs text-gray-400 mb-1">Notes</p><p>{invoice.notes}</p></div>}
+            <div className="border-2 border-border shadow bg-card p-5 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p className="text-xs text-muted-foreground mb-1">Issue Date</p>
+                    <p className="font-medium">{new Date(invoice.issueDate).toLocaleDateString()}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-muted-foreground mb-1">Due Date</p>
+                    <p className="font-medium">{new Date(invoice.dueDate).toLocaleDateString()}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-muted-foreground mb-1">Created by</p>
+                    <p className="font-medium">{invoice.createdBy.name}</p>
+                </div>
+                {invoice.notes && (
+                    <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground mb-1">Notes</p>
+                        <p>{invoice.notes}</p>
+                    </div>
+                )}
             </div>
 
             {/* Line items */}
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b bg-gray-50">
-                    <h3 className="text-sm font-semibold text-gray-700">Line Items</h3>
+            <div className="border-2 border-border shadow bg-card overflow-hidden">
+                <div className="px-5 py-3 border-b-2 border-border bg-muted">
+                    <h3 className="text-sm font-semibold text-foreground">Line Items</h3>
                 </div>
                 <table className="w-full text-sm">
-                    <thead className="text-xs text-gray-500 border-b">
+                    <thead className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
                         <tr>
                             <th className="px-5 py-2 text-left font-medium">Description</th>
                             <th className="px-5 py-2 text-right font-medium">Qty</th>
@@ -217,30 +251,41 @@ export default function InvoiceDetailPage() {
                     <tbody>
                         {invoice.lines.map((l) => (
                             <tr key={l.id} className="border-b last:border-0">
-                                <td className="px-5 py-3 text-gray-800">{l.description}</td>
+                                <td className="px-5 py-3 text-foreground">{l.description}</td>
                                 <td className="px-5 py-3 text-right">{Number(l.quantity)}</td>
                                 <td className="px-5 py-3 text-right font-mono">{fmt(Number(l.unitPrice))}</td>
-                                <td className="px-5 py-3 text-right text-gray-400">{Number(l.taxRate)}%</td>
+                                <td className="px-5 py-3 text-right text-muted-foreground">{Number(l.taxRate)}%</td>
                                 <td className="px-5 py-3 text-right font-mono font-medium">{fmt(Number(l.amount))}</td>
                             </tr>
                         ))}
                     </tbody>
-                    <tfoot className="bg-gray-50 border-t text-sm font-semibold">
-                        <tr><td colSpan={4} className="px-5 py-2 text-right text-gray-500">Subtotal</td><td className="px-5 py-2 text-right font-mono">{fmt(Number(invoice.subtotal))}</td></tr>
-                        {Number(invoice.taxAmount) > 0 && <tr><td colSpan={4} className="px-5 py-2 text-right text-gray-500">Tax</td><td className="px-5 py-2 text-right font-mono">{fmt(Number(invoice.taxAmount))}</td></tr>}
-                        <tr><td colSpan={4} className="px-5 py-2 text-right text-gray-800">Total</td><td className="px-5 py-2 text-right font-mono text-gray-900">{fmt(Number(invoice.totalAmount))}</td></tr>
+                    <tfoot className="bg-muted border-t-2 border-border text-sm font-semibold">
+                        <tr>
+                            <td colSpan={4} className="px-5 py-2 text-right text-muted-foreground">Subtotal</td>
+                            <td className="px-5 py-2 text-right font-mono">{fmt(Number(invoice.subtotal))}</td>
+                        </tr>
+                        {Number(invoice.taxAmount) > 0 && (
+                            <tr>
+                                <td colSpan={4} className="px-5 py-2 text-right text-muted-foreground">Tax</td>
+                                <td className="px-5 py-2 text-right font-mono">{fmt(Number(invoice.taxAmount))}</td>
+                            </tr>
+                        )}
+                        <tr>
+                            <td colSpan={4} className="px-5 py-2 text-right text-foreground">Total</td>
+                            <td className="px-5 py-2 text-right font-mono text-foreground">{fmt(Number(invoice.totalAmount))}</td>
+                        </tr>
                     </tfoot>
                 </table>
             </div>
 
             {/* Payments */}
             {invoice.payments.length > 0 && (
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 border-b bg-gray-50">
-                        <h3 className="text-sm font-semibold text-gray-700">Payments Received</h3>
+                <div className="border-2 border-border shadow bg-card overflow-hidden">
+                    <div className="px-5 py-3 border-b-2 border-border bg-muted">
+                        <h3 className="text-sm font-semibold text-foreground">Payments Received</h3>
                     </div>
                     <table className="w-full text-sm">
-                        <thead className="text-xs text-gray-500 border-b">
+                        <thead className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
                             <tr>
                                 <th className="px-5 py-2 text-left font-medium">Date</th>
                                 <th className="px-5 py-2 text-left font-medium">Method</th>
@@ -254,9 +299,9 @@ export default function InvoiceDetailPage() {
                                 <tr key={p.id} className="border-b last:border-0">
                                     <td className="px-5 py-3">{new Date(p.date).toLocaleDateString()}</td>
                                     <td className="px-5 py-3 capitalize">{p.method.replace(/_/g, " ")}</td>
-                                    <td className="px-5 py-3 text-gray-400">{p.reference ?? "—"}</td>
+                                    <td className="px-5 py-3 text-muted-foreground">{p.reference ?? "—"}</td>
                                     <td className="px-5 py-3 text-right font-mono font-semibold text-green-700">{fmt(Number(p.amount))}</td>
-                                    <td className="px-5 py-3 text-gray-400 text-xs">{p.createdBy.name}</td>
+                                    <td className="px-5 py-3 text-muted-foreground text-xs">{p.createdBy.name}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -264,82 +309,112 @@ export default function InvoiceDetailPage() {
                 </div>
             )}
 
-            {/* Payment modal */}
-            {showPayment && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md space-y-4">
-                        <h3 className="font-semibold text-gray-900">Record Payment</h3>
-                        <p className="text-sm text-gray-500">Amount due: <strong>{fmt(Number(invoice.amountDue))}</strong></p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
-                                <label className="text-xs font-medium text-gray-600">Amount</label>
-                                <input type="number" min="0" step="0.01" value={payForm.amount}
-                                    onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))}
-                                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="0.00" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-600">Payment Method</label>
-                                <select value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}
-                                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
-                                    {PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-600">Date</label>
-                                <input type="date" value={payForm.date} onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
-                                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-600">Debit GL Account</label>
-                                <select value={payForm.cashGlAccountCode} onChange={(e) => setPayForm((f) => ({ ...f, cashGlAccountCode: e.target.value }))}
-                                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
-                                    <option value="1000">1000 — Cash</option>
-                                    <option value="1010">1010 — Bank Account</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-600">Reference</label>
-                                <input value={payForm.reference} onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))}
-                                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Cheque / bank ref" />
-                            </div>
-                            <div className="col-span-2">
-                                <label className="text-xs font-medium text-gray-600">Notes</label>
-                                <input value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))}
-                                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Optional" />
-                            </div>
+            {/* Payment Dialog */}
+            <Dialog open={showPayment} onOpenChange={(open) => { if (!open) setShowPayment(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Record Payment</DialogTitle>
+                        <DialogDescription>
+                            Amount due: <strong>{fmt(Number(invoice.amountDue))}</strong>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Amount</Label>
+                            <Input
+                                type="number" min="0" step="0.01"
+                                value={payForm.amount}
+                                onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))}
+                                placeholder="0.00"
+                            />
                         </div>
-                        <div className="flex gap-2 justify-end">
-                            <button onClick={() => setShowPayment(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
-                            <button onClick={recordPayment} disabled={paying}
-                                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2">
-                                {paying && <Loader2 size={14} className="animate-spin" />} Record Payment
-                            </button>
+                        <div className="space-y-1.5">
+                            <Label>Payment Method</Label>
+                            <Select value={payForm.method} onValueChange={(v) => setPayForm((f) => ({ ...f, method: v }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m.replace(/_/g, " ")}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Date</Label>
+                            <Input
+                                type="date"
+                                value={payForm.date}
+                                onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Debit GL Account</Label>
+                            <Select value={payForm.cashGlAccountCode} onValueChange={(v) => setPayForm((f) => ({ ...f, cashGlAccountCode: v }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1000">1000 — Cash</SelectItem>
+                                    <SelectItem value="1010">1010 — Bank Account</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Reference</Label>
+                            <Input
+                                value={payForm.reference}
+                                onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))}
+                                placeholder="Cheque / bank ref"
+                            />
+                        </div>
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Notes</Label>
+                            <Input
+                                value={payForm.notes}
+                                onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))}
+                                placeholder="Optional"
+                            />
                         </div>
                     </div>
-                </div>
-            )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowPayment(false)}>Cancel</Button>
+                        <Button
+                            onClick={recordPayment}
+                            disabled={paying}
+                            className="bg-green-600 hover:bg-green-700 text-white border-green-600"
+                        >
+                            {paying && <Loader2 size={14} className="animate-spin" />} Record Payment
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-            {/* Void modal */}
-            {showVoid && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md space-y-4">
-                        <h3 className="font-semibold text-gray-900">Void Invoice</h3>
-                        <p className="text-sm text-gray-600">This will reverse all posted journal entries for this invoice.</p>
-                        <div>
-                            <label className="text-xs font-medium text-gray-600">Reason</label>
-                            <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)}
-                                rows={3} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Reason..." />
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                            <button onClick={() => setShowVoid(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
-                            <button onClick={voidInvoice} disabled={voiding}
-                                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
-                                {voiding && <Loader2 size={14} className="animate-spin" />} Confirm Void
-                            </button>
-                        </div>
+            {/* Void Dialog */}
+            <Dialog open={showVoid} onOpenChange={(open) => { if (!open) setShowVoid(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Void Invoice</DialogTitle>
+                        <DialogDescription>
+                            This will reverse all posted journal entries for this invoice.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-1.5">
+                        <Label>Reason</Label>
+                        <Textarea
+                            value={voidReason}
+                            onChange={(e) => setVoidReason(e.target.value)}
+                            rows={3}
+                            placeholder="Reason..."
+                        />
                     </div>
-                </div>
-            )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowVoid(false)}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={voidInvoice}
+                            disabled={voiding}
+                        >
+                            {voiding && <Loader2 size={14} className="animate-spin" />} Confirm Void
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

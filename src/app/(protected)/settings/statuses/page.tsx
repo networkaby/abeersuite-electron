@@ -273,7 +273,7 @@ export default function StatusesPage() {
                         variant={activePipelineId === pipeline.id ? "default" : "outline"}
                         onClick={() => switchPipeline(pipeline.id)}
                     >
-                        <span className={`h-2 w-2 rounded-full ${pipeline.color.replace("text-", "bg-").split(" ")[1] ?? "bg-gray-300"}`} />
+                        <span className={`h-2 w-2 ${pipeline.color.replace("text-", "bg-").split(" ")[1] ?? "bg-muted"}`} />
                         {pipeline.label}
                     </Button>
                 ))}
@@ -560,7 +560,7 @@ export default function StatusesPage() {
                         {statuses
                             .filter((status) => status.id !== transitionModalId)
                             .map((status) => (
-                                <label key={status.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                                <label key={status.id} className="flex items-center gap-3 border-2 border-border px-3 py-2">
                                     <Checkbox
                                         checked={selectedToIds.includes(status.id)}
                                         onCheckedChange={(checked) => {
@@ -600,7 +600,7 @@ export default function StatusesPage() {
                             <p className="text-xs text-muted-foreground">Leave all unchecked to allow any role. Admin always bypasses this.</p>
                             <div className="grid grid-cols-2 gap-2">
                                 {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                    <label key={role.id} className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm">
                                         <Checkbox
                                             checked={rolesForm.allowedRoles.includes(role.id)}
                                             onCheckedChange={() => toggleRole("allowedRoles", role.id)}
@@ -616,7 +616,7 @@ export default function StatusesPage() {
                             <p className="text-xs text-muted-foreground">These roles will see tickets in this status on their dashboard queue.</p>
                             <div className="grid grid-cols-2 gap-2">
                                 {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                                    <label key={role.id} className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm">
                                         <Checkbox
                                             checked={rolesForm.notifyRoles.includes(role.id)}
                                             onCheckedChange={() => toggleRole("notifyRoles", role.id)}

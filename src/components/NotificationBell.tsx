@@ -26,24 +26,18 @@ export default function NotificationBell() {
         try {
             const res = await axios.get("/api/notifications");
             setNotifications(res.data);
-        } catch {
-            // silent
-        }
+        } catch { /* silent */ }
     };
 
     useEffect(() => {
-        const load = () => { fetchNotifications(); };
-        load();
-        const interval = setInterval(load, 30_000);
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30_000);
         return () => clearInterval(interval);
     }, []);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handler = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
         };
         document.addEventListener("mousedown", handler);
         return () => document.removeEventListener("mousedown", handler);
@@ -56,60 +50,52 @@ export default function NotificationBell() {
 
     const markOneRead = async (id: number) => {
         await axios.patch(`/api/notifications/${id}`);
-        setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-        );
+        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     };
 
     return (
         <div ref={ref} className="relative">
             <button
                 onClick={() => setOpen((v) => !v)}
-                className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                className="relative p-2 text-muted-foreground hover:bg-muted transition-colors border-2 border-transparent hover:border-border"
             >
                 <Bell size={20} />
                 {unread > 0 && (
-                    <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
                         {unread > 9 ? "9+" : unread}
                     </span>
                 )}
             </button>
 
             {open && (
-                <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border z-50">
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
-                        <span className="text-sm font-semibold text-gray-700">Notifications</span>
+                <div className="absolute left-0 top-full mt-1 w-80 border-2 border-border shadow bg-card z-50">
+                    <div className="flex items-center justify-between px-4 py-3 border-b-2 border-border bg-muted">
+                        <span className="text-sm font-semibold text-foreground">Notifications</span>
                         {unread > 0 && (
-                            <button
-                                onClick={markAllRead}
-                                className="text-xs text-primary hover:underline"
-                            >
+                            <button onClick={markAllRead} className="text-xs text-primary hover:underline">
                                 Mark all read
                             </button>
                         )}
                     </div>
 
-                    <div className="max-h-80 overflow-y-auto divide-y">
+                    <div className="max-h-80 overflow-y-auto divide-y divide-border">
                         {notifications.length === 0 ? (
-                            <p className="text-center text-sm text-gray-400 py-6">No notifications</p>
+                            <p className="text-center text-sm text-muted-foreground py-6">No notifications</p>
                         ) : (
                             notifications.map((n) => (
                                 <Link
                                     key={n.id}
                                     href={n.link ?? "/inbox"}
-                                    onClick={() => {
-                                        markOneRead(n.id);
-                                        setOpen(false);
-                                    }}
-                                    className={`block px-4 py-3 hover:bg-gray-50 transition-colors ${n.read ? "opacity-60" : ""}`}
+                                    onClick={() => { markOneRead(n.id); setOpen(false); }}
+                                    className={`block px-4 py-3 hover:bg-muted transition-colors ${n.read ? "opacity-60" : ""}`}
                                 >
                                     <div className="flex items-start gap-2">
                                         {!n.read && (
-                                            <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                                            <span className="mt-1.5 w-2 h-2 bg-primary shrink-0" />
                                         )}
                                         <div className={!n.read ? "" : "pl-4"}>
-                                            <p className="text-sm text-gray-700 leading-snug">{n.message}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5">
+                                            <p className="text-sm text-foreground leading-snug">{n.message}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
                                                 {formatDateTime(n.createdAt)}
                                             </p>
                                         </div>

@@ -6,7 +6,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import axios from "axios";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const schema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -28,15 +39,18 @@ interface Props {
     onClose: () => void;
 }
 
+function FieldError({ message }: { message?: string }) {
+    if (!message) return null;
+    return <p className="text-xs text-destructive">{message}</p>;
+}
+
 export default function ServiceCenterForm({ serviceCenter, onClose }: Props) {
     const {
         register,
         handleSubmit,
         reset,
         formState: { errors, isSubmitting },
-    } = useForm<FormData>({
-        resolver: zodResolver(schema),
-    });
+    } = useForm<FormData>({ resolver: zodResolver(schema) });
 
     useEffect(() => {
         if (serviceCenter) {
@@ -65,76 +79,47 @@ export default function ServiceCenterForm({ serviceCenter, onClose }: Props) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">
-                        {serviceCenter ? "Edit Service Center" : "Add Service Center"}
-                    </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <X size={20} />
-                    </button>
-                </div>
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{serviceCenter ? "Edit Service Center" : "Add Service Center"}</DialogTitle>
+                    <DialogDescription>
+                        External repair facility for escalated tickets.
+                    </DialogDescription>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Name</label>
-                        <input
-                            {...register("name")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="Service center name"
-                        />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input {...register("name")} placeholder="Service center name" />
+                        <FieldError message={errors.name?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Phone</label>
-                        <input
-                            {...register("phone")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="Phone number"
-                        />
-                        {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input {...register("phone")} placeholder="Phone number" />
+                        <FieldError message={errors.phone?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Email <span className="text-gray-400">(optional)</span></label>
-                        <input
-                            {...register("email")}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="email@example.com"
-                        />
-                        {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+                    <div className="space-y-2">
+                        <Label>Email <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Input {...register("email")} placeholder="email@example.com" />
+                        <FieldError message={errors.email?.message} />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Address <span className="text-gray-400">(optional)</span></label>
-                        <textarea
-                            {...register("address")}
-                            rows={2}
-                            className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="Full address"
-                        />
+                    <div className="space-y-2">
+                        <Label>Address <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Textarea {...register("address")} rows={2} placeholder="Full address" />
                     </div>
 
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 rounded-lg bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                        >
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? "Saving..." : serviceCenter ? "Update" : "Add"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

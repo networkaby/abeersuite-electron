@@ -55,55 +55,56 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
     const hasFilter = selectedStageId !== null || selectedTeam !== null;
 
     return (
-        <div>
-            <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
-            <p className="text-gray-400 text-sm mb-6">
-                Welcome back, {name}
-                {contextLabel ? ` · ${contextLabel}` : ""}
-            </p>
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
+                <p className="text-muted-foreground text-sm">
+                    Welcome back, {name}{contextLabel ? ` · ${contextLabel}` : ""}
+                </p>
+            </div>
 
             {/* Summary bar */}
-            <div className="flex flex-wrap gap-3 mb-6">
+            <div className="flex flex-wrap gap-3">
                 {[
-                    { label: "Total", value: counts.total, color: "text-gray-700" },
+                    { label: "Total", value: counts.total, color: "text-foreground" },
                     { label: "Open", value: counts.open, color: "text-primary" },
-                    { label: "Escalated", value: counts.escalated, color: "text-orange-600" },
-                    { label: "Ready for Pickup", value: counts.ready, color: "text-green-600" },
+                    { label: "Escalated", value: counts.escalated, color: "text-foreground" },
+                    { label: "Ready for Pickup", value: counts.ready, color: "text-primary" },
                 ].map(stat => (
-                    <div key={stat.label} className="bg-white rounded-lg shadow px-4 py-2.5 flex items-center gap-2">
-                        <span className="text-xs text-gray-500">{stat.label}</span>
+                    <div key={stat.label} className="border-2 border-border shadow bg-card px-4 py-2.5 flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{stat.label}</span>
                         <span className={`text-xl font-bold ${stat.color}`}>{stat.value}</span>
                     </div>
                 ))}
                 {counts.actionItems > 0 && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5 flex items-center gap-2">
-                        <AlertCircle size={14} className="text-yellow-600" />
-                        <span className="text-xs text-yellow-800 font-medium">{counts.actionItems} pending actions</span>
+                    <div className="border-2 border-border bg-secondary/40 px-4 py-2.5 flex items-center gap-2">
+                        <AlertCircle size={14} className="text-foreground" />
+                        <span className="text-xs text-foreground font-medium">{counts.actionItems} pending actions</span>
                     </div>
                 )}
             </div>
 
             {/* Pipeline strip */}
-            <div className="bg-white rounded-xl shadow p-4 mb-6">
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Ticket Pipeline</h2>
+            <div className="border-2 border-border shadow bg-card p-4">
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Ticket Pipeline</h2>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                     {pipeline.map((stage, i) => (
                         <div key={stage.id} className="flex items-center gap-2 shrink-0">
                             <button
                                 onClick={() => setSelectedStageId(prev => prev === stage.id ? null : stage.id)}
-                                className={`flex flex-col items-center px-4 py-3 rounded-lg border transition-all min-w-[90px]
+                                className={`flex flex-col items-center px-4 py-3 border-2 transition-all min-w-[90px]
                                     ${stage._count.tickets === 0 ? "opacity-40" : ""}
                                     ${selectedStageId === stage.id
-                                        ? "border-primary/40 bg-primary/10 ring-1 ring-primary/30"
-                                        : "border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
+                                        ? "border-primary bg-primary/10"
+                                        : "border-border hover:bg-muted"}`}
                             >
-                                <span className={`text-2xl font-bold ${stage._count.tickets > 0 ? "text-gray-800" : "text-gray-400"}`}>
+                                <span className={`text-2xl font-bold ${stage._count.tickets > 0 ? "text-foreground" : "text-muted-foreground"}`}>
                                     {stage._count.tickets}
                                 </span>
-                                <span className="text-xs text-gray-500 mt-0.5 text-center leading-tight">{stage.label}</span>
+                                <span className="text-xs text-muted-foreground mt-0.5 text-center leading-tight">{stage.label}</span>
                             </button>
                             {i < pipeline.length - 1 && (
-                                <ChevronRight size={14} className="text-gray-300 shrink-0" />
+                                <ChevronRight size={14} className="text-muted-foreground shrink-0" />
                             )}
                         </div>
                     ))}
@@ -111,29 +112,29 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
             </div>
 
             {/* Team tabs + ticket table */}
-            <div className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="px-6 py-4 border-b flex items-center gap-4 flex-wrap">
+            <div className="border-2 border-border shadow overflow-hidden">
+                <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-4 flex-wrap">
                     <div className="flex gap-1">
                         {TEAM_TABS.map(tab => (
                             <button
                                 key={String(tab.key)}
                                 onClick={() => setSelectedTeam(tab.key)}
-                                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors
+                                className={`text-xs px-3 py-1.5 border font-medium transition-colors
                                     ${selectedTeam === tab.key
-                                        ? "bg-primary text-primary-foreground"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                                        ? "border-primary bg-primary text-primary-foreground"
+                                        : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
                             >
                                 {tab.label}
                             </button>
                         ))}
                     </div>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                         {filtered.length}{hasFilter ? ` of ${allActiveTickets.length}` : ""} tickets
                     </span>
                     {hasFilter ? (
                         <button
                             onClick={() => { setSelectedStageId(null); setSelectedTeam(null); }}
-                            className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+                            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
                         >
                             Clear filters
                         </button>
@@ -142,10 +143,10 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                     )}
                 </div>
                 {filtered.length === 0 ? (
-                    <p className="px-6 py-8 text-sm text-gray-400 text-center">No tickets match this filter.</p>
+                    <p className="px-6 py-8 text-sm text-muted-foreground text-center">No tickets match this filter.</p>
                 ) : (
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                        <thead className="bg-muted text-muted-foreground text-xs uppercase">
                             <tr>
                                 <th className="px-5 py-3 text-left">#</th>
                                 <th className="px-5 py-3 text-left">Customer</th>
@@ -156,21 +157,21 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                                 <th className="px-5 py-3 text-left">Updated</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-border">
                             {filtered.map(t => (
-                                <tr key={t.id} className={`hover:bg-gray-50 ${t.escalated ? "bg-orange-50/30" : ""}`}>
+                                <tr key={t.id} className={`hover:bg-muted/40 ${t.escalated ? "bg-secondary/20" : ""}`}>
                                     <td className="px-5 py-3">
                                         <Link href={`/tickets/${t.id}`} className="text-primary font-medium hover:underline">#{t.id}</Link>
                                     </td>
                                     <td className="px-5 py-3 font-medium">{(t.device.customer ?? t.device.company)?.name}</td>
-                                    <td className="px-5 py-3 text-gray-500">{t.device.brand} {t.device.model}</td>
+                                    <td className="px-5 py-3 text-muted-foreground">{t.device.brand} {t.device.model}</td>
                                     <td className="px-5 py-3">
                                         <div className="flex flex-col gap-0.5">
-                                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium w-fit ${t.ticketStatus.color}`}>
+                                            <span className={`inline-block px-2 py-0.5 text-xs font-medium w-fit ${t.ticketStatus.color}`}>
                                                 {t.ticketStatus.label}
                                             </span>
                                             {t.ticketSubStatus && (
-                                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium w-fit ${t.ticketSubStatus.color}`}>
+                                                <span className={`inline-block px-2 py-0.5 text-xs font-medium w-fit ${t.ticketSubStatus.color}`}>
                                                     {t.ticketSubStatus.label}
                                                 </span>
                                             )}
@@ -179,15 +180,15 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                                     <td className="px-5 py-3">
                                         <div className="flex flex-wrap gap-1">
                                             {t.pendingTeam.map(role => (
-                                                <span key={role} className={`text-xs px-2 py-0.5 rounded-full font-medium ${TEAM_BADGE[role] ?? "bg-gray-100 text-gray-600"}`}>
+                                                <span key={role} className={`text-xs px-2 py-0.5 font-medium ${TEAM_BADGE[role] ?? "bg-muted text-muted-foreground"}`}>
                                                     {TEAM_LABEL[role] ?? role}
                                                 </span>
                                             ))}
-                                            {t.pendingTeam.length === 0 && <span className="text-xs text-gray-400">—</span>}
+                                            {t.pendingTeam.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-gray-500">{t.primaryOwner?.name ?? "—"}</td>
-                                    <td className="px-5 py-3 text-gray-400 text-xs">{timeAgo(t.updatedAt)}</td>
+                                    <td className="px-5 py-3 text-muted-foreground">{t.primaryOwner?.name ?? "—"}</td>
+                                    <td className="px-5 py-3 text-muted-foreground text-xs">{timeAgo(t.updatedAt)}</td>
                                 </tr>
                             ))}
                         </tbody>

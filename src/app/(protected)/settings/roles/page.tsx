@@ -235,7 +235,7 @@ export default function RolesSettingsPage() {
             {/* ── Page header ─────────────────────────────────────────────── */}
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
                         Roles &amp; Permissions
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -249,15 +249,15 @@ export default function RolesSettingsPage() {
 
             {/* ── New role form ────────────────────────────────────────────── */}
             {addingNew && (
-                <Card className="border-blue-200 bg-blue-50/50 shadow-sm">
+                <Card className="border-2 border-primary/30 bg-primary/5">
                     <CardContent className="pt-5 pb-4">
-                        <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-3">
+                        <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">
                             New Role
                         </p>
                         <div className="flex flex-wrap gap-3 items-end">
                             {/* Label */}
                             <div className="flex-1 min-w-48">
-                                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                                     Role name
                                 </label>
                                 <Input
@@ -266,13 +266,12 @@ export default function RolesSettingsPage() {
                                     onChange={(e) => setNewRole(r => ({ ...r, label: e.target.value }))}
                                     onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                                     placeholder="e.g. Senior Technician"
-                                    className="bg-white"
                                 />
                             </div>
 
                             {/* Colour picker */}
                             <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                                     Colour
                                 </label>
                                 <div className="flex gap-1.5 flex-wrap">
@@ -283,11 +282,11 @@ export default function RolesSettingsPage() {
                                             title={c.label}
                                             onClick={() => setNewRole(r => ({ ...r, color: c.value }))}
                                             className={[
-                                                "h-7 w-7 rounded-full border-2 transition-all duration-150",
+                                                "h-7 w-7 border-2 transition-all duration-150",
                                                 c.dot,
                                                 newRole.color === c.value
-                                                    ? "border-gray-800 ring-2 ring-gray-300 ring-offset-1 scale-110"
-                                                    : "border-white hover:scale-105 hover:border-gray-300",
+                                                    ? "border-foreground ring-2 ring-border ring-offset-1 scale-110"
+                                                    : "border-transparent hover:scale-105 hover:border-border",
                                             ].join(" ")}
                                         />
                                     ))}
@@ -320,7 +319,7 @@ export default function RolesSettingsPage() {
                     return (
                         <Card
                             key={role.id}
-                            className={`border-l-4 ${accent} transition-shadow duration-150 hover:shadow-md`}
+                            className={`border-l-4 ${accent}`}
                         >
                             <CardContent className="py-3.5 flex items-center gap-4">
                                 {/* Role badge */}
@@ -331,21 +330,21 @@ export default function RolesSettingsPage() {
                                 {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-semibold text-sm text-gray-900">
+                                        <span className="font-semibold text-sm text-foreground">
                                             {role.label}
                                         </span>
                                         {role.isSystem && (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5">
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted border border-border px-1.5 py-0.5">
                                                 <Lock size={9} /> System
                                             </span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1.5 mt-1">
-                                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted border border-border px-2 py-0.5">
                                             <Users size={9} />
                                             {role._count.users} {role._count.users === 1 ? "user" : "users"}
                                         </span>
-                                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted border border-border px-2 py-0.5">
                                             <Shield size={9} />
                                             {role.permissions.length} permissions
                                         </span>
@@ -387,7 +386,7 @@ export default function RolesSettingsPage() {
                     className="sm:max-w-2xl max-h-[88vh] p-0 gap-0 flex flex-col overflow-hidden"
                 >
                     {/* Header */}
-                    <DialogHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b px-6 py-4">
+                    <DialogHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b-2 border-border px-6 py-4">
                         <div>
                             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
                                 Permissions
@@ -398,7 +397,7 @@ export default function RolesSettingsPage() {
                             <DialogDescription className="mt-0.5 text-xs">
                                 {selectedCount} of {totalCount} selected
                                 {hasChanges() && (
-                                    <span className="ml-2 font-medium text-blue-600">· unsaved changes</span>
+                                    <span className="ml-2 font-medium text-primary">· unsaved changes</span>
                                 )}
                             </DialogDescription>
                         </div>
@@ -411,9 +410,9 @@ export default function RolesSettingsPage() {
 
                     {/* admin:bypass warning */}
                     {hasBypass && (
-                        <div className="mx-6 mt-4 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-500" />
-                            <p className="text-xs leading-relaxed text-red-700">
+                        <div className="mx-6 mt-4 flex items-start gap-2.5 border-2 border-destructive/20 bg-destructive/10 px-4 py-3">
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-destructive" />
+                            <p className="text-xs leading-relaxed text-destructive">
                                 <span className="font-semibold">admin:bypass is active.</span>{" "}
                                 This role skips every permission check in the system.
                                 All other permissions are redundant while this is enabled.
@@ -422,14 +421,14 @@ export default function RolesSettingsPage() {
                     )}
 
                     {/* Search + bulk */}
-                    <div className="flex gap-2 border-b bg-muted/30 px-6 py-3">
+                    <div className="flex gap-2 border-b-2 border-border bg-muted/30 px-6 py-3">
                         <div className="relative flex-1">
                             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 value={permSearch}
                                 onChange={(e) => setPermSearch(e.target.value)}
                                 placeholder="Search permissions…"
-                                className="pl-8 h-8 bg-white text-sm"
+                                className="pl-8 h-8 text-sm"
                             />
                         </div>
                         <Button
@@ -464,9 +463,9 @@ export default function RolesSettingsPage() {
                                 const isCollapsed = collapsedModules.has(module);
 
                                 return (
-                                    <div key={module} className="overflow-hidden rounded-xl border bg-white shadow-sm">
+                                    <div key={module} className="overflow-hidden border-2 border-border bg-card">
                                         {/* Module header */}
-                                        <div className={`flex items-center gap-2 border-b px-3 py-2.5 ${meta?.chip ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                                        <div className={`flex items-center gap-2 border-b-2 border-border px-3 py-2.5 ${meta?.chip ?? "bg-muted text-foreground border-border"}`}>
                                             <button
                                                 onClick={() => toggleModule(module)}
                                                 className="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
@@ -494,7 +493,7 @@ export default function RolesSettingsPage() {
                                                     ? deselectAllInModule(perms)
                                                     : selectAllInModule(perms)
                                                 }
-                                                className="ml-1 rounded-md px-2 py-0.5 text-xs font-medium hover:bg-black/10 transition-colors"
+                                                className="ml-1 px-2 py-0.5 text-xs font-medium hover:bg-black/10 transition-colors"
                                             >
                                                 {isAllSelected ? "None" : "All"}
                                             </button>
@@ -502,7 +501,7 @@ export default function RolesSettingsPage() {
 
                                         {/* Permission rows */}
                                         {!isCollapsed && (
-                                            <div className="divide-y divide-gray-100">
+                                            <div className="divide-y divide-border">
                                                 {perms.map((p) => {
                                                     const isSelected = selectedPerms.has(p.id);
                                                     const isDangerous = p.id === "admin:bypass";
@@ -516,21 +515,21 @@ export default function RolesSettingsPage() {
                                                                 "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors",
                                                                 isDangerous
                                                                     ? isSelected
-                                                                        ? "bg-red-50/70 hover:bg-red-50"
-                                                                        : "hover:bg-red-50/40"
+                                                                        ? "bg-destructive/10 hover:bg-destructive/5"
+                                                                        : "hover:bg-destructive/5"
                                                                     : isSelected
-                                                                        ? "bg-blue-50/60 hover:bg-blue-50"
-                                                                        : "hover:bg-gray-50",
+                                                                        ? "bg-primary/10 hover:bg-primary/5"
+                                                                        : "hover:bg-muted",
                                                             ].join(" ")}
                                                         >
                                                             {/* Custom checkbox */}
                                                             <div className={[
-                                                                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-all duration-150",
+                                                                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border-2 transition-all duration-150",
                                                                 isSelected
                                                                     ? isDangerous
-                                                                        ? "border-red-500 bg-red-500"
-                                                                        : "border-blue-600 bg-blue-600"
-                                                                    : "border-gray-300 hover:border-gray-400",
+                                                                        ? "border-destructive bg-destructive"
+                                                                        : "border-primary bg-primary"
+                                                                    : "border-border hover:border-foreground",
                                                             ].join(" ")}>
                                                                 {isSelected && (
                                                                     <Check size={10} strokeWidth={3} className="text-white" />
@@ -542,9 +541,9 @@ export default function RolesSettingsPage() {
                                                                 <div className="flex items-center gap-2 flex-wrap">
                                                                     <span className={[
                                                                         "text-sm font-medium leading-none",
-                                                                        isDangerous && isSelected ? "text-red-800"
-                                                                            : isSelected ? "text-gray-900"
-                                                                                : "text-gray-600",
+                                                                        isDangerous && isSelected ? "text-destructive"
+                                                                            : isSelected ? "text-foreground"
+                                                                                : "text-muted-foreground",
                                                                     ].join(" ")}>
                                                                         {p.label}
                                                                     </span>
@@ -555,11 +554,11 @@ export default function RolesSettingsPage() {
                                                                     )}
                                                                 </div>
                                                                 {p.description && (
-                                                                    <p className="mt-1 text-xs leading-relaxed text-gray-400">
+                                                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                                                                         {p.description}
                                                                     </p>
                                                                 )}
-                                                                <p className="mt-1 font-mono text-[10px] text-gray-300 select-all">
+                                                                <p className="mt-1 font-mono text-[10px] text-muted-foreground/50 select-all">
                                                                     {p.id}
                                                                 </p>
                                                             </div>
@@ -575,7 +574,7 @@ export default function RolesSettingsPage() {
                     </div>
 
                     {/* Footer */}
-                    <div className="flex gap-2.5 border-t bg-muted/30 px-6 py-4">
+                    <div className="flex gap-2.5 border-t-2 border-border bg-muted/30 px-6 py-4">
                         <DialogClose asChild>
                             <Button variant="outline" className="flex-1">
                                 Cancel

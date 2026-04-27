@@ -439,7 +439,7 @@ export default function InboxModule({
                 type="button"
                 onClick={() => setActiveRoomId(room.id)}
                 className={[
-                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
+                    "flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors",
                     isActive
                         ? "bg-primary/15 text-foreground font-semibold"
                         : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -511,7 +511,7 @@ export default function InboxModule({
                                     type="button"
                                     onClick={() => openDm(u.id)}
                                     disabled={openingDm === u.id}
-                                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground/60 hover:bg-muted/60 hover:text-muted-foreground transition-colors disabled:opacity-40"
+                                    className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground/60 hover:bg-muted/60 hover:text-muted-foreground transition-colors disabled:opacity-40"
                                 >
                                     <span className="truncate">@ {u.name}</span>
                                     {openingDm === u.id && (
@@ -544,7 +544,7 @@ export default function InboxModule({
                 ) : (
                     <>
                         {/* Room header */}
-                        <div className="flex items-center gap-2 border-b border-border bg-card px-6 py-3 shrink-0 shadow-sm">
+                        <div className="flex items-center gap-2 border-b-2 border-border bg-card px-6 py-3 shrink-0">
                             {activeRoom.type === "DIRECT_MESSAGE" ? (
                                 <AtSign size={16} className="text-muted-foreground" />
                             ) : activeRoom.type === "SYSTEM_INBOX" ? (
@@ -581,13 +581,13 @@ export default function InboxModule({
                                         if (message.messageType === "SYSTEM") {
                                             return (
                                                 <div key={message.id} className="flex justify-center py-2">
-                                                    <div className="max-w-lg rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-2 text-center">
+                                                    <div className="max-w-lg border-2 border-border bg-secondary/40 px-4 py-2 text-center">
                                                         {message.title && (
-                                                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                                            <p className="text-xs font-semibold text-foreground">
                                                                 {message.title}
                                                             </p>
                                                         )}
-                                                        <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap">
+                                                        <p className="text-sm text-foreground whitespace-pre-wrap">
                                                             {message.body}
                                                         </p>
                                                         {message.link && (
@@ -595,7 +595,7 @@ export default function InboxModule({
                                                                 Open →
                                                             </Link>
                                                         )}
-                                                        <p className="mt-0.5 text-[10px] text-amber-600/60">
+                                                        <p className="mt-0.5 text-[10px] text-muted-foreground/60">
                                                             {formatTime(message.createdAt)}
                                                         </p>
                                                     </div>
@@ -679,7 +679,7 @@ export default function InboxModule({
                                     System inbox is read-only.
                                 </p>
                             ) : (
-                                <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
+                                <div className="flex items-end gap-2 border-2 border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
                                     <textarea
                                         value={draft}
                                         onChange={(e) => setDraft(e.target.value)}
@@ -702,7 +702,7 @@ export default function InboxModule({
                                         type="button"
                                         onClick={sendMessage}
                                         disabled={sending || !draft.trim()}
-                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30 transition-colors"
+                                        className="flex h-8 w-8 shrink-0 items-center justify-center border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30 transition-colors"
                                         title="Send (Enter)"
                                     >
                                         <Send size={14} />
