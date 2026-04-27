@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth-guard";
-import { createRoomMessage, getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
+import { getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
 import { prisma } from "@/lib/prisma";
 
 const messageSchema = z.object({
@@ -61,22 +61,25 @@ export async function POST(
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid message payload" }, { status: 400 });
         }
 
-        const message = await createRoomMessage({
-            roomId: room.id,
-            senderUserId: user.id,
-            messageType: "USER",
-            title: parsed.data.title || null,
-            body: parsed.data.body,
-        });
-
-        // Re-fetch with senderUser so the client can broadcast the full shape
-        const fullMessage = await prisma.chatMessage.findUnique({
-            where: { id: message.id },
-            include: { senderUser: { select: { id: true, name: true, role: true } } },
-        });
+        const [message] = await Promise.all([
+            prisma.chatMessage.create({
+                data: {
+                    roomId: room.id,
+                    senderUserId: user.id,
+                    messageType: "USER",
+                    title: parsed.data.title || null,
+                    body: parsed.data.body,
+                },
+                include: { senderUser: { select: { id: true, name: true, role: true } } },
+            }),
+            prisma.chatRoom.update({
+                where: { id: room.id },
+                data: { updatedAt: new Date() },
+            }),
+        ]);
 
         await markRoomRead(user.id, room.id, message.createdAt);
-        return NextResponse.json(fullMessage, { status: 201 });
+        return NextResponse.json(message, { status: 201 });
     } catch (error) {
         console.error("[inbox room messages POST]", error);
         return NextResponse.json({ error: "Failed to send message" }, { status: 500 });

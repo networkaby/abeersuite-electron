@@ -46,6 +46,12 @@ async function ensureMembership(roomId: string, userId: number) {
 }
 
 export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id" | "roles">) {
+    const existing = await prisma.chatRoom.findUnique({
+        where: { key: ROOM_KEY.system(user.id) },
+        select: { id: true },
+    });
+    if (existing) return;
+
     const systemRoom = await ensureRoom({
         key: ROOM_KEY.system(user.id),
         name: "System Inbox",
@@ -171,8 +177,6 @@ export async function listAccessibleRooms(user: ResolvedUser) {
 }
 
 export async function getAccessibleRoom(user: ResolvedUser, roomId: string) {
-    await ensureCoreRoomsForUser(user);
-
     const room = await prisma.chatRoom.findFirst({
         where: {
             id: roomId,
