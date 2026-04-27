@@ -36,15 +36,34 @@ type Priority = { id: string; label: string };
 type PipelineOption = { id: string; label: string; color: string; isDefault: boolean };
 type LinkedCompany = { id: number; name: string; accountId: number | null };
 type SearchSuggestion = BasicIdentity;
+type CompanySuggestion = {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    companyReg: string | null;
+    taxId: string | null;
+    account?: { id: number } | null;
+};
 
 const accountSchema = z.object({
     type: z.enum(["individual", "company"]),
-    name: z.string().min(1, "Name is required"),
-    phone: z.string().min(1, "Phone is required"),
+    name: z.string().trim().min(1, "Name is required"),
+    contactName: z.string().trim().optional().or(z.literal("")),
+    phone: z.string().trim().min(1, "Phone is required"),
     email: z.string().email("Invalid email").optional().or(z.literal("")),
     address: z.string().optional().or(z.literal("")),
     companyReg: z.string().optional().or(z.literal("")),
     taxId: z.string().optional().or(z.literal("")),
+}).superRefine((data, ctx) => {
+    if (data.type === "company" && !data.contactName?.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["contactName"],
+            message: "Contact name is required",
+        });
+    }
 });
 
 const ticketSchema = z.object({
@@ -68,6 +87,19 @@ function FieldError({ message }: { message?: string }) {
     if (!message) return null;
 
     return <p className="text-xs text-destructive">{message}</p>;
+}
+
+function FieldLabel({ children, required = false }: { children: string; required?: boolean }) {
+    return (
+        <Label className="flex items-center gap-1.5">
+            <span>{children}</span>
+            {required && <span className="text-sm font-semibold text-destructive">*</span>}
+        </Label>
+    );
+}
+
+function invalidFieldClass(hasError?: boolean) {
+    return hasError ? "border-destructive focus-visible:ring-destructive/20" : "";
 }
 
 function colorDot(color: string) {
@@ -94,12 +126,18 @@ export default function QuickTicketButton() {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [lookupLoading, setLookupLoading] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [companySuggestions, setCompanySuggestions] = useState<CompanySuggestion[]>([]);
+    const [showCompanySuggestions, setShowCompanySuggestions] = useState(false);
+    const [companyLookupLoading, setCompanyLookupLoading] = useState(false);
+    const [selectedCompany, setSelectedCompany] = useState<CompanySuggestion | null>(null);
 
     const accountForm = useForm<AccountFormData>({
         resolver: zodResolver(accountSchema) as Resolver<AccountFormData>,
-        defaultValues: { type: "individual" },
+        defaultValues: { type: "individual", contactName: "" },
     });
     const accountType = accountForm.watch("type") ?? "individual";
+    const companyName = accountForm.watch("name") ?? "";
+    const hasCompanyInput = accountType === "company" && companyName.trim().length > 0;
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
@@ -119,6 +157,10 @@ export default function QuickTicketButton() {
         setShowSuggestions(false);
         setLookupLoading(false);
         setHighlightedIndex(-1);
+        setCompanySuggestions([]);
+        setShowCompanySuggestions(false);
+        setCompanyLookupLoading(false);
+        setSelectedCompany(null);
 
         const pendingPipelineId = useQuickTicketStore.getState().initialPipelineId;
         if (pendingPipelineId) {
@@ -161,6 +203,20 @@ export default function QuickTicketButton() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [identity]);
 
+    useEffect(() => {
+        if (accountType !== "company") {
+            setSelectedCompany(null);
+            setCompanySuggestions([]);
+            setShowCompanySuggestions(false);
+            accountForm.setValue("contactName", "");
+            return;
+        }
+
+        if (selectedCompany && companyName.trim() !== selectedCompany.name) {
+            setSelectedCompany(null);
+        }
+    }, [accountForm, accountType, companyName, selectedCompany]);
+
     const closeModal = () => reset();
 
     useEffect(() => {
@@ -193,6 +249,41 @@ export default function QuickTicketButton() {
 
         return () => window.clearTimeout(timer);
     }, [open, phone, step]);
+
+    useEffect(() => {
+        if (!open || step !== "account" || accountType !== "company") return;
+
+        const query = companyName.trim();
+        if (selectedCompany && query === selectedCompany.name) {
+            setCompanySuggestions([]);
+            setShowCompanySuggestions(false);
+            setCompanyLookupLoading(false);
+            return;
+        }
+
+        if (query.length < 2) {
+            setCompanySuggestions([]);
+            setShowCompanySuggestions(false);
+            setCompanyLookupLoading(false);
+            return;
+        }
+
+        const timer = window.setTimeout(async () => {
+            setCompanyLookupLoading(true);
+            try {
+                const res = await axios.get<CompanySuggestion[]>(`/api/companies?q=${encodeURIComponent(query)}`);
+                setCompanySuggestions(res.data);
+                setShowCompanySuggestions(true);
+            } catch {
+                setCompanySuggestions([]);
+                setShowCompanySuggestions(false);
+            } finally {
+                setCompanyLookupLoading(false);
+            }
+        }, 250);
+
+        return () => window.clearTimeout(timer);
+    }, [accountType, companyName, open, selectedCompany, step]);
 
     const selectIdentity = (found: BasicIdentity) => {
         setPhone(found.phone ?? found.name);
@@ -230,25 +321,43 @@ export default function QuickTicketButton() {
     const createAccount = async (data: AccountFormData) => {
         try {
             if (data.type === "company") {
-                const res = await axios.post("/api/companies", {
-                    name: data.name,
+                const companyRes = selectedCompany
+                    ? { data: selectedCompany }
+                    : await axios.post("/api/companies", {
+                        name: data.name,
+                        companyReg: data.companyReg,
+                        taxId: data.taxId,
+                    });
+                const company = companyRes.data as CompanySuggestion;
+                const customerRes = await axios.post("/api/customers", {
+                    name: data.contactName,
                     phone: data.phone,
                     email: data.email,
                     address: data.address,
-                    companyReg: data.companyReg,
-                    taxId: data.taxId,
                 });
-                const raw = res.data;
+                const customer = customerRes.data;
+
+                await axios.post(`/api/companies/${company.id}/links`, {
+                    customerId: customer.id,
+                });
+
                 setIdentity({
-                    id: raw.id,
-                    name: raw.name,
-                    phone: raw.phone ?? null,
-                    type: "company",
-                    accountId: raw.account?.id ?? null,
-                    linkedCompanies: [],
+                    id: customer.id,
+                    name: customer.name,
+                    phone: customer.phone ?? null,
+                    type: "customer",
+                    accountId: customer.account?.id ?? null,
+                    linkedCompanies: [
+                        {
+                            id: company.id,
+                            name: company.name,
+                            accountId: company.account?.id ?? null,
+                        },
+                    ],
                 });
+                setBillingAccountId(company.account?.id ?? null);
                 setStep("ticket");
-                toast.success("Company created!");
+                toast.success(selectedCompany ? "Contact linked to company!" : "Customer and company created!");
                 return;
             }
 
@@ -436,8 +545,12 @@ export default function QuickTicketButton() {
                                 No account found for <strong>{phone}</strong>. Choose individual or company, then fill in the details.
                             </div>
 
+                            <p className="text-xs font-medium text-muted-foreground">
+                                Fields marked <span className="font-semibold text-destructive">*</span> are required.
+                            </p>
+
                             <div className="space-y-2">
-                                <Label>Account Type</Label>
+                                <FieldLabel required>Account Type</FieldLabel>
                                 <div className="grid grid-cols-2 gap-2">
                                     <Button
                                         type="button"
@@ -458,44 +571,164 @@ export default function QuickTicketButton() {
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>{accountType === "company" ? "Company Name" : "Full Name"}</Label>
-                                <Input
-                                    {...accountForm.register("name")}
-                                    placeholder={accountType === "company" ? "ABC Pvt Ltd" : "Full name"}
-                                    autoFocus
-                                />
-                                <FieldError message={accountForm.formState.errors.name?.message} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-2">
-                                    <Label>Phone</Label>
-                                    <Input {...accountForm.register("phone")} />
-                                    <FieldError message={accountForm.formState.errors.phone?.message} />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Email</Label>
-                                    <Input {...accountForm.register("email")} placeholder="email@example.com" />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Address</Label>
-                                <Input {...accountForm.register("address")} placeholder="Street, City" />
-                            </div>
-
-                            {accountType === "company" && (
-                                <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
+                            {accountType === "company" ? (
+                                <>
                                     <div className="space-y-2">
-                                        <Label>Company Reg #</Label>
-                                        <Input {...accountForm.register("companyReg")} placeholder="Trade licence / Reg no." />
+                                        <FieldLabel required>Company</FieldLabel>
+                                        <div className="relative">
+                                            <Input
+                                                {...accountForm.register("name")}
+                                                placeholder="Select existing or type a new company"
+                                                autoFocus
+                                                className={invalidFieldClass(Boolean(accountForm.formState.errors.name))}
+                                                onFocus={() => {
+                                                    if (companySuggestions.length > 0) setShowCompanySuggestions(true);
+                                                }}
+                                                onChange={(e) => {
+                                                    accountForm.setValue("name", e.target.value, { shouldValidate: true });
+                                                    setShowCompanySuggestions(true);
+                                                }}
+                                            />
+                                            {showCompanySuggestions && companySuggestions.length > 0 && (
+                                                <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden border-2 border-border bg-popover shadow">
+                                                    {companySuggestions.map((company) => (
+                                                        <button
+                                                            key={company.id}
+                                                            type="button"
+                                                            onMouseDown={(e) => e.preventDefault()}
+                                                            onClick={() => {
+                                                                setSelectedCompany(company);
+                                                                accountForm.setValue("name", company.name, { shouldValidate: true });
+                                                                accountForm.setValue("companyReg", company.companyReg ?? "");
+                                                                accountForm.setValue("taxId", company.taxId ?? "");
+                                                                setShowCompanySuggestions(false);
+                                                            }}
+                                                            className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors hover:bg-muted"
+                                                        >
+                                                            <span className="truncate font-medium">{company.name}</span>
+                                                            <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                                                                Existing company
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <FieldError message={accountForm.formState.errors.name?.message} />
+                                        <p className="text-xs text-muted-foreground">
+                                            {selectedCompany
+                                                ? "Existing company selected. The customer you create will be linked automatically."
+                                                : companyLookupLoading
+                                                    ? "Searching existing companies..."
+                                                    : "Start typing to pick an existing company or create a new one."}
+                                        </p>
                                     </div>
+
+                                    {hasCompanyInput && (
+                                        <>
+                                            {!selectedCompany && (
+                                                <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
+                                                    <div className="space-y-2">
+                                                        <FieldLabel>Company Reg #</FieldLabel>
+                                                        <Input
+                                                            {...accountForm.register("companyReg")}
+                                                            placeholder="Trade licence / Reg no."
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <FieldLabel>Tax / VAT ID</FieldLabel>
+                                                        <Input
+                                                            {...accountForm.register("taxId")}
+                                                            placeholder="GST / VAT number"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-4 border-2 border-border bg-card p-4">
+                                                <div className="space-y-1">
+                                                    <p className="text-sm font-medium">Primary Contact</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        This creates the individual account and links it to the company.
+                                                    </p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <FieldLabel required>Contact Full Name</FieldLabel>
+                                                    <Input
+                                                        {...accountForm.register("contactName")}
+                                                        placeholder="Full name"
+                                                        className={invalidFieldClass(Boolean(accountForm.formState.errors.contactName))}
+                                                    />
+                                                    <FieldError message={accountForm.formState.errors.contactName?.message} />
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-2">
+                                                        <FieldLabel required>Phone</FieldLabel>
+                                                        <Input
+                                                            {...accountForm.register("phone")}
+                                                            className={invalidFieldClass(Boolean(accountForm.formState.errors.phone))}
+                                                        />
+                                                        <FieldError message={accountForm.formState.errors.phone?.message} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <FieldLabel>Email</FieldLabel>
+                                                        <Input
+                                                            {...accountForm.register("email")}
+                                                            placeholder="email@example.com"
+                                                            className={invalidFieldClass(Boolean(accountForm.formState.errors.email))}
+                                                        />
+                                                        <FieldError message={accountForm.formState.errors.email?.message} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <FieldLabel>Address</FieldLabel>
+                                                    <Input {...accountForm.register("address")} placeholder="Street, City" />
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <>
                                     <div className="space-y-2">
-                                        <Label>Tax / VAT ID</Label>
-                                        <Input {...accountForm.register("taxId")} placeholder="GST / VAT number" />
+                                        <FieldLabel required>Full Name</FieldLabel>
+                                        <Input
+                                            {...accountForm.register("name")}
+                                            placeholder="Full name"
+                                            autoFocus
+                                            className={invalidFieldClass(Boolean(accountForm.formState.errors.name))}
+                                        />
+                                        <FieldError message={accountForm.formState.errors.name?.message} />
                                     </div>
-                                </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <FieldLabel required>Phone</FieldLabel>
+                                            <Input
+                                                {...accountForm.register("phone")}
+                                                className={invalidFieldClass(Boolean(accountForm.formState.errors.phone))}
+                                            />
+                                            <FieldError message={accountForm.formState.errors.phone?.message} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FieldLabel>Email</FieldLabel>
+                                            <Input
+                                                {...accountForm.register("email")}
+                                                placeholder="email@example.com"
+                                                className={invalidFieldClass(Boolean(accountForm.formState.errors.email))}
+                                            />
+                                            <FieldError message={accountForm.formState.errors.email?.message} />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <FieldLabel>Address</FieldLabel>
+                                        <Input {...accountForm.register("address")} placeholder="Street, City" />
+                                    </div>
+                                </>
                             )}
 
                             <div className="flex gap-3 pt-1">
@@ -525,7 +758,7 @@ export default function QuickTicketButton() {
 
                             {identity && linkedCompanies.length > 0 && (
                                 <div className="space-y-2">
-                                    <Label>Bill To</Label>
+                                    <FieldLabel>Bill To</FieldLabel>
                                     <div className="space-y-2">
                                         <Button
                                             type="button"
@@ -554,7 +787,7 @@ export default function QuickTicketButton() {
 
                             {pipelines.length > 1 && (
                                 <div className="space-y-2">
-                                    <Label>Pipeline</Label>
+                                    <FieldLabel>Pipeline</FieldLabel>
                                     <div className="flex flex-wrap gap-2">
                                         {pipelines.map((p) => (
                                             <Button
@@ -574,30 +807,48 @@ export default function QuickTicketButton() {
 
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-2">
-                                    <Label>Device Type</Label>
-                                    <Input {...ticketForm.register("deviceType")} placeholder="Laptop, Printer..." autoFocus />
+                                    <FieldLabel required>Device Type</FieldLabel>
+                                    <Input
+                                        {...ticketForm.register("deviceType")}
+                                        placeholder="Laptop, Printer..."
+                                        autoFocus
+                                        className={invalidFieldClass(Boolean(ticketForm.formState.errors.deviceType))}
+                                    />
                                     <FieldError message={ticketForm.formState.errors.deviceType?.message} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Brand</Label>
-                                    <Input {...ticketForm.register("brand")} placeholder="HP, Dell..." />
+                                    <FieldLabel required>Brand</FieldLabel>
+                                    <Input
+                                        {...ticketForm.register("brand")}
+                                        placeholder="HP, Dell..."
+                                        className={invalidFieldClass(Boolean(ticketForm.formState.errors.brand))}
+                                    />
                                     <FieldError message={ticketForm.formState.errors.brand?.message} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Model</Label>
-                                    <Input {...ticketForm.register("model")} placeholder="Model number" />
+                                    <FieldLabel required>Model</FieldLabel>
+                                    <Input
+                                        {...ticketForm.register("model")}
+                                        placeholder="Model number"
+                                        className={invalidFieldClass(Boolean(ticketForm.formState.errors.model))}
+                                    />
                                     <FieldError message={ticketForm.formState.errors.model?.message} />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Problem Description</Label>
-                                <Textarea {...ticketForm.register("problem")} rows={3} placeholder="Describe the issue..." />
+                                <FieldLabel required>Problem Description</FieldLabel>
+                                <Textarea
+                                    {...ticketForm.register("problem")}
+                                    rows={3}
+                                    placeholder="Describe the issue..."
+                                    className={invalidFieldClass(Boolean(ticketForm.formState.errors.problem))}
+                                />
                                 <FieldError message={ticketForm.formState.errors.problem?.message} />
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Job Type</Label>
+                                <FieldLabel>Job Type</FieldLabel>
                                 <div className="grid grid-cols-2 gap-2">
                                     <Button
                                         type="button"
@@ -625,11 +876,11 @@ export default function QuickTicketButton() {
                             {isWarranty && (
                                 <div className="grid grid-cols-2 gap-3 border-2 border-secondary/50 bg-secondary/30 p-4">
                                     <div className="space-y-2">
-                                        <Label>Serial / Purchase Ref</Label>
+                                        <FieldLabel>Serial / Purchase Ref</FieldLabel>
                                         <Input {...ticketForm.register("warrantyRef")} placeholder="Serial or receipt ref" />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>Purchase Date</Label>
+                                        <FieldLabel>Purchase Date</FieldLabel>
                                         <Input {...ticketForm.register("purchaseDate")} type="date" />
                                     </div>
                                 </div>
@@ -637,7 +888,7 @@ export default function QuickTicketButton() {
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-2">
-                                    <Label>Priority</Label>
+                                    <FieldLabel>Priority</FieldLabel>
                                     <Select
                                         value={selectedPriority}
                                         onValueChange={(value) => ticketForm.setValue("priority", value, { shouldValidate: true })}
@@ -655,7 +906,7 @@ export default function QuickTicketButton() {
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Primary Owner</Label>
+                                    <FieldLabel>Primary Owner</FieldLabel>
                                     <Select
                                         value={selectedOwnerId || "__unassigned__"}
                                         onValueChange={(value) => ticketForm.setValue("primaryOwnerId", value === "__unassigned__" ? "" : value)}
@@ -677,17 +928,17 @@ export default function QuickTicketButton() {
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-2">
-                                    <Label>Access Info</Label>
+                                    <FieldLabel>Access Info</FieldLabel>
                                     <Input {...ticketForm.register("accessInfo")} placeholder="Device PIN or password" />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Estimated Cost</Label>
+                                    <FieldLabel>Estimated Cost</FieldLabel>
                                     <Input {...ticketForm.register("estimatedCost")} type="number" placeholder="0.00" />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Notes</Label>
+                                <FieldLabel>Notes</FieldLabel>
                                 <Textarea {...ticketForm.register("notes")} rows={2} placeholder="Internal notes..." />
                             </div>
 
