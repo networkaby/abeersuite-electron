@@ -65,7 +65,8 @@
       "Bash(xargs wc *)",
       "Bash(grep -r \"//\" /d/our-own-website/service-mgmt-experiment/src --include=\"*.tsx\" --include=\"*.ts\" -n)",
       "Bash(find D:\\\\\\\\our-own-website\\\\\\\\service-mgmt-experiment\\\\\\\\src -type f -not -path \"*/node_modules/*\")",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(git reset *)"
     ]
   }
 }

@@ -28,9 +28,6 @@ interface SubStatus {
     triggerStatus: { id: string; label: string } | null;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-    R1: "Admin", R2: "Technician", R3: "Front Desk", R4: "Despatch",
-};
 
 interface Props {
     ticket: { id: number; status: string };
@@ -47,6 +44,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
 
     const [subStatuses, setSubStatuses] = useState<SubStatus[]>([]);
     const [groupLabels, setGroupLabels] = useState<Record<string, string>>({});
+    const [roleLabelMap, setRoleLabelMap] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
 
     const selectedId = watch("subStatusId");
@@ -55,11 +53,15 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
         Promise.all([
             axios.get(`/api/sub-statuses?statusId=${ticket.status}`),
             axios.get("/api/sub-status-groups"),
-        ]).then(([ssRes, grRes]) => {
+            axios.get("/api/roles/labels"),
+        ]).then(([ssRes, grRes, rolesRes]) => {
             setSubStatuses(ssRes.data);
-            const map: Record<string, string> = {};
-            for (const g of grRes.data) map[g.id] = g.label;
-            setGroupLabels(map);
+            const groupMap: Record<string, string> = {};
+            for (const g of grRes.data) groupMap[g.id] = g.label;
+            setGroupLabels(groupMap);
+            const roleMap: Record<string, string> = {};
+            for (const r of rolesRes.data) roleMap[r.id] = r.label;
+            setRoleLabelMap(roleMap);
         }).catch(() => {
             toast.error("Failed to load sub-statuses");
         }).finally(() => setLoading(false));
@@ -139,7 +141,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                                 )}
                                                 {ss.notifyRoles.length > 0 && (
                                                     <span className="ml-auto text-xs text-muted-foreground">
-                                                        {ss.notifyRoles.map(r => ROLE_LABELS[r] ?? r).join(", ")}
+                                                        {ss.notifyRoles.map(r => roleLabelMap[r] ?? r).join(", ")}
                                                     </span>
                                                 )}
                                             </label>

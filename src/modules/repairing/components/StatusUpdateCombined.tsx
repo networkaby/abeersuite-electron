@@ -14,9 +14,6 @@ interface NextSubStatus {
     triggerMap: Record<string, string>;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-    R1: "Admin", R2: "Technician", R3: "Front Desk", R4: "Despatch",
-};
 
 interface Props {
     ticket: {
@@ -38,6 +35,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
     const [nextSubStatuses, setNextSubStatuses] = useState<NextSubStatus[]>([]);
     const [loadingSubStatuses, setLoadingSubStatuses] = useState(true);
     const [statusLabels, setStatusLabels] = useState<Record<string, string>>({});
+    const [roleLabelMap, setRoleLabelMap] = useState<Record<string, string>>({});
     const [handoff, setHandoff] = useState<{
         role: string; subStatusId: string;
         candidates: { id: number; name: string; role: string }[];
@@ -70,12 +68,16 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         Promise.all([
             axios.get(`/api/sub-statuses/next?${params}`),
             axios.get(`/api/ticket-statuses${statusParams}`),
+            axios.get("/api/roles/labels"),
         ])
-            .then(([subRes, statusRes]) => {
+            .then(([subRes, statusRes, rolesRes]) => {
                 setNextSubStatuses(subRes.data);
                 const labels: Record<string, string> = {};
                 for (const s of statusRes.data as { id: string; label: string }[]) labels[s.id] = s.label;
                 setStatusLabels(labels);
+                const roleMap: Record<string, string> = {};
+                for (const r of rolesRes.data as { id: string; label: string }[]) roleMap[r.id] = r.label;
+                setRoleLabelMap(roleMap);
                 if (subRes.data.length === 0 && nextMainStatuses.length > 0) setValue("mode", "mainstatus");
             })
             .catch(() => toast.error("Failed to load statuses"))
@@ -194,7 +196,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             {selectedSub?.notifyRoles && selectedSub.notifyRoles.length > 0 && (
                                 <div className="mt-3 border-2 border-primary bg-primary/10 px-3 py-2 flex items-center gap-2 text-sm text-primary">
                                     <ArrowRight size={13} />
-                                    Notifies: {selectedSub.notifyRoles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}
+                                    Notifies: {selectedSub.notifyRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
                                 </div>
                             )}
                             {selectedSub?.triggerMap[ticket.status] && (
