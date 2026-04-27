@@ -23,7 +23,6 @@ export async function GET(
         where: { id: Number(id) },
         include: {
             account: {
-                select: { id: true },
                 include: {
                     devices: {
                         include: {
