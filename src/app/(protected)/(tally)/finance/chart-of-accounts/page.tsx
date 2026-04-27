@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt, GL_GL_TYPE_COLORS, GL_GL_TYPE_ORDER, type GlAccountType } from "@/utils/constants";
+import { fmt, GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/utils/constants";
 
 type NormalBalance = "DEBIT" | "CREDIT";
 

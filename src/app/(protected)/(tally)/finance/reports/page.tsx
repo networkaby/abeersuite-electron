@@ -103,7 +103,7 @@ export default function ReportsPage() {
         if (tab === "trial-balance") loadTrialBalance();
     }, [tab, loadTrialBalance]);
 
-    const grouped = TYPE_ORDER.map((type) => ({
+    const grouped = GL_TYPE_ORDER.map((type) => ({
         type,
         rows: tbData?.rows.filter((r) => r.type === type) ?? [],
     }));

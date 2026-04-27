@@ -1,5 +1,5 @@
 "use client";
-import { fmt } from "@/utils/constants";
+import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 
 import { useEffect, useState } from "react";
 import axios from "axios";
