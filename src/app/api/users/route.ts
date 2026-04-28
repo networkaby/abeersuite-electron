@@ -5,32 +5,30 @@ import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const createUserSchema = z.object({
-    name:         z.string().trim().min(1, "Name is required"),
-    email:        z.string().trim().email("Valid email is required"),
-    password:     z.string().min(6, "Password must be at least 6 characters"),
-    role:         z.string().trim().optional(),
-    title:        z.string().trim().optional().nullable(),
-    scope:        z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
-    departmentId: z.string().trim().optional().nullable(),
-    branchId:     z.string().trim().optional().nullable(),
-    managerId:    z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    name:          z.string().trim().min(1, "Name is required"),
+    email:         z.string().trim().email("Valid email is required"),
+    password:      z.string().min(6, "Password must be at least 6 characters"),
+    role:          z.string().trim().optional(),
+    title:         z.string().trim().optional().nullable(),
+    scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
+    departmentIds: z.array(z.string()).optional(),
+    branchIds:     z.array(z.string()).optional(),
+    managerId:     z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
 });
 
 const USER_SELECT = {
-    id:           true,
-    name:         true,
-    email:        true,
-    role:         true,
-    title:        true,
-    scope:        true,
-    departmentId: true,
-    branchId:     true,
-    managerId:    true,
-    createdAt:    true,
-    userRole:     { select: { id: true, label: true, color: true, rank: true } },
-    manager:      { select: { id: true, name: true } },
-    department:   { select: { id: true, name: true } },
-    branch:       { select: { id: true, name: true } },
+    id:          true,
+    name:        true,
+    email:       true,
+    role:        true,
+    title:       true,
+    scope:       true,
+    createdAt:   true,
+    managerId:   true,
+    userRole:    { select: { id: true, label: true, color: true, rank: true } },
+    manager:     { select: { id: true, name: true } },
+    departments: { select: { id: true, name: true } },
+    branches:    { select: { id: true, name: true } },
 } as const;
 
 export async function GET() {
@@ -63,7 +61,6 @@ export async function POST(req: Request) {
             primaryRole = firstRole?.id || "R2";
         }
 
-        // Rank guard — caller cannot assign a role equal to or above their own rank
         if (!caller.permissions.includes("admin:bypass")) {
             const [targetRole, callerRole] = await Promise.all([
                 prisma.role.findUnique({ where: { id: primaryRole }, select: { rank: true } }),
@@ -80,14 +77,18 @@ export async function POST(req: Request) {
         const password = await bcrypt.hash(body.password, 10);
         const user = await prisma.user.create({
             data: {
-                name:         body.name,
-                email:        body.email,
+                name:     body.name,
+                email:    body.email,
                 password,
-                role:         primaryRole,
-                title:        body.title ?? null,
-                scope:        body.scope ?? "OWN",
-                departmentId: body.departmentId ?? null,
-                branchId:     body.branchId ?? null,
+                role:     primaryRole,
+                title:    body.title ?? null,
+                scope:    body.scope ?? "OWN",
+                departments: body.departmentIds?.length
+                    ? { connect: body.departmentIds.map(id => ({ id })) }
+                    : undefined,
+                branches: body.branchIds?.length
+                    ? { connect: body.branchIds.map(id => ({ id })) }
+                    : undefined,
                 ...(body.managerId ? { managerId: Number(body.managerId) } : {}),
             },
             select: USER_SELECT,

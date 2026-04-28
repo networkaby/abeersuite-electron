@@ -8,8 +8,6 @@ model User {
   role               String              @default("R2")
   title              String?
   scope              UserScope           @default(OWN)
-  departmentId       String?
-  branchId           String?
   createdAt          DateTime            @default(now())
   managerId          Int?
   ownedTickets       Ticket[]
@@ -19,8 +17,8 @@ model User {
   manager            User?               @relation("UserHierarchy", fields: [managerId], references: [id])
   reports            User[]              @relation("UserHierarchy")
   userRole           Role                @relation(fields: [role], references: [id])
-  department         Department?         @relation(fields: [departmentId], references: [id])
-  branch             Branch?             @relation(fields: [branchId], references: [id])
+  departments        Department[]
+  branches           Branch[]
   journalEntries     JournalEntry[]      @relation("JournalCreatedBy")
   invoices           Invoice[]           @relation("InvoiceCreatedBy")
   payments           Payment[]           @relation("PaymentCreatedBy")

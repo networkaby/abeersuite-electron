@@ -35,15 +35,13 @@ const SCOPE_OPTIONS = [
 ];
 
 const schema = z.object({
-    name:         z.string().min(1, "Name is required"),
-    email:        z.string().email("Invalid email"),
-    role:         z.string().min(1, "Role is required"),
-    title:        z.string().optional(),
-    scope:        z.string().optional(),
-    departmentId: z.string().optional(),
-    branchId:     z.string().optional(),
-    managerId:    z.string().optional(),
-    password:     z.string().optional(),
+    name:      z.string().min(1, "Name is required"),
+    email:     z.string().email("Invalid email"),
+    role:      z.string().min(1, "Role is required"),
+    title:     z.string().optional(),
+    scope:     z.string().optional(),
+    managerId: z.string().optional(),
+    password:  z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -56,9 +54,9 @@ interface Props {
         role: string;
         title?: string | null;
         scope?: string | null;
-        departmentId?: string | null;
-        branchId?: string | null;
         managerId?: number | null;
+        departments: { id: string; name: string }[];
+        branches:    { id: string; name: string }[];
     };
     onClose: () => void;
 }
@@ -68,20 +66,75 @@ function FieldError({ message }: { message?: string }) {
     return <p className="text-xs text-destructive">{message}</p>;
 }
 
+function MultiCheckList({
+    label,
+    items,
+    selected,
+    onChange,
+}: {
+    label: string;
+    items: { id: string; name: string }[];
+    selected: string[];
+    onChange: (ids: string[]) => void;
+}) {
+    const toggle = (id: string) =>
+        onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
+
+    return (
+        <div className="space-y-1.5">
+            <Label>{label} <span className="text-muted-foreground font-normal">(optional — pick multiple)</span></Label>
+            {items.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No {label.toLowerCase()} added yet</p>
+            ) : (
+                <div className="flex flex-wrap gap-2">
+                    {items.map(item => {
+                        const checked = selected.includes(item.id);
+                        return (
+                            <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => toggle(item.id)}
+                                className={[
+                                    "flex items-center gap-1.5 border-2 px-2.5 py-1 text-xs font-medium transition-colors",
+                                    checked
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                                ].join(" ")}
+                            >
+                                <span className={[
+                                    "flex h-3.5 w-3.5 shrink-0 items-center justify-center border transition-colors",
+                                    checked ? "border-primary bg-primary" : "border-muted-foreground",
+                                ].join(" ")}>
+                                    {checked && (
+                                        <svg viewBox="0 0 10 10" className="h-2 w-2 text-white fill-current">
+                                            <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    )}
+                                </span>
+                                {item.name}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function UserForm({ user, onClose }: Props) {
     const [roles, setRoles]           = useState<Role[]>([]);
     const [users, setUsers]           = useState<UserOption[]>([]);
     const [branches, setBranches]     = useState<Branch[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
+    const [selectedDepts, setSelectedDepts] = useState<string[]>(user?.departments.map(d => d.id) ?? []);
+    const [selectedBranches, setSelectedBranches] = useState<string[]>(user?.branches.map(b => b.id) ?? []);
 
     const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } =
-        useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { role: "", managerId: NONE, departmentId: NONE, branchId: NONE, scope: "OWN" } });
+        useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { role: "", managerId: NONE, scope: "OWN" } });
 
-    const roleValue       = watch("role");
-    const managerValue    = watch("managerId");
-    const scopeValue      = watch("scope");
-    const departmentValue = watch("departmentId");
-    const branchValue     = watch("branchId");
+    const roleValue    = watch("role");
+    const managerValue = watch("managerId");
+    const scopeValue   = watch("scope");
 
     useEffect(() => {
         Promise.all([
@@ -100,38 +153,38 @@ export default function UserForm({ user, onClose }: Props) {
 
             if (!user && rolesRes.data.length > 0) {
                 const defaultRole = rolesRes.data.find(r => r.id === "R2")?.id || rolesRes.data[0].id;
-                reset({ name: "", email: "", role: defaultRole, password: "", managerId: NONE, departmentId: NONE, branchId: NONE, scope: "OWN" });
+                reset({ name: "", email: "", role: defaultRole, password: "", managerId: NONE, scope: "OWN" });
             }
-        });
+        }).catch(() => toast.error("Failed to load form data"));
     }, [user?.id, user, reset]);
 
     useEffect(() => {
         if (user) {
             reset({
-                name:         user.name,
-                email:        user.email,
-                role:         user.role,
-                title:        user.title ?? "",
-                scope:        user.scope ?? "OWN",
-                departmentId: user.departmentId ?? NONE,
-                branchId:     user.branchId ?? NONE,
-                managerId:    user.managerId ? String(user.managerId) : NONE,
-                password:     "",
+                name:      user.name,
+                email:     user.email,
+                role:      user.role,
+                title:     user.title ?? "",
+                scope:     user.scope ?? "OWN",
+                managerId: user.managerId ? String(user.managerId) : NONE,
+                password:  "",
             });
+            setSelectedDepts(user.departments.map(d => d.id));
+            setSelectedBranches(user.branches.map(b => b.id));
         }
     }, [user, reset]);
 
     const onSubmit = async (data: FormData) => {
         try {
             const payload = {
-                name:         data.name,
-                email:        data.email,
-                role:         data.role,
-                title:        data.title || null,
-                scope:        data.scope || "OWN",
-                departmentId: data.departmentId && data.departmentId !== NONE ? data.departmentId : null,
-                branchId:     data.branchId && data.branchId !== NONE ? data.branchId : null,
-                managerId:    data.managerId && data.managerId !== NONE ? Number(data.managerId) : null,
+                name:          data.name,
+                email:         data.email,
+                role:          data.role,
+                title:         data.title || null,
+                scope:         data.scope || "OWN",
+                departmentIds: selectedDepts,
+                branchIds:     selectedBranches,
+                managerId:     data.managerId && data.managerId !== NONE ? Number(data.managerId) : null,
                 ...(data.password ? { password: data.password } : {}),
             };
             if (user) {
@@ -179,28 +232,18 @@ export default function UserForm({ user, onClose }: Props) {
                     {/* ── Org placement ── */}
                     <div className="border-t border-border pt-3 space-y-3">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Org Placement</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                                <Label>Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                                <Select value={departmentValue ?? NONE} onValueChange={v => setValue("departmentId", v)}>
-                                    <SelectTrigger><SelectValue placeholder="— None —" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={NONE}>— None —</SelectItem>
-                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Branch <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                                <Select value={branchValue ?? NONE} onValueChange={v => setValue("branchId", v)}>
-                                    <SelectTrigger><SelectValue placeholder="— All branches —" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={NONE}>— All branches —</SelectItem>
-                                        {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
+                        <MultiCheckList
+                            label="Departments"
+                            items={departments}
+                            selected={selectedDepts}
+                            onChange={setSelectedDepts}
+                        />
+                        <MultiCheckList
+                            label="Branches"
+                            items={branches}
+                            selected={selectedBranches}
+                            onChange={setSelectedBranches}
+                        />
                     </div>
 
                     {/* ── Access ── */}

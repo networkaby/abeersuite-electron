@@ -38,9 +38,10 @@ interface User {
     title: string | null;
     scope: string;
     createdAt: string;
-    userRole: { label: string; color: string; rank: number };
-    department: { id: string; name: string } | null;
-    branch: { id: string; name: string } | null;
+    managerId: number | null;
+    userRole:    { label: string; color: string; rank: number };
+    departments: { id: string; name: string }[];
+    branches:    { id: string; name: string }[];
 }
 
 interface PermRow {
@@ -237,8 +238,8 @@ export default function UsersPage() {
                                 <TableHead>Name</TableHead>
                                 <TableHead>Email</TableHead>
                                 <TableHead>Role</TableHead>
-                                <TableHead>Department</TableHead>
-                                <TableHead>Branch</TableHead>
+                                <TableHead>Departments</TableHead>
+                                <TableHead>Branches</TableHead>
                                 <TableHead>Scope</TableHead>
                                 <TableHead>Joined</TableHead>
                                 <TableHead>Actions</TableHead>
@@ -257,8 +258,16 @@ export default function UsersPage() {
                                         <div><Badge className={u.userRole.color}>{u.userRole.label}</Badge></div>
                                         <div className="text-xs text-muted-foreground mt-0.5">rank {u.userRole.rank}</div>
                                     </TableCell>
-                                    <TableCell className="text-sm">{u.department?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                                    <TableCell className="text-sm">{u.branch?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                                    <TableCell>
+                                        {u.departments.length > 0
+                                            ? <div className="flex flex-wrap gap-1">{u.departments.map(d => <Badge key={d.id} className="bg-blue-50 text-blue-700 text-xs">{d.name}</Badge>)}</div>
+                                            : <span className="text-muted-foreground text-sm">—</span>}
+                                    </TableCell>
+                                    <TableCell>
+                                        {u.branches.length > 0
+                                            ? <div className="flex flex-wrap gap-1">{u.branches.map(b => <Badge key={b.id} className="bg-orange-50 text-orange-700 text-xs">{b.name}</Badge>)}</div>
+                                            : <span className="text-muted-foreground text-sm">—</span>}
+                                    </TableCell>
                                     <TableCell>
                                         <Badge className="bg-muted text-muted-foreground text-xs">{SCOPE_LABELS[u.scope] ?? u.scope}</Badge>
                                     </TableCell>
@@ -278,7 +287,7 @@ export default function UsersPage() {
                                                 type="button"
                                                 variant="outline"
                                                 size="icon-sm"
-                                                onClick={() => setEditUser(u as Parameters<typeof setEditUser>[0])}
+                                                onClick={() => setEditUser(u)}
                                             >
                                                 <Pencil size={14} />
                                             </Button>

@@ -2,10 +2,12 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
 export interface ResolvedUser {
-    id: number;
-    primaryRole: string;
-    roles: string[];
-    permissions: string[];
+    id:            number;
+    primaryRole:   string;
+    roles:         string[];
+    permissions:   string[];
+    departmentIds: string[];
+    branchIds:     string[];
 }
 
 export function hasPermission(user: ResolvedUser, permissionId: string): boolean {
@@ -25,12 +27,16 @@ function resolveFromSession(sessionUser: {
     role?: string;
     roles?: string[];
     permissions?: string[];
+    departmentIds?: string[];
+    branchIds?: string[];
 }): ResolvedUser {
     return {
-        id: Number(sessionUser.id ?? 0),
-        primaryRole: sessionUser.role ?? "",
-        roles: sessionUser.roles ?? [sessionUser.role ?? ""],
-        permissions: sessionUser.permissions ?? [],
+        id:            Number(sessionUser.id ?? 0),
+        primaryRole:   sessionUser.role ?? "",
+        roles:         sessionUser.roles ?? [sessionUser.role ?? ""],
+        permissions:   sessionUser.permissions ?? [],
+        departmentIds: sessionUser.departmentIds ?? [],
+        branchIds:     sessionUser.branchIds ?? [],
     };
 }
 

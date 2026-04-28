@@ -5,16 +5,31 @@ import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const userUpdateSchema = z.object({
-    name:         z.string().trim().min(1, "Name is required"),
-    email:        z.string().trim().email("Valid email is required"),
-    role:         z.string().trim().min(1, "Role is required"),
-    title:        z.string().trim().optional().nullable(),
-    scope:        z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
-    departmentId: z.string().trim().optional().nullable(),
-    branchId:     z.string().trim().optional().nullable(),
-    managerId:    z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
-    password:     z.string().min(6).optional().or(z.literal("")),
+    name:          z.string().trim().min(1, "Name is required"),
+    email:         z.string().trim().email("Valid email is required"),
+    role:          z.string().trim().min(1, "Role is required"),
+    title:         z.string().trim().optional().nullable(),
+    scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
+    departmentIds: z.array(z.string()).optional(),
+    branchIds:     z.array(z.string()).optional(),
+    managerId:     z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    password:      z.string().min(6).optional().or(z.literal("")),
 });
+
+const USER_SELECT = {
+    id:          true,
+    name:        true,
+    email:       true,
+    role:        true,
+    title:       true,
+    scope:       true,
+    createdAt:   true,
+    managerId:   true,
+    userRole:    { select: { id: true, label: true, color: true, rank: true } },
+    manager:     { select: { id: true, name: true } },
+    departments: { select: { id: true, name: true } },
+    branches:    { select: { id: true, name: true } },
+} as const;
 
 export async function PUT(
     req: Request,
@@ -30,7 +45,6 @@ export async function PUT(
         }
         const body = parsed.data;
 
-        // Rank guard — caller cannot assign a role equal to or above their own
         if (!caller.permissions.includes("admin:bypass")) {
             const [targetRole, callerRole] = await Promise.all([
                 prisma.role.findUnique({ where: { id: body.role }, select: { rank: true } }),
@@ -44,22 +58,24 @@ export async function PUT(
             }
         }
 
-        const data: Record<string, unknown> = {
-            name:         body.name,
-            email:        body.email,
-            role:         body.role,
-            title:        body.title ?? null,
-            scope:        body.scope ?? "OWN",
-            departmentId: body.departmentId ?? null,
-            branchId:     body.branchId ?? null,
-            managerId:    body.managerId !== undefined ? (body.managerId ? Number(body.managerId) : null) : undefined,
+        const userId = Number(id);
+        const data: Parameters<typeof prisma.user.update>[0]["data"] = {
+            name:     body.name,
+            email:    body.email,
+            role:     body.role,
+            title:    body.title ?? null,
+            scope:    body.scope ?? "OWN",
+            managerId: body.managerId !== undefined ? (body.managerId ? Number(body.managerId) : null) : undefined,
+            // set pattern: disconnect all then reconnect chosen ones
+            departments: { set: (body.departmentIds ?? []).map(id => ({ id })) },
+            branches:    { set: (body.branchIds    ?? []).map(id => ({ id })) },
         };
         if (body.password) data.password = await bcrypt.hash(body.password, 10);
 
         const user = await prisma.user.update({
-            where: { id: Number(id) },
+            where: { id: userId },
             data,
-            select: { id: true, name: true, email: true, role: true, title: true, scope: true, departmentId: true, branchId: true, createdAt: true },
+            select: USER_SELECT,
         });
 
         return NextResponse.json(user);

@@ -8,22 +8,22 @@ declare module "next-auth" {
         permissions:  string[];
         rank:         number;
         scope:        string;
-        departmentId?: string;
-        branchId?:    string;
-        title?:       string;
+        departmentIds?: string[];
+        branchIds?:    string[];
+        title?:        string;
     }
 
     interface Session {
         user: {
-            id:           string;
-            role:         string;
-            roles:        string[];
-            permissions:  string[];
-            rank:         number;
-            scope:        string;
-            departmentId?: string;
-            branchId?:    string;
-            title?:       string;
+            id:            string;
+            role:          string;
+            roles:         string[];
+            permissions:   string[];
+            rank:          number;
+            scope:         string;
+            departmentIds?: string[];
+            branchIds?:    string[];
+            title?:        string;
         } & DefaultSession["user"];
     }
 }
@@ -36,8 +36,8 @@ declare module "next-auth/jwt" {
         permissions?:  string[];
         rank?:         number;
         scope?:        string;
-        departmentId?: string;
-        branchId?:     string;
-        title?:        string;
+        departmentIds?: string[];
+        branchIds?:     string[];
+        title?:         string;
     }
 }

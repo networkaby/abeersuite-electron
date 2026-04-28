@@ -19,8 +19,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.permissions = "permissions" in user && Array.isArray(user.permissions)  ? user.permissions as string[] : undefined;
                 token.rank        = "rank"        in user && typeof user.rank === "number"    ? user.rank        : 0;
                 token.scope       = "scope"       in user && typeof user.scope === "string"   ? user.scope       : "OWN";
-                token.departmentId = "departmentId" in user ? user.departmentId as string | undefined : undefined;
-                token.branchId    = "branchId"    in user ? user.branchId as string | undefined    : undefined;
+                token.departmentIds = "departmentIds" in user && Array.isArray(user.departmentIds) ? user.departmentIds as string[] : [];
+                token.branchIds    = "branchIds"    in user && Array.isArray(user.branchIds)    ? user.branchIds    as string[] : [];
                 token.title       = "title"       in user ? user.title as string | undefined       : undefined;
             }
             return token;
@@ -29,7 +29,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (token) {
                 const sessionUser = session.user as typeof session.user & {
                     id: string; role: string; roles: string[]; permissions: string[];
-                    rank: number; scope: string; departmentId?: string; branchId?: string; title?: string;
+                    rank: number; scope: string; departmentIds: string[]; branchIds: string[]; title?: string;
                 };
                 sessionUser.id           = token.id as string;
                 sessionUser.role         = typeof token.role === "string" ? token.role : "";
@@ -37,8 +37,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 sessionUser.permissions  = Array.isArray(token.permissions) ? token.permissions as string[] : [];
                 sessionUser.rank         = typeof token.rank === "number" ? token.rank : 0;
                 sessionUser.scope        = typeof token.scope === "string" ? token.scope : "OWN";
-                sessionUser.departmentId = typeof token.departmentId === "string" ? token.departmentId : undefined;
-                sessionUser.branchId     = typeof token.branchId === "string" ? token.branchId : undefined;
+                sessionUser.departmentIds = Array.isArray(token.departmentIds) ? token.departmentIds as string[] : [];
+                sessionUser.branchIds    = Array.isArray(token.branchIds)    ? token.branchIds    as string[] : [];
                 sessionUser.title        = typeof token.title === "string" ? token.title : undefined;
             }
             return session;
@@ -62,6 +62,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 permissions: { include: { permission: true } },
                             },
                         },
+                        departments: { select: { id: true } },
+                        branches:    { select: { id: true } },
                     },
                 });
 
@@ -88,17 +90,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 // Per-user permission overrides removed — role-based only
 
                 return {
-                    id:           String(user.id),
-                    name:         user.name,
-                    email:        user.email,
-                    role:         primaryRole,
+                    id:            String(user.id),
+                    name:          user.name,
+                    email:         user.email,
+                    role:          primaryRole,
                     roles,
-                    permissions:  [...rolePermIds],
-                    rank:         user.userRole.rank,
-                    scope:        user.scope,
-                    departmentId: user.departmentId ?? undefined,
-                    branchId:     user.branchId ?? undefined,
-                    title:        user.title ?? undefined,
+                    permissions:   [...rolePermIds],
+                    rank:          user.userRole.rank,
+                    scope:         user.scope,
+                    departmentIds: user.departments.map(d => d.id),
+                    branchIds:     user.branches.map(b => b.id),
+                    title:         user.title ?? undefined,
                 };
             },
         }),
