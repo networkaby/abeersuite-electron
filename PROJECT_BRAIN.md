@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `UI-Update`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-28 10:00
+**Last Updated:** 2026-04-29 00:00
 
 ---
 
@@ -167,7 +167,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ## 🔄 In Progress
 
-_(Nothing actively in progress — codebase is clean as of 2026-04-28; branch: UI-Update)_
+- [ ] **UI-Update branch** — `src/modules/shared/components/Sidebar.tsx`: added `w-full` to sidebar link items (uncommitted). Staging for merge.
 
 ---
 

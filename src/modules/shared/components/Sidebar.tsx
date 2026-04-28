@@ -87,7 +87,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const linkClass = (href: string) => {
         const active = pathname.startsWith(href);
         return [
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
             active
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
