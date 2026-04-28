@@ -5,12 +5,33 @@ import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const createUserSchema = z.object({
-    name: z.string().trim().min(1, "Name is required"),
-    email: z.string().trim().email("Valid email is required"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    role: z.string().trim().optional(),
-    managerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    name:         z.string().trim().min(1, "Name is required"),
+    email:        z.string().trim().email("Valid email is required"),
+    password:     z.string().min(6, "Password must be at least 6 characters"),
+    role:         z.string().trim().optional(),
+    title:        z.string().trim().optional().nullable(),
+    scope:        z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
+    departmentId: z.string().trim().optional().nullable(),
+    branchId:     z.string().trim().optional().nullable(),
+    managerId:    z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
 });
+
+const USER_SELECT = {
+    id:           true,
+    name:         true,
+    email:        true,
+    role:         true,
+    title:        true,
+    scope:        true,
+    departmentId: true,
+    branchId:     true,
+    managerId:    true,
+    createdAt:    true,
+    userRole:     { select: { id: true, label: true, color: true, rank: true } },
+    manager:      { select: { id: true, name: true } },
+    department:   { select: { id: true, name: true } },
+    branch:       { select: { id: true, name: true } },
+} as const;
 
 export async function GET() {
     const { response } = await requireAuth();
@@ -18,16 +39,7 @@ export async function GET() {
     try {
         const users = await prisma.user.findMany({
             orderBy: { createdAt: "desc" },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-                managerId: true,
-                createdAt: true,
-                userRole: { select: { label: true, color: true } },
-                manager: { select: { id: true, name: true } },
-            },
+            select: USER_SELECT,
         });
         return NextResponse.json(users);
     } catch {
@@ -36,7 +48,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("users:manage");
+    const { user: caller, response } = await requirePermission("users:manage");
     if (response) return response;
     try {
         const parsed = createUserSchema.safeParse(await req.json());
@@ -44,23 +56,41 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user payload" }, { status: 400 });
         }
         const body = parsed.data;
-        const password = await bcrypt.hash(body.password, 10);
-        
+
         let primaryRole = body.role;
         if (!primaryRole) {
             const firstRole = await prisma.role.findFirst({ orderBy: { id: "asc" } });
             primaryRole = firstRole?.id || "R2";
         }
 
+        // Rank guard — caller cannot assign a role equal to or above their own rank
+        if (!caller.permissions.includes("admin:bypass")) {
+            const [targetRole, callerRole] = await Promise.all([
+                prisma.role.findUnique({ where: { id: primaryRole }, select: { rank: true } }),
+                prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),
+            ]);
+            if (targetRole && callerRole && targetRole.rank >= callerRole.rank) {
+                return NextResponse.json(
+                    { error: "You cannot assign a role equal to or above your own rank" },
+                    { status: 403 }
+                );
+            }
+        }
+
+        const password = await bcrypt.hash(body.password, 10);
         const user = await prisma.user.create({
             data: {
-                name: body.name,
-                email: body.email,
+                name:         body.name,
+                email:        body.email,
                 password,
-                role: primaryRole,
+                role:         primaryRole,
+                title:        body.title ?? null,
+                scope:        body.scope ?? "OWN",
+                departmentId: body.departmentId ?? null,
+                branchId:     body.branchId ?? null,
                 ...(body.managerId ? { managerId: Number(body.managerId) } : {}),
             },
-            select: { id: true, name: true, email: true, role: true, createdAt: true, userRole: { select: { label: true, color: true } } },
+            select: USER_SELECT,
         });
 
         return NextResponse.json(user);

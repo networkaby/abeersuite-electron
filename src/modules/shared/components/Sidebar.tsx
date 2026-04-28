@@ -8,7 +8,7 @@ import { useTheme } from "next-themes";
 import axios from "axios";
 import {
     Settings, ChevronDown, LogOut,
-    ChevronLeft, ChevronRight, Sun, Moon, Bell,
+    ChevronLeft, ChevronRight, Sun, Moon, Bell, ShieldCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/modules/message/components/NotificationBell";
@@ -16,6 +16,7 @@ import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
     WORKSPACE_NAV,
     MODULE_SECTIONS,
+    ADMIN_NAV,
     SETTINGS_NAV,
     type ModuleChild,
 } from "@/utils/constants";
@@ -40,6 +41,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     const [collapsed, setCollapsed] = useState(false);
+    const [adminOpen, setAdminOpen] = useState(
+        pathname.startsWith("/users") || pathname.startsWith("/roles") || pathname.startsWith("/settings/branches") || pathname.startsWith("/settings/departments")
+    );
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
@@ -113,6 +117,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const canViewChild = (child: ModuleChild) =>
         !child.permission || isAdmin || permissions.includes(child.permission);
+
+    const visibleAdmin = ADMIN_NAV.filter(
+        (item) => isAdmin || permissions.includes(item.permission)
+    );
 
     const visibleSettings = SETTINGS_NAV.filter(
         (item) => isAdmin || permissions.includes(item.permission)
@@ -328,6 +336,39 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         })}
                     </div>
                 </section>
+
+                {/* Admin */}
+                {visibleAdmin.length > 0 && (
+                    <section>
+                        <button
+                            onClick={() => !collapsed && setAdminOpen((o) => !o)}
+                            className={linkClass("/users")}
+                            title={collapsed ? "Admin" : ""}
+                        >
+                            <ShieldCheck size={17} className="shrink-0" />
+                            {!collapsed && (
+                                <>
+                                    <span className="flex-1 truncate text-left">Admin</span>
+                                    <ChevronDown
+                                        size={13}
+                                        className={`shrink-0 transition-transform duration-200 ${adminOpen ? "rotate-180" : ""}`}
+                                    />
+                                </>
+                            )}
+                        </button>
+
+                        {adminOpen && !collapsed && (
+                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                {visibleAdmin.map(({ label, href, icon: Icon }) => (
+                                    <Link key={href} href={href} className={linkClass(href)}>
+                                        <Icon size={15} className="shrink-0" />
+                                        <span className="truncate">{label}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
 
                 {/* Settings */}
                 {visibleSettings.length > 0 && (

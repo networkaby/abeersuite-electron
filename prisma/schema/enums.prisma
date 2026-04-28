@@ -1,3 +1,14 @@
+// ── Org enums ─────────────────────────────────────────────────────────────────
+
+enum UserScope {
+  OWN
+  TEAM
+  DEPARTMENT
+  BRANCH
+  REGION
+  ORG
+}
+
 // ── Ticket enums ──────────────────────────────────────────────────────────────
 
 enum WarrantyStatus {

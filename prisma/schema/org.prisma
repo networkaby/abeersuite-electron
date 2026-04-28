@@ -1,0 +1,22 @@
+// ── Org structure — Branch & Department ───────────────────────────────────────
+
+model Branch {
+  id          String       @id
+  name        String
+  address     String?
+  phone       String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  users       User[]
+  departments Department[]
+}
+
+model Department {
+  id          String   @id
+  name        String
+  description String?
+  branchId    String?
+  createdAt   DateTime @default(now())
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  users       User[]
+}

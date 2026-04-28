@@ -6,6 +6,7 @@ import { z } from "zod";
 const rolePatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().min(1).optional(),
+    rank:  z.coerce.number().int().min(0).max(100).optional(),
 });
 
 export async function PATCH(
@@ -24,8 +25,9 @@ export async function PATCH(
         const role = await prisma.role.update({
             where: { id },
             data: {
-                ...(body.label && { label: body.label }),
-                ...(body.color && { color: body.color }),
+                ...(body.label !== undefined && { label: body.label }),
+                ...(body.color !== undefined && { color: body.color }),
+                ...(body.rank  !== undefined && { rank:  body.rank  }),
             },
         });
         return NextResponse.json(role);

@@ -25,13 +25,22 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
+const SCOPE_LABELS: Record<string, string> = {
+    OWN: "Own", TEAM: "Team", DEPARTMENT: "Dept",
+    BRANCH: "Branch", REGION: "Region", ORG: "Org",
+};
+
 interface User {
     id: number;
     name: string;
     email: string;
     role: string;
+    title: string | null;
+    scope: string;
     createdAt: string;
-    userRole: { label: string; color: string };
+    userRole: { label: string; color: string; rank: number };
+    department: { id: string; name: string } | null;
+    branch: { id: string; name: string } | null;
 }
 
 interface PermRow {
@@ -228,6 +237,9 @@ export default function UsersPage() {
                                 <TableHead>Name</TableHead>
                                 <TableHead>Email</TableHead>
                                 <TableHead>Role</TableHead>
+                                <TableHead>Department</TableHead>
+                                <TableHead>Branch</TableHead>
+                                <TableHead>Scope</TableHead>
                                 <TableHead>Joined</TableHead>
                                 <TableHead>Actions</TableHead>
                             </TableRow>
@@ -236,10 +248,19 @@ export default function UsersPage() {
                             {users.map((u) => (
                                 <TableRow key={u.id}>
                                     <TableCell className="text-muted-foreground">{u.id}</TableCell>
-                                    <TableCell className="font-medium">{u.name}</TableCell>
+                                    <TableCell>
+                                        <div className="font-medium">{u.name}</div>
+                                        {u.title && <div className="text-xs text-muted-foreground">{u.title}</div>}
+                                    </TableCell>
                                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                                     <TableCell>
-                                        <Badge className={u.userRole.color}>{u.userRole.label}</Badge>
+                                        <div><Badge className={u.userRole.color}>{u.userRole.label}</Badge></div>
+                                        <div className="text-xs text-muted-foreground mt-0.5">rank {u.userRole.rank}</div>
+                                    </TableCell>
+                                    <TableCell className="text-sm">{u.department?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                                    <TableCell className="text-sm">{u.branch?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                                    <TableCell>
+                                        <Badge className="bg-muted text-muted-foreground text-xs">{SCOPE_LABELS[u.scope] ?? u.scope}</Badge>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
                                     <TableCell>
@@ -257,7 +278,7 @@ export default function UsersPage() {
                                                 type="button"
                                                 variant="outline"
                                                 size="icon-sm"
-                                                onClick={() => setEditUser(u)}
+                                                onClick={() => setEditUser(u as Parameters<typeof setEditUser>[0])}
                                             >
                                                 <Pencil size={14} />
                                             </Button>

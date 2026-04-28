@@ -31,6 +31,7 @@ interface Role {
     id: string;
     label: string;
     color: string;
+    rank: number;
     isSystem: boolean;
     _count: { users: number };
     permissions: { permissionId: string; permission: Permission }[];
@@ -85,7 +86,8 @@ export default function RolesSettingsPage() {
     const [loading, setLoading] = useState(true);
 
     const [addingNew, setAddingNew] = useState(false);
-    const [newRole, setNewRole] = useState({ label: "", color: "bg-blue-100 text-blue-600" });
+    const [newRole, setNewRole] = useState({ label: "", color: "bg-blue-100 text-blue-600", rank: 20 });
+    const [editingRank, setEditingRank] = useState<{ id: string; rank: number } | null>(null);
     const [saving, setSaving] = useState(false);
 
     const [permModalRoleId, setPermModalRoleId] = useState<string | null>(null);
@@ -112,6 +114,16 @@ export default function RolesSettingsPage() {
 
     useEffect(() => { fetchData(); }, []);
 
+    const handleSaveRank = async () => {
+        if (!editingRank) return;
+        try {
+            await axios.patch(`/api/roles/${editingRank.id}`, { rank: editingRank.rank });
+            toast.success("Rank updated");
+            setEditingRank(null);
+            fetchData();
+        } catch { toast.error("Failed to update rank"); }
+    };
+
     const handleCreate = async () => {
         if (!newRole.label.trim()) return;
         setSaving(true);
@@ -119,7 +131,7 @@ export default function RolesSettingsPage() {
             await axios.post("/api/roles", newRole);
             toast.success("Role created");
             setAddingNew(false);
-            setNewRole({ label: "", color: "bg-blue-100 text-blue-600" });
+            setNewRole({ label: "", color: "bg-blue-100 text-blue-600", rank: 20 });
             fetchData();
         } catch {
             toast.error("Failed to create role");
@@ -269,6 +281,21 @@ export default function RolesSettingsPage() {
                                 />
                             </div>
 
+                            {/* Rank */}
+                            <div className="w-28">
+                                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                                    Rank (0–100)
+                                </label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={newRole.rank}
+                                    onChange={(e) => setNewRole(r => ({ ...r, rank: Number(e.target.value) }))}
+                                    placeholder="20"
+                                />
+                            </div>
+
                             {/* Colour picker */}
                             <div>
                                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">
@@ -339,7 +366,7 @@ export default function RolesSettingsPage() {
                                             </span>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted border border-border px-2 py-0.5">
                                             <Users size={9} />
                                             {role._count.users} {role._count.users === 1 ? "user" : "users"}
@@ -348,6 +375,28 @@ export default function RolesSettingsPage() {
                                             <Shield size={9} />
                                             {role.permissions.length} permissions
                                         </span>
+                                        {/* Rank inline editor */}
+                                        {editingRank?.id === role.id ? (
+                                            <span className="inline-flex items-center gap-1">
+                                                <Input
+                                                    type="number" min={0} max={100}
+                                                    value={editingRank.rank}
+                                                    onChange={e => setEditingRank(r => r ? { ...r, rank: Number(e.target.value) } : r)}
+                                                    className="h-6 w-16 text-xs px-1 py-0"
+                                                    autoFocus
+                                                />
+                                                <button onClick={handleSaveRank} className="text-[11px] text-primary font-semibold hover:underline">Save</button>
+                                                <button onClick={() => setEditingRank(null)} className="text-[11px] text-muted-foreground hover:underline">×</button>
+                                            </span>
+                                        ) : (
+                                            <button
+                                                onClick={() => setEditingRank({ id: role.id, rank: role.rank })}
+                                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted border border-border px-2 py-0.5 hover:border-primary hover:text-primary transition-colors"
+                                                title="Click to edit rank"
+                                            >
+                                                Rank {role.rank}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 

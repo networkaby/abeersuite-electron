@@ -4,6 +4,7 @@ model Role {
   id          String           @id
   label       String
   color       String
+  rank        Int              @default(0)
   isSystem    Boolean          @default(false)
   users       User[]
   permissions RolePermission[]

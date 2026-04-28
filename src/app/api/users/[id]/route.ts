@@ -5,18 +5,22 @@ import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const userUpdateSchema = z.object({
-    name: z.string().trim().min(1, "Name is required"),
-    email: z.string().trim().email("Valid email is required"),
-    role: z.string().trim().min(1, "Role is required"),
-    managerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
-    password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal("")),
+    name:         z.string().trim().min(1, "Name is required"),
+    email:        z.string().trim().email("Valid email is required"),
+    role:         z.string().trim().min(1, "Role is required"),
+    title:        z.string().trim().optional().nullable(),
+    scope:        z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
+    departmentId: z.string().trim().optional().nullable(),
+    branchId:     z.string().trim().optional().nullable(),
+    managerId:    z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    password:     z.string().min(6).optional().or(z.literal("")),
 });
 
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("users:manage");
+    const { user: caller, response } = await requirePermission("users:manage");
     if (response) return response;
     try {
         const { id } = await params;
@@ -26,31 +30,36 @@ export async function PUT(
         }
         const body = parsed.data;
 
-        const primaryRole: string = body.role as string;
-
-        const data: {
-            name: string;
-            email: string;
-            role: string;
-            managerId?: number | null;
-            password?: string;
-        } = {
-            name: body.name,
-            email: body.email,
-            role: primaryRole,
-            managerId: body.managerId !== undefined
-                ? (body.managerId ? Number(body.managerId) : null)
-                : undefined,
-        };
-
-        if (body.password) {
-            data.password = await bcrypt.hash(body.password, 10);
+        // Rank guard — caller cannot assign a role equal to or above their own
+        if (!caller.permissions.includes("admin:bypass")) {
+            const [targetRole, callerRole] = await Promise.all([
+                prisma.role.findUnique({ where: { id: body.role }, select: { rank: true } }),
+                prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),
+            ]);
+            if (targetRole && callerRole && targetRole.rank >= callerRole.rank) {
+                return NextResponse.json(
+                    { error: "You cannot assign a role equal to or above your own rank" },
+                    { status: 403 }
+                );
+            }
         }
+
+        const data: Record<string, unknown> = {
+            name:         body.name,
+            email:        body.email,
+            role:         body.role,
+            title:        body.title ?? null,
+            scope:        body.scope ?? "OWN",
+            departmentId: body.departmentId ?? null,
+            branchId:     body.branchId ?? null,
+            managerId:    body.managerId !== undefined ? (body.managerId ? Number(body.managerId) : null) : undefined,
+        };
+        if (body.password) data.password = await bcrypt.hash(body.password, 10);
 
         const user = await prisma.user.update({
             where: { id: Number(id) },
             data,
-            select: { id: true, name: true, email: true, role: true, createdAt: true },
+            select: { id: true, name: true, email: true, role: true, title: true, scope: true, departmentId: true, branchId: true, createdAt: true },
         });
 
         return NextResponse.json(user);
@@ -68,34 +77,16 @@ export async function DELETE(
     try {
         const { id } = await params;
         const userId = Number(id);
-
-        if (Number.isNaN(userId)) {
-            return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
-        }
+        if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
 
         const userWithRelations = await prisma.user.findUnique({
             where: { id: userId },
-            select: {
-                id: true,
-                _count: {
-                    select: {
-                        ownedTickets: true,
-                        ticketLogs: true,
-                    },
-                },
-            },
+            select: { id: true, _count: { select: { ownedTickets: true, ticketLogs: true } } },
         });
-
-        if (!userWithRelations) {
-            return NextResponse.json({ error: "User not found" }, { status: 404 });
-        }
-
+        if (!userWithRelations) return NextResponse.json({ error: "User not found" }, { status: 404 });
         if (userWithRelations._count.ownedTickets > 0 || userWithRelations._count.ticketLogs > 0) {
             return NextResponse.json(
-                {
-                    error:
-                        "Cannot delete user because linked tickets or ticket logs exist. Reassign records first.",
-                },
+                { error: "Cannot delete user because linked tickets or ticket logs exist. Reassign records first." },
                 { status: 400 }
             );
         }

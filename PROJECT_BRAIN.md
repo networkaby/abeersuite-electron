@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `UI-Update`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-29 00:00
+**Last Updated:** 2026-04-29 14:00
 
 ---
 
@@ -37,6 +37,23 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 ---
 
 ## ✅ Completed Work
+
+### 2026-04-29 — Enterprise RBAC — Rank, Scope, Department, Branch
+
+- **Role rank**: `rank Int` added to `Role` model (0–100); Admin=100, Manager=70, Staff=20; rank guard on `POST/PUT /api/users` prevents assigning a role equal to or above your own rank
+- **UserScope enum**: `OWN | TEAM | DEPARTMENT | BRANCH | REGION | ORG` — controls how far a user's data visibility reaches
+- **Branch model**: `prisma/schema/org.prisma` — id, name, address, phone, isActive; seeded with 4 sample branches (HQ, Mirpur, Chittagong, Online)
+- **Department model**: `prisma/schema/org.prisma` — id, name, description, branchId (null = cross-branch); seeded with 7 departments (Repairs, Sales, Front Desk, Finance, HR, IT/Admin, Despatch)
+- **User model**: added `title String?`, `scope UserScope @default(OWN)`, `departmentId`, `branchId`
+- **Auth/JWT**: `rank`, `scope`, `departmentId`, `branchId`, `title` now carried in JWT and session
+- **API**: `/api/branches` + `/api/departments` (full CRUD); `/api/roles` accepts `rank`; `/api/users` includes dept/branch/scope/title in responses
+- **Settings UI**: new `/settings/branches` page (CRUD + activate/deactivate toggle); new `/settings/departments` page (CRUD with branch scope selector)
+- **Roles settings**: rank displayed per role with inline click-to-edit; rank field in new role form
+- **UserForm**: expanded with Title, Department, Branch, Scope, and role rank shown in dropdown
+- **Users list**: added Department, Branch, Scope, Title columns; role shows rank badge
+- **Sidebar**: Branches + Departments added under Settings nav (require `settings:manage` permission)
+- **Seed**: `prisma/seed-org.ts` + SQL seed via `prisma db execute`
+- Files: `prisma/schema/org.prisma`, `prisma/schema/enums.prisma`, `prisma/schema/rbac.prisma`, `prisma/schema/users.prisma`, `src/auth.ts`, `src/auth.d.ts`, `src/lib/permissions.ts`, `src/app/api/branches/`, `src/app/api/departments/`, `src/app/api/roles/`, `src/app/api/users/`, `src/app/(protected)/(repairing)/settings/branches/page.tsx`, `src/app/(protected)/(repairing)/settings/departments/page.tsx`, `src/modules/shared/components/UserForm.tsx`, `src/app/(protected)/(admin)/users/page.tsx`, `src/utils/constants.ts`
 
 ### 2026-04-28 — Message creation optimisation + Sentry setup
 - **Messaging**: Replaced `createRoomMessage` helper with direct `prisma.chatMessage.create`; concurrent `updatedAt` write to `ChatRoom` in same operation for consistency; removed redundant `ensureCoreRooms` call on `getAccessibleRoom`
@@ -167,7 +184,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ## 🔄 In Progress
 
-- [ ] **UI-Update branch** — `src/modules/shared/components/Sidebar.tsx`: added `w-full` to sidebar link items (uncommitted). Staging for merge.
+_(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 
 ---
 
@@ -176,6 +193,11 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 ### Milestone 12 — Reporting & Analytics
 1. **Reporting dashboard** — Recharts; key metrics: tickets by status/pipeline, avg resolution time, technician workload
 2. **Ticket list pagination** — cursor-based or offset; current list loads all records
+
+### Org RBAC — next steps (after reporting)
+3. **Branch-scoped data filtering** — tickets, customers, invoices filtered by user's `branchId` when `scope` is BRANCH or below
+4. **`settings:manage` permission** — needs to be seeded into Admin role so Branches/Departments pages are accessible
+5. **Position model** — named slots in the org chart (future; needed at 50+ users)
 
 ### Quick UX wins (after reporting)
 3. **U2 — duplicate Name column** in ticket list
@@ -214,6 +236,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **`@@unique` with nullable fields**: PostgreSQL treats NULL as distinct; `skipDuplicates` may not work reliably. Use `findFirst` + `create` pattern.
 - **Account model**: Still present in schema alongside `Customer` and `Company` — acts as a legacy bridge. The `Customer` and `Company` models are the source of truth going forward. `Account` may be cleaned up later.
 - **Tasks feature removed**: `Task`/`TaskLog` models are still in `schema.prisma` (not dropped from DB) but all application code has been deleted. Safe to drop the tables when convenient.
+- **`settings:manage` permission**: Branches + Departments pages require this permission. If the Admin role doesn't have it yet, go to Settings → Roles → Admin → Permissions and add `settings:manage`.
 - **Sentry example files**: `src/app/api/sentry-example-api/route.ts` and `src/app/sentry-example-page/page.tsx` were added by Sentry setup — remove before production deploy if not needed.
 - **Module migration incomplete**: Some components may still live in `src/components/` rather than their domain module. Gradual migration is fine; no functional impact.
 
@@ -248,6 +271,10 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | Codebase structure | `src/modules/<domain>/` + Next.js route groups | Flat `src/components/` + `src/app/(protected)/` | Codebase grew large enough to need domain boundaries; route groups keep URLs unchanged |
 | UI theme | Neo Brutalism (sharp corners, `border-2`, theme vars only) | Default shadcn rounded style | Design decision for shop context; enforced by removing all `rounded-*` classes |
 | Role labels | Dynamic fetch from `/api/roles/labels` | Hardcoded `ROLE_LABELS` constant | Roles are DB-driven; hardcoding would break when roles are renamed in settings |
+| Rank on Role not User | `Role.rank` (not per-user) | Per-user rank field | Role defines authority ceiling; individuals inherit via their role assignment |
+| Scope on User not Role | `User.scope` (per-user) | Scope on Role | Two people with same role can have different data reach (e.g. local vs regional mgr) |
+| Department cross-branch by default | `Department.branchId` nullable | Dept always branch-scoped | Most departments (HR, IT, Finance) span all branches; branch-specific is the exception |
+| Branch-scoped data filtering deferred | Schema only; no query filters yet | Implement immediately | Core workflows must be stable; branch scoping changes every data query — separate milestone |
 
 ---
 

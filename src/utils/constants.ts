@@ -98,12 +98,17 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     },
 ];
 
+export const ADMIN_NAV: SettingsNavItem[] = [
+    { label: "Users",       href: "/users",                icon: UserCog,     permission: "users:manage" },
+    { label: "Roles",       href: "/roles",                icon: ShieldCheck, permission: "roles:manage" },
+    { label: "Branches",    href: "/settings/branches",    icon: Building2,   permission: "settings:manage" },
+    { label: "Departments", href: "/settings/departments", icon: Users,       permission: "settings:manage" },
+];
+
 export const SETTINGS_NAV: SettingsNavItem[] = [
-    { label: "Users",        href: "/settings/users",        icon: UserCog,     permission: "users:manage" },
-    { label: "Statuses",     href: "/settings/statuses",     icon: Settings,    permission: "settings:statuses" },
-    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings,    permission: "settings:statuses" },
-    { label: "Pipelines",    href: "/settings/pipelines",    icon: GitBranch,   permission: "settings:pipelines" },
-    { label: "Roles",        href: "/settings/roles",        icon: ShieldCheck, permission: "roles:manage" },
+    { label: "Statuses",     href: "/settings/statuses",     icon: Settings,  permission: "settings:statuses" },
+    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings,  permission: "settings:statuses" },
+    { label: "Pipelines",    href: "/settings/pipelines",    icon: GitBranch, permission: "settings:pipelines" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

@@ -2,10 +2,14 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
 export interface ResolvedUser {
-    id: number;
-    roles: string[];
-    primaryRole: string;
-    permissions: string[];
+    id:           number;
+    roles:        string[];
+    primaryRole:  string;
+    permissions:  string[];
+    rank:         number;
+    scope:        string;
+    departmentId?: string;
+    branchId?:    string;
 }
 
 export function hasPermission(user: ResolvedUser, permissionId: string): boolean {
@@ -27,17 +31,19 @@ export async function requirePermission(permissionId: string): Promise<Permissio
     }
 
     const sessionUser = session.user as {
-        id?: string;
-        role?: string;
-        roles?: string[];
-        permissions?: string[];
+        id?: string; role?: string; roles?: string[]; permissions?: string[];
+        rank?: number; scope?: string; departmentId?: string; branchId?: string;
     };
 
     const resolved: ResolvedUser = {
-        id: Number(sessionUser.id ?? 0),
-        primaryRole: sessionUser.role ?? "",
-        roles: sessionUser.roles ?? [sessionUser.role ?? ""],
-        permissions: sessionUser.permissions ?? [],
+        id:           Number(sessionUser.id ?? 0),
+        primaryRole:  sessionUser.role ?? "",
+        roles:        sessionUser.roles ?? [sessionUser.role ?? ""],
+        permissions:  sessionUser.permissions ?? [],
+        rank:         sessionUser.rank ?? 0,
+        scope:        sessionUser.scope ?? "OWN",
+        departmentId: sessionUser.departmentId,
+        branchId:     sessionUser.branchId,
     };
 
     if (!resolved.permissions.includes(permissionId)) {
@@ -48,13 +54,17 @@ export async function requirePermission(permissionId: string): Promise<Permissio
 }
 
 export function resolvedUserFromSession(session: {
-    user?: { id?: string; role?: string; roles?: string[]; permissions?: string[] };
+    user?: { id?: string; role?: string; roles?: string[]; permissions?: string[]; rank?: number; scope?: string; departmentId?: string; branchId?: string };
 }): ResolvedUser {
     const u = session.user ?? {};
     return {
-        id: Number(u.id ?? 0),
-        primaryRole: u.role ?? "",
-        roles: u.roles ?? [u.role ?? ""],
-        permissions: u.permissions ?? [],
+        id:           Number(u.id ?? 0),
+        primaryRole:  u.role ?? "",
+        roles:        u.roles ?? [u.role ?? ""],
+        permissions:  u.permissions ?? [],
+        rank:         u.rank ?? 0,
+        scope:        u.scope ?? "OWN",
+        departmentId: u.departmentId,
+        branchId:     u.branchId,
     };
 }

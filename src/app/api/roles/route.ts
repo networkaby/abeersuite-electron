@@ -6,6 +6,7 @@ import { z } from "zod";
 const createRoleSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
     color: z.string().trim().min(1, "Color is required"),
+    rank:  z.coerce.number().int().min(0).max(100).optional(),
 });
 
 export async function GET() {
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
         }, 0);
         const newId = `R${maxNum + 1}`;
         const role = await prisma.role.create({
-            data: { id: newId, label: body.label, color: body.color, isSystem: false },
+            data: { id: newId, label: body.label, color: body.color, rank: body.rank ?? 0, isSystem: false },
         });
         return NextResponse.json(role);
     } catch {

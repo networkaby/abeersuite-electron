@@ -68,7 +68,14 @@
       "Bash(git mv *)",
       "Bash(git reset *)",
       "PowerShell(Move-Item -LiteralPath \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\\\(repairing\\)\\\\assignments\" -Destination \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\\\(core\\)\\\\assignments\")",
-      "Bash(taskkill /F /IM node.exe)"
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(pnpm dev *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/settings/branches)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/settings/departments)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/settings/roles)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/settings/users)",
+      "Bash(taskkill /PID 6532 /F)",
+      "Bash(rm -rf .next)"
     ]
   }
 }

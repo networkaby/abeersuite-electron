@@ -1,0 +1,44 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const createSchema = z.object({
+    id:       z.string().trim().min(1, "ID is required").toUpperCase(),
+    name:     z.string().trim().min(1, "Name is required"),
+    address:  z.string().trim().optional().nullable(),
+    phone:    z.string().trim().optional().nullable(),
+    isActive: z.boolean().optional(),
+});
+
+export async function GET() {
+    const { response } = await requireAuth();
+    if (response) return response;
+    try {
+        const branches = await prisma.branch.findMany({
+            orderBy: { name: "asc" },
+            include: { _count: { select: { users: true, departments: true } } },
+        });
+        return NextResponse.json(branches);
+    } catch {
+        return NextResponse.json({ error: "Failed to fetch branches" }, { status: 500 });
+    }
+}
+
+export async function POST(req: Request) {
+    const { response } = await requirePermission("settings:manage");
+    if (response) return response;
+    try {
+        const parsed = createSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+        }
+        const { id, name, address, phone, isActive } = parsed.data;
+        const existing = await prisma.branch.findUnique({ where: { id } });
+        if (existing) return NextResponse.json({ error: "Branch ID already exists" }, { status: 409 });
+        const branch = await prisma.branch.create({ data: { id, name, address: address ?? null, phone: phone ?? null, isActive: isActive ?? true } });
+        return NextResponse.json(branch, { status: 201 });
+    } catch {
+        return NextResponse.json({ error: "Failed to create branch" }, { status: 500 });
+    }
+}
