@@ -7,6 +7,7 @@ export interface OrgNode {
     name: string;
     title: string | null;
     role: string;
+    avatarUrl: string | null;
     userRole: { label: string; color: string; rank: number };
     departments: { id: string; name: string }[];
     branches:    { id: string; name: string }[];
@@ -18,6 +19,7 @@ const USER_SELECT = {
     name:        true,
     title:       true,
     role:        true,
+    avatarUrl:   true,
     managerId:   true,
     userRole:    { select: { label: true, color: true, rank: true } },
     departments: { select: { id: true, name: true } },
@@ -29,6 +31,7 @@ type FlatUser = {
     name: string;
     title: string | null;
     role: string;
+    avatarUrl: string | null;
     managerId: number | null;
     userRole: { label: string; color: string; rank: number };
     departments: { id: string; name: string }[];

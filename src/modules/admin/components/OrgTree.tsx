@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,36 @@ function avatarBg(role: string) {
 
 function containsHighlight(node: OrgNode, id: number): boolean {
     return node.id === id || node.children.some(c => containsHighlight(c, id));
+}
+
+// ── Avatar (photo or initials fallback) ──────────────────────────────────────
+
+function NodeAvatar({ node, sizePx = 40 }: { node: OrgNode; sizePx?: number }) {
+    const [imgError, setImgError] = useState(false);
+
+    if (node.avatarUrl && !imgError) {
+        return (
+            <div className="rounded-full overflow-hidden shrink-0" style={{ width: sizePx, height: sizePx }}>
+                <Image
+                    src={node.avatarUrl}
+                    alt={node.name}
+                    width={sizePx}
+                    height={sizePx}
+                    className="object-cover w-full h-full"
+                    onError={() => setImgError(true)}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className={`flex shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarBg(node.role)}`}
+            style={{ width: sizePx, height: sizePx }}
+        >
+            {initials(node.name)}
+        </div>
+    );
 }
 
 // ── Node wrapper (owns open/close state) ──────────────────────────────────────
@@ -60,9 +91,7 @@ function OrgNodeWrapper({
                             : "border-border hover:border-primary",
                     ].join(" ")}
                 >
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${avatarBg(node.role)}`}>
-                        {initials(node.name)}
-                    </div>
+                    <NodeAvatar node={node} sizePx={40} />
                     <div>
                         <p className={`text-sm font-semibold leading-tight transition-colors ${isHighlighted ? "text-primary" : "text-foreground group-hover:text-primary"}`}>
                             {node.name}

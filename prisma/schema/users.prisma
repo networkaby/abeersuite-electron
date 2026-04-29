@@ -10,6 +10,15 @@ model User {
   scope              UserScope           @default(OWN)
   createdAt          DateTime            @default(now())
   managerId          Int?
+  // public profile
+  avatarUrl          String?
+  phone              String?
+  birthday           DateTime?
+  bio                String?
+  linkedIn           String?
+  twitter            String?
+  instagram          String?
+  facebook           String?
   ownedTickets       Ticket[]
   ticketLogs         TicketLog[]
   participantAdded   TicketParticipant[] @relation("ParticipantAddedBy")

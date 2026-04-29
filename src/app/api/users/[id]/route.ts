@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const PROFILE_SELECT = {
@@ -13,9 +13,18 @@ const PROFILE_SELECT = {
     scope:       true,
     createdAt:   true,
     managerId:   true,
+    // public profile fields
+    avatarUrl:   true,
+    phone:       true,
+    birthday:    true,
+    bio:         true,
+    linkedIn:    true,
+    twitter:     true,
+    instagram:   true,
+    facebook:    true,
     userRole:    { select: { id: true, label: true, color: true, rank: true, permissions: { select: { permission: true } } } },
-    manager:     { select: { id: true, name: true, title: true, role: true, userRole: { select: { label: true, color: true } } } },
-    reports:     { select: { id: true, name: true, title: true, role: true, userRole: { select: { label: true, color: true } } } },
+    manager:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
+    reports:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
     departments: { select: { id: true, name: true } },
     branches:    { select: { id: true, name: true } },
 } as const;
@@ -39,18 +48,28 @@ export async function GET(
 }
 
 const userUpdateSchema = z.object({
+    // personal (self or admin)
     name:          z.string().trim().min(1, "Name is required"),
     email:         z.string().trim().email("Valid email is required"),
-    role:          z.string().trim().min(1).optional(),
     title:         z.string().trim().optional().nullable(),
+    password:      z.string().min(6).optional().or(z.literal("")),
+    avatarUrl:     z.string().url().optional().nullable(),
+    phone:         z.string().trim().optional().nullable(),
+    birthday:      z.string().optional().nullable(),
+    bio:           z.string().trim().max(500).optional().nullable(),
+    linkedIn:      z.string().trim().optional().nullable(),
+    twitter:       z.string().trim().optional().nullable(),
+    instagram:     z.string().trim().optional().nullable(),
+    facebook:      z.string().trim().optional().nullable(),
+    // admin-only
+    role:          z.string().trim().min(1).optional(),
     scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
     departmentIds: z.array(z.string()).optional(),
     branchIds:     z.array(z.string()).optional(),
     managerId:     z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
-    password:      z.string().min(6).optional().or(z.literal("")),
 });
 
-const USER_SELECT = {
+const PUT_SELECT = {
     id:          true,
     name:        true,
     email:       true,
@@ -59,8 +78,17 @@ const USER_SELECT = {
     scope:       true,
     createdAt:   true,
     managerId:   true,
-    userRole:    { select: { id: true, label: true, color: true, rank: true } },
-    manager:     { select: { id: true, name: true } },
+    avatarUrl:   true,
+    phone:       true,
+    birthday:    true,
+    bio:         true,
+    linkedIn:    true,
+    twitter:     true,
+    instagram:   true,
+    facebook:    true,
+    userRole:    { select: { id: true, label: true, color: true, rank: true, permissions: { select: { permission: true } } } },
+    manager:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
+    reports:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
     departments: { select: { id: true, name: true } },
     branches:    { select: { id: true, name: true } },
 } as const;
@@ -69,17 +97,29 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { user: caller, response } = await requirePermission("users:manage");
+    const { user: caller, response } = await requireAuth();
     if (response) return response;
+
+    const { id } = await params;
+    const userId = Number(id);
+    if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+
+    const isSelf  = caller.id === userId;
+    const isAdmin = caller.permissions.includes("users:manage") || caller.permissions.includes("admin:bypass");
+
+    if (!isSelf && !isAdmin) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     try {
-        const { id } = await params;
         const parsed = userUpdateSchema.safeParse(await req.json());
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user payload" }, { status: 400 });
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
         }
         const body = parsed.data;
 
-        if (body.role && !caller.permissions.includes("admin:bypass")) {
+        // Rank guard when an admin changes someone's role
+        if (body.role && isAdmin && !caller.permissions.includes("admin:bypass")) {
             const [targetRole, callerRole] = await Promise.all([
                 prisma.role.findUnique({ where: { id: body.role }, select: { rank: true } }),
                 prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),
@@ -92,25 +132,32 @@ export async function PUT(
             }
         }
 
-        const userId = Number(id);
         const data: Parameters<typeof prisma.user.update>[0]["data"] = {
-            name:  body.name,
-            email: body.email,
-            title: body.title ?? null,
-            ...(body.role      !== undefined && { role:      body.role }),
-            ...(body.scope     !== undefined && { scope:     body.scope }),
-            ...(body.managerId !== undefined && { managerId: body.managerId ? Number(body.managerId) : null }),
-            ...(body.departmentIds !== undefined && { departments: { set: body.departmentIds.map(id => ({ id })) } }),
-            ...(body.branchIds    !== undefined && { branches:    { set: body.branchIds.map(id => ({ id })) } }),
+            name:      body.name,
+            email:     body.email,
+            title:     body.title     ?? null,
+            avatarUrl: body.avatarUrl ?? null,
+            phone:     body.phone     ?? null,
+            bio:       body.bio       ?? null,
+            linkedIn:  body.linkedIn  ?? null,
+            twitter:   body.twitter   ?? null,
+            instagram: body.instagram ?? null,
+            facebook:  body.facebook  ?? null,
+            birthday:  body.birthday  ? new Date(body.birthday) : null,
         };
+
         if (body.password) data.password = await bcrypt.hash(body.password, 10);
 
-        const user = await prisma.user.update({
-            where: { id: userId },
-            data,
-            select: USER_SELECT,
-        });
+        // Admin-only fields
+        if (isAdmin) {
+            if (body.role      !== undefined) data.role      = body.role;
+            if (body.scope     !== undefined) data.scope     = body.scope;
+            if (body.managerId !== undefined) data.managerId = body.managerId ? Number(body.managerId) : null;
+            if (body.departmentIds !== undefined) data.departments = { set: body.departmentIds.map(id => ({ id })) };
+            if (body.branchIds    !== undefined) data.branches    = { set: body.branchIds.map(id => ({ id })) };
+        }
 
+        const user = await prisma.user.update({ where: { id: userId }, data, select: PUT_SELECT });
         return NextResponse.json(user);
     } catch {
         return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
@@ -121,8 +168,11 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("users:manage");
+    const { user: caller, response } = await requireAuth();
     if (response) return response;
+    if (!caller.permissions.includes("users:manage") && !caller.permissions.includes("admin:bypass")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     try {
         const { id } = await params;
         const userId = Number(id);
