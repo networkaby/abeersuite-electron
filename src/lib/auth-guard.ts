@@ -60,7 +60,8 @@ export async function requireRole(...roles: string[]): Promise<GuardResult> {
 export async function requirePermission(permissionId: string): Promise<GuardResult> {
     const result = await requireAuth();
     if (result.response) return result;
-    if (!result.user.permissions.includes(permissionId)) {
+    const { permissions } = result.user;
+    if (!permissions.includes("admin:bypass") && !permissions.includes(permissionId)) {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return result;

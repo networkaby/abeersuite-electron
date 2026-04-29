@@ -18,7 +18,66 @@ interface Department {
     _count: { users: number };
 }
 
-const EMPTY = { id: "", name: "", description: "", branchId: "" };
+type FormState = { id: string; name: string; description: string; branchId: string };
+const EMPTY: FormState = { id: "", name: "", description: "", branchId: "" };
+
+function DeptFormFields({
+    addingNew, form, branches, onChange,
+}: {
+    addingNew: boolean;
+    form: FormState;
+    branches: Branch[];
+    onChange: (f: FormState) => void;
+}) {
+    return (
+        <div className="grid grid-cols-2 gap-3">
+            {addingNew && (
+                <div className="col-span-2 grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-medium text-muted-foreground">ID (e.g. DEP-ENG) *</label>
+                        <Input
+                            value={form.id}
+                            onChange={e => onChange({ ...form, id: e.target.value.toUpperCase() })}
+                            placeholder="DEP-REPAIR"
+                            className="mt-1 font-mono uppercase"
+                        />
+                    </div>
+                </div>
+            )}
+            <div>
+                <label className="text-xs font-medium text-muted-foreground">Name *</label>
+                <Input
+                    value={form.name}
+                    onChange={e => onChange({ ...form, name: e.target.value })}
+                    placeholder="Engineering"
+                    className="mt-1"
+                />
+            </div>
+            <div>
+                <label className="text-xs font-medium text-muted-foreground">
+                    Branch scope <span className="font-normal text-muted-foreground">(leave blank = cross-branch)</span>
+                </label>
+                <select
+                    value={form.branchId}
+                    onChange={e => onChange({ ...form, branchId: e.target.value })}
+                    className="mt-1 w-full border-2 border-border bg-background text-foreground text-sm px-3 py-2 focus:outline-none focus:ring-0 focus:border-primary"
+                >
+                    <option value="">— All branches —</option>
+                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+            </div>
+            <div className="col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Description</label>
+                <Input
+                    value={form.description}
+                    onChange={e => onChange({ ...form, description: e.target.value })}
+                    placeholder="What does this department do?"
+                    className="mt-1"
+                />
+            </div>
+        </div>
+    );
+}
 
 export default function DepartmentsPage() {
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -26,7 +85,7 @@ export default function DepartmentsPage() {
     const [loading, setLoading] = useState(true);
     const [addingNew, setAddingNew] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
-    const [form, setForm] = useState(EMPTY);
+    const [form, setForm] = useState<FormState>(EMPTY);
     const [saving, setSaving] = useState(false);
 
     const fetchAll = async () => {
@@ -85,38 +144,6 @@ export default function DepartmentsPage() {
         }
     };
 
-    const FormFields = () => (
-        <div className="grid grid-cols-2 gap-3">
-            {addingNew && (
-                <div className="col-span-2 grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-xs font-medium text-muted-foreground">ID (e.g. DEP-ENG) *</label>
-                        <Input value={form.id} onChange={e => setForm(f => ({ ...f, id: e.target.value.toUpperCase() }))} placeholder="DEP-REPAIR" className="mt-1 font-mono uppercase" />
-                    </div>
-                </div>
-            )}
-            <div>
-                <label className="text-xs font-medium text-muted-foreground">Name *</label>
-                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Engineering" className="mt-1" />
-            </div>
-            <div>
-                <label className="text-xs font-medium text-muted-foreground">Branch scope <span className="text-muted-foreground font-normal">(leave blank = cross-branch)</span></label>
-                <select
-                    value={form.branchId}
-                    onChange={e => setForm(f => ({ ...f, branchId: e.target.value }))}
-                    className="mt-1 w-full border-2 border-border bg-background text-foreground text-sm px-3 py-2 focus:outline-none focus:ring-0 focus:border-primary"
-                >
-                    <option value="">— All branches —</option>
-                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-            </div>
-            <div className="col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Description</label>
-                <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="What does this department do?" className="mt-1" />
-            </div>
-        </div>
-    );
-
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -134,7 +161,7 @@ export default function DepartmentsPage() {
             {addingNew && (
                 <div className="border-2 border-primary p-4 space-y-3 bg-muted/30">
                     <p className="text-sm font-semibold">New Department</p>
-                    <FormFields />
+                    <DeptFormFields addingNew={true} form={form} branches={branches} onChange={setForm} />
                     <div className="flex gap-2 pt-1">
                         <Button onClick={handleSave} disabled={saving} size="sm"><Check size={14} /> Save</Button>
                         <Button variant="outline" size="sm" onClick={cancel}><X size={14} /> Cancel</Button>
@@ -153,7 +180,7 @@ export default function DepartmentsPage() {
                         <div key={d.id} className="border-2 border-border border-l-4 border-l-primary bg-card">
                             {editId === d.id ? (
                                 <div className="p-4 space-y-3">
-                                    <FormFields />
+                                    <DeptFormFields addingNew={false} form={form} branches={branches} onChange={setForm} />
                                     <div className="flex gap-2">
                                         <Button size="sm" onClick={handleSave} disabled={saving}><Check size={14} /> Save</Button>
                                         <Button size="sm" variant="outline" onClick={cancel}><X size={14} /> Cancel</Button>

@@ -28,7 +28,7 @@ export default function BranchesPage() {
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
 
-    const fetch = async () => {
+    const loadBranches = async () => {
         try {
             const res = await axios.get<Branch[]>("/api/branches");
             setBranches(res.data);
@@ -36,7 +36,7 @@ export default function BranchesPage() {
         finally { setLoading(false); }
     };
 
-    useEffect(() => { fetch(); }, []);
+    useEffect(() => { loadBranches(); }, []);
 
     const startAdd = () => { setForm(EMPTY); setEditId(null); setAddingNew(true); };
     const startEdit = (b: Branch) => { setForm({ id: b.id, name: b.name, address: b.address ?? "", phone: b.phone ?? "", isActive: b.isActive }); setEditId(b.id); setAddingNew(false); };
@@ -55,7 +55,7 @@ export default function BranchesPage() {
                 toast.success("Branch updated");
             }
             cancel();
-            fetch();
+            loadBranches();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to save branch");
         } finally { setSaving(false); }
@@ -66,7 +66,7 @@ export default function BranchesPage() {
         try {
             await axios.delete(`/api/branches/${id}`);
             toast.success("Branch deleted");
-            fetch();
+            loadBranches();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to delete branch");
         }
@@ -76,7 +76,7 @@ export default function BranchesPage() {
         try {
             await axios.patch(`/api/branches/${b.id}`, { isActive: !b.isActive });
             toast.success(b.isActive ? "Branch deactivated" : "Branch activated");
-            fetch();
+            loadBranches();
         } catch { toast.error("Failed to update branch"); }
     };
 
