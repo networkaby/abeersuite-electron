@@ -21,29 +21,33 @@ export default async function ProtectedLayout({
         role?: string;
         roles?: string[];
         permissions?: string[];
+        roleLabel?: string;
+        roleColor?: string;
     };
 
     const userId = user.id ? parseInt(user.id, 10) : undefined;
 
     return (
         <SessionWrapper>
-            <div className="flex min-h-screen bg-background">
+            <div className="flex h-screen overflow-hidden bg-background">
                 <Sidebar user={{
-                    name: user.name,
-                    role: user.role,
-                    roles: user.roles,
+                    id:         user.id,
+                    name:       user.name,
+                    role:       user.role,
+                    roles:      user.roles,
                     permissions: user.permissions,
+                    roleLabel:  user.roleLabel,
+                    roleColor:  user.roleColor,
                 }} />
-                <main className="flex-1 p-8 overflow-auto">{children}</main>
+                <main className="flex-1 overflow-y-auto p-8">{children}</main>
                 <ButtonBar user={{
-                    name: user.name,
-                    role: user.role,
-                    roles: user.roles,
+                    name:        user.name,
+                    role:        user.role,
+                    roles:       user.roles,
                     permissions: user.permissions,
                 }} />
                 <Toaster richColors />
                 <QuickTicketButton />
-                {/* Always-on inbox listener — fires notifications on any page */}
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

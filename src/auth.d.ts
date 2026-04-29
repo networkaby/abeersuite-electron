@@ -2,12 +2,14 @@ import type { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
     interface User {
-        id:           string;
-        role:         string;
-        roles:        string[];
-        permissions:  string[];
-        rank:         number;
-        scope:        string;
+        id:            string;
+        role:          string;
+        roles:         string[];
+        permissions:   string[];
+        rank:          number;
+        scope:         string;
+        roleLabel?:    string;
+        roleColor?:    string;
         departmentIds?: string[];
         branchIds?:    string[];
         title?:        string;
@@ -15,15 +17,17 @@ declare module "next-auth" {
 
     interface Session {
         user: {
-            id:            string;
-            role:          string;
-            roles:         string[];
-            permissions:   string[];
-            rank:          number;
-            scope:         string;
+            id:             string;
+            role:           string;
+            roles:          string[];
+            permissions:    string[];
+            rank:           number;
+            scope:          string;
+            roleLabel?:     string;
+            roleColor?:     string;
             departmentIds?: string[];
-            branchIds?:    string[];
-            title?:        string;
+            branchIds?:     string[];
+            title?:         string;
         } & DefaultSession["user"];
     }
 }
@@ -36,6 +40,8 @@ declare module "next-auth/jwt" {
         permissions?:  string[];
         rank?:         number;
         scope?:        string;
+        roleLabel?:     string;
+        roleColor?:     string;
         departmentIds?: string[];
         branchIds?:     string[];
         title?:         string;

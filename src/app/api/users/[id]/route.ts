@@ -1,8 +1,42 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { requirePermission } from "@/lib/auth-guard";
+import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+
+const PROFILE_SELECT = {
+    id:          true,
+    name:        true,
+    email:       true,
+    title:       true,
+    role:        true,
+    scope:       true,
+    createdAt:   true,
+    managerId:   true,
+    userRole:    { select: { id: true, label: true, color: true, rank: true, permissions: { select: { permission: true } } } },
+    manager:     { select: { id: true, name: true, title: true, role: true, userRole: { select: { label: true, color: true } } } },
+    reports:     { select: { id: true, name: true, title: true, role: true, userRole: { select: { label: true, color: true } } } },
+    departments: { select: { id: true, name: true } },
+    branches:    { select: { id: true, name: true } },
+} as const;
+
+export async function GET(
+    _: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { response } = await requireAuth();
+    if (response) return response;
+    try {
+        const { id } = await params;
+        const userId = Number(id);
+        if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: PROFILE_SELECT });
+        if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+        return NextResponse.json(user);
+    } catch {
+        return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 });
+    }
+}
 
 const userUpdateSchema = z.object({
     name:          z.string().trim().min(1, "Name is required"),

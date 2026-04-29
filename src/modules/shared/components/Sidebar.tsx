@@ -8,7 +8,7 @@ import { useTheme } from "next-themes";
 import axios from "axios";
 import {
     Settings, ChevronDown, LogOut,
-    ChevronLeft, ChevronRight, Sun, Moon, Bell, ShieldCheck,
+    ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/modules/message/components/NotificationBell";
@@ -22,10 +22,25 @@ import {
 } from "@/utils/constants";
 
 type SidebarUser = {
-    name?: string | null;
-    role?: string | null;
-    roles?: string[] | null;
+    id?:          string | null;
+    name?:        string | null;
+    role?:        string | null;
+    roles?:       string[] | null;
     permissions?: string[] | null;
+    roleLabel?:   string | null;
+    roleColor?:   string | null;
+};
+
+function initials(name: string) {
+    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+const AVATAR_COLOR: Record<string, string> = {
+    R1: "bg-purple-100 text-purple-700",
+    R2: "bg-blue-100 text-blue-700",
+    R3: "bg-green-100 text-green-700",
+    R4: "bg-orange-100 text-orange-700",
+    R5: "bg-pink-100 text-pink-700",
 };
 
 type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
@@ -86,7 +101,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const totalInboxUnread = inboxRooms.reduce((sum, r) => sum + r.unreadCount, 0);
 
-    const roleLabel = userRoles.length > 0 ? userRoles.join(" / ") : (user?.role ?? "");
 
     const linkClass = (href: string) => {
         const active = pathname.startsWith(href);
@@ -130,7 +144,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         <aside
             className={[
                 collapsed ? "w-16" : "w-64",
-                "relative flex min-h-screen flex-col border-r border-border bg-sidebar transition-all duration-300",
+                "relative flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300 shrink-0",
             ].join(" ")}
         >
             {/* Collapse toggle */}
@@ -145,19 +159,40 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             {/* Brand */}
             <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
                 {collapsed ? (
-                    <div className="flex justify-center">
+                    <div className="flex flex-col items-center gap-2">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                             S
                         </div>
+                        {user?.name && (
+                            <Link href={user.id ? `/users/${user.id}` : "/users"}>
+                                <div className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${AVATAR_COLOR[user.role ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                                    {initials(user.name)}
+                                </div>
+                            </Link>
+                        )}
                     </div>
                 ) : (
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                            <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
-                            <p className="mt-0.5 truncate text-xs font-medium text-foreground">{user?.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">{roleLabel}</p>
-                        </div>
-                        <NotificationBell />
+                    <div className="space-y-2.5">
+                        <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                        <Link
+                            href={user?.id ? `/users/${user.id}` : "/users"}
+                            className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
+                        >
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${AVATAR_COLOR[user?.role ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+                                {user?.name ? initials(user.name) : "?"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
+                                    {user?.name ?? ""}
+                                </p>
+                                {user?.roleLabel && (
+                                    <Badge className={`mt-0.5 h-4 px-1.5 text-[10px] ${user.roleColor ?? ""}`}>
+                                        {user.roleLabel}
+                                    </Badge>
+                                )}
+                            </div>
+                            <NotificationBell />
+                        </Link>
                     </div>
                 )}
             </div>
