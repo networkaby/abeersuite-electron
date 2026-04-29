@@ -60,7 +60,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [collapsed,   setCollapsed]   = useState(false);
     const [liveAvatar,  setLiveAvatar]  = useState<string | null | undefined>(undefined);
     const [adminOpen, setAdminOpen] = useState(
-        pathname.startsWith("/users") || pathname.startsWith("/roles") || pathname.startsWith("/settings/branches") || pathname.startsWith("/settings/departments")
+        pathname.startsWith("/users") || pathname.startsWith("/roles") || pathname.startsWith("/org-chart") || pathname.startsWith("/branches") || pathname.startsWith("/departments")
     );
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);

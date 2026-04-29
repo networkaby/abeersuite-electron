@@ -100,11 +100,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 ];
 
 export const ADMIN_NAV: SettingsNavItem[] = [
-    { label: "Users",       href: "/users",                icon: UserCog,     permission: "users:manage" },
-    { label: "Org Chart",   href: "/org-chart",            icon: Network,     permission: "users:manage" },
-    { label: "Roles",       href: "/roles",                icon: ShieldCheck, permission: "roles:manage" },
-    { label: "Branches",    href: "/settings/branches",    icon: Building2,   permission: "settings:manage" },
-    { label: "Departments", href: "/settings/departments", icon: Users,       permission: "settings:manage" },
+    { label: "Users",       href: "/users",       icon: UserCog,     permission: "users:manage" },
+    { label: "Org Chart",   href: "/org-chart",   icon: Network,     permission: "users:manage" },
+    { label: "Roles",       href: "/roles",       icon: ShieldCheck, permission: "roles:manage" },
+    { label: "Branches",    href: "/branches",    icon: Building2,   permission: "settings:manage" },
+    { label: "Departments", href: "/departments", icon: Users,       permission: "settings:manage" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
