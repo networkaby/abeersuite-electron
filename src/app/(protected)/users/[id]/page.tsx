@@ -14,7 +14,7 @@ import {
     ArrowLeft, Shield, Mail, Phone, Cake, Building2, Users,
     ShieldCheck, Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose,
-    Send, UserCircle, Printer,
+    Send, UserCircle, Printer, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format-date";
 import type { OrgNode } from "@/app/api/org-chart/route";
 import OrgTree from "@/modules/admin/components/OrgTree";
+import UserAvatar from "@/modules/shared/components/UserAvatar";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,14 +39,15 @@ interface StaffCard {
 interface UserProfile {
     id: number; name: string; email: string; title: string | null;
     role: string; scope: string; createdAt: string; managerId: number | null;
-    avatarUrl:  string | null;
-    phone:      string | null;
-    birthday:   string | null;
-    bio:        string | null;
-    linkedIn:   string | null;
-    twitter:    string | null;
-    instagram:  string | null;
-    facebook:   string | null;
+    avatarUrl: string | null;
+    coverUrl:  string | null;
+    phone:     string | null;
+    birthday:  string | null;
+    bio:       string | null;
+    linkedIn:  string | null;
+    twitter:   string | null;
+    instagram: string | null;
+    facebook:  string | null;
     userRole: { id: string; label: string; color: string; rank: number; permissions: { permission: Permission }[] };
     manager:  StaffCard | null;
     reports:  StaffCard[];
@@ -53,9 +55,7 @@ interface UserProfile {
     branches:    { id: string; name: string }[];
 }
 interface WallPost {
-    id: number;
-    body: string;
-    createdAt: string;
+    id: number; body: string; createdAt: string;
     author: {
         id: number; name: string; avatarUrl: string | null; role: string;
         userRole: { label: string; color: string };
@@ -69,11 +69,6 @@ const SCOPE_LABELS: Record<string, string> = {
     BRANCH: "Full branch", REGION: "Region-wide", ORG: "Entire organisation",
 };
 const MODULE_ORDER = ["core", "customers", "tickets", "assignments", "service", "admin"];
-const AVATAR_COLOR: Record<string, string> = {
-    R1: "bg-purple-100 text-purple-700", R2: "bg-blue-100 text-blue-700",
-    R3: "bg-green-100 text-green-700",   R4: "bg-orange-100 text-orange-700",
-    R5: "bg-pink-100 text-pink-700",
-};
 const COVER_GRADIENT: Record<string, string> = {
     R1: "linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",
     R2: "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%)",
@@ -84,13 +79,7 @@ const COVER_GRADIENT: Record<string, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function initials(name: string) {
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
-function avatarBg(role: string) {
-    return AVATAR_COLOR[role] ?? "bg-gray-100 text-gray-600";
-}
-function coverGradient(role: string) {
+function coverBg(role: string) {
     return COVER_GRADIENT[role] ?? "linear-gradient(135deg,#334155 0%,#64748b 100%)";
 }
 function formatBirthday(iso: string) {
@@ -111,29 +100,6 @@ function timeAgo(iso: string): string {
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// ── Avatar ───────────────────────────────────────────────────────────────────
-
-function Avatar({
-    avatarUrl, name, role, sizePx = 64, className = "",
-}: { avatarUrl: string | null; name: string; role: string; sizePx?: number; className?: string }) {
-    const [err, setErr] = useState(false);
-    if (avatarUrl && !err) {
-        return (
-            <div className={`rounded-full overflow-hidden shrink-0 ${className}`}
-                style={{ width: sizePx, height: sizePx }}>
-                <Image src={avatarUrl} alt={name} width={sizePx} height={sizePx}
-                    className="object-cover w-full h-full" onError={() => setErr(true)} />
-            </div>
-        );
-    }
-    return (
-        <div className={`flex shrink-0 items-center justify-center rounded-full font-bold ${avatarBg(role)} ${className}`}
-            style={{ width: sizePx, height: sizePx, fontSize: sizePx * 0.32 }}>
-            {initials(name)}
-        </div>
-    );
-}
-
 // ── Cloudinary upload ─────────────────────────────────────────────────────────
 
 async function uploadToCloudinary(file: File): Promise<string> {
@@ -141,11 +107,9 @@ async function uploadToCloudinary(file: File): Promise<string> {
         timestamp: number; signature: string; apiKey: string; cloudName: string; folder: string;
     }>("/api/upload-signature");
     const form = new FormData();
-    form.append("file", file);
-    form.append("api_key",   sig.apiKey);
-    form.append("timestamp", String(sig.timestamp));
-    form.append("signature", sig.signature);
-    form.append("folder",    sig.folder);
+    form.append("file", file); form.append("api_key", sig.apiKey);
+    form.append("timestamp", String(sig.timestamp)); form.append("signature", sig.signature);
+    form.append("folder", sig.folder);
     const res = await axios.post<{ secure_url: string }>(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, form,
     );
@@ -155,65 +119,50 @@ async function uploadToCloudinary(file: File): Promise<string> {
 // ── ProfileHeader ─────────────────────────────────────────────────────────────
 
 function ProfileHeader({
-    profile, isSelf, wallPostCount,
-    onWriteOnWall, onEditProfile,
+    profile, isSelf, wallPostCount, onWriteOnWall, onEditProfile,
 }: {
-    profile: UserProfile;
-    isSelf: boolean;
-    wallPostCount: number;
-    onWriteOnWall: () => void;
-    onEditProfile: () => void;
+    profile: UserProfile; isSelf: boolean; wallPostCount: number;
+    onWriteOnWall: () => void; onEditProfile: () => void;
 }) {
     return (
         <div className="border-2 border-border overflow-hidden mb-1 print:border-0">
-            {/* Cover strip */}
-            <div className="h-36" style={{ background: coverGradient(profile.role) }} />
+            {/* Cover */}
+            <div className="relative h-28 sm:h-36 overflow-hidden">
+                {profile.coverUrl ? (
+                    <Image src={profile.coverUrl} alt="Cover" fill className="object-cover" />
+                ) : (
+                    <div className="absolute inset-0" style={{ background: coverBg(profile.role) }} />
+                )}
+            </div>
 
-            {/* Avatar + name row */}
-            <div className="bg-card px-5 pb-4">
-                <div className="flex items-end gap-4 -mt-12">
-                    {/* Avatar with white ring */}
-                    <div className="shrink-0 rounded-full border-4 border-card"
-                        style={{ lineHeight: 0 }}>
-                        <Avatar avatarUrl={profile.avatarUrl} name={profile.name}
-                            role={profile.role} sizePx={96} />
+            {/* Avatar + name */}
+            <div className="bg-card px-4 sm:px-5 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4 -mt-10 sm:-mt-12">
+                    {/* Avatar ring */}
+                    <div className="shrink-0 rounded-full border-4 border-card self-start" style={{ lineHeight: 0 }}>
+                        <UserAvatar avatarUrl={profile.avatarUrl} name={profile.name} role={profile.role} sizePx={88} />
                     </div>
 
-                    {/* Name + actions */}
-                    <div className="flex-1 pb-1 flex items-end justify-between gap-4 min-w-0 pt-12">
+                    {/* Name block */}
+                    <div className="flex-1 flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 min-w-0 sm:pb-1 pt-2 sm:pt-12">
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h1 className="text-xl font-bold text-foreground leading-tight">
-                                    {profile.name}
-                                </h1>
-                                <Badge className={`${profile.userRole.color} text-xs`}>
-                                    {profile.userRole.label}
-                                </Badge>
+                                <h1 className="text-xl font-bold text-foreground leading-tight">{profile.name}</h1>
+                                <Badge className={`${profile.userRole.color} text-xs`}>{profile.userRole.label}</Badge>
                                 {isSelf && (
-                                    <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 font-medium">
-                                        You
-                                    </span>
+                                    <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 font-medium">You</span>
                                 )}
                             </div>
-                            {profile.title && (
-                                <p className="text-sm text-muted-foreground mt-0.5">
-                                    {profile.title}
-                                </p>
-                            )}
+                            {profile.title && <p className="text-sm text-muted-foreground mt-0.5">{profile.title}</p>}
                             <div className="flex flex-wrap gap-1 mt-1.5">
                                 {profile.departments.map(d => (
-                                    <span key={d.id} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5">
-                                        {d.name}
-                                    </span>
+                                    <span key={d.id} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5">{d.name}</span>
                                 ))}
                                 {profile.branches.map(b => (
-                                    <span key={b.id} className="text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5">
-                                        {b.name}
-                                    </span>
+                                    <span key={b.id} className="text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5">{b.name}</span>
                                 ))}
                             </div>
                         </div>
-
                         <div className="flex items-center gap-2 shrink-0 print:hidden">
                             {isSelf ? (
                                 <Button variant="outline" size="sm" onClick={onEditProfile}>
@@ -224,7 +173,7 @@ function ProfileHeader({
                                     <MessageSquare size={13} /> Write on Wall
                                 </Button>
                             )}
-                            <Button variant="outline" size="sm" onClick={() => window.print()}>
+                            <Button variant="outline" size="sm" onClick={() => window.print()} title="Print">
                                 <Printer size={13} />
                             </Button>
                         </div>
@@ -233,19 +182,13 @@ function ProfileHeader({
             </div>
 
             {/* Stats strip */}
-            <div className="bg-muted/30 border-t-2 border-border px-6 py-2 flex items-center gap-4 text-xs text-muted-foreground print:hidden">
-                <span className="flex items-center gap-1.5">
-                    <Building2 size={11} /> Joined {formatDate(profile.createdAt)}
-                </span>
-                <span className="text-border">·</span>
-                <span className="flex items-center gap-1.5">
-                    <Users size={11} /> {profile.reports.length} direct report{profile.reports.length !== 1 ? "s" : ""}
-                </span>
-                <span className="text-border">·</span>
-                <span className="flex items-center gap-1.5">
-                    <MessageSquare size={11} /> {wallPostCount} wall post{wallPostCount !== 1 ? "s" : ""}
-                </span>
-                <span className="text-border">·</span>
+            <div className="bg-muted/30 border-t-2 border-border px-4 sm:px-6 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground print:hidden">
+                <span className="flex items-center gap-1.5"><Building2 size={11} /> Joined {formatDate(profile.createdAt)}</span>
+                <span className="text-border hidden sm:inline">·</span>
+                <span className="flex items-center gap-1.5"><Users size={11} /> {profile.reports.length} direct report{profile.reports.length !== 1 ? "s" : ""}</span>
+                <span className="text-border hidden sm:inline">·</span>
+                <span className="flex items-center gap-1.5"><MessageSquare size={11} /> {wallPostCount} wall post{wallPostCount !== 1 ? "s" : ""}</span>
+                <span className="text-border hidden sm:inline">·</span>
                 <span>Rank {profile.userRole.rank}</span>
             </div>
         </div>
@@ -255,77 +198,47 @@ function ProfileHeader({
 // ── WallTab ───────────────────────────────────────────────────────────────────
 
 function WallTab({
-    profile, sessionUserId, posts, loading, focusInput,
-    onPost, onDelete,
+    profile, sessionUserId, posts, loading, focusInput, onPost, onDelete,
 }: {
-    profile: UserProfile;
-    sessionUserId: number | undefined;
-    posts: WallPost[];
-    loading: boolean;
-    focusInput: boolean;
-    onPost: (post: WallPost) => void;
-    onDelete: (id: number) => void;
+    profile: UserProfile; sessionUserId: number | undefined;
+    posts: WallPost[]; loading: boolean; focusInput: boolean;
+    onPost: (p: WallPost) => void; onDelete: (id: number) => void;
 }) {
-    const [body,    setBody]    = useState("");
+    const [body, setBody] = useState("");
     const [posting, setPosting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    useEffect(() => {
-        if (focusInput) textareaRef.current?.focus();
-    }, [focusInput]);
+    useEffect(() => { if (focusInput) textareaRef.current?.focus(); }, [focusInput]);
 
     async function handlePost() {
         if (!body.trim()) return;
         setPosting(true);
         try {
             const res = await axios.post<WallPost>(`/api/users/${profile.id}/wall`, { body: body.trim() });
-            onPost(res.data);
-            setBody("");
+            onPost(res.data); setBody("");
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Failed to post";
-            toast.error(msg);
-        } finally {
-            setPosting(false);
-        }
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to post");
+        } finally { setPosting(false); }
     }
 
     async function handleDelete(postId: number) {
-        try {
-            await axios.delete(`/api/wall-posts/${postId}`);
-            onDelete(postId);
-        } catch {
-            toast.error("Failed to delete post");
-        }
+        try { await axios.delete(`/api/wall-posts/${postId}`); onDelete(postId); }
+        catch { toast.error("Failed to delete post"); }
     }
 
-    const canDeletePost = (post: WallPost) =>
-        sessionUserId !== undefined &&
-        (sessionUserId === post.author.id || sessionUserId === profile.id);
+    const canDelete = (post: WallPost) =>
+        sessionUserId !== undefined && (sessionUserId === post.author.id || sessionUserId === profile.id);
 
     return (
         <div className="space-y-4">
-            {/* Write box */}
             <div className="border-2 border-border bg-card p-4 space-y-3">
                 <div className="flex items-start gap-3">
-                    {sessionUserId && (
-                        <div className="shrink-0 mt-1">
-                            <UserCircle size={32} className="text-muted-foreground" />
-                        </div>
-                    )}
+                    <div className="shrink-0 mt-1"><UserCircle size={32} className="text-muted-foreground" /></div>
                     <Textarea
-                        ref={textareaRef}
-                        value={body}
-                        onChange={e => setBody(e.target.value)}
-                        placeholder={
-                            sessionUserId === profile.id
-                                ? "Write something on your wall…"
-                                : `Write something on ${profile.name.split(" ")[0]}'s wall…`
-                        }
-                        rows={3}
+                        ref={textareaRef} value={body} onChange={e => setBody(e.target.value)} rows={3}
                         className="flex-1 resize-none"
-                        onKeyDown={e => {
-                            if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); handlePost(); }
-                        }}
+                        placeholder={sessionUserId === profile.id ? "Write something on your wall…" : `Write something on ${profile.name.split(" ")[0]}'s wall…`}
+                        onKeyDown={e => { if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); handlePost(); } }}
                     />
                 </div>
                 <div className="flex items-center justify-between">
@@ -336,7 +249,6 @@ function WallTab({
                 </div>
             </div>
 
-            {/* Posts */}
             {loading ? (
                 <p className="text-center text-sm text-muted-foreground py-8">Loading wall…</p>
             ) : posts.length === 0 ? (
@@ -352,8 +264,7 @@ function WallTab({
                         <div key={post.id} className="border-2 border-border bg-card p-4">
                             <div className="flex items-start gap-3">
                                 <Link href={`/users/${post.author.id}`} className="shrink-0">
-                                    <Avatar avatarUrl={post.author.avatarUrl} name={post.author.name}
-                                        role={post.author.role} sizePx={40} />
+                                    <UserAvatar avatarUrl={post.author.avatarUrl} name={post.author.name} role={post.author.role} sizePx={40} />
                                 </Link>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -361,25 +272,16 @@ function WallTab({
                                             className="text-sm font-semibold text-foreground hover:text-primary transition-colors">
                                             {post.author.name}
                                         </Link>
-                                        <Badge className={`${post.author.userRole.color} text-[10px]`}>
-                                            {post.author.userRole.label}
-                                        </Badge>
-                                        <span className="text-[11px] text-muted-foreground ml-auto">
-                                            {timeAgo(post.createdAt)}
-                                        </span>
-                                        {canDeletePost(post) && (
-                                            <button
-                                                onClick={() => handleDelete(post.id)}
-                                                className="text-muted-foreground/50 hover:text-destructive transition-colors"
-                                                title="Delete post"
-                                            >
+                                        <Badge className={`${post.author.userRole.color} text-[10px]`}>{post.author.userRole.label}</Badge>
+                                        <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo(post.createdAt)}</span>
+                                        {canDelete(post) && (
+                                            <button onClick={() => handleDelete(post.id)}
+                                                className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Delete">
                                                 <Trash2 size={13} />
                                             </button>
                                         )}
                                     </div>
-                                    <p className="text-sm text-foreground mt-1.5 whitespace-pre-wrap leading-relaxed">
-                                        {post.body}
-                                    </p>
+                                    <p className="text-sm text-foreground mt-1.5 whitespace-pre-wrap leading-relaxed">{post.body}</p>
                                 </div>
                             </div>
                         </div>
@@ -402,29 +304,22 @@ function AboutTab({ profile }: { profile: UserProfile }) {
 
     return (
         <div className="space-y-4 max-w-xl">
-            {/* Bio */}
             {profile.bio && (
                 <div className="border-2 border-border bg-card px-5 py-4">
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">About</h3>
                     <p className="text-sm text-foreground leading-relaxed">{profile.bio}</p>
                 </div>
             )}
-
-            {/* Contact */}
             <div className="border-2 border-border bg-card px-5 py-4 space-y-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contact</h3>
                 <div className="flex items-center gap-2 text-sm">
                     <Mail size={14} className="shrink-0 text-muted-foreground" />
-                    <a href={`mailto:${profile.email}`} className="text-foreground hover:text-primary transition-colors">
-                        {profile.email}
-                    </a>
+                    <a href={`mailto:${profile.email}`} className="text-foreground hover:text-primary transition-colors">{profile.email}</a>
                 </div>
                 {profile.phone && (
                     <div className="flex items-center gap-2 text-sm">
                         <Phone size={14} className="shrink-0 text-muted-foreground" />
-                        <a href={`tel:${profile.phone}`} className="text-foreground hover:text-primary transition-colors">
-                            {profile.phone}
-                        </a>
+                        <a href={`tel:${profile.phone}`} className="text-foreground hover:text-primary transition-colors">{profile.phone}</a>
                     </div>
                 )}
                 {profile.birthday && (
@@ -434,8 +329,6 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                     </div>
                 )}
             </div>
-
-            {/* Organisation */}
             <div className="border-2 border-border bg-card px-5 py-4 space-y-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Organisation</h3>
                 {profile.manager && (
@@ -443,7 +336,8 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                         <Users size={14} className="shrink-0 text-muted-foreground" />
                         <span className="text-muted-foreground">Reports to</span>
                         <Link href={`/users/${profile.manager.id}`}
-                            className="text-foreground font-medium hover:text-primary transition-colors flex items-center gap-1">
+                            className="font-medium hover:text-primary transition-colors flex items-center gap-1">
+                            <UserAvatar avatarUrl={profile.manager.avatarUrl} name={profile.manager.name} role={profile.manager.role} sizePx={18} />
                             {profile.manager.name} <ExternalLink size={10} />
                         </Link>
                     </div>
@@ -453,9 +347,7 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                         <Building2 size={14} className="shrink-0 text-muted-foreground mt-0.5" />
                         <div className="flex flex-wrap gap-1">
                             {profile.departments.map(d => (
-                                <span key={d.id} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5">
-                                    {d.name}
-                                </span>
+                                <span key={d.id} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5">{d.name}</span>
                             ))}
                         </div>
                     </div>
@@ -465,9 +357,7 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                         <Building2 size={14} className="shrink-0 text-muted-foreground mt-0.5" />
                         <div className="flex flex-wrap gap-1">
                             {profile.branches.map(b => (
-                                <span key={b.id} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5">
-                                    {b.name}
-                                </span>
+                                <span key={b.id} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5">{b.name}</span>
                             ))}
                         </div>
                     </div>
@@ -483,8 +373,6 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                     <span className="font-medium">{formatDate(profile.createdAt)}</span>
                 </div>
             </div>
-
-            {/* Social links */}
             {socials.length > 0 && (
                 <div className="border-2 border-border bg-card px-5 py-4">
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Social</h3>
@@ -521,19 +409,23 @@ type EditForm = z.infer<typeof editSchema>;
 function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (p: UserProfile) => void }) {
     const [saving,        setSaving]        = useState(false);
     const [uploading,     setUploading]     = useState(false);
+    const [coverUploading, setCoverUploading] = useState(false);
     const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatarUrl);
     const [avatarUrl,     setAvatarUrl]     = useState<string | null>(profile.avatarUrl);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [coverPreview,  setCoverPreview]  = useState<string | null>(profile.coverUrl);
+    const [coverUrl,      setCoverUrl]      = useState<string | null>(profile.coverUrl);
+    const fileInputRef  = useRef<HTMLInputElement>(null);
+    const coverInputRef = useRef<HTMLInputElement>(null);
 
     const { register, handleSubmit, watch, formState: { errors } } = useForm<EditForm>({
         resolver: zodResolver(editSchema),
         defaultValues: {
             name:      profile.name,
             email:     profile.email,
-            title:     profile.title     ?? "",
-            bio:       profile.bio       ?? "",
-            phone:     profile.phone     ?? "",
-            birthday:  profile.birthday  ? profile.birthday.slice(0, 10) : "",
+            title:     profile.title    ?? "",
+            bio:       profile.bio      ?? "",
+            phone:     profile.phone    ?? "",
+            birthday:  profile.birthday ? profile.birthday.slice(0, 10) : "",
             linkedIn:  profile.linkedIn  ?? "",
             twitter:   profile.twitter   ?? "",
             instagram: profile.instagram ?? "",
@@ -543,71 +435,86 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
 
     const bioValue = watch("bio") ?? "";
 
-    async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "cover") {
         const file = e.target.files?.[0];
         if (!file) return;
         if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
         if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return; }
         const localUrl = URL.createObjectURL(file);
-        setAvatarPreview(localUrl);
-        setUploading(true);
+        if (type === "avatar") { setAvatarPreview(localUrl); setUploading(true); }
+        else                   { setCoverPreview(localUrl);  setCoverUploading(true); }
         try {
             const cloudUrl = await uploadToCloudinary(file);
-            setAvatarUrl(cloudUrl);
-            setAvatarPreview(cloudUrl);
-            toast.success("Photo uploaded");
+            if (type === "avatar") { setAvatarUrl(cloudUrl); setAvatarPreview(cloudUrl); toast.success("Photo uploaded"); }
+            else                   { setCoverUrl(cloudUrl);  setCoverPreview(cloudUrl);  toast.success("Cover uploaded"); }
         } catch {
-            toast.error("Photo upload failed — check Cloudinary settings");
-            setAvatarPreview(profile.avatarUrl);
+            toast.error("Upload failed — check Cloudinary settings");
+            if (type === "avatar") setAvatarPreview(profile.avatarUrl);
+            else setCoverPreview(profile.coverUrl);
         } finally {
-            setUploading(false);
+            if (type === "avatar") setUploading(false);
+            else setCoverUploading(false);
         }
     }
 
     const onSubmit = async (data: EditForm) => {
         setSaving(true);
         try {
-            const payload = {
-                name:      data.name,
-                email:     data.email,
-                title:     data.title     || null,
-                bio:       data.bio       || null,
-                phone:     data.phone     || null,
-                birthday:  data.birthday  || null,
-                linkedIn:  data.linkedIn  || null,
-                twitter:   data.twitter   || null,
-                instagram: data.instagram || null,
-                facebook:  data.facebook  || null,
-                avatarUrl: avatarUrl,
-            };
-            const res = await axios.put<UserProfile>(`/api/users/${profile.id}`, payload);
+            const res = await axios.put<UserProfile>(`/api/users/${profile.id}`, {
+                name: data.name, email: data.email, title: data.title || null,
+                bio: data.bio || null, phone: data.phone || null, birthday: data.birthday || null,
+                linkedIn: data.linkedIn || null, twitter: data.twitter || null,
+                instagram: data.instagram || null, facebook: data.facebook || null,
+                avatarUrl, coverUrl,
+            });
             toast.success("Profile saved");
             onSaved(res.data);
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Failed to save";
-            toast.error(msg);
-        } finally {
-            setSaving(false);
-        }
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to save");
+        } finally { setSaving(false); }
     };
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 max-w-xl">
-            {/* Photo */}
+
+            {/* Cover photo */}
+            <div className="border-2 border-border bg-card p-5 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Cover Photo</h3>
+                <div className="relative h-28 overflow-hidden rounded-sm border border-border">
+                    {coverPreview
+                        ? <Image src={coverPreview} alt="Cover" fill className="object-cover" />
+                        : <div className="absolute inset-0" style={{ background: "linear-gradient(135deg,#334155,#64748b)" }} />
+                    }
+                    {coverUploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        </div>
+                    )}
+                    <div className="absolute bottom-2 right-2 flex gap-2">
+                        <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
+                            onChange={e => handleFileChange(e, "cover")} />
+                        <Button type="button" size="sm" variant="outline"
+                            className="bg-white/90 text-xs h-7 px-2" disabled={coverUploading}
+                            onClick={() => coverInputRef.current?.click()}>
+                            <Upload size={12} /> {coverUploading ? "Uploading…" : "Change Cover"}
+                        </Button>
+                        {coverUrl && (
+                            <Button type="button" size="sm" variant="outline"
+                                className="bg-white/90 text-destructive text-xs h-7 px-2"
+                                onClick={() => { setCoverUrl(null); setCoverPreview(null); }}>
+                                Remove
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Profile photo */}
             <div className="border-2 border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Profile Photo</h3>
                 <div className="flex items-center gap-5">
                     <div className="relative shrink-0">
-                        {avatarPreview ? (
-                            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-border">
-                                <Image src={avatarPreview} alt="Preview" width={80} height={80}
-                                    className="object-cover w-full h-full" />
-                            </div>
-                        ) : (
-                            <div className={`flex w-20 h-20 items-center justify-center rounded-full border-2 border-border text-2xl font-bold ${avatarBg(profile.role)}`}>
-                                {initials(profile.name)}
-                            </div>
-                        )}
+                        <UserAvatar avatarUrl={avatarPreview} name={profile.name} role={profile.role} sizePx={80} />
                         {uploading && (
                             <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
                                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -616,7 +523,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
                     </div>
                     <div className="space-y-2">
                         <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                            onChange={handleFileChange} />
+                            onChange={e => handleFileChange(e, "avatar")} />
                         <Button type="button" variant="outline" size="sm" disabled={uploading}
                             onClick={() => fileInputRef.current?.click()}>
                             <Upload size={13} /> {uploading ? "Uploading…" : "Upload Photo"}
@@ -633,19 +540,16 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
                 </div>
                 <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5"><Link2 size={12} /> Or paste a photo URL</Label>
-                    <Input
-                        placeholder="https://example.com/photo.jpg"
-                        value={avatarUrl ?? ""}
-                        onChange={e => { setAvatarUrl(e.target.value || null); setAvatarPreview(e.target.value || null); }}
-                    />
+                    <Input placeholder="https://example.com/photo.jpg" value={avatarUrl ?? ""}
+                        onChange={e => { setAvatarUrl(e.target.value || null); setAvatarPreview(e.target.value || null); }} />
                 </div>
             </div>
 
             {/* Identity */}
             <div className="border-2 border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Identity</h3>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2 space-y-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2 space-y-1.5">
                         <Label>Full Name</Label>
                         <Input {...register("name")} />
                         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
@@ -659,7 +563,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
                         <Label>Job Title <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Input {...register("title")} placeholder="e.g. Senior Technician" />
                     </div>
-                    <div className="col-span-2 space-y-1.5">
+                    <div className="sm:col-span-2 space-y-1.5">
                         <Label>Bio <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Textarea {...register("bio")} placeholder="A short intro about yourself…" rows={3} />
                         <p className="text-[11px] text-muted-foreground text-right">{bioValue.length}/500</p>
@@ -671,7 +575,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
             {/* Contact */}
             <div className="border-2 border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Contact</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                         <Label>Phone <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Input {...register("phone")} placeholder="+880-xxx-xxx-xxxx" />
@@ -702,7 +606,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
             </div>
 
             <div className="flex justify-end">
-                <Button type="submit" disabled={saving || uploading}>
+                <Button type="submit" disabled={saving || uploading || coverUploading}>
                     {saving ? "Saving…" : "Save Profile"}
                 </Button>
             </div>
@@ -715,10 +619,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
 const securitySchema = z.object({
     password:        z.string().min(6, "Min 6 characters"),
     confirmPassword: z.string(),
-}).refine(d => d.password === d.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-});
+}).refine(d => d.password === d.confirmPassword, { message: "Passwords do not match", path: ["confirmPassword"] });
 type SecurityForm = z.infer<typeof securitySchema>;
 
 function SecurityTab({ profileId }: { profileId: number }) {
@@ -735,11 +636,8 @@ function SecurityTab({ profileId }: { profileId: number }) {
             toast.success("Password changed successfully");
             reset();
         } catch (e) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Failed to change password";
-            toast.error(msg);
-        } finally {
-            setSaving(false);
-        }
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to change password");
+        } finally { setSaving(false); }
     };
 
     return (
@@ -747,13 +645,9 @@ function SecurityTab({ profileId }: { profileId: number }) {
             <form onSubmit={handleSubmit(onSubmit)} className="border-2 border-border bg-card p-5 space-y-4">
                 <div className="flex items-center gap-2 mb-1">
                     <Lock size={14} className="text-muted-foreground" />
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                        Change Password
-                    </h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Change Password</h3>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                    Choose a strong password of at least 6 characters.
-                </p>
+                <p className="text-xs text-muted-foreground">Choose a strong password of at least 6 characters.</p>
                 <div className="space-y-1.5">
                     <Label>New Password</Label>
                     <Input {...register("password")} type="password" placeholder="Min 6 characters" />
@@ -762,14 +656,10 @@ function SecurityTab({ profileId }: { profileId: number }) {
                 <div className="space-y-1.5">
                     <Label>Confirm Password</Label>
                     <Input {...register("confirmPassword")} type="password" placeholder="Repeat new password" />
-                    {errors.confirmPassword && (
-                        <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
-                    )}
+                    {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
                 </div>
                 <div className="flex justify-end pt-1">
-                    <Button type="submit" disabled={saving}>
-                        {saving ? "Changing…" : "Change Password"}
-                    </Button>
+                    <Button type="submit" disabled={saving}>{saving ? "Changing…" : "Change Password"}</Button>
                 </div>
             </form>
         </div>
@@ -835,28 +725,21 @@ function PermissionsTab({ profile }: { profile: UserProfile }) {
 function OrgPositionTab({ profile }: { profile: UserProfile }) {
     const [roots, setRoots] = useState<OrgNode[]>([]);
     const [loading, setLoading] = useState(true);
-
     useEffect(() => {
         axios.get<OrgNode[]>("/api/org-chart")
             .then(r => setRoots(r.data))
             .catch(() => toast.error("Failed to load org chart"))
             .finally(() => setLoading(false));
     }, []);
-
-    if (loading) return (
-        <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-            Loading org chart…
-        </div>
-    );
+    if (loading) return <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">Loading org chart…</div>;
     return <OrgTree roots={roots} highlightId={profile.id} />;
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function Sidebar({ profile }: { profile: UserProfile }) {
+function ProfileSidebar({ profile }: { profile: UserProfile }) {
     return (
-        <aside className="w-60 shrink-0 space-y-4">
-            {/* Mini info */}
+        <aside className="w-56 shrink-0 space-y-4">
             <div className="border-2 border-border bg-card overflow-hidden">
                 <div className="bg-muted/40 border-b-2 border-border px-3 py-2">
                     <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
@@ -868,9 +751,8 @@ function Sidebar({ profile }: { profile: UserProfile }) {
                         <div>
                             <p className="text-muted-foreground mb-0.5">Reports to</p>
                             <Link href={`/users/${profile.manager.id}`}
-                                className="font-medium text-foreground hover:text-primary flex items-center gap-1 transition-colors">
-                                <Avatar avatarUrl={profile.manager.avatarUrl} name={profile.manager.name}
-                                    role={profile.manager.role} sizePx={18} className="shrink-0" />
+                                className="font-medium text-foreground hover:text-primary flex items-center gap-1.5 transition-colors">
+                                <UserAvatar avatarUrl={profile.manager.avatarUrl} name={profile.manager.name} role={profile.manager.role} sizePx={18} />
                                 {profile.manager.name}
                             </Link>
                         </div>
@@ -898,7 +780,6 @@ function Sidebar({ profile }: { profile: UserProfile }) {
                 </div>
             </div>
 
-            {/* Direct reports */}
             {profile.reports.length > 0 && (
                 <div className="border-2 border-border bg-card overflow-hidden">
                     <div className="bg-muted/40 border-b-2 border-border px-3 py-2">
@@ -910,7 +791,7 @@ function Sidebar({ profile }: { profile: UserProfile }) {
                         {profile.reports.slice(0, 9).map(r => (
                             <Link key={r.id} href={`/users/${r.id}`}
                                 className="flex flex-col items-center gap-1 text-center group">
-                                <Avatar avatarUrl={r.avatarUrl} name={r.name} role={r.role} sizePx={40}
+                                <UserAvatar avatarUrl={r.avatarUrl} name={r.name} role={r.role} sizePx={40}
                                     className="group-hover:ring-2 group-hover:ring-primary transition-all" />
                                 <span className="text-[10px] text-muted-foreground group-hover:text-primary transition-colors leading-tight truncate w-full text-center">
                                     {r.name.split(" ")[0]}
@@ -920,9 +801,7 @@ function Sidebar({ profile }: { profile: UserProfile }) {
                     </div>
                     {profile.reports.length > 9 && (
                         <div className="border-t border-border px-3 py-2 text-center">
-                            <span className="text-[11px] text-muted-foreground">
-                                +{profile.reports.length - 9} more
-                            </span>
+                            <span className="text-[11px] text-muted-foreground">+{profile.reports.length - 9} more</span>
                         </div>
                     )}
                 </div>
@@ -946,19 +825,18 @@ type TabId = 1 | 2 | 3 | 4 | 5 | 6;
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function UserProfilePage() {
-    const { id }             = useParams<{ id: string }>();
-    const { data: session }  = useSession();
-    const [profile,      setProfile]      = useState<UserProfile | null>(null);
-    const [wallPosts,    setWallPosts]    = useState<WallPost[]>([]);
-    const [loading,      setLoading]      = useState(true);
-    const [wallLoading,  setWallLoading]  = useState(true);
-    const [activeTab,    setActiveTab]    = useState<TabId>(1);
-    const [sidebarOpen,  setSidebarOpen]  = useState(true);
-    const [focusWall,    setFocusWall]    = useState(false);
+    const { id }            = useParams<{ id: string }>();
+    const { data: session } = useSession();
+    const [profile,     setProfile]     = useState<UserProfile | null>(null);
+    const [wallPosts,   setWallPosts]   = useState<WallPost[]>([]);
+    const [loading,     setLoading]     = useState(true);
+    const [wallLoading, setWallLoading] = useState(true);
+    const [activeTab,   setActiveTab]   = useState<TabId>(1);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [tabBarOpen,  setTabBarOpen]  = useState(true);
+    const [focusWall,   setFocusWall]   = useState(false);
 
-    const sessionUserId = session?.user
-        ? Number((session.user as { id?: string }).id)
-        : undefined;
+    const sessionUserId = session?.user ? Number((session.user as { id?: string }).id) : undefined;
     const isSelf  = sessionUserId !== undefined && sessionUserId === Number(id);
     const isAdmin = Boolean(
         (session?.user as { permissions?: string[] })?.permissions?.includes("users:manage") ||
@@ -966,23 +844,26 @@ export default function UserProfilePage() {
     );
 
     useEffect(() => {
-        setLoading(true);
-        setWallLoading(true);
-        setActiveTab(1);
+        setLoading(true); setWallLoading(true); setActiveTab(1);
         axios.get<UserProfile>(`/api/users/${id}`)
             .then(r => setProfile(r.data))
-            .catch(() => toast.error("Failed to load profile"))
+            .catch(e => {
+                if (!axios.isAxiosError(e) || e.response?.status !== 404)
+                    toast.error("Failed to load profile");
+            })
             .finally(() => setLoading(false));
         axios.get<WallPost[]>(`/api/users/${id}/wall`)
             .then(r => setWallPosts(r.data))
-            .catch(() => toast.error("Failed to load wall"))
+            .catch(e => {
+                if (!axios.isAxiosError(e) || e.response?.status !== 404)
+                    toast.error("Failed to load wall");
+            })
             .finally(() => setWallLoading(false));
     }, [id]);
 
     function handleWriteOnWall() {
-        setActiveTab(1);
-        setFocusWall(true);
-        setTimeout(() => setFocusWall(false), 300);
+        setActiveTab(1); setTabBarOpen(true);
+        setFocusWall(true); setTimeout(() => setFocusWall(false), 300);
     }
 
     const visibleTabs = TABS.filter(t => {
@@ -992,11 +873,9 @@ export default function UserProfilePage() {
         return false;
     });
 
-    if (loading) return (
-        <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-            Loading profile…
-        </div>
-    );
+    const currentTab = visibleTabs.find(t => t.id === activeTab) ?? visibleTabs[0];
+
+    if (loading) return <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">Loading profile…</div>;
     if (!profile) return (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
             <p className="text-sm text-muted-foreground">User not found.</p>
@@ -1017,77 +896,97 @@ export default function UserProfilePage() {
 
             {/* Profile header */}
             <ProfileHeader
-                profile={profile}
-                isSelf={isSelf}
-                wallPostCount={wallPosts.length}
+                profile={profile} isSelf={isSelf} wallPostCount={wallPosts.length}
                 onWriteOnWall={handleWriteOnWall}
-                onEditProfile={() => setActiveTab(3)}
+                onEditProfile={() => { setActiveTab(3); setTabBarOpen(true); }}
             />
 
-            {/* Tab bar + sidebar toggle */}
-            <div className="flex items-stretch border-b-2 border-border mb-5 print:hidden">
-                <div className="flex flex-1">
-                    {visibleTabs.map(tab => {
-                        const Icon   = tab.icon;
-                        const active = activeTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={[
-                                    "flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 -mb-0.5 transition-colors whitespace-nowrap",
-                                    active
-                                        ? "border-primary text-primary"
-                                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-                                ].join(" ")}
-                            >
-                                <Icon size={13} /> {tab.label}
+            {/* Tab bar */}
+            <div className="print:hidden">
+                {tabBarOpen ? (
+                    <div className="flex items-stretch border-b-2 border-border mb-5">
+                        {/* Scrollable tab list */}
+                        <div className="flex flex-1 overflow-x-auto scrollbar-none">
+                            {visibleTabs.map(tab => {
+                                const Icon = tab.icon;
+                                const active = activeTab === tab.id;
+                                return (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                        className={[
+                                            "flex items-center gap-1.5 px-3 sm:px-4 py-3 text-sm font-medium border-b-2 -mb-0.5 transition-colors whitespace-nowrap shrink-0",
+                                            active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
+                                        ].join(" ")}>
+                                        <Icon size={13} />
+                                        <span className="hidden xs:inline sm:inline">{tab.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {/* Controls */}
+                        <div className="flex items-stretch shrink-0 border-l-2 border-border">
+                            <button onClick={() => setTabBarOpen(false)}
+                                className="flex items-center gap-1 px-3 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                title="Collapse tabs">
+                                <ChevronUp size={14} />
+                                <span className="hidden sm:inline">Collapse</span>
                             </button>
-                        );
-                    })}
-                </div>
-                {/* Sidebar toggle */}
-                <button
-                    onClick={() => setSidebarOpen(prev => !prev)}
-                    className="flex items-center gap-1.5 px-4 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors border-l-2 border-border shrink-0"
-                    title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-                >
-                    {sidebarOpen
-                        ? <><PanelRightClose size={15} /> <span className="hidden sm:inline">Hide</span></>
-                        : <><PanelRightOpen  size={15} /> <span className="hidden sm:inline">Info</span></>
-                    }
-                </button>
+                            <button onClick={() => setSidebarOpen(prev => !prev)}
+                                className="flex items-center gap-1 px-3 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors border-l border-border"
+                                title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
+                                {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                                <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Info"}</span>
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* Collapsed tab bar — shows current tab name + expand button */
+                    <div className="flex items-center gap-3 border-b-2 border-border mb-5 px-1">
+                        <button onClick={() => setTabBarOpen(true)}
+                            className="flex items-center gap-1.5 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            title="Expand tabs">
+                            <ChevronDown size={14} />
+                            <span className="hidden sm:inline">Tabs</span>
+                        </button>
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                            {currentTab && <currentTab.icon size={13} />}
+                            {currentTab?.label}
+                        </div>
+                        <button onClick={() => setSidebarOpen(prev => !prev)}
+                            className="ml-auto flex items-center gap-1 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                            {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                            <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Info"}</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Main layout */}
             <div className="flex gap-5 items-start">
-                {/* Tab content */}
                 <div className="flex-1 min-w-0">
                     {activeTab === 1 && (
                         <WallTab
-                            profile={profile}
-                            sessionUserId={sessionUserId}
-                            posts={wallPosts}
-                            loading={wallLoading}
-                            focusInput={focusWall}
+                            profile={profile} sessionUserId={sessionUserId}
+                            posts={wallPosts} loading={wallLoading} focusInput={focusWall}
                             onPost={post => setWallPosts(prev => [post, ...prev])}
-                            onDelete={id => setWallPosts(prev => prev.filter(p => p.id !== id))}
+                            onDelete={postId => setWallPosts(prev => prev.filter(p => p.id !== postId))}
                         />
                     )}
                     {activeTab === 2 && <AboutTab profile={profile} />}
                     {activeTab === 3 && isSelf && (
-                        <EditProfileTab
-                            profile={profile}
-                            onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)}
-                        />
+                        <EditProfileTab profile={profile}
+                            onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)} />
                     )}
                     {activeTab === 4 && isSelf && <SecurityTab profileId={profile.id} />}
                     {activeTab === 5 && (isSelf || isAdmin) && <PermissionsTab profile={profile} />}
                     {activeTab === 6 && <OrgPositionTab profile={profile} />}
                 </div>
 
-                {/* Collapsible sidebar */}
-                {sidebarOpen && <Sidebar profile={profile} />}
+                {/* Collapsible sidebar — hidden on small screens */}
+                {sidebarOpen && (
+                    <div className="hidden lg:block">
+                        <ProfileSidebar profile={profile} />
+                    </div>
+                )}
             </div>
         </div>
     );

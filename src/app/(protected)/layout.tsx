@@ -23,6 +23,7 @@ export default async function ProtectedLayout({
         permissions?: string[];
         roleLabel?: string;
         roleColor?: string;
+        avatarUrl?: string;
     };
 
     const userId = user.id ? parseInt(user.id, 10) : undefined;
@@ -31,13 +32,14 @@ export default async function ProtectedLayout({
         <SessionWrapper>
             <div className="flex h-screen overflow-hidden bg-background">
                 <Sidebar user={{
-                    id:         user.id,
-                    name:       user.name,
-                    role:       user.role,
-                    roles:      user.roles,
+                    id:          user.id,
+                    name:        user.name,
+                    role:        user.role,
+                    roles:       user.roles,
                     permissions: user.permissions,
-                    roleLabel:  user.roleLabel,
-                    roleColor:  user.roleColor,
+                    roleLabel:   user.roleLabel,
+                    roleColor:   user.roleColor,
+                    avatarUrl:   user.avatarUrl,
                 }} />
                 <main className="flex-1 overflow-y-auto p-8">{children}</main>
                 <ButtonBar user={{

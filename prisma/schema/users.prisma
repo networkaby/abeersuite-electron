@@ -12,6 +12,7 @@ model User {
   managerId          Int?
   // public profile
   avatarUrl          String?
+  coverUrl           String?
   phone              String?
   birthday           DateTime?
   bio                String?

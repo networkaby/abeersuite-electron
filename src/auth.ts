@@ -23,7 +23,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.roleColor    = "roleColor" in user && typeof user.roleColor === "string" ? user.roleColor : undefined;
                 token.departmentIds = "departmentIds" in user && Array.isArray(user.departmentIds) ? user.departmentIds as string[] : [];
                 token.branchIds    = "branchIds"    in user && Array.isArray(user.branchIds)    ? user.branchIds    as string[] : [];
-                token.title       = "title"       in user ? user.title as string | undefined       : undefined;
+                token.title       = "title"       in user ? user.title     as string | undefined : undefined;
+                token.avatarUrl   = "avatarUrl"   in user ? user.avatarUrl as string | undefined : undefined;
             }
             return token;
         },
@@ -44,7 +45,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 sessionUser.roleColor     = typeof token.roleColor === "string" ? token.roleColor : undefined;
                 sessionUser.departmentIds = Array.isArray(token.departmentIds) ? token.departmentIds as string[] : [];
                 sessionUser.branchIds     = Array.isArray(token.branchIds)    ? token.branchIds    as string[] : [];
-                sessionUser.title        = typeof token.title === "string" ? token.title : undefined;
+                sessionUser.title        = typeof token.title     === "string" ? token.title     : undefined;
+                sessionUser.avatarUrl    = typeof token.avatarUrl === "string" ? token.avatarUrl : undefined;
             }
             return session;
         },
@@ -107,7 +109,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     roleColor:     user.userRole.color,
                     departmentIds: user.departments.map(d => d.id),
                     branchIds:     user.branches.map(b => b.id),
-                    title:         user.title ?? undefined,
+                    title:         user.title    ?? undefined,
+                    avatarUrl:     user.avatarUrl ?? undefined,
                 };
             },
         }),

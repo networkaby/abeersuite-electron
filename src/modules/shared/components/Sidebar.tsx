@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/modules/message/components/NotificationBell";
+import UserAvatar from "@/modules/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
     WORKSPACE_NAV,
@@ -29,6 +30,7 @@ type SidebarUser = {
     permissions?: string[] | null;
     roleLabel?:   string | null;
     roleColor?:   string | null;
+    avatarUrl?:   string | null;
 };
 
 function initials(name: string) {
@@ -55,7 +57,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes("admin:bypass");
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed,   setCollapsed]   = useState(false);
+    const [liveAvatar,  setLiveAvatar]  = useState<string | null | undefined>(undefined);
     const [adminOpen, setAdminOpen] = useState(
         pathname.startsWith("/users") || pathname.startsWith("/roles") || pathname.startsWith("/settings/branches") || pathname.startsWith("/settings/departments")
     );
@@ -66,6 +69,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         tally: false,
     });
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
+
+    // Fetch live avatarUrl so it reflects changes without re-login
+    useEffect(() => {
+        if (!user?.id) return;
+        axios
+            .get<{ avatarUrl: string | null }>(`/api/users/${user.id}`)
+            .then(r => setLiveAvatar(r.data.avatarUrl))
+            .catch(() => { /* keep session fallback */ });
+    }, [user?.id]);
 
     useEffect(() => {
         axios
@@ -165,9 +177,12 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         </div>
                         {user?.name && (
                             <Link href={user.id ? `/users/${user.id}` : "/users"}>
-                                <div className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${AVATAR_COLOR[user.role ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                                    {initials(user.name)}
-                                </div>
+                                <UserAvatar
+                                    avatarUrl={liveAvatar !== undefined ? liveAvatar : user.avatarUrl}
+                                    name={user.name}
+                                    role={user.role}
+                                    sizePx={28}
+                                />
                             </Link>
                         )}
                     </div>
@@ -178,9 +193,13 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             href={user?.id ? `/users/${user.id}` : "/users"}
                             className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
                         >
-                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${AVATAR_COLOR[user?.role ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
-                                {user?.name ? initials(user.name) : "?"}
-                            </div>
+                            <UserAvatar
+                                avatarUrl={liveAvatar !== undefined ? liveAvatar : user?.avatarUrl}
+                                name={user?.name ?? "?"}
+                                role={user?.role}
+                                sizePx={32}
+                                className="shrink-0"
+                            />
                             <div className="flex-1 min-w-0">
                                 <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
                                     {user?.name ?? ""}

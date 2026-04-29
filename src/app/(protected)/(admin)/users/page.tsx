@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/modules/shared/components/UserForm";
+import UserAvatar from "@/modules/shared/components/UserAvatar";
+import Link from "next/link";
 import { formatDate } from "@/lib/format-date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,7 @@ interface User {
     scope: string;
     createdAt: string;
     managerId: number | null;
+    avatarUrl:   string | null;
     userRole:    { label: string; color: string; rank: number };
     departments: { id: string; name: string }[];
     branches:    { id: string; name: string }[];
@@ -250,8 +253,13 @@ export default function UsersPage() {
                                 <TableRow key={u.id}>
                                     <TableCell className="text-muted-foreground">{u.id}</TableCell>
                                     <TableCell>
-                                        <div className="font-medium">{u.name}</div>
-                                        {u.title && <div className="text-xs text-muted-foreground">{u.title}</div>}
+                                        <Link href={`/users/${u.id}`} className="flex items-center gap-2.5 group">
+                                            <UserAvatar avatarUrl={u.avatarUrl} name={u.name} role={u.role} sizePx={32} className="shrink-0" />
+                                            <div>
+                                                <div className="font-medium group-hover:text-primary transition-colors">{u.name}</div>
+                                                {u.title && <div className="text-xs text-muted-foreground">{u.title}</div>}
+                                            </div>
+                                        </Link>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                                     <TableCell>

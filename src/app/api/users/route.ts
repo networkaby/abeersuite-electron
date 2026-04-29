@@ -25,6 +25,7 @@ const USER_SELECT = {
     scope:       true,
     createdAt:   true,
     managerId:   true,
+    avatarUrl:   true,
     userRole:    { select: { id: true, label: true, color: true, rank: true } },
     manager:     { select: { id: true, name: true } },
     departments: { select: { id: true, name: true } },
