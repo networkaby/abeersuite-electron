@@ -14,7 +14,7 @@ import {
     ArrowLeft, Shield, Mail, Phone, Cake, Building2, Users,
     ShieldCheck, Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose,
-    Send, UserCircle, Printer, ChevronDown, ChevronUp,
+    Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,14 @@ interface WallPost {
         userRole: { label: string; color: string };
     };
 }
+interface UserActivity {
+    id: string;
+    type: "ticket_created" | "ticket_updated" | "wall_post" | "user_joined" | "login_untracked" | "logout_untracked";
+    title: string;
+    description: string;
+    createdAt: string;
+    meta?: { ticketId?: number; wallUserId?: number; wallUserName?: string };
+}
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -98,6 +106,9 @@ function timeAgo(iso: string): string {
     const days = Math.floor(hrs / 24);
     if (days < 30) return `${days}d ago`;
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function formatTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 // ── Cloudinary upload ─────────────────────────────────────────────────────────
@@ -879,6 +890,89 @@ function OrgPositionTab({ profile }: { profile: UserProfile }) {
     return <OrgTree roots={roots} highlightId={profile.id} />;
 }
 
+function ActivityTimelineTab({
+    profileId, items, loading, period, onPeriodChange,
+}: {
+    profileId: number;
+    items: UserActivity[];
+    loading: boolean;
+    period: "today" | "7d" | "30d";
+    onPeriodChange: (period: "today" | "7d" | "30d") => void;
+}) {
+    const periodButtons: { id: "today" | "7d" | "30d"; label: string }[] = [
+        { id: "today", label: "Today" },
+        { id: "7d", label: "Last 7 days" },
+        { id: "30d", label: "Last 30 days" },
+    ];
+    const eventTone: Record<UserActivity["type"], string> = {
+        ticket_created: "bg-emerald-100 text-emerald-700 border-emerald-200",
+        ticket_updated: "bg-blue-100 text-blue-700 border-blue-200",
+        wall_post: "bg-violet-100 text-violet-700 border-violet-200",
+        user_joined: "bg-slate-100 text-slate-700 border-slate-200",
+        login_untracked: "bg-amber-100 text-amber-700 border-amber-200",
+        logout_untracked: "bg-amber-100 text-amber-700 border-amber-200",
+    };
+
+    if (loading) return <p className="text-center text-sm text-muted-foreground py-8">Loading activity timeline…</p>;
+
+    return (
+        <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+                {periodButtons.map((button) => (
+                    <Button
+                        key={button.id}
+                        type="button"
+                        size="sm"
+                        variant={period === button.id ? "default" : "outline"}
+                        onClick={() => onPeriodChange(button.id)}
+                    >
+                        {button.label}
+                    </Button>
+                ))}
+            </div>
+
+            {items.length === 0 ? (
+                <div className="border-2 border-dashed border-border bg-card/50 py-12 text-center space-y-1">
+                    <Activity size={28} className="mx-auto text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">No tracked activity in this time range.</p>
+                </div>
+            ) : (
+                <div className="border-2 border-border bg-card divide-y divide-border">
+                    {items.map((item) => (
+                        <div key={item.id} className="px-4 py-3.5">
+                            <div className="flex items-start gap-3">
+                                <div className="mt-0.5 h-2 w-2 rounded-full bg-primary shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                        <span className={`text-[10px] border px-1.5 py-0.5 ${eventTone[item.type]}`}>
+                                            {item.type.replaceAll("_", " ")}
+                                        </span>
+                                        <span className="ml-auto text-[11px] text-muted-foreground">
+                                            {timeAgo(item.createdAt)} ({formatTime(item.createdAt)})
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                                    {item.meta?.ticketId && (
+                                        <Link href={`/tickets/${item.meta.ticketId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                                            Open ticket #{item.meta.ticketId}
+                                        </Link>
+                                    )}
+                                    {item.meta?.wallUserId && item.meta.wallUserId !== profileId && (
+                                        <Link href={`/users/${item.meta.wallUserId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                                            Open {item.meta.wallUserName ?? "user"} profile
+                                        </Link>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function ProfileSidebar({ profile }: { profile: UserProfile }) {
@@ -959,12 +1053,13 @@ function ProfileSidebar({ profile }: { profile: UserProfile }) {
 const TABS = [
     { id: 1 as const, label: "Wall", icon: MessageSquare, access: "all" },
     { id: 2 as const, label: "About", icon: Info, access: "all" },
-    { id: 3 as const, label: "Edit Profile", icon: Pencil, access: "self" },
-    { id: 4 as const, label: "Security", icon: Lock, access: "self" },
-    { id: 5 as const, label: "Permissions", icon: Shield, access: "selfOrAdmin" },
-    { id: 6 as const, label: "Org Position", icon: GitBranch, access: "all" },
+    { id: 3 as const, label: "Activity Timeline", icon: Activity, access: "all" },
+    { id: 4 as const, label: "Edit Profile", icon: Pencil, access: "self" },
+    { id: 5 as const, label: "Security", icon: Lock, access: "self" },
+    { id: 6 as const, label: "Permissions", icon: Shield, access: "selfOrAdmin" },
+    { id: 7 as const, label: "Org Position", icon: GitBranch, access: "all" },
 ];
-type TabId = 1 | 2 | 3 | 4 | 5 | 6;
+type TabId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -973,8 +1068,11 @@ export default function UserProfilePage() {
     const { data: session } = useSession();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [wallPosts, setWallPosts] = useState<WallPost[]>([]);
+    const [activityItems, setActivityItems] = useState<UserActivity[]>([]);
     const [loading, setLoading] = useState(true);
     const [wallLoading, setWallLoading] = useState(true);
+    const [activityLoading, setActivityLoading] = useState(true);
+    const [activityPeriod, setActivityPeriod] = useState<"today" | "7d" | "30d">("today");
     const [activeTab, setActiveTab] = useState<TabId>(1);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [tabBarOpen, setTabBarOpen] = useState(true);
@@ -1017,6 +1115,25 @@ export default function UserProfilePage() {
         void loadProfileAndWall();
     }, [id]);
 
+    useEffect(() => {
+        const loadActivity = async () => {
+            setActivityLoading(true);
+            try {
+                const response = await axios.get<{ items: UserActivity[] }>(`/api/users/${id}/activity`, {
+                    params: { period: activityPeriod, limit: 120 },
+                });
+                setActivityItems(response.data.items);
+            } catch (e) {
+                if (!axios.isAxiosError(e) || e.response?.status !== 404) {
+                    toast.error("Failed to load activity timeline");
+                }
+            } finally {
+                setActivityLoading(false);
+            }
+        };
+        void loadActivity();
+    }, [id, activityPeriod]);
+
     function handleWriteOnWall() {
         setActiveTab(1); setTabBarOpen(true);
         setFocusWall(true); setTimeout(() => setFocusWall(false), 300);
@@ -1054,7 +1171,7 @@ export default function UserProfilePage() {
             <ProfileHeader
                 profile={profile} isSelf={isSelf} wallPostCount={wallPosts.length}
                 onWriteOnWall={handleWriteOnWall}
-                onEditProfile={() => { setActiveTab(3); setTabBarOpen(true); }}
+                onEditProfile={() => { setActiveTab(4); setTabBarOpen(true); }}
             />
 
             {/* Tab bar */}
@@ -1128,13 +1245,22 @@ export default function UserProfilePage() {
                         />
                     )}
                     {activeTab === 2 && <AboutTab profile={profile} />}
-                    {activeTab === 3 && isSelf && (
+                    {activeTab === 3 && (
+                        <ActivityTimelineTab
+                            profileId={profile.id}
+                            items={activityItems}
+                            loading={activityLoading}
+                            period={activityPeriod}
+                            onPeriodChange={setActivityPeriod}
+                        />
+                    )}
+                    {activeTab === 4 && isSelf && (
                         <EditProfileTab profile={profile}
                             onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)} />
                     )}
-                    {activeTab === 4 && isSelf && <SecurityTab profileId={profile.id} />}
-                    {activeTab === 5 && (isSelf || isAdmin) && <PermissionsTab profile={profile} />}
-                    {activeTab === 6 && <OrgPositionTab profile={profile} />}
+                    {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
+                    {activeTab === 6 && (isSelf || isAdmin) && <PermissionsTab profile={profile} />}
+                    {activeTab === 7 && <OrgPositionTab profile={profile} />}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}
