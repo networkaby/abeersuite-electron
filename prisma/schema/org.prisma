@@ -1,4 +1,4 @@
-// ── Org structure — Branch & Department ───────────────────────────────────────
+// ── Org structure — Branch, Department & Post ─────────────────────────────────
 
 model Branch {
   id          String       @id
@@ -9,6 +9,7 @@ model Branch {
   createdAt   DateTime     @default(now())
   users       User[]
   departments Department[]
+  posts       Post[]
 }
 
 model Department {
@@ -19,5 +20,37 @@ model Department {
   createdAt   DateTime @default(now())
   branch      Branch?  @relation(fields: [branchId], references: [id])
   users       User[]
+  posts       Post[]
+}
+
+// ── Post (position-based hierarchy) ───────────────────────────────────────────
+// A Post is a role/position in the org. It can be scoped to a branch,
+// a department, or left org-wide (Executive Council level).
+// Multiple users can hold the same post (job-sharing / dual in-charge).
+
+model Post {
+  id           String     @id
+  title        String
+  branchId     String?
+  departmentId String?
+  parentPostId String?
+  createdAt    DateTime   @default(now())
+
+  branch       Branch?     @relation(fields: [branchId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+  parent       Post?       @relation("PostHierarchy", fields: [parentPostId], references: [id])
+  children     Post[]      @relation("PostHierarchy")
+  holders      UserPost[]
+}
+
+model UserPost {
+  userId    Int
+  postId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
 }
 

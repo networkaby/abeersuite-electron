@@ -37,4 +37,5 @@ model User {
   chatMessages       ChatMessage[]
   wallPosts          WallPost[]          @relation("WallPosts")
   authoredPosts      WallPost[]          @relation("AuthoredPosts")
+  posts              UserPost[]
 }

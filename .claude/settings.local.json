@@ -79,7 +79,8 @@
       "Bash(cmd /c \"taskkill /PID 4288 /F & taskkill /PID 1908 /F\")",
       "Bash(findstr /v \"SECRET\\\\|PASSWORD\\\\|KEY\\\\|TOKEN\")",
       "Bash(cmd /c \"findstr /i DATABASE_URL .env.local 2>&1\")",
-      "Bash(cmd /c \"npx dotenvx run -- node -e \\\\\"console.log\\(process.env.DATABASE_URL?.slice\\(0,60\\)\\)\\\\\" 2>&1\")"
+      "Bash(cmd /c \"npx dotenvx run -- node -e \\\\\"console.log\\(process.env.DATABASE_URL?.slice\\(0,60\\)\\)\\\\\" 2>&1\")",
+      "Bash(pnpm tsc *)"
     ]
   }
 }

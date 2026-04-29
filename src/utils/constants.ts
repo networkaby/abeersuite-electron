@@ -13,6 +13,7 @@ import {
     Calculator,
     Bell,
     Network,
+    Briefcase,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -105,6 +106,7 @@ export const ADMIN_NAV: SettingsNavItem[] = [
     { label: "Roles",       href: "/roles",       icon: ShieldCheck, permission: "roles:manage" },
     { label: "Branches",    href: "/branches",    icon: Building2,   permission: "settings:manage" },
     { label: "Departments", href: "/departments", icon: Users,       permission: "settings:manage" },
+    { label: "Posts",       href: "/posts",       icon: Briefcase,   permission: "settings:manage" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
