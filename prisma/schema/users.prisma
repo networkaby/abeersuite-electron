@@ -34,4 +34,6 @@ model User {
   ownedChatRooms     ChatRoom[]          @relation("OwnedChatRooms")
   chatRoomMembers    ChatRoomMember[]
   chatMessages       ChatMessage[]
+  wallPosts          WallPost[]          @relation("WallPosts")
+  authoredPosts      WallPost[]          @relation("AuthoredPosts")
 }

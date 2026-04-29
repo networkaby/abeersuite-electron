@@ -1,0 +1,36 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { requireAuth } from "@/lib/auth-guard";
+import { z } from "zod";
+
+const schema = z.object({
+    password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export async function PATCH(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { user: caller, response } = await requireAuth();
+    if (response) return response;
+
+    const { id } = await params;
+    const userId = Number(id);
+    if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+
+    const isSelf  = caller.id === userId;
+    const isAdmin = caller.permissions.includes("users:manage") || caller.permissions.includes("admin:bypass");
+    if (!isSelf && !isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const parsed = schema.safeParse(await req.json());
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
+
+    try {
+        const hashed = await bcrypt.hash(parsed.data.password, 10);
+        await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+        return NextResponse.json({ success: true });
+    } catch {
+        return NextResponse.json({ error: "Failed to update password" }, { status: 500 });
+    }
+}

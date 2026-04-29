@@ -1,0 +1,15 @@
+// ── Social / Wall ──────────────────────────────────────────────────────────────
+
+model WallPost {
+  id         Int      @id @default(autoincrement())
+  wallUserId Int
+  authorId   Int
+  body       String
+  createdAt  DateTime @default(now())
+
+  wallUser User @relation("WallPosts",     fields: [wallUserId], references: [id])
+  author   User @relation("AuthoredPosts", fields: [authorId],   references: [id])
+
+  @@index([wallUserId])
+  @@index([authorId])
+}
