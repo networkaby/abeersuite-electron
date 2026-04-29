@@ -34,6 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     id: string; role: string; roles: string[]; permissions: string[];
                     rank: number; scope: string; roleLabel?: string; roleColor?: string;
                     departmentIds: string[]; branchIds: string[]; title?: string;
+                    avatarUrl?: string;
                 };
                 sessionUser.id           = token.id as string;
                 sessionUser.role         = typeof token.role === "string" ? token.role : "";
