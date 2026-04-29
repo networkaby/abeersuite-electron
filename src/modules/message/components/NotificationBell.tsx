@@ -22,16 +22,20 @@ export default function NotificationBell() {
 
     const unread = notifications.filter((n) => !n.read).length;
 
-    const fetchNotifications = async () => {
-        try {
-            const res = await axios.get("/api/notifications");
-            setNotifications(res.data);
-        } catch { /* silent */ }
-    };
-
     useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30_000);
+        const loadNotifications = async () => {
+            try {
+                const res = await axios.get("/api/notifications");
+                setNotifications(res.data);
+            } catch {
+                // silent
+            }
+        };
+
+        void loadNotifications();
+        const interval = setInterval(() => {
+            void loadNotifications();
+        }, 30_000);
         return () => clearInterval(interval);
     }, []);
 

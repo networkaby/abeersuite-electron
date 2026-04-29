@@ -844,21 +844,33 @@ export default function UserProfilePage() {
     );
 
     useEffect(() => {
-        setLoading(true); setWallLoading(true); setActiveTab(1);
-        axios.get<UserProfile>(`/api/users/${id}`)
-            .then(r => setProfile(r.data))
-            .catch(e => {
-                if (!axios.isAxiosError(e) || e.response?.status !== 404)
-                    toast.error("Failed to load profile");
-            })
-            .finally(() => setLoading(false));
-        axios.get<WallPost[]>(`/api/users/${id}/wall`)
-            .then(r => setWallPosts(r.data))
-            .catch(e => {
-                if (!axios.isAxiosError(e) || e.response?.status !== 404)
-                    toast.error("Failed to load wall");
-            })
-            .finally(() => setWallLoading(false));
+        const loadProfileAndWall = async () => {
+            setLoading(true);
+            setWallLoading(true);
+            setActiveTab(1);
+
+            const profilePromise = axios.get<UserProfile>(`/api/users/${id}`)
+                .then(r => setProfile(r.data))
+                .catch(e => {
+                    if (!axios.isAxiosError(e) || e.response?.status !== 404) {
+                        toast.error("Failed to load profile");
+                    }
+                })
+                .finally(() => setLoading(false));
+
+            const wallPromise = axios.get<WallPost[]>(`/api/users/${id}/wall`)
+                .then(r => setWallPosts(r.data))
+                .catch(e => {
+                    if (!axios.isAxiosError(e) || e.response?.status !== 404) {
+                        toast.error("Failed to load wall");
+                    }
+                })
+                .finally(() => setWallLoading(false));
+
+            await Promise.all([profilePromise, wallPromise]);
+        };
+
+        void loadProfileAndWall();
     }, [id]);
 
     function handleWriteOnWall() {
