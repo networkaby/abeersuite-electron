@@ -170,14 +170,14 @@ export default function RolesSettingsPage() {
     const togglePerm = (id: string) =>
         setSelectedPerms(prev => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
 
     const toggleModule = (module: string) =>
         setCollapsedModules(prev => {
             const next = new Set(prev);
-            next.has(module) ? next.delete(module) : next.add(module);
+            if (next.has(module)) next.delete(module); else next.add(module);
             return next;
         });
 

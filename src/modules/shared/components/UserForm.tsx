@@ -132,6 +132,7 @@ export default function UserForm({ user, onClose }: Props) {
     const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } =
         useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { role: "", managerId: NONE, scope: "OWN" } });
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const roleValue    = watch("role");
     const managerValue = watch("managerId");
     const scopeValue   = watch("scope");

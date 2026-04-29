@@ -47,6 +47,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
     const [roleLabelMap, setRoleLabelMap] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const selectedId = watch("subStatusId");
 
     useEffect(() => {

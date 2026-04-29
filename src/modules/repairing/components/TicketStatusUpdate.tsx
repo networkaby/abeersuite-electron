@@ -43,6 +43,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
         },
     });
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const selectedStatus = watch("status");
 
     const onSubmit = async (data: StatusUpdateFormData) => {
