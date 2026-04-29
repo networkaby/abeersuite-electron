@@ -41,7 +41,7 @@ export async function GET(
 const userUpdateSchema = z.object({
     name:          z.string().trim().min(1, "Name is required"),
     email:         z.string().trim().email("Valid email is required"),
-    role:          z.string().trim().min(1, "Role is required"),
+    role:          z.string().trim().min(1).optional(),
     title:         z.string().trim().optional().nullable(),
     scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
     departmentIds: z.array(z.string()).optional(),
@@ -79,7 +79,7 @@ export async function PUT(
         }
         const body = parsed.data;
 
-        if (!caller.permissions.includes("admin:bypass")) {
+        if (body.role && !caller.permissions.includes("admin:bypass")) {
             const [targetRole, callerRole] = await Promise.all([
                 prisma.role.findUnique({ where: { id: body.role }, select: { rank: true } }),
                 prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),
@@ -94,15 +94,14 @@ export async function PUT(
 
         const userId = Number(id);
         const data: Parameters<typeof prisma.user.update>[0]["data"] = {
-            name:     body.name,
-            email:    body.email,
-            role:     body.role,
-            title:    body.title ?? null,
-            scope:    body.scope ?? "OWN",
-            managerId: body.managerId !== undefined ? (body.managerId ? Number(body.managerId) : null) : undefined,
-            // set pattern: disconnect all then reconnect chosen ones
-            departments: { set: (body.departmentIds ?? []).map(id => ({ id })) },
-            branches:    { set: (body.branchIds    ?? []).map(id => ({ id })) },
+            name:  body.name,
+            email: body.email,
+            title: body.title ?? null,
+            ...(body.role      !== undefined && { role:      body.role }),
+            ...(body.scope     !== undefined && { scope:     body.scope }),
+            ...(body.managerId !== undefined && { managerId: body.managerId ? Number(body.managerId) : null }),
+            ...(body.departmentIds !== undefined && { departments: { set: body.departmentIds.map(id => ({ id })) } }),
+            ...(body.branchIds    !== undefined && { branches:    { set: body.branchIds.map(id => ({ id })) } }),
         };
         if (body.password) data.password = await bcrypt.hash(body.password, 10);
 
