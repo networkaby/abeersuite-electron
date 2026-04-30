@@ -87,15 +87,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const roles = [user.role];
                 const primaryRole = user.role;
 
-                // Union of role-granted permissions
-                const rolePermIds = new Set<string>();
+                // Role-granted permissions
+                const effective = new Set<string>();
                 for (const rp of user.userRole.permissions) {
                     const permId = rp.permission?.id;
-                    if (permId) {
-                        rolePermIds.add(permId);
-                    }
+                    if (permId) effective.add(permId);
                 }
-                // Per-user permission overrides removed — role-based only
+
+                // Per-user overrides (non-expired only)
+                const now = new Date();
+                const overrides = await prisma.userPermission.findMany({
+                    where: {
+                        userId: user.id,
+                        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+                    },
+                    select: { permissionId: true, type: true },
+                });
+                for (const o of overrides) {
+                    if (o.type === "GRANT") effective.add(o.permissionId);
+                    else effective.delete(o.permissionId); // DENY wins
+                }
 
                 return {
                     id:            String(user.id),
@@ -103,7 +114,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     email:         user.email,
                     role:          primaryRole,
                     roles,
-                    permissions:   [...rolePermIds],
+                    permissions:   [...effective],
                     rank:          user.userRole.rank,
                     scope:         user.scope,
                     roleLabel:     user.userRole.label,

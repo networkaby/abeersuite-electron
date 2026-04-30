@@ -38,4 +38,5 @@ model User {
   wallPosts          WallPost[]          @relation("WallPosts")
   authoredPosts      WallPost[]          @relation("AuthoredPosts")
   posts              UserPost[]
+  userPermissions    UserPermission[]
 }

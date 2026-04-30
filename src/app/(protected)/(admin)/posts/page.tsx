@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 import {
     Plus, Pencil, Trash2, X, Check, Briefcase,
-    UserPlus, UserMinus, ChevronDown, ChevronRight, Building2, Layers,
+    UserPlus, ChevronDown, ChevronRight, Building2, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,7 +217,7 @@ function PostRow({
     allUsers: UserStub[];
     branches: Branch[];
     departments: Department[];
-    onSave: (id: string, data: Partial<FormState>) => Promise<void>;
+    onSave: (id: string, data: object) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
     onAssign: (postId: string, userId: number) => Promise<void>;
     onUnassign: (postId: string, userId: number) => Promise<void>;
@@ -234,11 +234,29 @@ function PostRow({
         ? (post.department ? `${post.branch.name} / ${post.department.name}` : post.branch.name)
         : "Executive Council";
 
+    // Always sync form with latest post data when opening edit mode
+    const openEdit = () => {
+        setForm({
+            id: post.id, title: post.title,
+            branchId: post.branchId ?? "", departmentId: post.departmentId ?? "", parentPostId: post.parentPostId ?? "",
+        });
+        setEditing(true);
+    };
+
     const handleSave = async () => {
+        if (!form.title.trim()) { return; }
         setSaving(true);
-        await onSave(post.id, { title: form.title, branchId: form.branchId || null, departmentId: form.departmentId || null, parentPostId: form.parentPostId || null } as Partial<FormState>);
-        setSaving(false);
-        setEditing(false);
+        try {
+            await onSave(post.id, {
+                title:        form.title,
+                branchId:     form.branchId     || null,
+                departmentId: form.departmentId || null,
+                parentPostId: form.parentPostId || null,
+            });
+            setEditing(false);
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -298,7 +316,7 @@ function PostRow({
                                 <Button variant="outline" size="icon-sm" title="Appoint / remove holders" onClick={() => setExpanded(o => !o)}>
                                     <UserPlus size={13} />
                                 </Button>
-                                <Button variant="outline" size="icon-sm" onClick={() => setEditing(true)}><Pencil size={14} /></Button>
+                                <Button variant="outline" size="icon-sm" onClick={openEdit}><Pencil size={14} /></Button>
                                 <Button variant="destructive" size="icon-sm" onClick={() => onDelete(post.id)}><Trash2 size={14} /></Button>
                             </div>
                         </div>
@@ -367,13 +385,14 @@ export default function PostsPage() {
         } finally { setSaving(false); }
     };
 
-    const handleSave = async (id: string, data: Partial<FormState>) => {
+    const handleSave = async (id: string, data: object) => {
         try {
             await axios.patch(`/api/posts/${id}`, data);
             toast.success("Post updated");
             loadAll();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to update post");
+            throw e; // re-throw so PostRow keeps edit panel open
         }
     };
 
@@ -416,7 +435,7 @@ export default function PostsPage() {
     const branchPosts = branches.map(b => ({
         branch: b,
         posts:  filteredPosts.filter(p => p.branchId === b.id),
-    })).filter(g => g.posts.length > 0 || !filterBranch);
+    })).filter(g => g.posts.length > 0);
 
     return (
         <div className="space-y-6">

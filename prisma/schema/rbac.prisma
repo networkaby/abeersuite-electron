@@ -12,11 +12,26 @@ model Role {
 }
 
 model Permission {
-  id          String           @id
-  label       String
-  description String?
-  module      String           @default("core")
-  roleGrants  RolePermission[]
+  id           String            @id
+  label        String
+  description  String?
+  module       String            @default("core")
+  roleGrants   RolePermission[]
+  userOverrides UserPermission[]
+}
+
+model UserPermission {
+  id           Int          @id @default(autoincrement())
+  userId       Int
+  permissionId String
+  type         OverrideType
+  reason       String?
+  expiresAt    DateTime?
+  createdAt    DateTime     @default(now())
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
 }
 
 model RolePermission {

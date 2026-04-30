@@ -823,24 +823,95 @@ function SecurityTab({ profileId }: { profileId: number }) {
 
 // ── PermissionsTab ────────────────────────────────────────────────────────────
 
-function PermissionsTab({ profile }: { profile: UserProfile }) {
-    const permissions = profile.userRole.permissions.map(p => p.permission);
-    const byModule = permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+interface EnrichedPermission extends Permission {
+    roleGranted: boolean;
+    effective:   boolean;
+    userOverride: { type: "GRANT" | "DENY"; reason: string | null; expiresAt: string | null } | null;
+}
+
+function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: boolean }) {
+    const [perms,       setPerms]       = useState<EnrichedPermission[]>([]);
+    const [loading,     setLoading]     = useState(true);
+    const [addOpen,     setAddOpen]     = useState(false);
+    const [newPermId,   setNewPermId]   = useState("");
+    const [newType,     setNewType]     = useState<"GRANT" | "DENY">("GRANT");
+    const [newReason,   setNewReason]   = useState("");
+    const [newExpiry,   setNewExpiry]   = useState("");
+    const [saving,      setSaving]      = useState(false);
+
+    const loadPerms = () => {
+        setLoading(true);
+        axios.get<EnrichedPermission[]>(`/api/users/${profile.id}/permissions`)
+            .then(r => setPerms(r.data))
+            .catch(() => toast.error("Failed to load permissions"))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { loadPerms(); }, [profile.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const overrides    = perms.filter(p => p.userOverride !== null);
+    const effective    = perms.filter(p => p.effective);
+    const hasBypass    = effective.some(p => p.id === "admin:bypass");
+
+    const byModule = effective.reduce<Record<string, EnrichedPermission[]>>((acc, p) => {
         (acc[p.module] ??= []).push(p); return acc;
     }, {});
     const orderedModules = [
         ...MODULE_ORDER.filter(m => byModule[m]),
         ...Object.keys(byModule).filter(m => !MODULE_ORDER.includes(m)),
     ];
-    const hasBypass = permissions.some(p => p.id === "admin:bypass");
+
+    const handleAddOverride = async () => {
+        if (!newPermId) return;
+        setSaving(true);
+        try {
+            await axios.post(`/api/users/${profile.id}/permissions`, {
+                permissionId: newPermId,
+                type:         newType,
+                reason:       newReason || undefined,
+                expiresAt:    newExpiry || undefined,
+            });
+            toast.success(`${newType === "GRANT" ? "Grant" : "Deny"} override added`);
+            setAddOpen(false);
+            setNewPermId(""); setNewType("GRANT"); setNewReason(""); setNewExpiry("");
+            loadPerms();
+        } catch {
+            toast.error("Failed to add override");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRemoveOverride = async (permissionId: string) => {
+        try {
+            await axios.delete(`/api/users/${profile.id}/permissions/${permissionId}`);
+            toast.success("Override removed");
+            loadPerms();
+        } catch {
+            toast.error("Failed to remove override");
+        }
+    };
+
+    if (loading) return (
+        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+            Loading permissions…
+        </div>
+    );
+
+    const availableToOverride = perms.filter(p => !p.userOverride);
 
     return (
-        <div className="space-y-3 max-w-xl">
-            <div className="flex items-center gap-2">
+        <div className="space-y-5 max-w-2xl">
+
+            {/* Summary row */}
+            <div className="flex items-center gap-2 flex-wrap">
                 <Shield size={13} className="text-muted-foreground" />
                 <p className="text-xs text-muted-foreground">
                     Role: <span className="font-semibold text-foreground">{profile.userRole.label}</span>
-                    {" · "}{permissions.length} permission{permissions.length !== 1 ? "s" : ""}
+                    {" · "}{effective.length} effective permission{effective.length !== 1 ? "s" : ""}
+                    {overrides.length > 0 && (
+                        <span className="ml-1 text-primary font-semibold">· {overrides.length} override{overrides.length !== 1 ? "s" : ""}</span>
+                    )}
                 </p>
                 {hasBypass && (
                     <span className="text-[10px] bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.5">
@@ -848,29 +919,176 @@ function PermissionsTab({ profile }: { profile: UserProfile }) {
                     </span>
                 )}
             </div>
-            {orderedModules.length === 0
-                ? <p className="text-sm text-muted-foreground italic">No permissions granted.</p>
-                : orderedModules.map(module => (
-                    <div key={module} className="border-2 border-border overflow-hidden">
-                        <div className="flex items-center gap-2 bg-muted/40 border-b-2 border-border px-3 py-2">
-                            <ShieldCheck size={11} className="text-muted-foreground" />
-                            <span className="text-xs font-bold uppercase tracking-wide">{module}</span>
-                            <span className="ml-auto text-[11px] text-muted-foreground">{byModule[module].length}</span>
+
+            {/* ── Overrides section (admin only) ─────────────────────────── */}
+            {isAdmin && (
+                <div className="border-2 border-border">
+                    <div className="flex items-center justify-between gap-2 bg-muted/50 border-b-2 border-border px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck size={12} className="text-muted-foreground" />
+                            <span className="text-xs font-bold uppercase tracking-wide">Permission Overrides</span>
                         </div>
-                        <div className="divide-y divide-border">
-                            {byModule[module].map(p => (
-                                <div key={p.id} className="flex items-start gap-3 px-3 py-2.5">
-                                    <div className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${p.id === "admin:bypass" ? "bg-destructive" : "bg-primary"}`} />
-                                    <div>
-                                        <p className="text-sm font-medium text-foreground">{p.label}</p>
-                                        {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
-                                        <p className="font-mono text-[10px] text-muted-foreground/50 select-all">{p.id}</p>
+                        <button
+                            onClick={() => setAddOpen(o => !o)}
+                            className="text-xs text-primary font-medium hover:underline"
+                        >
+                            {addOpen ? "Cancel" : "+ Add override"}
+                        </button>
+                    </div>
+
+                    {/* Add override form */}
+                    {addOpen && (
+                        <div className="border-b-2 border-border bg-muted/20 px-4 py-3 space-y-2.5">
+                            <div className="flex gap-2 flex-wrap">
+                                {/* Permission picker */}
+                                <div className="flex-1 min-w-48">
+                                    <label className="block text-[11px] font-medium text-muted-foreground mb-1">Permission</label>
+                                    <select
+                                        value={newPermId}
+                                        onChange={e => setNewPermId(e.target.value)}
+                                        className="w-full border-2 border-border bg-background text-sm px-2 py-1.5 focus:outline-none focus:border-primary"
+                                    >
+                                        <option value="">— select —</option>
+                                        {availableToOverride.map(p => (
+                                            <option key={p.id} value={p.id}>{p.label} ({p.id})</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Type toggle */}
+                                <div>
+                                    <label className="block text-[11px] font-medium text-muted-foreground mb-1">Type</label>
+                                    <div className="flex border-2 border-border overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewType("GRANT")}
+                                            className={`px-3 py-1.5 text-xs font-semibold transition-colors ${newType === "GRANT" ? "bg-green-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                                        >
+                                            + GRANT
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewType("DENY")}
+                                            className={`px-3 py-1.5 text-xs font-semibold transition-colors ${newType === "DENY" ? "bg-destructive text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                                        >
+                                            − DENY
+                                        </button>
                                     </div>
+                                </div>
+
+                                {/* Expiry */}
+                                <div>
+                                    <label className="block text-[11px] font-medium text-muted-foreground mb-1">Expires (optional)</label>
+                                    <input
+                                        type="date"
+                                        value={newExpiry}
+                                        onChange={e => setNewExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                                        className="border-2 border-border bg-background text-sm px-2 py-1.5 focus:outline-none focus:border-primary"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Reason */}
+                            <div>
+                                <label className="block text-[11px] font-medium text-muted-foreground mb-1">Reason (optional)</label>
+                                <Input
+                                    value={newReason}
+                                    onChange={e => setNewReason(e.target.value)}
+                                    placeholder="e.g. Covering for manager on leave"
+                                    className="text-sm h-8"
+                                />
+                            </div>
+
+                            <Button size="sm" onClick={handleAddOverride} disabled={!newPermId || saving}>
+                                {saving ? "Saving…" : "Apply override"}
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Existing overrides */}
+                    {overrides.length === 0 ? (
+                        <p className="px-4 py-3 text-xs text-muted-foreground italic">
+                            No overrides. This user&apos;s permissions come entirely from their role.
+                        </p>
+                    ) : (
+                        <div className="divide-y divide-border">
+                            {overrides.map(p => (
+                                <div key={p.id} className="flex items-start gap-3 px-4 py-2.5">
+                                    <span className={`mt-0.5 shrink-0 text-[11px] font-bold px-1.5 py-0.5 border ${
+                                        p.userOverride!.type === "GRANT"
+                                            ? "bg-green-50 text-green-700 border-green-200"
+                                            : "bg-red-50 text-destructive border-red-200"
+                                    }`}>
+                                        {p.userOverride!.type === "GRANT" ? "+ GRANT" : "− DENY"}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-foreground">{p.label}</p>
+                                        {p.userOverride!.reason && (
+                                            <p className="text-xs text-muted-foreground">{p.userOverride!.reason}</p>
+                                        )}
+                                        {p.userOverride!.expiresAt && (
+                                            <p className="text-[11px] text-orange-600">
+                                                Expires {new Date(p.userOverride!.expiresAt).toLocaleDateString()}
+                                            </p>
+                                        )}
+                                        <p className="font-mono text-[10px] text-muted-foreground/40 select-all">{p.id}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleRemoveOverride(p.id)}
+                                        className="shrink-0 text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                                        title="Remove override"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                ))}
+                    )}
+
+                    <p className="px-4 py-2 text-[10px] text-muted-foreground bg-muted/20 border-t border-border">
+                        Changes take effect on next login.
+                    </p>
+                </div>
+            )}
+
+            {/* ── Effective permissions list ────────────────────────────── */}
+            <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Effective Permissions
+                </p>
+                {orderedModules.length === 0
+                    ? <p className="text-sm text-muted-foreground italic">No permissions granted.</p>
+                    : orderedModules.map(module => (
+                        <div key={module} className="border-2 border-border overflow-hidden mb-2">
+                            <div className="flex items-center gap-2 bg-muted/40 border-b-2 border-border px-3 py-2">
+                                <ShieldCheck size={11} className="text-muted-foreground" />
+                                <span className="text-xs font-bold uppercase tracking-wide">{module}</span>
+                                <span className="ml-auto text-[11px] text-muted-foreground">{byModule[module].length}</span>
+                            </div>
+                            <div className="divide-y divide-border">
+                                {byModule[module].map(p => (
+                                    <div key={p.id} className="flex items-start gap-3 px-3 py-2.5">
+                                        <div className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                                            p.id === "admin:bypass" ? "bg-destructive"
+                                            : p.userOverride?.type === "GRANT" ? "bg-green-500"
+                                            : "bg-primary"
+                                        }`} />
+                                        <div>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <p className="text-sm font-medium text-foreground">{p.label}</p>
+                                                {p.userOverride?.type === "GRANT" && (
+                                                    <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1">+override</span>
+                                                )}
+                                            </div>
+                                            {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
+                                            <p className="font-mono text-[10px] text-muted-foreground/50 select-all">{p.id}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+            </div>
         </div>
     );
 }
@@ -1259,7 +1477,7 @@ export default function UserProfilePage() {
                             onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)} />
                     )}
                     {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
-                    {activeTab === 6 && (isSelf || isAdmin) && <PermissionsTab profile={profile} />}
+                    {activeTab === 6 && (isSelf || isAdmin) && <PermissionsTab profile={profile} isAdmin={isAdmin} />}
                     {activeTab === 7 && <OrgPositionTab profile={profile} />}
                 </div>
 

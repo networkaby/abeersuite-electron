@@ -185,12 +185,13 @@ const PERMISSIONS = [
     // admin
     { id: "users:manage",                  label: "Manage users",                      module: "admin",       description: "Create, edit, and delete user accounts." },
     { id: "roles:manage",                  label: "Manage roles",                      module: "admin",       description: "Create and edit roles and their permission sets." },
+    { id: "settings:manage",               label: "Manage org settings",               module: "admin",       description: "Manage branches, departments, and posts." },
     { id: "settings:statuses",             label: "Manage statuses & sub-statuses",    module: "admin",       description: "Create, edit, and delete ticket statuses and sub-statuses." },
     { id: "settings:pipelines",            label: "Manage pipelines",                  module: "admin",       description: "Create, edit, and configure pipelines." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-    R1: PERMISSIONS.map((p) => p.id),
+    R1: (PERMISSIONS as readonly { id: string }[]).map((p) => p.id),
     R2: [
         "customers:view",
         "tickets:create", "tickets:status:set", "tickets:substatus:set",

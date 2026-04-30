@@ -3,6 +3,28 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
+export async function GET(
+    _: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { response } = await requirePermission("roles:manage");
+    if (response) return response;
+    try {
+        const { id } = await params;
+        const role = await prisma.role.findUnique({
+            where: { id },
+            include: {
+                permissions: { include: { permission: true } },
+                _count: { select: { users: true } },
+            },
+        });
+        if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
+        return NextResponse.json(role);
+    } catch {
+        return NextResponse.json({ error: "Failed to fetch role" }, { status: 500 });
+    }
+}
+
 const rolePatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().min(1).optional(),
