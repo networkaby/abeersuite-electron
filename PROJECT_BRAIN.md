@@ -5,7 +5,15 @@
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `UI-Update`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-29 14:00
+**Last Updated:** 2026-04-30 23:58
+
+---
+
+## 📌 Source of Truth
+
+- `README.md` = setup and day-to-day runbook
+- `ARCHITECTURE.md` = current implementation architecture (modules, route groups, auth/data boundaries)
+- `PROJECT_BRAIN.md` = milestone history, roadmap, and decision log
 
 ---
 
@@ -221,6 +229,7 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - 2026-04-18 **SLA alerts**: Flag tickets in the same status for too long (e.g. "Diagnosing 5+ days")
 - 2026-04-19 **Phase 5 — ERP Module Foundation (archived)**: `AppSetting` model, static module registry `src/config/modules.ts`, module toggle settings page, module-driven sidebar. Implement when ready to add CRM / Inventory / HR / Finance modules.
 - 2026-04-19 **Branch + Department structure**: `Branch` (physical site) + `Department` (functional group). Users and tickets get `branchId`. `data:all_branches` permission for managers.
+- 2026-04-30 **Tally mapping note**: keep accounting UX familiar to Tally users, but persist data in normalized hierarchy (`AccountType -> AccountGroup -> Account`) instead of hardcoding platform-specific group names into business logic.
 
 ---
 
@@ -229,13 +238,14 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - **Server restart required after `prisma generate`**: Turbopack caches Prisma client chunks. After any schema change → `prisma db push` → `prisma generate` → **restart dev server**.
 - **Next.js 16 breaking changes**: Middleware file is `src/proxy.ts` NOT `middleware.ts`.
 - **Prisma adapter-pg**: Uses `@prisma/adapter-pg`. Datasource configured via `prisma.config.ts`.
+- **Prisma schema layout**: This repo uses split Prisma schema files in `prisma/schema/` (configured in `prisma.config.ts`), not a single `prisma/schema.prisma`.
 - **NextAuth v5 beta**: Cast `session.user` to access `id`/`role`/`roles`/`permissions`. Never use `getToken()`.
 - **Scalar list filtering**: `String[]` fields use `{ has: "R3" }` in Prisma (PostgreSQL only).
 - **Sub-status `allowedRoles`**: R1 always bypasses — by design.
 - **Opaque IDs**: Status IDs S1–S10, sub-statuses SS1–SS37, roles R1–R4, priorities P1–P4, pipelines P-REPAIR/P-SALES.
 - **`@@unique` with nullable fields**: PostgreSQL treats NULL as distinct; `skipDuplicates` may not work reliably. Use `findFirst` + `create` pattern.
 - **Account model**: Still present in schema alongside `Customer` and `Company` — acts as a legacy bridge. The `Customer` and `Company` models are the source of truth going forward. `Account` may be cleaned up later.
-- **Tasks feature removed**: `Task`/`TaskLog` models are still in `schema.prisma` (not dropped from DB) but all application code has been deleted. Safe to drop the tables when convenient.
+- **Tasks feature removed**: task application code is removed. Some historical migrations may still mention task tables from older iterations.
 - **`settings:manage` permission**: Branches + Departments pages require this permission. If the Admin role doesn't have it yet, go to Settings → Roles → Admin → Permissions and add `settings:manage`.
 - **Sentry example files**: `src/app/api/sentry-example-api/route.ts` and `src/app/sentry-example-page/page.tsx` were added by Sentry setup — remove before production deploy if not needed.
 - **Module migration incomplete**: Some components may still live in `src/components/` rather than their domain module. Gradual migration is fine; no functional impact.
@@ -279,6 +289,8 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 ---
 
 ## 📁 Project Structure
+
+> Detailed, maintained structure reference now lives in `ARCHITECTURE.md`. Keep this section as a high-level snapshot.
 
 ```
 src/
@@ -338,9 +350,9 @@ src/
 ├── auth.ts / auth.d.ts
 └── proxy.ts                         # Auth middleware; redirects to /assignments
 prisma/
-├── schema.prisma                    # Pipeline, Customer, Company, CustomerCompany, Account, TicketParticipant…
-├── prisma.config.ts
-├── seed*.ts                         # seed, seed-phase1/2, seed-assignments, seed-pipelines, seed-business-pipelines
+├── schema/                          # Split Prisma schema (*.prisma by domain)
+├── prisma.config.ts                 # schema path + datasource + seed command
+├── seed*.ts                         # seed and migration helper scripts
 └── migrate-accounts.ts
 ```
 
