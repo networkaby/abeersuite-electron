@@ -6,11 +6,23 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import axios from "axios";
+import { toast } from "sonner";
 import {
     Settings, ChevronDown, LogOut,
     ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import NotificationBell from "@/modules/message/components/NotificationBell";
 import UserAvatar from "@/modules/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
@@ -20,17 +32,18 @@ import {
     ADMIN_NAV,
     SETTINGS_NAV,
     type ModuleChild,
+    type NavItem,
 } from "@/utils/constants";
 
 type SidebarUser = {
-    id?:          string | null;
-    name?:        string | null;
-    role?:        string | null;
-    roles?:       string[] | null;
+    id?: string | null;
+    name?: string | null;
+    role?: string | null;
+    roles?: string[] | null;
     permissions?: string[] | null;
-    roleLabel?:   string | null;
-    roleColor?:   string | null;
-    avatarUrl?:   string | null;
+    roleLabel?: string | null;
+    roleColor?: string | null;
+    avatarUrl?: string | null;
 };
 
 function initials(name: string) {
@@ -57,18 +70,34 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes("admin:bypass");
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
-    const [collapsed,   setCollapsed]   = useState(false);
-    const [liveAvatar,  setLiveAvatar]  = useState<string | null | undefined>(undefined);
+    const [collapsed, setCollapsed] = useState(false);
+    const [liveAvatar, setLiveAvatar] = useState<string | null | undefined>(undefined);
     const [adminOpen, setAdminOpen] = useState(
         pathname.startsWith("/users") || pathname.startsWith("/roles") || pathname.startsWith("/org-chart") || pathname.startsWith("/branches") || pathname.startsWith("/departments") || pathname.startsWith("/posts")
     );
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
+    const [workspaceOpen, setWorkspaceOpen] = useState<Record<string, boolean>>({
+        customers: pathname.startsWith("/customers") || pathname.startsWith("/companies"),
+    });
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
         repair: pathname.startsWith("/tickets") || pathname.startsWith("/service-centers") || pathname.startsWith("/dashboard"),
         tally: false,
     });
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
+    const [showCreatePerson, setShowCreatePerson] = useState(false);
+    const [showCreateCompany, setShowCreateCompany] = useState(false);
+    const [savingPerson, setSavingPerson] = useState(false);
+    const [savingCompany, setSavingCompany] = useState(false);
+    const [personForm, setPersonForm] = useState({ name: "", phone: "", email: "", address: "" });
+    const [companyForm, setCompanyForm] = useState({
+        name: "",
+        phone: "",
+        email: "",
+        address: "",
+        companyReg: "",
+        taxId: "",
+    });
 
     // Fetch live avatarUrl so it reflects changes without re-login
     useEffect(() => {
@@ -151,6 +180,78 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const visibleSettings = SETTINGS_NAV.filter(
         (item) => isAdmin || permissions.includes(item.permission)
     );
+
+    const canViewNavItem = (item: NavItem) =>
+        item.permission === null || !item.permission || isAdmin || permissions.includes(item.permission);
+
+    const isCreatePersonItem = (href: string) => href === "/customers/new";
+    const isCreateCompanyItem = (href: string) => href === "/companies/new";
+    const isDialogNavItem = (href: string) => isCreatePersonItem(href) || isCreateCompanyItem(href);
+
+    const isWorkspaceChildActive = (childHref: string, siblings: NavItem[]) => {
+        if (isDialogNavItem(childHref)) return false;
+        if (!pathname.startsWith(childHref)) return false;
+        // Prevent broad routes like "/customers" from also matching "/customers/all".
+        const hasMoreSpecificSiblingMatch = siblings.some(
+            (sibling) => sibling.href !== childHref && sibling.href.startsWith(`${childHref}/`) && pathname.startsWith(sibling.href)
+        );
+        return !hasMoreSpecificSiblingMatch;
+    };
+
+    const openWorkspaceDialog = (href: string) => {
+        if (isCreatePersonItem(href)) {
+            setShowCreatePerson(true);
+            return;
+        }
+        if (isCreateCompanyItem(href)) {
+            setShowCreateCompany(true);
+        }
+    };
+
+    const handleCreatePerson = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!personForm.name.trim()) {
+            toast.error("Name is required");
+            return;
+        }
+        setSavingPerson(true);
+        try {
+            await axios.post("/api/customers", personForm);
+            toast.success("Person created");
+            setShowCreatePerson(false);
+            setPersonForm({ name: "", phone: "", email: "", address: "" });
+        } catch {
+            toast.error("Failed to create person");
+        } finally {
+            setSavingPerson(false);
+        }
+    };
+
+    const handleCreateCompany = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!companyForm.name.trim()) {
+            toast.error("Company name is required");
+            return;
+        }
+        setSavingCompany(true);
+        try {
+            await axios.post("/api/companies", companyForm);
+            toast.success("Company created");
+            setShowCreateCompany(false);
+            setCompanyForm({
+                name: "",
+                phone: "",
+                email: "",
+                address: "",
+                companyReg: "",
+                taxId: "",
+            });
+        } catch {
+            toast.error("Failed to create company");
+        } finally {
+            setSavingCompany(false);
+        }
+    };
 
     return (
         <aside
@@ -244,22 +345,91 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         </p>
                     )}
                     <div className="space-y-0.5">
-                        {WORKSPACE_NAV.filter(
-                            (item) =>
-                                item.permission === null ||
-                                isAdmin ||
-                                permissions.includes(item.permission ?? "")
-                        ).map(({ label, href, icon: Icon }) => (
-                            <Link
-                                key={href}
-                                href={href}
-                                className={linkClass(href)}
-                                title={collapsed ? label : ""}
-                            >
-                                <Icon size={17} className="shrink-0" />
-                                {!collapsed && <span className="truncate">{label}</span>}
-                            </Link>
-                        ))}
+                        {WORKSPACE_NAV.filter(canViewNavItem).map((item) => {
+                            const Icon = item.icon;
+                            const hasChildren = !!item.children?.length;
+                            const visibleChildren = item.children?.filter(canViewNavItem) ?? [];
+                            const isOpen = workspaceOpen[item.label.toLowerCase()] ?? false;
+                            const hasActiveChild = visibleChildren.some((child) => isWorkspaceChildActive(child.href, visibleChildren));
+                            const isActiveParent = pathname.startsWith(item.href) || hasActiveChild;
+
+                            if (!hasChildren || visibleChildren.length === 0 || collapsed) {
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        className={linkClass(item.href)}
+                                        title={collapsed ? item.label : ""}
+                                    >
+                                        <Icon size={17} className="shrink-0" />
+                                        {!collapsed && <span className="truncate">{item.label}</span>}
+                                    </Link>
+                                );
+                            }
+
+                            return (
+                                <div key={item.href}>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setWorkspaceOpen((prev) => ({
+                                                ...prev,
+                                                [item.label.toLowerCase()]: !prev[item.label.toLowerCase()],
+                                            }))
+                                        }
+                                        className={[
+                                            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                            isActiveParent
+                                                ? "bg-primary text-primary-foreground"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                        ].join(" ")}
+                                    >
+                                        <Icon size={17} className="shrink-0" />
+                                        <span className="flex-1 truncate text-left">{item.label}</span>
+                                        <ChevronDown
+                                            size={13}
+                                            className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                        />
+                                    </button>
+
+                                    {isOpen && (
+                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                            {visibleChildren.map((child) => {
+                                                if (isDialogNavItem(child.href)) {
+                                                    return (
+                                                        <button
+                                                            key={`${item.href}-${child.href}`}
+                                                            type="button"
+                                                            onClick={() => openWorkspaceDialog(child.href)}
+                                                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
+                                                        >
+                                                            <child.icon size={15} className="shrink-0" />
+                                                            <span className="truncate">{child.label}</span>
+                                                        </button>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <Link
+                                                        key={`${item.href}-${child.href}`}
+                                                        href={child.href}
+                                                        className={[
+                                                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                            isWorkspaceChildActive(child.href, visibleChildren)
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                        ].join(" ")}
+                                                    >
+                                                        <child.icon size={15} className="shrink-0" />
+                                                        <span className="truncate">{child.label}</span>
+                                                    </Link>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
 
@@ -390,7 +560,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         })}
                     </div>
                 </section>
-
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                    Admin Only
+                </p>
                 {/* Admin */}
                 {visibleAdmin.length > 0 && (
                     <section>
@@ -493,6 +665,122 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     {!collapsed && <span className="truncate">Sign Out</span>}
                 </button>
             </div>
+
+            <Dialog open={showCreatePerson} onOpenChange={setShowCreatePerson}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Create Person</DialogTitle>
+                        <DialogDescription>Add a new customer person record.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreatePerson} className="space-y-3">
+                        <div className="space-y-2">
+                            <Label>Name</Label>
+                            <Input
+                                value={personForm.name}
+                                onChange={(e) => setPersonForm((prev) => ({ ...prev, name: e.target.value }))}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Phone</Label>
+                            <Input
+                                value={personForm.phone}
+                                onChange={(e) => setPersonForm((prev) => ({ ...prev, phone: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input
+                                type="email"
+                                value={personForm.email}
+                                onChange={(e) => setPersonForm((prev) => ({ ...prev, email: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Address</Label>
+                            <Input
+                                value={personForm.address}
+                                onChange={(e) => setPersonForm((prev) => ({ ...prev, address: e.target.value }))}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setShowCreatePerson(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={savingPerson}>
+                                {savingPerson ? "Creating..." : "Create"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showCreateCompany} onOpenChange={setShowCreateCompany}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Create Company</DialogTitle>
+                        <DialogDescription>Add a new company customer record.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateCompany} className="space-y-3">
+                        <div className="space-y-2">
+                            <Label>Company Name</Label>
+                            <Input
+                                value={companyForm.name}
+                                onChange={(e) => setCompanyForm((prev) => ({ ...prev, name: e.target.value }))}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <Label>Phone</Label>
+                                <Input
+                                    value={companyForm.phone}
+                                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, phone: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Email</Label>
+                                <Input
+                                    type="email"
+                                    value={companyForm.email}
+                                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, email: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <Label>Company Reg</Label>
+                                <Input
+                                    value={companyForm.companyReg}
+                                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, companyReg: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Tax ID / VAT</Label>
+                                <Input
+                                    value={companyForm.taxId}
+                                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, taxId: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Address</Label>
+                            <Input
+                                value={companyForm.address}
+                                onChange={(e) => setCompanyForm((prev) => ({ ...prev, address: e.target.value }))}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setShowCreateCompany(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={savingCompany}>
+                                {savingCompany ? "Creating..." : "Create"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </aside>
     );
 }

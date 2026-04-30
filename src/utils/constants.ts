@@ -31,6 +31,7 @@ export type NavItem = {
     href: string;
     icon: LucideIcon;
     permission?: string | null;
+    children?: NavItem[];
 };
 
 export type ModuleChild = {
@@ -73,8 +74,20 @@ export type ButtonBarAction = {
 
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
-    { label: "Customers", href: "/customers", icon: Users, permission: "customers:view" },
-    { label: "Companies", href: "/companies", icon: Building2, permission: "customers:view" },
+    {
+        label: "Customers",
+        href: "/customers",
+        icon: Users,
+        permission: "customers:view",
+        children: [
+            { label: "New People", href: "/customers/new", icon: Plus, permission: "customers:view" },
+            { label: "New Companies", href: "/companies/new", icon: Plus, permission: "customers:view" },
+            { label: "All Customers", href: "/customers/all", icon: Users, permission: "customers:view" },
+            { label: "People", href: "/customers", icon: Users, permission: "customers:view" },
+            { label: "Companies", href: "/companies", icon: Building2, permission: "customers:view" },
+
+        ],
+    },
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [
@@ -83,7 +96,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Wrench,
         key: "repair",
         children: [
-            { label: "New Repair +", icon: Plus, action: "new-ticket", pipelineRef: "default" },
+            { label: "New Repair", icon: Plus, action: "new-ticket", pipelineRef: "default" },
             { label: "All Repair", icon: ClipboardList, href: "/tickets", pipelineRef: "default" },
             { label: "Service Centers", icon: Building2, href: "/service-centers", permission: "service-centers:view" },
         ],
@@ -92,7 +105,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Tally",
         icon: Calculator,
         key: "tally",
-        disabled: true,
+        // disabled: true,
         children: [
             { label: "Dummy1", icon: FileText, href: "/tally/dummy1", disabled: true },
             { label: "Dummy2", icon: FileText, href: "/tally/dummy2", disabled: true },
