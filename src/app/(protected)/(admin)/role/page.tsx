@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     AlertTriangle,
     Check,
-    ChevronDown,
-    ChevronRight,
     ClipboardList,
     Lock,
     Plus,
@@ -25,7 +23,22 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface Permission {
     id: string;
@@ -118,6 +131,190 @@ const MODULE_META: Record<string, { label: string; description: string; icon: Re
 };
 
 const MODULE_ORDER = ["core", "customers", "tickets", "assignments", "service", "admin"];
+const NO_COPY_ROLE = "__none__";
+
+const MATRIX_COLUMN_GROUPS = [
+    {
+        key: "create",
+        label: "CREATE",
+        columns: [
+            { key: "create", label: "own" },
+        ],
+    },
+    {
+        key: "view",
+        label: "VIEW",
+        columns: [
+            { key: "viewOwn", label: "own" },
+            { key: "viewBranch", label: "br" },
+            { key: "viewOrg", label: "org" },
+        ],
+    },
+    {
+        key: "edit",
+        label: "EDIT",
+        columns: [
+            { key: "editOwn", label: "own" },
+            { key: "editBranch", label: "br" },
+            { key: "editOrg", label: "org" },
+        ],
+    },
+    {
+        key: "delete",
+        label: "DELETE",
+        columns: [
+            { key: "deleteOwn", label: "own" },
+            { key: "deleteBranch", label: "br" },
+            { key: "deleteOrg", label: "org" },
+        ],
+    },
+] as const;
+
+type MatrixColumnKey = (typeof MATRIX_COLUMN_GROUPS)[number]["columns"][number]["key"];
+
+const MATRIX_ROWS: {
+    key: string;
+    label: string;
+    module: string;
+    cells: Partial<Record<MatrixColumnKey, string>>;
+}[] = [
+    {
+        key: "tickets",
+        label: "Tickets",
+        module: "tickets",
+        cells: {
+            create: "tickets:create",
+            editOwn: "tickets:status:set",
+            editBranch: "tickets:substatus:set",
+            editOrg: "tickets:manage-participants",
+        },
+    },
+    {
+        key: "ticketOwnership",
+        label: "Ticket Ownership",
+        module: "tickets",
+        cells: {
+            editOrg: "tickets:assign",
+        },
+    },
+    {
+        key: "warranty",
+        label: "Warranty",
+        module: "tickets",
+        cells: {
+            editOrg: "warranty:convert",
+        },
+    },
+    {
+        key: "customers",
+        label: "Customers",
+        module: "customers",
+        cells: {
+            viewOrg: "customers:view",
+            create: "customers:manage",
+            editOrg: "customers:manage",
+            deleteOrg: "customers:manage",
+        },
+    },
+    {
+        key: "invoices",
+        label: "Invoices",
+        module: "customers",
+        cells: {},
+    },
+    {
+        key: "companies",
+        label: "Companies",
+        module: "customers",
+        cells: {
+            viewOrg: "customers:view",
+            create: "companies:manage",
+            editOrg: "companies:manage",
+            deleteOrg: "companies:manage",
+        },
+    },
+    {
+        key: "assignments",
+        label: "Assignments",
+        module: "assignments",
+        cells: {
+            viewBranch: "assignments:view-team",
+            viewOrg: "assignments:view-org",
+        },
+    },
+    {
+        key: "serviceCenters",
+        label: "Service Centers",
+        module: "service",
+        cells: {
+            viewOrg: "service-centers:view",
+            create: "service-centers:manage",
+            editOrg: "service-centers:manage",
+            deleteOrg: "service-centers:manage",
+        },
+    },
+    {
+        key: "users",
+        label: "Users",
+        module: "admin",
+        cells: {
+            create: "users:manage",
+            editOrg: "users:manage",
+            deleteOrg: "users:manage",
+        },
+    },
+    {
+        key: "roles",
+        label: "Roles",
+        module: "admin",
+        cells: {
+            create: "roles:manage",
+            editOrg: "roles:manage",
+            deleteOrg: "roles:manage",
+        },
+    },
+    {
+        key: "orgSettings",
+        label: "Org Settings",
+        module: "admin",
+        cells: {
+            editOrg: "settings:manage",
+        },
+    },
+    {
+        key: "statuses",
+        label: "Statuses",
+        module: "admin",
+        cells: {
+            create: "settings:statuses",
+            editOrg: "settings:statuses",
+            deleteOrg: "settings:statuses",
+        },
+    },
+    {
+        key: "pipelines",
+        label: "Pipelines",
+        module: "admin",
+        cells: {
+            create: "settings:pipelines",
+            editOrg: "settings:pipelines",
+            deleteOrg: "settings:pipelines",
+        },
+    },
+    {
+        key: "systemBypass",
+        label: "System Bypass",
+        module: "core",
+        cells: {
+            editOrg: "admin:bypass",
+        },
+    },
+];
+
+const MATRIX_PERMISSION_IDS = new Set(
+    MATRIX_ROWS.flatMap((row) => Object.values(row.cells))
+        .filter((permissionId): permissionId is string => Boolean(permissionId))
+);
 
 function roleToForm(role: Role): RoleForm {
     return {
@@ -140,11 +337,11 @@ export default function RolePage() {
     const [loading, setLoading] = useState(true);
     const [savingRole, setSavingRole] = useState(false);
     const [savingPerms, setSavingPerms] = useState(false);
-    const [addingNew, setAddingNew] = useState(false);
+    const [newRoleOpen, setNewRoleOpen] = useState(false);
     const [newRole, setNewRole] = useState<RoleForm>(EMPTY_ROLE);
+    const [copyFromRoleId, setCopyFromRoleId] = useState(NO_COPY_ROLE);
     const [roleForm, setRoleForm] = useState<RoleForm>(EMPTY_ROLE);
     const [search, setSearch] = useState("");
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
     const activeRole = roles.find((role) => role.id === activeRoleId) ?? null;
 
@@ -197,6 +394,8 @@ export default function RolePage() {
             roleForm.rank !== activeRole.rank
         : false;
 
+    const permissionById = useMemo(() => new Map(allPerms.map((permission) => [permission.id, permission])), [allPerms]);
+
     const filtered = search.trim()
         ? allPerms.filter((permission) =>
             [permission.label, permission.id, permission.module, permission.description ?? ""]
@@ -204,15 +403,7 @@ export default function RolePage() {
         )
         : allPerms;
 
-    const byModule = filtered.reduce<Record<string, Permission[]>>((acc, permission) => {
-        (acc[permission.module] ??= []).push(permission);
-        return acc;
-    }, {});
-
-    const orderedModules = [
-        ...MODULE_ORDER.filter((module) => byModule[module]),
-        ...Object.keys(byModule).filter((module) => !MODULE_ORDER.includes(module)),
-    ];
+    const matrixPermissions = filtered.filter((permission) => MATRIX_PERMISSION_IDS.has(permission.id));
 
     const selectedCount = selected.size;
     const totalCount = allPerms.length;
@@ -232,9 +423,15 @@ export default function RolePage() {
         setSavingRole(true);
         try {
             const res = await axios.post<Role>("/api/roles", newRole);
+            if (copyFromRoleId !== NO_COPY_ROLE) {
+                const sourceRole = roles.find((role) => role.id === copyFromRoleId);
+                const permissionIds = sourceRole?.permissions.map((permission) => permission.permissionId) ?? [];
+                await axios.put(`/api/roles/${res.data.id}/permissions`, { permissionIds });
+            }
             toast.success("Role created");
-            setAddingNew(false);
+            setNewRoleOpen(false);
             setNewRole(EMPTY_ROLE);
+            setCopyFromRoleId(NO_COPY_ROLE);
             await loadData(res.data.id);
         } catch (error) {
             toast.error(getErrorMessage(error, "Failed to create role"));
@@ -311,34 +508,6 @@ export default function RolePage() {
         });
     };
 
-    const toggleModule = (module: string) => {
-        setCollapsed((prev) => {
-            const next = new Set(prev);
-            if (next.has(module)) {
-                next.delete(module);
-            } else {
-                next.add(module);
-            }
-            return next;
-        });
-    };
-
-    const selectAll = (permissions: Permission[]) => {
-        setSelected((prev) => {
-            const next = new Set(prev);
-            permissions.forEach((permission) => next.add(permission.id));
-            return next;
-        });
-    };
-
-    const deselectAll = (permissions: Permission[]) => {
-        setSelected((prev) => {
-            const next = new Set(prev);
-            permissions.forEach((permission) => next.delete(permission.id));
-            return next;
-        });
-    };
-
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
@@ -348,55 +517,20 @@ export default function RolePage() {
     }
 
     return (
-        <div className="space-y-6 pb-12">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-3 pb-8 text-xs">
+            <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                        Role Management
+                    <h1 className="text-xl font-bold tracking-tight text-foreground">
+                        Roles &amp; Permissions
                     </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                         Create roles, edit role details, and manage permissions from one page.
                     </p>
                 </div>
-                <Button onClick={() => setAddingNew(true)}>
+                <Button size="sm" onClick={() => setNewRoleOpen(true)}>
                     <Plus /> New Role
                 </Button>
             </div>
-
-            {addingNew && (
-                <Card className="border-2 border-primary/30 bg-primary/5">
-                    <CardContent className="space-y-4 pt-5">
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                                New Role
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                The role ID is generated automatically by the existing API.
-                            </p>
-                        </div>
-                        <RoleFields
-                            form={newRole}
-                            onChange={setNewRole}
-                        />
-                        <div className="flex justify-end gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setAddingNew(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                size="sm"
-                                disabled={savingRole || !newRole.label.trim()}
-                                onClick={handleCreate}
-                            >
-                                {savingRole ? "Creating..." : "Create Role"}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
 
             {roles.length === 0 ? (
                 <Card>
@@ -406,80 +540,45 @@ export default function RolePage() {
                     </CardContent>
                 </Card>
             ) : activeRole && (
-                <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-                    <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-                        <RoleList
-                            roles={roles}
-                            activeRoleId={activeRoleId}
-                            totalCount={totalCount}
-                            onSelect={handleTabChange}
-                            onDelete={handleDelete}
-                        />
+                <>
+                    <RoleDetailsCard
+                        role={activeRole}
+                        form={roleForm}
+                        selectedCount={selectedCount}
+                        totalCount={totalCount}
+                        saving={savingRole}
+                        hasChanges={hasRoleChanges}
+                        onFormChange={setRoleForm}
+                        onSave={handleUpdateRole}
+                        onDiscard={() => setRoleForm(roleToForm(activeRole))}
+                        onDelete={() => handleDelete(activeRole)}
+                    />
 
-                        <Card className={`border-l-4 ${ROLE_ACCENT[roleForm.color] ?? "border-l-gray-300"}`}>
-                            <CardContent className="space-y-4 pt-5">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            Role Details
-                                        </p>
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            Edit the selected role.
-                                        </p>
-                                    </div>
-                                    <Badge className={`${activeRole.color} font-mono text-xs`}>
-                                        {activeRole.id}
-                                    </Badge>
-                                </div>
-                                <RoleFields
-                                    form={roleForm}
-                                    onChange={setRoleForm}
-                                />
-                                <div className="flex gap-2">
-                                    <Button
-                                        className="flex-1"
-                                        onClick={handleUpdateRole}
-                                        disabled={savingRole || !hasRoleChanges || !roleForm.label.trim()}
-                                    >
-                                        <Save size={14} />
-                                        {savingRole ? "Saving..." : "Save role"}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setRoleForm(roleToForm(activeRole))}
-                                        disabled={!hasRoleChanges}
-                                    >
-                                        <RotateCcw size={14} />
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
+                    <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
+                        <aside className="xl:sticky xl:top-6 xl:self-start">
+                            <RoleList
+                                roles={roles}
+                                activeRoleId={activeRoleId}
+                                totalCount={totalCount}
+                                onSelect={handleTabChange}
+                            />
+                        </aside>
 
-                        {hasBypass && (
-                            <div className="flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-3 py-2.5">
-                                <AlertTriangle size={13} className="mt-0.5 shrink-0 text-destructive" />
-                                <p className="text-[11px] leading-relaxed text-destructive">
-                                    <span className="font-semibold">admin:bypass active.</span>{" "}
-                                    This role skips every permission check in the system.
-                                </p>
-                            </div>
-                        )}
-                    </aside>
-
-                    <section className="min-w-0 space-y-4">
+                        <section className="min-w-0 space-y-3">
                         <Card>
-                            <CardContent className="space-y-4 pt-5">
-                                <div className="flex flex-wrap items-start justify-between gap-4">
+                            <CardContent className="space-y-3 pt-4">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <h2 className="text-xl font-bold tracking-tight">
-                                            Permissions <Badge className={`${activeRole.color} ml-2`}>{activeRole.label}</Badge>
+                                        <h2 className="text-base font-bold tracking-tight">
+                                            Role: {activeRole.label} <Badge className={`${activeRole.color} ml-2`}>{activeRole.id}</Badge>
                                         </h2>
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            {selectedCount}/{totalCount} permissions selected. Changes apply on next login.
+                                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                            {activeRole._count.users} {activeRole._count.users === 1 ? "user" : "users"} · {selectedCount}/{totalCount} permissions selected. Changes apply on next login.
                                         </p>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-1.5">
                                         <Button
+                                            size="sm"
                                             onClick={handleSavePermissions}
                                             disabled={savingPerms || !hasPermissionChanges}
                                         >
@@ -488,6 +587,7 @@ export default function RolePage() {
                                         </Button>
                                         <Button
                                             variant="outline"
+                                            size="sm"
                                             onClick={handleDiscardPermissions}
                                             disabled={!hasPermissionChanges}
                                         >
@@ -497,14 +597,14 @@ export default function RolePage() {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap gap-2 border-2 border-border bg-muted/30 px-4 py-3">
+                                <div className="flex flex-wrap gap-1.5 border-2 border-border bg-muted/30 px-3 py-2">
                                     <div className="relative min-w-64 flex-1">
                                         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                         <Input
                                             value={search}
                                             onChange={(event) => setSearch(event.target.value)}
                                             placeholder="Search permissions by name, module, or ID..."
-                                            className="h-8 pl-8 text-sm"
+                                            className="h-7 pl-8 text-xs"
                                         />
                                     </div>
                                     <Button
@@ -523,35 +623,56 @@ export default function RolePage() {
                                     </Button>
                                 </div>
 
-                                {orderedModules.length === 0 ? (
+                                {hasBypass && (
+                                    <div className="flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-3 py-2.5">
+                                        <AlertTriangle size={13} className="mt-0.5 shrink-0 text-destructive" />
+                                        <p className="text-[11px] leading-relaxed text-destructive">
+                                            <span className="font-semibold">admin:bypass active.</span>{" "}
+                                            This role skips every permission check in the system.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {filtered.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                                         <Search size={32} className="mb-3 opacity-20" />
                                         <p className="text-sm">No permissions match your search.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {orderedModules.map((module) => (
-                                            <PermissionModule
-                                                key={module}
-                                                module={module}
-                                                permissions={byModule[module]}
-                                                selected={selected}
-                                                original={original}
-                                                collapsed={collapsed.has(module)}
-                                                search={search}
-                                                onToggleModule={() => toggleModule(module)}
-                                                onTogglePerm={togglePerm}
-                                                onSelectAll={selectAll}
-                                                onDeselectAll={deselectAll}
-                                            />
-                                        ))}
+                                        <PermissionMatrix
+                                            permissions={matrixPermissions}
+                                            permissionById={permissionById}
+                                            search={search}
+                                            selected={selected}
+                                            original={original}
+                                            onTogglePerm={togglePerm}
+                                        />
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
-                    </section>
-                </div>
+                        </section>
+                    </div>
+                </>
             )}
+
+            <NewRoleDialog
+                open={newRoleOpen}
+                onOpenChange={setNewRoleOpen}
+                roles={roles}
+                form={newRole}
+                copyFromRoleId={copyFromRoleId}
+                saving={savingRole}
+                onFormChange={setNewRole}
+                onCopyFromRoleChange={setCopyFromRoleId}
+                onCreate={handleCreate}
+                onCancel={() => {
+                    setNewRoleOpen(false);
+                    setNewRole(EMPTY_ROLE);
+                    setCopyFromRoleId(NO_COPY_ROLE);
+                }}
+            />
         </div>
     );
 }
@@ -564,19 +685,20 @@ function RoleFields({
     onChange: React.Dispatch<React.SetStateAction<RoleForm>>;
 }) {
     return (
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_110px]">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_78px_minmax(160px,1fr)]">
             <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
                     Role name
                 </label>
                 <Input
                     value={form.label}
                     onChange={(event) => onChange((prev) => ({ ...prev, label: event.target.value }))}
                     placeholder="e.g. Senior Technician"
+                    className="h-7 text-xs"
                 />
             </div>
             <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
                     Rank
                 </label>
                 <Input
@@ -585,13 +707,14 @@ function RoleFields({
                     max={100}
                     value={form.rank}
                     onChange={(event) => onChange((prev) => ({ ...prev, rank: Number(event.target.value) }))}
+                    className="h-7 text-xs"
                 />
             </div>
-            <div className="sm:col-span-2">
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            <div>
+                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
                     Colour
                 </label>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                     {COLOR_OPTIONS.map((color) => (
                         <button
                             key={color.value}
@@ -599,10 +722,10 @@ function RoleFields({
                             title={color.label}
                             onClick={() => onChange((prev) => ({ ...prev, color: color.value }))}
                             className={[
-                                "h-7 w-7 border-2 transition-all duration-150",
+                                "h-6 w-6 border-2 transition-all duration-150",
                                 color.dot,
                                 form.color === color.value
-                                    ? "scale-110 border-foreground ring-2 ring-border ring-offset-1"
+                                    ? "scale-105 border-foreground ring-1 ring-border ring-offset-1"
                                     : "border-transparent hover:scale-105 hover:border-border",
                             ].join(" ")}
                         />
@@ -614,32 +737,181 @@ function RoleFields({
     );
 }
 
+function RoleDetailsCard({
+    role,
+    form,
+    selectedCount,
+    totalCount,
+    saving,
+    hasChanges,
+    onFormChange,
+    onSave,
+    onDiscard,
+    onDelete,
+}: {
+    role: Role;
+    form: RoleForm;
+    selectedCount: number;
+    totalCount: number;
+    saving: boolean;
+    hasChanges: boolean;
+    onFormChange: React.Dispatch<React.SetStateAction<RoleForm>>;
+    onSave: () => void;
+    onDiscard: () => void;
+    onDelete: () => void;
+}) {
+    return (
+        <Card className={`border-l-4 ${ROLE_ACCENT[form.color] ?? "border-l-gray-300"}`}>
+            <CardContent className="grid gap-3 pt-4 lg:grid-cols-[minmax(160px,0.7fr)_minmax(300px,1.5fr)_auto] lg:items-end">
+                <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge className={`${role.color} font-mono text-xs`}>{role.id}</Badge>
+                        {role.isSystem && (
+                            <span className="inline-flex items-center gap-1 border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                <Lock size={9} /> System
+                            </span>
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-base font-bold leading-tight text-foreground">{role.label}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {role._count.users} {role._count.users === 1 ? "user" : "users"} · {selectedCount}/{totalCount} permissions
+                        </p>
+                    </div>
+                </div>
+
+                <RoleFields form={form} onChange={onFormChange} />
+
+                <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                    <Button
+                        size="sm"
+                        onClick={onSave}
+                        disabled={saving || !hasChanges || !form.label.trim()}
+                    >
+                        <Save size={14} />
+                        {saving ? "Saving..." : "Save role"}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onDiscard}
+                        disabled={!hasChanges}
+                    >
+                        <RotateCcw size={14} />
+                    </Button>
+                    {!role.isSystem && (
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={onDelete}
+                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title="Delete role"
+                        >
+                            <Trash2 size={14} />
+                        </Button>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function NewRoleDialog({
+    open,
+    onOpenChange,
+    roles,
+    form,
+    copyFromRoleId,
+    saving,
+    onFormChange,
+    onCopyFromRoleChange,
+    onCreate,
+    onCancel,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    roles: Role[];
+    form: RoleForm;
+    copyFromRoleId: string;
+    saving: boolean;
+    onFormChange: React.Dispatch<React.SetStateAction<RoleForm>>;
+    onCopyFromRoleChange: (roleId: string) => void;
+    onCreate: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Create New Role</DialogTitle>
+                    <DialogDescription>
+                        Create the role details and optionally start with permissions copied from an existing role.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-5">
+                    <RoleFields form={form} onChange={onFormChange} />
+
+                    <div>
+                        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                            Copy permissions from
+                        </label>
+                        <Select value={copyFromRoleId} onValueChange={onCopyFromRoleChange}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Start with no copied permissions" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NO_COPY_ROLE}>No copied permissions</SelectItem>
+                                {roles.map((role) => (
+                                    <SelectItem key={role.id} value={role.id}>
+                                        {role.label} ({role.id})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                            The new role will be created first, then the copied permission set will be applied with the existing API.
+                        </p>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Button disabled={saving || !form.label.trim()} onClick={onCreate}>
+                        {saving ? "Creating..." : "Create Role"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function RoleList({
     roles,
     activeRoleId,
     totalCount,
     onSelect,
-    onDelete,
 }: {
     roles: Role[];
     activeRoleId: string;
     totalCount: number;
     onSelect: (roleId: string) => void;
-    onDelete: (role: Role) => void;
 }) {
     return (
         <Card>
-            <CardContent className="space-y-3 pt-4">
+            <CardContent className="space-y-2 pt-3">
                 <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Roles
                     </p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
                         Select a role to edit its details and permissions.
                     </p>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                     {roles.map((role) => {
                         const isActive = role.id === activeRoleId;
                         const permissionCount = role.permissions.length;
@@ -651,16 +923,16 @@ function RoleList({
                                 type="button"
                                 onClick={() => onSelect(role.id)}
                                 className={[
-                                    "group w-full border-2 border-l-4 bg-background px-2.5 py-2 text-left transition-all",
+                                    "group w-full border-2 border-l-4 bg-background px-2 py-1.5 text-left transition-all",
                                     accent,
                                     isActive
                                         ? "border-primary shadow-sm"
                                         : "border-border hover:border-primary/50 hover:bg-muted/40",
                                 ].join(" ")}
                             >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0 space-y-1.5">
-                                        <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="flex flex-wrap items-center gap-1.5">
                                             <Badge className={`${role.color} font-mono text-[10px]`}>
                                                 {role.id}
                                             </Badge>
@@ -674,31 +946,20 @@ function RoleList({
                                             {role.label}
                                         </p>
                                     </div>
-                                    {!role.isSystem && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                onDelete(role);
-                                            }}
-                                            className="shrink-0 text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                                            title="Delete role"
-                                        >
-                                            <Trash2 size={14} />
-                                        </Button>
-                                    )}
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {isActive ? "Active" : ""}
+                                    </span>
                                 </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                                    <span className="inline-flex items-center gap-1 border border-border bg-muted px-2 py-0.5">
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                                    <span className="inline-flex items-center gap-1 border border-border bg-muted px-1.5 py-0.5">
                                         <Users size={10} />
                                         {role._count.users}
                                     </span>
-                                    <span className="inline-flex items-center gap-1 border border-border bg-muted px-2 py-0.5">
+                                    <span className="inline-flex items-center gap-1 border border-border bg-muted px-1.5 py-0.5">
                                         <Shield size={10} />
                                         {permissionCount}/{totalCount}
                                     </span>
-                                    <span className="inline-flex items-center border border-border bg-muted px-2 py-0.5">
+                                    <span className="inline-flex items-center border border-border bg-muted px-1.5 py-0.5">
                                         Rank {role.rank}
                                     </span>
                                 </div>
@@ -711,139 +972,168 @@ function RoleList({
     );
 }
 
-function PermissionModule({
-    module,
+function PermissionMatrix({
     permissions,
+    permissionById,
+    search,
     selected,
     original,
-    collapsed,
-    search,
-    onToggleModule,
     onTogglePerm,
-    onSelectAll,
-    onDeselectAll,
 }: {
-    module: string;
     permissions: Permission[];
+    permissionById: Map<string, Permission>;
+    search: string;
     selected: Set<string>;
     original: Set<string>;
-    collapsed: boolean;
-    search: string;
-    onToggleModule: () => void;
     onTogglePerm: (id: string) => void;
-    onSelectAll: (permissions: Permission[]) => void;
-    onDeselectAll: (permissions: Permission[]) => void;
 }) {
-    const meta = MODULE_META[module];
-    const selectedInModule = permissions.filter((permission) => selected.has(permission.id)).length;
-    const allSelected = selectedInModule === permissions.length;
+    const visiblePermissionIds = new Set(permissions.map((permission) => permission.id));
+    const flattenedColumns = MATRIX_COLUMN_GROUPS.flatMap((group) =>
+        group.columns.map((column) => ({ ...column, groupKey: group.key }))
+    );
+    const normalizedSearch = search.trim().toLowerCase();
+    const rows = MATRIX_ROWS.filter((row) => {
+        if (!normalizedSearch) return true;
+        if (row.label.toLowerCase().includes(normalizedSearch) || row.module.toLowerCase().includes(normalizedSearch)) {
+            return true;
+        }
+
+        return Object.values(row.cells).some((permissionId) => {
+            const permission = permissionId ? permissionById.get(permissionId) : undefined;
+            return permission
+                ? [permission.id, permission.label, permission.module, permission.description ?? ""]
+                    .some((value) => value.toLowerCase().includes(normalizedSearch))
+                : false;
+        });
+    });
+
+    const groupedRows = [
+        ...MODULE_ORDER.filter((module) => rows.some((row) => row.module === module)),
+        ...Array.from(new Set(rows.map((row) => row.module))).filter((module) => !MODULE_ORDER.includes(module)),
+    ].map((module) => ({
+        module,
+        rows: rows.filter((row) => row.module === module),
+    }));
 
     return (
         <div className="overflow-hidden border-2 border-border bg-card">
-            <div
-                className={[
-                    "flex items-center gap-2.5 border-b-2 border-border px-4 py-3",
-                    meta?.chip ?? "bg-muted text-foreground",
-                ].join(" ")}
-            >
-                <button
-                    onClick={onToggleModule}
-                    className="opacity-60 transition-opacity hover:opacity-100"
-                    title={collapsed ? "Expand" : "Collapse"}
-                >
-                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </button>
-                <span className="opacity-70">{meta?.icon}</span>
-                <div className="min-w-0 flex-1">
-                    <span className="text-xs font-bold uppercase tracking-wider">
-                        {meta?.label ?? module}
-                    </span>
-                    {!search && meta?.description && (
-                        <span className="ml-2 text-[11px] font-normal normal-case tracking-normal opacity-60">
-                            {meta.description}
-                        </span>
-                    )}
-                </div>
-                <span className="text-xs font-semibold tabular-nums opacity-60">
-                    {selectedInModule}/{permissions.length}
-                </span>
-                <button
-                    onClick={() => allSelected ? onDeselectAll(permissions) : onSelectAll(permissions)}
-                    className="px-2 py-0.5 text-xs font-medium transition-colors hover:bg-black/10"
-                >
-                    {allSelected ? "None" : "All"}
-                </button>
+            <div className="border-b-2 border-border bg-muted/40 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Enterprise Permission Matrix
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Module-wise control for create, view, edit, and delete scopes. Disabled cells are future backend permissions.
+                </p>
             </div>
-
-            {!collapsed && (
-                <div className="divide-y divide-border">
-                    {permissions.map((permission) => {
-                        const isOn = selected.has(permission.id);
-                        const wasOriginal = original.has(permission.id);
-                        const changed = isOn !== wasOriginal;
-                        const isDangerous = permission.id === "admin:bypass";
-
-                        return (
-                            <button
-                                key={permission.id}
-                                type="button"
-                                onClick={() => onTogglePerm(permission.id)}
-                                className={[
-                                    "group flex w-full items-start gap-4 px-5 py-3.5 text-left transition-colors",
-                                    isDangerous
-                                        ? isOn ? "bg-destructive/10 hover:bg-destructive/5" : "hover:bg-destructive/5"
-                                        : isOn ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/60",
-                                ].join(" ")}
-                            >
-                                <div
+            <div className="max-h-[68vh] overflow-auto">
+                <table className="w-full min-w-[760px] text-xs">
+                    <thead>
+                        <tr className="border-b border-border bg-muted/20 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <th rowSpan={2} className="sticky top-0 left-0 z-40 bg-muted px-3 py-1.5 text-left align-bottom font-semibold">Area</th>
+                            {MATRIX_COLUMN_GROUPS.map((group) => (
+                                <th
+                                    key={group.key}
+                                    colSpan={group.columns.length}
                                     className={[
-                                        "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border-2 transition-all",
-                                        isOn
-                                            ? isDangerous
-                                                ? "border-destructive bg-destructive"
-                                                : "border-primary bg-primary"
-                                            : "border-border group-hover:border-foreground/50",
+                                        "sticky top-0 z-20 border-l border-border px-2 py-1.5 text-center font-semibold",
+                                        group.key === "view" ? "bg-blue-100 dark:bg-blue-950" : "",
+                                        group.key === "delete" ? "bg-rose-100 dark:bg-rose-950" : "",
+                                        group.key === "create" ? "bg-emerald-100 dark:bg-emerald-950" : "",
+                                        group.key === "edit" ? "bg-amber-100 dark:bg-amber-950" : "",
                                     ].join(" ")}
                                 >
-                                    {isOn && <Check size={10} strokeWidth={3} className="text-white" />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span
-                                            className={[
-                                                "text-sm font-medium leading-none",
-                                                isDangerous && isOn
-                                                    ? "text-destructive"
-                                                    : isOn ? "text-foreground" : "text-muted-foreground",
-                                            ].join(" ")}
-                                        >
-                                            {permission.label}
-                                        </span>
-                                        {isDangerous && (
-                                            <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
-                                                Dangerous
-                                            </Badge>
-                                        )}
-                                        {changed && (
-                                            <span className={`text-[10px] font-semibold ${isOn ? "text-green-600" : "text-red-500"}`}>
-                                                {isOn ? "+ added" : "- removed"}
+                                    {group.label}
+                                </th>
+                            ))}
+                        </tr>
+                        <tr className="border-b border-border bg-muted/20 text-[10px] lowercase tracking-wide text-muted-foreground">
+                            {flattenedColumns.map((column) => (
+                                <th
+                                    key={column.key}
+                                    className={[
+                                        "sticky top-7 z-20 border-l border-border px-2 py-1 text-center font-medium",
+                                        column.groupKey === "view" ? "bg-blue-100 dark:bg-blue-950" : "",
+                                        column.groupKey === "delete" ? "bg-rose-100 dark:bg-rose-950" : "",
+                                        column.groupKey === "create" ? "bg-emerald-100 dark:bg-emerald-950" : "",
+                                        column.groupKey === "edit" ? "bg-amber-100 dark:bg-amber-950" : "",
+                                    ].join(" ")}
+                                >
+                                    {column.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                        {groupedRows.map((group) => (
+                            <Fragment key={group.module}>
+                                <tr className="bg-muted/50">
+                                    <td colSpan={1 + MATRIX_COLUMN_GROUPS.reduce((count, item) => count + item.columns.length, 0)} className="px-3 py-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                                                {MODULE_META[group.module]?.label ?? group.module}
                                             </span>
-                                        )}
-                                    </div>
-                                    {permission.description && (
-                                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                            {permission.description}
-                                        </p>
-                                    )}
-                                    <p className="mt-1 select-all font-mono text-[10px] text-muted-foreground/40">
-                                        {permission.id}
-                                    </p>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+                                            <span className="text-[10px] text-muted-foreground">
+                                                {group.rows.length} {group.rows.length === 1 ? "area" : "areas"}
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {group.rows.map((row) => (
+                                    <tr key={row.key} className="hover:bg-muted/30">
+                                        <td className="sticky left-0 z-10 bg-card px-3 py-2">
+                                            <div className="font-medium text-foreground">{row.label}</div>
+                                            <div className="text-[10px] text-muted-foreground">{row.module}</div>
+                                        </td>
+                                        {flattenedColumns.map((column) => {
+                                            const permissionId = row.cells[column.key];
+                                            const permission = permissionId ? permissionById.get(permissionId) : undefined;
+                                            const isVisible = permissionId ? visiblePermissionIds.has(permissionId) : false;
+                                            const enabled = Boolean(permission && isVisible);
+                                            const isOn = permissionId ? selected.has(permissionId) : false;
+                                            const changed = permissionId ? isOn !== original.has(permissionId) : false;
+
+                                            return (
+                                                <td
+                                                    key={column.key}
+                                                    className={[
+                                                        "border-l border-border px-2 py-2 text-center",
+                                                        column.groupKey === "view" ? "bg-blue-50/30 dark:bg-blue-950/15" : "",
+                                                        column.groupKey === "delete" ? "bg-rose-50/30 dark:bg-rose-950/15" : "",
+                                                        column.groupKey === "create" ? "bg-emerald-50/30 dark:bg-emerald-950/15" : "",
+                                                        column.groupKey === "edit" ? "bg-amber-50/30 dark:bg-amber-950/15" : "",
+                                                    ].join(" ")}
+                                                >
+                                                    {enabled && permissionId ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onTogglePerm(permissionId)}
+                                                            title={`${permission?.label ?? permissionId} (${permissionId})`}
+                                                            className={[
+                                                                "mx-auto flex h-6 w-6 items-center justify-center border-2 transition-colors",
+                                                                isOn
+                                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                                    : "border-border hover:border-primary/60 hover:bg-primary/5",
+                                                                changed ? "ring-2 ring-primary/20" : "",
+                                                            ].join(" ")}
+                                                        >
+                                                            {isOn && <Check size={11} strokeWidth={3} />}
+                                                        </button>
+                                                    ) : (
+                                                        <span
+                                                            title="Future scope, not connected to backend yet"
+                                                            className="mx-auto block h-6 w-6 border border-dashed border-border bg-muted/30 text-muted-foreground/40"
+                                                        />
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </Fragment>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
