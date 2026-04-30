@@ -171,22 +171,29 @@ const MATRIX_COLUMN_GROUPS = [
 ] as const;
 
 type MatrixColumnKey = (typeof MATRIX_COLUMN_GROUPS)[number]["columns"][number]["key"];
+type MatrixPermissionCell = string | string[];
 
 const MATRIX_ROWS: {
     key: string;
     label: string;
     module: string;
-    cells: Partial<Record<MatrixColumnKey, string>>;
+    cells: Partial<Record<MatrixColumnKey, MatrixPermissionCell>>;
 }[] = [
     {
         key: "tickets",
         label: "Tickets",
         module: "tickets",
         cells: {
+            viewOwn: "assignments:view-team",
+            viewBranch: "assignments:view-team",
+            viewOrg: "assignments:view-org",
             create: "tickets:create",
             editOwn: "tickets:status:set",
             editBranch: "tickets:substatus:set",
             editOrg: "tickets:manage-participants",
+            deleteOwn: "tickets:assign",
+            deleteBranch: "tickets:assign",
+            deleteOrg: "tickets:assign",
         },
     },
     {
@@ -194,7 +201,13 @@ const MATRIX_ROWS: {
         label: "Ticket Ownership",
         module: "tickets",
         cells: {
+            viewOwn: "assignments:view-team",
+            viewBranch: "assignments:view-team",
+            viewOrg: "assignments:view-org",
             editOrg: "tickets:assign",
+            deleteOwn: "tickets:assign",
+            deleteBranch: "tickets:assign",
+            deleteOrg: "tickets:assign",
         },
     },
     {
@@ -202,35 +215,37 @@ const MATRIX_ROWS: {
         label: "Warranty",
         module: "tickets",
         cells: {
+            viewOwn: "assignments:view-team",
+            viewBranch: "assignments:view-team",
+            viewOrg: "assignments:view-org",
             editOrg: "warranty:convert",
         },
     },
     {
-        key: "customers",
-        label: "Customers",
+        key: "buyers",
+        label: "Customers/Companies",
         module: "customers",
         cells: {
+            viewOwn: "customers:view",
+            viewBranch: "customers:view",
             viewOrg: "customers:view",
-            create: "customers:manage",
-            editOrg: "customers:manage",
-            deleteOrg: "customers:manage",
+            create: ["customers:manage", "companies:manage"],
+            editOwn: ["customers:manage", "companies:manage"],
+            editBranch: ["customers:manage", "companies:manage"],
+            editOrg: ["customers:manage", "companies:manage"],
+            deleteOwn: ["customers:manage", "companies:manage"],
+            deleteBranch: ["customers:manage", "companies:manage"],
+            deleteOrg: ["customers:manage", "companies:manage"],
         },
     },
     {
         key: "invoices",
         label: "Invoices",
         module: "customers",
-        cells: {},
-    },
-    {
-        key: "companies",
-        label: "Companies",
-        module: "customers",
         cells: {
+            viewOwn: "customers:view",
+            viewBranch: "customers:view",
             viewOrg: "customers:view",
-            create: "companies:manage",
-            editOrg: "companies:manage",
-            deleteOrg: "companies:manage",
         },
     },
     {
@@ -238,6 +253,7 @@ const MATRIX_ROWS: {
         label: "Assignments",
         module: "assignments",
         cells: {
+            viewOwn: "assignments:view-team",
             viewBranch: "assignments:view-team",
             viewOrg: "assignments:view-org",
         },
@@ -247,9 +263,15 @@ const MATRIX_ROWS: {
         label: "Service Centers",
         module: "service",
         cells: {
+            viewOwn: "service-centers:view",
+            viewBranch: "service-centers:view",
             viewOrg: "service-centers:view",
             create: "service-centers:manage",
+            editOwn: "service-centers:manage",
+            editBranch: "service-centers:manage",
             editOrg: "service-centers:manage",
+            deleteOwn: "service-centers:manage",
+            deleteBranch: "service-centers:manage",
             deleteOrg: "service-centers:manage",
         },
     },
@@ -258,8 +280,15 @@ const MATRIX_ROWS: {
         label: "Users",
         module: "admin",
         cells: {
+            viewOwn: "users:manage",
+            viewBranch: "users:manage",
+            viewOrg: "users:manage",
             create: "users:manage",
+            editOwn: "users:manage",
+            editBranch: "users:manage",
             editOrg: "users:manage",
+            deleteOwn: "users:manage",
+            deleteBranch: "users:manage",
             deleteOrg: "users:manage",
         },
     },
@@ -268,8 +297,15 @@ const MATRIX_ROWS: {
         label: "Roles",
         module: "admin",
         cells: {
+            viewOwn: "roles:manage",
+            viewBranch: "roles:manage",
+            viewOrg: "roles:manage",
             create: "roles:manage",
+            editOwn: "roles:manage",
+            editBranch: "roles:manage",
             editOrg: "roles:manage",
+            deleteOwn: "roles:manage",
+            deleteBranch: "roles:manage",
             deleteOrg: "roles:manage",
         },
     },
@@ -278,7 +314,16 @@ const MATRIX_ROWS: {
         label: "Org Settings",
         module: "admin",
         cells: {
+            viewOwn: "settings:manage",
+            viewBranch: "settings:manage",
+            viewOrg: "settings:manage",
+            create: "settings:manage",
+            editOwn: "settings:manage",
+            editBranch: "settings:manage",
             editOrg: "settings:manage",
+            deleteOwn: "settings:manage",
+            deleteBranch: "settings:manage",
+            deleteOrg: "settings:manage",
         },
     },
     {
@@ -286,8 +331,15 @@ const MATRIX_ROWS: {
         label: "Statuses",
         module: "admin",
         cells: {
+            viewOwn: "settings:statuses",
+            viewBranch: "settings:statuses",
+            viewOrg: "settings:statuses",
             create: "settings:statuses",
+            editOwn: "settings:statuses",
+            editBranch: "settings:statuses",
             editOrg: "settings:statuses",
+            deleteOwn: "settings:statuses",
+            deleteBranch: "settings:statuses",
             deleteOrg: "settings:statuses",
         },
     },
@@ -296,8 +348,15 @@ const MATRIX_ROWS: {
         label: "Pipelines",
         module: "admin",
         cells: {
+            viewOwn: "settings:pipelines",
+            viewBranch: "settings:pipelines",
+            viewOrg: "settings:pipelines",
             create: "settings:pipelines",
+            editOwn: "settings:pipelines",
+            editBranch: "settings:pipelines",
             editOrg: "settings:pipelines",
+            deleteOwn: "settings:pipelines",
+            deleteBranch: "settings:pipelines",
             deleteOrg: "settings:pipelines",
         },
     },
@@ -312,7 +371,9 @@ const MATRIX_ROWS: {
 ];
 
 const MATRIX_PERMISSION_IDS = new Set(
-    MATRIX_ROWS.flatMap((row) => Object.values(row.cells))
+    MATRIX_ROWS.flatMap((row) =>
+        Object.values(row.cells).flatMap((cell) => (Array.isArray(cell) ? cell : [cell]))
+    )
         .filter((permissionId): permissionId is string => Boolean(permissionId))
 );
 
@@ -991,6 +1052,10 @@ function PermissionMatrix({
     const flattenedColumns = MATRIX_COLUMN_GROUPS.flatMap((group) =>
         group.columns.map((column) => ({ ...column, groupKey: group.key }))
     );
+    const cellPermissionIds = (cell?: MatrixPermissionCell) => {
+        if (!cell) return [] as string[];
+        return Array.isArray(cell) ? cell : [cell];
+    };
     const normalizedSearch = search.trim().toLowerCase();
     const rows = MATRIX_ROWS.filter((row) => {
         if (!normalizedSearch) return true;
@@ -998,13 +1063,15 @@ function PermissionMatrix({
             return true;
         }
 
-        return Object.values(row.cells).some((permissionId) => {
-            const permission = permissionId ? permissionById.get(permissionId) : undefined;
-            return permission
-                ? [permission.id, permission.label, permission.module, permission.description ?? ""]
-                    .some((value) => value.toLowerCase().includes(normalizedSearch))
-                : false;
-        });
+        return Object.values(row.cells).some((cell) =>
+            cellPermissionIds(cell).some((permissionId) => {
+                const permission = permissionById.get(permissionId);
+                return permission
+                    ? [permission.id, permission.label, permission.module, permission.description ?? ""]
+                        .some((value) => value.toLowerCase().includes(normalizedSearch))
+                    : false;
+            })
+        );
     });
 
     const groupedRows = [
@@ -1085,12 +1152,23 @@ function PermissionMatrix({
                                             <div className="text-[10px] text-muted-foreground">{row.module}</div>
                                         </td>
                                         {flattenedColumns.map((column) => {
-                                            const permissionId = row.cells[column.key];
-                                            const permission = permissionId ? permissionById.get(permissionId) : undefined;
-                                            const isVisible = permissionId ? visiblePermissionIds.has(permissionId) : false;
-                                            const enabled = Boolean(permission && isVisible);
-                                            const isOn = permissionId ? selected.has(permissionId) : false;
-                                            const changed = permissionId ? isOn !== original.has(permissionId) : false;
+                                            const permissionIds = cellPermissionIds(row.cells[column.key]);
+                                            const validPermissionIds = permissionIds.filter(
+                                                (permissionId) => permissionById.has(permissionId) && visiblePermissionIds.has(permissionId)
+                                            );
+                                            const enabled = validPermissionIds.length > 0;
+                                            const isOn = enabled && validPermissionIds.every((permissionId) => selected.has(permissionId));
+                                            const changed = enabled && validPermissionIds.some(
+                                                (permissionId) => selected.has(permissionId) !== original.has(permissionId)
+                                            );
+                                            const title = enabled
+                                                ? validPermissionIds
+                                                    .map((permissionId) => {
+                                                        const permission = permissionById.get(permissionId);
+                                                        return `${permission?.label ?? permissionId} (${permissionId})`;
+                                                    })
+                                                    .join(" + ")
+                                                : "Future scope, not connected to backend yet";
 
                                             return (
                                                 <td
@@ -1103,11 +1181,13 @@ function PermissionMatrix({
                                                         column.groupKey === "edit" ? "bg-amber-50/30 dark:bg-amber-950/15" : "",
                                                     ].join(" ")}
                                                 >
-                                                    {enabled && permissionId ? (
+                                                    {enabled ? (
                                                         <button
                                                             type="button"
-                                                            onClick={() => onTogglePerm(permissionId)}
-                                                            title={`${permission?.label ?? permissionId} (${permissionId})`}
+                                                            onClick={() => {
+                                                                validPermissionIds.forEach((permissionId) => onTogglePerm(permissionId));
+                                                            }}
+                                                            title={title}
                                                             className={[
                                                                 "mx-auto flex h-6 w-6 items-center justify-center border-2 transition-colors",
                                                                 isOn
@@ -1120,7 +1200,7 @@ function PermissionMatrix({
                                                         </button>
                                                     ) : (
                                                         <span
-                                                            title="Future scope, not connected to backend yet"
+                                                            title={title}
                                                             className="mx-auto block h-6 w-6 border border-dashed border-border bg-muted/30 text-muted-foreground/40"
                                                         />
                                                     )}

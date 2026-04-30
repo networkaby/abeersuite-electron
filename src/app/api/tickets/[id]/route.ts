@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
+import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
+import { resolvedUserFromSession } from "@/lib/permissions";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -36,9 +39,14 @@ export async function GET(
         const { id } = await params;
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const user = resolvedUserFromSession(session);
+        const scopeWhere = buildTicketReadScopeWhere(user);
 
-        const ticket = await prisma.ticket.findUnique({
-            where: { id: Number(id) },
+        const ticket = await prisma.ticket.findFirst({
+            where: {
+                id: Number(id),
+                ...(scopeWhere ?? {}),
+            },
             include: {
                 device: {
                     include: {
@@ -104,24 +112,32 @@ export async function PUT(
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-        const sessionUser = session.user as {
-            id?: string;
-            role?: string;
-            roles?: string[];
-            permissions?: string[];
-        };
-        const userId = Number(sessionUser.id);
-        const userRoles = sessionUser.roles ?? [sessionUser.role ?? ""];
-        const permissions = sessionUser.permissions ?? [];
+        const resolvedUser = resolvedUserFromSession(session);
+        const userId = resolvedUser.id;
+        const userRoles = resolvedUser.roles ?? [resolvedUser.primaryRole ?? ""];
+        const permissions = resolvedUser.permissions ?? [];
         const isAdmin = permissions.includes("admin:bypass");
 
         const { id } = await params;
+        const scopeWhere = buildTicketReadScopeWhere(resolvedUser);
+        const scopedTicket = await prisma.ticket.findFirst({
+            where: {
+                id: Number(id),
+                ...(scopeWhere ?? {}),
+            },
+            select: { id: true, status: true },
+        });
+        if (!scopedTicket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+
         const parsed = ticketUpdateSchema.safeParse(await req.json());
         if (!parsed.success) {
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid ticket update payload" }, { status: 400 });
         }
         const body = parsed.data;
+
+        if (body.status !== undefined && !isAdmin && !hasPermissionWithScope(permissions, "tickets:status:set")) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         // Enforce allowedRoles on main status change (Admin bypasses)
         if (body.status && !isAdmin) {
@@ -138,7 +154,7 @@ export async function PUT(
             }
         }
 
-        if (body.primaryOwnerId !== undefined && !isAdmin && !permissions.includes("tickets:assign")) {
+        if (body.primaryOwnerId !== undefined && !isAdmin && !hasPermissionWithScope(permissions, "tickets:assign")) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

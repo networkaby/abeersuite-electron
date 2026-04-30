@@ -165,10 +165,28 @@ const ROLES = [
 const PERMISSIONS = [
     // core
     { id: "admin:bypass",                  label: "Bypass all permission checks",      module: "core",        description: "Grants full access to everything. Skips every permission check in the system." },
+
     // customers
     { id: "customers:view",                label: "View customers & companies",        module: "customers",   description: "Access the Customers and Companies pages and view records." },
     { id: "customers:manage",              label: "Manage customers",                  module: "customers",   description: "Create, edit, and delete customer records." },
     { id: "companies:manage",              label: "Manage companies",                  module: "customers",   description: "Create, edit, and delete company records." },
+    { id: "customers:view:own",            label: "View own customers",                module: "customers",   description: "View customer records owned by the user." },
+    { id: "customers:view:department",     label: "View department customers",         module: "customers",   description: "View customer records within user departments." },
+    { id: "customers:view:branch",         label: "View branch customers",             module: "customers",   description: "View customer records within user branches." },
+    { id: "customers:view:org",            label: "View organisation customers",       module: "customers",   description: "View customer records across the organisation." },
+    { id: "customers:create",              label: "Create customers",                  module: "customers",   description: "Create customer records." },
+    { id: "customers:edit:own",            label: "Edit own customers",                module: "customers",   description: "Edit customer records owned by the user." },
+    { id: "customers:edit:department",     label: "Edit department customers",         module: "customers",   description: "Edit customer records within user departments." },
+    { id: "customers:edit:branch",         label: "Edit branch customers",             module: "customers",   description: "Edit customer records within user branches." },
+    { id: "customers:edit:org",            label: "Edit organisation customers",       module: "customers",   description: "Edit customer records across the organisation." },
+    { id: "customers:delete:own",          label: "Delete own customers",              module: "customers",   description: "Delete customer records owned by the user." },
+    { id: "customers:delete:department",   label: "Delete department customers",       module: "customers",   description: "Delete customer records within user departments." },
+    { id: "customers:delete:branch",       label: "Delete branch customers",           module: "customers",   description: "Delete customer records within user branches." },
+    { id: "customers:delete:org",          label: "Delete organisation customers",     module: "customers",   description: "Delete customer records across the organisation." },
+    { id: "companies:create",              label: "Create companies",                  module: "customers",   description: "Create company records." },
+    { id: "companies:edit:org",            label: "Edit companies",                    module: "customers",   description: "Edit company records." },
+    { id: "companies:delete:org",          label: "Delete companies",                  module: "customers",   description: "Delete company records." },
+
     // tickets
     { id: "tickets:create",                label: "Create tickets",                    module: "tickets",     description: "Open and submit new tickets." },
     { id: "tickets:status:set",            label: "Set ticket status",                 module: "tickets",     description: "Move a ticket between pipeline statuses." },
@@ -176,18 +194,55 @@ const PERMISSIONS = [
     { id: "tickets:assign",                label: "Assign tickets",                    module: "tickets",     description: "Claim, pass, or reject primary ownership of a ticket." },
     { id: "tickets:manage-participants",   label: "Manage ticket participants",        module: "tickets",     description: "Add or remove secondary owners on a ticket." },
     { id: "warranty:convert",              label: "Edit warranty status",              module: "tickets",     description: "Change the warranty field on a ticket (in-warranty / out-of-warranty)." },
+    { id: "tickets:view:own",              label: "View own tickets",                  module: "tickets",     description: "View tickets owned by the user." },
+    { id: "tickets:view:department",       label: "View department tickets",           module: "tickets",     description: "View tickets within user departments." },
+    { id: "tickets:view:branch",           label: "View branch tickets",               module: "tickets",     description: "View tickets within user branches." },
+    { id: "tickets:view:org",              label: "View organisation tickets",         module: "tickets",     description: "View tickets across the organisation." },
+    { id: "tickets:edit:own",              label: "Edit own tickets",                  module: "tickets",     description: "Edit tickets owned by the user." },
+    { id: "tickets:edit:department",       label: "Edit department tickets",           module: "tickets",     description: "Edit tickets in user departments." },
+    { id: "tickets:edit:branch",           label: "Edit branch tickets",               module: "tickets",     description: "Edit tickets in user branches." },
+    { id: "tickets:edit:org",              label: "Edit organisation tickets",         module: "tickets",     description: "Edit tickets across the organisation." },
+    { id: "tickets:delete:own",            label: "Delete own tickets",                module: "tickets",     description: "Delete tickets owned by the user." },
+    { id: "tickets:delete:department",     label: "Delete department tickets",         module: "tickets",     description: "Delete tickets in user departments." },
+    { id: "tickets:delete:branch",         label: "Delete branch tickets",             module: "tickets",     description: "Delete tickets in user branches." },
+    { id: "tickets:delete:org",            label: "Delete organisation tickets",       module: "tickets",     description: "Delete tickets across the organisation." },
+
     // assignments
     { id: "assignments:view-team",         label: "View team assignments",             module: "assignments", description: "See the My Team tab — all tickets routed to your role." },
     { id: "assignments:view-org",          label: "View organisation assignments",     module: "assignments", description: "See the All Organisation tab — every active ticket across all roles." },
+    { id: "assignments:view:own",          label: "View own assignments",              module: "assignments", description: "View assignments directly owned by the user." },
+    { id: "assignments:view:department",   label: "View department assignments",       module: "assignments", description: "View assignments inside user departments." },
+    { id: "assignments:view:branch",       label: "View branch assignments",           module: "assignments", description: "View assignments inside user branches." },
+    { id: "assignments:view:org",          label: "View organisation assignments",     module: "assignments", description: "View assignments across the organisation." },
+
     // service
     { id: "service-centers:view",          label: "View service centers",              module: "service",     description: "Access the Service Centers page in the sidebar." },
     { id: "service-centers:manage",        label: "Manage service centers",            module: "service",     description: "Add, edit, and delete service center records." },
+    { id: "service-centers:view:branch",   label: "View branch service centers",       module: "service",     description: "View service centers in user branches." },
+    { id: "service-centers:view:org",      label: "View organisation service centers", module: "service",     description: "View service centers across the organisation." },
+    { id: "service-centers:create",        label: "Create service centers",            module: "service",     description: "Create service center records." },
+    { id: "service-centers:edit:org",      label: "Edit service centers",              module: "service",     description: "Edit service center records." },
+    { id: "service-centers:delete:org",    label: "Delete service centers",            module: "service",     description: "Delete service center records." },
+
     // admin
     { id: "users:manage",                  label: "Manage users",                      module: "admin",       description: "Create, edit, and delete user accounts." },
     { id: "roles:manage",                  label: "Manage roles",                      module: "admin",       description: "Create and edit roles and their permission sets." },
     { id: "settings:manage",               label: "Manage org settings",               module: "admin",       description: "Manage branches, departments, and posts." },
     { id: "settings:statuses",             label: "Manage statuses & sub-statuses",    module: "admin",       description: "Create, edit, and delete ticket statuses and sub-statuses." },
     { id: "settings:pipelines",            label: "Manage pipelines",                  module: "admin",       description: "Create, edit, and configure pipelines." },
+    { id: "users:create",                  label: "Create users",                      module: "admin",       description: "Create user accounts." },
+    { id: "users:edit:org",                label: "Edit users",                        module: "admin",       description: "Edit user accounts." },
+    { id: "users:delete:org",              label: "Delete users",                      module: "admin",       description: "Delete user accounts." },
+    { id: "roles:create",                  label: "Create roles",                      module: "admin",       description: "Create role definitions." },
+    { id: "roles:edit:org",                label: "Edit roles",                        module: "admin",       description: "Edit role definitions and grants." },
+    { id: "roles:delete:org",              label: "Delete roles",                      module: "admin",       description: "Delete custom role definitions." },
+    { id: "settings:edit",                 label: "Edit settings",                     module: "admin",       description: "Edit organisation-wide settings." },
+    { id: "settings:statuses:create",      label: "Create statuses",                   module: "admin",       description: "Create ticket statuses and sub-statuses." },
+    { id: "settings:statuses:edit",        label: "Edit statuses",                     module: "admin",       description: "Edit ticket statuses and sub-statuses." },
+    { id: "settings:statuses:delete",      label: "Delete statuses",                   module: "admin",       description: "Delete ticket statuses and sub-statuses." },
+    { id: "settings:pipelines:create",     label: "Create pipelines",                  module: "admin",       description: "Create pipelines." },
+    { id: "settings:pipelines:edit",       label: "Edit pipelines",                    module: "admin",       description: "Edit pipelines." },
+    { id: "settings:pipelines:delete",     label: "Delete pipelines",                  module: "admin",       description: "Delete pipelines." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {

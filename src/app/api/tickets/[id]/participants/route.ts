@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { resolvedUserFromSession } from "@/lib/permissions";
+import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
 
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),
@@ -16,11 +18,22 @@ export async function GET(
 ) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = resolvedUserFromSession(session);
+    const scopeWhere = buildTicketReadScopeWhere(user);
 
     const { id } = await params;
     const ticketId = Number(id);
 
     try {
+        const scopedTicket = await prisma.ticket.findFirst({
+            where: {
+                id: ticketId,
+                ...(scopeWhere ?? {}),
+            },
+            select: { id: true },
+        });
+        if (!scopedTicket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+
         const participants = await prisma.ticketParticipant.findMany({
             where: { ticketId, removedAt: null },
             include: { user: { select: { id: true, name: true, role: true } } },
@@ -49,8 +62,12 @@ export async function POST(
     const body = parsed.data;
 
     try {
-        const ticket = await prisma.ticket.findUnique({
-            where: { id: ticketId },
+        const scopeWhere = buildTicketReadScopeWhere(user);
+        const ticket = await prisma.ticket.findFirst({
+            where: {
+                id: ticketId,
+                ...(scopeWhere ?? {}),
+            },
             select: { ticketStatus: { select: { isTerminal: true } } },
         });
         if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });

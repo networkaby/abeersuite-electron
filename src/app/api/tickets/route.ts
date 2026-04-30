@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
+import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
 
 const createTicketSchema = z.object({
     customerId: z.coerce.number().int().positive().optional(),
@@ -33,14 +34,22 @@ const createTicketSchema = z.object({
 
 // GET /api/tickets?pipelineId=P1
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
         const pipelineId = searchParams.get("pipelineId");
+        const scopeWhere = buildTicketReadScopeWhere(user);
+
+        const where = {
+            AND: [
+                ...(pipelineId ? [{ pipelineId }] : []),
+                ...(scopeWhere ? [scopeWhere] : []),
+            ],
+        };
 
         const tickets = await prisma.ticket.findMany({
-            where: pipelineId ? { pipelineId } : undefined,
+            where,
             orderBy: { createdAt: "desc" },
             include: {
                 device: {

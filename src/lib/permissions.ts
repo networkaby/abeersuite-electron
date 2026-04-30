@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 export interface ResolvedUser {
     id:            number;
@@ -13,7 +14,7 @@ export interface ResolvedUser {
 }
 
 export function hasPermission(user: ResolvedUser, permissionId: string): boolean {
-    return user.permissions.includes(permissionId);
+    return hasPermissionWithScope(user.permissions, permissionId);
 }
 
 export function isAdmin(user: ResolvedUser): boolean {
@@ -46,7 +47,7 @@ export async function requirePermission(permissionId: string): Promise<Permissio
         branchIds:     sessionUser.branchIds ?? [],
     };
 
-    if (!resolved.permissions.includes(permissionId)) {
+    if (!hasPermission(resolved, permissionId)) {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
 

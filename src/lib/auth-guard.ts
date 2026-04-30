@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 export interface ResolvedUser {
     id:            number;
@@ -11,7 +12,7 @@ export interface ResolvedUser {
 }
 
 export function hasPermission(user: ResolvedUser, permissionId: string): boolean {
-    return user.permissions.includes(permissionId);
+    return hasPermissionWithScope(user.permissions, permissionId);
 }
 
 export function isAdmin(user: ResolvedUser): boolean {
@@ -60,8 +61,7 @@ export async function requireRole(...roles: string[]): Promise<GuardResult> {
 export async function requirePermission(permissionId: string): Promise<GuardResult> {
     const result = await requireAuth();
     if (result.response) return result;
-    const { permissions } = result.user;
-    if (!permissions.includes("admin:bypass") && !permissions.includes(permissionId)) {
+    if (!hasPermission(result.user, permissionId)) {
         return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
     return result;

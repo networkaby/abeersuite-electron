@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission, isAdmin } from "@/lib/auth-guard";
 import { z } from "zod";
+import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
 
 const assignSchema = z.object({
     action: z.enum(["claim", "pass", "reject"]),
@@ -26,8 +27,12 @@ export async function POST(
     const { action, toUserId } = body;
 
     try {
-        const ticket = await prisma.ticket.findUnique({
-            where: { id: ticketId },
+        const scopeWhere = buildTicketReadScopeWhere(user);
+        const ticket = await prisma.ticket.findFirst({
+            where: {
+                id: ticketId,
+                ...(scopeWhere ?? {}),
+            },
             select: {
                 id: true,
                 primaryOwnerId: true,
