@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BUTTON_BAR_ACTIONS, type ButtonBarAction } from "@/utils/constants";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
@@ -18,6 +18,7 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
 export default function ButtonBar({ user }: { user?: UserType }) {
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
+    const [collapsed, setCollapsed] = useState(false);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     useEffect(() => {
@@ -42,18 +43,35 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     };
 
     return (
-        <aside className="flex w-52 flex-col border-l border-border bg-sidebar">
+        <aside
+            className={[
+                collapsed ? "w-16" : "w-52",
+                "relative flex flex-col border-l border-border bg-sidebar transition-all duration-300 shrink-0",
+            ].join(" ")}
+        >
+            {/* Collapse toggle */}
+            <button
+                type="button"
+                onClick={() => setCollapsed((c) => !c)}
+                aria-label={collapsed ? "Expand button bar" : "Collapse button bar"}
+                className="absolute -left-3 top-8 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+            >
+                {collapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+            </button>
+
             {/* Header */}
-            <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
+            <div className={`flex items-center border-b border-border px-4 py-3 ${collapsed ? "justify-center px-3" : "gap-2.5"}`}>
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-primary/10 text-primary">
                     <Zap size={14} />
                 </div>
-                <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">Quick Actions</p>
-                    {user?.name && (
-                        <p className="truncate text-xs text-muted-foreground">{user.name}</p>
-                    )}
-                </div>
+                {!collapsed && (
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">Quick Actions</p>
+                        {user?.name && (
+                            <p className="truncate text-xs text-muted-foreground">{user.name}</p>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Action buttons */}
@@ -66,10 +84,12 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                         <button
                             key={action.label}
                             type="button"
+                            title={collapsed ? action.label : ""}
                             disabled={action.disabled}
                             onClick={() => handleAction(action)}
                             className={[
                                 "group w-full border-2 border-border text-left transition-all duration-150",
+                                collapsed ? "px-0" : "",
                                 action.disabled
                                     ? "cursor-not-allowed border-border bg-muted opacity-50"
                                     : isPrimary
@@ -77,7 +97,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                         : "border-border bg-card hover:bg-muted active:scale-[0.98]",
                             ].join(" ")}
                         >
-                            <div className="flex items-center gap-3 px-3 py-2.5">
+                            <div className={`flex items-center px-3 py-2.5 ${collapsed ? "justify-center" : "gap-3"}`}>
                                 {/* Icon */}
                                 <div className={[
                                     "flex h-8 w-8 shrink-0 items-center justify-center transition-colors",
@@ -91,28 +111,30 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                 </div>
 
                                 {/* Label + subtitle */}
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className={[
-                                            "block truncate text-sm font-semibold",
-                                            action.disabled
-                                                ? "text-muted-foreground"
-                                                : isPrimary
-                                                    ? "text-primary"
-                                                    : "text-foreground",
-                                        ].join(" ")}>
-                                            {action.label}
+                                {!collapsed && (
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={[
+                                                "block truncate text-sm font-semibold",
+                                                action.disabled
+                                                    ? "text-muted-foreground"
+                                                    : isPrimary
+                                                        ? "text-primary"
+                                                        : "text-foreground",
+                                            ].join(" ")}>
+                                                {action.label}
+                                            </span>
+                                            {action.disabled && (
+                                                <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
+                                                    Soon
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <span className="block truncate text-xs text-muted-foreground">
+                                            {action.subtitle}
                                         </span>
-                                        {action.disabled && (
-                                            <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
-                                                Soon
-                                            </Badge>
-                                        )}
                                     </div>
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                        {action.subtitle}
-                                    </span>
-                                </div>
+                                )}
                             </div>
                         </button>
                     );
