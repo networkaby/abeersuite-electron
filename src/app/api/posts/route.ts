@@ -9,12 +9,14 @@ const createSchema = z.object({
     branchId:     z.string().trim().optional().nullable(),
     departmentId: z.string().trim().optional().nullable(),
     parentPostId: z.string().trim().optional().nullable(),
+    roleTemplateId: z.string().trim().optional().nullable(),
 });
 
 const POST_INCLUDE = {
     branch:     { select: { id: true, name: true } },
     department: { select: { id: true, name: true } },
     parent:     { select: { id: true, title: true } },
+    roleTemplate: { select: { id: true, label: true, color: true } },
     holders:    {
         select: {
             createdAt: true,
@@ -33,7 +35,8 @@ export async function GET() {
             include: POST_INCLUDE,
         });
         return NextResponse.json(posts);
-    } catch {
+    } catch (error) {
+        console.error("GET /api/posts failed", error);
         return NextResponse.json({ error: "Failed to fetch posts" }, { status: 500 });
     }
 }
@@ -46,11 +49,18 @@ export async function POST(req: Request) {
         if (!parsed.success) {
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
         }
-        const { id, title, branchId, departmentId, parentPostId } = parsed.data;
+        const { id, title, branchId, departmentId, parentPostId, roleTemplateId } = parsed.data;
         const existing = await prisma.post.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Post ID already exists" }, { status: 409 });
         const post = await prisma.post.create({
-            data: { id, title, branchId: branchId ?? null, departmentId: departmentId ?? null, parentPostId: parentPostId ?? null },
+            data: {
+                id,
+                title,
+                branchId: branchId ?? null,
+                departmentId: departmentId ?? null,
+                parentPostId: parentPostId ?? null,
+                roleTemplateId: roleTemplateId ?? null,
+            },
             include: POST_INCLUDE,
         });
         return NextResponse.json(post, { status: 201 });

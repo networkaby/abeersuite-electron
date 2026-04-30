@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 interface Branch     { id: string; name: string; }
 interface Department { id: string; name: string; branchId: string | null; }
 interface UserStub   { id: number; name: string; avatarUrl: string | null; role: string; title: string | null; userRole: { label: string; color: string }; }
+interface RoleOption { id: string; label: string; color: string; }
 
 interface Post {
     id: string;
@@ -24,15 +25,17 @@ interface Post {
     branchId: string | null;
     departmentId: string | null;
     parentPostId: string | null;
+    roleTemplateId: string | null;
     branch:     { id: string; name: string } | null;
     department: { id: string; name: string } | null;
     parent:     { id: string; title: string } | null;
+    roleTemplate: { id: string; label: string; color: string } | null;
     holders:    { user: UserStub }[];
     _count:     { children: number };
 }
 
-type FormState = { id: string; title: string; branchId: string; departmentId: string; parentPostId: string };
-const EMPTY: FormState = { id: "", title: "", branchId: "", departmentId: "", parentPostId: "" };
+type FormState = { id: string; title: string; branchId: string; departmentId: string; parentPostId: string; roleTemplateId: string };
+const EMPTY: FormState = { id: "", title: "", branchId: "", departmentId: "", parentPostId: "", roleTemplateId: "" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -71,13 +74,14 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
 // ── Form fields (extracted to avoid remount on parent re-render) ──────────────
 
 function PostFormFields({
-    addingNew, form, branches, departments, allPosts, onChange,
+    addingNew, form, branches, departments, allPosts, roleOptions, onChange,
 }: {
     addingNew: boolean;
     form: FormState;
     branches: Branch[];
     departments: Department[];
     allPosts: Post[];
+    roleOptions: RoleOption[];
     onChange: (f: FormState) => void;
 }) {
     const filteredDepts = form.branchId
@@ -126,6 +130,19 @@ function PostFormFields({
                 >
                     <option value="">— None —</option>
                     {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+            </div>
+            <div className="col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Role template <span className="font-normal">(optional)</span></label>
+                <select
+                    value={form.roleTemplateId}
+                    onChange={e => onChange({ ...form, roleTemplateId: e.target.value })}
+                    className="mt-1 w-full border-2 border-border bg-background text-sm px-3 py-2 focus:outline-none focus:border-primary"
+                >
+                    <option value="">— None —</option>
+                    {roleOptions.map(role => (
+                        <option key={role.id} value={role.id}>{role.label} ({role.id})</option>
+                    ))}
                 </select>
             </div>
             <div className="col-span-2">
@@ -209,7 +226,7 @@ function AssignPanel({
 // ── Post row ──────────────────────────────────────────────────────────────────
 
 function PostRow({
-    post, allPosts, allUsers, branches, departments,
+    post, allPosts, allUsers, branches, departments, roleOptions,
     onSave, onDelete, onAssign, onUnassign,
 }: {
     post: Post;
@@ -217,6 +234,7 @@ function PostRow({
     allUsers: UserStub[];
     branches: Branch[];
     departments: Department[];
+    roleOptions: RoleOption[];
     onSave: (id: string, data: object) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
     onAssign: (postId: string, userId: number) => Promise<void>;
@@ -226,7 +244,7 @@ function PostRow({
     const [expanded, setExpanded] = useState(false);
     const [form, setForm]         = useState<FormState>({
         id: post.id, title: post.title,
-        branchId: post.branchId ?? "", departmentId: post.departmentId ?? "", parentPostId: post.parentPostId ?? "",
+        branchId: post.branchId ?? "", departmentId: post.departmentId ?? "", parentPostId: post.parentPostId ?? "", roleTemplateId: post.roleTemplateId ?? "",
     });
     const [saving, setSaving] = useState(false);
 
@@ -238,7 +256,7 @@ function PostRow({
     const openEdit = () => {
         setForm({
             id: post.id, title: post.title,
-            branchId: post.branchId ?? "", departmentId: post.departmentId ?? "", parentPostId: post.parentPostId ?? "",
+            branchId: post.branchId ?? "", departmentId: post.departmentId ?? "", parentPostId: post.parentPostId ?? "", roleTemplateId: post.roleTemplateId ?? "",
         });
         setEditing(true);
     };
@@ -252,6 +270,7 @@ function PostRow({
                 branchId:     form.branchId     || null,
                 departmentId: form.departmentId || null,
                 parentPostId: form.parentPostId || null,
+                roleTemplateId: form.roleTemplateId || null,
             });
             setEditing(false);
         } finally {
@@ -265,7 +284,7 @@ function PostRow({
                 <div className="p-4 space-y-3">
                     <PostFormFields
                         addingNew={false} form={form} branches={branches}
-                        departments={departments} allPosts={allPosts} onChange={setForm}
+                        departments={departments} allPosts={allPosts} roleOptions={roleOptions} onChange={setForm}
                     />
                     <div className="flex gap-2">
                         <Button size="sm" onClick={handleSave} disabled={saving}><Check size={14} /> Save</Button>
@@ -287,6 +306,11 @@ function PostRow({
                                 <Badge className="font-mono text-[10px]">{post.id}</Badge>
                                 {post.parent && (
                                     <span className="text-[11px] text-muted-foreground">↑ {post.parent.title}</span>
+                                )}
+                                {post.roleTemplate && (
+                                    <Badge className={`${post.roleTemplate.color} text-[10px]`}>
+                                        Template: {post.roleTemplate.label}
+                                    </Badge>
                                 )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
@@ -341,6 +365,7 @@ export default function PostsPage() {
     const [branches, setBranches]     = useState<Branch[]>([]);
     const [departments, setDepts]     = useState<Department[]>([]);
     const [allUsers, setAllUsers]     = useState<UserStub[]>([]);
+    const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
     const [loading, setLoading]       = useState(true);
     const [addingNew, setAddingNew]   = useState(false);
     const [form, setForm]             = useState<FormState>(EMPTY);
@@ -349,16 +374,18 @@ export default function PostsPage() {
 
     const loadAll = async () => {
         try {
-            const [pRes, bRes, dRes, uRes] = await Promise.all([
+            const [pRes, bRes, dRes, uRes, rRes] = await Promise.all([
                 axios.get<Post[]>("/api/posts"),
                 axios.get<Branch[]>("/api/branches"),
                 axios.get<Department[]>("/api/departments"),
                 axios.get<UserStub[]>("/api/users"),
+                axios.get<RoleOption[]>("/api/roles"),
             ]);
             setPosts(pRes.data);
             setBranches(bRes.data);
             setDepts(dRes.data);
             setAllUsers(uRes.data);
+            setRoleOptions(rRes.data);
         } catch { toast.error("Failed to load data"); }
         finally { setLoading(false); }
     };
@@ -376,6 +403,7 @@ export default function PostsPage() {
                 branchId:     form.branchId || null,
                 departmentId: form.departmentId || null,
                 parentPostId: form.parentPostId || null,
+                roleTemplateId: form.roleTemplateId || null,
             });
             toast.success("Post created");
             setForm(EMPTY); setAddingNew(false);
@@ -485,7 +513,7 @@ export default function PostsPage() {
                     <p className="text-sm font-semibold">New Post</p>
                     <PostFormFields
                         addingNew={true} form={form} branches={branches}
-                        departments={departments} allPosts={posts} onChange={setForm}
+                        departments={departments} allPosts={posts} roleOptions={roleOptions} onChange={setForm}
                     />
                     <div className="flex gap-2 pt-1">
                         <Button onClick={handleCreate} disabled={saving} size="sm"><Check size={14} /> Create</Button>
@@ -513,7 +541,7 @@ export default function PostsPage() {
                             <div className="space-y-1.5">
                                 {orgPosts.map(p => (
                                     <PostRow key={p.id} post={p} allPosts={posts} allUsers={allUsers}
-                                        branches={branches} departments={departments}
+                                        branches={branches} departments={departments} roleOptions={roleOptions}
                                         onSave={handleSave} onDelete={handleDelete}
                                         onAssign={handleAssign} onUnassign={handleUnassign} />
                                 ))}
@@ -542,7 +570,7 @@ export default function PostsPage() {
                                     <div className="space-y-1.5 mb-3">
                                         {noDeptPosts.map(p => (
                                             <PostRow key={p.id} post={p} allPosts={posts} allUsers={allUsers}
-                                                branches={branches} departments={departments}
+                                                branches={branches} departments={departments} roleOptions={roleOptions}
                                                 onSave={handleSave} onDelete={handleDelete}
                                                 onAssign={handleAssign} onUnassign={handleUnassign} />
                                         ))}
@@ -559,7 +587,7 @@ export default function PostsPage() {
                                         <div className="space-y-1.5">
                                             {dPosts.map(p => (
                                                 <PostRow key={p.id} post={p} allPosts={posts} allUsers={allUsers}
-                                                    branches={branches} departments={departments}
+                                                    branches={branches} departments={departments} roleOptions={roleOptions}
                                                     onSave={handleSave} onDelete={handleDelete}
                                                     onAssign={handleAssign} onUnassign={handleUnassign} />
                                             ))}

@@ -70,6 +70,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 permissions: { include: { permission: true } },
                             },
                         },
+                        posts: {
+                            include: {
+                                post: {
+                                    include: {
+                                        roleTemplate: {
+                                            include: {
+                                                permissions: { include: { permission: true } },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
                         departments: { select: { id: true } },
                         branches:    { select: { id: true } },
                     },
@@ -84,7 +97,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                 if (!isValid) return null;
 
-                const roles = [user.role];
+                const inheritedRoleIds = user.posts
+                    .map((up) => up.post.roleTemplateId)
+                    .filter((id): id is string => Boolean(id));
+                const roles = [...new Set([user.role, ...inheritedRoleIds])];
                 const primaryRole = user.role;
 
                 // Role-granted permissions
@@ -92,6 +108,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 for (const rp of user.userRole.permissions) {
                     const permId = rp.permission?.id;
                     if (permId) effective.add(permId);
+                }
+                // Inherit role-template permissions from held posts
+                for (const userPost of user.posts) {
+                    const templatePerms = userPost.post.roleTemplate?.permissions ?? [];
+                    for (const rp of templatePerms) {
+                        const permId = rp.permission?.id;
+                        if (permId) effective.add(permId);
+                    }
                 }
 
                 // Per-user overrides (non-expired only)

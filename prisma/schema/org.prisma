@@ -34,12 +34,14 @@ model Post {
   branchId     String?
   departmentId String?
   parentPostId String?
+  roleTemplateId String?
   createdAt    DateTime   @default(now())
 
   branch       Branch?     @relation(fields: [branchId], references: [id])
   department   Department? @relation(fields: [departmentId], references: [id])
   parent       Post?       @relation("PostHierarchy", fields: [parentPostId], references: [id])
   children     Post[]      @relation("PostHierarchy")
+  roleTemplate Role?       @relation(fields: [roleTemplateId], references: [id])
   holders      UserPost[]
 }
 

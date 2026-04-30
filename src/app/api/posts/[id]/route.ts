@@ -8,12 +8,14 @@ const updateSchema = z.object({
     branchId:     z.string().trim().optional().nullable(),
     departmentId: z.string().trim().optional().nullable(),
     parentPostId: z.string().trim().optional().nullable(),
+    roleTemplateId: z.string().trim().optional().nullable(),
 });
 
 const POST_INCLUDE = {
     branch:     { select: { id: true, name: true } },
     department: { select: { id: true, name: true } },
     parent:     { select: { id: true, title: true } },
+    roleTemplate: { select: { id: true, label: true, color: true } },
     holders:    {
         select: {
             createdAt: true,
