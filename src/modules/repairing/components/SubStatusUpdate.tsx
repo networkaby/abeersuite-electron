@@ -105,15 +105,16 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                 ) : (
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-2 max-h-64 overflow-y-auto">
-                            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-                                <input
-                                    type="radio"
-                                    {...register("subStatusId")}
-                                    value=""
-                                    className="accent-primary"
-                                />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setValue("subStatusId", "")}
+                                className={`h-auto w-full justify-start gap-2 px-3 py-2 text-sm ${
+                                    selectedId === "" ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
+                                }`}
+                            >
                                 <span className="text-muted-foreground">— Clear sub-status —</span>
-                            </label>
+                            </Button>
 
                             {Object.entries(grouped).map(([groupKey, items]) => (
                                 <div key={groupKey}>
@@ -123,17 +124,16 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                     {items.map((ss) => {
                                         const canSet = ss.notifyRoles.length === 0 || ss.notifyRoles.some(r => userRoles.includes(r));
                                         return (
-                                            <label
+                                            <Button
                                                 key={ss.id}
-                                                className={`flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm ${!canSet ? "opacity-50 cursor-not-allowed" : ""}`}
+                                                type="button"
+                                                variant="outline"
+                                                disabled={!canSet}
+                                                onClick={() => setValue("subStatusId", ss.id)}
+                                                className={`h-auto w-full justify-start gap-2 px-3 py-2 text-sm ${!canSet ? "opacity-50" : ""} ${
+                                                    selectedId === ss.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
+                                                }`}
                                             >
-                                                <input
-                                                    type="radio"
-                                                    {...register("subStatusId")}
-                                                    value={ss.id}
-                                                    disabled={!canSet}
-                                                    className="accent-primary"
-                                                />
                                                 <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${ss.color}`}>{ss.label}</span>
                                                 {ss.triggerStatus && (
                                                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -145,7 +145,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                                         {ss.notifyRoles.map(r => roleLabelMap[r] ?? r).join(", ")}
                                                     </span>
                                                 )}
-                                            </label>
+                                            </Button>
                                         );
                                     })}
                                 </div>

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import { Users, Briefcase, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import type { OrgNode } from "@/app/api/org-chart/route";
 import type { PostNode } from "@/app/api/posts/structure/route";
 import OrgTree from "@/modules/admin/components/OrgTree";
@@ -65,11 +66,13 @@ export default function OrgChartPage() {
                     const Icon = t.icon;
                     const active = tab === t.id;
                     return (
-                        <button
+                        <Button
                             key={t.id}
+                            type="button"
+                            variant="ghost"
                             onClick={() => setTab(t.id)}
                             className={[
-                                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-0.5 transition-colors",
+                                "h-auto flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-0.5 rounded-none transition-colors",
                                 active
                                     ? "border-primary text-primary"
                                     : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
@@ -77,7 +80,7 @@ export default function OrgChartPage() {
                         >
                             <Icon size={14} />
                             {t.label}
-                        </button>
+                        </Button>
                     );
                 })}
             </div>

@@ -7,6 +7,13 @@ import { Plus, Pencil, Trash2, X, Check, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface Branch { id: string; name: string; }
 interface Department {
@@ -57,14 +64,15 @@ function DeptFormFields({
                 <label className="text-xs font-medium text-muted-foreground">
                     Branch scope <span className="font-normal text-muted-foreground">(leave blank = cross-branch)</span>
                 </label>
-                <select
-                    value={form.branchId}
-                    onChange={e => onChange({ ...form, branchId: e.target.value })}
-                    className="mt-1 h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                    <option value="">— All branches —</option>
-                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
+                <Select value={form.branchId || "all-branches"} onValueChange={(value) => onChange({ ...form, branchId: value === "all-branches" ? "" : value })}>
+                    <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="All branches" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all-branches">All branches</SelectItem>
+                        {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="col-span-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>

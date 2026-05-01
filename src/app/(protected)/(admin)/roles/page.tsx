@@ -179,13 +179,15 @@ export default function RolesSettingsPage() {
                                 </label>
                                 <div className="flex gap-1.5 flex-wrap">
                                     {COLOR_OPTIONS.map(c => (
-                                        <button
+                                        <Button
                                             key={c.value}
                                             type="button"
                                             title={c.label}
                                             onClick={() => setNewRole(r => ({ ...r, color: c.value }))}
+                                            variant="ghost"
+                                            size="icon-sm"
                                             className={[
-                                                "h-7 w-7 border-2 transition-all duration-150",
+                                                "border-2 transition-all duration-150",
                                                 c.dot,
                                                 newRole.color === c.value
                                                     ? "border-foreground ring-2 ring-border ring-offset-1 scale-110"
@@ -261,17 +263,20 @@ export default function RolesSettingsPage() {
                                                     className="h-6 w-16 text-xs px-1 py-0"
                                                     autoFocus
                                                 />
-                                                <button onClick={handleSaveRank} className="text-[11px] text-primary font-semibold hover:underline">Save</button>
-                                                <button onClick={() => setEditingRank(null)} className="text-[11px] text-muted-foreground hover:underline">×</button>
+                                                <Button type="button" variant="link" size="xs" onClick={handleSaveRank} className="h-auto p-0 text-[11px]">Save</Button>
+                                                <Button type="button" variant="link" size="xs" onClick={() => setEditingRank(null)} className="h-auto p-0 text-[11px] text-muted-foreground">×</Button>
                                             </span>
                                         ) : (
-                                            <button
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="xs"
                                                 onClick={() => setEditingRank({ id: role.id, rank: role.rank })}
-                                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-muted border border-border px-2 py-0.5 hover:border-primary hover:text-primary transition-colors"
+                                                className="h-auto items-center gap-1 border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary hover:text-primary"
                                                 title="Click to edit rank"
                                             >
                                                 Rank {role.rank}
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 </div>

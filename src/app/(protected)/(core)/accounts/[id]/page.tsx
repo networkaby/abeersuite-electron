@@ -220,12 +220,15 @@ export default function AccountDetailPage() {
                                 <Link2 size={15} />
                                 {isCompany ? "Linked Individuals" : "Linked Companies"}
                             </h2>
-                            <button
+                            <Button
+                                type="button"
+                                variant="link"
+                                size="xs"
                                 onClick={() => setShowLinkModal(true)}
-                                className="text-xs flex items-center gap-1 text-primary hover:text-primary/80"
+                                className="h-auto gap-1 p-0 text-xs text-primary hover:text-primary/80"
                             >
                                 <Plus size={13} /> Link
-                            </button>
+                            </Button>
                         </div>
 
                         {relationships.length === 0 ? (
@@ -246,13 +249,16 @@ export default function AccountDetailPage() {
                                                 {linked?.phone && <p className="text-xs text-muted-foreground">{linked.phone}</p>}
                                                 {rel.role && <span className="text-xs text-muted-foreground italic">{rel.role}</span>}
                                             </div>
-                                            <button
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-xs"
                                                 onClick={() => unlink(rel.id)}
-                                                className="text-muted-foreground/40 hover:text-destructive shrink-0 mt-0.5"
+                                                className="mt-0.5 shrink-0 text-muted-foreground/40 hover:text-destructive"
                                                 title="Unlink"
                                             >
                                                 <Unlink size={13} />
-                                            </button>
+                                            </Button>
                                         </div>
                                     );
                                 })}
@@ -311,11 +317,13 @@ export default function AccountDetailPage() {
                                 </div>
                                 <div className="max-h-48 divide-y divide-border overflow-y-auto rounded-md border border-border">
                                     {linkResults.map(r => (
-                                        <button
+                                        <Button
                                             key={r.id}
+                                            type="button"
+                                            variant="ghost"
                                             onClick={() => linkTo(r.id)}
                                             disabled={linking}
-                                            className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-primary/10 disabled:opacity-50"
+                                            className="h-auto w-full justify-start gap-3 rounded-none px-4 py-3 text-left text-sm hover:bg-primary/10 disabled:opacity-50"
                                         >
                                             {r.type === "company"
                                                 ? <Building2 size={14} className="text-purple-500 shrink-0" />
@@ -325,7 +333,7 @@ export default function AccountDetailPage() {
                                                 <p className="font-medium">{r.name}</p>
                                                 {r.phone && <p className="text-xs text-muted-foreground">{r.phone}</p>}
                                             </div>
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
                             </>

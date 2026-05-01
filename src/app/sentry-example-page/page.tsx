@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 class SentryExampleFrontendError extends Error {
   constructor(message: string | undefined) {
@@ -68,8 +69,9 @@ export default function Page() {
           .
         </p>
 
-        <button
+        <Button
           type="button"
+          className="sentry-trigger"
           onClick={async () => {
             Sentry.logger.info("User clicked the button, throwing a sample error");
             await Sentry.startSpan(
@@ -91,7 +93,7 @@ export default function Page() {
           disabled={!isConnected}
         >
           <span>Throw Sample Error</span>
-        </button>
+        </Button>
 
         {hasSentError ? (
           <p className="success">Error sent to Sentry.</p>
@@ -146,7 +148,7 @@ export default function Page() {
           }
         }
 
-        button {
+        .sentry-trigger {
           border-radius: 8px;
           color: white;
           cursor: pointer;

@@ -303,13 +303,16 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                                         "flex items-center gap-2.5 border-b border-border px-4 py-3",
                                         meta?.chip ?? "bg-muted text-foreground",
                                     ].join(" ")}>
-                                        <button
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-xs"
                                             onClick={() => toggleModule(mod)}
                                             className="opacity-60 hover:opacity-100 transition-opacity"
                                             title={isCollapsed ? "Expand" : "Collapse"}
                                         >
                                             {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                                        </button>
+                                        </Button>
                                         <span className="opacity-70">{meta?.icon}</span>
                                         <div className="flex-1 min-w-0">
                                             <span className="text-xs font-bold uppercase tracking-wider">
@@ -324,12 +327,15 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                                         <span className="text-xs font-semibold tabular-nums opacity-60">
                                             {selectedInMod}/{perms.length}
                                         </span>
-                                        <button
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="xs"
                                             onClick={() => allSelected ? deselectAll(perms) : selectAll(perms)}
-                                            className="text-xs font-medium px-2 py-0.5 hover:bg-black/10 transition-colors rounded"
+                                            className="h-auto px-2 py-0.5 text-xs font-medium hover:bg-black/10"
                                         >
                                             {allSelected ? "None" : "All"}
-                                        </button>
+                                        </Button>
                                     </div>
 
                                     {/* Permission rows */}
@@ -342,12 +348,13 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                                                 const changed     = isOn !== wasOriginal;
 
                                                 return (
-                                                    <button
+                                                    <Button
                                                         key={p.id}
                                                         type="button"
+                                                        variant="ghost"
                                                         onClick={() => togglePerm(p.id)}
                                                         className={[
-                                                            "flex w-full items-start gap-4 px-5 py-3.5 text-left transition-colors group",
+                                                            "h-auto w-full items-start justify-start gap-4 rounded-none px-5 py-3.5 text-left transition-colors group",
                                                             isDangerous
                                                                 ? isOn ? "bg-destructive/10 hover:bg-destructive/5" : "hover:bg-destructive/5"
                                                                 : isOn ? "bg-primary/5 hover:bg-primary/10"   : "hover:bg-muted/60",
@@ -396,7 +403,7 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                                                                 {p.id}
                                                             </p>
                                                         </div>
-                                                    </button>
+                                                    </Button>
                                                 );
                                             })}
                                         </div>

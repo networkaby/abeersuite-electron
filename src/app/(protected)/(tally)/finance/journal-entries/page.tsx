@@ -9,6 +9,13 @@ import { Plus, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface JournalEntry {
     id: number;
@@ -172,26 +179,34 @@ export default function JournalEntriesPage() {
                                 {form.lines.map((line, i) => (
                                     <tr key={i} className="border-t border-border">
                                         <td className="px-3 py-2">
-                                            <select
-                                                value={line.accountId}
-                                                onChange={(e) => updateLine(i, { accountId: Number(e.target.value) })}
-                                                className={cellClass}
+                                            <Select
+                                                value={String(line.accountId)}
+                                                onValueChange={(value) => updateLine(i, { accountId: Number(value) })}
                                             >
-                                                <option value={0}>Select account</option>
-                                                {accounts.map((a) => (
-                                                    <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-                                                ))}
-                                            </select>
+                                                <SelectTrigger className={cellClass}>
+                                                    <SelectValue placeholder="Select account" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="0">Select account</SelectItem>
+                                                    {accounts.map((a) => (
+                                                        <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </td>
                                         <td className="px-3 py-2">
-                                            <select
+                                            <Select
                                                 value={line.type}
-                                                onChange={(e) => updateLine(i, { type: e.target.value as "DEBIT" | "CREDIT" })}
-                                                className={cellClass}
+                                                onValueChange={(value) => updateLine(i, { type: value as "DEBIT" | "CREDIT" })}
                                             >
-                                                <option>DEBIT</option>
-                                                <option>CREDIT</option>
-                                            </select>
+                                                <SelectTrigger className={cellClass}>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="DEBIT">DEBIT</SelectItem>
+                                                    <SelectItem value="CREDIT">CREDIT</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </td>
                                         <td className="px-3 py-2">
                                             <Input

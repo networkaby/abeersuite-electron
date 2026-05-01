@@ -4,15 +4,20 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+const tableWrapperClasses = "relative w-full overflow-x-auto"
+const tableBaseClasses = "w-full caption-bottom text-sm"
+const tableInteractiveRowClasses =
+  "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={tableWrapperClasses}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(tableBaseClasses, className)}
         {...props}
       />
     </div>
@@ -56,10 +61,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       data-slot="table-row"
-      className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
-        className
-      )}
+      className={cn(tableInteractiveRowClasses, className)}
       {...props}
     />
   )

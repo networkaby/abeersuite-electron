@@ -11,6 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,9 +70,9 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
             <span className="font-medium">{user.name}</span>
             <Badge className={`${user.userRole.color} text-[9px] px-1 py-0`}>{user.userRole.label}</Badge>
             {onRemove && (
-                <button onClick={onRemove} className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors" title="Remove">
+                <Button type="button" variant="ghost" size="icon-xs" onClick={onRemove} className="ml-0.5" title="Remove">
                     <X size={11} />
-                </button>
+                </Button>
             )}
         </span>
     );
@@ -112,53 +119,57 @@ function PostFormFields({
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Branch scope <span className="font-normal">(blank = org-wide)</span></label>
-                <select
-                    value={form.branchId}
-                    onChange={e => onChange({ ...form, branchId: e.target.value, departmentId: "" })}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                    <option value="">— Org-wide (Executive Council) —</option>
-                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
+                <Select value={form.branchId || "org-wide"} onValueChange={(value) => onChange({ ...form, branchId: value === "org-wide" ? "" : value, departmentId: "" })}>
+                    <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Org-wide (Executive Council)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="org-wide">Org-wide (Executive Council)</SelectItem>
+                        {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Department scope <span className="font-normal">(optional)</span></label>
-                <select
-                    value={form.departmentId}
-                    onChange={e => onChange({ ...form, departmentId: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                    <option value="">— None —</option>
-                    {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
+                <Select value={form.departmentId || "none"} onValueChange={(value) => onChange({ ...form, departmentId: value === "none" ? "" : value })}>
+                    <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {filteredDepts.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="col-span-2">
                 <label className="text-xs font-medium text-muted-foreground">Role template <span className="font-normal">(optional)</span></label>
-                <select
-                    value={form.roleTemplateId}
-                    onChange={e => onChange({ ...form, roleTemplateId: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                    <option value="">— None —</option>
-                    {roleOptions.map(role => (
-                        <option key={role.id} value={role.id}>{role.label} ({role.id})</option>
-                    ))}
-                </select>
+                <Select value={form.roleTemplateId || "none"} onValueChange={(value) => onChange({ ...form, roleTemplateId: value === "none" ? "" : value })}>
+                    <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {roleOptions.map((role) => (
+                            <SelectItem key={role.id} value={role.id}>{role.label} ({role.id})</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="col-span-2">
                 <label className="text-xs font-medium text-muted-foreground">Reports to (parent post) <span className="font-normal">(optional)</span></label>
-                <select
-                    value={form.parentPostId}
-                    onChange={e => onChange({ ...form, parentPostId: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                    <option value="">— Top level —</option>
-                    {allPosts.filter(p => p.id !== form.id).map(p => (
-                        <option key={p.id} value={p.id}>
-                            {p.title}{p.branch ? ` · ${p.branch.name}` : ""}{p.department ? ` / ${p.department.name}` : ""}
-                        </option>
-                    ))}
-                </select>
+                <Select value={form.parentPostId || "top-level"} onValueChange={(value) => onChange({ ...form, parentPostId: value === "top-level" ? "" : value })}>
+                    <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Top level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="top-level">Top level</SelectItem>
+                        {allPosts.filter((p) => p.id !== form.id).map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                                {p.title}{p.branch ? ` · ${p.branch.name}` : ""}{p.department ? ` / ${p.department.name}` : ""}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
         </div>
     );
@@ -181,7 +192,7 @@ function AssignPanel({
     );
 
     return (
-        <div className="border-t-2 border-border mt-3 pt-3 space-y-3">
+        <div className="border-t border-border mt-3 pt-3 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Holders</p>
             {post.holders.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">Vacant — no one appointed</p>
@@ -205,15 +216,17 @@ function AssignPanel({
                             <p className="px-3 py-2 text-xs text-muted-foreground">No matching users</p>
                         ) : (
                             candidates.map(u => (
-                                <button
+                                <Button
                                     key={u.id}
+                                    type="button"
                                     onClick={() => { onAssign(u.id); setSearch(""); }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors text-left"
+                                    variant="ghost"
+                                    className="h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left text-xs"
                                 >
                                     <span className="font-medium">{u.name}</span>
                                     <Badge className={`${u.userRole.color} text-[9px] px-1 py-0`}>{u.userRole.label}</Badge>
                                     {u.title && <span className="text-muted-foreground">{u.title}</span>}
-                                </button>
+                                </Button>
                             ))
                         )}
                     </div>
@@ -294,12 +307,15 @@ function PostRow({
             ) : (
                 <div className="px-4 py-3 space-y-2">
                     <div className="flex items-center gap-3">
-                        <button
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
                             onClick={() => setExpanded(o => !o)}
-                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                            className="shrink-0 text-muted-foreground hover:text-foreground"
                         >
                             {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
+                        </Button>
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-semibold text-sm">{post.title}</p>
@@ -484,26 +500,35 @@ export default function PostsPage() {
 
             {/* Filter */}
             <div className="flex gap-2 flex-wrap">
-                <button
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
                     onClick={() => setFilter("")}
-                    className={`px-3 py-1 text-xs rounded-md border transition-colors ${!filterBranch ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
+                    className={!filterBranch ? "bg-primary text-primary-foreground hover:bg-primary" : ""}
                 >
                     All
-                </button>
-                <button
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
                     onClick={() => setFilter("__org")}
-                    className={`px-3 py-1 text-xs rounded-md border transition-colors ${filterBranch === "__org" ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
+                    className={filterBranch === "__org" ? "bg-primary text-primary-foreground hover:bg-primary" : ""}
                 >
                     Executive Council
-                </button>
+                </Button>
                 {branches.map(b => (
-                    <button
+                    <Button
                         key={b.id}
+                        type="button"
+                        variant="outline"
+                        size="xs"
                         onClick={() => setFilter(b.id)}
-                        className={`px-3 py-1 text-xs rounded-md border transition-colors ${filterBranch === b.id ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
+                        className={filterBranch === b.id ? "bg-primary text-primary-foreground hover:bg-primary" : ""}
                     >
                         {b.name}
-                    </button>
+                    </Button>
                 ))}
             </div>
 

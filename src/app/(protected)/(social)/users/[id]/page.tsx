@@ -20,6 +20,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format-date";
 import type { OrgNode } from "@/app/api/org-chart/route";
@@ -430,10 +437,15 @@ function WallTab({
                                         <Badge className={`${post.author.userRole.color} text-[10px]`}>{post.author.userRole.label}</Badge>
                                         <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo(post.createdAt)}</span>
                                         {canDelete(post) && (
-                                            <button onClick={() => handleDelete(post.id)}
-                                                className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Delete">
+                                            <Button
+                                                onClick={() => handleDelete(post.id)}
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                className="text-muted-foreground/50 hover:text-destructive"
+                                                title="Delete"
+                                            >
                                                 <Trash2 size={13} />
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                     <p className="text-sm text-foreground mt-1.5 whitespace-pre-wrap leading-relaxed">{post.body}</p>
@@ -928,12 +940,14 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                             <ShieldCheck size={12} className="text-muted-foreground" />
                             <span className="text-xs font-bold uppercase tracking-wide">Permission Overrides</span>
                         </div>
-                        <button
+                        <Button
                             onClick={() => setAddOpen(o => !o)}
-                            className="text-xs text-primary font-medium hover:underline"
+                            variant="link"
+                            size="xs"
+                            className="h-auto p-0 text-xs"
                         >
                             {addOpen ? "Cancel" : "+ Add override"}
-                        </button>
+                        </Button>
                     </div>
 
                     {/* Add override form */}
@@ -943,47 +957,52 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                                 {/* Permission picker */}
                                 <div className="flex-1 min-w-48">
                                     <label className="block text-[11px] font-medium text-muted-foreground mb-1">Permission</label>
-                                    <select
-                                        value={newPermId}
-                                        onChange={e => setNewPermId(e.target.value)}
-                                        className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                                    >
-                                        <option value="">— select —</option>
-                                        {availableToOverride.map(p => (
-                                            <option key={p.id} value={p.id}>{p.label} ({p.id})</option>
-                                        ))}
-                                    </select>
+                                    <Select value={newPermId || "__none__"} onValueChange={(v) => setNewPermId(v === "__none__" ? "" : v)}>
+                                        <SelectTrigger className="h-8 w-full">
+                                            <SelectValue placeholder="— select —" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">— select —</SelectItem>
+                                            {availableToOverride.map(p => (
+                                                <SelectItem key={p.id} value={p.id}>{p.label} ({p.id})</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 {/* Type toggle */}
                                 <div>
                                     <label className="block text-[11px] font-medium text-muted-foreground mb-1">Type</label>
                                     <div className="flex overflow-hidden rounded-md border border-border">
-                                        <button
+                                        <Button
                                             type="button"
                                             onClick={() => setNewType("GRANT")}
-                                            className={`px-3 py-1.5 text-xs font-semibold transition-colors ${newType === "GRANT" ? "bg-green-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                                            variant="ghost"
+                                            size="xs"
+                                            className={`h-auto rounded-none px-3 py-1.5 text-xs font-semibold transition-colors ${newType === "GRANT" ? "bg-green-600 text-white hover:bg-green-600" : "bg-background text-muted-foreground hover:bg-muted"}`}
                                         >
                                             + GRANT
-                                        </button>
-                                        <button
+                                        </Button>
+                                        <Button
                                             type="button"
                                             onClick={() => setNewType("DENY")}
-                                            className={`px-3 py-1.5 text-xs font-semibold transition-colors ${newType === "DENY" ? "bg-destructive text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                                            variant="ghost"
+                                            size="xs"
+                                            className={`h-auto rounded-none px-3 py-1.5 text-xs font-semibold transition-colors ${newType === "DENY" ? "bg-destructive text-white hover:bg-destructive" : "bg-background text-muted-foreground hover:bg-muted"}`}
                                         >
                                             − DENY
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
 
                                 {/* Expiry */}
                                 <div>
                                     <label className="block text-[11px] font-medium text-muted-foreground mb-1">Expires (optional)</label>
-                                    <input
+                                    <Input
                                         type="date"
                                         value={newExpiry}
                                         onChange={e => setNewExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
-                                        className="rounded-md border border-input bg-background px-2 py-1.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                        className="h-8 px-2 py-1.5 text-sm"
                                     />
                                 </div>
                             </div>
@@ -1033,13 +1052,15 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                                         )}
                                         <p className="font-mono text-[10px] text-muted-foreground/40 select-all">{p.id}</p>
                                     </div>
-                                    <button
+                                    <Button
                                         onClick={() => handleRemoveOverride(p.id)}
-                                        className="shrink-0 text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        className="shrink-0 text-[11px] text-muted-foreground hover:text-destructive"
                                         title="Remove override"
                                     >
                                         <Trash2 size={12} />
-                                    </button>
+                                    </Button>
                                 </div>
                             ))}
                         </div>
@@ -1402,51 +1423,51 @@ export default function UserProfilePage() {
                                 const Icon = tab.icon;
                                 const active = activeTab === tab.id;
                                 return (
-                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                    <Button key={tab.id} onClick={() => setActiveTab(tab.id)} variant="ghost"
                                         className={[
-                                            "flex items-center gap-1.5 px-3 sm:px-4 py-3 text-sm font-medium border-b-2 -mb-0.5 transition-colors whitespace-nowrap shrink-0",
+                                            "h-auto flex items-center gap-1.5 rounded-none px-3 py-3 text-sm font-medium border-b-2 -mb-0.5 transition-colors whitespace-nowrap shrink-0",
                                             active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
                                         ].join(" ")}>
                                         <Icon size={13} />
                                         <span className="hidden xs:inline sm:inline">{tab.label}</span>
-                                    </button>
+                                    </Button>
                                 );
                             })}
                         </div>
                         {/* Controls */}
-                        <div className="flex items-stretch shrink-0 border-l-2 border-border">
-                            <button onClick={() => setTabBarOpen(false)}
-                                className="flex items-center gap-1 px-3 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        <div className="flex items-stretch shrink-0 border-l border-border">
+                            <Button onClick={() => setTabBarOpen(false)} variant="ghost"
+                                className="h-auto rounded-none px-3 py-3 text-xs text-muted-foreground hover:text-foreground"
                                 title="Collapse tabs">
                                 <ChevronUp size={14} />
                                 <span className="hidden sm:inline">Collapse</span>
-                            </button>
-                            <button onClick={() => setSidebarOpen(prev => !prev)}
-                                className="flex items-center gap-1 px-3 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors border-l border-border"
+                            </Button>
+                            <Button onClick={() => setSidebarOpen(prev => !prev)} variant="ghost"
+                                className="h-auto rounded-none border-l border-border px-3 py-3 text-xs text-muted-foreground hover:text-foreground"
                                 title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
                                 {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
                                 <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Info"}</span>
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 ) : (
                     /* Collapsed tab bar — shows current tab name + expand button */
                     <div className="mb-5 flex items-center gap-3 border-b border-border px-1">
-                        <button onClick={() => setTabBarOpen(true)}
-                            className="flex items-center gap-1.5 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        <Button onClick={() => setTabBarOpen(true)} variant="ghost"
+                            className="h-auto px-0 py-2.5 text-xs text-muted-foreground hover:text-foreground"
                             title="Expand tabs">
                             <ChevronDown size={14} />
                             <span className="hidden sm:inline">Tabs</span>
-                        </button>
+                        </Button>
                         <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                             {currentTab && <currentTab.icon size={13} />}
                             {currentTab?.label}
                         </div>
-                        <button onClick={() => setSidebarOpen(prev => !prev)}
-                            className="ml-auto flex items-center gap-1 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <Button onClick={() => setSidebarOpen(prev => !prev)} variant="ghost"
+                            className="ml-auto h-auto py-2.5 text-xs text-muted-foreground hover:text-foreground">
                             {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
                             <span className="hidden sm:inline">{sidebarOpen ? "Hide" : "Info"}</span>
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>

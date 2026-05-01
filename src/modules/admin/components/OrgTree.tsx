@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { OrgNode } from "@/app/api/org-chart/route";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -120,13 +121,16 @@ function OrgNodeWrapper({
                 </Link>
 
                 {hasChildren && (
-                    <button
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
                         onClick={() => setOpen(o => !o)}
-                        className="absolute -bottom-3.5 left-1/2 z-10 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary hover:text-primary"
+                        className="absolute -bottom-3.5 left-1/2 z-10 -translate-x-1/2 rounded-full text-muted-foreground shadow-sm transition-colors hover:border-primary hover:text-primary"
                         title={open ? "Collapse" : "Expand"}
                     >
                         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                    </button>
+                    </Button>
                 )}
             </div>
 

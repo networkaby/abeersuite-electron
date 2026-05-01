@@ -262,34 +262,46 @@ export default function ChartOfAccountsPage() {
                                         <div className="flex items-center gap-1 justify-end">
                                             {editingId === a.id ? (
                                                 <>
-                                                    <button
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon-sm"
                                                         onClick={() => saveEdit(a.id)}
-                                                        className="p-1.5 text-green-600 hover:bg-green-50"
+                                                        className="text-green-600 hover:bg-green-50"
                                                         disabled={saving}
                                                     >
                                                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                                    </button>
-                                                    <button
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon-sm"
                                                         onClick={() => setEditingId(null)}
-                                                        className="p-1.5 text-muted-foreground hover:bg-muted"
+                                                        className="text-muted-foreground hover:bg-muted"
                                                     >
                                                         <X size={14} />
-                                                    </button>
+                                                    </Button>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <button
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon-sm"
                                                         onClick={() => startEdit(a)}
-                                                        className="p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                        className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
                                                     >
                                                         <Pencil size={14} />
-                                                    </button>
-                                                    <button
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon-sm"
                                                         onClick={() => toggleActive(a)}
-                                                        className={`p-1.5 text-xs ${a.isActive ? "text-destructive hover:bg-destructive/10" : "text-green-600 hover:bg-green-50"}`}
+                                                        className={`text-xs ${a.isActive ? "text-destructive hover:bg-destructive/10" : "text-green-600 hover:bg-green-50"}`}
                                                     >
                                                         {a.isActive ? <X size={14} /> : <Check size={14} />}
-                                                    </button>
+                                                    </Button>
                                                 </>
                                             )}
                                         </div>

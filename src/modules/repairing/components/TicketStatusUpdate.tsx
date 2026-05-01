@@ -81,21 +81,17 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
 
                         <div className="space-y-1.5">
                             {nextStatuses.map((s) => (
-                                <label
+                                <Button
                                     key={s.id}
-                                    className={`flex items-center gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors ${
-                                        selectedStatus === s.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setValue("status", s.id)}
+                                    className={`h-auto w-full justify-start rounded-md px-3 py-2.5 text-left ${
+                                        selectedStatus === s.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
                                     }`}
                                 >
-                                    <input
-                                        type="radio"
-                                        value={s.id}
-                                        {...register("status")}
-                                        onClick={() => setValue("status", s.id)}
-                                        className="accent-primary"
-                                    />
                                     <span className="text-sm text-foreground">{s.label}</span>
-                                </label>
+                                </Button>
                             ))}
                         </div>
 

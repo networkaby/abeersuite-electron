@@ -181,9 +181,15 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             ) : (
                                 <div className="space-y-1.5">
                                     {nextSubStatuses.map((ss) => (
-                                        <label key={ss.id}
-                                            className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition-colors ${selectedSubId === ss.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
-                                            <input type="radio" value={ss.id} {...register("subStatusId")} className="accent-primary" />
+                                        <Button
+                                            key={ss.id}
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setValue("subStatusId", ss.id)}
+                                            className={`h-auto w-full justify-start gap-3 px-3 py-2.5 transition-colors ${
+                                                selectedSubId === ss.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
+                                            }`}
+                                        >
                                             <div className="flex-1">
                                                 <span className="text-sm text-foreground">{ss.label}</span>
                                                 {ss.triggerMap[ticket.status] && (
@@ -193,7 +199,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                                 )}
                                             </div>
                                             <span className={`text-xs px-2 py-0.5 shrink-0 ${ss.color}`}>{ss.id}</span>
-                                        </label>
+                                        </Button>
                                     ))}
                                 </div>
                             )}
@@ -223,11 +229,17 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             ) : (
                                 <div className="space-y-1.5">
                                     {nextMainStatuses.map((s) => (
-                                        <label key={s.id}
-                                            className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition-colors ${selectedMainId === s.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
-                                            <input type="radio" value={s.id} {...register("mainStatusId")} className="accent-primary" />
+                                        <Button
+                                            key={s.id}
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setValue("mainStatusId", s.id)}
+                                            className={`h-auto w-full justify-start gap-3 px-3 py-2.5 transition-colors ${
+                                                selectedMainId === s.id ? "border-primary bg-primary/10 hover:bg-primary/10" : ""
+                                            }`}
+                                        >
                                             <span className="text-sm text-foreground">{s.label}</span>
-                                        </label>
+                                        </Button>
                                     ))}
                                 </div>
                             )}

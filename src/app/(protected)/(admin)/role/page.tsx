@@ -777,13 +777,15 @@ function RoleFields({
                 </label>
                 <div className="flex flex-wrap gap-1">
                     {COLOR_OPTIONS.map((color) => (
-                        <button
+                        <Button
                             key={color.value}
                             type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             title={color.label}
                             onClick={() => onChange((prev) => ({ ...prev, color: color.value }))}
                             className={[
-                                "h-6 w-6 rounded-md border transition-all duration-150",
+                                "h-6 w-6 rounded-md border p-0 transition-all duration-150",
                                 color.dot,
                                 form.color === color.value
                                     ? "scale-105 border-foreground ring-1 ring-border ring-offset-1"
@@ -979,12 +981,13 @@ function RoleList({
                         const accent = ROLE_ACCENT[role.color] ?? "border-l-gray-300";
 
                         return (
-                            <button
+                            <Button
                                 key={role.id}
                                 type="button"
+                                variant="ghost"
                                 onClick={() => onSelect(role.id)}
                                 className={[
-                                    "group w-full rounded-md border border-l-4 bg-background px-2 py-1.5 text-left transition-all",
+                                    "group h-auto w-full justify-start rounded-md border border-l-4 bg-background px-2 py-1.5 text-left transition-all",
                                     accent,
                                     isActive
                                         ? "border-primary shadow-sm"
@@ -1024,7 +1027,7 @@ function RoleList({
                                         Rank {role.rank}
                                     </span>
                                 </div>
-                            </button>
+                            </Button>
                         );
                     })}
                 </div>
@@ -1182,14 +1185,16 @@ function PermissionMatrix({
                                                     ].join(" ")}
                                                 >
                                                     {enabled ? (
-                                                        <button
+                                                        <Button
                                                             type="button"
+                                                            variant="ghost"
+                                                            size="icon-sm"
                                                             onClick={() => {
                                                                 validPermissionIds.forEach((permissionId) => onTogglePerm(permissionId));
                                                             }}
                                                             title={title}
                                                             className={[
-                                                                "mx-auto flex h-6 w-6 items-center justify-center rounded-md border transition-colors",
+                                                                "mx-auto h-6 w-6 rounded-md border p-0 transition-colors",
                                                                 isOn
                                                                     ? "border-primary bg-primary text-primary-foreground"
                                                                     : "border-border hover:border-primary/60 hover:bg-primary/5",
@@ -1197,7 +1202,7 @@ function PermissionMatrix({
                                                             ].join(" ")}
                                                         >
                                                             {isOn && <Check size={11} strokeWidth={3} />}
-                                                        </button>
+                                                        </Button>
                                                     ) : (
                                                         <span
                                                             title={title}

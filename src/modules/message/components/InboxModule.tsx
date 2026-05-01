@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { Send, Users2, Monitor, User, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
 import { supabase } from "@/lib/supabase-client";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -435,11 +437,12 @@ export default function InboxModule({
             room.type === "DIRECT_MESSAGE" ? "@" :
             room.type === "SYSTEM_INBOX"   ? "" : "#";
         return (
-            <button
+            <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setActiveRoomId(room.id)}
                 className={[
-                    "flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors",
+                    "h-auto w-full items-center gap-2 justify-start px-3 py-1.5 text-sm transition-colors",
                     isActive
                         ? "bg-primary/15 text-foreground font-semibold"
                         : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -453,7 +456,7 @@ export default function InboxModule({
                         {room.unreadCount}
                     </span>
                 )}
-            </button>
+            </Button>
         );
     };
 
@@ -506,18 +509,19 @@ export default function InboxModule({
                         {teamUsers
                             .filter((u) => !dmOpenIds.has(u.id))
                             .map((u) => (
-                                <button
+                                <Button
                                     key={u.id}
                                     type="button"
+                                    variant="ghost"
                                     onClick={() => openDm(u.id)}
                                     disabled={openingDm === u.id}
-                                    className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground/60 hover:bg-muted/60 hover:text-muted-foreground transition-colors disabled:opacity-40"
+                                    className="h-auto w-full justify-start gap-2 px-3 py-1.5 text-sm text-muted-foreground/60 hover:bg-muted/60 hover:text-muted-foreground disabled:opacity-40"
                                 >
                                     <span className="truncate">@ {u.name}</span>
                                     {openingDm === u.id && (
                                         <Loader2 size={11} className="ml-auto animate-spin" />
                                     )}
-                                </button>
+                                </Button>
                             ))
                         }
 
@@ -680,7 +684,7 @@ export default function InboxModule({
                                 </p>
                             ) : (
                                 <div className="flex items-end gap-2 rounded-md border border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
-                                    <textarea
+                                    <Textarea
                                         value={draft}
                                         onChange={(e) => setDraft(e.target.value)}
                                         onKeyDown={handleKeyDown}
@@ -690,7 +694,7 @@ export default function InboxModule({
                                                 ? `@ ${dmPartnerName(activeRoom, currentUserId, teamUsers)}`
                                                 : `# ${activeRoom.name}`
                                         }`}
-                                        className="flex-1 resize-none bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/50 max-h-40"
+                                        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/50 max-h-40"
                                         style={{ overflowY: "auto" }}
                                         onInput={(e) => {
                                             const el = e.currentTarget;
@@ -698,15 +702,16 @@ export default function InboxModule({
                                             el.style.height = `${el.scrollHeight}px`;
                                         }}
                                     />
-                                    <button
+                                    <Button
                                         type="button"
+                                        size="icon-sm"
                                         onClick={sendMessage}
                                         disabled={sending || !draft.trim()}
-                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-30"
+                                        className="shrink-0 disabled:opacity-30"
                                         title="Send (Enter)"
                                     >
                                         <Send size={14} />
-                                    </button>
+                                    </Button>
                                 </div>
                             )}
                             <p className="mt-1 px-1 text-[10px] text-muted-foreground/40">

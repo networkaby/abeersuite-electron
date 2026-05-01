@@ -11,6 +11,13 @@ import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 interface Ticket {
     id: number;
     status: string;
@@ -127,8 +134,6 @@ export default function TicketsPage() {
         pipelineFilter !== requestedPipeline
     );
 
-    const selectClass = "h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
@@ -185,29 +190,44 @@ export default function TicketsPage() {
 
                 {/* Filter Row */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
-                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
-                        <option value="">All Status</option>
-                        {statusOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                    </select>
-                    <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className={selectClass}>
-                        <option value="">All Priority</option>
-                        {priorityOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                    </select>
-                    <select value={technicianFilter} onChange={(e) => setTechnicianFilter(e.target.value)} className={selectClass}>
-                        <option value="">All Technicians</option>
-                        {technicians.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-                    </select>
-                    <select value={serviceCenterFilter} onChange={(e) => setServiceCenterFilter(e.target.value)} className={selectClass}>
-                        <option value="">All Service Centers</option>
-                        {serviceCenters.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                    <select value={warrantyFilter} onChange={(e) => setWarrantyFilter(e.target.value)} className={selectClass}>
-                        <option value="">All Warranty</option>
-                        <option value="warranty">Warranty only</option>
-                        <option value="non_warranty">Non-warranty only</option>
-                    </select>
-                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={selectClass} />
-                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={selectClass} />
+                    <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}>
+                        <SelectTrigger><SelectValue placeholder="All Status" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            {statusOptions.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={priorityFilter || "all"} onValueChange={(value) => setPriorityFilter(value === "all" ? "" : value)}>
+                        <SelectTrigger><SelectValue placeholder="All Priority" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Priority</SelectItem>
+                            {priorityOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={technicianFilter || "all"} onValueChange={(value) => setTechnicianFilter(value === "all" ? "" : value)}>
+                        <SelectTrigger><SelectValue placeholder="All Technicians" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Technicians</SelectItem>
+                            {technicians.map((t) => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={serviceCenterFilter || "all"} onValueChange={(value) => setServiceCenterFilter(value === "all" ? "" : value)}>
+                        <SelectTrigger><SelectValue placeholder="All Service Centers" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Service Centers</SelectItem>
+                            {serviceCenters.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={warrantyFilter || "all"} onValueChange={(value) => setWarrantyFilter(value === "all" ? "" : value)}>
+                        <SelectTrigger><SelectValue placeholder="All Warranty" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Warranty</SelectItem>
+                            <SelectItem value="warranty">Warranty only</SelectItem>
+                            <SelectItem value="non_warranty">Non-warranty only</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
 
                 {/* Results count + clear */}

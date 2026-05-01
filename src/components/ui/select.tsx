@@ -5,6 +5,13 @@ import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+import {
+  uiFocusRingClasses,
+  uiInvalidStateClasses,
+} from "@/components/ui/ui-classnames"
+
+const selectScrollButtonClasses =
+  "z-10 flex cursor-default items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4"
 
 function Select({
   ...props
@@ -39,14 +46,22 @@ function SelectTrigger({
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: "sm" | "default"
 }) {
+  const baseTriggerClasses = [
+    "flex w-fit items-center justify-between gap-1.5 rounded-md border border-input bg-transparent py-2 pr-3 pl-3 text-sm whitespace-nowrap transition-colors outline-none select-none",
+    uiFocusRingClasses,
+    "disabled:cursor-not-allowed disabled:opacity-50 data-placeholder:text-muted-foreground",
+    uiInvalidStateClasses,
+    "data-[size=default]:h-9 data-[size=sm]:h-8",
+    "*:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5",
+    "dark:bg-input/30 dark:hover:bg-input/50",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  ].join(" ")
+
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
-      className={cn(
-        "flex w-fit items-center justify-between gap-1.5 rounded-md border border-input bg-transparent py-2 pr-3 pl-3 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn(baseTriggerClasses, className)}
       {...props}
     >
       {children}
@@ -147,10 +162,7 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up-button"
-      className={cn(
-        "z-10 flex cursor-default items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn(selectScrollButtonClasses, className)}
       {...props}
     >
       <ChevronUpIcon
@@ -166,10 +178,7 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down-button"
-      className={cn(
-        "z-10 flex cursor-default items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn(selectScrollButtonClasses, className)}
       {...props}
     >
       <ChevronDownIcon

@@ -1,7 +1,5 @@
 import { headers } from "next/headers";
 import { PhoneCall, Clock3 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
     Table,
     TableBody,
@@ -10,6 +8,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import CallLogFilters from "./CallLogFilters";
 
 type CallLogItem = {
     id: number;
@@ -123,44 +122,13 @@ export default async function CallLogPage({
                 </div>
             </div>
 
-            <form className="grid grid-cols-1 gap-3 rounded-md border bg-card p-3 md:grid-cols-4">
-                <Input
-                    name="search"
-                    defaultValue={search}
-                    placeholder="Search customer, phone, or note"
-                    className="md:col-span-2"
-                />
-                <select
-                    name="status"
-                    defaultValue={selectedStatus}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                    <option value="">All Status</option>
-                    {STATUS_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                            {formatStatus(opt)}
-                        </option>
-                    ))}
-                </select>
-                <select
-                    name="direction"
-                    defaultValue={selectedDirection}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                    <option value="">All Direction</option>
-                    {DIRECTION_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                            {formatDirection(opt)}
-                        </option>
-                    ))}
-                </select>
-                <div className="flex items-center gap-2 md:col-span-4">
-                    <Button type="submit">Apply Filters</Button>
-                    <Button type="button" variant="outline" asChild>
-                        <a href="/call-log">Reset</a>
-                    </Button>
-                </div>
-            </form>
+            <CallLogFilters
+                search={search}
+                selectedStatus={selectedStatus}
+                selectedDirection={selectedDirection}
+                statusOptions={STATUS_OPTIONS}
+                directionOptions={DIRECTION_OPTIONS}
+            />
 
             <div className="rounded-lg border border-border bg-card shadow">
                 <Table>

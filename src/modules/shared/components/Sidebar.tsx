@@ -271,13 +271,16 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             ].join(" ")}
         >
             {/* Collapse toggle */}
-            <button
+            <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
                 onClick={() => setCollapsed((c) => !c)}
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="absolute -right-3 top-8 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card shadow-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute -right-3 top-8 z-10 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
             >
                 {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-            </button>
+            </Button>
 
             {/* Brand */}
             <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
@@ -379,8 +382,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                             return (
                                 <div key={item.href}>
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="ghost"
                                         onClick={() =>
                                             setWorkspaceOpen((prev) => ({
                                                 ...prev,
@@ -388,7 +392,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             }))
                                         }
                                         className={[
-                                            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                            "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                             isActiveParent
                                                 ? "bg-primary text-primary-foreground"
                                                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -400,22 +404,23 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                             size={13}
                                             className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                                         />
-                                    </button>
+                                    </Button>
 
                                     {isOpen && (
                                         <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
                                             {visibleChildren.map((child) => {
                                                 if (isDialogNavItem(child.href)) {
                                                     return (
-                                                        <button
+                                                        <Button
                                                             key={`${item.href}-${child.href}`}
                                                             type="button"
+                                                            variant="ghost"
                                                             onClick={() => openWorkspaceDialog(child.href)}
-                                                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
+                                                            className="h-auto w-full justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
                                                         >
                                                             <child.icon size={15} className="shrink-0" />
                                                             <span className="truncate">{child.label}</span>
-                                                        </button>
+                                                        </Button>
                                                     );
                                                 }
 
@@ -458,22 +463,24 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             return (
                                 <div key={mod.key}>
                                     {collapsed ? (
-                                        <button
+                                        <Button
                                             type="button"
+                                            variant="ghost"
                                             title={mod.label}
                                             className={[
-                                                "flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
+                                                "h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
                                                 mod.disabled
                                                     ? "cursor-not-allowed text-muted-foreground/30"
                                                     : "text-muted-foreground hover:bg-muted",
                                             ].join(" ")}
                                         >
                                             <Icon size={17} />
-                                        </button>
+                                        </Button>
                                     ) : (
                                         <>
-                                            <button
+                                            <Button
                                                 type="button"
+                                                variant="ghost"
                                                 disabled={mod.disabled}
                                                 onClick={() =>
                                                     !mod.disabled &&
@@ -483,7 +490,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                     }))
                                                 }
                                                 className={[
-                                                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                    "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                     mod.disabled
                                                         ? "cursor-not-allowed text-muted-foreground/30"
                                                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -501,7 +508,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                         className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                                                     />
                                                 )}
-                                            </button>
+                                            </Button>
 
                                             {isOpen && (
                                                 <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
@@ -516,13 +523,14 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                                                             if (child.action) {
                                                                 return (
-                                                                    <button
+                                                                    <Button
                                                                         key={child.label}
                                                                         type="button"
+                                                                        variant="ghost"
                                                                         disabled={child.disabled}
                                                                         onClick={() => handleChildAction(child)}
                                                                         className={[
-                                                                            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                            "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                                                                             child.disabled
                                                                                 ? "cursor-not-allowed text-muted-foreground/30"
                                                                                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -535,7 +543,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                                 Soon
                                                                             </Badge>
                                                                         )}
-                                                                    </button>
+                                                                    </Button>
                                                                 );
                                                             }
 
@@ -576,7 +584,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 {/* Admin */}
                 {visibleAdmin.length > 0 && (
                     <section>
-                        <button
+                        <Button
+                            type="button"
+                            variant="ghost"
                             onClick={() => !collapsed && setAdminOpen((o) => !o)}
                             className={linkClass("/users")}
                             title={collapsed ? "Admin" : ""}
@@ -591,7 +601,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     />
                                 </>
                             )}
-                        </button>
+                        </Button>
 
                         {adminOpen && !collapsed && (
                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
@@ -609,7 +619,9 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 {/* Settings */}
                 {visibleSettings.length > 0 && (
                     <section>
-                        <button
+                        <Button
+                            type="button"
+                            variant="ghost"
                             onClick={() => !collapsed && setSettingsOpen((o) => !o)}
                             className={linkClass("/settings")}
                             title={collapsed ? "Settings" : ""}
@@ -624,7 +636,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     />
                                 </>
                             )}
-                        </button>
+                        </Button>
 
                         {settingsOpen && !collapsed && (
                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
@@ -643,11 +655,13 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             {/* Bottom — theme toggle + sign out */}
             <div className="border-t border-border p-2 space-y-1">
                 {/* Theme toggle */}
-                <button
+                <Button
+                    type="button"
+                    variant="ghost"
                     onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
                     title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                     className={[
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground",
+                        "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground",
                         collapsed ? "justify-center px-2" : "",
                     ].join(" ")}
                 >
@@ -660,20 +674,22 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
                         </span>
                     )}
-                </button>
+                </Button>
 
                 {/* Sign out */}
-                <button
+                <Button
+                    type="button"
+                    variant="ghost"
                     onClick={() => signOut({ callbackUrl: "/login" })}
                     title={collapsed ? "Sign Out" : ""}
                     className={[
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",
+                        "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",
                         collapsed ? "justify-center px-2" : "",
                     ].join(" ")}
                 >
                     <LogOut size={17} className="shrink-0" />
                     {!collapsed && <span className="truncate">Sign Out</span>}
-                </button>
+                </Button>
             </div>
 
             <Dialog open={showCreatePerson} onOpenChange={setShowCreatePerson}>

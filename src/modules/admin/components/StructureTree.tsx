@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Building2, Layers, Briefcase } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { PostNode } from "@/app/api/posts/structure/route";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,13 +92,15 @@ function PostCard({ node }: { node: PostNode }) {
 
                 {/* Expand toggle */}
                 {hasChildren && (
-                    <button
+                    <Button
+                        type="button"
+                        variant="ghost"
                         onClick={() => setOpen(o => !o)}
-                        className="mt-2 flex items-center justify-center gap-0.5 mx-auto text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                        className="mt-2 mx-auto h-auto items-center justify-center gap-0.5 p-0 text-[10px] text-muted-foreground hover:text-foreground"
                     >
                         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                         {node.children.length} sub-post{node.children.length !== 1 ? "s" : ""}
-                    </button>
+                    </Button>
                 )}
             </div>
 
