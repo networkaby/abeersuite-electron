@@ -85,20 +85,7 @@ export const WORKSPACE_NAV: NavItem[] = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
     { label: "CallLog", href: "/call-log", icon: PhoneCall, permission: null },
     { label: "Search SLno", href: "/search-slno", icon: Search, permission: null },
-    // {
-    //     label: "Customers",
-    //     href: "/customers",
-    //     icon: Users,
-    //     permission: "customers:view",
-    //     children: [
-    //         { label: "New People", href: "/customers/new", icon: Plus, permission: "customers:view" },
-    //         { label: "New Companies", href: "/companies/new", icon: Plus, permission: "customers:view" },
-    //         { label: "All Customers", href: "/customers/all", icon: Users, permission: "customers:view" },
-    //         { label: "People", href: "/customers", icon: Users, permission: "customers:view" },
-    //         { label: "Companies", href: "/companies", icon: Building2, permission: "customers:view" },
 
-    //     ],
-    // },
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [
