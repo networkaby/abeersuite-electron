@@ -16,6 +16,13 @@ import {
     Briefcase,
     PhoneCall,
     Search,
+    ShoppingCart,
+    Box,
+    Truck,
+    MapPin,
+    HelpCircle,
+    ChartArea,
+
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -119,13 +126,113 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     {
+        label: "CRM",
+        icon: Network,
+        key: "crm",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: PhoneCall, href: "/crm/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/crm/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "E-Commerce",
+        icon: ShoppingCart,
+        key: "e-commerce",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: Box, href: "/e-commerce/dummy1", disabled: true },
+            { label: "Dummy2", icon: Truck, href: "/e-commerce/dummy2", disabled: true },
+        ],
+    },
+    {
         label: "Tally",
         icon: Calculator,
         key: "tally",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: FileText, href: "/tally/dummy1", disabled: true },
-            { label: "Dummy2", icon: FileText, href: "/tally/dummy2", disabled: true },
+            { label: "Dummy1", icon: Calculator, href: "/tally/dummy1", disabled: true },
+            { label: "Dummy2", icon: ClipboardList, href: "/tally/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Inventory",
+        icon: Box,
+        key: "inventory",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: Box, href: "/inventory/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/inventory/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "HRM",
+        icon: UserCog,
+        key: "hrm",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: Users, href: "/hrm/dummy1", disabled: true },
+            { label: "Dummy2", icon: Briefcase, href: "/hrm/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Delivery",
+        icon: Truck,
+        key: "delivery",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: MapPin, href: "/delivery/dummy1", disabled: true },
+            { label: "Dummy2", icon: ClipboardList, href: "/delivery/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Field Service",
+        icon: MapPin,
+        key: "field-service",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: Wrench, href: "/field-service/dummy1", disabled: true },
+            { label: "Dummy2", icon: PhoneCall, href: "/field-service/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "HelpDesk",
+        icon: HelpCircle,
+        key: "helpdesk",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: HelpCircle, href: "/helpdesk/dummy1", disabled: true },
+            { label: "Dummy2", icon: Bell, href: "/helpdesk/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Project Management",
+        icon: Briefcase,
+        key: "project-management",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: ClipboardList, href: "/project-management/dummy1", disabled: true },
+            { label: "Dummy2", icon: GitBranch, href: "/project-management/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Business Intelligence",
+        icon: ChartArea,
+        key: "business-intelligence",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: ChartArea, href: "/business-intelligence/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/business-intelligence/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Business Administration",
+        icon: Settings,
+        key: "business-administration",
+        // disabled: true,
+        children: [
+            { label: "Dummy1", icon: Building2, href: "/business-administration/dummy1", disabled: true },
+            { label: "Dummy2", icon: Settings, href: "/business-administration/dummy2", disabled: true },
         ],
     },
 ];

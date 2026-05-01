@@ -553,7 +553,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     </section>
                 )}
 
-                {/* Settings */}
+                {/* // Settings */}
                 {visibleSettings.length > 0 && (
                     <section>
                         <Button
