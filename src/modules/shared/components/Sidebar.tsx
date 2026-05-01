@@ -515,78 +515,82 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         })}
                     </div>
                 </section>
-                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                    Admin Only
-                </p>
-                {/* Admin */}
-                {visibleAdmin.length > 0 && (
-                    <section>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => !collapsed && setAdminOpen((o) => !o)}
-                            className={linkClass("/users")}
-                            title={collapsed ? "Admin" : ""}
-                        >
-                            <ShieldCheck size={17} className="shrink-0" />
-                            {!collapsed && (
-                                <>
-                                    <span className="flex-1 truncate text-left">Admin</span>
-                                    <ChevronDown
-                                        size={13}
-                                        className={`shrink-0 transition-transform duration-200 ${adminOpen ? "rotate-180" : ""}`}
-                                    />
-                                </>
-                            )}
-                        </Button>
+                <section>
+                    <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                        Admin Only
+                    </p>
+                    <div className="space-y-0.5">
+                        {/* Admin */}
+                        {visibleAdmin.length > 0 && (
+                            <section>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => !collapsed && setAdminOpen((o) => !o)}
+                                    className={linkClass("/users")}
+                                    title={collapsed ? "Admin" : ""}
+                                >
+                                    <ShieldCheck size={17} className="shrink-0" />
+                                    {!collapsed && (
+                                        <>
+                                            <span className="flex-1 truncate text-left">Admin</span>
+                                            <ChevronDown
+                                                size={13}
+                                                className={`shrink-0 transition-transform duration-200 ${adminOpen ? "rotate-180" : ""}`}
+                                            />
+                                        </>
+                                    )}
+                                </Button>
 
-                        {adminOpen && !collapsed && (
-                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                {visibleAdmin.map(({ label, href, icon: Icon }) => (
-                                    <Link key={href} href={href} className={linkClass(href)}>
-                                        <Icon size={15} className="shrink-0" />
-                                        <span className="truncate">{label}</span>
-                                    </Link>
-                                ))}
-                            </div>
+                                {adminOpen && !collapsed && (
+                                    <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                        {visibleAdmin.map(({ label, href, icon: Icon }) => (
+                                            <Link key={href} href={href} className={linkClass(href)}>
+                                                <Icon size={15} className="shrink-0" />
+                                                <span className="truncate">{label}</span>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
                         )}
-                    </section>
-                )}
 
-                {/* Settings */}
-                {visibleSettings.length > 0 && (
-                    <section>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => !collapsed && setSettingsOpen((o) => !o)}
-                            className={linkClass("/settings")}
-                            title={collapsed ? "Settings" : ""}
-                        >
-                            <Settings size={17} className="shrink-0" />
-                            {!collapsed && (
-                                <>
-                                    <span className="flex-1 truncate text-left">Settings</span>
-                                    <ChevronDown
-                                        size={13}
-                                        className={`shrink-0 transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`}
-                                    />
-                                </>
-                            )}
-                        </Button>
+                        {/* Settings */}
+                        {visibleSettings.length > 0 && (
+                            <section>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => !collapsed && setSettingsOpen((o) => !o)}
+                                    className={linkClass("/settings")}
+                                    title={collapsed ? "Settings" : ""}
+                                >
+                                    <Settings size={17} className="shrink-0" />
+                                    {!collapsed && (
+                                        <>
+                                            <span className="flex-1 truncate text-left">Settings</span>
+                                            <ChevronDown
+                                                size={13}
+                                                className={`shrink-0 transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`}
+                                            />
+                                        </>
+                                    )}
+                                </Button>
 
-                        {settingsOpen && !collapsed && (
-                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                {visibleSettings.map(({ label, href, icon: Icon }) => (
-                                    <Link key={href} href={href} className={linkClass(href)}>
-                                        <Icon size={15} className="shrink-0" />
-                                        <span className="truncate">{label}</span>
-                                    </Link>
-                                ))}
-                            </div>
+                                {settingsOpen && !collapsed && (
+                                    <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                        {visibleSettings.map(({ label, href, icon: Icon }) => (
+                                            <Link key={href} href={href} className={linkClass(href)}>
+                                                <Icon size={15} className="shrink-0" />
+                                                <span className="truncate">{label}</span>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
                         )}
-                    </section>
-                )}
+                    </div>
+                </section>
             </nav>
 
             {/* Bottom — theme toggle + sign out */}
