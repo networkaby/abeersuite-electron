@@ -170,6 +170,16 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         }
     };
 
+    const isModuleChildActive = (childHref: string, siblings: ModuleChild[]) => {
+        if (!pathname.startsWith(childHref)) return false;
+        // Prevent broad routes like "/customers" from also matching "/customers/all".
+        const hasMoreSpecificSiblingMatch = siblings.some((sibling) => {
+            if (!sibling.href || sibling.href === childHref) return false;
+            return sibling.href.startsWith(`${childHref}/`) && pathname.startsWith(sibling.href);
+        });
+        return !hasMoreSpecificSiblingMatch;
+    };
+
     const canViewChild = (child: ModuleChild) =>
         !child.permission || isAdmin || permissions.includes(child.permission);
 
@@ -502,7 +512,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                             const href = resolveHref(child);
                                                             const basePath = href?.split("?")[0] ?? "";
                                                             const isActiveChild =
-                                                                !!basePath && pathname.startsWith(basePath);
+                                                                !!basePath && isModuleChildActive(basePath, mod.children);
 
                                                             if (child.action) {
                                                                 return (

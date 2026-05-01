@@ -77,7 +77,7 @@ export type ButtonBarAction = {
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
     { label: "CallLog", href: "/call-log", icon: PhoneCall, permission: null },
-    { label: "Search SLno", href: "/#1", icon: Search, permission: null },
+    { label: "Search SLno", href: "/search-slno", icon: Search, permission: null },
     // {
     //     label: "Customers",
     //     href: "/customers",
