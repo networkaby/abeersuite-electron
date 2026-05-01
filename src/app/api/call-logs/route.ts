@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
+import type { Prisma } from "@/generated/prisma/client";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -59,22 +60,28 @@ export async function GET(req: Request) {
         const status = parsedStatus.success ? parsedStatus.data : undefined;
         const direction = parsedDirection.success ? parsedDirection.data : undefined;
 
-        const where = {
-            AND: [
-                { note: { startsWith: CALL_LOG_NOTE_PREFIX } },
-                ...(status ? [{ note: { contains: `"status":"${status}"` } }] : []),
-                ...(direction ? [{ note: { contains: `"direction":"${direction}"` } }] : []),
-                ...(search
-                    ? [{
-                        OR: [
-                            { note: { contains: search } },
-                            { ticket: { device: { brand: { contains: search, mode: "insensitive" } } } },
-                            { ticket: { device: { model: { contains: search, mode: "insensitive" } } } },
-                        ],
-                    }]
-                    : []),
-            ],
-        };
+        const andFilters: Prisma.TicketLogWhereInput[] = [
+            { note: { startsWith: CALL_LOG_NOTE_PREFIX } },
+        ];
+
+        if (status) {
+            andFilters.push({ note: { contains: `"status":"${status}"` } });
+        }
+
+        if (direction) {
+            andFilters.push({ note: { contains: `"direction":"${direction}"` } });
+        }
+
+        if (search) {
+            const searchOrFilters: Prisma.TicketLogWhereInput[] = [
+                { note: { contains: search } },
+                { ticket: { device: { brand: { contains: search, mode: "insensitive" } } } },
+                { ticket: { device: { model: { contains: search, mode: "insensitive" } } } },
+            ];
+            andFilters.push({ OR: searchOrFilters });
+        }
+
+        const where: Prisma.TicketLogWhereInput = { AND: andFilters };
 
         const [total, logs] = await Promise.all([
             prisma.ticketLog.count({ where }),
