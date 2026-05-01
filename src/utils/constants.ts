@@ -22,6 +22,10 @@ import {
     MapPin,
     HelpCircle,
     ChartArea,
+    TicketPercent,
+    Gift,
+    BadgePercent,
+    Wallet,
 
 } from "lucide-react";
 
@@ -193,33 +197,51 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     {
-        label: "Project Management",
+        label: "Projects",
         icon: Briefcase,
-        key: "project-management",
+        key: "projects",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: ClipboardList, href: "/project-management/dummy1", disabled: true },
-            { label: "Dummy2", icon: GitBranch, href: "/project-management/dummy2", disabled: true },
+            { label: "Dummy1", icon: ClipboardList, href: "/projects/dummy1", disabled: true },
+            { label: "Dummy2", icon: GitBranch, href: "/projects/dummy2", disabled: true },
         ],
     },
     {
-        label: "Business Intelligence",
+        label: "Intelligence",
         icon: ChartArea,
-        key: "business-intelligence",
+        key: "intelligence",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: ChartArea, href: "/business-intelligence/dummy1", disabled: true },
-            { label: "Dummy2", icon: Search, href: "/business-intelligence/dummy2", disabled: true },
+            { label: "Dummy1", icon: ChartArea, href: "/intelligence/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/intelligence/dummy2", disabled: true },
         ],
     },
     {
-        label: "Business Administration",
+        label: "Administration",
         icon: Settings,
-        key: "business-administration",
+        key: "administration",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Building2, href: "/business-administration/dummy1", disabled: true },
-            { label: "Dummy2", icon: Settings, href: "/business-administration/dummy2", disabled: true },
+            { label: "Dummy1", icon: Building2, href: "/administration/dummy1", disabled: true },
+            { label: "Dummy2", icon: Settings, href: "/administration/dummy2", disabled: true },
+        ],
+    },
+    {
+        label: "Retention",
+        icon: TicketPercent,
+        key: "retention",
+        children: [
+            { label: "Create Coupon", icon: BadgePercent, href: "/retention/create-coupon", disabled: true },
+            { label: "Loyalty Program", icon: Gift, href: "/retention/loyalty-program", disabled: true },
+        ],
+    },
+    {
+        label: "Pricing Strategy",
+        icon: Wallet,
+        key: "pricing-strategy",
+        children: [
+            { label: "Pricing Rules", icon: Calculator, href: "/pricing-strategy/pricing-rules", disabled: true },
+            { label: "Discount Matrix", icon: FileText, href: "/pricing-strategy/discount-matrix", disabled: true },
         ],
     },
 ];

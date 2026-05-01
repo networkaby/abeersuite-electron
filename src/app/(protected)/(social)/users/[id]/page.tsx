@@ -13,7 +13,7 @@ import { z } from "zod/v3";
 import {
     ArrowLeft, Shield, Mail, Phone, Cake, Building2, Users,
     ShieldCheck, Pencil, GitBranch, Upload, Link2, ExternalLink,
-    MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose,
+    MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose, Home,
     Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -1419,6 +1419,16 @@ export default function UserProfilePage() {
                     <div className="mb-5 flex items-stretch border-b border-border">
                         {/* Scrollable tab list */}
                         <div className="flex flex-1 overflow-x-auto scrollbar-none">
+                            {sessionUserId !== undefined && !isSelf && (
+                                <Button asChild variant="ghost"
+                                    className="h-auto flex items-center gap-1.5 rounded-none px-3 py-3 text-sm font-medium border-b-2 -mb-0.5 border-transparent text-muted-foreground hover:text-foreground hover:border-border whitespace-nowrap shrink-0"
+                                    title="My profile">
+                                    <Link href={`/users/${sessionUserId}`}>
+                                        <Home size={13} />
+                                        <span className="hidden xs:inline sm:inline">Home</span>
+                                    </Link>
+                                </Button>
+                            )}
                             {visibleTabs.map(tab => {
                                 const Icon = tab.icon;
                                 const active = activeTab === tab.id;
@@ -1453,6 +1463,16 @@ export default function UserProfilePage() {
                 ) : (
                     /* Collapsed tab bar — shows current tab name + expand button */
                     <div className="mb-5 flex items-center gap-3 border-b border-border px-1">
+                        {sessionUserId !== undefined && !isSelf && (
+                            <Button asChild variant="ghost"
+                                className="h-auto px-1 py-2.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                                title="My profile">
+                                <Link href={`/users/${sessionUserId}`}>
+                                    <Home size={14} />
+                                    <span className="hidden sm:inline ml-1">Home</span>
+                                </Link>
+                            </Button>
+                        )}
                         <Button onClick={() => setTabBarOpen(true)} variant="ghost"
                             className="h-auto px-0 py-2.5 text-xs text-muted-foreground hover:text-foreground"
                             title="Expand tabs">
