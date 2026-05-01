@@ -19,6 +19,8 @@ import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvert
 import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import { useSession } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Ticket {
     id: number;
@@ -123,7 +125,7 @@ export default function TicketDetailPage() {
     if (loading) return <p className="text-muted-foreground">Loading...</p>;
     if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;
 
-    const actionBtnBase = "w-full border-2 border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted";
+    const actionBtnBase = "w-full border border-border py-2 text-sm flex items-center justify-center gap-2 transition-colors hover:bg-muted rounded-md";
 
     return (
         <div className="max-w-5xl mx-auto">
@@ -138,18 +140,18 @@ export default function TicketDetailPage() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     {ticket.pipeline && (
-                        <span className={`px-3 py-1 text-xs font-medium border border-border ${ticket.pipeline.color}`}>
+                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.pipeline.color}`}>
                             {ticket.pipeline.label}
                         </span>
                     )}
-                    <span className={`px-3 py-1 text-xs font-medium border border-border ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
+                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${PRIORITY_META[ticket.priority]?.color ?? ""}`}>
                         {PRIORITY_META[ticket.priority]?.label ?? ticket.priority}
                     </span>
-                    <span className={`px-3 py-1 text-xs font-medium border border-border ${ticket.ticketStatus.color}`}>
+                    <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketStatus.color}`}>
                         {ticket.ticketStatus.label}
                     </span>
                     {ticket.ticketSubStatus && (
-                        <span className={`px-3 py-1 text-xs font-medium border border-border ${ticket.ticketSubStatus.color}`}>
+                        <span className={`rounded-md border border-border px-3 py-1 text-xs font-medium ${ticket.ticketSubStatus.color}`}>
                             {ticket.ticketSubStatus.label}
                         </span>
                     )}
@@ -158,7 +160,7 @@ export default function TicketDetailPage() {
 
             {/* Warranty banner */}
             {ticket.isWarranty && (
-                <div className={`mb-4 border-2 border-border px-5 py-3 flex items-center gap-3 text-sm ${
+                <div className={`mb-4 flex items-center gap-3 rounded-lg border border-border px-5 py-3 text-sm ${
                     ticket.warrantyStatus === "VOID" ? "bg-destructive/10 text-destructive" :
                     ticket.warrantyStatus === "ACTIVE" ? "bg-secondary/40 text-foreground" :
                     "bg-primary/10 text-primary"
@@ -178,7 +180,7 @@ export default function TicketDetailPage() {
                 <div className="col-span-2 space-y-6">
 
                     {/* Customer & Device */}
-                    <div className="border-2 border-border shadow bg-card p-6">
+                    <div className="rounded-lg border border-border bg-card p-6 shadow">
                         <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <User size={16} /> Customer & Device
                         </h2>
@@ -223,7 +225,7 @@ export default function TicketDetailPage() {
 
                     {/* Escalation Info */}
                     {ticket.escalated && (
-                        <div className="border-2 border-border bg-muted p-6">
+                        <div className="rounded-lg border border-border bg-muted p-6">
                             <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                                 <Building2 size={16} /> Escalated to External
                             </h2>
@@ -255,7 +257,7 @@ export default function TicketDetailPage() {
                     )}
 
                     {/* Timeline */}
-                    <div className="border-2 border-border shadow bg-card p-6">
+                    <div className="rounded-lg border border-border bg-card p-6 shadow">
                         <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Clock size={16} /> Timeline
                         </h2>
@@ -319,73 +321,74 @@ export default function TicketDetailPage() {
                     />
 
                     {/* Actions */}
-                    <div className="border-2 border-border shadow bg-card p-4 space-y-2">
+                    <div className="space-y-2 rounded-lg border border-border bg-card p-4 shadow">
                         <h2 className="font-semibold text-foreground mb-3 text-sm">Actions</h2>
 
-                        <button
+                        <Button
                             onClick={() => setShowStatusUpdate(true)}
-                            className="w-full border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 shadow active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+                            className="w-full"
                         >
                             Update Status
-                        </button>
+                        </Button>
 
-                        <button onClick={() => setShowAddNote(true)} className={actionBtnBase}>
+                        <Button onClick={() => setShowAddNote(true)} variant="outline" className={actionBtnBase}>
                             <NotebookPen size={15} /> Add Note
-                        </button>
+                        </Button>
 
                         {canTransfer && !ticket.ticketStatus.isTerminal && (
-                            <button onClick={() => setShowTransferModal(true)} className={actionBtnBase}>
+                            <Button onClick={() => setShowTransferModal(true)} variant="outline" className={actionBtnBase}>
                                 <ArrowRightLeft size={15} /> Transfer Pipeline
-                            </button>
+                            </Button>
                         )}
 
                         {canConvertWarranty && ticket.status !== "S7" && ticket.status !== "S8" && (
-                            <button onClick={() => setShowWarrantyModal(true)} className={actionBtnBase}>
+                            <Button onClick={() => setShowWarrantyModal(true)} variant="outline" className={actionBtnBase}>
                                 {ticket.isWarranty ? "⚙ Manage Warranty" : "⚙ Mark as Warranty"}
-                            </button>
+                            </Button>
                         )}
 
                         {!ticket.escalated && !ticket.ticketStatus.isTerminal &&
                             ticket.ticketStatus.fromTransitions.some(t => t.to.id === "S4") && (
-                            <button onClick={() => setShowEscalation(true)} className={actionBtnBase}>
+                            <Button onClick={() => setShowEscalation(true)} variant="outline" className={actionBtnBase}>
                                 <AlertTriangle size={15} /> Escalate to Service Centre
-                            </button>
+                            </Button>
                         )}
 
                         {ticket.escalated && (
                             showRefEdit ? (
-                                <div className="border-2 border-border p-3 space-y-2">
+                                <div className="space-y-2 rounded-md border border-border p-3">
                                     <p className="text-xs text-muted-foreground font-medium">External Ref # / RMA</p>
-                                    <input
+                                    <Input
                                         type="text"
                                         value={refValue}
                                         onChange={e => setRefValue(e.target.value)}
                                         placeholder="Job #, RMA code…"
-                                        className="w-full border-2 border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                        className="px-2 py-1.5"
                                         autoFocus
                                     />
                                     <div className="flex gap-2">
-                                        <button onClick={() => setShowRefEdit(false)} className="flex-1 text-xs py-1.5 border-2 border-border hover:bg-muted">Cancel</button>
-                                        <button onClick={saveRef} disabled={savingRef} className="flex-1 border-2 border-primary bg-primary py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                                        <Button onClick={() => setShowRefEdit(false)} variant="outline" size="xs" className="flex-1">Cancel</Button>
+                                        <Button onClick={saveRef} disabled={savingRef} size="xs" className="flex-1">
                                             {savingRef ? "Saving…" : "Save"}
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             ) : (
-                                <button
+                                <Button
                                     onClick={() => { setRefValue(ticket.externalRef ?? ""); setShowRefEdit(true); }}
+                                    variant="outline"
                                     className={actionBtnBase}
                                 >
                                     <Building2 size={15} />
                                     {ticket.externalRef ? `Ref: ${ticket.externalRef}` : "Add External Ref # / RMA"}
-                                </button>
+                                </Button>
                             )
                         )}
 
                         <Link
                             href={`/receipt/${ticket.id}`}
                             target="_blank"
-                            className={actionBtnBase}
+                            className={`${actionBtnBase} inline-flex`}
                         >
                             <Printer size={15} /> Print Receipt
                         </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 export default function ReceiptButtons() {
     useEffect(() => {
@@ -8,35 +9,13 @@ export default function ReceiptButtons() {
     }, []);
 
     return (
-        <div style={{ marginBottom: "12px", display: "flex", gap: "8px" }} className="no-print">
-            <button
-                onClick={() => window.print()}
-                style={{
-                    padding: "6px 16px",
-                    background: "#2563eb",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                }}
-            >
+        <div className="no-print mb-3 flex gap-2">
+            <Button onClick={() => window.print()} size="sm">
                 🖨️ Print
-            </button>
-            <button
-                onClick={() => window.close()}
-                style={{
-                    padding: "6px 16px",
-                    background: "#f3f4f6",
-                    color: "#374151",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                }}
-            >
+            </Button>
+            <Button onClick={() => window.close()} size="sm" variant="outline">
                 ✕ Close
-            </button>
+            </Button>
         </div>
     );
 }

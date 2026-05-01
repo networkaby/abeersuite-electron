@@ -158,7 +158,7 @@ export default function PipelinesPage() {
             ) : (
                 <div className="grid gap-4">
                     {pipelines.map((p) => (
-                        <div key={p.id} className="border-2 border-border shadow bg-card p-5 flex items-start gap-4">
+                        <div key={p.id} className="flex items-start gap-4 rounded-lg border border-border bg-card p-5 shadow">
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-3 flex-wrap">
                                     <span className={`px-2.5 py-1 text-xs font-semibold ${p.color}`}>

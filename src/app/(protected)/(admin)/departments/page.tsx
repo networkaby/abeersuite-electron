@@ -60,7 +60,7 @@ function DeptFormFields({
                 <select
                     value={form.branchId}
                     onChange={e => onChange({ ...form, branchId: e.target.value })}
-                    className="mt-1 w-full border-2 border-border bg-background text-foreground text-sm px-3 py-2 focus:outline-none focus:ring-0 focus:border-primary"
+                    className="mt-1 h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     <option value="">— All branches —</option>
                     {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -159,7 +159,7 @@ export default function DepartmentsPage() {
             </div>
 
             {addingNew && (
-                <div className="border-2 border-primary p-4 space-y-3 bg-muted/30">
+                <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
                     <p className="text-sm font-semibold">New Department</p>
                     <DeptFormFields addingNew={true} form={form} branches={branches} onChange={setForm} />
                     <div className="flex gap-2 pt-1">
@@ -174,10 +174,10 @@ export default function DepartmentsPage() {
             ) : (
                 <div className="space-y-2">
                     {departments.length === 0 && !addingNew && (
-                        <p className="text-sm text-muted-foreground py-8 text-center border-2 border-dashed border-border">No departments yet. Create one above.</p>
+                        <p className="border-dashed text-sm text-muted-foreground py-8 text-center border border-border">No departments yet. Create one above.</p>
                     )}
                     {departments.map(d => (
-                        <div key={d.id} className="border-2 border-border border-l-4 border-l-primary bg-card">
+                        <div key={d.id} className="border-l-primary rounded-lg border border-border border-l-4 bg-card">
                             {editId === d.id ? (
                                 <div className="p-4 space-y-3">
                                     <DeptFormFields addingNew={false} form={form} branches={branches} onChange={setForm} />

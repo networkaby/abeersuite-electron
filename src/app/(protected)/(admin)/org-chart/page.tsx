@@ -60,7 +60,7 @@ export default function OrgChartPage() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex border-b-2 border-border">
+            <div className="flex border-b border-border">
                 {TABS.map(t => {
                     const Icon = t.icon;
                     const active = tab === t.id;

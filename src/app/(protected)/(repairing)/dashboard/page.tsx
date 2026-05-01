@@ -200,14 +200,14 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow">
                     <Phone size={22} className="text-muted-foreground" />
                     <div>
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Action Required</p>
                         <p className={`text-3xl font-bold mt-0.5 ${actionCount > 0 ? "text-destructive" : "text-foreground"}`}>{actionCount}</p>
                     </div>
                 </div>
-                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow">
                     <Package size={22} className="text-muted-foreground" />
                     <div>
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">New Today</p>
@@ -217,8 +217,8 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             </div>
 
             {statusQueue.length > 0 && (
-                <div className="border-2 border-border shadow overflow-hidden">
-                    <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
+                    <div className="flex items-center gap-2 border-b border-border bg-muted px-6 py-4">
                         <CheckCircle size={16} className="text-primary" />
                         <h2 className="font-semibold text-foreground">Status Actions</h2>
                         <span className="ml-auto border border-border bg-primary/10 text-primary text-xs font-bold px-2 py-0.5">
@@ -247,15 +247,15 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <p className="text-xs text-primary mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-md border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            <div className="border-2 border-border shadow overflow-hidden">
-                <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+            <div className="overflow-hidden rounded-lg border border-border shadow">
+                <div className="flex items-center gap-2 border-b border-border bg-muted px-6 py-4">
                     <Phone size={16} className="text-muted-foreground" />
                     <h2 className="font-semibold text-foreground">Call Queue</h2>
                     {subActionCount > 0 && (
@@ -296,7 +296,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <p className="text-xs text-destructive mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-md border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
@@ -304,7 +304,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             </div>
 
             {statusQueue.length === 0 && actionQueue.length === 0 && (
-                <div className="px-6 py-10 text-center border-2 border-border shadow bg-card">
+                <div className="rounded-lg border border-border bg-card px-6 py-10 text-center shadow">
                     <CheckCircle size={32} className="text-primary mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">All clear — no pending actions.</p>
                 </div>
@@ -358,14 +358,14 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow">
                     <Package size={22} className="text-muted-foreground" />
                     <div>
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pending Action</p>
                         <p className={`text-3xl font-bold mt-0.5 ${pendingCount > 0 ? "text-primary" : "text-foreground"}`}>{pendingCount}</p>
                     </div>
                 </div>
-                <div className="border-2 border-border shadow bg-card p-5 flex items-center gap-4">
+                <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-5 shadow">
                     <AlertCircle size={22} className="text-muted-foreground" />
                     <div>
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Escalated (In Repair)</p>
@@ -375,8 +375,8 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             </div>
 
             {statusQueue.length > 0 && (
-                <div className="border-2 border-border shadow overflow-hidden">
-                    <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
+                    <div className="flex items-center gap-2 border-b border-border bg-muted px-6 py-4">
                         <Package size={16} className="text-muted-foreground" />
                         <h2 className="font-semibold text-foreground">Status Actions</h2>
                         <span className="ml-auto border border-border bg-primary/10 text-primary text-xs font-bold px-2 py-0.5">
@@ -408,15 +408,15 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                         <p className="text-xs text-primary mt-1 font-medium">→ {t.ticketStatus.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-md border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            <div className="border-2 border-border shadow overflow-hidden">
-                <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-2">
+            <div className="overflow-hidden rounded-lg border border-border shadow">
+                <div className="flex items-center gap-2 border-b border-border bg-muted px-6 py-4">
                     <Package size={16} className="text-muted-foreground" />
                     <h2 className="font-semibold text-foreground">Despatch Queue</h2>
                     {subPendingCount > 0 && (
@@ -459,7 +459,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                         <p className="text-xs text-primary mt-1 font-medium">→ {t.ticketSubStatus!.actionLabel}</p>
                                     )}
                                 </div>
-                                <Link href={`/tickets/${t.id}`} className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
+                                <Link href={`/tickets/${t.id}`} className="shrink-0 rounded-md border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90">Open</Link>
                             </div>
                         ))}
                     </div>

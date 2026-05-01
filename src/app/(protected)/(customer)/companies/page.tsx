@@ -442,7 +442,7 @@ export default function CompaniesPage() {
                                 <Input type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 border-2 border-border bg-muted p-4">
+                        <div className="grid grid-cols-2 gap-3 rounded-md border border-border bg-muted p-4">
                             <div className="space-y-2">
                                 <Label>Company Reg</Label>
                                 <Input value={form.companyReg} onChange={(e) => setForm((prev) => ({ ...prev, companyReg: e.target.value }))} />

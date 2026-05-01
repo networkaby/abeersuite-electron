@@ -184,7 +184,7 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                 <aside className="w-64 shrink-0 sticky top-6 space-y-4">
 
                     {/* Role card */}
-                    <div className="border-2 border-border bg-card p-4 space-y-3">
+                    <div className="space-y-3 rounded-lg border border-border bg-card p-4">
                         <div className="flex items-center gap-2 flex-wrap">
                             <Badge className={`${role.color} font-mono text-xs shrink-0`}>{role.id}</Badge>
                             {role.isSystem && (
@@ -261,7 +261,7 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                     </div>
 
                     {/* Search + global bulk */}
-                    <div className="flex gap-2 border-2 border-border bg-muted/30 px-4 py-3">
+                    <div className="flex gap-2 rounded-md border border-border bg-muted/30 px-4 py-3">
                         <div className="relative flex-1">
                             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <Input
@@ -296,11 +296,11 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
                             const isCollapsed    = collapsed.has(mod);
 
                             return (
-                                <div key={mod} className="border-2 border-border overflow-hidden bg-card">
+                                <div key={mod} className="overflow-hidden rounded-lg border border-border bg-card">
 
                                     {/* Module header */}
                                     <div className={[
-                                        "flex items-center gap-2.5 px-4 py-3 border-b-2 border-border",
+                                        "flex items-center gap-2.5 border-b border-border px-4 py-3",
                                         meta?.chip ?? "bg-muted text-foreground",
                                     ].join(" ")}>
                                         <button
@@ -410,7 +410,7 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
 
             {/* ── Sticky bottom save bar ─────────────────────────────────── */}
             {hasChanges() && (
-                <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-6 py-3 flex items-center justify-between gap-4 shadow-lg">
+                <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-primary/20 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 px-6 py-3 flex items-center justify-between gap-4 shadow-lg">
                     <p className="text-sm text-muted-foreground">
                         <span className="font-semibold text-foreground">{selectedCount}</span> permissions selected
                         {" · "}unsaved changes

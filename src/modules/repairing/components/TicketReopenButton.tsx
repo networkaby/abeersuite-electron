@@ -66,7 +66,7 @@ export default function TicketReopenButton({ ticketId }: Props) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="border-2 border-primary bg-primary/10 p-3 text-sm text-primary">
+                    <div className="rounded-md border border-primary bg-primary/10 p-3 text-sm text-primary">
                         A new ticket will be opened and linked to this one.
                     </div>
 

@@ -115,7 +115,7 @@ function PostFormFields({
                 <select
                     value={form.branchId}
                     onChange={e => onChange({ ...form, branchId: e.target.value, departmentId: "" })}
-                    className="mt-1 w-full border-2 border-border bg-background text-sm px-3 py-2 focus:outline-none focus:border-primary"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     <option value="">— Org-wide (Executive Council) —</option>
                     {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -126,7 +126,7 @@ function PostFormFields({
                 <select
                     value={form.departmentId}
                     onChange={e => onChange({ ...form, departmentId: e.target.value })}
-                    className="mt-1 w-full border-2 border-border bg-background text-sm px-3 py-2 focus:outline-none focus:border-primary"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     <option value="">— None —</option>
                     {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -137,7 +137,7 @@ function PostFormFields({
                 <select
                     value={form.roleTemplateId}
                     onChange={e => onChange({ ...form, roleTemplateId: e.target.value })}
-                    className="mt-1 w-full border-2 border-border bg-background text-sm px-3 py-2 focus:outline-none focus:border-primary"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     <option value="">— None —</option>
                     {roleOptions.map(role => (
@@ -150,7 +150,7 @@ function PostFormFields({
                 <select
                     value={form.parentPostId}
                     onChange={e => onChange({ ...form, parentPostId: e.target.value })}
-                    className="mt-1 w-full border-2 border-border bg-background text-sm px-3 py-2 focus:outline-none focus:border-primary"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                     <option value="">— Top level —</option>
                     {allPosts.filter(p => p.id !== form.id).map(p => (
@@ -200,7 +200,7 @@ function AssignPanel({
                     className="text-xs h-8"
                 />
                 {search && (
-                    <div className="border-2 border-border border-t-0 max-h-40 overflow-y-auto">
+                    <div className="max-h-40 overflow-y-auto rounded-b-md border border-border border-t-0">
                         {candidates.length === 0 ? (
                             <p className="px-3 py-2 text-xs text-muted-foreground">No matching users</p>
                         ) : (
@@ -279,7 +279,7 @@ function PostRow({
     };
 
     return (
-        <div className="border-2 border-border bg-card">
+        <div className="rounded-lg border border-border bg-card">
             {editing ? (
                 <div className="p-4 space-y-3">
                     <PostFormFields
@@ -486,13 +486,13 @@ export default function PostsPage() {
             <div className="flex gap-2 flex-wrap">
                 <button
                     onClick={() => setFilter("")}
-                    className={`px-3 py-1 text-xs border-2 transition-colors ${!filterBranch ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
+                    className={`px-3 py-1 text-xs rounded-md border transition-colors ${!filterBranch ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
                 >
                     All
                 </button>
                 <button
                     onClick={() => setFilter("__org")}
-                    className={`px-3 py-1 text-xs border-2 transition-colors ${filterBranch === "__org" ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
+                    className={`px-3 py-1 text-xs rounded-md border transition-colors ${filterBranch === "__org" ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
                 >
                     Executive Council
                 </button>
@@ -500,7 +500,7 @@ export default function PostsPage() {
                     <button
                         key={b.id}
                         onClick={() => setFilter(b.id)}
-                        className={`px-3 py-1 text-xs border-2 transition-colors ${filterBranch === b.id ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
+                        className={`px-3 py-1 text-xs rounded-md border transition-colors ${filterBranch === b.id ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary"}`}
                     >
                         {b.name}
                     </button>
@@ -509,7 +509,7 @@ export default function PostsPage() {
 
             {/* New post form */}
             {addingNew && (
-                <div className="border-2 border-primary p-4 space-y-3 bg-muted/30">
+                <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
                     <p className="text-sm font-semibold">New Post</p>
                     <PostFormFields
                         addingNew={true} form={form} branches={branches}
@@ -525,7 +525,7 @@ export default function PostsPage() {
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
             ) : posts.length === 0 && !addingNew ? (
-                <p className="text-sm text-muted-foreground py-12 text-center border-2 border-dashed border-border">
+                <p className="border-dashed text-sm text-muted-foreground py-12 text-center border border-border">
                     No posts yet. Create your first position above.
                 </p>
             ) : (

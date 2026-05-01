@@ -5,6 +5,7 @@ import { Bell } from "lucide-react";
 import axios from "axios";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/format-date";
+import { Button } from "@/components/ui/button";
 
 interface Notification {
     id: number;
@@ -59,9 +60,11 @@ export default function NotificationBell() {
 
     return (
         <div ref={ref} className="relative">
-            <button
+            <Button
                 onClick={() => setOpen((v) => !v)}
-                className="relative p-2 text-muted-foreground hover:bg-muted transition-colors border-2 border-transparent hover:border-border"
+                variant="ghost"
+                size="icon-sm"
+                className="relative text-muted-foreground hover:bg-muted"
             >
                 <Bell size={20} />
                 {unread > 0 && (
@@ -69,16 +72,16 @@ export default function NotificationBell() {
                         {unread > 9 ? "9+" : unread}
                     </span>
                 )}
-            </button>
+            </Button>
 
             {open && (
-                <div className="absolute left-0 top-full mt-1 w-80 border-2 border-border shadow bg-card z-50">
-                    <div className="flex items-center justify-between px-4 py-3 border-b-2 border-border bg-muted">
+                <div className="absolute left-0 top-full z-50 mt-1 w-80 rounded-lg border border-border bg-card shadow">
+                    <div className="flex items-center justify-between border-b border-border bg-muted px-4 py-3">
                         <span className="text-sm font-semibold text-foreground">Notifications</span>
                         {unread > 0 && (
-                            <button onClick={markAllRead} className="text-xs text-primary hover:underline">
+                            <Button onClick={markAllRead} variant="link" size="xs" className="h-auto p-0 text-xs">
                                 Mark all read
-                            </button>
+                            </Button>
                         )}
                     </div>
 

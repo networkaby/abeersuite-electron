@@ -6,19 +6,23 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Props { ticket: { id: number }; onClose: () => void; }
 type ServiceCenterOption = { id: number; name: string };
 type EscalationFormData = { serviceCenterId: string; externalRef: string; escalatedAt: string; expectedReturn: string };
 
-const fieldClass = "w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-
 export default function TicketEscalation({ ticket, onClose }: Props) {
     const { data: session } = useSession();
     const [serviceCenters, setServiceCenters] = useState<ServiceCenterOption[]>([]);
-    const { register, handleSubmit, formState: { isSubmitting } } = useForm({
+    const { register, handleSubmit, setValue, watch, formState: { isSubmitting } } = useForm({
         defaultValues: { serviceCenterId: "", externalRef: "", escalatedAt: new Date().toISOString().split("T")[0], expectedReturn: "" },
     });
+    const serviceCenterId = watch("serviceCenterId");
 
     useEffect(() => { axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)); }, []);
 
@@ -39,48 +43,53 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="border-2 border-border shadow bg-card w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Escalate to Service Center</h2>
-                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
-                </div>
-
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader className="flex-row items-center justify-between space-y-0">
+                    <DialogTitle>Escalate to Service Center</DialogTitle>
+                    <Button onClick={onClose} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
+                        <X size={20} />
+                    </Button>
+                </DialogHeader>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <input type="hidden" {...register("serviceCenterId")} />
                     <div>
-                        <label className="block text-sm font-medium mb-1">Service Center</label>
-                        <select {...register("serviceCenterId")} className={fieldClass}>
-                            <option value="">Select service center...</option>
-                            {serviceCenters.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                        <Label className="mb-1 block">Service Center</Label>
+                        <Select value={serviceCenterId} onValueChange={(v) => setValue("serviceCenterId", v)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select service center..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {serviceCenters.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-1">
+                        <Label className="mb-1 block">
                             External Ref # <span className="text-muted-foreground">(optional)</span>
-                        </label>
-                        <input {...register("externalRef")} className={fieldClass} placeholder="Job number from service center" />
+                        </Label>
+                        <Input {...register("externalRef")} placeholder="Job number from service center" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-medium mb-1">Escalated Date</label>
-                            <input type="date" {...register("escalatedAt")} className={fieldClass} />
+                            <Label className="mb-1 block">Escalated Date</Label>
+                            <Input type="date" {...register("escalatedAt")} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">
+                            <Label className="mb-1 block">
                                 Expected Return <span className="text-muted-foreground">(optional)</span>
-                            </label>
-                            <input type="date" {...register("expectedReturn")} className={fieldClass} />
+                            </Label>
+                            <Input type="date" {...register("expectedReturn")} />
                         </div>
                     </div>
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 border-2 border-border py-2 text-sm hover:bg-muted">Cancel</button>
-                        <button type="submit" disabled={isSubmitting}
-                            className="flex-1 border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    <DialogFooter className="pt-2">
+                        <Button type="button" onClick={onClose} variant="outline" className="flex-1">Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting} className="flex-1">
                             {isSubmitting ? "Escalating..." : "Escalate"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

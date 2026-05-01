@@ -658,7 +658,7 @@ export default function RolePage() {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap gap-1.5 border-2 border-border bg-muted/30 px-3 py-2">
+                                <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted/30 px-3 py-2">
                                     <div className="relative min-w-64 flex-1">
                                         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                         <Input
@@ -685,7 +685,7 @@ export default function RolePage() {
                                 </div>
 
                                 {hasBypass && (
-                                    <div className="flex items-start gap-2 border-2 border-destructive/30 bg-destructive/10 px-3 py-2.5">
+                                    <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5">
                                         <AlertTriangle size={13} className="mt-0.5 shrink-0 text-destructive" />
                                         <p className="text-[11px] leading-relaxed text-destructive">
                                             <span className="font-semibold">admin:bypass active.</span>{" "}
@@ -783,7 +783,7 @@ function RoleFields({
                             title={color.label}
                             onClick={() => onChange((prev) => ({ ...prev, color: color.value }))}
                             className={[
-                                "h-6 w-6 border-2 transition-all duration-150",
+                                "h-6 w-6 rounded-md border transition-all duration-150",
                                 color.dot,
                                 form.color === color.value
                                     ? "scale-105 border-foreground ring-1 ring-border ring-offset-1"
@@ -984,7 +984,7 @@ function RoleList({
                                 type="button"
                                 onClick={() => onSelect(role.id)}
                                 className={[
-                                    "group w-full border-2 border-l-4 bg-background px-2 py-1.5 text-left transition-all",
+                                    "group w-full rounded-md border border-l-4 bg-background px-2 py-1.5 text-left transition-all",
                                     accent,
                                     isActive
                                         ? "border-primary shadow-sm"
@@ -1083,8 +1083,8 @@ function PermissionMatrix({
     }));
 
     return (
-        <div className="overflow-hidden border-2 border-border bg-card">
-            <div className="border-b-2 border-border bg-muted/40 px-3 py-2">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="border-b border-border bg-muted/40 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Enterprise Permission Matrix
                 </p>
@@ -1189,7 +1189,7 @@ function PermissionMatrix({
                                                             }}
                                                             title={title}
                                                             className={[
-                                                                "mx-auto flex h-6 w-6 items-center justify-center border-2 transition-colors",
+                                                                "mx-auto flex h-6 w-6 items-center justify-center rounded-md border transition-colors",
                                                                 isOn
                                                                     ? "border-primary bg-primary text-primary-foreground"
                                                                     : "border-border hover:border-primary/60 hover:bg-primary/5",

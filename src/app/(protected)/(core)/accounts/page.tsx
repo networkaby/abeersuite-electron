@@ -103,7 +103,7 @@ export default function AccountsPage() {
             )}
 
             {/* Search + Filter */}
-            <div className="border-2 border-border shadow bg-card p-4 space-y-3">
+            <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -115,9 +115,9 @@ export default function AccountsPage() {
                             className="pl-9"
                         />
                         {search && (
-                            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                            <Button onClick={() => setSearch("")} variant="ghost" size="icon-xs" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                                 <X size={15} />
-                            </button>
+                            </Button>
                         )}
                     </div>
                     <div className="flex gap-1">
@@ -143,11 +143,11 @@ export default function AccountsPage() {
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
             ) : filtered.length === 0 ? (
-                <div className="border-2 border-border shadow bg-card p-12 text-center text-muted-foreground">
+                <div className="rounded-lg border border-border bg-card p-12 text-center text-muted-foreground shadow">
                     {search || typeFilter ? "No accounts match your filter." : "No accounts yet. Add your first one!"}
                 </div>
             ) : (
-                <div className="border-2 border-border shadow overflow-hidden">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
                     <Table>
                         <TableHeader>
                             <TableRow>

@@ -162,7 +162,7 @@ export default function AccountDetailPage() {
                 <div className="col-span-2 space-y-6">
 
                     {/* Contact Info */}
-                    <div className="border-2 border-border shadow bg-card p-6">
+                    <div className="rounded-lg border border-border bg-card p-6 shadow">
                         <h2 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">Contact Details</h2>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             {account.phone && <div><p className="text-muted-foreground text-xs mb-0.5">Phone</p><p>{account.phone}</p></div>}
@@ -174,14 +174,14 @@ export default function AccountDetailPage() {
                     </div>
 
                     {/* Devices & Tickets */}
-                    <div className="border-2 border-border shadow bg-card p-6">
+                    <div className="rounded-lg border border-border bg-card p-6 shadow">
                         <h2 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">Devices &amp; Tickets</h2>
                         {account.devices.length === 0 ? (
                             <p className="text-muted-foreground text-sm">No devices yet.</p>
                         ) : (
                             <div className="space-y-4">
                                 {account.devices.map(d => (
-                                    <div key={d.id} className="border-2 border-border p-4">
+                                    <div key={d.id} className="rounded-md border border-border p-4">
                                         <p className="font-medium text-sm">
                                             {d.brand} {d.model} <span className="text-muted-foreground">({d.type})</span>
                                         </p>
@@ -214,7 +214,7 @@ export default function AccountDetailPage() {
 
                 {/* Right: Relationships */}
                 <div className="space-y-4">
-                    <div className="border-2 border-border shadow bg-card p-5">
+                    <div className="rounded-lg border border-border bg-card p-5 shadow">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
                                 <Link2 size={15} />
@@ -309,7 +309,7 @@ export default function AccountDetailPage() {
                                         placeholder="e.g. Owner, Employee, Contact"
                                     />
                                 </div>
-                                <div className="border-2 border-border divide-y divide-border max-h-48 overflow-y-auto">
+                                <div className="max-h-48 divide-y divide-border overflow-y-auto rounded-md border border-border">
                                     {linkResults.map(r => (
                                         <button
                                             key={r.id}

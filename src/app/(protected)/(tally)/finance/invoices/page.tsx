@@ -33,7 +33,7 @@ type LineInput = { description: string; quantity: string; unitPrice: string; tax
 
 const STATUS_COLORS = INVOICE_STATUS_COLORS;
 
-const cellClass = "w-full border-2 border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+const cellClass = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export default function InvoicesPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -128,23 +128,25 @@ export default function InvoicesPage() {
             {/* Status filters */}
             <div className="flex gap-1 flex-wrap">
                 {(["", "DRAFT", "SENT", "PARTIAL", "PAID", "VOID"] as const).map((s) => (
-                    <button
+                    <Button
                         key={s}
                         onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1.5 text-xs border-2 font-medium transition-colors ${
+                        variant="outline"
+                        size="xs"
+                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
                             statusFilter === s
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border bg-card text-muted-foreground hover:bg-muted"
                         }`}
                     >
                         {s || "All"}
-                    </button>
+                    </Button>
                 ))}
             </div>
 
             {/* Create form */}
             {showCreate && (
-                <div className="border-2 border-border shadow bg-card p-5 space-y-5">
+                <div className="space-y-5 rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground">New Invoice</h2>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -206,9 +208,9 @@ export default function InvoicesPage() {
                     </div>
 
                     {/* Line items */}
-                    <div className="border-2 border-border overflow-hidden">
+                    <div className="overflow-hidden rounded-lg border border-border">
                         <table className="w-full text-sm">
-                            <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
+                            <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Description</th>
                                     <th className="px-3 py-2 text-right font-medium w-20">Qty</th>
@@ -222,7 +224,7 @@ export default function InvoicesPage() {
                                 {form.lines.map((l, i) => (
                                     <tr key={i} className="border-t border-border">
                                         <td className="px-3 py-2">
-                                            <input
+                                            <Input
                                                 value={l.description}
                                                 onChange={(e) => updateLine(i, { description: e.target.value })}
                                                 className={cellClass}
@@ -230,7 +232,7 @@ export default function InvoicesPage() {
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input
+                                            <Input
                                                 type="number" min="0" step="0.001"
                                                 value={l.quantity}
                                                 onChange={(e) => updateLine(i, { quantity: e.target.value })}
@@ -238,7 +240,7 @@ export default function InvoicesPage() {
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input
+                                            <Input
                                                 type="number" min="0" step="0.01"
                                                 value={l.unitPrice}
                                                 onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
@@ -247,7 +249,7 @@ export default function InvoicesPage() {
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input
+                                            <Input
                                                 type="number" min="0" max="100" step="0.5"
                                                 value={l.taxRate}
                                                 onChange={(e) => updateLine(i, { taxRate: e.target.value })}
@@ -257,13 +259,13 @@ export default function InvoicesPage() {
                                         <td className="px-3 py-2 text-right font-mono text-foreground">{fmt(lineTotal(l))}</td>
                                         <td className="px-3 py-2 text-center">
                                             {form.lines.length > 1 && (
-                                                <button onClick={() => removeLine(i)} className="text-destructive hover:text-destructive/80">×</button>
+                                                <Button onClick={() => removeLine(i)} variant="ghost" size="icon-xs" className="text-destructive hover:text-destructive/80">×</Button>
                                             )}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot className="bg-muted border-t-2 border-border font-semibold">
+                            <tfoot className="border-t border-border bg-muted font-semibold">
                                 <tr>
                                     <td colSpan={4} className="px-3 py-2 text-right text-muted-foreground">Grand Total</td>
                                     <td className="px-3 py-2 text-right font-mono">{fmt(grandTotal)}</td>
@@ -272,7 +274,7 @@ export default function InvoicesPage() {
                             </tfoot>
                         </table>
                     </div>
-                    <button onClick={addLine} className="text-sm text-primary hover:underline">+ Add line</button>
+                    <Button onClick={addLine} variant="link" size="sm" className="h-auto p-0 text-sm">+ Add line</Button>
 
                     <div className="flex items-center justify-between pt-2">
                         <div className="flex items-center gap-3">
@@ -306,12 +308,12 @@ export default function InvoicesPage() {
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
             ) : (
-                <div className="border-2 border-border shadow bg-card overflow-hidden">
+                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
                     {invoices.length === 0 ? (
                         <div className="text-center py-16 text-muted-foreground">No invoices yet</div>
                     ) : (
                         <table className="w-full text-sm">
-                            <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
+                            <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                                 <tr>
                                     <th className="px-5 py-3 text-left font-medium">Invoice #</th>
                                     <th className="px-5 py-3 text-left font-medium">Billed To</th>

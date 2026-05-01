@@ -177,8 +177,8 @@ export function TicketSection({
     if (tickets.length === 0) return null;
     const themedHeader = color === "text-blue-700" && bgColor === "bg-blue-50";
     return (
-        <div className="mb-6 overflow-hidden border-2 border-border shadow bg-card">
-            <div className={`flex items-center gap-2 border-b-2 border-border px-6 py-4 ${themedHeader ? "bg-primary/8" : bgColor}`}>
+        <div className="mb-6 overflow-hidden rounded-lg border border-border bg-card shadow">
+            <div className={`flex items-center gap-2 border-b border-border px-6 py-4 ${themedHeader ? "bg-primary/8" : bgColor}`}>
                 {icon}
                 <h2 className={`font-semibold ${themedHeader ? "text-primary" : color}`}>{title}</h2>
                 <span className={`ml-auto px-2 py-0.5 text-xs font-bold border border-current/20 ${themedHeader ? "bg-primary/12 text-primary" : `${bgColor} ${color}`}`}>

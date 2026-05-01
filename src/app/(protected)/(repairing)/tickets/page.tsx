@@ -9,6 +9,8 @@ import { useSearchParams } from "next/navigation";
 import { formatDate } from "@/lib/format-date";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 interface Ticket {
     id: number;
     status: string;
@@ -125,7 +127,7 @@ export default function TicketsPage() {
         pipelineFilter !== requestedPipeline
     );
 
-    const selectClass = "border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring w-full";
+    const selectClass = "h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
     return (
         <div>
@@ -135,44 +137,48 @@ export default function TicketsPage() {
             </div>
 
             {/* Search & Filters */}
-            <div className="border-2 border-border bg-card shadow p-4 mb-4 space-y-3">
+            <div className="mb-4 space-y-3 rounded-lg border border-border bg-card p-4 shadow">
                 {/* Search */}
                 <div className="relative">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
+                    <Input
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by customer name, phone, device, ticket #..."
-                        className="w-full border-2 border-border bg-background py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="py-2 pl-9 pr-4"
                     />
                 </div>
 
                 {/* Pipeline tabs */}
                 {pipelineOptions.length > 1 && (
                     <div className="flex gap-2 flex-wrap pb-1">
-                        <button
+                        <Button
                             onClick={() => setPipelineFilter("")}
-                            className={`px-3 py-1.5 text-xs font-medium border-2 transition-colors ${
+                            variant="outline"
+                            size="xs"
+                            className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
                                 !pipelineFilter
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "bg-card text-muted-foreground border-border hover:bg-muted"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-card text-muted-foreground hover:bg-muted"
                             }`}
                         >
                             All Pipelines
-                        </button>
+                        </Button>
                         {pipelineOptions.map((p) => (
-                            <button
+                            <Button
                                 key={p.id}
                                 onClick={() => setPipelineFilter(p.id)}
-                                className={`px-3 py-1.5 text-xs font-medium border-2 transition-colors ${
+                                variant="outline"
+                                size="xs"
+                                className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
                                     pipelineFilter === p.id
-                                        ? "bg-primary text-primary-foreground border-primary"
-                                        : "bg-card text-muted-foreground border-border hover:bg-muted"
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-card text-muted-foreground hover:bg-muted"
                                 }`}
                             >
                                 {p.label}
-                            </button>
+                            </Button>
                         ))}
                     </div>
                 )}
@@ -211,9 +217,9 @@ export default function TicketsPage() {
                         <span className="font-medium text-foreground">{tickets.length}</span> tickets
                     </span>
                     {hasFilters && (
-                        <button onClick={clearFilters} className="flex items-center gap-1 text-destructive hover:opacity-80">
+                        <Button onClick={clearFilters} variant="ghost" size="xs" className="h-auto p-0 text-destructive hover:opacity-80">
                             <X size={14} /> Clear filters
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>
@@ -222,13 +228,13 @@ export default function TicketsPage() {
             {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
             ) : filtered.length === 0 ? (
-                <div className="border-2 border-border shadow p-12 text-center text-muted-foreground">
+                <div className="rounded-lg border border-border p-12 text-center text-muted-foreground shadow">
                     {hasFilters ? "No tickets match your filters." : "No tickets yet. Create your first one!"}
                 </div>
             ) : (
-                <div className="border-2 border-border shadow overflow-hidden">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
                     <table className="w-full text-sm">
-                        <thead className="bg-muted text-muted-foreground uppercase text-xs border-b-2 border-border">
+                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground uppercase">
                             <tr>
                                 <th className="px-6 py-3 text-left">#</th>
                                 <th className="px-6 py-3 text-left">Customer</th>

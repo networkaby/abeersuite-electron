@@ -202,7 +202,7 @@ export default function InvoiceDetailPage() {
                     { label: "Paid",   value: fmt(Number(invoice.amountPaid)),  color: "text-green-700" },
                     { label: "Due",    value: fmt(Number(invoice.amountDue)),   color: "text-orange-600" },
                 ].map(({ label, value, color }) => (
-                    <div key={label} className="border-2 border-border shadow bg-card p-4 text-center">
+                    <div key={label} className="rounded-lg border border-border bg-card p-4 text-center shadow">
                         <p className="text-xs text-muted-foreground mb-1">{label}</p>
                         <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
                     </div>
@@ -210,7 +210,7 @@ export default function InvoiceDetailPage() {
             </div>
 
             {/* Meta */}
-            <div className="border-2 border-border shadow bg-card p-5 grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-card p-5 text-sm shadow">
                 <div>
                     <p className="text-xs text-muted-foreground mb-1">Issue Date</p>
                     <p className="font-medium">{new Date(invoice.issueDate).toLocaleDateString()}</p>
@@ -232,12 +232,12 @@ export default function InvoiceDetailPage() {
             </div>
 
             {/* Line items */}
-            <div className="border-2 border-border shadow bg-card overflow-hidden">
-                <div className="px-5 py-3 border-b-2 border-border bg-muted">
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                <div className="border-b border-border bg-muted px-5 py-3">
                     <h3 className="text-sm font-semibold text-foreground">Line Items</h3>
                 </div>
                 <table className="w-full text-sm">
-                    <thead className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
+                    <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                         <tr>
                             <th className="px-5 py-2 text-left font-medium">Description</th>
                             <th className="px-5 py-2 text-right font-medium">Qty</th>
@@ -278,12 +278,12 @@ export default function InvoiceDetailPage() {
 
             {/* Payments */}
             {invoice.payments.length > 0 && (
-                <div className="border-2 border-border shadow bg-card overflow-hidden">
-                    <div className="px-5 py-3 border-b-2 border-border bg-muted">
+                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                    <div className="border-b border-border bg-muted px-5 py-3">
                         <h3 className="text-sm font-semibold text-foreground">Payments Received</h3>
                     </div>
                     <table className="w-full text-sm">
-                        <thead className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
+                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                             <tr>
                                 <th className="px-5 py-2 text-left font-medium">Date</th>
                                 <th className="px-5 py-2 text-left font-medium">Method</th>

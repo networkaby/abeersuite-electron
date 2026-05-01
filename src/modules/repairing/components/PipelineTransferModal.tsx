@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowRightLeft, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 interface PipelineOption {
     id: string;
@@ -17,8 +22,6 @@ interface Props {
     currentPipelineLabel?: string;
     onClose: () => void;
 }
-
-const fieldClass = "w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function PipelineTransferModal({ ticketId, currentPipelineLabel, onClose }: Props) {
     const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
@@ -72,17 +75,17 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="border-2 border-border shadow bg-card w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-5">
-                    <h2 className="font-semibold text-foreground flex items-center gap-2">
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader className="mb-1 flex-row items-center justify-between space-y-0">
+                    <DialogTitle className="flex items-center gap-2">
                         <ArrowRightLeft size={17} />
                         Transfer to Another Pipeline
-                    </h2>
-                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+                    </DialogTitle>
+                    <Button onClick={onClose} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
                         <X size={18} />
-                    </button>
-                </div>
+                    </Button>
+                </DialogHeader>
 
                 {loading ? (
                     <p className="text-sm text-muted-foreground">Loading pipelines…</p>
@@ -91,21 +94,22 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                 ) : (
                     <div className="space-y-4">
                         {currentPipelineLabel && (
-                            <div className="text-xs text-muted-foreground border-2 border-border bg-muted px-3 py-2">
+                            <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
                                 Currently in: <span className="font-medium text-foreground">{currentPipelineLabel}</span>
                             </div>
                         )}
 
                         <div>
-                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                            <Label className="mb-1.5 block text-xs font-medium text-muted-foreground uppercase tracking-wide">
                                 Transfer To
-                            </label>
+                            </Label>
                             <div className="grid grid-cols-1 gap-2">
                                 {pipelines.map(p => (
-                                    <button
+                                    <Button
                                         key={p.id}
                                         onClick={() => handlePipelineChange(p.id)}
-                                        className={`flex items-center gap-3 px-4 py-3 border-2 text-left transition-colors ${
+                                        variant="outline"
+                                        className={`h-auto justify-start gap-3 px-4 py-3 text-left transition-colors ${
                                             selectedPipelineId === p.id
                                                 ? "border-primary bg-primary/10"
                                                 : "border-border hover:bg-muted"
@@ -117,27 +121,28 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                                         <span className="text-xs text-muted-foreground">
                                             {p.statuses.length} stage{p.statuses.length !== 1 ? "s" : ""}
                                         </span>
-                                    </button>
+                                    </Button>
                                 ))}
                             </div>
                         </div>
 
                         {selectedPipeline && selectedPipeline.statuses.length > 0 && (
                             <div>
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                                <Label className="mb-1.5 block text-xs font-medium text-muted-foreground uppercase tracking-wide">
                                     Land On Stage
-                                </label>
-                                <select
-                                    value={selectedStatusId}
-                                    onChange={e => setSelectedStatusId(e.target.value)}
-                                    className={fieldClass}
-                                >
-                                    {selectedPipeline.statuses.map(s => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.label}{s.isEntryPoint ? " ★" : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                                </Label>
+                                <Select value={selectedStatusId} onValueChange={setSelectedStatusId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select stage" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {selectedPipeline.statuses.map(s => (
+                                            <SelectItem key={s.id} value={s.id}>
+                                                {s.label}{s.isEntryPoint ? " ★" : ""}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                                 {selectedPipeline.statuses.some(s => s.isEntryPoint) && (
                                     <p className="text-xs text-muted-foreground mt-1">★ = default entry point</p>
                                 )}
@@ -145,36 +150,37 @@ export default function PipelineTransferModal({ ticketId, currentPipelineLabel, 
                         )}
 
                         <div>
-                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                            <Label className="mb-1.5 block text-xs font-medium text-muted-foreground uppercase tracking-wide">
                                 Reason / Note <span className="font-normal normal-case">(optional)</span>
-                            </label>
-                            <textarea
+                            </Label>
+                            <Textarea
                                 value={note}
                                 onChange={e => setNote(e.target.value)}
                                 rows={2}
                                 placeholder="e.g. Repair is more complex than expected"
-                                className="w-full resize-none border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                className="resize-none"
                             />
                         </div>
 
-                        <div className="flex gap-2 pt-1">
-                            <button
+                        <DialogFooter className="pt-1">
+                            <Button
                                 onClick={onClose}
-                                className="flex-1 border-2 border-border py-2 text-sm hover:bg-muted"
+                                variant="outline"
+                                className="flex-1"
                             >
                                 Cancel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 onClick={handleSubmit}
                                 disabled={submitting || !selectedStatusId}
-                                className="flex-1 border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                className="flex-1"
                             >
                                 {submitting ? "Transferring…" : "Transfer Ticket"}
-                            </button>
-                        </div>
+                            </Button>
+                        </DialogFooter>
                     </div>
                 )}
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

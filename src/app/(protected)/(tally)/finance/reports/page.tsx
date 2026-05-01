@@ -116,19 +116,20 @@ export default function ReportsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 border-b-2 border-border">
+            <div className="flex gap-1 border-b border-border">
                 {([["trial-balance", "Trial Balance"], ["ledger", "General Ledger"]] as [TabType, string][]).map(([key, label]) => (
-                    <button
+                    <Button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-[2px] transition-colors ${
+                        variant="ghost"
+                        className={`h-auto px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-none transition-colors ${
                             tab === key
                                 ? "border-primary text-primary"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                     >
                         {label}
-                    </button>
+                    </Button>
                 ))}
             </div>
 
@@ -159,12 +160,12 @@ export default function ReportsPage() {
                             </p>
 
                             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                                <div key={type} className="border-2 border-border shadow bg-card overflow-hidden">
-                                    <div className={`px-5 py-2.5 border-b-2 border-border ${TYPE_COLORS[type]}`}>
+                                <div key={type} className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                                    <div className={`border-b border-border px-5 py-2.5 ${TYPE_COLORS[type]}`}>
                                         <span className="text-xs font-bold uppercase tracking-wider">{type}</span>
                                     </div>
                                     <table className="w-full text-sm">
-                                        <thead className="text-xs text-muted-foreground bg-muted border-b-2 border-border">
+                                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                                             <tr>
                                                 <th className="px-5 py-2 text-left font-medium">Code</th>
                                                 <th className="px-5 py-2 text-left font-medium">Account</th>
@@ -195,7 +196,7 @@ export default function ReportsPage() {
                             ))}
 
                             {/* Totals */}
-                            <div className="border-2 border-border shadow bg-card p-5 flex justify-end gap-12 text-sm font-semibold">
+                            <div className="flex justify-end gap-12 rounded-lg border border-border bg-card p-5 text-sm font-semibold shadow">
                                 <div className="text-right">
                                     <p className="text-xs text-muted-foreground mb-1">Total Debits</p>
                                     <p className="font-mono text-foreground">{fmt(tbData.totalDebits)}</p>
@@ -252,8 +253,8 @@ export default function ReportsPage() {
                             <Loader2 className="animate-spin text-muted-foreground" size={28} />
                         </div>
                     ) : ledgerData ? (
-                        <div className="border-2 border-border shadow bg-card overflow-hidden">
-                            <div className="px-5 py-3 border-b-2 border-border bg-muted flex items-center justify-between">
+                        <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                            <div className="flex items-center justify-between border-b border-border bg-muted px-5 py-3">
                                 <div>
                                     <span className="font-mono text-muted-foreground mr-2">{ledgerData.account.code}</span>
                                     <span className="font-semibold text-foreground">{ledgerData.account.name}</span>
@@ -273,7 +274,7 @@ export default function ReportsPage() {
                                 <div className="text-center py-10 text-muted-foreground text-sm">No transactions in this period</div>
                             ) : (
                                 <table className="w-full text-sm">
-                                    <thead className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
+                                    <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                                         <tr>
                                             <th className="px-5 py-2 text-left font-medium">Date</th>
                                             <th className="px-5 py-2 text-left font-medium">Reference</th>

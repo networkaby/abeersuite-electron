@@ -105,7 +105,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                 ) : (
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-2 max-h-64 overflow-y-auto">
-                            <label className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm cursor-pointer">
+                            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                                 <input
                                     type="radio"
                                     {...register("subStatusId")}
@@ -125,7 +125,7 @@ export default function SubStatusUpdate({ ticket, onClose }: Props) {
                                         return (
                                             <label
                                                 key={ss.id}
-                                                className={`flex items-center gap-2 border-2 border-border px-3 py-2 text-sm cursor-pointer ${!canSet ? "opacity-50 cursor-not-allowed" : ""}`}
+                                                className={`flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm ${!canSet ? "opacity-50 cursor-not-allowed" : ""}`}
                                             >
                                                 <input
                                                     type="radio"

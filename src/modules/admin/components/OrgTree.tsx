@@ -122,7 +122,7 @@ function OrgNodeWrapper({
                 {hasChildren && (
                     <button
                         onClick={() => setOpen(o => !o)}
-                        className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 border-border bg-card text-muted-foreground shadow-sm hover:border-primary hover:text-primary transition-colors"
+                        className="absolute -bottom-3.5 left-1/2 z-10 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:border-primary hover:text-primary"
                         title={open ? "Collapse" : "Expand"}
                     >
                         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}

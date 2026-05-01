@@ -26,7 +26,7 @@ interface GlAccount {
     _count: { lines: number };
 }
 
-const cellClass = "w-full border-2 border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+const cellClass = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export default function ChartOfAccountsPage() {
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
@@ -131,7 +131,7 @@ export default function ChartOfAccountsPage() {
 
             {/* Add form */}
             {showAdd && (
-                <div className="border-2 border-border shadow bg-card p-5 space-y-4">
+                <div className="space-y-4 rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground">New GL Account</h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
@@ -198,14 +198,14 @@ export default function ChartOfAccountsPage() {
 
             {/* Account groups */}
             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                <div key={type} className="border-2 border-border shadow bg-card overflow-hidden">
-                    <div className={`px-5 py-3 border-b-2 border-border flex items-center justify-between ${GL_TYPE_COLORS[type]}`}>
+                <div key={type} className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                    <div className={`flex items-center justify-between border-b border-border px-5 py-3 ${GL_TYPE_COLORS[type]}`}>
                         <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 border border-current/20 ${GL_TYPE_COLORS[type]}`}>{type}</span>
                         <span className="text-xs opacity-70">{rows.length} accounts</span>
                     </div>
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="text-xs text-muted-foreground border-b-2 border-border bg-muted">
+                            <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
                                 <th className="px-5 py-2 text-left font-medium">Code</th>
                                 <th className="px-5 py-2 text-left font-medium">Name</th>
                                 <th className="px-5 py-2 text-left font-medium">Normal Balance</th>

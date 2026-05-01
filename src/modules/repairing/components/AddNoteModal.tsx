@@ -4,6 +4,9 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { X, Lock, Eye } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Props {
     ticketId: number;
@@ -30,58 +33,57 @@ export default function AddNoteModal({ ticketId, onClose }: Props) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="border-2 border-border shadow bg-card w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Add Note</h2>
-                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader className="flex-row items-center justify-between space-y-0">
+                    <DialogTitle>Add Note</DialogTitle>
+                    <Button onClick={onClose} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
                         <X size={20} />
-                    </button>
-                </div>
+                    </Button>
+                </DialogHeader>
 
                 <div className="space-y-4">
-                    <textarea
+                    <Textarea
                         autoFocus
                         rows={4}
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
                         placeholder="e.g. Called customer — no answer. Will try again tomorrow."
-                        className="w-full resize-none border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="resize-none"
                     />
 
                     <div>
                         <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Visibility</p>
                         <div className="flex gap-2">
-                            <button type="button" onClick={() => setVisibility("INTERNAL")}
-                                className={`flex items-center gap-2 flex-1 px-3 py-2 border-2 text-sm font-medium transition-colors ${
+                            <Button type="button" onClick={() => setVisibility("INTERNAL")} variant="outline"
+                                className={`h-auto flex-1 items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
                                     visibility === "INTERNAL"
                                         ? "border-border bg-muted text-foreground"
                                         : "border-border text-muted-foreground hover:bg-muted"
                                 }`}>
                                 <Lock size={13} /> Internal
                                 <span className="text-xs font-normal text-muted-foreground ml-auto">staff only</span>
-                            </button>
-                            <button type="button" onClick={() => setVisibility("PUBLIC")}
-                                className={`flex items-center gap-2 flex-1 px-3 py-2 border-2 text-sm font-medium transition-colors ${
+                            </Button>
+                            <Button type="button" onClick={() => setVisibility("PUBLIC")} variant="outline"
+                                className={`h-auto flex-1 items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
                                     visibility === "PUBLIC"
                                         ? "border-primary bg-primary/10 text-primary"
                                         : "border-border text-muted-foreground hover:bg-muted"
                                 }`}>
                                 <Eye size={13} /> Public
                                 <span className="text-xs font-normal ml-auto">customer visible</span>
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex gap-3 pt-4 mt-2 border-t border-border">
-                    <button onClick={onClose} className="flex-1 border-2 border-border py-2 text-sm hover:bg-muted">Cancel</button>
-                    <button onClick={handleSave} disabled={saving || !note.trim()}
-                        className="flex-1 border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                <DialogFooter className="mt-2 border-t border-border pt-4">
+                    <Button onClick={onClose} variant="outline" className="flex-1">Cancel</Button>
+                    <Button onClick={handleSave} disabled={saving || !note.trim()} className="flex-1">
                         {saving ? "Saving..." : "Save Note"}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

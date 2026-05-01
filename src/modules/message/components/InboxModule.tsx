@@ -544,7 +544,7 @@ export default function InboxModule({
                 ) : (
                     <>
                         {/* Room header */}
-                        <div className="flex items-center gap-2 border-b-2 border-border bg-card px-6 py-3 shrink-0">
+                        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-6 py-3">
                             {activeRoom.type === "DIRECT_MESSAGE" ? (
                                 <AtSign size={16} className="text-muted-foreground" />
                             ) : activeRoom.type === "SYSTEM_INBOX" ? (
@@ -581,7 +581,7 @@ export default function InboxModule({
                                         if (message.messageType === "SYSTEM") {
                                             return (
                                                 <div key={message.id} className="flex justify-center py-2">
-                                                    <div className="max-w-lg border-2 border-border bg-secondary/40 px-4 py-2 text-center">
+                                                    <div className="max-w-lg rounded-md border border-border bg-secondary/40 px-4 py-2 text-center">
                                                         {message.title && (
                                                             <p className="text-xs font-semibold text-foreground">
                                                                 {message.title}
@@ -655,7 +655,7 @@ export default function InboxModule({
                                                     {message.title && (
                                                         <p className="text-xs font-semibold text-foreground mb-0.5">{message.title}</p>
                                                     )}
-                                                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed break-words">
+                                                    <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed wrap-break-word">
                                                         {message.body}
                                                     </p>
                                                     {message.link && (
@@ -679,7 +679,7 @@ export default function InboxModule({
                                     System inbox is read-only.
                                 </p>
                             ) : (
-                                <div className="flex items-end gap-2 border-2 border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
+                                <div className="flex items-end gap-2 rounded-md border border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
                                     <textarea
                                         value={draft}
                                         onChange={(e) => setDraft(e.target.value)}
@@ -702,7 +702,7 @@ export default function InboxModule({
                                         type="button"
                                         onClick={sendMessage}
                                         disabled={sending || !draft.trim()}
-                                        className="flex h-8 w-8 shrink-0 items-center justify-center border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30 transition-colors"
+                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-30"
                                         title="Send (Enter)"
                                     >
                                         <Send size={14} />

@@ -446,7 +446,7 @@ export default function QuickTicketButton() {
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) closeModal(); }}>
             <DialogContent showCloseButton={false} className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
-                <DialogHeader className="border-b-2 border-border px-6 py-5">
+                <DialogHeader className="border-b border-border px-6 py-5">
                     <div className="flex items-start justify-between gap-4">
                         <div className="space-y-3">
                             <div>
@@ -530,18 +530,19 @@ export default function QuickTicketButton() {
                                         autoFocus
                                     />
                                     {showSuggestions && (suggestions.length > 0 || (phone.trim().length >= 2 && !lookupLoading)) && (
-                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden border-2 border-border shadow bg-popover">
+                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden rounded-md border border-border bg-popover shadow">
                                             {suggestions.length > 0 ? (
                                                 suggestions.map((suggestion, index) => (
-                                                    <button
+                                                    <Button
                                                         key={`${suggestion.type}-${suggestion.id}`}
                                                         type="button"
                                                         onMouseDown={(e) => e.preventDefault()}
                                                         onClick={() => selectIdentity(suggestion)}
                                                         className={cn(
-                                                            "flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors",
+                                                            "h-auto w-full justify-between rounded-none px-4 py-3 text-left text-sm transition-colors",
                                                             highlightedIndex === index ? "bg-accent text-accent-foreground" : "hover:bg-muted"
                                                         )}
+                                                        variant="ghost"
                                                     >
                                                         <span className="truncate font-medium">
                                                             {suggestion.name} - {suggestion.phone ?? "No mobile"}
@@ -549,7 +550,7 @@ export default function QuickTicketButton() {
                                                         <span className="ml-3 shrink-0 text-xs uppercase text-muted-foreground">
                                                             {suggestion.type}
                                                         </span>
-                                                    </button>
+                                                    </Button>
                                                 ))
                                             ) : (
                                                 <div className="px-4 py-3 text-sm text-muted-foreground">
@@ -631,9 +632,9 @@ export default function QuickTicketButton() {
                                         }}
                                     />
                                     {showCompanySuggestions && companySuggestions.length > 0 && (
-                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden border-2 border-border bg-popover shadow">
+                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden rounded-md border border-border bg-popover shadow">
                                             {companySuggestions.map((company) => (
-                                                <button
+                                                <Button
                                                     key={company.id}
                                                     type="button"
                                                     onMouseDown={(e) => e.preventDefault()}
@@ -647,13 +648,14 @@ export default function QuickTicketButton() {
                                                         accountForm.setValue("taxId", company.taxId ?? "");
                                                         setShowCompanySuggestions(false);
                                                     }}
-                                                    className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors hover:bg-muted"
+                                                    variant="ghost"
+                                                    className="h-auto w-full justify-between rounded-none px-4 py-3 text-left text-sm transition-colors hover:bg-muted"
                                                 >
                                                     <span className="truncate font-medium">{company.name}</span>
                                                     <span className="ml-3 shrink-0 text-xs text-muted-foreground">
                                                         Existing company
                                                     </span>
-                                                </button>
+                                                </Button>
                                             ))}
                                         </div>
                                     )}
@@ -668,7 +670,7 @@ export default function QuickTicketButton() {
                             </div>
 
                             {hasCompanyInput && (
-                                <div className="space-y-4 border-2 border-border bg-muted p-4">
+                                <div className="space-y-4 rounded-md border border-border bg-muted p-4">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-2">
                                             <FieldLabel>Company Phone</FieldLabel>
@@ -710,7 +712,7 @@ export default function QuickTicketButton() {
                             )}
 
                             {hasCompanyInput && (
-                                <div className="border-2 border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                                <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
                                     {selectedCompany
                                         ? "This customer will be linked to the selected company, and the ticket will go to the company account."
                                         : "A new company will be created, linked to this customer, and used as the ticket account."}
@@ -734,7 +736,7 @@ export default function QuickTicketButton() {
 
                     {step === "ticket" && (
                         <form onSubmit={ticketForm.handleSubmit(createTicket)} className="space-y-5">
-                            <div className="flex items-center gap-2 border-2 border-border bg-muted/60 px-4 py-3 text-sm text-foreground">
+                            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/60 px-4 py-3 text-sm text-foreground">
                                 <UserPlus size={15} />
                                 <span><strong>{identity?.name}</strong> {identity?.phone && `— ${identity.phone}`}</span>
                                 <Button type="button" variant="link" className="ml-auto h-auto px-0 text-xs text-muted-foreground" onClick={() => setStep("phone")}>

@@ -137,7 +137,7 @@ export default function RolesSettingsPage() {
 
             {/* ── New role form ────────────────────────────────────────────── */}
             {addingNew && (
-                <Card className="border-2 border-primary/30 bg-primary/5">
+                <Card className="border border-primary/30 bg-primary/5">
                     <CardContent className="pt-5 pb-4">
                         <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">
                             New Role

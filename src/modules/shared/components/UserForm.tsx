@@ -90,12 +90,14 @@ function MultiCheckList({
                     {items.map(item => {
                         const checked = selected.includes(item.id);
                         return (
-                            <button
+                            <Button
                                 key={item.id}
                                 type="button"
                                 onClick={() => toggle(item.id)}
+                                variant="outline"
+                                size="xs"
                                 className={[
-                                    "flex items-center gap-1.5 border-2 px-2.5 py-1 text-xs font-medium transition-colors",
+                                    "flex h-auto items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors",
                                     checked
                                         ? "border-primary bg-primary/10 text-primary"
                                         : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
@@ -112,7 +114,7 @@ function MultiCheckList({
                                     )}
                                 </span>
                                 {item.name}
-                            </button>
+                            </Button>
                         );
                     })}
                 </div>

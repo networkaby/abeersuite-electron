@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Plus, X, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface LinkedCustomer {
     id: number;
@@ -17,7 +19,7 @@ interface Props {
     initialLinks: LinkedCustomer[];
 }
 
-const fieldClass = "flex-1 border-2 border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+const fieldClass = "flex-1";
 
 export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
     const router = useRouter();
@@ -70,7 +72,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
                 <p className="text-sm text-muted-foreground">No linked contacts.</p>
             )}
             {links.map(lc => (
-                <div key={lc.id} className="flex items-center justify-between p-2 border-2 border-border text-sm">
+                <div key={lc.id} className="flex items-center justify-between rounded-md border border-border p-2 text-sm">
                     <div className="flex items-center gap-2">
                         <User size={13} className="text-primary" />
                         <Link href={`/customers/${lc.customer.id}`} className="font-medium hover:text-primary">
@@ -78,16 +80,16 @@ export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
                         </Link>
                         {lc.customer.phone && <span className="text-xs text-muted-foreground">· {lc.customer.phone}</span>}
                     </div>
-                    <button onClick={() => unlink(lc.customer.id, lc.id)} className="text-muted-foreground/40 hover:text-destructive">
+                    <Button onClick={() => unlink(lc.customer.id, lc.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/40 hover:text-destructive">
                         <X size={14} />
-                    </button>
+                    </Button>
                 </div>
             ))}
 
             {showSearch ? (
-                <div className="border-2 border-border p-3 space-y-2">
+                <div className="space-y-2 rounded-md border border-border p-3">
                     <div className="flex gap-2">
-                        <input
+                        <Input
                             value={query}
                             onChange={e => setQuery(e.target.value)}
                             onKeyDown={e => e.key === "Enter" && search()}
@@ -95,42 +97,47 @@ export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
                             className={fieldClass}
                             autoFocus
                         />
-                        <button
+                        <Button
                             onClick={search}
                             disabled={searching}
-                            className="border-2 border-primary bg-primary text-primary-foreground px-3 py-1.5 text-sm hover:bg-primary/90 disabled:opacity-50"
+                            size="sm"
                         >
                             {searching ? "..." : "Search"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             onClick={() => { setShowSearch(false); setResults([]); }}
+                            variant="ghost"
+                            size="icon-sm"
                             className="text-muted-foreground hover:text-foreground"
                         >
                             <X size={16} />
-                        </button>
+                        </Button>
                     </div>
                     {results.map(r => (
-                        <button
+                        <Button
                             key={r.id}
                             onClick={() => link(r.id, r.name)}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-sm text-left border-2 border-border"
+                            variant="outline"
+                            className="h-auto w-full justify-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
                         >
                             <User size={13} className="text-primary" />
                             <span className="font-medium">{r.name}</span>
                             {r.phone && <span className="text-xs text-muted-foreground">· {r.phone}</span>}
-                        </button>
+                        </Button>
                     ))}
                     {results.length === 0 && query && !searching && (
                         <p className="text-xs text-muted-foreground text-center py-1">No customers found.</p>
                     )}
                 </div>
             ) : (
-                <button
+                <Button
                     onClick={() => setShowSearch(true)}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 mt-1"
+                    variant="link"
+                    size="xs"
+                    className="mt-1 h-auto p-0 text-xs"
                 >
                     <Plus size={13} /> Link a contact
-                </button>
+                </Button>
             )}
         </div>
     );

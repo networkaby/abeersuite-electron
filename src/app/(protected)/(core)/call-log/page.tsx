@@ -133,7 +133,7 @@ export default async function CallLogPage({
                 <select
                     name="status"
                     defaultValue={selectedStatus}
-                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
                     <option value="">All Status</option>
                     {STATUS_OPTIONS.map((opt) => (
@@ -145,7 +145,7 @@ export default async function CallLogPage({
                 <select
                     name="direction"
                     defaultValue={selectedDirection}
-                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
                     <option value="">All Direction</option>
                     {DIRECTION_OPTIONS.map((opt) => (
@@ -162,7 +162,7 @@ export default async function CallLogPage({
                 </div>
             </form>
 
-            <div className="border-2 border-border bg-card shadow">
+            <div className="rounded-lg border border-border bg-card shadow">
                 <Table>
                     <TableHeader>
                         <TableRow>

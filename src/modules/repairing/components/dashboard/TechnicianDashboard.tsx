@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wrench, ChevronRight, ArrowRight } from "lucide-react";
 import { timeAgo } from "@/lib/time-ago";
+import { Button } from "@/components/ui/button";
 
 interface PipelineStage {
     id: string;
@@ -86,14 +87,15 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
             </div>
 
             {/* Pipeline strip */}
-            <div className="border-2 border-border shadow bg-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4 shadow">
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Ticket Pipeline</h2>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                     {pipeline.map((stage, i) => (
                         <div key={stage.id} className="flex items-center gap-2 shrink-0">
-                            <button
+                            <Button
                                 onClick={() => setSelectedStageId(prev => prev === stage.id ? null : stage.id)}
-                                className={`flex flex-col items-center px-4 py-3 border-2 transition-all min-w-[90px]
+                                variant="outline"
+                                className={`flex h-auto min-w-[90px] flex-col items-center px-4 py-3 transition-all
                                     ${stage._count.tickets === 0 ? "opacity-40" : ""}
                                     ${selectedStageId === stage.id
                                         ? "border-primary bg-primary/10"
@@ -103,7 +105,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                     {stage._count.tickets}
                                 </span>
                                 <span className="text-xs text-muted-foreground mt-0.5 text-center leading-tight">{stage.label}</span>
-                            </button>
+                            </Button>
                             {i < pipeline.length - 1 && (
                                 <ChevronRight size={14} className="text-muted-foreground shrink-0" />
                             )}
@@ -113,32 +115,36 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
             </div>
 
             {/* Team tabs + ticket list */}
-            <div className="border-2 border-border shadow overflow-hidden">
-                <div className="px-6 py-4 border-b-2 border-border bg-muted flex items-center gap-4 flex-wrap">
+            <div className="overflow-hidden rounded-lg border border-border shadow">
+                <div className="flex items-center gap-4 border-b border-border bg-muted px-6 py-4">
                     <div className="flex gap-1">
                         {TEAM_TABS.map(tab => (
-                            <button
+                            <Button
                                 key={String(tab.key)}
                                 onClick={() => setSelectedTeam(tab.key)}
-                                className={`text-xs px-3 py-1.5 border font-medium transition-colors
+                                variant="outline"
+                                size="xs"
+                                className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors
                                     ${selectedTeam === tab.key
                                         ? "border-primary bg-primary text-primary-foreground"
                                         : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
                             >
                                 {tab.label}
-                            </button>
+                            </Button>
                         ))}
                     </div>
                     <span className="text-xs text-muted-foreground">
                         {filtered.length}{(selectedStageId || selectedTeam) ? ` of ${allActiveTickets.length}` : ""} tickets
                     </span>
                     {selectedStageId && (
-                        <button
+                        <Button
                             onClick={() => setSelectedStageId(null)}
-                            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+                            variant="ghost"
+                            size="xs"
+                            className="ml-auto h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
                         >
                             Clear stage filter
-                        </button>
+                        </Button>
                     )}
                 </div>
                 {filtered.length === 0 ? (
@@ -181,8 +187,8 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
 
             {/* Action queue — unassigned tickets needing a technician */}
             {unassigned.length > 0 && (
-                <div className="border-2 border-border shadow overflow-hidden">
-                    <div className="px-6 py-4 border-b-2 border-border bg-primary/10 flex items-center gap-2">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
+                    <div className="flex items-center gap-2 border-b border-border bg-primary/10 px-6 py-4">
                         <Wrench size={16} className="text-primary" />
                         <div>
                             <h2 className="font-semibold text-primary">Action Required — Needs Attention</h2>
@@ -212,13 +218,14 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                     </div>
                                 </div>
                                 <span className="text-xs text-muted-foreground shrink-0">{timeAgo(t.createdAt)}</span>
-                                <button
+                                <Button
                                     onClick={() => handleClaim(t.id)}
                                     disabled={claiming === t.id}
-                                    className="shrink-0 border-2 border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                    size="xs"
+                                    className="shrink-0"
                                 >
                                     {claiming === t.id ? "Claiming…" : "Claim"}
-                                </button>
+                                </Button>
                             </div>
                         ))}
                     </div>

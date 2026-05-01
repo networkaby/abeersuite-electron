@@ -59,7 +59,7 @@ export default async function CustomerDetailPage({
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Contact Info */}
-                <div className="border-2 border-border shadow bg-card p-5 space-y-3">
+                <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">Contact Info</h2>
                     <div className="space-y-2 text-sm">
                         {customer.phone && (
@@ -94,7 +94,7 @@ export default async function CustomerDetailPage({
                 </div>
 
                 {/* Linked Companies */}
-                <div className="border-2 border-border shadow bg-card p-5">
+                <div className="rounded-lg border border-border bg-card p-5 shadow">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
                             <Building2 size={14} /> Linked Companies
@@ -107,7 +107,7 @@ export default async function CustomerDetailPage({
                 </div>
 
                 {/* Devices & Tickets */}
-                <div className="border-2 border-border shadow bg-card p-5">
+                <div className="rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
                         <Smartphone size={14} /> Devices &amp; Tickets
                     </h2>
@@ -116,7 +116,7 @@ export default async function CustomerDetailPage({
                     ) : (
                         <div className="space-y-4">
                             {(customer.account?.devices ?? []).map(d => (
-                                <div key={d.id} className="border-2 border-border p-3">
+                                <div key={d.id} className="rounded-md border border-border p-3">
                                     <p className="font-medium text-sm">{d.brand} {d.model}</p>
                                     <p className="text-xs text-muted-foreground">{d.type}</p>
                                     <div className="mt-2 space-y-1">

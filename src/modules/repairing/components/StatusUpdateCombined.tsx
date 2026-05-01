@@ -6,6 +6,10 @@ import axios from "axios";
 import { toast } from "sonner";
 import { X, ArrowRight, ChevronRight, Lock, Eye } from "lucide-react";
 import HandoffPickerModal from "./assignments/HandoffPickerModal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface NextMainStatus { id: string; label: string; }
 interface NextSubStatus {
@@ -123,18 +127,18 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         );
     }
 
-    const visibilityBtn = (v: "INTERNAL" | "PUBLIC") => `flex items-center gap-1.5 flex-1 px-2 py-1.5 border-2 text-xs font-medium transition-colors ${
+    const visibilityBtn = (v: "INTERNAL" | "PUBLIC") => `flex h-auto items-center gap-1.5 flex-1 px-2 py-1.5 border text-xs font-medium transition-colors ${
         visibility === v
             ? v === "INTERNAL" ? "border-border bg-muted text-foreground" : "border-primary bg-primary/10 text-primary"
             : "border-border text-muted-foreground hover:bg-muted"
     }`;
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="border-2 border-border shadow bg-card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+                <DialogHeader className="mb-1 flex-row items-center justify-between space-y-0">
                     <div>
-                        <h2 className="text-lg font-semibold">Update Status</h2>
+                        <DialogTitle>Update Status</DialogTitle>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="text-xs px-2 py-0.5 font-medium bg-muted text-muted-foreground">
                                 {ticket.ticketStatus.label}
@@ -149,20 +153,20 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                             )}
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
-                </div>
+                    <Button onClick={onClose} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground"><X size={20} /></Button>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {!isTerminalReopen && (
-                        <div className="flex border-2 border-border overflow-hidden text-sm">
-                            <button type="button" onClick={() => setValue("mode", "substatus")}
-                                className={`flex-1 py-2 font-medium transition-colors ${mode === "substatus" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                            <Button type="button" onClick={() => setValue("mode", "substatus")} variant={mode === "substatus" ? "default" : "outline"}
+                                className="w-full">
                                 Within this stage
-                            </button>
-                            <button type="button" onClick={() => setValue("mode", "mainstatus")}
-                                className={`flex-1 py-2 font-medium transition-colors border-l border-border ${mode === "mainstatus" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                            </Button>
+                            <Button type="button" onClick={() => setValue("mode", "mainstatus")} variant={mode === "mainstatus" ? "default" : "outline"}
+                                className="w-full">
                                 Advance stage
-                            </button>
+                            </Button>
                         </div>
                     )}
 
@@ -178,7 +182,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 <div className="space-y-1.5">
                                     {nextSubStatuses.map((ss) => (
                                         <label key={ss.id}
-                                            className={`flex items-center gap-3 px-3 py-2.5 border-2 cursor-pointer transition-colors ${selectedSubId === ss.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
+                                            className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition-colors ${selectedSubId === ss.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
                                             <input type="radio" value={ss.id} {...register("subStatusId")} className="accent-primary" />
                                             <div className="flex-1">
                                                 <span className="text-sm text-foreground">{ss.label}</span>
@@ -194,13 +198,13 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 </div>
                             )}
                             {selectedSub?.notifyRoles && selectedSub.notifyRoles.length > 0 && (
-                                <div className="mt-3 border-2 border-primary bg-primary/10 px-3 py-2 flex items-center gap-2 text-sm text-primary">
+                                <div className="mt-3 flex items-center gap-2 rounded-md border border-primary bg-primary/10 px-3 py-2 text-sm text-primary">
                                     <ArrowRight size={13} />
                                     Notifies: {selectedSub.notifyRoles.map((r) => roleLabelMap[r] ?? r).join(", ")}
                                 </div>
                             )}
                             {selectedSub?.triggerMap[ticket.status] && (
-                                <div className="mt-2 border-2 border-border bg-muted px-3 py-2 text-sm text-foreground">
+                                <div className="mt-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground">
                                     Stage will auto-advance to <strong>{statusLabels[selectedSub.triggerMap[ticket.status]] ?? selectedSub.triggerMap[ticket.status]}</strong>
                                 </div>
                             )}
@@ -210,7 +214,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                     {(mode === "mainstatus" || isTerminalReopen) && (
                         <div>
                             {isTerminalReopen && (
-                                <div className="mb-3 border-2 border-primary bg-primary/10 p-3 text-sm text-primary">
+                                <div className="mb-3 rounded-md border border-primary bg-primary/10 p-3 text-sm text-primary">
                                     ↩ This will reopen the ticket and start a new repair cycle.
                                 </div>
                             )}
@@ -220,7 +224,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 <div className="space-y-1.5">
                                     {nextMainStatuses.map((s) => (
                                         <label key={s.id}
-                                            className={`flex items-center gap-3 px-3 py-2.5 border-2 cursor-pointer transition-colors ${selectedMainId === s.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
+                                            className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition-colors ${selectedMainId === s.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
                                             <input type="radio" value={s.id} {...register("mainStatusId")} className="accent-primary" />
                                             <span className="text-sm text-foreground">{s.label}</span>
                                         </label>
@@ -228,7 +232,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                                 </div>
                             )}
                             {selectedMain && (
-                                <div className="mt-3 border-2 border-border bg-muted px-3 py-2 text-sm text-foreground">
+                                <div className="mt-3 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground">
                                     Moving to <strong>{selectedMain.label}</strong> will clear the current sub-status.
                                 </div>
                             )}
@@ -236,32 +240,31 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
                     )}
 
                     <div className="space-y-2">
-                        <label className="block text-sm font-medium">
+                        <Label className="block text-sm font-medium">
                             Note <span className="text-muted-foreground">(optional)</span>
-                        </label>
-                        <textarea {...register("note")} rows={2}
+                        </Label>
+                        <Textarea {...register("note")} rows={2}
                             placeholder="Add context — part number, customer quote, courier details..."
-                            className="w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="resize-none"
                         />
                         <div className="flex gap-2">
-                            <button type="button" onClick={() => setValue("visibility", "INTERNAL")} className={visibilityBtn("INTERNAL")}>
+                            <Button type="button" variant="outline" onClick={() => setValue("visibility", "INTERNAL")} className={visibilityBtn("INTERNAL")}>
                                 <Lock size={11} /> Internal
-                            </button>
-                            <button type="button" onClick={() => setValue("visibility", "PUBLIC")} className={visibilityBtn("PUBLIC")}>
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => setValue("visibility", "PUBLIC")} className={visibilityBtn("PUBLIC")}>
                                 <Eye size={11} /> Public
-                            </button>
+                            </Button>
                         </div>
                     </div>
 
-                    <div className="flex gap-3 pt-1">
-                        <button type="button" onClick={onClose} className="flex-1 border-2 border-border py-2 text-sm hover:bg-muted">Cancel</button>
-                        <button type="submit" disabled={isSubmitting}
-                            className="flex-1 border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    <DialogFooter className="pt-1">
+                        <Button type="button" onClick={onClose} variant="outline" className="flex-1">Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting} className="flex-1">
                             {isSubmitting ? "Saving..." : isTerminalReopen ? "↩ Reopen Ticket" : "Update Status"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -4,6 +4,12 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Props {
     ticketId: number; isWarranty: boolean; warrantyStatus: string;
@@ -19,8 +25,6 @@ const VOID_REASONS = [
     { value: "misuse", label: "Misuse / user error" },
     { value: "other", label: "Other" },
 ];
-
-const fieldClass = "w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
 export default function WarrantyConvertModal({ ticketId, isWarranty, warrantyStatus, warrantyRef: initRef, purchaseDate: initDate, onClose }: Props) {
     const [voiding, setVoiding] = useState(false);
@@ -52,28 +56,27 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="border-2 border-border shadow bg-card w-full max-w-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Warranty Conversion</h2>
-                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
-                </div>
-
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader className="flex-row items-center justify-between space-y-0">
+                    <DialogTitle>Warranty Conversion</DialogTitle>
+                    <Button onClick={onClose} variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground"><X size={20} /></Button>
+                </DialogHeader>
                 <div className="space-y-4">
                     {isWarranty && warrantyStatus !== "voided" && (
-                        <div className="flex border-2 border-border overflow-hidden text-sm">
-                            <button type="button" onClick={() => setVoiding(false)}
-                                className={`flex-1 py-2 font-medium transition-colors ${!voiding ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                            <Button type="button" onClick={() => setVoiding(false)} variant={!voiding ? "default" : "outline"}
+                                className="w-full">
                                 Remove from warranty
-                            </button>
-                            <button type="button" onClick={() => setVoiding(true)}
-                                className={`flex-1 py-2 font-medium transition-colors border-l border-border ${voiding ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                            </Button>
+                            <Button type="button" onClick={() => setVoiding(true)} variant={voiding ? "default" : "outline"}
+                                className="w-full">
                                 Void warranty
-                            </button>
+                            </Button>
                         </div>
                     )}
 
-                    <div className="border-2 border-border bg-muted px-4 py-3 text-sm text-foreground">
+                    <div className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-foreground">
                         {isVoidAction
                             ? "Warranty will be voided. Sub-status will switch to SS36 — customer approval required."
                             : toWarranty
@@ -83,48 +86,49 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
 
                     {isVoidAction && (
                         <div>
-                            <label className="block text-sm font-medium mb-1">Void reason</label>
-                            <select value={voidReason} onChange={(e) => setVoidReason(e.target.value)} className={fieldClass}>
-                                <option value="">— Select reason —</option>
-                                {VOID_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                            </select>
+                            <Label className="mb-1 block">Void reason</Label>
+                            <Select value={voidReason} onValueChange={setVoidReason}>
+                                <SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
+                                <SelectContent>
+                                    {VOID_REASONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                     )}
 
                     {toWarranty && !isVoidAction && (
                         <>
                             <div>
-                                <label className="block text-sm font-medium mb-1">
+                                <Label className="mb-1 block">
                                     Warranty ref / serial <span className="text-muted-foreground">(optional)</span>
-                                </label>
-                                <input value={warrantyRef} onChange={(e) => setWarrantyRef(e.target.value)}
-                                    placeholder="e.g. SN-12345 or receipt number" className={fieldClass} />
+                                </Label>
+                                <Input value={warrantyRef} onChange={(e) => setWarrantyRef(e.target.value)}
+                                    placeholder="e.g. SN-12345 or receipt number" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">
+                                <Label className="mb-1 block">
                                     Purchase date <span className="text-muted-foreground">(optional)</span>
-                                </label>
-                                <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={fieldClass} />
+                                </Label>
+                                <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
                             </div>
                         </>
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium mb-1">Note <span className="text-muted-foreground">(optional)</span></label>
-                        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
+                        <Label className="mb-1 block">Note <span className="text-muted-foreground">(optional)</span></Label>
+                        <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
                             placeholder="Add context for the log..."
-                            className="w-full border-2 border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+                            className="resize-none" />
                     </div>
 
-                    <div className="flex gap-3 pt-1">
-                        <button onClick={onClose} className="flex-1 border-2 border-border py-2 text-sm hover:bg-muted">Cancel</button>
-                        <button onClick={handleSubmit} disabled={saving}
-                            className="flex-1 border-2 border-primary bg-primary py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    <DialogFooter className="pt-1">
+                        <Button onClick={onClose} variant="outline" className="flex-1">Cancel</Button>
+                        <Button onClick={handleSubmit} disabled={saving} className="flex-1">
                             {saving ? "Saving..." : "Confirm"}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

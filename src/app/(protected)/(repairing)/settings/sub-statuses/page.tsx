@@ -254,7 +254,7 @@ function SubStatusFormModal({
                         ) : (
                             <div className="space-y-2">
                                 {statuses.map((status) => (
-                                    <div key={status.id} className="border-2 border-border p-3">
+                                    <div key={status.id} className="rounded-md border border-border p-3">
                                         <div className="flex flex-wrap items-center gap-3">
                                             <label className="flex items-center gap-2 text-sm">
                                                 <Checkbox
@@ -294,7 +294,7 @@ function SubStatusFormModal({
                             <Label>Who can set it</Label>
                             <div className="space-y-2">
                                 {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm">
+                                    <label key={role.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                                         <Checkbox
                                             checked={form.allowedRoles.includes(role.id)}
                                             onCheckedChange={() => toggle("allowedRoles", role.id)}
@@ -308,7 +308,7 @@ function SubStatusFormModal({
                             <Label>Notifies</Label>
                             <div className="space-y-2">
                                 {roles.map((role) => (
-                                    <label key={role.id} className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm">
+                                    <label key={role.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                                         <Checkbox
                                             checked={form.notifyRoles.includes(role.id)}
                                             onCheckedChange={() => toggle("notifyRoles", role.id)}
@@ -883,7 +883,7 @@ export default function SubStatusesPage() {
                             <p className="text-sm text-muted-foreground">No compatible sub-statuses in the same stage.</p>
                         ) : (
                             transitionCandidates.map((candidate) => (
-                                <label key={candidate.id} className="flex items-center gap-3 border-2 border-border px-3 py-2">
+                                <label key={candidate.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
                                     <Checkbox checked={selectedToIds.includes(candidate.id)} onCheckedChange={() => toggleTo(candidate.id)} />
                                     <Badge className={candidate.color}>{candidate.id}</Badge>
                                     <span className="text-sm">{candidate.label}</span>

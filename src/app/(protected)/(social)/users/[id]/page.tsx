@@ -136,7 +136,7 @@ function ProfileHeader({
     onWriteOnWall: () => void; onEditProfile: () => void;
 }) {
     return (
-        // <div className="relative border-2 border-border overflow-hidden mb-1 print:border-0">
+        // <div className="relative border border-border overflow-hidden mb-1 print:border-0">
         //     {/* Cover */}
         //     <div className="absolute inset-0 overflow-hidden print:hidden">
         //         {profile.coverUrl ? (
@@ -221,7 +221,7 @@ function ProfileHeader({
                 )}
 
                 {/* Overlay for readability */}
-                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/60" />
+                <div className="absolute inset-0 bg-linear-to-b from-black/30 via-black/20 to-black/60" />
             </div>
 
             <div className="relative z-10 pt-20 sm:pt-28">
@@ -386,7 +386,7 @@ function WallTab({
 
     return (
         <div className="space-y-4">
-            <div className="border-2 border-border bg-card p-4 space-y-3">
+            <div className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-start gap-3">
                     <div className="shrink-0 mt-1"><UserCircle size={32} className="text-muted-foreground" /></div>
                     <Textarea
@@ -416,7 +416,7 @@ function WallTab({
             ) : (
                 <div className="space-y-3">
                     {posts.map(post => (
-                        <div key={post.id} className="border-2 border-border bg-card p-4">
+                        <div key={post.id} className="rounded-lg border border-border bg-card p-4">
                             <div className="flex items-start gap-3">
                                 <Link href={`/users/${post.author.id}`} className="shrink-0">
                                     <UserAvatar avatarUrl={post.author.avatarUrl} name={post.author.name} role={post.author.role} sizePx={40} />
@@ -460,12 +460,12 @@ function AboutTab({ profile }: { profile: UserProfile }) {
     return (
         <div className="space-y-4 max-w-xl">
             {profile.bio && (
-                <div className="border-2 border-border bg-card px-5 py-4">
+                <div className="rounded-lg border border-border bg-card px-5 py-4">
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">About</h3>
                     <p className="text-sm text-foreground leading-relaxed">{profile.bio}</p>
                 </div>
             )}
-            <div className="border-2 border-border bg-card px-5 py-4 space-y-2.5">
+            <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contact</h3>
                 <div className="flex items-center gap-2 text-sm">
                     <Mail size={14} className="shrink-0 text-muted-foreground" />
@@ -484,7 +484,7 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                     </div>
                 )}
             </div>
-            <div className="border-2 border-border bg-card px-5 py-4 space-y-2.5">
+            <div className="rounded-lg border border-border bg-card px-5 py-4 space-y-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Organisation</h3>
                 {profile.manager && (
                     <div className="flex items-center gap-2 text-sm">
@@ -529,7 +529,7 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                 </div>
             </div>
             {socials.length > 0 && (
-                <div className="border-2 border-border bg-card px-5 py-4">
+                <div className="rounded-lg border border-border bg-card px-5 py-4">
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Social</h3>
                     <div className="flex flex-wrap gap-2">
                         {socials.map(({ key, label, color, href }) => (
@@ -633,7 +633,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 max-w-xl">
 
             {/* Cover photo */}
-            <div className="border-2 border-border bg-card p-5 space-y-3">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Cover Photo</h3>
                 <div className="relative h-28 overflow-hidden rounded-sm border border-border">
                     {coverPreview
@@ -665,7 +665,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
             </div>
 
             {/* Profile photo */}
-            <div className="border-2 border-border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Profile Photo</h3>
                 <div className="flex items-center gap-5">
                     <div className="relative shrink-0">
@@ -701,7 +701,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
             </div>
 
             {/* Identity */}
-            <div className="border-2 border-border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Identity</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="sm:col-span-2 space-y-1.5">
@@ -728,7 +728,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
             </div>
 
             {/* Contact */}
-            <div className="border-2 border-border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Contact</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
@@ -743,7 +743,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
             </div>
 
             {/* Social */}
-            <div className="border-2 border-border bg-card p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Social Media</h3>
                 <div className="space-y-3">
                     {([
@@ -797,7 +797,7 @@ function SecurityTab({ profileId }: { profileId: number }) {
 
     return (
         <div className="max-w-sm">
-            <form onSubmit={handleSubmit(onSubmit)} className="border-2 border-border bg-card p-5 space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <div className="flex items-center gap-2 mb-1">
                     <Lock size={14} className="text-muted-foreground" />
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Change Password</h3>
@@ -922,8 +922,8 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
 
             {/* ── Overrides section (admin only) ─────────────────────────── */}
             {isAdmin && (
-                <div className="border-2 border-border">
-                    <div className="flex items-center justify-between gap-2 bg-muted/50 border-b-2 border-border px-4 py-2.5">
+                <div className="rounded-lg border border-border">
+                    <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/50 px-4 py-2.5">
                         <div className="flex items-center gap-2">
                             <ShieldCheck size={12} className="text-muted-foreground" />
                             <span className="text-xs font-bold uppercase tracking-wide">Permission Overrides</span>
@@ -938,7 +938,7 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
 
                     {/* Add override form */}
                     {addOpen && (
-                        <div className="border-b-2 border-border bg-muted/20 px-4 py-3 space-y-2.5">
+                        <div className="border-b border-border bg-muted/20 px-4 py-3 space-y-2.5">
                             <div className="flex gap-2 flex-wrap">
                                 {/* Permission picker */}
                                 <div className="flex-1 min-w-48">
@@ -946,7 +946,7 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                                     <select
                                         value={newPermId}
                                         onChange={e => setNewPermId(e.target.value)}
-                                        className="w-full border-2 border-border bg-background text-sm px-2 py-1.5 focus:outline-none focus:border-primary"
+                                        className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                     >
                                         <option value="">— select —</option>
                                         {availableToOverride.map(p => (
@@ -958,7 +958,7 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                                 {/* Type toggle */}
                                 <div>
                                     <label className="block text-[11px] font-medium text-muted-foreground mb-1">Type</label>
-                                    <div className="flex border-2 border-border overflow-hidden">
+                                    <div className="flex overflow-hidden rounded-md border border-border">
                                         <button
                                             type="button"
                                             onClick={() => setNewType("GRANT")}
@@ -983,7 +983,7 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                                         type="date"
                                         value={newExpiry}
                                         onChange={e => setNewExpiry(e.target.value ? new Date(e.target.value).toISOString() : "")}
-                                        className="border-2 border-border bg-background text-sm px-2 py-1.5 focus:outline-none focus:border-primary"
+                                        className="rounded-md border border-input bg-background px-2 py-1.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                     />
                                 </div>
                             </div>
@@ -1059,8 +1059,8 @@ function PermissionsTab({ profile, isAdmin }: { profile: UserProfile; isAdmin: b
                 {orderedModules.length === 0
                     ? <p className="text-sm text-muted-foreground italic">No permissions granted.</p>
                     : orderedModules.map(module => (
-                        <div key={module} className="border-2 border-border overflow-hidden mb-2">
-                            <div className="flex items-center gap-2 bg-muted/40 border-b-2 border-border px-3 py-2">
+                        <div key={module} className="mb-2 overflow-hidden rounded-lg border border-border">
+                            <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
                                 <ShieldCheck size={11} className="text-muted-foreground" />
                                 <span className="text-xs font-bold uppercase tracking-wide">{module}</span>
                                 <span className="ml-auto text-[11px] text-muted-foreground">{byModule[module].length}</span>
@@ -1155,7 +1155,7 @@ function ActivityTimelineTab({
                     <p className="text-sm text-muted-foreground">No tracked activity in this time range.</p>
                 </div>
             ) : (
-                <div className="border-2 border-border bg-card divide-y divide-border">
+                <div className="rounded-lg border border-border bg-card divide-y divide-border">
                     {items.map((item) => (
                         <div key={item.id} className="px-4 py-3.5">
                             <div className="flex items-start gap-3">
@@ -1196,8 +1196,8 @@ function ActivityTimelineTab({
 function ProfileSidebar({ profile }: { profile: UserProfile }) {
     return (
         <aside className="w-56 shrink-0 space-y-4">
-            <div className="border-2 border-border bg-card overflow-hidden">
-                <div className="bg-muted/40 border-b-2 border-border px-3 py-2">
+            <div className="overflow-hidden rounded-lg border border-border bg-card">
+                <div className="border-b border-border bg-muted/40 px-3 py-2">
                     <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                         <Info size={11} /> Info
                     </span>
@@ -1237,8 +1237,8 @@ function ProfileSidebar({ profile }: { profile: UserProfile }) {
             </div>
 
             {profile.reports.length > 0 && (
-                <div className="border-2 border-border bg-card overflow-hidden">
-                    <div className="bg-muted/40 border-b-2 border-border px-3 py-2">
+                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    <div className="border-b border-border bg-muted/40 px-3 py-2">
                         <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                             <Users size={11} /> Team ({profile.reports.length})
                         </span>
@@ -1395,7 +1395,7 @@ export default function UserProfilePage() {
             {/* Tab bar */}
             <div className="print:hidden">
                 {tabBarOpen ? (
-                    <div className="flex items-stretch border-b-2 border-border mb-5">
+                    <div className="mb-5 flex items-stretch border-b border-border">
                         {/* Scrollable tab list */}
                         <div className="flex flex-1 overflow-x-auto scrollbar-none">
                             {visibleTabs.map(tab => {
@@ -1431,7 +1431,7 @@ export default function UserProfilePage() {
                     </div>
                 ) : (
                     /* Collapsed tab bar — shows current tab name + expand button */
-                    <div className="flex items-center gap-3 border-b-2 border-border mb-5 px-1">
+                    <div className="mb-5 flex items-center gap-3 border-b border-border px-1">
                         <button onClick={() => setTabBarOpen(true)}
                             className="flex items-center gap-1.5 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                             title="Expand tabs">

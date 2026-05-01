@@ -73,11 +73,11 @@ export default function ServiceCentersPage() {
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
             ) : serviceCenters.length === 0 ? (
-                <div className="border-2 border-border shadow bg-card p-12 text-center text-muted-foreground">
+                <div className="rounded-lg border border-border bg-card p-12 text-center text-muted-foreground shadow">
                     No service centers yet. Add your first one!
                 </div>
             ) : (
-                <div className="border-2 border-border shadow overflow-hidden">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
                     <Table>
                         <TableHeader>
                             <TableRow>

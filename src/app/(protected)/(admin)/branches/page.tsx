@@ -96,7 +96,7 @@ export default function BranchesPage() {
 
             {/* New branch inline form */}
             {addingNew && (
-                <div className="border-2 border-primary p-4 space-y-3 bg-muted/30">
+                <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
                     <p className="text-sm font-semibold">New Branch</p>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -128,10 +128,10 @@ export default function BranchesPage() {
             ) : (
                 <div className="space-y-2">
                     {branches.length === 0 && !addingNew && (
-                        <p className="text-sm text-muted-foreground py-8 text-center border-2 border-dashed border-border">No branches yet. Create one above.</p>
+                        <p className="border-dashed text-sm text-muted-foreground py-8 text-center border border-border">No branches yet. Create one above.</p>
                     )}
                     {branches.map(b => (
-                        <div key={b.id} className={`border-2 border-border border-l-4 ${b.isActive ? "border-l-primary" : "border-l-muted-foreground opacity-60"} bg-card`}>
+                        <div key={b.id} className={`rounded-lg border border-border border-l-4 ${b.isActive ? "border-l-primary" : "border-l-muted-foreground opacity-60"} bg-card`}>
                             {editId === b.id ? (
                                 <div className="p-4 space-y-3">
                                     <div className="grid grid-cols-2 gap-3">

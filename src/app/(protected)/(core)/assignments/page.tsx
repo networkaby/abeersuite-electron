@@ -80,7 +80,7 @@ function StatCard({
     label, value, icon, textColor,
 }: { label: string; value: number; icon: React.ReactNode; textColor: string }) {
     return (
-        <div className="border-2 border-border bg-card shadow p-4 flex items-center gap-3">
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow">
             <div className={textColor}>{icon}</div>
             <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
@@ -202,7 +202,7 @@ export default async function AssignmentsPage({
             </div>
 
             {/* Scope tabs */}
-            <div className="mb-6 border-2 border-border bg-card shadow p-1">
+            <div className="mb-6 rounded-lg border border-border bg-card p-1 shadow">
                 <div className="flex gap-1">
                     {TABS.map(tab => (
                         <Link
@@ -224,7 +224,7 @@ export default async function AssignmentsPage({
 
             {/* Scope banner */}
             {scope === "me" && (
-                <div className="mb-6 border-2 border-border bg-secondary/30 p-4">
+                <div className="mb-6 rounded-lg border border-border bg-secondary/30 p-4">
                     <div className="flex items-center gap-2 text-foreground">
                         <UserCheck size={16} className="text-primary" />
                         <span className="text-sm font-medium">Your named assignments</span>
@@ -235,7 +235,7 @@ export default async function AssignmentsPage({
                 </div>
             )}
             {scope === "team" && (
-                <div className="mb-6 border-2 border-border bg-card p-4">
+                <div className="mb-6 rounded-lg border border-border bg-card p-4">
                     <div className="flex items-center gap-2 text-foreground">
                         <Users size={16} className="text-primary" />
                         <span className="text-sm font-medium">Team view — {userRoles.join(", ")}</span>
@@ -246,7 +246,7 @@ export default async function AssignmentsPage({
                 </div>
             )}
             {scope === "org" && (
-                <div className="mb-6 border-2 border-border bg-muted p-4">
+                <div className="mb-6 rounded-lg border border-border bg-muted p-4">
                     <div className="flex items-center gap-2 text-foreground">
                         <AlertCircle size={16} className="text-primary" />
                         <span className="text-sm font-medium">Organisation view</span>
@@ -380,7 +380,7 @@ export default async function AssignmentsPage({
             )}
 
             {total === 0 && (
-                <div className="border-2 border-border bg-card p-16 text-center shadow">
+                <div className="rounded-lg border border-border bg-card p-16 text-center shadow">
                     <CheckCircle size={48} className="text-green-400 mx-auto mb-4" />
                     <h3 className="mb-2 text-lg font-medium text-foreground">All caught up!</h3>
                     <p className="text-sm text-muted-foreground">No tickets need your attention right now.</p>

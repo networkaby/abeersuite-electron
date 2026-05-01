@@ -74,7 +74,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                 ) : (
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         {ticket.status === "S7" && (
-                            <div className="border-2 border-primary bg-primary/10 p-3 text-sm text-primary">
+                            <div className="rounded-md border border-primary bg-primary/10 p-3 text-sm text-primary">
                                 ↩ This will <strong>reopen</strong> the ticket and start a new repair cycle.
                             </div>
                         )}
@@ -83,7 +83,7 @@ export default function TicketStatusUpdate({ ticket, onClose }: Props) {
                             {nextStatuses.map((s) => (
                                 <label
                                     key={s.id}
-                                    className={`flex items-center gap-3 px-3 py-2.5 border-2 cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors ${
                                         selectedStatus === s.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
                                     }`}
                                 >

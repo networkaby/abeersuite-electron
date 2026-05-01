@@ -134,12 +134,12 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
                                         return (
                                             <div
                                                 key={p.id}
-                                                className={`flex items-center gap-3 px-3 py-2 border-2 border-border cursor-pointer hover:bg-muted transition-colors ${
+                                                className={`flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted ${
                                                     effective ? "opacity-100" : "opacity-50"
                                                 }`}
                                                 onClick={() => toggle(p.id, displayOverride, p.roleGranted)}
                                             >
-                                                <div className={`w-4 h-4 border-2 flex items-center justify-center shrink-0 ${
+                                                <div className={`flex h-4 w-4 shrink-0 items-center justify-center border ${
                                                     effective ? "bg-primary border-primary" : "border-border"
                                                 }`}>
                                                     {effective && <div className="w-2 h-2 bg-primary-foreground" />}
@@ -233,7 +233,7 @@ export default function UsersPage() {
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
             ) : (
-                <div className="border-2 border-border shadow overflow-hidden">
+                <div className="overflow-hidden rounded-lg border border-border shadow">
                     <Table>
                         <TableHeader>
                             <TableRow>

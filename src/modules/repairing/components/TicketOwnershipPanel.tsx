@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { UserCheck, Users, X, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Owner { id: number; name: string }
 interface Participant { user: { id: number; name: string; role: string }; addedForRole?: string | null }
@@ -77,12 +78,12 @@ export default function TicketOwnershipPanel({
     };
 
     const userPickerClass = (id: number) =>
-        `w-full flex items-center gap-2 px-2 py-1.5 text-xs text-left transition-colors ${
+        `h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs text-left transition-colors ${
             selectedUserId === id ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"
         }`;
 
     return (
-        <div className="border-2 border-border shadow bg-card p-4 space-y-3">
+        <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow">
             <h2 className="font-semibold text-foreground text-sm flex items-center gap-2">
                 <UserCheck size={15} /> Ownership
             </h2>
@@ -95,28 +96,27 @@ export default function TicketOwnershipPanel({
                         {primaryOwner?.name ?? <span className="text-muted-foreground font-normal">Unassigned</span>}
                     </p>
                     {canManage && !isTerminal && !showReassign && (
-                        <button onClick={() => { setShowReassign(true); setShowAddParticipant(false); setSelectedUserId(null); }}
-                            className="text-xs text-primary hover:underline">
+                        <Button variant="link" size="xs" onClick={() => { setShowReassign(true); setShowAddParticipant(false); setSelectedUserId(null); }}
+                            className="h-auto p-0 text-xs">
                             Reassign
-                        </button>
+                        </Button>
                     )}
                 </div>
                 {showReassign && (
-                    <div className="mt-2 border-2 border-border p-2 space-y-1.5">
+                    <div className="mt-2 space-y-1.5 rounded-md border border-border p-2">
                         <div className="max-h-40 overflow-y-auto space-y-0.5">
                             {allUsers.map(u => (
-                                <button key={u.id} onClick={() => setSelectedUserId(u.id)} className={userPickerClass(u.id)}>
+                                <Button key={u.id} variant="ghost" onClick={() => setSelectedUserId(u.id)} className={userPickerClass(u.id)}>
                                     <span className="font-medium">{u.name}</span>
                                     <span className={`ml-auto text-xs ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{u.role}</span>
-                                </button>
+                                </Button>
                             ))}
                         </div>
                         <div className="flex gap-2 pt-1">
-                            <button onClick={() => setShowReassign(false)} className="flex-1 border-2 border-border py-1 text-xs hover:bg-muted">Cancel</button>
-                            <button onClick={handleReassign} disabled={submitting || !selectedUserId}
-                                className="flex-1 border-2 border-primary bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                            <Button onClick={() => setShowReassign(false)} variant="outline" size="xs" className="flex-1">Cancel</Button>
+                            <Button onClick={handleReassign} disabled={submitting || !selectedUserId} size="xs" className="flex-1">
                                 {submitting ? "…" : "Confirm"}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -129,10 +129,10 @@ export default function TicketOwnershipPanel({
                         <Users size={11} /> Participants
                     </p>
                     {canManage && !isTerminal && !showAddParticipant && (
-                        <button onClick={() => { setShowAddParticipant(true); setShowReassign(false); setSelectedUserId(null); }}
-                            className="text-xs text-primary hover:underline flex items-center gap-1">
+                        <Button variant="link" size="xs" onClick={() => { setShowAddParticipant(true); setShowReassign(false); setSelectedUserId(null); }}
+                            className="h-auto p-0 text-xs">
                             <Plus size={11} /> Add
-                        </button>
+                        </Button>
                     )}
                 </div>
 
@@ -145,10 +145,10 @@ export default function TicketOwnershipPanel({
                                 <span className="flex-1 text-foreground">{p.user.name}</span>
                                 {p.addedForRole && <span className="text-xs text-muted-foreground">{p.addedForRole}</span>}
                                 {(canManage || p.user.id === currentUserId) && (
-                                    <button onClick={() => handleRemove(p.user.id)} disabled={removingId === p.user.id}
-                                        className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50">
+                                    <Button onClick={() => handleRemove(p.user.id)} disabled={removingId === p.user.id}
+                                        variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-destructive disabled:opacity-50">
                                         <X size={13} />
-                                    </button>
+                                    </Button>
                                 )}
                             </div>
                         ))}
@@ -156,21 +156,20 @@ export default function TicketOwnershipPanel({
                 )}
 
                 {showAddParticipant && (
-                    <div className="mt-2 border-2 border-border p-2 space-y-1.5">
+                    <div className="mt-2 space-y-1.5 rounded-md border border-border p-2">
                         <div className="max-h-40 overflow-y-auto space-y-0.5">
                             {allUsers.filter(u => u.id !== primaryOwner?.id && !participantIds.has(u.id)).map(u => (
-                                <button key={u.id} onClick={() => setSelectedUserId(u.id)} className={userPickerClass(u.id)}>
+                                <Button key={u.id} variant="ghost" onClick={() => setSelectedUserId(u.id)} className={userPickerClass(u.id)}>
                                     <span className="font-medium">{u.name}</span>
                                     <span className={`ml-auto text-xs ${selectedUserId === u.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{u.role}</span>
-                                </button>
+                                </Button>
                             ))}
                         </div>
                         <div className="flex gap-2 pt-1">
-                            <button onClick={() => setShowAddParticipant(false)} className="flex-1 border-2 border-border py-1 text-xs hover:bg-muted">Cancel</button>
-                            <button onClick={handleAddParticipant} disabled={submitting || !selectedUserId}
-                                className="flex-1 border-2 border-primary bg-primary py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                            <Button onClick={() => setShowAddParticipant(false)} variant="outline" size="xs" className="flex-1">Cancel</Button>
+                            <Button onClick={handleAddParticipant} disabled={submitting || !selectedUserId} size="xs" className="flex-1">
                                 {submitting ? "…" : "Add"}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}

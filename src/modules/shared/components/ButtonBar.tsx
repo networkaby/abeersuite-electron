@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { BUTTON_BAR_ACTIONS, type ButtonBarAction } from "@/utils/constants";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 
@@ -50,14 +51,16 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             ].join(" ")}
         >
             {/* Collapse toggle */}
-            <button
+            <Button
                 type="button"
                 onClick={() => setCollapsed((c) => !c)}
                 aria-label={collapsed ? "Expand button bar" : "Collapse button bar"}
-                className="absolute -left-3 top-8 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                variant="outline"
+                size="icon-xs"
+                className="absolute -left-3 top-8 z-10 rounded-full bg-card text-muted-foreground shadow-sm hover:text-foreground"
             >
                 {collapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
-            </button>
+            </Button>
 
             {/* Header */}
             <div className={`flex items-center border-b border-border px-4 py-3 ${collapsed ? "justify-center px-3" : "gap-2.5"}`}>
@@ -81,14 +84,15 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                     const isPrimary = action.variant === "default" && !action.disabled;
 
                     return (
-                        <button
+                        <Button
                             key={action.label}
                             type="button"
                             title={collapsed ? action.label : ""}
                             disabled={action.disabled}
                             onClick={() => handleAction(action)}
+                            variant="ghost"
                             className={[
-                                "group w-full border-2 border-border text-left transition-all duration-150",
+                                "group h-auto w-full rounded-md border border-border text-left transition-all duration-150",
                                 collapsed ? "px-0" : "",
                                 action.disabled
                                     ? "cursor-not-allowed border-border bg-muted opacity-50"
@@ -136,7 +140,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                     </div>
                                 )}
                             </div>
-                        </button>
+                        </Button>
                     );
                 })}
             </div>

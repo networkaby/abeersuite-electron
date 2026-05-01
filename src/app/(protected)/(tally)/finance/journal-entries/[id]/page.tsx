@@ -140,7 +140,7 @@ export default function JournalEntryDetailPage() {
             </div>
 
             {/* Meta */}
-            <div className="border-2 border-border shadow bg-card p-5 grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-card p-5 text-sm shadow">
                 <div>
                     <p className="text-xs text-muted-foreground mb-1">Date</p>
                     <p className="font-medium">
@@ -176,9 +176,9 @@ export default function JournalEntryDetailPage() {
             </div>
 
             {/* Lines */}
-            <div className="border-2 border-border shadow bg-card overflow-hidden">
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
                 <table className="w-full text-sm">
-                    <thead className="bg-muted text-xs text-muted-foreground border-b-2 border-border">
+                    <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                         <tr>
                             <th className="px-5 py-3 text-left font-medium">Account</th>
                             <th className="px-5 py-3 text-left font-medium">Note</th>
