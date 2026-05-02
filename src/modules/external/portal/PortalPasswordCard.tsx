@@ -3,6 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,12 @@ export default function PortalPasswordCard() {
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const minLengthOk = newPassword.length >= 8;
+    const hasMixed = /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword);
+    const hasNumber = /\d/.test(newPassword);
+    const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+    const score = [minLengthOk, hasMixed, hasNumber, hasSymbol].filter(Boolean).length;
+    const scoreText = ["Weak", "Weak", "Fair", "Good", "Strong"][score];
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,13 +45,16 @@ export default function PortalPasswordCard() {
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-lg">Security</CardTitle>
-                <CardDescription>Update your portal password to complete your profile security.</CardDescription>
+        <Card className="border-border/70 shadow-sm">
+            <CardHeader className="border-b border-border/70 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-emerald-600" />
+                    Security
+                </CardTitle>
+                <CardDescription>Change your portal password and keep your account safe.</CardDescription>
             </CardHeader>
             <CardContent>
-                <form className="space-y-4" onSubmit={onSubmit}>
+                <form className="space-y-4 pt-2" onSubmit={onSubmit}>
                     <div className="space-y-1.5">
                         <Label htmlFor="currentPassword">Current password</Label>
                         <Input
@@ -62,9 +72,21 @@ export default function PortalPasswordCard() {
                             type="password"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            minLength={6}
+                            minLength={8}
                             required
                         />
+                        <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">Strength</span>
+                                <span className="font-medium">{scoreText}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-muted">
+                                <div
+                                    className="h-full rounded-full bg-primary transition-all"
+                                    style={{ width: `${(score / 4) * 100}%` }}
+                                />
+                            </div>
+                        </div>
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="confirmPassword">Confirm new password</Label>
@@ -73,11 +95,12 @@ export default function PortalPasswordCard() {
                             type="password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            minLength={6}
+                            minLength={8}
                             required
                         />
                     </div>
-                    <Button type="submit" disabled={loading}>
+                    <p className="text-xs text-muted-foreground">Use at least 8 characters with upper/lower case, number, and symbol.</p>
+                    <Button type="submit" disabled={loading} className="w-full sm:w-auto">
                         {loading ? "Updating..." : "Update password"}
                     </Button>
                 </form>

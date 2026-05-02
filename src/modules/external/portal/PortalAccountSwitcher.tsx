@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -11,6 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Building2, UserRound } from "lucide-react";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
 type AccountContextResponse = {
@@ -74,24 +76,36 @@ export default function PortalAccountSwitcher() {
     };
 
     return (
-        <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Active profile</Label>
+        <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-2">
+                <div className="space-y-0.5">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">Active profile</Label>
+                    <p className="text-sm text-muted-foreground">Switch between personal and linked company profiles.</p>
+                </div>
+                <Badge variant="secondary" className="hidden sm:inline-flex">
+                    {options.length} profile{options.length === 1 ? "" : "s"}
+                </Badge>
+            </div>
             <Select
                 value={activeAccountId ? String(activeAccountId) : undefined}
                 onValueChange={(value) => void onSwitch(value)}
                 disabled={loading || options.length === 0}
             >
-                <SelectTrigger>
+                <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select profile" />
                 </SelectTrigger>
                 <SelectContent>
                     {options.map((option) => (
                         <SelectItem key={option.accountId} value={String(option.accountId)}>
-                            {option.accountType === "personal" ? `${option.label}` : `${option.label} (Company)`}
+                            <span className="inline-flex items-center gap-2">
+                                {option.accountType === "personal" ? <UserRound className="size-3.5" /> : <Building2 className="size-3.5" />}
+                                {option.accountType === "personal" ? option.label : `${option.label} (Company)`}
+                            </span>
                         </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
+            {loading ? <p className="text-xs text-muted-foreground">Updating profile context...</p> : null}
         </div>
     );
 }
