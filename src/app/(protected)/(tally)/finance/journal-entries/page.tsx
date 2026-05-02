@@ -34,7 +34,6 @@ interface GlAccount { id: number; code: string; name: string; type: string }
 
 const STATUS_COLORS = JOURNAL_STATUS_COLORS;
 
-const fieldClass = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 const cellClass  = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 

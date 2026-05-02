@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/modules/shared/components/UserForm";
 import UserAvatar from "@/modules/shared/components/UserAvatar";

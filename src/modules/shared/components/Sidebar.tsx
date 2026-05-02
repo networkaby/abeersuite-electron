@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/modules/shared/components/ThemeProvider";
 import axios from "axios";
 import {
     Settings, ChevronDown, LogOut,

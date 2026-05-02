@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import axios from "axios";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -19,10 +19,10 @@ type EscalationFormData = { serviceCenterId: string; externalRef: string; escala
 export default function TicketEscalation({ ticket, onClose }: Props) {
     const { data: session } = useSession();
     const [serviceCenters, setServiceCenters] = useState<ServiceCenterOption[]>([]);
-    const { register, handleSubmit, setValue, watch, formState: { isSubmitting } } = useForm({
+    const { register, handleSubmit, setValue, control, formState: { isSubmitting } } = useForm({
         defaultValues: { serviceCenterId: "", externalRef: "", escalatedAt: new Date().toISOString().split("T")[0], expectedReturn: "" },
     });
-    const serviceCenterId = watch("serviceCenterId");
+    const serviceCenterId = useWatch({ control, name: "serviceCenterId" });
 
     useEffect(() => { axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)); }, []);
 

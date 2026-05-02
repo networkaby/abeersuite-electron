@@ -1,7 +1,7 @@
 "use client";
 
 import Image, { type ImageProps } from "next/image";
-import { useEffect, useState } from "react";
+import { startTransition, useLayoutEffect, useMemo, useState } from "react";
 import { SHOP_IMAGE_PLACEHOLDER_PATH } from "@/lib/shop/shop-image-placeholder";
 
 export type ShopRemoteImageProps = Omit<ImageProps, "src"> & {
@@ -12,22 +12,28 @@ export type ShopRemoteImageProps = Omit<ImageProps, "src"> & {
  * next/image wrapper: swaps to a local placeholder on load error so broken CDN URLs
  * never show the browser broken-image icon.
  */
-export default function ShopRemoteImage({ src, onError, ...rest }: ShopRemoteImageProps) {
-    const nextSrc =
-        typeof src === "string" && src.length > 0 ? src : SHOP_IMAGE_PLACEHOLDER_PATH;
-    const [resolved, setResolved] = useState(nextSrc);
+export default function ShopRemoteImage({ src, onError, alt = "", ...rest }: ShopRemoteImageProps) {
+    const safeSrc = useMemo(
+        () => (typeof src === "string" && src.length > 0 ? src : SHOP_IMAGE_PLACEHOLDER_PATH),
+        [src]
+    );
+    const [usePlaceholder, setUsePlaceholder] = useState(false);
+    const displaySrc = usePlaceholder ? SHOP_IMAGE_PLACEHOLDER_PATH : safeSrc;
 
-    useEffect(() => {
-        setResolved(typeof src === "string" && src.length > 0 ? src : SHOP_IMAGE_PLACEHOLDER_PATH);
-    }, [src]);
+    useLayoutEffect(() => {
+        startTransition(() => {
+            setUsePlaceholder(false);
+        });
+    }, [safeSrc]);
 
     return (
         <Image
             {...rest}
-            src={resolved}
+            alt={alt}
+            src={displaySrc}
             onError={(e) => {
-                if (resolved !== SHOP_IMAGE_PLACEHOLDER_PATH) {
-                    setResolved(SHOP_IMAGE_PLACEHOLDER_PATH);
+                if (!usePlaceholder) {
+                    setUsePlaceholder(true);
                 }
                 onError?.(e);
             }}

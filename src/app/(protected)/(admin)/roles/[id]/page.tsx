@@ -111,10 +111,20 @@ export default function RolePermissionsPage({ params }: { params: Promise<{ id: 
     // ── Handlers ─────────────────────────────────────────────────────────────
 
     const togglePerm = (id: string) =>
-        setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+        setSelected((prev) => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id);
+            else n.add(id);
+            return n;
+        });
 
     const toggleModule = (mod: string) =>
-        setCollapsed(prev => { const n = new Set(prev); n.has(mod) ? n.delete(mod) : n.add(mod); return n; });
+        setCollapsed((prev) => {
+            const n = new Set(prev);
+            if (n.has(mod)) n.delete(mod);
+            else n.add(mod);
+            return n;
+        });
 
     const selectAll   = (perms: Permission[]) =>
         setSelected(prev => { const n = new Set(prev); perms.forEach(p => n.add(p.id));    return n; });
