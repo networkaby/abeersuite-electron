@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status";
+import { ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status-transitions";
 import type { ShopOrderStatus } from "@/generated/prisma/enums";
 
 const LABELS: Partial<Record<ShopOrderStatus, string>> = {
