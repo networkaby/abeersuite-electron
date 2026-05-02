@@ -1,36 +1,31 @@
 import { prisma } from "@/lib/prisma";
-import AddToCartButton from "@/modules/external/shop/AddToCartButton";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { shopProductToPublic } from "@/lib/shop/product-public";
+import ShopHero from "@/modules/external/shop/ShopHero";
+import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 
-export default async function ShopCatalogPage() {
-    const products = await prisma.shopProduct.findMany({
+export default async function ShopCatalogPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ q?: string; category?: string }>;
+}) {
+    const sp = await searchParams;
+    const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
+    const rows = await prisma.shopProduct.findMany({
         where: { isActive: true },
-        orderBy: { id: "asc" },
+        orderBy: [{ category: "asc" }, { id: "asc" }],
     });
+    const products = rows.map(shopProductToPublic);
+    const cats = [...new Set(products.map((p) => p.category))];
 
     return (
-        <main className="mx-auto max-w-4xl px-4 py-8 space-y-8">
-            <div>
-                <h1 className="text-2xl font-semibold">Shop</h1>
-                <p className="text-muted-foreground text-sm mt-1">Prices include GST where applicable · pay in ₹</p>
-            </div>
-            <ul className="grid gap-4 sm:grid-cols-2">
-                {products.map((p) => (
-                    <li key={p.id} className="rounded-lg border border-border p-4 flex flex-col gap-3">
-                        <div className="flex-1">
-                            <h2 className="font-medium">{p.name}</h2>
-                            {p.description ? (
-                                <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{p.description}</p>
-                            ) : null}
-                            <p className="text-lg font-semibold mt-2">{formatRupeesFromPaise(p.pricePaise)}</p>
-                        </div>
-                        <AddToCartButton productId={p.id} />
-                    </li>
-                ))}
-            </ul>
-            {products.length === 0 ? (
-                <p className="text-muted-foreground">No products yet. Ask an admin to add catalog items.</p>
-            ) : null}
-        </main>
+        <>
+            <ShopHero categories={cats} />
+            <ShopCatalogClient
+                products={products}
+                allCategories={cats}
+                initialQuery={sp.q ?? ""}
+                initialCategory={initialCategory}
+            />
+        </>
     );
 }

@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
+import { DEMO_SHOP_CATALOG } from "./lib/shop/demo-catalog-seed";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -619,24 +620,39 @@ async function upsertChartOfAccounts() {
     }
 }
 
-async function ensureShopProducts() {
-    const n = await prisma.shopProduct.count();
-    if (n > 0) return;
-    await prisma.shopProduct.createMany({
-        data: [
-            {
-                name: "Extended warranty (1 year)",
-                description: "Add-on warranty plan for eligible devices.",
-                pricePaise: 49900,
-                isActive: true,
-            },
-            {
-                name: "Pickup & delivery",
-                description: "Doorstep pickup and return within city limits.",
-                pricePaise: 35000,
-                isActive: true,
-            },
-        ],
+/** Idempotent: upsert full demo catalog (slugs + rich media) for the public shop. */
+async function upsertShopDemoCatalog() {
+    for (const row of DEMO_SHOP_CATALOG) {
+        const galleryJson = row.galleryUrls;
+        const specsJson = row.specs;
+        const existing = await prisma.shopProduct.findFirst({
+            where: { OR: [{ slug: row.slug }, { name: row.name }] },
+        });
+        const data = {
+            slug: row.slug,
+            name: row.name,
+            subheading: row.subheading,
+            description: row.description,
+            category: row.category,
+            pricePaise: row.pricePaise,
+            mrpPaise: row.mrpPaise,
+            badge: row.badge,
+            imageUrl: row.imageUrl,
+            galleryJson,
+            specsJson,
+            isActive: true,
+        };
+        if (existing) {
+            await prisma.shopProduct.update({ where: { id: existing.id }, data });
+        } else {
+            await prisma.shopProduct.create({ data });
+        }
+    }
+
+    const keepSlugs = DEMO_SHOP_CATALOG.map((r) => r.slug);
+    await prisma.shopProduct.updateMany({
+        where: { slug: { notIn: keepSlugs, not: null } },
+        data: { isActive: false },
     });
 }
 
@@ -682,8 +698,8 @@ async function main() {
     await ensureAdminUser();
     console.log("  Ensured admin user exists (admin@networkservice.in / admin123 on first seed only)");
 
-    await ensureShopProducts();
-    console.log("  Ensured sample shop products when catalog was empty");
+    await upsertShopDemoCatalog();
+    console.log("  Upserted demo shop catalog (products + imagery)");
 
     console.log("Seed complete.");
 }

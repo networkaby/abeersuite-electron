@@ -1,32 +1,39 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ShoppingBag, Truck, Shield, Sparkles, ArrowRight } from "lucide-react";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col text-foreground">
       {/* Nav */}
-      <header className="px-8 py-5 flex items-center justify-between border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <span className="font-semibold text-foreground text-lg">ServiceMgmt</span>
+      <header className="px-6 sm:px-8 py-5 flex flex-wrap items-center justify-between gap-4 border-b border-border">
+        <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <span className="font-semibold text-foreground text-lg">ServiceMgmt</span>
+          </Link>
+          <nav className="hidden sm:flex items-center gap-1 text-sm font-medium">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/shop">Store</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/portal/login">Portal</Link>
+            </Button>
+          </nav>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href="/portal/login"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg border border-border"
-          >
-            Customer sign in
-          </Link>
-          <Link
-            href="/login"
-            className="bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            Staff sign in
-          </Link>
+          <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
+            <Link href="/portal/login">Customer sign in</Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/login">Staff sign in</Link>
+          </Button>
         </div>
       </header>
 
@@ -42,26 +49,89 @@ export default function Home() {
           Track every device, customer, and technician in one place. From intake to handoff — nothing falls through the cracks.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/portal/login"
-            className="bg-primary text-primary-foreground px-8 py-3.5 rounded-lg text-base font-semibold hover:bg-primary/90 transition-colors shadow-sm"
-          >
-            Customer portal →
-          </Link>
-          <Link
-            href="/shop"
-            className="px-8 py-3.5 rounded-lg text-base font-semibold border border-border hover:bg-muted/60 transition-colors"
-          >
-            Shop
-          </Link>
-          <Link
-            href="/login"
-            className="text-sm text-muted-foreground underline underline-offset-4"
-          >
-            Staff dashboard
-          </Link>
+          <Button size="lg" className="rounded-full px-8 shadow-md" asChild>
+            <Link href="/shop">
+              <ShoppingBag className="size-4 mr-2" />
+              Browse the store
+            </Link>
+          </Button>
+          <Button size="lg" variant="outline" className="rounded-full border-border px-8" asChild>
+            <Link href="/portal/login">Customer portal</Link>
+          </Button>
+          <Button variant="link" className="text-muted-foreground" asChild>
+            <Link href="/login">Staff dashboard</Link>
+          </Button>
         </div>
       </main>
+
+      {/* Ecommerce spotlight */}
+      <section className="border-t border-border bg-linear-to-b from-violet-500/5 via-background to-background px-6 sm:px-8 py-20">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col lg:flex-row lg:items-stretch gap-10 lg:gap-12">
+            <div className="flex-1 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-primary">Ecommerce</p>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-balance">
+                Network Shop — PCs, laptops, printers, CCTV &amp; components in ₹
+              </h2>
+              <p className="text-muted-foreground text-lg leading-relaxed max-w-xl">
+                Sell desktops, notebooks, ink &amp; laser printers, bullet &amp; NVR kits, monitors, RAM, SSDs, PSUs, and
+                Wi‑Fi upgrades — same storefront as your customer portal session when they sign in.
+              </p>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <Button size="lg" className="rounded-full gap-2" asChild>
+                  <Link href="/shop#catalog">
+                    Shop the catalog
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button size="lg" variant="secondary" className="rounded-full" asChild>
+                  <Link href="/shop/cart">View cart</Link>
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 grid gap-4 sm:grid-cols-2">
+              <Card className="border-border/80 shadow-sm bg-card/80 backdrop-blur-sm">
+                <CardContent className="pt-6 pb-6 flex gap-3">
+                  <Sparkles className="size-10 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <div>
+                    <h3 className="font-semibold">Discover</h3>
+                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                      Filter by category, sort by price, and open rich PDPs with galleries &amp; specs.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-border/80 shadow-sm bg-card/80 backdrop-blur-sm">
+                <CardContent className="pt-6 pb-6 flex gap-3">
+                  <Truck className="size-10 shrink-0 text-primary" />
+                  <div>
+                    <h3 className="font-semibold">Checkout</h3>
+                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                      Order summary, guest contact, and Razorpay when your keys are set — or mock pay in demo.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-border/80 shadow-sm bg-card/80 backdrop-blur-sm sm:col-span-2">
+                <CardContent className="pt-6 pb-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex gap-3 flex-1">
+                    <Shield className="size-10 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <div>
+                      <h3 className="font-semibold">Trust</h3>
+                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                        SSL session, cart persistence, and staff admin for catalog &amp; orders with permissions.
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="outline" className="rounded-full shrink-0 w-full sm:w-auto" asChild>
+                    <Link href="/shop/wishlist">Wishlist &amp; compare</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Feature strips */}
       <section className="border-t border-border bg-muted/40 px-8 py-16">

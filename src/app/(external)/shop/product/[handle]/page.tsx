@@ -1,0 +1,99 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { shopProductToPublic, productPath } from "@/lib/shop/product-public";
+import ProductGallery from "@/modules/external/shop/ProductGallery";
+import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
+import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";
+import ProductCard from "@/modules/external/shop/ProductCard";
+import { ChevronRight } from "lucide-react";
+
+async function loadProduct(handle: string) {
+    const decoded = decodeURIComponent(handle);
+    if (/^\d+$/.test(decoded)) {
+        const id = parseInt(decoded, 10);
+        const p = await prisma.shopProduct.findFirst({ where: { id, isActive: true } });
+        return p ? shopProductToPublic(p) : null;
+    }
+    const p = await prisma.shopProduct.findFirst({ where: { slug: decoded, isActive: true } });
+    return p ? shopProductToPublic(p) : null;
+}
+
+export async function generateMetadata({
+    params,
+}: {
+    params: Promise<{ handle: string }>;
+}): Promise<Metadata> {
+    const { handle } = await params;
+    const p = await loadProduct(handle);
+    if (!p) return { title: "Product" };
+    return {
+        title: `${p.name} · Shop`,
+        description: p.subheading ?? p.description ?? undefined,
+    };
+}
+
+export default async function ShopProductPage({ params }: { params: Promise<{ handle: string }> }) {
+    const { handle } = await params;
+    const product = await loadProduct(handle);
+    if (!product) notFound();
+
+    const related = await prisma.shopProduct.findMany({
+        where: {
+            isActive: true,
+            category: product.category,
+            NOT: { id: product.id },
+        },
+        take: 4,
+        orderBy: { id: "asc" },
+    });
+
+    const canonicalPath = productPath(product);
+
+    return (
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+            <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground mb-8">
+                <Link href="/shop" className="hover:text-foreground">
+                    Shop
+                </Link>
+                <ChevronRight className="size-4 opacity-60" />
+                <Link href={`/shop#cat-${encodeURIComponent(product.category)}`} className="hover:text-foreground">
+                    {product.category}
+                </Link>
+                <ChevronRight className="size-4 opacity-60" />
+                <span className="text-foreground font-medium line-clamp-1">{product.name}</span>
+            </nav>
+
+            {product.slug && /^\d+$/.test(decodeURIComponent(handle)) ? (
+                <p className="mb-4 text-xs text-muted-foreground">
+                    Permalink:{" "}
+                    <Link href={canonicalPath} className="text-primary underline">
+                        {canonicalPath}
+                    </Link>
+                </p>
+            ) : null}
+
+            <div className="grid gap-10 lg:grid-cols-2 lg:gap-12 items-start">
+                <ProductGallery urls={product.galleryUrls} alt={product.name} />
+                <ProductPurchasePanel product={product} />
+            </div>
+
+            <ProductDetailTabs product={product} />
+
+            {related.length > 0 ? (
+                <section className="mt-20 border-t border-border/80 pt-12">
+                    <h2 className="text-2xl font-bold tracking-tight">You may also like</h2>
+                    <p className="text-sm text-muted-foreground mt-1">More in {product.category}</p>
+                    <ul className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+                        {related.map((r) => (
+                            <li key={r.id}>
+                                <ProductCard product={shopProductToPublic(r)} />
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+        </main>
+    );
+}

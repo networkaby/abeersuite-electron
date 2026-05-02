@@ -8,14 +8,25 @@ enum ShopOrderStatus {
 }
 
 model ShopProduct {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?
-  pricePaise  Int
-  imageUrl    String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  /// URL-safe handle for /shop/product/[handle]; optional for legacy rows
+  slug         String?  @unique
+  name         String
+  subheading   String?
+  description  String?
+  category     String   @default("Accessories")
+  pricePaise   Int
+  /// Optional list price for “was” / savings UI
+  mrpPaise     Int?
+  badge        String?
+  imageUrl     String?
+  /// JSON array of image URLs for gallery (same host as imageUrl)
+  galleryJson  Json?
+  /// JSON object of label → value for specs tab
+  specsJson    Json?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   lines ShopOrderLine[]
 }
