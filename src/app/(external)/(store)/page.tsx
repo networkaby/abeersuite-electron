@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { shopProductToPublic, type ShopProductPublic } from "@/lib/shop/product-public";
-import StoreHero from "@/modules/external/store/StoreHero";
-import CategoryTiles from "@/modules/external/store/CategoryTiles";
+import { HERO_SLIDES, PROMO_BANNERS_TOP, PROMO_BANNERS_BOTTOM } from "@/lib/shop/store-content";
+import HeroCarousel from "@/modules/external/store/HeroCarousel";
+import TrustStrip from "@/modules/external/store/TrustStrip";
+import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
+import PromoBanners from "@/modules/external/store/PromoBanners";
+import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import FeaturedRow from "@/modules/external/store/FeaturedRow";
+import BrandStrip from "@/modules/external/store/BrandStrip";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 
 function pickFeatured(products: ShopProductPublic[], n = 8): ShopProductPublic[] {
@@ -12,15 +17,21 @@ function pickFeatured(products: ShopProductPublic[], n = 8): ShopProductPublic[]
         .slice(0, n);
 }
 
+function discountPctOf(p: ShopProductPublic): number {
+    if (!p.mrpPaise || p.mrpPaise <= p.pricePaise) return 0;
+    return (p.mrpPaise - p.pricePaise) / p.mrpPaise;
+}
+
 function pickDeals(products: ShopProductPublic[], n = 8): ShopProductPublic[] {
     return [...products]
-        .filter((p) => p.mrpPaise && p.mrpPaise > p.pricePaise)
-        .sort(
-            (a, b) =>
-                (b.mrpPaise! - b.pricePaise) / b.mrpPaise! -
-                (a.mrpPaise! - a.pricePaise) / a.mrpPaise!,
-        )
+        .filter((p) => discountPctOf(p) > 0)
+        .sort((a, b) => discountPctOf(b) - discountPctOf(a))
         .slice(0, n);
+}
+
+function pickDealOfTheDay(products: ShopProductPublic[]): ShopProductPublic | null {
+    const sorted = [...products].sort((a, b) => discountPctOf(b) - discountPctOf(a));
+    return sorted[0] ?? null;
 }
 
 export default async function StoreHomePage({
@@ -38,27 +49,42 @@ export default async function StoreHomePage({
     const products = rows.map(shopProductToPublic);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
-    const categoryCounts = allCategories
-        .map((name) => ({ name, count: products.filter((p) => p.category === name).length }))
+    const categoryEntries = allCategories
+        .map((name) => {
+            const inCat = products.filter((p) => p.category === name);
+            return {
+                name,
+                count: inCat.length,
+                fallbackImageUrl: inCat[0]?.galleryUrls[0] ?? inCat[0]?.imageUrl ?? null,
+            };
+        })
         .sort((a, b) => b.count - a.count);
-    const topCategories = categoryCounts.slice(0, 6).map((c) => c.name);
 
     const featured = pickFeatured(products);
     const deals = pickDeals(products);
+    const dealOfTheDay = pickDealOfTheDay(products);
 
     return (
         <>
-            <StoreHero topCategories={topCategories} />
+            <HeroCarousel slides={HERO_SLIDES} />
 
-            <CategoryTiles categoryCounts={categoryCounts} />
+            <TrustStrip />
+
+            <CategoryShowcase categories={categoryEntries} />
+
+            <PromoBanners banners={PROMO_BANNERS_TOP} columns={2} />
 
             <FeaturedRow
                 id="featured"
-                eyebrow="Featured"
-                title="Trending picks for you"
+                eyebrow="Trending"
+                title="Top picks for you"
                 subtitle="Hand-picked best sellers across categories."
                 products={featured}
             />
+
+            <DealOfTheDay product={dealOfTheDay} />
+
+            <PromoBanners banners={PROMO_BANNERS_BOTTOM} columns={3} />
 
             <FeaturedRow
                 id="deals"
@@ -68,6 +94,8 @@ export default async function StoreHomePage({
                 products={deals}
                 accent="emerald"
             />
+
+            <BrandStrip />
 
             <ShopCatalogClient
                 products={products}
