@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import Link from "next/link";
-import Image from "next/image";
+import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,7 +149,7 @@ export default function ShopCheckoutPage() {
                                     <li key={l.productId} className="flex gap-3">
                                         <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border bg-muted">
                                             {img ? (
-                                                <Image src={img} alt="" fill className="object-cover" sizes="56px" />
+                                                <ShopRemoteImage src={img} alt="" fill className="object-cover" sizes="56px" />
                                             ) : null}
                                         </div>
                                         <div className="min-w-0 flex-1">

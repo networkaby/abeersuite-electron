@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
     const [active, setActive] = useState(0);
     const [paused, setPaused] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const touchResumeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const total = slides.length;
 
     const goTo = useCallback(
@@ -51,18 +52,32 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
         };
     }, [paused, total]);
 
+    useEffect(() => {
+        return () => {
+            if (touchResumeRef.current) clearTimeout(touchResumeRef.current);
+        };
+    }, []);
+
     if (total === 0) return null;
 
     return (
         <section
-            className="relative isolate overflow-hidden border-b border-border/80 bg-black"
+            className="relative isolate touch-pan-y overflow-hidden border-b border-border/80 bg-black"
             aria-roledescription="carousel"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
             onFocus={() => setPaused(true)}
             onBlur={() => setPaused(false)}
+            onTouchStart={() => {
+                if (touchResumeRef.current) clearTimeout(touchResumeRef.current);
+                setPaused(true);
+            }}
+            onTouchEnd={() => {
+                if (touchResumeRef.current) clearTimeout(touchResumeRef.current);
+                touchResumeRef.current = setTimeout(() => setPaused(false), 4000);
+            }}
         >
-            <div className="relative h-[420px] sm:h-[480px] lg:h-[520px]">
+            <div className="relative h-[min(78svh,480px)] sm:h-[480px] lg:h-[520px]">
                 {slides.map((s, i) => (
                     <div
                         key={s.id}
@@ -72,7 +87,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                         )}
                         aria-hidden={i !== active}
                     >
-                        <Image
+                        <ShopRemoteImage
                             src={s.imageUrl}
                             alt={s.imageAlt}
                             fill
@@ -80,9 +95,9 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                             sizes="100vw"
                             className="object-cover"
                         />
-                        <div className="absolute inset-0 bg-linear-to-r from-black/80 via-black/40 to-transparent" />
-                        <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
-                        <div className="relative mx-auto flex h-full max-w-6xl items-center px-4 sm:px-6">
+                        <div className="absolute inset-0 bg-linear-to-r from-black/85 via-black/55 to-black/25 sm:from-black/80 sm:via-black/40 sm:to-transparent" />
+                        <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/30 to-transparent sm:from-black/60 sm:via-transparent" />
+                        <div className="relative mx-auto flex h-full max-w-6xl items-end pb-28 pt-10 sm:items-center sm:pb-0 sm:pt-0 px-4 sm:px-6">
                             <div className="max-w-xl text-white">
                                 <p
                                     className={cn(
@@ -93,19 +108,19 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                                     <span className={cn("inline-block size-1.5 rounded-full", ACCENT_DOT[s.accent])} />
                                     {s.eyebrow}
                                 </p>
-                                <h1 className="mt-3 text-balance text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+                                <h1 className="mt-3 text-balance text-3xl font-bold leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
                                     {s.title}
                                 </h1>
-                                <p className="mt-4 max-w-lg text-base leading-relaxed text-white/85 sm:text-lg">
+                                <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/90 sm:mt-4 sm:text-lg">
                                     {s.subtitle}
                                 </p>
-                                <div className="mt-7 flex flex-wrap items-center gap-3">
+                                <div className="mt-6 flex w-full max-w-md flex-col gap-3 sm:mt-7 sm:flex-row sm:flex-wrap sm:items-center">
                                     <Button
                                         asChild
                                         size="lg"
-                                        className="rounded-full px-7 shadow-lg"
+                                        className="h-12 w-full touch-manipulation rounded-full px-7 shadow-lg sm:h-11 sm:w-auto"
                                     >
-                                        <Link href={s.ctaHref} className="inline-flex items-center gap-2">
+                                        <Link href={s.ctaHref} className="inline-flex items-center justify-center gap-2">
                                             {s.ctaLabel}
                                             <ArrowRight className="size-4" />
                                         </Link>
@@ -114,7 +129,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                                         asChild
                                         size="lg"
                                         variant="outline"
-                                        className="rounded-full border-white/40 bg-white/10 px-6 text-white backdrop-blur hover:bg-white/20 hover:text-white"
+                                        className="h-12 w-full touch-manipulation rounded-full border-white/40 bg-white/10 px-6 text-white backdrop-blur hover:bg-white/20 hover:text-white sm:h-11 sm:w-auto"
                                     >
                                         <Link href="#catalog">Browse all</Link>
                                     </Button>
@@ -130,7 +145,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                             type="button"
                             onClick={prev}
                             aria-label="Previous slide"
-                            className="absolute left-3 top-1/2 z-10 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-white backdrop-blur-md transition hover:bg-black/50 sm:flex"
+                            className="absolute bottom-23 left-2 z-10 flex size-11 touch-manipulation items-center justify-center rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-md transition active:bg-black/60 sm:bottom-auto sm:left-3 sm:top-1/2 sm:size-10 sm:-translate-y-1/2"
                         >
                             <ChevronLeft className="size-5" />
                         </button>
@@ -138,12 +153,12 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                             type="button"
                             onClick={next}
                             aria-label="Next slide"
-                            className="absolute right-3 top-1/2 z-10 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-white backdrop-blur-md transition hover:bg-black/50 sm:flex"
+                            className="absolute bottom-23 right-2 z-10 flex size-11 touch-manipulation items-center justify-center rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-md transition active:bg-black/60 sm:bottom-auto sm:right-3 sm:top-1/2 sm:size-10 sm:-translate-y-1/2"
                         >
                             <ChevronRight className="size-5" />
                         </button>
 
-                        <div className="absolute bottom-5 left-0 right-0 z-10 flex items-center justify-center gap-2">
+                        <div className="absolute bottom-4 left-0 right-0 z-10 flex items-center justify-center gap-1 py-2 sm:bottom-5 sm:gap-2">
                             {slides.map((s, i) => (
                                 <button
                                     key={s.id}
@@ -151,13 +166,15 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                                     aria-label={`Go to slide ${i + 1}`}
                                     aria-current={i === active}
                                     onClick={() => goTo(i)}
-                                    className={cn(
-                                        "h-1.5 rounded-full transition-all",
-                                        i === active
-                                            ? "w-8 bg-white"
-                                            : "w-3 bg-white/40 hover:bg-white/70",
-                                    )}
-                                />
+                                    className="touch-manipulation p-2"
+                                >
+                                    <span
+                                        className={cn(
+                                            "block h-1.5 rounded-full transition-all",
+                                            i === active ? "w-8 bg-white" : "w-3 bg-white/45 active:bg-white/80",
+                                        )}
+                                    />
+                                </button>
                             ))}
                         </div>
                     </>

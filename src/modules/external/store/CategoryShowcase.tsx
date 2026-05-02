@@ -1,4 +1,4 @@
-import Image from "next/image";
+import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { ArrowRight } from "lucide-react";
 import { CATEGORY_IMAGES } from "@/lib/shop/store-content";
 
@@ -14,18 +14,18 @@ export default function CategoryShowcase({ categories }: { categories: CategoryE
 
     return (
         <section className="border-b border-border/60 bg-background">
-            <div className="mx-auto max-w-6xl px-4 py-14">
-                <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div className="mx-auto max-w-6xl px-3 py-10 sm:px-4 sm:py-14">
+                <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Departments</p>
-                        <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Shop by category</h2>
+                        <h2 className="mt-2 text-xl font-bold tracking-tight sm:text-3xl">Shop by category</h2>
                         <p className="mt-1 text-sm text-muted-foreground">
                             Tap a department to jump to its section in the catalog below.
                         </p>
                     </div>
                 </div>
 
-                <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
                     {categories.map(({ name, count, fallbackImageUrl }) => {
                         const known = CATEGORY_IMAGES[name];
                         const imageUrl = known?.imageUrl ?? fallbackImageUrl ?? null;
@@ -35,11 +35,11 @@ export default function CategoryShowcase({ categories }: { categories: CategoryE
                             <li key={name}>
                                 <a
                                     href={`#cat-${encodeURIComponent(name)}`}
-                                    className="group relative block overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+                                    className="group relative block touch-manipulation overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-all active:scale-[0.99] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                                 >
                                     <div className="relative aspect-[4/3] bg-muted">
                                         {imageUrl ? (
-                                            <Image
+                                            <ShopRemoteImage
                                                 src={imageUrl}
                                                 alt={imageAlt}
                                                 fill

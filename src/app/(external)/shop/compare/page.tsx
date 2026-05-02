@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
-import Image from "next/image";
+import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -83,7 +83,7 @@ export default function ShopComparePage() {
                                         <div className="space-y-3 py-2">
                                             <div className="relative mx-auto aspect-square w-full max-w-[140px] overflow-hidden rounded-xl border border-border bg-muted">
                                                 {(p.galleryUrls[0] ?? p.imageUrl) ? (
-                                                    <Image
+                                                    <ShopRemoteImage
                                                         src={(p.galleryUrls[0] ?? p.imageUrl)!}
                                                         alt=""
                                                         fill

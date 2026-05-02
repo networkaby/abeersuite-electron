@@ -50,10 +50,10 @@ export default function ShopWishlistPage() {
                     </Button>
                 </div>
             ) : (
-                <ul className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                <ul className="grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-3">
                     {list.map((p) => (
-                        <li key={p.id}>
-                            <ProductCard product={p} />
+                        <li key={p.id} className="flex min-h-0 h-full flex-col">
+                            <ProductCard product={p} className="min-h-0 flex-1" />
                         </li>
                     ))}
                 </ul>

@@ -111,7 +111,7 @@ function ShopCatalogInner({
     };
 
     return (
-        <div id="catalog" className="mx-auto max-w-6xl px-4 py-12 scroll-mt-20">
+        <div id="catalog" className="mx-auto max-w-6xl scroll-mt-28 px-3 py-10 sm:scroll-mt-24 sm:px-4 sm:py-12 lg:scroll-mt-20">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
                 <aside
                     className={cn(
@@ -173,25 +173,25 @@ function ShopCatalogInner({
                 <div className="min-w-0 flex-1 space-y-8">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-2xl font-bold tracking-tight">Catalog</h2>
-                            <p className="text-sm text-muted-foreground mt-1">
+                            <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Catalog</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
                                 {filtered.length} product{filtered.length === 1 ? "" : "s"} · filter, compare, and checkout securely
                             </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
                             <Button
                                 type="button"
                                 variant="outline"
-                                size="sm"
-                                className="lg:hidden"
+                                size="lg"
+                                className="h-11 w-full touch-manipulation lg:hidden sm:h-10 sm:w-auto"
                                 onClick={() => setShowFilters(true)}
                             >
-                                <SlidersHorizontal className="size-4 mr-1" />
+                                <SlidersHorizontal className="mr-1 size-4" />
                                 Filters
                             </Button>
-                            <div className="w-[200px]">
+                            <div className="w-full sm:w-[200px]">
                                 <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="h-11 w-full touch-manipulation sm:h-10">
                                         <SelectValue placeholder="Sort" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -203,12 +203,12 @@ function ShopCatalogInner({
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex rounded-lg border border-border p-0.5">
+                            <div className="flex justify-end rounded-lg border border-border p-0.5 sm:justify-start">
                                 <Button
                                     type="button"
                                     variant={!dense ? "secondary" : "ghost"}
                                     size="icon"
-                                    className="size-9"
+                                    className="size-11 touch-manipulation sm:size-9"
                                     onClick={() => setDense(false)}
                                     aria-label="Comfortable grid"
                                 >
@@ -218,7 +218,7 @@ function ShopCatalogInner({
                                     type="button"
                                     variant={dense ? "secondary" : "ghost"}
                                     size="icon"
-                                    className="size-9"
+                                    className="size-11 touch-manipulation sm:size-9"
                                     onClick={() => setDense(true)}
                                     aria-label="Dense grid"
                                 >
@@ -243,15 +243,15 @@ function ShopCatalogInner({
                                 </div>
                                 <ul
                                     className={cn(
-                                        "grid gap-6",
+                                        "grid auto-rows-fr gap-6",
                                         dense
                                             ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                                             : "sm:grid-cols-2 xl:grid-cols-3"
                                     )}
                                 >
                                     {items.map((p) => (
-                                        <li key={p.id}>
-                                            <ProductCard product={p} />
+                                        <li key={p.id} className="flex min-h-0 h-full flex-col">
+                                            <ProductCard product={p} className="min-h-0 flex-1" />
                                         </li>
                                     ))}
                                 </ul>

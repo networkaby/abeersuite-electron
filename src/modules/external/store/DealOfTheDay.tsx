@@ -1,4 +1,4 @@
-import Image from "next/image";
+import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,7 @@ export default function DealOfTheDay({ product }: { product: ShopProductPublic |
 
     return (
         <section className="border-b border-border/60 bg-linear-to-br from-rose-500/5 via-background to-amber-500/5">
-            <div className="mx-auto max-w-6xl px-4 py-12">
+            <div className="mx-auto max-w-6xl px-3 py-10 sm:px-4 sm:py-12">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400">
@@ -45,7 +45,7 @@ export default function DealOfTheDay({ product }: { product: ShopProductPublic |
                 <article className="mt-7 grid gap-0 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-md md:grid-cols-[1.1fr_1fr]">
                     <Link href={href} className="relative block aspect-[4/3] bg-muted md:aspect-auto md:min-h-[340px]">
                         {img ? (
-                            <Image
+                            <ShopRemoteImage
                                 src={img}
                                 alt={product.name}
                                 fill
@@ -117,11 +117,11 @@ export default function DealOfTheDay({ product }: { product: ShopProductPublic |
                             Limited time · Free shipping on this product · Razorpay secured.
                         </p>
 
-                        <div className="mt-2 flex flex-wrap gap-3">
-                            <Button size="lg" asChild className="rounded-full px-7 shadow-md">
+                        <div className="mt-2 flex w-full flex-col gap-3 sm:mt-2 sm:w-auto sm:flex-row sm:flex-wrap">
+                            <Button size="lg" asChild className="h-12 w-full touch-manipulation rounded-full px-7 shadow-md sm:h-11 sm:w-auto">
                                 <Link href={href}>Buy now</Link>
                             </Button>
-                            <Button size="lg" variant="outline" asChild className="rounded-full px-6">
+                            <Button size="lg" variant="outline" asChild className="h-12 w-full touch-manipulation rounded-full px-6 sm:h-11 sm:w-auto">
                                 <Link href={href}>View details</Link>
                             </Button>
                         </div>

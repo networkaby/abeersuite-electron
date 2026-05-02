@@ -85,10 +85,10 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
                 <section className="mt-20 border-t border-border/80 pt-12">
                     <h2 className="text-2xl font-bold tracking-tight">You may also like</h2>
                     <p className="text-sm text-muted-foreground mt-1">More in {product.category}</p>
-                    <ul className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+                    <ul className="mt-8 grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-4">
                         {related.map((r) => (
-                            <li key={r.id}>
-                                <ProductCard product={shopProductToPublic(r)} />
+                            <li key={r.id} className="flex min-h-0 h-full flex-col">
+                                <ProductCard product={shopProductToPublic(r)} className="min-h-0 flex-1" />
                             </li>
                         ))}
                     </ul>

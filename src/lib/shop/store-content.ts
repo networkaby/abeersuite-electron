@@ -6,7 +6,7 @@
  * so any field can be swapped without touching components.
  *
  * Image hosts in use:
- *   - images.unsplash.com  → hero, category, promo banners
+ *   - images.pexels.com  → hero, category, promo banners (direct CDN; free to use per Pexels license)
  *   - cdn.simpleicons.org  → brand logos (electronics manufacturers)
  */
 
@@ -45,7 +45,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         subtitle:
             "Latest 13th-gen ultrabooks, gaming rigs and business notebooks — with GST invoice and Razorpay-secured checkout.",
         imageUrl:
-            "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=1600&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/1229861/pexels-photo-1229861.jpeg?auto=compress&cs=tinysrgb&w=1600",
         imageAlt: "Open laptop on a wooden desk in soft daylight",
         ctaLabel: "Shop laptops",
         ctaHref: "#cat-Laptops",
@@ -58,7 +58,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         subtitle:
             "4-channel & 8-channel kits with NVR, cabling and bullet/dome cameras. Live view from your phone.",
         imageUrl:
-            "https://images.unsplash.com/photo-1558002038-1055907df827?w=1600&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/8463140/pexels-photo-8463140.jpeg?auto=compress&cs=tinysrgb&w=1600",
         imageAlt: "White security camera mounted on a wall",
         ctaLabel: "Shop CCTV kits",
         ctaHref: "#cat-CCTV%20%26%20Security",
@@ -71,7 +71,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         subtitle:
             "Genuine RAM, NVMe SSDs, gold-rated PSUs, AM5 boards, and RTX-tier graphics. We dispatch from metro warehouses.",
         imageUrl:
-            "https://images.unsplash.com/photo-1591488320449-011701bb6704?w=1600&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/325229/pexels-photo-325229.jpeg?auto=compress&cs=tinysrgb&w=1600",
         imageAlt: "Memory module and PC components in close-up",
         ctaLabel: "Shop components",
         ctaHref: "#cat-Components",
@@ -86,38 +86,38 @@ export const HERO_SLIDES: HeroSlide[] = [
 export const CATEGORY_IMAGES: Record<string, { imageUrl: string; imageAlt: string }> = {
     Laptops: {
         imageUrl:
-            "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/7514838/pexels-photo-7514838.jpeg?auto=compress&cs=tinysrgb&w=800",
         imageAlt: "Sleek silver laptop on a clean white surface",
     },
     Desktops: {
         imageUrl:
-            "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=800&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/256264/pexels-photo-256264.jpeg?auto=compress&cs=tinysrgb&w=800",
         imageAlt: "RGB-lit gaming desktop tower",
     },
     Printers: {
         imageUrl:
-            "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=800&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg?auto=compress&cs=tinysrgb&w=800",
         imageAlt: "Modern office printer printing a document",
     },
     "CCTV & Security": {
         imageUrl:
-            "https://images.unsplash.com/photo-1547119957-637f8679db1e?w=800&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/2582937/pexels-photo-2582937.jpeg?auto=compress&cs=tinysrgb&w=800",
         imageAlt: "Outdoor CCTV camera on a building corner",
     },
     Components: {
         imageUrl:
-            "https://images.unsplash.com/photo-1587202372634-32705e3bf49c?w=800&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/777001/pexels-photo-777001.jpeg?auto=compress&cs=tinysrgb&w=800",
         imageAlt: "PC components on a workbench",
     },
     Monitors: {
         imageUrl:
-            "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=800&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/265087/pexels-photo-265087.jpeg?auto=compress&cs=tinysrgb&w=800",
         imageAlt: "Curved monitor on a tidy work desk",
     },
     Networking: {
         imageUrl:
-            "https://images.unsplash.com/photo-1606904825846-647eb07f5be2?w=800&q=80&auto=format&fit=crop",
-        imageAlt: "Wireless router on a glossy table",
+            "https://images.pexels.com/photos/159304/network-cable-ethernet-computer-159304.jpeg?auto=compress&cs=tinysrgb&w=800",
+        imageAlt: "Ethernet cables plugged into a network switch",
     },
 };
 
@@ -129,7 +129,7 @@ export const PROMO_BANNERS_TOP: PromoBanner[] = [
         title: "Office bundle savings",
         subtitle: "Desktop + monitor + printer combos — fleet pricing built in.",
         imageUrl:
-            "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/442150/pexels-photo-442150.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Modern office workspace with desks and monitors",
         ctaLabel: "Browse office",
         ctaHref: "#cat-Desktops",
@@ -141,7 +141,7 @@ export const PROMO_BANNERS_TOP: PromoBanner[] = [
         title: "Components week — 20% off",
         subtitle: "RAM, SSDs, PSUs and motherboards from trusted brands.",
         imageUrl:
-            "https://images.unsplash.com/photo-1587202372616-b43abea06c2a?w=1200&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/3862139/pexels-photo-3862139.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Custom built PC with RGB lights",
         ctaLabel: "Shop components",
         ctaHref: "#cat-Components",
@@ -156,7 +156,7 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
         eyebrow: "Display week",
         title: "Bigger screens, sharper work",
         imageUrl:
-            "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Large monitor on a clean desk",
         ctaLabel: "Shop monitors",
         ctaHref: "#cat-Monitors",
@@ -167,7 +167,7 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
         eyebrow: "Print smarter",
         title: "Ink & laser, ready to ship",
         imageUrl:
-            "https://images.unsplash.com/photo-1623126908029-58cb08a2b272?w=1200&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/1714341/pexels-photo-1714341.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Workplace printer with paper output",
         ctaLabel: "Shop printers",
         ctaHref: "#cat-Printers",
@@ -178,7 +178,7 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
         eyebrow: "Storage upgrade",
         title: "Faster boot, more space",
         imageUrl:
-            "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?w=1200&q=80&auto=format&fit=crop",
+            "https://images.pexels.com/photos/4302071/pexels-photo-4302071.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Server storage racks",
         ctaLabel: "Shop storage",
         ctaHref: "#cat-Components",

@@ -1,23 +1,37 @@
 import Link from "next/link";
 import { Package, Mail, MapPin } from "lucide-react";
+import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 
 export default function ShopFooter() {
+    const addressLine = [
+        COMPANY_DETAILS.address.line1,
+        COMPANY_DETAILS.address.line2,
+        `${COMPANY_DETAILS.address.city}, ${COMPANY_DETAILS.address.state} ${COMPANY_DETAILS.address.pin}`,
+        COMPANY_DETAILS.address.country,
+    ]
+        .filter(Boolean)
+        .join(" · ");
+
     return (
         <footer className="mt-auto border-t border-border/80 bg-muted/30">
             <div className="mx-auto max-w-6xl px-4 py-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <div className="flex items-center gap-2 font-semibold text-lg">
                         <Package className="size-5 text-primary" />
-                        Network Shop
+                        {COMPANY_DETAILS.brandName}
                     </div>
                     <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-                        IT hardware — laptops, desktops, printers, CCTV, monitors, and components. Same session as your
-                        customer portal and service team.
+                        {COMPANY_DETAILS.description} Same session as your customer portal and service team.
                     </p>
                 </div>
                 <div>
                     <h4 className="text-sm font-semibold uppercase tracking-wide">Shop</h4>
                     <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        <li>
+                            <Link href="/" className="hover:text-foreground">
+                                Home
+                            </Link>
+                        </li>
                         <li>
                             <Link href="/shop" className="hover:text-foreground">
                                 All products
@@ -65,17 +79,17 @@ export default function ShopFooter() {
                     <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
                         <li className="flex gap-2">
                             <MapPin className="size-4 shrink-0 mt-0.5" />
-                            <span>India — service &amp; logistics as per your org policy</span>
+                            <span>{addressLine}</span>
                         </li>
                         <li className="flex gap-2">
                             <Mail className="size-4 shrink-0 mt-0.5" />
-                            <span>support@yourcompany.in</span>
+                            <span>{COMPANY_DETAILS.contact.supportEmail}</span>
                         </li>
                     </ul>
                 </div>
             </div>
             <div className="border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
-                © {new Date().getFullYear()} Network Shop demo · Prices in ₹ · Payments via Razorpay when configured
+                © {new Date().getFullYear()} {COMPANY_DETAILS.brandName} · Prices in {COMPANY_DETAILS.currencySymbol} · Payments via Razorpay when configured
             </div>
         </footer>
     );

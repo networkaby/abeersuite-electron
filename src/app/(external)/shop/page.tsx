@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { shopProductToPublic } from "@/lib/shop/product-public";
-import ShopHero from "@/modules/external/shop/ShopHero";
+import ShopPageBanner from "@/modules/external/shop/ShopPageBanner";
+import TrustStrip from "@/modules/external/store/TrustStrip";
+import BrandStrip from "@/modules/external/store/BrandStrip";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 
 export default async function ShopCatalogPage({
@@ -17,15 +19,28 @@ export default async function ShopCatalogPage({
     const products = rows.map(shopProductToPublic);
     const cats = [...new Set(products.map((p) => p.category))];
 
+    const categoryPills = cats
+        .map((name) => ({
+            name,
+            count: products.filter((p) => p.category === name).length,
+        }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
     return (
         <>
-            <ShopHero categories={cats} />
+            <ShopPageBanner
+                productCount={products.length}
+                categoryPills={categoryPills}
+                activeQuery={sp.q?.trim() || undefined}
+            />
+            <TrustStrip />
             <ShopCatalogClient
                 products={products}
                 allCategories={cats}
                 initialQuery={sp.q ?? ""}
                 initialCategory={initialCategory}
             />
+            <BrandStrip />
         </>
     );
 }

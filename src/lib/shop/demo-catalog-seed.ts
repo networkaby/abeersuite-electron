@@ -1,7 +1,7 @@
 /**
  * Demo catalog for the storefront — upserted by `src/new-seed.ts`.
  * Positioning: IT hardware reseller — computers, laptops, printers, CCTV, components.
- * Images: Unsplash (hotlink for demos per their guidelines).
+ * Images: Pexels CDN (replace with your own assets for production).
  */
 export type DemoShopProductSeed = {
     slug: string;
@@ -29,10 +29,10 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 5999000,
         badge: "Popular",
         imageUrl:
-            "https://images.unsplash.com/photo-1496181133206-80ce195b668c?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1229861/pexels-photo-1229861.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1496181133206-80ce195b668c?auto=format&fit=crop&w=900&q=80",
-            "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1229861/pexels-photo-1229861.jpeg?auto=compress&cs=tinysrgb&w=900",
+            "https://images.pexels.com/photos/7514838/pexels-photo-7514838.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Display: '14.0″ FHD IPS (1920×1080)',
@@ -53,10 +53,10 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 4399000,
         badge: "Workhorse",
         imageUrl:
-            "https://images.unsplash.com/photo-1587831990711-23ca6441447e?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/256264/pexels-photo-256264.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1587831990711-23ca6441447e?auto=format&fit=crop&w=900&q=80",
-            "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/256264/pexels-photo-256264.jpeg?auto=compress&cs=tinysrgb&w=900",
+            "https://images.pexels.com/photos/3862139/pexels-photo-3862139.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             CPU: "Intel Core i5 (12th/13th gen class)",
@@ -77,10 +77,10 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 5099000,
         badge: "New",
         imageUrl:
-            "https://images.unsplash.com/photo-1587831990711-23ca6441447e?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/256264/pexels-photo-256264.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1587831990711-23ca6441447e?auto=format&fit=crop&w=900&q=80",
-            "https://images.unsplash.com/photo-1527443224154-c849ada854d8?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/256264/pexels-photo-256264.jpeg?auto=compress&cs=tinysrgb&w=900",
+            "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Display: '23.8″ FHD touch (non‑touch option)',
@@ -101,10 +101,10 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 2199000,
         badge: "Bestseller",
         imageUrl:
-            "https://images.unsplash.com/photo-1560472355-539de96252cb?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1560472355-539de96252cb?auto=format&fit=crop&w=900&q=80",
-            "https://images.unsplash.com/photo-1586953208448-b95deabbfd07?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg?auto=compress&cs=tinysrgb&w=900",
+            "https://images.pexels.com/photos/1714341/pexels-photo-1714341.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Functions: "Print / scan / copy",
@@ -125,9 +125,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 2599000,
         badge: "Office",
         imageUrl:
-            "https://images.unsplash.com/photo-1586953208448-b95deabbfd07?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1714341/pexels-photo-1714341.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1586953208448-b95deabbfd07?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1714341/pexels-photo-1714341.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Speed: "Up to 40 ppm",
@@ -148,10 +148,10 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 899900,
         badge: "PoE",
         imageUrl:
-            "https://images.unsplash.com/photo-1557597624-38f159974cff?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/8463140/pexels-photo-8463140.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1557597624-38f159974cff?auto=format&fit=crop&w=900&q=80",
-            "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/8463140/pexels-photo-8463140.jpeg?auto=compress&cs=tinysrgb&w=900",
+            "https://images.pexels.com/photos/2582937/pexels-photo-2582937.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Sensor: "5 MP 1/2.7″",
@@ -172,9 +172,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 1749900,
         badge: "Kit ready",
         imageUrl:
-            "https://images.unsplash.com/photo-1580983710599-14bdf96687aa?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/4302071/pexels-photo-4302071.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1580983710599-14bdf96687aa?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/4302071/pexels-photo-4302071.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Channels: "8 IP (up to 8 MP each)",
@@ -195,9 +195,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 429900,
         badge: null,
         imageUrl:
-            "https://images.unsplash.com/photo-1517430816045-df4b7de11d1d?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/777001/pexels-photo-777001.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1517430816045-df4b7de11d1d?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/777001/pexels-photo-777001.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Capacity: "16 GB",
@@ -218,9 +218,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 849900,
         badge: "Fast ship",
         imageUrl:
-            "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Interface: "PCIe Gen4 ×4 NVMe 1.4",
@@ -241,9 +241,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 749900,
         badge: null,
         imageUrl:
-            "https://images.unsplash.com/photo-1580894894514-741edd882683?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1580894894514-741edd882683?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Output: "650 W continuous",
@@ -264,9 +264,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 1149900,
         badge: "Desk staple",
         imageUrl:
-            "https://images.unsplash.com/photo-1527443224154-c849ada854d8?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1527443224154-c849ada854d8?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Panel: '23.8″ IPS FHD',
@@ -287,9 +287,9 @@ export const DEMO_SHOP_CATALOG: DemoShopProductSeed[] = [
         mrpPaise: 229900,
         badge: null,
         imageUrl:
-            "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/159304/network-cable-ethernet-computer-159304.jpeg?auto=compress&cs=tinysrgb&w=900",
         galleryUrls: [
-            "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=900&q=80",
+            "https://images.pexels.com/photos/159304/network-cable-ethernet-computer-159304.jpeg?auto=compress&cs=tinysrgb&w=900",
         ],
         specs: {
             Standard: "Wi‑Fi 6 (802.11ax)",

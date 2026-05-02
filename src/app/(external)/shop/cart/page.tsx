@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShopCartStore } from "@/store/external/shopCartStore";
@@ -64,7 +64,7 @@ export default function ShopCartPage() {
                                                 className="relative size-24 shrink-0 overflow-hidden rounded-xl border border-border bg-muted sm:size-28"
                                             >
                                                 {img ? (
-                                                    <Image src={img} alt="" fill className="object-cover" sizes="112px" />
+                                                    <ShopRemoteImage src={img} alt="" fill className="object-cover" sizes="112px" />
                                                 ) : null}
                                             </Link>
                                             <div className="min-w-0 flex-1 flex flex-col gap-3">
