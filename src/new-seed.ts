@@ -243,6 +243,7 @@ const PERMISSIONS = [
     { id: "settings:pipelines:create",     label: "Create pipelines",                  module: "admin",       description: "Create pipelines." },
     { id: "settings:pipelines:edit",       label: "Edit pipelines",                    module: "admin",       description: "Edit pipelines." },
     { id: "settings:pipelines:delete",     label: "Delete pipelines",                  module: "admin",       description: "Delete pipelines." },
+    { id: "ecommerce:manage",               label: "Manage ecommerce catalog & orders", module: "admin",       description: "Create shop products and view customer orders." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -618,6 +619,27 @@ async function upsertChartOfAccounts() {
     }
 }
 
+async function ensureShopProducts() {
+    const n = await prisma.shopProduct.count();
+    if (n > 0) return;
+    await prisma.shopProduct.createMany({
+        data: [
+            {
+                name: "Extended warranty (1 year)",
+                description: "Add-on warranty plan for eligible devices.",
+                pricePaise: 49900,
+                isActive: true,
+            },
+            {
+                name: "Pickup & delivery",
+                description: "Doorstep pickup and return within city limits.",
+                pricePaise: 35000,
+                isActive: true,
+            },
+        ],
+    });
+}
+
 async function ensureAdminUser() {
     const password = await bcrypt.hash("admin123", 10);
     await prisma.user.upsert({
@@ -659,6 +681,9 @@ async function main() {
 
     await ensureAdminUser();
     console.log("  Ensured admin user exists (admin@example.com / admin123 on first seed only)");
+
+    await ensureShopProducts();
+    console.log("  Ensured sample shop products when catalog was empty");
 
     console.log("Seed complete.");
 }

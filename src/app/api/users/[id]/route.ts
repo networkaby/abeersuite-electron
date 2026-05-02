@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { requireAuth } from "@/lib/auth-guard";
+import { isStaffEmailDomainAllowed } from "@/lib/auth/staff-email-allowlist";
 import { z } from "zod";
 
 const PROFILE_SELECT = {
@@ -120,6 +121,13 @@ export async function PUT(
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
         }
         const body = parsed.data;
+
+        if (body.email !== undefined && !isStaffEmailDomainAllowed(body.email)) {
+            return NextResponse.json(
+                { error: "Email domain is not allowed for staff accounts" },
+                { status: 400 }
+            );
+        }
 
         // Rank guard when an admin changes someone's role
         if (body.role && isAdmin && !caller.permissions.includes("admin:bypass")) {

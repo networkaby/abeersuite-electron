@@ -14,12 +14,20 @@ export default function Home() {
           </div>
           <span className="font-semibold text-foreground text-lg">ServiceMgmt</span>
         </div>
-        <Link
-          href="/login"
-          className="bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          Sign In
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/portal/login"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg border border-border"
+          >
+            Customer sign in
+          </Link>
+          <Link
+            href="/login"
+            className="bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            Staff sign in
+          </Link>
+        </div>
       </header>
 
       {/* Hero */}
@@ -33,12 +41,26 @@ export default function Home() {
         <p className="text-lg text-muted-foreground max-w-xl mb-10">
           Track every device, customer, and technician in one place. From intake to handoff — nothing falls through the cracks.
         </p>
-        <Link
-          href="/login"
-          className="bg-primary text-primary-foreground px-8 py-3.5 rounded-lg text-base font-semibold hover:bg-primary/90 transition-colors shadow-sm"
-        >
-          Go to Dashboard →
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/portal/login"
+            className="bg-primary text-primary-foreground px-8 py-3.5 rounded-lg text-base font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+          >
+            Customer portal →
+          </Link>
+          <Link
+            href="/shop"
+            className="px-8 py-3.5 rounded-lg text-base font-semibold border border-border hover:bg-muted/60 transition-colors"
+          >
+            Shop
+          </Link>
+          <Link
+            href="/login"
+            className="text-sm text-muted-foreground underline underline-offset-4"
+          >
+            Staff dashboard
+          </Link>
+        </div>
       </main>
 
       {/* Feature strips */}

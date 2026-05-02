@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { isStaffEmailDomainAllowed } from "@/lib/auth/staff-email-allowlist";
 import { z } from "zod";
 
 const createUserSchema = z.object({
@@ -55,6 +56,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user payload" }, { status: 400 });
         }
         const body = parsed.data;
+
+        if (!isStaffEmailDomainAllowed(body.email)) {
+            return NextResponse.json(
+                { error: "Email domain is not allowed for staff accounts" },
+                { status: 400 }
+            );
+        }
 
         let primaryRole = body.role;
         if (!primaryRole) {

@@ -22,6 +22,8 @@ model Customer {
 
   account   Account?
   companies CustomerCompany[]
+  portalCredential CustomerPortalCredential?
+  shopOrders       ShopOrder[]
 
   @@index([phone])
   @@index([email])

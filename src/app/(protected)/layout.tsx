@@ -15,6 +15,11 @@ export default async function ProtectedLayout({
     const session = await auth();
     if (!session) redirect("/login");
 
+    const kind = (session.user as { kind?: string }).kind;
+    if (kind === "customer") {
+        redirect("/portal");
+    }
+
     const user = session.user as {
         id?: string | null;
         name?: string | null;

@@ -46,6 +46,9 @@ export async function requireAuth(): Promise<GuardResult> {
     if (!session || !session.user) {
         return { user: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
     }
+    if ((session.user as { kind?: string }).kind === "customer") {
+        return { user: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
     return { user: resolveFromSession(session.user), response: null };
 }
 

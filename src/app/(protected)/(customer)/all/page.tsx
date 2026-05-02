@@ -110,38 +110,59 @@ export default function AllCustomersPage() {
 
     useEffect(() => {
         if (!selected) {
-            setPersonDetail(null);
-            setCompanyDetail(null);
-            return;
+            const id = window.setTimeout(() => {
+                setPersonDetail(null);
+                setCompanyDetail(null);
+                setDetailLoading(false);
+            }, 0);
+            return () => window.clearTimeout(id);
         }
 
-        setDetailLoading(true);
-        if (selected.kind === "person") {
-            axios.get<PersonDetail>(`/api/customers/${selected.id}`)
+        let cancelled = false;
+        queueMicrotask(() => {
+            if (cancelled) return;
+            setDetailLoading(true);
+            const finishLoading = () => {
+                if (!cancelled) setDetailLoading(false);
+            };
+
+            if (selected.kind === "person") {
+                axios
+                    .get<PersonDetail>(`/api/customers/${selected.id}`)
+                    .then((res) => {
+                        if (cancelled) return;
+                        setPersonDetail(res.data);
+                        setCompanyDetail(null);
+                        setPersonTab("tickets");
+                    })
+                    .catch(() => {
+                        if (cancelled) return;
+                        setPersonDetail(null);
+                        setCompanyDetail(null);
+                    })
+                    .finally(finishLoading);
+                return;
+            }
+
+            axios
+                .get<CompanyDetail>(`/api/companies/${selected.id}`)
                 .then((res) => {
-                    setPersonDetail(res.data);
-                    setCompanyDetail(null);
-                    setPersonTab("tickets");
+                    if (cancelled) return;
+                    setCompanyDetail(res.data);
+                    setPersonDetail(null);
+                    setCompanyTab("contacts");
                 })
                 .catch(() => {
-                    setPersonDetail(null);
+                    if (cancelled) return;
                     setCompanyDetail(null);
+                    setPersonDetail(null);
                 })
-                .finally(() => setDetailLoading(false));
-            return;
-        }
+                .finally(finishLoading);
+        });
 
-        axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
-            .then((res) => {
-                setCompanyDetail(res.data);
-                setPersonDetail(null);
-                setCompanyTab("contacts");
-            })
-            .catch(() => {
-                setCompanyDetail(null);
-                setPersonDetail(null);
-            })
-            .finally(() => setDetailLoading(false));
+        return () => {
+            cancelled = true;
+        };
     }, [selected]);
 
     const merged = useMemo<CombinedListItem[]>(

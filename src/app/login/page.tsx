@@ -20,7 +20,7 @@ export default function LoginPage() {
         setLoading(true);
         setError("");
 
-        const res = await signIn("credentials", {
+        const res = await signIn("credentials-staff", {
             email,
             password,
             redirect: false,

@@ -13,6 +13,9 @@ declare module "next-auth" {
         departmentIds?: string[];
         branchIds?:    string[];
         title?:        string;
+        avatarUrl?:    string;
+        kind?:         "staff" | "customer";
+        customerId?: string;
     }
 
     interface Session {
@@ -28,6 +31,9 @@ declare module "next-auth" {
             departmentIds?: string[];
             branchIds?:     string[];
             title?:         string;
+            avatarUrl?:     string;
+            kind?:          "staff" | "customer";
+            customerId?:  string;
         } & DefaultSession["user"];
     }
 }
@@ -45,5 +51,8 @@ declare module "next-auth/jwt" {
         departmentIds?: string[];
         branchIds?:     string[];
         title?:         string;
+        avatarUrl?:     string;
+        kind?:          "staff" | "customer";
+        customerId?:   string;
     }
 }
