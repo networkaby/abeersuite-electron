@@ -27,8 +27,6 @@ type OrderDetail = {
     id: number;
     status: ShopOrderStatus;
     totalPaise: number;
-    guestEmail: string | null;
-    guestPhone: string | null;
     shippingName: string | null;
     courier: string | null;
     trackingNumber: string | null;
@@ -41,6 +39,10 @@ type OrderDetail = {
         name: string;
         email: string | null;
         phone: string | null;
+    } | null;
+    account: {
+        id: number;
+        company: { id: number; name: string } | null;
     } | null;
     lines: {
         id: number;
@@ -228,6 +230,9 @@ export default function EcommerceOrderDetailPage() {
                                 <p className="font-medium">{order.customer.name}</p>
                                 <p className="text-muted-foreground text-sm">{order.customer.email}</p>
                                 <p className="text-muted-foreground text-sm">{order.customer.phone}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    {order.account?.company ? `Company profile: ${order.account.company.name}` : "Personal profile order"}
+                                </p>
                                 <div className="mt-4">
                                     <CustomerLinkPanel
                                         customerId={order.customer.id}
@@ -239,9 +244,7 @@ export default function EcommerceOrderDetailPage() {
                                 </div>
                             </>
                         ) : (
-                            <p className="text-muted-foreground text-sm">
-                                Guest · {order.guestEmail ?? "—"} · {order.guestPhone ?? "—"}
-                            </p>
+                            <p className="text-muted-foreground text-sm">Customer profile unavailable.</p>
                         )}
                     </div>
 
@@ -251,8 +254,7 @@ export default function EcommerceOrderDetailPage() {
                         status={order.status}
                         lines={order.lines}
                         totalPaise={order.totalPaise}
-                        guestEmail={order.guestEmail}
-                        guestPhone={order.guestPhone}
+                        accountLabel={order.account?.company?.name ?? "Personal"}
                         customerName={order.customer?.name ?? null}
                     />
                 </div>

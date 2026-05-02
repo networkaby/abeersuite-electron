@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
+import PortalAccountSwitcher from "@/modules/external/portal/PortalAccountSwitcher";
+import PortalPasswordCard from "@/modules/external/portal/PortalPasswordCard";
 
 export default async function PortalHomePage() {
     const session = await auth();
@@ -34,6 +36,12 @@ export default async function PortalHomePage() {
                     </>
                 )}
             </div>
+            {isCustomer ? (
+                <div className="space-y-4 rounded-lg border border-border p-4">
+                    <PortalAccountSwitcher />
+                    <PortalPasswordCard />
+                </div>
+            ) : null}
             <p className="text-xs text-muted-foreground">
                 Staff sign-in: <Link className="underline" href="/login">/login</Link>
             </p>

@@ -16,6 +16,8 @@ declare module "next-auth" {
         avatarUrl?:    string;
         kind?:         "staff" | "customer";
         customerId?: string;
+        activeAccountId?: string;
+        activeAccountType?: "personal" | "company";
     }
 
     interface Session {
@@ -34,6 +36,8 @@ declare module "next-auth" {
             avatarUrl?:     string;
             kind?:          "staff" | "customer";
             customerId?:  string;
+            activeAccountId?: string;
+            activeAccountType?: "personal" | "company";
         } & DefaultSession["user"];
     }
 }
@@ -54,5 +58,7 @@ declare module "next-auth/jwt" {
         avatarUrl?:     string;
         kind?:          "staff" | "customer";
         customerId?:   string;
+        activeAccountId?: string;
+        activeAccountType?: "personal" | "company";
     }
 }

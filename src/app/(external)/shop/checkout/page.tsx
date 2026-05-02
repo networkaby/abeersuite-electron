@@ -6,8 +6,6 @@ import axios from "axios";
 import Link from "next/link";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { formatRupeesFromPaise } from "@/lib/money-inr";
@@ -15,14 +13,17 @@ import type { ShopProductPublic } from "@/lib/shop/product-public";
 import { productPath } from "@/lib/shop/product-public";
 import { Badge } from "@/components/ui/badge";
 import { Lock, ShieldCheck } from "lucide-react";
+import PortalAccountSwitcher from "@/modules/external/portal/PortalAccountSwitcher";
+import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
 export default function ShopCheckoutPage() {
     const router = useRouter();
     const lines = useShopCartStore((s) => s.lines);
     const clear = useShopCartStore((s) => s.clear);
+    const activeAccountId = usePortalAccountStore((s) => s.activeAccountId);
+    const accountOptions = usePortalAccountStore((s) => s.options);
+    const accountLoading = usePortalAccountStore((s) => s.loading);
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
-    const [guestEmail, setGuestEmail] = useState("");
-    const [guestPhone, setGuestPhone] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -50,10 +51,14 @@ export default function ShopCheckoutPage() {
         setLoading(true);
         setError("");
         try {
+            if (!activeAccountId) {
+                setError("Sign in and select a profile before placing order.");
+                setLoading(false);
+                return;
+            }
             const { data: order } = await axios.post<{ id: number; totalPaise: number }>("/api/shop/orders", {
                 lines,
-                guestEmail: guestEmail.trim() || undefined,
-                guestPhone: guestPhone.trim() || undefined,
+                accountId: activeAccountId,
             });
             const pay = await axios.post(`/api/shop/orders/${order.id}/razorpay`);
             if (pay.data?.mock) {
@@ -97,35 +102,19 @@ export default function ShopCheckoutPage() {
                 <div className="space-y-8">
                     <Card className="border-border/80 shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-lg">Contact</CardTitle>
+                            <CardTitle className="text-lg">Account profile</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    autoComplete="email"
-                                    placeholder="you@example.com"
-                                    value={guestEmail}
-                                    onChange={(e) => setGuestEmail(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="phone">Mobile</Label>
-                                <Input
-                                    id="phone"
-                                    type="tel"
-                                    autoComplete="tel"
-                                    placeholder="+91 …"
-                                    value={guestPhone}
-                                    onChange={(e) => setGuestPhone(e.target.value)}
-                                />
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                                Optional when logged into the customer portal — we still collect them for guest demo
-                                orders.
-                            </p>
+                            <PortalAccountSwitcher />
+                            {accountOptions.length === 0 && !accountLoading ? (
+                                <p className="text-sm text-muted-foreground">
+                                    No active portal profile found. Please sign in to the customer portal first.
+                                    {" "}
+                                    <Link href="/portal/login" className="text-primary underline">
+                                        Sign in
+                                    </Link>
+                                </p>
+                            ) : null}
                         </CardContent>
                     </Card>
 
@@ -196,7 +185,7 @@ export default function ShopCheckoutPage() {
                             type="button"
                             size="lg"
                             className="w-full rounded-full gap-2 shadow-md"
-                            disabled={loading}
+                            disabled={loading || !activeAccountId}
                             onClick={() => void submit()}
                         >
                             <Lock className="size-4" />

@@ -69,12 +69,21 @@ export async function POST(req: Request) {
         }
 
         if (!customer) {
-            customer = await prisma.customer.create({
-                data: {
-                    name: name || (emailNorm ? emailNorm.split("@")[0] : "Customer") || "Customer",
-                    phone: phoneNorm ? `+91${phoneNorm}` : phone ?? undefined,
-                    email: emailNorm ?? undefined,
-                },
+            customer = await prisma.$transaction(async (tx) => {
+                const created = await tx.customer.create({
+                    data: {
+                        name: name || (emailNorm ? emailNorm.split("@")[0] : "Customer") || "Customer",
+                        phone: phoneNorm ? `+91${phoneNorm}` : phone ?? undefined,
+                        email: emailNorm ?? undefined,
+                    },
+                });
+                await tx.account.create({
+                    data: {
+                        customerId: created.id,
+                        name: created.name,
+                    },
+                });
+                return created;
             });
         } else {
             const data: { name?: string; phone?: string; email?: string } = {};
@@ -85,6 +94,18 @@ export async function POST(req: Request) {
                 customer = await prisma.customer.update({
                     where: { id: customer.id },
                     data,
+                });
+            }
+            const existingAccount = await prisma.account.findUnique({
+                where: { customerId: customer.id },
+                select: { id: true },
+            });
+            if (!existingAccount) {
+                await prisma.account.create({
+                    data: {
+                        customerId: customer.id,
+                        name: customer.name,
+                    },
                 });
             }
         }

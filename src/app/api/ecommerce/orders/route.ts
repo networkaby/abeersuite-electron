@@ -32,8 +32,10 @@ export async function GET(req: Request) {
                 ...(q
                     ? {
                           OR: [
-                              { guestEmail: { contains: q, mode: "insensitive" as const } },
-                              { guestPhone: { contains: q, mode: "insensitive" as const } },
+                              { customer: { name: { contains: q, mode: "insensitive" as const } } },
+                              { customer: { email: { contains: q, mode: "insensitive" as const } } },
+                              { customer: { phone: { contains: q } } },
+                              { account: { company: { name: { contains: q, mode: "insensitive" as const } } } },
                               ...(Number.isFinite(Number(q)) && String(Number(q)) === q.trim()
                                   ? [{ id: Number(q) }]
                                   : []),
@@ -45,6 +47,12 @@ export async function GET(req: Request) {
             take: 500,
             include: {
                 customer: { select: { id: true, name: true, email: true, phone: true } },
+                account: {
+                    select: {
+                        id: true,
+                        company: { select: { id: true, name: true } },
+                    },
+                },
                 lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
             },
         });

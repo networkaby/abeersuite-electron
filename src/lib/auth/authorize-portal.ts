@@ -17,6 +17,8 @@ export type PortalAuthUser = {
     scope: string;
     kind: "customer";
     customerId: string;
+    activeAccountId?: string;
+    activeAccountType?: "personal" | "company";
 };
 
 export async function authorizePortalCredentials(
@@ -49,6 +51,11 @@ export async function authorizePortalCredentials(
     if (!ok) return null;
 
     const c = cred.customer;
+    const personalAccount = await prisma.account.findUnique({
+        where: { customerId: c.id },
+        select: { id: true },
+    });
+
     return {
         id: String(c.id),
         name: c.name,
@@ -60,5 +67,7 @@ export async function authorizePortalCredentials(
         scope: "OWN",
         kind: "customer",
         customerId: String(c.id),
+        activeAccountId: personalAccount ? String(personalAccount.id) : undefined,
+        activeAccountType: "personal",
     };
 }

@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
+import { cookies } from "next/headers";
+import {
+    PORTAL_ACTIVE_ACCOUNT_COOKIE,
+    resolvePortalAccountContext,
+} from "@/lib/auth/portal-account-context";
 
 export default async function PortalTicketsPage() {
     const session = await auth();
@@ -13,11 +18,22 @@ export default async function PortalTicketsPage() {
     const customerId = parseInt((session.user as { customerId?: string }).customerId || "", 10);
     if (!Number.isFinite(customerId)) redirect("/portal/login");
 
+    const cookieStore = await cookies();
+    const rawAccountId = cookieStore.get(PORTAL_ACTIVE_ACCOUNT_COOKIE)?.value;
+    const preferredAccountId = rawAccountId ? Number(rawAccountId) : null;
+    let context: Awaited<ReturnType<typeof resolvePortalAccountContext>>;
+    try {
+        context = await resolvePortalAccountContext(
+            customerId,
+            Number.isFinite(preferredAccountId) ? preferredAccountId : null
+        );
+    } catch {
+        redirect("/portal");
+    }
+
     const tickets = await prisma.ticket.findMany({
         where: {
-            device: {
-                account: { customerId },
-            },
+            device: { accountId: context.active.accountId },
         },
         orderBy: { createdAt: "desc" },
         take: 50,
@@ -37,7 +53,7 @@ export default async function PortalTicketsPage() {
             </div>
             {tickets.length === 0 ? (
                 <p className="text-muted-foreground">
-                    No tickets found for devices linked to your customer account yet.
+                    No tickets found for the active account profile yet.
                 </p>
             ) : (
                 <ul className="space-y-3">

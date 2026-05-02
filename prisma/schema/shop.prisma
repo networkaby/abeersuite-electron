@@ -55,6 +55,7 @@ model ShopOrder {
   id               Int             @id @default(autoincrement())
   status           ShopOrderStatus @default(DRAFT)
   customerId       Int?
+  accountId        Int?
   guestEmail       String?
   guestPhone       String?
   shippingName     String?
@@ -74,11 +75,13 @@ model ShopOrder {
   updatedAt        DateTime        @updatedAt
 
   customer     Customer?    @relation(fields: [customerId], references: [id])
+  account      Account?     @relation(fields: [accountId], references: [id])
   sourceCoupon ShopCoupon?  @relation(fields: [sourceCouponId], references: [id])
   lines        ShopOrderLine[]
   tickets      Ticket[]
 
   @@index([customerId])
+  @@index([accountId])
   @@index([status])
   @@index([sourceCouponId])
 }

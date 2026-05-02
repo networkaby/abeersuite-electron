@@ -38,6 +38,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
                 token.customerId =
                     "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
+                token.activeAccountId =
+                    "activeAccountId" in user && typeof user.activeAccountId === "string"
+                        ? user.activeAccountId
+                        : undefined;
+                token.activeAccountType =
+                    "activeAccountType" in user && (user.activeAccountType === "personal" || user.activeAccountType === "company")
+                        ? user.activeAccountType
+                        : undefined;
             }
             return token;
         },
@@ -58,6 +66,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     avatarUrl?: string;
                     kind?: "staff" | "customer";
                     customerId?: string;
+                    activeAccountId?: string;
+                    activeAccountType?: "personal" | "company";
                 };
                 sessionUser.id = token.id as string;
                 sessionUser.role = typeof token.role === "string" ? token.role : "";
@@ -76,6 +86,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 sessionUser.kind = token.kind === "customer" ? "customer" : "staff";
                 sessionUser.customerId =
                     typeof token.customerId === "string" ? token.customerId : undefined;
+                sessionUser.activeAccountId =
+                    typeof token.activeAccountId === "string" ? token.activeAccountId : undefined;
+                sessionUser.activeAccountType =
+                    token.activeAccountType === "company" || token.activeAccountType === "personal"
+                        ? token.activeAccountType
+                        : undefined;
             }
             return session;
         },

@@ -1,15 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requirePortalCustomer } from "@/lib/portal-auth-guard";
+import { requirePortalAccountContext } from "@/lib/portal-auth-guard";
 
 export async function GET() {
-    const { customerId, response } = await requirePortalCustomer();
+    const { context, response } = await requirePortalAccountContext();
     if (response) return response;
 
     const tickets = await prisma.ticket.findMany({
         where: {
             device: {
-                account: { customerId: customerId! },
+                accountId: context!.active.accountId,
             },
         },
         orderBy: { createdAt: "desc" },

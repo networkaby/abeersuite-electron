@@ -17,8 +17,7 @@ export default function OrderInvoice({
     status,
     lines,
     totalPaise,
-    guestEmail,
-    guestPhone,
+    accountLabel,
     customerName,
 }: {
     orderId: number;
@@ -26,8 +25,7 @@ export default function OrderInvoice({
     status: string;
     lines: Line[];
     totalPaise: number;
-    guestEmail: string | null;
-    guestPhone: string | null;
+    accountLabel: string;
     customerName: string | null;
 }) {
     const print = () => {
@@ -64,8 +62,7 @@ export default function OrderInvoice({
                 <div className="py-4">
                     <p className="font-medium">Bill to</p>
                     <p className="text-muted-foreground">
-                        {customerName ?? "Guest"}{" "}
-                        {guestEmail ? `· ${guestEmail}` : ""} {guestPhone ? `· ${guestPhone}` : ""}
+                        {customerName ?? "Customer"} · {accountLabel}
                     </p>
                 </div>
                 <table className="w-full border-collapse text-left text-sm">

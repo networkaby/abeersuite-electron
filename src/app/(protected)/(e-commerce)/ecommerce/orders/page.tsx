@@ -22,10 +22,9 @@ type OrderRow = {
     id: number;
     status: ShopOrderStatus;
     totalPaise: number;
-    guestEmail: string | null;
-    guestPhone: string | null;
     createdAt: string;
     customer: { id: number; name: string; email: string | null; phone: string | null } | null;
+    account: { id: number; company: { id: number; name: string } | null } | null;
     lines: { id: number; quantity: number; unitPricePaise: number; product: { id: number; name: string } }[];
 };
 
@@ -95,7 +94,7 @@ export default function EcommerceOrdersPage() {
                 <div className="grid min-w-[12rem] flex-1 gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Search</label>
                     <Input
-                        placeholder="Order id, email, phone…"
+                        placeholder="Order id, customer, company…"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                     />
@@ -136,7 +135,7 @@ export default function EcommerceOrdersPage() {
                                     <Badge variant="outline">{o.status}</Badge>
                                 </TableCell>
                                 <TableCell className="max-w-[14rem] truncate text-sm">
-                                    {o.customer ? o.customer.name : o.guestEmail ?? o.guestPhone ?? "—"}
+                                    {o.account?.company?.name ?? o.customer?.name ?? "—"}
                                 </TableCell>
                                 <TableCell className="text-right">{formatRupeesFromPaise(o.totalPaise)}</TableCell>
                                 <TableCell className="text-muted-foreground text-xs whitespace-nowrap">

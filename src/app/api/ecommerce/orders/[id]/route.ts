@@ -15,6 +15,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             where: { id: oid },
             include: {
                 customer: true,
+                account: { include: { company: true } },
                 sourceCoupon: true,
                 lines: { include: { product: true } },
                 tickets: { select: { id: true, status: true, notes: true, createdAt: true } },

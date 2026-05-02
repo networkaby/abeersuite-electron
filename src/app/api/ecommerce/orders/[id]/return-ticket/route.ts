@@ -37,14 +37,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
 
-        let billingAccountId: number | undefined;
-        if (order.customerId) {
-            const acct = await prisma.account.findUnique({
-                where: { customerId: order.customerId },
-                select: { id: true },
-            });
-            billingAccountId = acct?.id;
-        }
+        const billingAccountId = order.accountId ?? undefined;
 
         const device = await prisma.device.create({
             data: {
@@ -63,8 +56,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
                 priority: Priority.MEDIUM,
                 notes:
                     `Return / RMA — shop order #${oid}. ` +
-                    (order.guestEmail ? `Guest email: ${order.guestEmail}. ` : "") +
-                    (order.customer ? `Customer: ${order.customer.name} (#${order.customer.id}).` : ""),
+                    (order.customer ? `Customer: ${order.customer.name} (#${order.customer.id}). ` : "") +
+                    (billingAccountId ? `Account #${billingAccountId}.` : ""),
                 pipelineId: body.pipelineId ?? "P1",
                 billingAccountId: billingAccountId ?? null,
             },

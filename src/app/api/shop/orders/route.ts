@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
+import { resolvePortalAccountContext } from "@/lib/auth/portal-account-context";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -11,8 +12,7 @@ const lineSchema = z.object({
 
 const createOrderSchema = z.object({
     lines: z.array(lineSchema).min(1),
-    guestEmail: z.string().email().optional(),
-    guestPhone: z.string().trim().optional(),
+    accountId: z.coerce.number().int().positive(),
 });
 
 export async function POST(req: Request) {
@@ -24,14 +24,23 @@ export async function POST(req: Request) {
                 { status: 400 }
             );
         }
-        const { lines, guestEmail, guestPhone } = parsed.data;
+        const { lines, accountId } = parsed.data;
 
         const session = await auth();
         const kind = (session?.user as { kind?: string } | undefined)?.kind;
-        const customerId =
-            kind === "customer" && (session?.user as { customerId?: string }).customerId
-                ? parseInt((session!.user as { customerId: string }).customerId, 10)
-                : null;
+        if (!session?.user || kind !== "customer") {
+            return NextResponse.json({ error: "Customer sign-in required" }, { status: 401 });
+        }
+        const sessionUser = session.user as { customerId?: string };
+        const customerId = sessionUser.customerId ? parseInt(sessionUser.customerId, 10) : NaN;
+        if (!Number.isFinite(customerId)) {
+            return NextResponse.json({ error: "Customer sign-in required" }, { status: 401 });
+        }
+
+        const context = await resolvePortalAccountContext(customerId, accountId);
+        if (context.active.accountId !== accountId) {
+            return NextResponse.json({ error: "Account is not linked to this profile" }, { status: 403 });
+        }
 
         const productIds = [...new Set(lines.map((l) => l.productId))];
         const products = await prisma.shopProduct.findMany({
@@ -64,9 +73,10 @@ export async function POST(req: Request) {
             data: {
                 status: "PENDING_PAYMENT",
                 totalPaise,
-                customerId: Number.isFinite(customerId!) ? customerId : null,
-                guestEmail: guestEmail ?? null,
-                guestPhone: guestPhone ?? null,
+                customerId,
+                accountId: context.active.accountId,
+                guestEmail: null,
+                guestPhone: null,
                 lines: {
                     create: resolvedLines.map((r) => ({
                         productId: r.productId,
@@ -81,7 +91,7 @@ export async function POST(req: Request) {
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],
             title: `New shop order #${order.id}`,
-            body: `Total ₹ ${(order.totalPaise / 100).toFixed(2)} · ${guestEmail ?? guestPhone ?? "checkout pending"}`,
+            body: `Total ₹ ${(order.totalPaise / 100).toFixed(2)} · ${context.active.label}`,
             link: `/ecommerce/orders/${order.id}`,
         });
 
