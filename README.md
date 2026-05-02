@@ -15,7 +15,10 @@ finance modules.
 - Tailwind CSS v4 + shadcn/ui
 - Supabase Realtime (`@supabase/supabase-js`) for inbox updates
 - Sentry (`@sentry/nextjs`)
+- Razorpay (payment gateway for shop checkout)
+- Cloudinary (`next-cloudinary`) for product image uploads
 - Zod + React Hook Form
+- Zustand for client-side state (cart, wishlist, compare, quick-ticket)
 - Package manager: `pnpm`
 
 ## Repository Conventions
@@ -32,10 +35,12 @@ See `ARCHITECTURE.md` for full details.
 
 High-level:
 
-- `src/app/(protected)/*` route groups: admin, core, customer, message, repairing, tally
-- `src/app/api/*` route handlers
-- `src/modules/*` domain modules (`core`, `customer`, `message`, `repairing`, `shared`, `tally`)
-- `src/lib/*` infrastructure and auth guards
+- `src/app/(protected)/*` route groups: admin, core, customer, message, repairing, social, tally
+- `src/app/(external)/*` route groups: store homepage, shop (product/cart/checkout), customer portal
+- `src/app/api/*` route handlers (staff API + public shop/portal API)
+- `src/modules/*` domain modules (`core`, `customer`, `external`, `message`, `repairing`, `shared`, `tally`)
+- `src/lib/*` infrastructure, auth guards, shop helpers
+- `src/store/*` Zustand stores (staff: quickTicket, reference; external: cart, wishlist, compare)
 - `prisma/schema/*` split Prisma schema files
 
 ## Finance (Tally Context)
@@ -72,6 +77,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
+
+RAZORPAY_KEY_ID=...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
+NEXT_PUBLIC_RAZORPAY_KEY_ID=...
 
 SENTRY_DSN=...
 NEXT_PUBLIC_SENTRY_DSN=...
@@ -129,4 +139,5 @@ pnpm dev
 
 - `ARCHITECTURE.md` - current architecture and module boundaries
 - `PROJECT_BRAIN.md` - decision log, milestones, roadmap notes
-- `AI_HANDOFF_SUMMARY.md` - historical context from earlier phases
+- `docs/customer-site-shared-imports.md` - cross-boundary import registry for `(external)/` surface
+- `AI_HANDOFF_SUMMARY.md` - historical context from earlier phases (may be missing)

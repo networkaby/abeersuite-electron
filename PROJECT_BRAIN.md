@@ -2,10 +2,10 @@
 
 > Internal service management system for an electronics repair shop — tracking tickets, team handoffs, and customer communication across Front Desk, Technician, Despatch, and Admin roles.
 
-**Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod  
+**Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod, Razorpay (payments)  
 **Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `UI-Update`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-04-30 23:58
+**Last Updated:** 2026-05-02
 
 ---
 
@@ -39,12 +39,59 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | 10 | Permission-based auth + API hardening | ✅ Done | 2026-04-23 |
 | 11 | Pipeline System + CRM Foundation | ✅ Done | 2026-04-24 |
 | 12 | Reporting & Analytics | ⏳ Not Started | — |
+| 13 | External Shop + Customer Portal | ✅ Done | 2026-05-02 |
+| 14 | Social / Staff Profiles + Call Log | ✅ Done | 2026-05-02 |
+| 15 | Ecommerce Admin + Org Chart | ✅ Done | 2026-05-02 |
 
-> **Current Milestone:** Milestone #12 — Reporting & Analytics (nothing in progress yet; codebase is clean)
+> **Current Milestone:** Milestone #12 — Reporting & Analytics (nothing in progress yet; shop/portal/social now stable)
 
 ---
 
 ## ✅ Completed Work
+
+### 2026-05-02 — Ecommerce Admin + Org Chart + Sub-status Groups (Milestone 15)
+
+- **Ecommerce admin pages**: `/ecommerce/products` (staff product management) + `/ecommerce/orders` (staff order list); live under `(admin)` route group with dedicated layout
+- **Ecommerce API**: `GET/POST /api/ecommerce/products` + `GET /api/ecommerce/orders` — staff-side reads of `ShopProduct` / `ShopOrder` records
+- **Org chart**: `(admin)/org-chart/` — visual org tree page; `GET /api/org-chart` returns hierarchical user/department/branch structure
+- **Sub-status groups**: `GET/POST /api/sub-status-groups`, `GET/PATCH/DELETE /api/sub-status-groups/[id]` — groups for organising sub-statuses in settings UI
+- **Serial number search**: `(core)/search-slno/` page + `GET /api/search-slno` + `GET /api/search-slno/[deviceId]` — look up tickets by device serial number
+- **All-customers view**: `(customer)/all/` — unified list combining customers and companies
+- Files: `src/app/(protected)/(admin)/ecommerce/`, `src/app/(protected)/(admin)/org-chart/`, `src/app/(protected)/(core)/search-slno/`, `src/app/(protected)/(customer)/all/`, `src/app/api/ecommerce/`, `src/app/api/org-chart/`, `src/app/api/sub-status-groups/`, `src/app/api/search-slno/`
+
+### 2026-05-02 — Social / Staff Profiles + Call Log (Milestone 14)
+
+- **Social wall**: `social.prisma` — `WallPost` model (`wallUserId`, `authorId`, `body`); `(social)/users/[id]/` profile page shows user info + wall posts feed; users can post to each other's walls
+- **Wall API**: `GET /api/users/[id]/wall` — paginated wall posts for a user; `POST/DELETE /api/wall-posts/[postId]` — create and delete wall posts; `GET /api/posts`, `GET/PATCH/DELETE /api/posts/[id]`, `/api/posts/[id]/holders`, `/api/posts/[id]/holders/[userId]` — internal post/notice board
+- **`(admin)/posts/` page**: staff notice board management with dedicated layout
+- **User activity**: `GET /api/users/[id]/activity` — activity feed for a user's recent actions
+- **Call log**: `(core)/call-log/` page with `CallLogFilters.tsx` client component for filter sidebar; `GET/POST /api/call-logs` + `GET/PATCH /api/call-logs/[id]` — track inbound/outbound customer calls with status, direction, duration, and follow-up amount
+- **Notifications**: `GET /api/notifications` + `GET/PATCH /api/notifications/[id]` — per-user notification list with read/unread state
+- **User password change**: `PATCH /api/users/[id]/password` — self-service or admin password reset endpoint
+- Files: `prisma/schema/social.prisma`, `src/app/(protected)/(social)/users/[id]/`, `src/app/(protected)/(admin)/posts/`, `src/app/(protected)/(core)/call-log/`, `src/app/api/wall-posts/`, `src/app/api/posts/`, `src/app/api/call-logs/`, `src/app/api/notifications/`, `src/app/api/users/[id]/activity/`, `src/app/api/users/[id]/password/`, `src/app/api/users/[id]/wall/`
+
+### 2026-05-02 — External Shop + Customer Portal (Milestone 13)
+
+- **`(external)` app route group**: entire public/customer-facing surface outside the staff app; two sub-surfaces:
+  - **`(store)` homepage**: `/` (store root) — full marketing homepage with hero carousel, deal-of-the-day, featured products row, brand strip, trust strip, category showcase, promo banners; SSR, no auth required
+  - **Shop** (`/shop/*`): product listing page, product detail (`/shop/product/[handle]`), cart, wishlist, compare, checkout, order confirmation (`/shop/order/[id]`); own layout with `ShopHeader` + `ShopFooter`
+  - **Portal** (`/portal/*`): customer login, register, ticket tracking (`/portal/tickets`); own layout with `PortalHeader`
+- **`external` module** (`src/modules/external/`):
+  - `shop/`: `ShopHeader`, `ShopFooter`, `ShopSearchBar`, `ProductCard`, `AddToCartButton`, `ShopCatalogClient`, `ProductDetailTabs`, `ProductGallery`, `ProductPurchasePanel`, `ShopPageBanner`, `ShopRemoteImage`
+  - `store/`: `HeroCarousel`, `DealOfTheDay`, `FeaturedRow`, `BrandStrip`, `TrustStrip`, `CategoryShowcase`, `PromoBanners`
+  - `portal/`: `PortalHeader`
+  - `ExternalRootShell.tsx`: root layout shell wrapping NextAuth `SessionProvider` for the external surface
+- **New Prisma schemas**:
+  - `shop.prisma` — `ShopProduct` (slug, name, pricePaise, mrpPaise, galleryJson, specsJson), `ShopOrder` (status, customerId/guestEmail, razorpayOrderId), `ShopOrderLine`; prices stored as integer paise
+  - `portal.prisma` — `CustomerPortalCredential` (phoneNormalized, emailNormalized, passwordHash, linked to `Customer`)
+- **Shop API**: `GET /api/shop/products`, `GET /api/shop/products/[handle]`, `GET/POST /api/shop/orders`, `POST /api/shop/orders/[id]/razorpay` (create Razorpay order), `POST /api/shop/razorpay/webhook` (payment verification)
+- **Portal API**: `POST /api/portal/register`, `GET /api/portal/tickets`
+- **Razorpay**: integrated for checkout; Razorpay order created server-side, payment verified via signed webhook
+- **Cloudinary upload**: `POST /api/upload-signature` — generates signed upload params for direct browser-to-Cloudinary uploads (used in product image management)
+- **Zustand external stores** (`src/store/external/`): `shopCartStore.ts` (cart items + quantity), `shopWishlistStore.ts` (wishlisted product IDs), `shopCompareStore.ts` (up to 3 products for side-by-side compare); all client-side, localStorage-persisted
+- **Shop lib** (`src/lib/shop/`): `store-content.ts` (homepage content config — hero slides, featured rows, brand list, trust points), `product-public.ts` (public product queries), `demo-catalog-seed.ts` (seed data helper), `demo-reviews.ts` (static review data for UI), `shop-image-placeholder.ts` (fallback image helper)
+- **Portal auth lib** (`src/lib/auth/`): `authorize-portal.ts` (portal credential check + bcrypt), `portal-identifier.ts` (phone/email normalisation), `staff-email-allowlist.ts`, `authorize-staff.ts`; `src/lib/portal-auth-guard.ts` (portal-side `requirePortalAuth` guard); `src/lib/make-permission-layout.tsx` (factory for permission-gated layout wrappers); `src/lib/permission-scope.ts` + `src/lib/ticket-scope.ts`
+- Files: `src/app/(external)/`, `src/modules/external/`, `prisma/schema/shop.prisma`, `prisma/schema/portal.prisma`, `src/store/external/`, `src/lib/shop/`, `src/lib/auth/`, `src/lib/portal-auth-guard.ts`, `src/app/api/shop/`, `src/app/api/portal/`, `src/app/api/upload-signature/`
 
 ### 2026-04-29 — Enterprise RBAC — Rank, Scope, Department, Branch
 
@@ -207,17 +254,22 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 4. **`settings:manage` permission** — needs to be seeded into Admin role so Branches/Departments pages are accessible
 5. **Position model** — named slots in the org chart (future; needed at 50+ users)
 
+### Shop / Portal — next steps
+6. **Portal ticket detail** — customers can see full ticket notes and status history, not just the list
+7. **Shop order history** — logged-in portal users see their past orders
+8. **Razorpay payment status page** — post-payment redirect with real-time status polling
+9. **Product inventory / stock tracking** — `stockQty` on `ShopProduct`; decrement on order confirm
+
 ### Quick UX wins (after reporting)
-3. **U2 — duplicate Name column** in ticket list
-4. **U4 — mobile grid** layout fixes
-5. **U11 — toast label** improvements
-6. **U16 — default date sort** on ticket list (newest first)
+10. **U2 — duplicate Name column** in ticket list
+11. **U4 — mobile grid** layout fixes
+12. **U11 — toast label** improvements
+13. **U16 — default date sort** on ticket list (newest first)
 
 ### Longer term
-7. **Customer portal** — read-only view for customers to track their repair
-8. **SLA alerts** — flag tickets in same status too long (e.g. "Diagnosing 5+ days")
-9. **Branch + Department structure** — `Branch` (physical site) + `Department` (functional group); users + tickets get `branchId`
-10. **ERP Module Foundation** — `AppSetting` model, static module registry, module toggle settings page (archived Phase 5)
+14. **SLA alerts** — flag tickets in same status too long (e.g. "Diagnosing 5+ days")
+15. **Company portal** — B2B version of customer portal; companies see all linked devices/tickets
+16. **ERP Module Foundation** — `AppSetting` model, static module registry, module toggle settings page (archived Phase 5)
 
 ---
 
@@ -230,6 +282,9 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - 2026-04-19 **Phase 5 — ERP Module Foundation (archived)**: `AppSetting` model, static module registry `src/config/modules.ts`, module toggle settings page, module-driven sidebar. Implement when ready to add CRM / Inventory / HR / Finance modules.
 - 2026-04-19 **Branch + Department structure**: `Branch` (physical site) + `Department` (functional group). Users and tickets get `branchId`. `data:all_branches` permission for managers.
 - 2026-04-30 **Tally mapping note**: keep accounting UX familiar to Tally users, but persist data in normalized hierarchy (`AccountType -> AccountGroup -> Account`) instead of hardcoding platform-specific group names into business logic.
+- 2026-05-02 **Shop guest vs. logged-in**: `ShopOrder.customerId` is nullable — guest orders use `guestEmail`/`guestPhone`. Future: merge guest orders on portal login.
+- 2026-05-02 **Prices in paise**: all shop prices stored as integer paise (₹1 = 100 paise); `money-inr.ts` handles formatting. Never store floats for currency.
+- 2026-05-02 **External app split**: `docs/customer-site-shared-imports.md` tracks every import that crosses the `(external)/` boundary, to make future extraction into a separate Next.js app traceable.
 
 ---
 
@@ -249,6 +304,11 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - **`settings:manage` permission**: Branches + Departments pages require this permission. If the Admin role doesn't have it yet, go to Settings → Roles → Admin → Permissions and add `settings:manage`.
 - **Sentry example files**: `src/app/api/sentry-example-api/route.ts` and `src/app/sentry-example-page/page.tsx` were added by Sentry setup — remove before production deploy if not needed.
 - **Module migration incomplete**: Some components may still live in `src/components/` rather than their domain module. Gradual migration is fine; no functional impact.
+- **Razorpay webhook secret**: `RAZORPAY_WEBHOOK_SECRET` must be set in `.env`; webhook handler will reject all events if missing. Verify in Razorpay dashboard → Webhooks.
+- **Portal auth is separate from staff auth**: `CustomerPortalCredential` is a separate credential table; portal users cannot access staff routes and vice versa. Do not reuse staff session cookies for portal.
+- **Shop prices in paise**: `ShopProduct.pricePaise` and `ShopOrder.totalPaise` are integers representing paise. Always use `money-inr.ts` helpers to format for display; never divide by 100 inline.
+- **External stores are client-only**: `shopCartStore`, `shopWishlistStore`, `shopCompareStore` use Zustand with localStorage persistence. They are not synced to the DB — cart is lost on a different browser/device until checkout creates a `ShopOrder`.
+- **`(store)` sub-group**: The store homepage lives under `src/app/(external)/(store)/` as its own route sub-group so it gets a different layout from the shop pages.
 
 ---
 
@@ -285,6 +345,14 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 | Scope on User not Role | `User.scope` (per-user) | Scope on Role | Two people with same role can have different data reach (e.g. local vs regional mgr) |
 | Department cross-branch by default | `Department.branchId` nullable | Dept always branch-scoped | Most departments (HR, IT, Finance) span all branches; branch-specific is the exception |
 | Branch-scoped data filtering deferred | Schema only; no query filters yet | Implement immediately | Core workflows must be stable; branch scoping changes every data query — separate milestone |
+| Shop prices in paise | `pricePaise Int` / `totalPaise Int` | Decimal/float | Avoids floating-point rounding errors; consistent with Indian payment APIs (Razorpay uses paise) |
+| Portal auth separate from staff auth | `CustomerPortalCredential` table + `portal-auth-guard.ts` | Shared NextAuth session | Staff and customer sessions must never be confused; separate credential table + guard keeps boundaries clear |
+| External stores client-only | Zustand + localStorage (no DB sync until checkout) | Server-side cart | Reduces latency; guest users don't need accounts to browse; DB record (`ShopOrder`) created only at checkout |
+| Razorpay webhook verification | HMAC-SHA256 signature check in `/api/shop/razorpay/webhook` | Trust payment response | Webhooks are the authoritative payment confirmation; payment response from client is not trusted |
+| `(external)` as separate route group | `src/app/(external)/` with own layout tree | Same layout as staff app | Customer/shop surface needs completely different headers, auth, and styling from staff app |
+| Store homepage in `(store)` sub-group | `(external)/(store)/` sub-group with own layout | Flat under `(external)/` | Allows different layout (no ShopHeader/Footer) for the marketing homepage vs. the shop pages |
+| Social wall on staff profiles | `WallPost` model; any staff member can post on any other's wall | Post only on own wall | Encourages team communication; wall is visible to all staff |
+| Call log as CRM primitive | `CallLog` records linked to customer optionally | Notes-only approach | Makes calls searchable, filterable, and reportable; foundation for future auto-dialer or CRM pipeline |
 
 ---
 
@@ -295,10 +363,12 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 ```
 src/
 ├── app/
-│   ├── (protected)/
+│   ├── (protected)/                 # Staff app (requires login)
 │   │   ├── layout.tsx               # ProtectedLayout with UniversalCreateMenu
 │   │   ├── (core)/
 │   │   │   ├── assignments/         # Primary work surface; me/team/org scopes
+│   │   │   ├── call-log/            # Inbound/outbound call log with filters
+│   │   │   ├── search-slno/         # Device serial number search
 │   │   │   └── accounts/            # Legacy account pages (bridge)
 │   │   ├── (repairing)/
 │   │   │   ├── dashboard/           # Role-specific dashboards (pipeline context)
@@ -307,32 +377,75 @@ src/
 │   │   │   └── settings/            # pipelines, statuses, sub-statuses, roles
 │   │   ├── (customer)/
 │   │   │   ├── customers/           # Individual customer list + detail
-│   │   │   └── companies/           # Company list + detail
+│   │   │   ├── companies/           # Company list + detail
+│   │   │   └── all/                 # Unified customers + companies view
 │   │   ├── (message)/
 │   │   │   └── inbox/               # Real-time inbox (Supabase Realtime)
 │   │   ├── (tally)/
 │   │   │   └── finance/             # Chart of accounts, journal entries, invoices, reports
+│   │   ├── (social)/
+│   │   │   └── users/[id]/          # Staff profile page with wall posts
 │   │   └── (admin)/
-│   │       └── users/               # User management + permissions modal
+│   │       ├── users/               # User management + permissions modal
+│   │       ├── branches/ + departments/ + roles/  # Org + RBAC settings
+│   │       ├── org-chart/           # Visual org hierarchy
+│   │       ├── posts/               # Internal notice board
+│   │       └── ecommerce/           # Staff product + order management
+│   ├── (external)/                  # Public/customer-facing surface (no staff auth)
+│   │   ├── layout.tsx               # ExternalRootShell (SessionProvider for portal)
+│   │   ├── (store)/                 # Store homepage sub-group
+│   │   │   └── page.tsx             # Marketing homepage (hero, deals, featured, brands)
+│   │   ├── shop/                    # Shop sub-surface (own layout)
+│   │   │   ├── layout.tsx           # ShopHeader + ShopFooter
+│   │   │   ├── page.tsx             # Product listing / catalog
+│   │   │   ├── product/[handle]/    # Product detail (tabs: overview, specs, gallery)
+│   │   │   ├── cart/                # Cart page (Zustand shopCartStore)
+│   │   │   ├── wishlist/            # Wishlist page (Zustand shopWishlistStore)
+│   │   │   ├── compare/             # Side-by-side compare (Zustand shopCompareStore)
+│   │   │   ├── checkout/            # Checkout + Razorpay payment
+│   │   │   └── order/[id]/          # Order confirmation page
+│   │   └── portal/                  # Customer portal sub-surface (own layout)
+│   │       ├── layout.tsx           # PortalHeader
+│   │       ├── page.tsx             # Portal home
+│   │       ├── login/               # Portal login (phone/email + password)
+│   │       ├── register/            # Portal self-registration
+│   │       └── tickets/             # Customer's repair ticket list
 │   ├── api/
 │   │   ├── tickets/[id]/            # GET, PUT, sub-status, warranty, reopen, notes, assign, participants, transfer
 │   │   ├── sub-statuses/            # CRUD + transitions + next (pipeline/warranty filtered)
+│   │   ├── sub-status-groups/       # Group CRUD for sub-status organisation
 │   │   ├── ticket-statuses/         # Main status CRUD + transitions
 │   │   ├── pipelines/               # Pipeline CRUD
 │   │   ├── customers/[id]/          # Customer CRUD
 │   │   ├── companies/[id]/          # Company CRUD + links
 │   │   ├── accounts/[id]/           # Legacy account endpoints + relationships
 │   │   ├── inbox/rooms/             # Room listing + messages (Supabase-backed)
-│   │   ├── users/[id]/              # roles, permissions endpoints
-│   │   └── roles/[id]/              # permissions + labels endpoints
-│   └── login/
-├── modules/                         # Domain modules (introduced 2026-04-27)
+│   │   ├── users/[id]/              # roles, permissions, activity, wall, password endpoints
+│   │   ├── roles/[id]/              # permissions + labels endpoints
+│   │   ├── branches/ + departments/ # Org structure CRUD
+│   │   ├── org-chart/               # Hierarchical org data
+│   │   ├── call-logs/               # Call log CRUD
+│   │   ├── notifications/           # Per-user notification list + mark-read
+│   │   ├── posts/ + wall-posts/     # Notice board + user wall posts
+│   │   ├── search-slno/             # Device serial number search
+│   │   ├── upload-signature/        # Cloudinary signed upload params
+│   │   ├── finance/*                # GL accounts, journal entries, invoices, reports
+│   │   ├── shop/                    # Public shop: products, orders, Razorpay
+│   │   ├── ecommerce/               # Staff ecommerce: products + orders
+│   │   └── portal/                  # Customer portal: register, tickets
+│   └── login/                       # Staff login
+├── modules/                         # Domain modules
 │   ├── core/                        # Shared business logic
 │   ├── customer/                    # Customer + Company components/lib
 │   ├── message/                     # Inbox components + lib/inbox.ts
 │   ├── repairing/                   # Ticket, assignment, dashboard components
 │   ├── tally/                       # Finance/accounting components
-│   └── shared/                      # Cross-module shared utilities
+│   ├── shared/                      # Cross-module shared utilities
+│   └── external/                    # Customer-facing surface components
+│       ├── ExternalRootShell.tsx    # Root layout shell with SessionProvider
+│       ├── shop/                    # ShopHeader, ShopFooter, ProductCard, AddToCartButton, etc.
+│       ├── store/                   # HeroCarousel, DealOfTheDay, FeaturedRow, BrandStrip, etc.
+│       └── portal/                  # PortalHeader
 ├── components/                      # App-level shared components
 │   ├── UniversalCreateMenu.tsx      # Floating "+" create menu in layout
 │   ├── QuickTicketButton.tsx        # Pipeline-aware quick ticket creation
@@ -342,15 +455,45 @@ src/
 ├── lib/
 │   ├── prisma.ts
 │   ├── permissions.ts
-│   ├── auth-guard.ts                # requirePermission() (replaces requireRole)
+│   ├── auth-guard.ts                # requirePermission() for staff routes
+│   ├── portal-auth-guard.ts         # requirePortalAuth() for portal routes
+│   ├── make-permission-layout.tsx   # Factory for permission-gated layout wrappers
+│   ├── permission-scope.ts          # Scope-aware permission helpers
+│   ├── ticket-scope.ts              # Ticket visibility scoping helpers
 │   ├── supabase-client.ts           # Supabase singleton for Realtime
-│   └── format-date.ts / time-ago.ts
+│   ├── money-inr.ts                 # ₹ formatting (paise → display string)
+│   ├── format-date.ts / time-ago.ts
+│   ├── auth/                        # Auth helpers
+│   │   ├── authorize-staff.ts       # Staff credential validation
+│   │   ├── authorize-portal.ts      # Portal credential validation (bcrypt)
+│   │   ├── portal-identifier.ts     # Phone/email normalisation
+│   │   └── staff-email-allowlist.ts
+│   └── shop/                        # Shop helpers
+│       ├── store-content.ts         # Homepage content config (hero, brands, etc.)
+│       ├── product-public.ts        # Public product queries
+│       ├── demo-catalog-seed.ts     # Seed data helper
+│       ├── demo-reviews.ts          # Static review data for UI
+│       └── shop-image-placeholder.ts
+├── store/                           # Zustand stores
+│   ├── quickTicketStore.ts          # Staff quick-ticket creation state
+│   ├── referenceStore.ts            # Reference data cache
+│   └── external/                   # Customer-facing stores (localStorage-persisted)
+│       ├── shopCartStore.ts
+│       ├── shopWishlistStore.ts
+│       └── shopCompareStore.ts
 ├── utils/
 │   └── constants.ts                 # Centralised: COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS, GL types, fmt()
 ├── auth.ts / auth.d.ts
 └── proxy.ts                         # Auth middleware; redirects to /assignments
 prisma/
 ├── schema/                          # Split Prisma schema (*.prisma by domain)
+│   ├── base.prisma                  # Core CRM: Customer, Company, CustomerCompany
+│   ├── users.prisma / rbac.prisma / org.prisma
+│   ├── pipeline.prisma / tickets.prisma / accounts.prisma
+│   ├── finance.prisma / inbox.prisma / enums.prisma
+│   ├── social.prisma                # WallPost model
+│   ├── shop.prisma                  # ShopProduct, ShopOrder, ShopOrderLine
+│   └── portal.prisma                # CustomerPortalCredential
 ├── prisma.config.ts                 # schema path + datasource + seed command
 ├── seed*.ts                         # seed and migration helper scripts
 └── migrate-accounts.ts
