@@ -2,7 +2,9 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 
-export async function GET() {
+const ALLOWED_FOLDERS = ["avatars", "shop/products"] as const;
+
+export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -14,8 +16,13 @@ export async function GET() {
         return NextResponse.json({ error: "Cloudinary not configured" }, { status: 500 });
     }
 
+    const rawFolder = new URL(req.url).searchParams.get("folder");
+    const folder =
+        rawFolder && ALLOWED_FOLDERS.includes(rawFolder as (typeof ALLOWED_FOLDERS)[number])
+            ? rawFolder
+            : "avatars";
+
     const timestamp = Math.round(Date.now() / 1000);
-    const folder    = "avatars";
 
     // Cloudinary signature: alphabetical sort, concat with secret, SHA1
     const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;

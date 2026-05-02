@@ -1,0 +1,90 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth-guard";
+import { Priority } from "@/generated/prisma/enums";
+import { z } from "zod";
+
+const bodySchema = z.object({
+    deviceType: z.string().trim().min(1).default("Shop return"),
+    brand: z.string().trim().min(1),
+    model: z.string().trim().min(1),
+    problem: z.string().trim().min(1),
+    pipelineId: z.string().trim().optional(),
+});
+
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+    const { user, response } = await requirePermission("ecommerce:manage");
+    if (response) return response;
+
+    const { id } = await ctx.params;
+    const oid = parseInt(id, 10);
+    if (!Number.isFinite(oid)) {
+        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    }
+    const body = parsed.data;
+
+    try {
+        const order = await prisma.shopOrder.findUnique({
+            where: { id: oid },
+            include: { customer: true },
+        });
+        if (!order) {
+            return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        }
+
+        let billingAccountId: number | undefined;
+        if (order.customerId) {
+            const acct = await prisma.account.findUnique({
+                where: { customerId: order.customerId },
+                select: { id: true },
+            });
+            billingAccountId = acct?.id;
+        }
+
+        const device = await prisma.device.create({
+            data: {
+                type: body.deviceType,
+                brand: body.brand,
+                model: body.model,
+                problem: body.problem,
+                ...(billingAccountId ? { accountId: billingAccountId } : {}),
+            },
+        });
+
+        const ticket = await prisma.ticket.create({
+            data: {
+                deviceId: device.id,
+                sourceShopOrderId: oid,
+                priority: Priority.MEDIUM,
+                notes:
+                    `Return / RMA — shop order #${oid}. ` +
+                    (order.guestEmail ? `Guest email: ${order.guestEmail}. ` : "") +
+                    (order.customer ? `Customer: ${order.customer.name} (#${order.customer.id}).` : ""),
+                pipelineId: body.pipelineId ?? "P1",
+                billingAccountId: billingAccountId ?? null,
+            },
+            include: {
+                device: true,
+            },
+        });
+
+        await prisma.ticketLog.create({
+            data: {
+                ticketId: ticket.id,
+                status: "S1",
+                note: "Ticket created from ecommerce return",
+                userId: user!.id,
+            },
+        });
+
+        return NextResponse.json(ticket, { status: 201 });
+    } catch (e) {
+        console.error(e);
+        return NextResponse.json({ error: "Failed to create return ticket" }, { status: 500 });
+    }
+}

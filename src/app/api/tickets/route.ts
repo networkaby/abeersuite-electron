@@ -6,6 +6,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
 
 const createTicketSchema = z.object({
+    sourceShopOrderId: z.coerce.number().int().positive().optional(),
     customerId: z.coerce.number().int().positive().optional(),
     companyId: z.coerce.number().int().positive().optional(),
     billingAccountId: z.preprocess(
@@ -28,9 +29,12 @@ const createTicketSchema = z.object({
     warrantyRef: z.string().trim().optional().or(z.literal("")),
     purchaseDate: z.string().trim().optional().or(z.literal("")),
     pipelineId: z.string().trim().optional(),
-}).refine(d => d.customerId || d.companyId || d.billingAccountId, {
-    message: "Either customerId, companyId, or billingAccountId is required",
-});
+}).refine(
+    (d) => Boolean(d.customerId || d.companyId || d.billingAccountId || d.sourceShopOrderId),
+    {
+        message: "Either customerId, companyId, billingAccountId, or sourceShopOrderId is required",
+    }
+);
 
 // GET /api/tickets?pipelineId=P1
 export async function GET(req: Request) {
@@ -114,8 +118,9 @@ export async function POST(req: Request) {
         // Create ticket
         const ticket = await prisma.ticket.create({
             data: {
-                deviceId:         device.id,
-                priority:         body.priority ?? Priority.MEDIUM,
+                deviceId: device.id,
+                ...(body.sourceShopOrderId ? { sourceShopOrderId: body.sourceShopOrderId } : {}),
+                priority: body.priority ?? Priority.MEDIUM,
                 notes:            body.notes || null,
                 accessInfo:       body.accessInfo || null,
                 estimatedCost:    body.estimatedCost ? Number(body.estimatedCost) : null,

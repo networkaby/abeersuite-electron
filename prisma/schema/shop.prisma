@@ -4,7 +4,24 @@ enum ShopOrderStatus {
   DRAFT
   PENDING_PAYMENT
   PAID
+  PACKED
+  SHIPPED
+  DELIVERED
+  REFUNDED
   CANCELLED
+}
+
+model ShopCoupon {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  percentOff Int?
+  flatPaise  Int?
+  isActive   Boolean   @default(true)
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  orders ShopOrder[]
 }
 
 model ShopProduct {
@@ -24,6 +41,9 @@ model ShopProduct {
   galleryJson  Json?
   /// JSON object of label → value for specs tab
   specsJson    Json?
+  /// When null, stock is not enforced (legacy / open catalogue).
+  stock             Int?
+  lowStockThreshold Int  @default(5)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -37,17 +57,30 @@ model ShopOrder {
   customerId       Int?
   guestEmail       String?
   guestPhone       String?
+  shippingName     String?
+  shippingAddress  Json?
   totalPaise       Int             @default(0)
   razorpayOrderId  String?         @unique
   razorpayPaymentId String?
+  courier          String?
+  trackingNumber   String?
+  sourceCouponId   String?
+  paidAt           DateTime?
+  packedAt         DateTime?
+  shippedAt        DateTime?
+  deliveredAt      DateTime?
+  refundedAt       DateTime?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  customer Customer? @relation(fields: [customerId], references: [id])
-  lines    ShopOrderLine[]
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+  sourceCoupon ShopCoupon?  @relation(fields: [sourceCouponId], references: [id])
+  lines        ShopOrderLine[]
+  tickets      Ticket[]
 
   @@index([customerId])
   @@index([status])
+  @@index([sourceCouponId])
 }
 
 model ShopOrderLine {

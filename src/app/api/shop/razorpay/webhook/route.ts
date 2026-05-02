@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { transitionShopOrderStatus } from "@/modules/ecommerce/lib/order-status";
+import { ShopOrderStatus } from "@/generated/prisma/enums";
 
 /**
  * Razorpay webhook stub — verify signature in production before trusting payload.
@@ -13,22 +15,49 @@ export async function POST(req: Request) {
         } catch {
             return NextResponse.json({ ok: false }, { status: 400 });
         }
-        const orderId = parsed.payload?.payment?.entity?.order_id;
+        const rzOrderId = parsed.payload?.payment?.entity?.order_id;
         const paymentId = parsed.payload?.payment?.entity?.id;
-        if (!orderId) {
+        if (!rzOrderId) {
             return NextResponse.json({ ok: true, ignored: true });
         }
 
-        await prisma.shopOrder.updateMany({
-            where: { razorpayOrderId: orderId },
-            data: {
-                status: "PAID",
-                razorpayPaymentId: paymentId ?? null,
-            },
+        const row = await prisma.shopOrder.findFirst({
+            where: { razorpayOrderId: rzOrderId },
+            select: { id: true, status: true },
+        });
+        if (!row) {
+            return NextResponse.json({ ok: true, ignored: true });
+        }
+
+        await prisma.shopOrder.update({
+            where: { id: row.id },
+            data: { razorpayPaymentId: paymentId ?? null },
         });
 
+        if (row.status === ShopOrderStatus.PENDING_PAYMENT) {
+            const actor =
+                (await prisma.user.findFirst({
+                    where: { role: "R1" },
+                    orderBy: { id: "asc" },
+                    select: { id: true },
+                })) ?? (await prisma.user.findFirst({ orderBy: { id: "asc" }, select: { id: true } }));
+
+            if (actor) {
+                try {
+                    await transitionShopOrderStatus({
+                        orderId: row.id,
+                        to: ShopOrderStatus.PAID,
+                        actorUserId: actor.id,
+                    });
+                } catch {
+                    /* already PAID or invalid transition — ignore */
+                }
+            }
+        }
+
         return NextResponse.json({ ok: true });
-    } catch {
+    } catch (e) {
+        console.error(e);
         return NextResponse.json({ ok: false }, { status: 500 });
     }
 }

@@ -18,6 +18,7 @@ import {
     Search,
     ShoppingCart,
     Box,
+    Layers,
     Truck,
     MapPin,
     HelpCircle,
@@ -130,10 +131,12 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "E-Commerce",
         icon: ShoppingCart,
         key: "e-commerce",
-        // disabled: true,
         children: [
-            { label: "Dummy1", icon: Box, href: "/e-commerce/dummy1", disabled: true },
-            { label: "Dummy2", icon: Truck, href: "/e-commerce/dummy2", disabled: true },
+            { label: "Dashboard", icon: ChartArea, href: "/ecommerce", permission: "ecommerce:manage" },
+            { label: "Orders", icon: ClipboardList, href: "/ecommerce/orders", permission: "ecommerce:manage" },
+            { label: "Products", icon: Box, href: "/ecommerce/products", permission: "ecommerce:manage" },
+            { label: "Categories", icon: Layers, href: "/ecommerce/categories", permission: "ecommerce:manage" },
+            { label: "Coupons", icon: BadgePercent, href: "/ecommerce/coupons", permission: "ecommerce:manage" },
         ],
     },
     {
@@ -253,8 +256,6 @@ export const ADMIN_NAV: SettingsNavItem[] = [
     { label: "Branches", href: "/branches", icon: Building2, permission: "settings:manage" },
     { label: "Departments", href: "/departments", icon: Users, permission: "settings:manage" },
     { label: "Posts", href: "/posts", icon: Briefcase, permission: "settings:manage" },
-    { label: "Shop products", href: "/ecommerce/products", icon: ShoppingCart, permission: "ecommerce:manage" },
-    { label: "Shop orders", href: "/ecommerce/orders", icon: ShoppingCart, permission: "ecommerce:manage" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [

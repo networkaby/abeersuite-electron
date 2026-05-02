@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -45,6 +46,12 @@ export async function POST(req: Request) {
             if (!p) {
                 return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
             }
+            if (p.stock !== null && p.stock < l.quantity) {
+                return NextResponse.json(
+                    { error: `Not enough stock for “${p.name}”. Available: ${p.stock}.` },
+                    { status: 400 }
+                );
+            }
             totalPaise += p.pricePaise * l.quantity;
             resolvedLines.push({
                 productId: l.productId,
@@ -69,6 +76,13 @@ export async function POST(req: Request) {
                 },
             },
             select: { id: true, totalPaise: true, status: true },
+        });
+
+        await createSystemInboxNotifications({
+            roleIds: ["R1", "R2"],
+            title: `New shop order #${order.id}`,
+            body: `Total ₹ ${(order.totalPaise / 100).toFixed(2)} · ${guestEmail ?? guestPhone ?? "checkout pending"}`,
+            link: `/ecommerce/orders/${order.id}`,
         });
 
         return NextResponse.json(order);
