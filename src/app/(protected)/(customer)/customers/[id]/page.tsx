@@ -4,6 +4,8 @@ import Link from "next/link";
 import { formatDate } from "@/lib/format-date";
 import { ArrowLeft, User, Building2, Smartphone, Eye } from "lucide-react";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
+import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
+import { auth } from "@/auth";
 
 export default async function CustomerDetailPage({
     params,
@@ -11,12 +13,14 @@ export default async function CustomerDetailPage({
     params: Promise<{ id: string }>;
 }) {
     const { id } = await params;
+    const session = await auth();
+    const permissions = ((session?.user as { permissions?: string[] } | undefined)?.permissions ?? []);
+    const canEmergencyReset = permissions.includes("users:manage") || permissions.includes("admin:bypass");
 
     const customer = await prisma.customer.findUnique({
         where: { id: Number(id) },
         include: {
             account: {
-                select: { id: true },
                 include: {
                     devices: {
                         include: {
@@ -141,6 +145,11 @@ export default async function CustomerDetailPage({
                     )}
                 </div>
             </div>
+            {canEmergencyReset ? (
+                <div className="mt-6">
+                    <CustomerEmergencyPasswordResetCard customerId={customer.id} />
+                </div>
+            ) : null}
         </div>
     );
 }
