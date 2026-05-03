@@ -1,0 +1,40 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth-guard";
+import { invUnitCreateSchema } from "@/lib/inventory/schemas";
+
+export async function GET() {
+    const { response } = await requirePermission("inventory:manage");
+    if (response) return response;
+    try {
+        const rows = await prisma.invUnit.findMany({ orderBy: { code: "asc" } });
+        return NextResponse.json(rows);
+    } catch {
+        return NextResponse.json({ error: "Failed to fetch units" }, { status: 500 });
+    }
+}
+
+export async function POST(req: Request) {
+    const { response } = await requirePermission("inventory:manage");
+    if (response) return response;
+    try {
+        const parsed = invUnitCreateSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+        }
+        const b = parsed.data;
+        const existing = await prisma.invUnit.findUnique({ where: { code: b.code.toUpperCase() } });
+        if (existing) return NextResponse.json({ error: "Unit code already exists" }, { status: 409 });
+        const row = await prisma.invUnit.create({
+            data: {
+                code: b.code.toUpperCase(),
+                label: b.label,
+                decimals: b.decimals ?? 0,
+                isActive: b.isActive ?? true,
+            },
+        });
+        return NextResponse.json(row, { status: 201 });
+    } catch {
+        return NextResponse.json({ error: "Failed to create unit" }, { status: 500 });
+    }
+}

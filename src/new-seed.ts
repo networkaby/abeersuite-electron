@@ -245,6 +245,7 @@ const PERMISSIONS = [
     { id: "settings:pipelines:edit", label: "Edit pipelines", module: "admin", description: "Edit pipelines." },
     { id: "settings:pipelines:delete", label: "Delete pipelines", module: "admin", description: "Delete pipelines." },
     { id: "ecommerce:manage", label: "Manage ecommerce catalog & orders", module: "admin", description: "Create shop products and view customer orders." },
+    { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {

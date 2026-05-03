@@ -21,6 +21,7 @@ Core domain modules are in `src/modules`:
 - `message` - inbox and messaging domain
 - `repairing` - ticket lifecycle, repair workflow UI/domain
 - `tally` - finance and accounting features
+- `inventory` - inventory master data (units, categories, product groups, brands, warranty terms, internal SKU products)
 - `shared` - cross-domain reusable module-level pieces
 - `external` - customer-facing shop, store homepage, and portal UI components
 
@@ -55,8 +56,9 @@ Route groups under `office/` (each maps under `/office/...`):
 - `(social)` — staff profile pages with wall (`/office/users/[id]`)
 - `(tally)` — finance (`/office/finance/...`)
 - `(e-commerce)` — staff shop admin (`/office/ecommerce/...`)
+- `(inventory)` — inventory masters (`/office/inventory/...`): units, categories, groups, brands, warranty terms, products (barcode/EAN/UPC slots; no stock transactions in this module)
 
-Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/finance/invoices`.
+Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/finance/invoices`, `/office/inventory/products`.
 
 Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/assignments`** (or `callbackUrl` when present).
 
@@ -90,6 +92,7 @@ Parentheses route groups do not add URL segments; public URLs stay **`/`**, **`/
 - `/api/search-slno/*` - device serial number search
 - `/api/upload-signature` - Cloudinary signed upload params
 - `/api/ecommerce/*` - staff-side product and order management
+- `/api/inventory/*` - inventory master CRUD (`units`, `categories`, `product-groups`, `brands`, `warranty-terms`, `products`); requires `inventory:manage`. Stock movements and sales are not part of this surface.
 
 ### Customer-facing API
 
@@ -132,6 +135,7 @@ Prisma uses split schema mode:
   - `inbox.prisma` - `ChatRoom`, `ChatMessage`
   - `social.prisma` - `WallPost` (staff wall/profile posts)
   - `shop.prisma` - `ShopProduct`, `ShopOrder`, `ShopOrderLine` (prices in integer paise)
+  - `inventory.prisma` - `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (internal catalogue masters; quantities live in future transaction modules)
   - `portal.prisma` - `CustomerPortalCredential`
   - `enums.prisma` - shared enums
 

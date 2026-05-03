@@ -1,0 +1,102 @@
+// ── Inventory masters (no stock transactions in this module) ─────────────────
+
+model InvUnit {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  label     String
+  decimals  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products InvProduct[]
+}
+
+model InvCategory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String?  @unique
+  parentId  Int?
+  parent    InvCategory?  @relation("InvCategoryHierarchy", fields: [parentId], references: [id])
+  children  InvCategory[] @relation("InvCategoryHierarchy")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products InvProduct[]
+
+  @@index([parentId])
+}
+
+model InvProductGroup {
+  id        Int      @id @default(autoincrement())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products InvProduct[]
+
+  @@unique([name])
+}
+
+model InvBrand {
+  id        Int      @id @default(autoincrement())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products InvProduct[]
+
+  @@unique([name])
+}
+
+model InvWarrantyTerm {
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  durationMonths Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products InvProduct[]
+}
+
+model InvProduct {
+  id              Int     @id @default(autoincrement())
+  sku             String  @unique
+  name            String
+  unitId          Int
+  categoryId      Int?
+  groupId         Int?
+  brandId         Int?
+  warrantyTermId  Int?
+  modelNo         String?
+  barcode1        String?
+  barcode2        String?
+  barcode3        String?
+  ean1            String?
+  ean2            String?
+  ean3            String?
+  upc1            String?
+  upc2            String?
+  upc3            String?
+  notes           String?
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  unit         InvUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  category     InvCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  group        InvProductGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
+
+  @@index([unitId])
+  @@index([categoryId])
+  @@index([groupId])
+  @@index([brandId])
+  @@index([warrantyTermId])
+}

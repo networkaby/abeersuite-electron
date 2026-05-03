@@ -27,6 +27,9 @@ import {
     Gift,
     BadgePercent,
     Wallet,
+    Ruler,
+    Tag,
+    LayoutGrid,
 
 } from "lucide-react";
 
@@ -155,10 +158,14 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Inventory",
         icon: Box,
         key: "inventory",
-        // disabled: true,
         children: [
-            { label: "Dummy1", icon: Box, href: "/office/inventory/dummy1", disabled: true },
-            { label: "Dummy2", icon: Search, href: "/office/inventory/dummy2", disabled: true },
+            { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
+            { label: "Units", icon: Ruler, href: "/office/inventory/units", permission: "inventory:manage" },
+            { label: "Categories", icon: Layers, href: "/office/inventory/categories", permission: "inventory:manage" },
+            { label: "Groups", icon: LayoutGrid, href: "/office/inventory/product-groups", permission: "inventory:manage" },
+            { label: "Brands", icon: Tag, href: "/office/inventory/brands", permission: "inventory:manage" },
+            { label: "Warranty terms", icon: ShieldCheck, href: "/office/inventory/warranty-terms", permission: "inventory:manage" },
+            { label: "Products", icon: Box, href: "/office/inventory/products", permission: "inventory:manage" },
         ],
     },
     {
