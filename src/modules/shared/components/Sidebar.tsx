@@ -61,7 +61,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
         repair: pathname.startsWith("/office/tickets") || pathname.startsWith("/office/service-centers") || pathname.startsWith("/office/dashboard"),
-        tally: false,
+        tally: pathname.startsWith("/office/finance"),
     });
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const [showCreatePerson, setShowCreatePerson] = useState(false);

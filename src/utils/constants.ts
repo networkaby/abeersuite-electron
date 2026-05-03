@@ -145,8 +145,10 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "tally",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Calculator, href: "/office/tally/dummy1", disabled: true },
-            { label: "Dummy2", icon: ClipboardList, href: "/office/tally/dummy2", disabled: true },
+            { label: "Chart of accounts", icon: Wallet, href: "/office/finance/chart-of-accounts" },
+            { label: "Journal entries", icon: FileText, href: "/office/finance/journal-entries" },
+            { label: "Invoices", icon: ClipboardList, href: "/office/finance/invoices" },
+            { label: "Reports", icon: ChartArea, href: "/office/finance/reports" },
         ],
     },
     {
