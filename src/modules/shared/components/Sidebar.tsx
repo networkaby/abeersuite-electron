@@ -52,15 +52,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [collapsed, setCollapsed] = useState(false);
     const [liveAvatar, setLiveAvatar] = useState<string | null | undefined>(undefined);
     const [adminOpen, setAdminOpen] = useState(
-        pathname.startsWith("/users") || pathname.startsWith("/roles") || pathname.startsWith("/org-chart") || pathname.startsWith("/branches") || pathname.startsWith("/departments") || pathname.startsWith("/posts")
+        pathname.startsWith("/office/users") || pathname.startsWith("/office/roles") || pathname.startsWith("/office/org-chart") || pathname.startsWith("/office/branches") || pathname.startsWith("/office/departments") || pathname.startsWith("/office/posts")
     );
-    const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
+    const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/office/settings"));
     const [workspaceOpen, setWorkspaceOpen] = useState<Record<string, boolean>>({
-        customers: pathname.startsWith("/customers") || pathname.startsWith("/companies"),
+        customers: pathname.startsWith("/office/customers") || pathname.startsWith("/office/companies"),
     });
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
-        repair: pathname.startsWith("/tickets") || pathname.startsWith("/service-centers") || pathname.startsWith("/dashboard"),
+        repair: pathname.startsWith("/office/tickets") || pathname.startsWith("/office/service-centers") || pathname.startsWith("/office/dashboard"),
         tally: false,
     });
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
@@ -162,8 +162,8 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const canViewNavItem = (item: NavItem) =>
         item.permission === null || !item.permission || isAdmin || permissions.includes(item.permission);
 
-    const isCreatePersonItem = (href: string) => href === "/customers/new";
-    const isCreateCompanyItem = (href: string) => href === "/companies/new";
+    const isCreatePersonItem = (href: string) => href === "/office/customers/new";
+    const isCreateCompanyItem = (href: string) => href === "/office/companies/new";
     const isDialogNavItem = (href: string) => isCreatePersonItem(href) || isCreateCompanyItem(href);
 
     const isWorkspaceChildActive = (childHref: string, siblings: NavItem[]) => {
@@ -213,7 +213,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             S
                         </div>
                         {user?.name && (
-                            <Link href={user.id ? `/users/${user.id}` : "/users"}>
+                            <Link href={user.id ? `/office/users/${user.id}` : "/office/users"}>
                                 <UserAvatar
                                     avatarUrl={liveAvatar !== undefined ? liveAvatar : user.avatarUrl}
                                     name={user.name}
@@ -227,7 +227,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     <div className="space-y-2.5">
                         <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
                         <Link
-                            href={user?.id ? `/users/${user.id}` : "/users"}
+                            href={user?.id ? `/office/users/${user.id}` : "/office/users"}
                             className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
                         >
                             <UserAvatar
@@ -263,7 +263,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                     {/* Inbox */}
                     <section>
-                        <Link href="/inbox" className={linkClass("/inbox")} title={collapsed ? "Inbox" : ""}>
+                        <Link href="/office/inbox" className={linkClass("/office/inbox")} title={collapsed ? "Inbox" : ""}>
                             <Bell size={17} className="shrink-0" />
                             {!collapsed && (
                                 <>
@@ -533,7 +533,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         type="button"
                                         variant="ghost"
                                         onClick={() => !collapsed && setAdminOpen((o) => !o)}
-                                        className={linkClass("/users")}
+                                        className={linkClass("/office/users")}
                                         title={collapsed ? "Admin" : ""}
                                     >
                                         <ShieldCheck size={17} className="shrink-0" />
@@ -568,7 +568,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         type="button"
                                         variant="ghost"
                                         onClick={() => !collapsed && setSettingsOpen((o) => !o)}
-                                        className={linkClass("/settings")}
+                                        className={linkClass("/office/settings")}
                                         title={collapsed ? "Settings" : ""}
                                     >
                                         <Settings size={17} className="shrink-0" />

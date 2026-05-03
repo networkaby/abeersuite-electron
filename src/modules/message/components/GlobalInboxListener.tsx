@@ -86,7 +86,7 @@ export default function GlobalInboxListener({ currentUserId }: { currentUserId?:
                 );
                 notif.onclick = () => {
                     window.focus();
-                    window.location.href = "/inbox";
+                    window.location.href = "/office/inbox";
                     notif.close();
                 };
             }

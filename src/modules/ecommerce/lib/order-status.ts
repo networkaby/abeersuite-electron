@@ -70,7 +70,7 @@ export async function notifyStaffLowStock(productName: string, productId: number
         roleIds: ["R1", "R2"],
         title: "Low stock alert",
         body: `${productName} (#${productId}) is at ${stock} units.`,
-        link: `/ecommerce/products/${productId}`,
+        link: `/office/ecommerce/products/${productId}`,
     });
 }
 
@@ -175,7 +175,7 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
     });
 
     // Inbox side-effects (after successful commit)
-    const link = `/ecommerce/orders/${orderId}`;
+    const link = `/office/ecommerce/orders/${orderId}`;
     if (result.prevStatus === ShopOrderStatus.PENDING_PAYMENT && input.to === ShopOrderStatus.PAID) {
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],

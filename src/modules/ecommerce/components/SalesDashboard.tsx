@@ -42,7 +42,7 @@ export default function SalesDashboard({
                     </CardHeader>
                     <CardContent>
                         <Button variant="outline" size="sm" asChild>
-                            <Link href="/ecommerce/orders?status=PENDING_PAYMENT">View queue</Link>
+                            <Link href="/office/ecommerce/orders?status=PENDING_PAYMENT">View queue</Link>
                         </Button>
                     </CardContent>
                 </Card>
@@ -67,7 +67,7 @@ export default function SalesDashboard({
                         <ul className="divide-y divide-border rounded-md border border-border">
                             {lowStock.map((p) => (
                                 <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                                    <Link href={`/ecommerce/products/${p.id}`} className="font-medium hover:text-primary">
+                                    <Link href={`/office/ecommerce/products/${p.id}`} className="font-medium hover:text-primary">
                                         {p.name}
                                     </Link>
                                     <span className="text-muted-foreground">{p.stock} left</span>

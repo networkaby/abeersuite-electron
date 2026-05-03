@@ -34,7 +34,7 @@ export default auth((req) => {
     }
 
     if (pathname === "/login") {
-        return NextResponse.redirect(new URL("/assignments", req.url));
+        return NextResponse.redirect(new URL("/office/assignments", req.url));
     }
 
     if (pathname === "/portal/login" && isCustomer) {

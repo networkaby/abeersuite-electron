@@ -87,9 +87,9 @@ export type ButtonBarAction = {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 export const WORKSPACE_NAV: NavItem[] = [
-    { label: "My Assignments", href: "/assignments", icon: ClipboardList, permission: null },
-    { label: "CallLog", href: "/call-log", icon: PhoneCall, permission: null },
-    { label: "Search SLno", href: "/search-slno", icon: Search, permission: null },
+    { label: "My Assignments", href: "/office/assignments", icon: ClipboardList, permission: null },
+    { label: "CallLog", href: "/office/call-log", icon: PhoneCall, permission: null },
+    { label: "Search SLno", href: "/office/search-slno", icon: Search, permission: null },
 
 ];
 
@@ -99,11 +99,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Users,
         key: "customers",
         children: [
-            { label: "New People", href: "/customers/new", icon: Plus, permission: "customers:view" },
-            { label: "New Companies", href: "/companies/new", icon: Plus, permission: "customers:view" },
-            { label: "All Customers", href: "/all", icon: Users, permission: "customers:view" },
-            { label: "People", href: "/customers", icon: Users, permission: "customers:view" },
-            { label: "Companies", href: "/companies", icon: Building2, permission: "customers:view" },
+            { label: "New People", href: "/office/customers/new", icon: Plus, permission: "customers:view" },
+            { label: "New Companies", href: "/office/companies/new", icon: Plus, permission: "customers:view" },
+            { label: "All Customers", href: "/office/all", icon: Users, permission: "customers:view" },
+            { label: "People", href: "/office/customers", icon: Users, permission: "customers:view" },
+            { label: "Companies", href: "/office/companies", icon: Building2, permission: "customers:view" },
 
         ],
     },
@@ -113,8 +113,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "repair",
         children: [
             { label: "New Repair", icon: Plus, action: "new-ticket", pipelineRef: "default" },
-            { label: "All Repair", icon: ClipboardList, href: "/tickets", pipelineRef: "default" },
-            { label: "Service Centers", icon: Building2, href: "/service-centers", permission: "service-centers:view" },
+            { label: "All Repair", icon: ClipboardList, href: "/office/tickets", pipelineRef: "default" },
+            { label: "Service Centers", icon: Building2, href: "/office/service-centers", permission: "service-centers:view" },
         ],
     },
     {
@@ -123,8 +123,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "crm",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: PhoneCall, href: "/crm/dummy1", disabled: true },
-            { label: "Dummy2", icon: Search, href: "/crm/dummy2", disabled: true },
+            { label: "Dummy1", icon: PhoneCall, href: "/office/crm/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/office/crm/dummy2", disabled: true },
         ],
     },
     {
@@ -132,11 +132,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: ShoppingCart,
         key: "e-commerce",
         children: [
-            { label: "Dashboard", icon: ChartArea, href: "/ecommerce", permission: "ecommerce:manage" },
-            { label: "Orders", icon: ClipboardList, href: "/ecommerce/orders", permission: "ecommerce:manage" },
-            { label: "Products", icon: Box, href: "/ecommerce/products", permission: "ecommerce:manage" },
-            { label: "Categories", icon: Layers, href: "/ecommerce/categories", permission: "ecommerce:manage" },
-            { label: "Coupons", icon: BadgePercent, href: "/ecommerce/coupons", permission: "ecommerce:manage" },
+            { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
+            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
+            { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
+            { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
+            { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
         ],
     },
     {
@@ -145,8 +145,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "tally",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Calculator, href: "/tally/dummy1", disabled: true },
-            { label: "Dummy2", icon: ClipboardList, href: "/tally/dummy2", disabled: true },
+            { label: "Dummy1", icon: Calculator, href: "/office/tally/dummy1", disabled: true },
+            { label: "Dummy2", icon: ClipboardList, href: "/office/tally/dummy2", disabled: true },
         ],
     },
     {
@@ -155,8 +155,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "inventory",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Box, href: "/inventory/dummy1", disabled: true },
-            { label: "Dummy2", icon: Search, href: "/inventory/dummy2", disabled: true },
+            { label: "Dummy1", icon: Box, href: "/office/inventory/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/office/inventory/dummy2", disabled: true },
         ],
     },
     {
@@ -165,8 +165,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "hrm",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Users, href: "/hrm/dummy1", disabled: true },
-            { label: "Dummy2", icon: Briefcase, href: "/hrm/dummy2", disabled: true },
+            { label: "Dummy1", icon: Users, href: "/office/hrm/dummy1", disabled: true },
+            { label: "Dummy2", icon: Briefcase, href: "/office/hrm/dummy2", disabled: true },
         ],
     },
     {
@@ -175,8 +175,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "delivery",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: MapPin, href: "/delivery/dummy1", disabled: true },
-            { label: "Dummy2", icon: ClipboardList, href: "/delivery/dummy2", disabled: true },
+            { label: "Dummy1", icon: MapPin, href: "/office/delivery/dummy1", disabled: true },
+            { label: "Dummy2", icon: ClipboardList, href: "/office/delivery/dummy2", disabled: true },
         ],
     },
     {
@@ -185,8 +185,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "field-service",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Wrench, href: "/field-service/dummy1", disabled: true },
-            { label: "Dummy2", icon: PhoneCall, href: "/field-service/dummy2", disabled: true },
+            { label: "Dummy1", icon: Wrench, href: "/office/field-service/dummy1", disabled: true },
+            { label: "Dummy2", icon: PhoneCall, href: "/office/field-service/dummy2", disabled: true },
         ],
     },
     {
@@ -195,8 +195,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "helpdesk",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: HelpCircle, href: "/helpdesk/dummy1", disabled: true },
-            { label: "Dummy2", icon: Bell, href: "/helpdesk/dummy2", disabled: true },
+            { label: "Dummy1", icon: HelpCircle, href: "/office/helpdesk/dummy1", disabled: true },
+            { label: "Dummy2", icon: Bell, href: "/office/helpdesk/dummy2", disabled: true },
         ],
     },
     {
@@ -205,8 +205,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "projects",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: ClipboardList, href: "/projects/dummy1", disabled: true },
-            { label: "Dummy2", icon: GitBranch, href: "/projects/dummy2", disabled: true },
+            { label: "Dummy1", icon: ClipboardList, href: "/office/projects/dummy1", disabled: true },
+            { label: "Dummy2", icon: GitBranch, href: "/office/projects/dummy2", disabled: true },
         ],
     },
     {
@@ -215,8 +215,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "intelligence",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: ChartArea, href: "/intelligence/dummy1", disabled: true },
-            { label: "Dummy2", icon: Search, href: "/intelligence/dummy2", disabled: true },
+            { label: "Dummy1", icon: ChartArea, href: "/office/intelligence/dummy1", disabled: true },
+            { label: "Dummy2", icon: Search, href: "/office/intelligence/dummy2", disabled: true },
         ],
     },
     {
@@ -225,8 +225,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "administration",
         // disabled: true,
         children: [
-            { label: "Dummy1", icon: Building2, href: "/administration/dummy1", disabled: true },
-            { label: "Dummy2", icon: Settings, href: "/administration/dummy2", disabled: true },
+            { label: "Dummy1", icon: Building2, href: "/office/administration/dummy1", disabled: true },
+            { label: "Dummy2", icon: Settings, href: "/office/administration/dummy2", disabled: true },
         ],
     },
     {
@@ -234,8 +234,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: TicketPercent,
         key: "retention",
         children: [
-            { label: "Create Coupon", icon: BadgePercent, href: "/retention/create-coupon", disabled: true },
-            { label: "Loyalty Program", icon: Gift, href: "/retention/loyalty-program", disabled: true },
+            { label: "Create Coupon", icon: BadgePercent, href: "/office/retention/create-coupon", disabled: true },
+            { label: "Loyalty Program", icon: Gift, href: "/office/retention/loyalty-program", disabled: true },
         ],
     },
     {
@@ -243,25 +243,25 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Wallet,
         key: "pricing-strategy",
         children: [
-            { label: "Pricing Rules", icon: Calculator, href: "/pricing-strategy/pricing-rules", disabled: true },
-            { label: "Discount Matrix", icon: FileText, href: "/pricing-strategy/discount-matrix", disabled: true },
+            { label: "Pricing Rules", icon: Calculator, href: "/office/pricing-strategy/pricing-rules", disabled: true },
+            { label: "Discount Matrix", icon: FileText, href: "/office/pricing-strategy/discount-matrix", disabled: true },
         ],
     },
 ];
 
 export const ADMIN_NAV: SettingsNavItem[] = [
-    { label: "Users", href: "/users", icon: UserCog, permission: "users:manage" },
-    { label: "Org Chart", href: "/org-chart", icon: Network, permission: "users:manage" },
-    { label: "Role", href: "/role", icon: ShieldCheck, permission: "role:manage" },
-    { label: "Branches", href: "/branches", icon: Building2, permission: "settings:manage" },
-    { label: "Departments", href: "/departments", icon: Users, permission: "settings:manage" },
-    { label: "Posts", href: "/posts", icon: Briefcase, permission: "settings:manage" },
+    { label: "Users", href: "/office/users", icon: UserCog, permission: "users:manage" },
+    { label: "Org Chart", href: "/office/org-chart", icon: Network, permission: "users:manage" },
+    { label: "Role", href: "/office/role", icon: ShieldCheck, permission: "role:manage" },
+    { label: "Branches", href: "/office/branches", icon: Building2, permission: "settings:manage" },
+    { label: "Departments", href: "/office/departments", icon: Users, permission: "settings:manage" },
+    { label: "Posts", href: "/office/posts", icon: Briefcase, permission: "settings:manage" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
-    { label: "Statuses", href: "/settings/statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Sub-Statuses", href: "/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Pipelines", href: "/settings/pipelines", icon: GitBranch, permission: "settings:pipelines" },
+    { label: "Statuses", href: "/office/settings/statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Sub-Statuses", href: "/office/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Pipelines", href: "/office/settings/pipelines", icon: GitBranch, permission: "settings:pipelines" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

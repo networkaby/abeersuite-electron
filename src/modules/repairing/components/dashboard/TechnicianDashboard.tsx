@@ -153,7 +153,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                     <div className="divide-y divide-border">
                         {filtered.map(t => (
                             <div key={t.id} className={`flex items-center gap-4 px-6 py-3.5 hover:bg-muted/40 ${t.escalated ? "bg-secondary/20" : ""}`}>
-                                <Link href={`/tickets/${t.id}`} className="text-primary font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
+                                <Link href={`/office/tickets/${t.id}`} className="text-primary font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-foreground truncate">
                                         {(t.device.customer ?? t.device.company)?.name} — {t.device.brand} {t.device.model}
@@ -176,7 +176,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                                 </div>
                                 <span className="text-xs text-muted-foreground shrink-0">{t.primaryOwner?.name ?? "Unassigned"}</span>
                                 <span className="text-xs text-muted-foreground shrink-0">{timeAgo(t.updatedAt)}</span>
-                                <Link href={`/tickets/${t.id}`} className="text-muted-foreground hover:text-primary">
+                                <Link href={`/office/tickets/${t.id}`} className="text-muted-foreground hover:text-primary">
                                     <ArrowRight size={16} />
                                 </Link>
                             </div>
@@ -201,7 +201,7 @@ export default function TechnicianDashboard({ name, userId, pipeline, allActiveT
                     <div className="divide-y divide-border">
                         {unassigned.map(t => (
                             <div key={t.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-primary/5">
-                                <Link href={`/tickets/${t.id}`} className="text-primary font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
+                                <Link href={`/office/tickets/${t.id}`} className="text-primary font-semibold text-sm w-10 shrink-0">#{t.id}</Link>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-foreground truncate">
                                         {(t.device.customer ?? t.device.company)?.name} — {t.device.brand} {t.device.model}

@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-    { href: "/ecommerce", label: "Dashboard" },
-    { href: "/ecommerce/orders", label: "Orders" },
-    { href: "/ecommerce/products", label: "Products" },
-    { href: "/ecommerce/categories", label: "Categories" },
-    { href: "/ecommerce/coupons", label: "Coupons" },
+    { href: "/office/ecommerce", label: "Dashboard" },
+    { href: "/office/ecommerce/orders", label: "Orders" },
+    { href: "/office/ecommerce/products", label: "Products" },
+    { href: "/office/ecommerce/categories", label: "Categories" },
+    { href: "/office/ecommerce/coupons", label: "Coupons" },
 ] as const;
 
 export default function AdminTabsNav() {
@@ -19,8 +19,8 @@ export default function AdminTabsNav() {
         <nav className="flex flex-wrap gap-1 border-b border-border pb-3" aria-label="E-commerce admin">
             {tabs.map((t) => {
                 const active =
-                    t.href === "/ecommerce"
-                        ? pathname === "/ecommerce"
+                    t.href === "/office/ecommerce"
+                        ? pathname === "/office/ecommerce"
                         : pathname === t.href || pathname.startsWith(`${t.href}/`);
                 return (
                     <Link

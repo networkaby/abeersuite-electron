@@ -92,7 +92,7 @@ export async function POST(req: Request) {
             roleIds: ["R1", "R2"],
             title: `New shop order #${order.id}`,
             body: `Total ₹ ${(order.totalPaise / 100).toFixed(2)} · ${context.active.label}`,
-            link: `/ecommerce/orders/${order.id}`,
+            link: `/office/ecommerce/orders/${order.id}`,
         });
 
         return NextResponse.json(order);

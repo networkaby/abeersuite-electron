@@ -30,7 +30,7 @@ export default function LoginPage() {
             setError("Invalid email or password");
             setLoading(false);
         } else {
-            router.push("/assignments");
+            router.push("/office/assignments");
         }
     };
 

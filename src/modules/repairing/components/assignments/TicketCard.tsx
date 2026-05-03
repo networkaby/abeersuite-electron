@@ -73,7 +73,7 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                 <div className="shrink-0 mt-0.5">{TYPE_ICON[type]}</div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <Link href={`/tickets/${ticket.id}`} className="text-sm font-semibold text-primary hover:underline">
+                        <Link href={`/office/tickets/${ticket.id}`} className="text-sm font-semibold text-primary hover:underline">
                             Ticket #{ticket.id}
                         </Link>
                         {ticket.ticketSubStatus ? (
@@ -146,7 +146,7 @@ export default function TicketCard({ ticket, type, currentUserId, isPrimaryOwner
                         </>
                     )}
                     <Button asChild size="sm" variant="secondary">
-                        <Link href={`/tickets/${ticket.id}`}>Open</Link>
+                        <Link href={`/office/tickets/${ticket.id}`}>Open</Link>
                     </Button>
                 </div>
             </div>

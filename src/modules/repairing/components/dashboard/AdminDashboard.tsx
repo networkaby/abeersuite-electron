@@ -35,7 +35,7 @@ interface Props {
     ticketsHref?: string;
 }
 
-export default function AdminDashboard({ name, pipeline, allActiveTickets, counts, roles, contextLabel, ticketsHref = "/tickets" }: Props) {
+export default function AdminDashboard({ name, pipeline, allActiveTickets, counts, roles, contextLabel, ticketsHref = "/office/tickets" }: Props) {
     const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
     const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
 
@@ -167,7 +167,7 @@ export default function AdminDashboard({ name, pipeline, allActiveTickets, count
                             {filtered.map(t => (
                                 <tr key={t.id} className={`hover:bg-muted/40 ${t.escalated ? "bg-secondary/20" : ""}`}>
                                     <td className="px-5 py-3">
-                                        <Link href={`/tickets/${t.id}`} className="text-primary font-medium hover:underline">#{t.id}</Link>
+                                        <Link href={`/office/tickets/${t.id}`} className="text-primary font-medium hover:underline">#{t.id}</Link>
                                     </td>
                                     <td className="px-5 py-3 font-medium">{(t.device.customer ?? t.device.company)?.name}</td>
                                     <td className="px-5 py-3 text-muted-foreground">{t.device.brand} {t.device.model}</td>

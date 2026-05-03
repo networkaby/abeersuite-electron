@@ -37,7 +37,7 @@ export default function TicketReopenButton({ ticketId }: Props) {
             toast.success(`New Ticket #${res.data.id} created!`);
             setOpen(false);
             window.open(`/receipt/${res.data.id}`, "_blank");
-            router.push(`/tickets/${res.data.id}`);
+            router.push(`/office/tickets/${res.data.id}`);
         } catch {
             toast.error("Failed to reopen ticket");
         } finally {

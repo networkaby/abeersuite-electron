@@ -208,7 +208,7 @@ export async function PATCH(
                 body: triggerStatusId && fallbackStatus
                     ? `Auto-advanced to ${fallbackStatus.label}. Next action is with ${effectiveNotifyRoles.join(", ")}.`
                     : `Next action is with ${effectiveNotifyRoles.join(", ")}.`,
-                link: `/tickets/${ticketId}`,
+                link: `/office/tickets/${ticketId}`,
             });
         }
 
