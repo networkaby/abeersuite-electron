@@ -30,6 +30,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 interface CompanyListItem {
     id: number;
@@ -213,36 +214,39 @@ export default function CompaniesPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
-                    {filtered.length === 0 ? (
-                        <p className="py-8 text-center text-xs text-muted-foreground">
-                            {search ? "No matches" : "No companies yet"}
-                        </p>
-                    ) : (
-                        filtered.map((company) => (
-                            <Button
-                                key={company.id}
-                                type="button"
-                                variant="ghost"
-                                className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
-                                onClick={() => setSelectedId(company.id)}
-                            >
-                                <div className="flex w-full items-center gap-3 text-left">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                        {initials(company.name)}
+                < ScrollArea className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto">
+                        {filtered.length === 0 ? (
+                            <p className="py-8 text-center text-xs text-muted-foreground">
+                                {search ? "No matches" : "No companies yet"}
+                            </p>
+                        ) : (
+                            filtered.map((company) => (
+                                <Button
+                                    key={company.id}
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
+                                    onClick={() => setSelectedId(company.id)}
+                                >
+                                    <div className="flex w-full items-center gap-3 text-left">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                            {initials(company.name)}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium">{company.name}</p>
+                                            <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
+                                        </div>
+                                        {company._count.customers > 0 && (
+                                            <span className="text-xs text-muted-foreground">{company._count.customers}c</span>
+                                        )}
                                     </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-medium">{company.name}</p>
-                                        <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
-                                    </div>
-                                    {company._count.customers > 0 && (
-                                        <span className="text-xs text-muted-foreground">{company._count.customers}c</span>
-                                    )}
-                                </div>
-                            </Button>
-                        ))
-                    )}
-                </div>
+                                </Button>
+                            ))
+                        )}
+                    </div>
+                    <ScrollBar orientation="vertical" />
+                </ScrollArea>
             </aside>
 
             <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">

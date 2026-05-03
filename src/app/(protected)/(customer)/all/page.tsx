@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/format-date";
 import { PRIORITY_META } from "@/utils/constants";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type PersonRow = {
     id: number;
@@ -215,41 +216,43 @@ export default function AllCustomersPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
-                    {filtered.length === 0 ? (
-                        <p className="py-8 text-center text-xs text-muted-foreground">
-                            {search ? "No matches" : "No customers yet"}
-                        </p>
-                    ) : (
-                        filtered.map((item) => {
-                            const Icon = item.kind === "person" ? User : Building2;
-                            const isActive = selected?.kind === item.kind && selected.id === item.id;
-                            return (
-                                <Button
-                                    key={`${item.kind}-${item.id}`}
-                                    type="button"
-                                    variant="ghost"
-                                    className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${isActive ? "bg-muted" : ""}`}
-                                    onClick={() => setSelected({ kind: item.kind, id: item.id })}
-                                >
-                                    <div className="flex w-full items-center gap-3 text-left">
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                            {initials(item.name)}
+                < ScrollArea className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto">
+                        {filtered.length === 0 ? (
+                            <p className="py-8 text-center text-xs text-muted-foreground">
+                                {search ? "No matches" : "No customers yet"}
+                            </p>
+                        ) : (
+                            filtered.map((item) => {
+                                const Icon = item.kind === "person" ? User : Building2;
+                                const isActive = selected?.kind === item.kind && selected.id === item.id;
+                                return (
+                                    <Button
+                                        key={`${item.kind}-${item.id}`}
+                                        type="button"
+                                        variant="ghost"
+                                        className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${isActive ? "bg-muted" : ""}`}
+                                        onClick={() => setSelected({ kind: item.kind, id: item.id })}
+                                    >
+                                        <div className="flex w-full items-center gap-3 text-left">
+                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                                {initials(item.name)}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-sm font-medium">{item.name}</p>
+                                                <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
+                                            </div>
+                                            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                                <Icon size={10} className="mr-1" />
+                                                {item.kind === "person" ? "Person" : "Company"}
+                                            </Badge>
                                         </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-medium">{item.name}</p>
-                                            <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
-                                        </div>
-                                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                            <Icon size={10} className="mr-1" />
-                                            {item.kind === "person" ? "Person" : "Company"}
-                                        </Badge>
-                                    </div>
-                                </Button>
-                            );
-                        })
-                    )}
-                </div>
+                                    </Button>
+                                );
+                            })
+                        )}
+                    </div>
+                </ScrollArea>
             </aside>
 
             <section className="flex flex-1 bg-muted/30 p-6">

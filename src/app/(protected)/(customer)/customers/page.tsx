@@ -31,7 +31,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 interface CustomerListItem {
     id: number;
     name: string;
@@ -214,36 +214,39 @@ export default function CustomersPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
-                    {filtered.length === 0 ? (
-                        <p className="py-8 text-center text-xs text-muted-foreground">
-                            {search ? "No matches" : "No customers yet"}
-                        </p>
-                    ) : (
-                        filtered.map((customer) => (
-                            <Button
-                                key={customer.id}
-                                type="button"
-                                variant="ghost"
-                                className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
-                                onClick={() => setSelectedId(customer.id)}
-                            >
-                                <div className="flex w-full items-center gap-3 text-left">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                        {initials(customer.name)}
+                < ScrollArea className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto">
+                        {filtered.length === 0 ? (
+                            <p className="py-8 text-center text-xs text-muted-foreground">
+                                {search ? "No matches" : "No customers yet"}
+                            </p>
+                        ) : (
+                            filtered.map((customer) => (
+                                <Button
+                                    key={customer.id}
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
+                                    onClick={() => setSelectedId(customer.id)}
+                                >
+                                    <div className="flex w-full items-center gap-3 text-left">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                            {initials(customer.name)}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium">{customer.name}</p>
+                                            <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
+                                        </div>
+                                        {customer._count.devices > 0 && (
+                                            <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
+                                        )}
                                     </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-medium">{customer.name}</p>
-                                        <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
-                                    </div>
-                                    {customer._count.devices > 0 && (
-                                        <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
-                                    )}
-                                </div>
-                            </Button>
-                        ))
-                    )}
-                </div>
+                                </Button>
+                            ))
+                        )}
+                    </div>
+                    <ScrollBar orientation="vertical" />
+                </ScrollArea>
             </aside>
 
             <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
