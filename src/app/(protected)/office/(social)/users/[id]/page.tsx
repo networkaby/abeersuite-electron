@@ -1516,8 +1516,7 @@ export default function UserProfilePage() {
                             onSaved={updated => setProfile(prev => prev ? { ...prev, ...updated } : prev)} />
                     )}
                     {activeTab === 5 && isSelf && <SecurityTab profileId={profile.id} />}
-                    {activeTab === 6 && (isSelf || isAdmin) && <PermissionsTab profile={profile} isAdmin={isAdmin} />}
-                    {activeTab === 7 && <OrgPositionTab profile={profile} />}
+                    {activeTab === 6 && <OrgPositionTab profile={profile} />}
                 </div>
 
                 {/* Collapsible sidebar — hidden on small screens */}
