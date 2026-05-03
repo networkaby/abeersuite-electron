@@ -12,11 +12,11 @@ export default async function PortalRepairsPage() {
     const session = await auth();
     const kind = (session?.user as { kind?: string } | undefined)?.kind;
     if (!session?.user || kind !== "customer") {
-        redirect("/portal/login?callbackUrl=/portal/repairs");
+        redirect("/login?callbackUrl=/portal/repairs");
     }
 
     const customerId = parseInt((session.user as { customerId?: string }).customerId || "", 10);
-    if (!Number.isFinite(customerId)) redirect("/portal/login");
+    if (!Number.isFinite(customerId)) redirect("/login");
 
     const cookieStore = await cookies();
     const rawAccountId = cookieStore.get(PORTAL_ACTIVE_ACCOUNT_COOKIE)?.value;

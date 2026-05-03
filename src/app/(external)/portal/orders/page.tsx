@@ -15,7 +15,7 @@ export default async function PortalOrdersPage() {
     const session = await auth();
     const kind = (session?.user as { kind?: string } | undefined)?.kind;
     if (!session?.user || kind !== "customer") {
-        redirect("/portal/login?callbackUrl=/portal/orders");
+        redirect("/login?callbackUrl=/portal/orders");
     }
 
     // Phase 2 contract: replace with real orders API bound to active account context.

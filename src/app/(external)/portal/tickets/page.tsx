@@ -5,7 +5,7 @@ export default async function PortalTicketsPage() {
     const session = await auth();
     const kind = (session?.user as { kind?: string } | undefined)?.kind;
     if (!session?.user || kind !== "customer") {
-        redirect("/portal/login?callbackUrl=/portal/tickets");
+        redirect("/login?callbackUrl=/portal/tickets");
     }
     redirect("/portal/repairs");
 }

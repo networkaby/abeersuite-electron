@@ -47,7 +47,7 @@ export default function PortalHeader() {
                     ) : (
                         <>
                             <Button variant="ghost" size="sm" asChild>
-                                <Link href="/portal/login">Sign in</Link>
+                                <Link href="/login">Sign in</Link>
                             </Button>
                             <Button size="sm" asChild>
                                 <Link href="/portal/register">Register</Link>

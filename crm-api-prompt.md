@@ -7,6 +7,7 @@ Use this prompt to generate or review CRM API endpoints in this project.
 - API style: Route handlers under `src/app/api/**/route.ts`.
 - Auth: Respect existing session and permission checks.
 - Currency format in responses/UI examples: `₹`.
+- Staff-facing **pages** use the `/office/*` prefix (e.g. call log UI: `/office/call-log`); **APIs** remain under `/api/...` (unchanged).
 
 ## Prompt
 You are implementing CRM API endpoints for this codebase.

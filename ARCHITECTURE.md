@@ -24,8 +24,8 @@ Core domain modules are in `src/modules`:
 - `shared` - cross-domain reusable module-level pieces
 - `external` - customer-facing shop, store homepage, and portal UI components
 
-App-level cross-cutting components remain in `src/components` (e.g. `Sidebar`,
-`QuickTicketButton`, `UniversalCreateMenu`).
+App-level cross-cutting components live in `src/components` (shadcn UI) and
+`src/modules/shared` (e.g. `Sidebar`, `QuickTicketButton`, `UniversalCreateMenu`).
 
 ### Tally Domain Note
 
@@ -40,15 +40,25 @@ application clarity and long-term extensibility:
 
 ### Staff app — protected (requires staff session)
 
-Pages are grouped under `src/app/(protected)`:
+Staff UI lives under **`src/app/(protected)/office/`** and is served at URLs prefixed with **`/office`** (parentheses folders are still Next.js *route groups* and do not appear in the URL).
 
-- `(admin)` - users, roles, org/admin management, org chart, notice board, ecommerce product/order management
-- `(core)` - assignments, call log, serial number search, cross-role operational views
-- `(customer)` - customers, companies, and unified all-customers view
-- `(message)` - inbox
-- `(repairing)` - dashboard, tickets, service centers, settings
-- `(social)` - staff user profile pages with wall posts
-- `(tally)` - finance flows
+- **`src/app/(protected)/layout.tsx`** — session gate, customer redirect to `/portal`, shared shell (sidebar, etc.)
+- **`src/app/(protected)/office/`** — real path segment **`/office`** in the browser
+
+Route groups under `office/` (each maps under `/office/...`):
+
+- `(admin)` — users, roles, role matrix, branches, departments, org chart, posts, staff ecommerce admin
+- `(core)` — assignments, call log, serial number search, accounts
+- `(customer)` — customers, companies, unified “all” view
+- `(message)` — inbox (`/office/inbox`)
+- `(repairing)` — dashboard, tickets, service centers, repair settings (statuses, pipelines, …)
+- `(social)` — staff profile pages with wall (`/office/users/[id]`)
+- `(tally)` — finance (`/office/finance/...`)
+- `(e-commerce)` — staff shop admin (`/office/ecommerce/...`)
+
+Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/finance/invoices`.
+
+Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/assignments`** (or `callbackUrl` when present).
 
 ### External surface — public/customer-facing
 
@@ -56,9 +66,9 @@ Pages are grouped under `src/app/(external)`:
 
 - `(store)` - marketing store homepage (hero, deals, featured products, brands)
 - `shop/` - product listing, product detail, cart, wishlist, compare, checkout, order confirmation; uses Razorpay for payment
-- `portal/` - customer login, self-registration, ticket tracking
+- `portal/` - customer hub (register, ticket tracking, etc.). Customer sign-in UI lives at **`/login`** (not under `/portal`); **`/portal/login`** redirects to **`/login`** for bookmarks.
 
-Route groups organize code without changing public URL structure.
+Parentheses route groups do not add URL segments; public URLs stay **`/`**, **`/shop/*`**, **`/portal/*`** (separate from **`/office/*`**).
 
 ## 4) API Topology
 
@@ -97,6 +107,7 @@ enforced via guard helpers from `src/lib` (staff: `requirePermission`; portal: `
 ### Staff auth
 
 - NextAuth config lives in `src/auth.ts` (`Credentials` provider + JWT strategy).
+- Staff credentials provider: `credentials-staff`; staff login page: **`/staff/login`** (`src/app/staff/login/page.tsx`). After successful staff login, navigation lands on **`/office/assignments`** (or `callbackUrl`) — see `src/proxy.ts`.
 - Sessions include role and permission context (rank, scope, branch, department) for server/UI decisions.
 - API endpoints use `requireAuth` for authenticated access and `requirePermission` for fine-grained authorization.
 - Current direction is permission-driven authorization rather than role-name checks.
@@ -104,7 +115,7 @@ enforced via guard helpers from `src/lib` (staff: `requirePermission`; portal: `
 ### Portal (customer) auth
 
 - Separate credential table: `CustomerPortalCredential` (linked to `Customer`).
-- Portal login validates phone/email + bcrypt password via `src/lib/auth/authorize-portal.ts`.
+- Customer sign-in page: **`/login`** (`src/app/(external)/login/page.tsx`); NextAuth default `pages.signIn` in `src/auth.ts` is **`/login`**. Portal credentials use `credentials-portal`; validation in `src/lib/auth/authorize-portal.ts`.
 - Portal routes are guarded by `src/lib/portal-auth-guard.ts` (`requirePortalAuth`).
 - Portal and staff sessions are completely independent — no crossover.
 
@@ -184,7 +195,7 @@ are tracked in `docs/customer-site-shared-imports.md` to make future extraction 
 
 ## 11) Documentation Boundaries
 
-- Use this file for code-current architecture.
+- Use this file for code-current architecture (including **`/office/*`** staff URLs).
 - Use `PROJECT_BRAIN.md` for milestones, decisions, and roadmap.
 - Use `docs/customer-site-shared-imports.md` to track cross-boundary imports from `(external)/`.
 - Use `AI_HANDOFF_SUMMARY.md` as historical context from earlier iterations (file may be missing).

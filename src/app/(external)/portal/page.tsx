@@ -56,7 +56,7 @@ export default async function PortalHomePage() {
                         ) : (
                             <>
                                 <Button asChild className="gap-1.5">
-                                    <Link href="/portal/login">
+                                    <Link href="/login">
                                         Sign in
                                         <ArrowRight className="size-4" />
                                     </Link>
@@ -91,7 +91,7 @@ export default async function PortalHomePage() {
                 </section>
             ) : null}
             <p className="text-xs text-muted-foreground px-1 pb-2">
-                Staff sign-in: <Link className="underline" href="/login">/login</Link>
+                Staff sign-in: <Link className="underline" href="/staff/login">/staff/login</Link>
             </p>
         </main>
     );

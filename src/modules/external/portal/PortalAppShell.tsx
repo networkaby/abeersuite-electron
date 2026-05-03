@@ -36,7 +36,7 @@ const NAV_ITEMS = [
 ] as const;
 
 function isPortalAuthPage(pathname: string) {
-    return pathname === "/portal/login" || pathname === "/portal/register";
+    return pathname === "/portal/register";
 }
 
 function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
@@ -118,7 +118,7 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                             </Button>
                         ) : (
                             <Button variant="outline" size="sm" asChild>
-                                <Link href="/portal/login">Sign in</Link>
+                                <Link href="/login">Sign in</Link>
                             </Button>
                         )}
                     </div>

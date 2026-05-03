@@ -10,7 +10,7 @@ export default async function PortalCouponsPage() {
     const session = await auth();
     const kind = (session?.user as { kind?: string } | undefined)?.kind;
     if (!session?.user || kind !== "customer") {
-        redirect("/portal/login?callbackUrl=/portal/coupons");
+        redirect("/login?callbackUrl=/portal/coupons");
     }
 
     // Phase 2 contract: replace with customer coupon entitlement API.

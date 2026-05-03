@@ -57,7 +57,7 @@ export default function ShopHeader() {
                                     <Link href="/portal">Customer portal</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
-                                    <Link href="/portal/login">Sign in</Link>
+                                    <Link href="/login">Sign in</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -74,7 +74,7 @@ export default function ShopHeader() {
 
                     <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
                         <Button variant="ghost" size="sm" className="hidden h-9 touch-manipulation sm:inline-flex" asChild>
-                            <Link href="/portal/login">Sign in</Link>
+                            <Link href="/login">Sign in</Link>
                         </Button>
                         <Button variant="ghost" asChild className={iconBtn} aria-label="Wishlist">
                             <Link href="/shop/wishlist" className="text-foreground">

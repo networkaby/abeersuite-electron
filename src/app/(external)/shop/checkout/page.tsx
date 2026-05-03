@@ -110,7 +110,7 @@ export default function ShopCheckoutPage() {
                                 <p className="text-sm text-muted-foreground">
                                     No active portal profile found. Please sign in to the customer portal first.
                                     {" "}
-                                    <Link href="/portal/login" className="text-primary underline">
+                                    <Link href="/login" className="text-primary underline">
                                         Sign in
                                     </Link>
                                 </p>

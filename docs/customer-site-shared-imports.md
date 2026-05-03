@@ -1,5 +1,7 @@
 # Customer site / external surface — shared imports registry
 
+**URL reminder:** Customer/shop pages live at **`/`**, **`/shop/*`**, **`/portal/*`**. Staff pages live under **`/office/*`** (`src/app/(protected)/office/`) and are out of scope for this registry unless they import from `(external)`.
+
 When `src/app/(external)/**` or `src/modules/external/**` imports **pre-existing** code outside those trees, add a row here so splitting into a separate customer app is traceable.
 
 | External file | Existing import path | Type | Reason | Split strategy |
@@ -77,7 +79,7 @@ When `src/app/(external)/**` or `src/modules/external/**` imports **pre-existing
 | `src/app/(external)/shop/order/[id]/page.tsx` | `@/components/ui/button` | shadcn | UI | keep |
 | `src/app/(external)/portal/page.tsx` | `@/auth` | server | SSR session check | extract auth types |
 | `src/app/(external)/portal/page.tsx` | `@/components/ui/button` | shadcn | UI | keep |
-| `src/app/(external)/portal/login/page.tsx` | `@/components/ui/*` | shadcn | Forms | keep |
+| `src/app/(external)/login/page.tsx` | `@/components/ui/*` | shadcn | Customer portal credentials form | keep |
 | `src/app/(external)/portal/register/page.tsx` | `@/components/ui/*` | shadcn | Forms | keep |
 | `src/app/(external)/portal/tickets/page.tsx` | `@/auth` | server | SSR session + customer lookup | extract auth types |
 | `src/app/(external)/portal/tickets/page.tsx` | `@/lib/prisma` | server | SSR ticket fetch | extract `packages/db` |

@@ -194,7 +194,7 @@ export default function InboxModule({
             new CustomEvent("inbox:active-room", { detail: { roomId: activeRoomId || null } })
         );
         return () => {
-            // On unmount (user left /inbox), clear the active room
+            // On unmount (user left /office/inbox), clear the active room
             window.dispatchEvent(
                 new CustomEvent("inbox:active-room", { detail: { roomId: null } })
             );

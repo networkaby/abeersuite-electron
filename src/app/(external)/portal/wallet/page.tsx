@@ -14,7 +14,7 @@ export default async function PortalWalletPage() {
     const session = await auth();
     const kind = (session?.user as { kind?: string } | undefined)?.kind;
     if (!session?.user || kind !== "customer") {
-        redirect("/portal/login?callbackUrl=/portal/wallet");
+        redirect("/login?callbackUrl=/portal/wallet");
     }
 
     // Phase 2 contract: replace with wallet ledger API and live balance.

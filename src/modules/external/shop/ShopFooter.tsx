@@ -58,7 +58,7 @@ export default function ShopFooter() {
                     <h4 className="text-sm font-semibold uppercase tracking-wide">Account</h4>
                     <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                         <li>
-                            <Link href="/portal/login" className="hover:text-foreground">
+                            <Link href="/login" className="hover:text-foreground">
                                 Customer sign in
                             </Link>
                         </li>
@@ -68,7 +68,7 @@ export default function ShopFooter() {
                             </Link>
                         </li>
                         <li>
-                            <Link href="/login" className="hover:text-foreground">
+                            <Link href="/staff/login" className="hover:text-foreground">
                                 Staff sign in
                             </Link>
                         </li>

@@ -29,7 +29,7 @@ export default function PortalRegisterPage() {
                 password,
                 name: name.trim() || undefined,
             });
-            router.push("/portal/login");
+            router.push("/login");
         } catch (err: unknown) {
             const msg =
                 axios.isAxiosError(err) && err.response?.data && typeof err.response.data === "object"
@@ -99,7 +99,7 @@ export default function PortalRegisterPage() {
                         </Button>
                     </form>
                     <p className="mt-4 text-center text-sm text-muted-foreground">
-                        <Link href="/portal/login" className="text-primary underline">
+                        <Link href="/login" className="text-primary underline">
                             Already have an account?
                         </Link>
                     </p>

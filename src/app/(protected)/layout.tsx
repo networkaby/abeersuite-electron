@@ -13,7 +13,7 @@ export default async function ProtectedLayout({
     children: React.ReactNode;
 }) {
     const session = await auth();
-    if (!session) redirect("/login");
+    if (!session) redirect("/staff/login");
 
     const kind = (session.user as { kind?: string }).kind;
     if (kind === "customer") {

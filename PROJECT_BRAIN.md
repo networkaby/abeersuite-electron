@@ -51,13 +51,13 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ### 2026-05-02 — Ecommerce Admin + Org Chart + Sub-status Groups (Milestone 15)
 
-- **Ecommerce admin pages**: `/ecommerce/products` (staff product management) + `/ecommerce/orders` (staff order list); live under `(admin)` route group with dedicated layout
+- **Ecommerce admin pages**: `/office/ecommerce/products` (staff product management) + `/office/ecommerce/orders` (staff order list); live under `(protected)/office/(e-commerce)/` with dedicated layout
 - **Ecommerce API**: `GET/POST /api/ecommerce/products` + `GET /api/ecommerce/orders` — staff-side reads of `ShopProduct` / `ShopOrder` records
 - **Org chart**: `(admin)/org-chart/` — visual org tree page; `GET /api/org-chart` returns hierarchical user/department/branch structure
 - **Sub-status groups**: `GET/POST /api/sub-status-groups`, `GET/PATCH/DELETE /api/sub-status-groups/[id]` — groups for organising sub-statuses in settings UI
 - **Serial number search**: `(core)/search-slno/` page + `GET /api/search-slno` + `GET /api/search-slno/[deviceId]` — look up tickets by device serial number
 - **All-customers view**: `(customer)/all/` — unified list combining customers and companies
-- Files: `src/app/(protected)/(admin)/ecommerce/`, `src/app/(protected)/(admin)/org-chart/`, `src/app/(protected)/(core)/search-slno/`, `src/app/(protected)/(customer)/all/`, `src/app/api/ecommerce/`, `src/app/api/org-chart/`, `src/app/api/sub-status-groups/`, `src/app/api/search-slno/`
+- Files: `src/app/(protected)/office/(e-commerce)/ecommerce/`, `src/app/(protected)/office/(admin)/org-chart/`, `src/app/(protected)/office/(core)/search-slno/`, `src/app/(protected)/office/(customer)/all/`, `src/app/api/ecommerce/`, `src/app/api/org-chart/`, `src/app/api/sub-status-groups/`, `src/app/api/search-slno/`
 
 ### 2026-05-02 — Social / Staff Profiles + Call Log (Milestone 14)
 
@@ -68,14 +68,14 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **Call log**: `(core)/call-log/` page with `CallLogFilters.tsx` client component for filter sidebar; `GET/POST /api/call-logs` + `GET/PATCH /api/call-logs/[id]` — track inbound/outbound customer calls with status, direction, duration, and follow-up amount
 - **Notifications**: `GET /api/notifications` + `GET/PATCH /api/notifications/[id]` — per-user notification list with read/unread state
 - **User password change**: `PATCH /api/users/[id]/password` — self-service or admin password reset endpoint
-- Files: `prisma/schema/social.prisma`, `src/app/(protected)/(social)/users/[id]/`, `src/app/(protected)/(admin)/posts/`, `src/app/(protected)/(core)/call-log/`, `src/app/api/wall-posts/`, `src/app/api/posts/`, `src/app/api/call-logs/`, `src/app/api/notifications/`, `src/app/api/users/[id]/activity/`, `src/app/api/users/[id]/password/`, `src/app/api/users/[id]/wall/`
+- Files: `prisma/schema/social.prisma`, `src/app/(protected)/office/(social)/users/[id]/`, `src/app/(protected)/office/(admin)/posts/`, `src/app/(protected)/office/(core)/call-log/`, `src/app/api/wall-posts/`, `src/app/api/posts/`, `src/app/api/call-logs/`, `src/app/api/notifications/`, `src/app/api/users/[id]/activity/`, `src/app/api/users/[id]/password/`, `src/app/api/users/[id]/wall/`
 
 ### 2026-05-02 — External Shop + Customer Portal (Milestone 13)
 
 - **`(external)` app route group**: entire public/customer-facing surface outside the staff app; two sub-surfaces:
   - **`(store)` homepage**: `/` (store root) — full marketing homepage with hero carousel, deal-of-the-day, featured products row, brand strip, trust strip, category showcase, promo banners; SSR, no auth required
   - **Shop** (`/shop/*`): product listing page, product detail (`/shop/product/[handle]`), cart, wishlist, compare, checkout, order confirmation (`/shop/order/[id]`); own layout with `ShopHeader` + `ShopFooter`
-  - **Portal** (`/portal/*`): customer login, register, ticket tracking (`/portal/tickets`); own layout with `PortalHeader`
+  - **Portal** (`/portal/*`): customer hub (register, ticket tracking at `/portal/tickets`, etc.); customer **sign-in** is at **`/login`** (staff at **`/staff/login`**); own layout with `PortalHeader` / `PortalAppShell`
 - **`external` module** (`src/modules/external/`):
   - `shop/`: `ShopHeader`, `ShopFooter`, `ShopSearchBar`, `ProductCard`, `AddToCartButton`, `ShopCatalogClient`, `ProductDetailTabs`, `ProductGallery`, `ProductPurchasePanel`, `ShopPageBanner`, `ShopRemoteImage`
   - `store/`: `HeroCarousel`, `DealOfTheDay`, `FeaturedRow`, `BrandStrip`, `TrustStrip`, `CategoryShowcase`, `PromoBanners`
@@ -102,13 +102,13 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **User model**: added `title String?`, `scope UserScope @default(OWN)`, `departmentId`, `branchId`
 - **Auth/JWT**: `rank`, `scope`, `departmentId`, `branchId`, `title` now carried in JWT and session
 - **API**: `/api/branches` + `/api/departments` (full CRUD); `/api/roles` accepts `rank`; `/api/users` includes dept/branch/scope/title in responses
-- **Settings UI**: new `/settings/branches` page (CRUD + activate/deactivate toggle); new `/settings/departments` page (CRUD with branch scope selector)
+- **Settings UI**: `/office/branches` page (CRUD + activate/deactivate toggle); `/office/departments` page (CRUD with branch scope selector)
 - **Roles settings**: rank displayed per role with inline click-to-edit; rank field in new role form
 - **UserForm**: expanded with Title, Department, Branch, Scope, and role rank shown in dropdown
 - **Users list**: added Department, Branch, Scope, Title columns; role shows rank badge
 - **Sidebar**: Branches + Departments added under Settings nav (require `settings:manage` permission)
 - **Seed**: `prisma/seed-org.ts` + SQL seed via `prisma db execute`
-- Files: `prisma/schema/org.prisma`, `prisma/schema/enums.prisma`, `prisma/schema/rbac.prisma`, `prisma/schema/users.prisma`, `src/auth.ts`, `src/auth.d.ts`, `src/lib/permissions.ts`, `src/app/api/branches/`, `src/app/api/departments/`, `src/app/api/roles/`, `src/app/api/users/`, `src/app/(protected)/(repairing)/settings/branches/page.tsx`, `src/app/(protected)/(repairing)/settings/departments/page.tsx`, `src/modules/shared/components/UserForm.tsx`, `src/app/(protected)/(admin)/users/page.tsx`, `src/utils/constants.ts`
+- Files: `prisma/schema/org.prisma`, `prisma/schema/enums.prisma`, `prisma/schema/rbac.prisma`, `prisma/schema/users.prisma`, `src/auth.ts`, `src/auth.d.ts`, `src/lib/permissions.ts`, `src/app/api/branches/`, `src/app/api/departments/`, `src/app/api/roles/`, `src/app/api/users/`, `src/app/(protected)/office/(admin)/branches/page.tsx`, `src/app/(protected)/office/(admin)/departments/page.tsx`, `src/modules/shared/components/UserForm.tsx`, `src/app/(protected)/office/(admin)/users/page.tsx`, `src/utils/constants.ts`
 
 ### 2026-04-28 — Message creation optimisation + Sentry setup
 - **Messaging**: Replaced `createRoomMessage` helper with direct `prisma.chatMessage.create`; concurrent `updatedAt` write to `ChatRoom` in same operation for consistency; removed redundant `ensureCoreRooms` call on `getAccessibleRoom`
@@ -117,11 +117,11 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ### 2026-04-27 — Domain module restructure + route groups
 - **`src/modules/`** introduced: `core`, `customer`, `message`, `repairing`, `tally`, `shared` — domain-specific components and lib files moved into respective modules
-- **Route groups** added inside `(protected)/`: `(admin)`, `(core)`, `(customer)`, `(message)`, `(repairing)`, `(tally)` — pages reorganised but URLs unchanged
+- **Route groups** under `(protected)/office/`: `(admin)`, `(core)`, `(customer)`, `(message)`, `(repairing)`, `(tally)`, `(e-commerce)`, `(social)` — staff URLs are prefixed with `/office` (e.g. `/office/tickets`)
 - `assignments/` moved from `(repairing)` → `(core)` (cross-module work queue, not repairing-specific)
 - **Constants centralised** into `src/utils/constants.ts`: `COLOR_OPTIONS`, `fmt()`, `INVOICE_STATUS_COLORS`, `JOURNAL_STATUS_COLORS`, `GL_TYPE_COLORS`, `GL_TYPE_ORDER`, `GlAccountType`, `WARRANTY_SCOPE_OPTIONS` — all local duplicates removed
 - **Role labels**: Removed hardcoded `ROLE_LABELS`; new `GET /api/roles/labels` endpoint; `StatusUpdateCombined` + `SubStatusUpdate` fetch labels dynamically via `roleLabelMap`
-- Files: `src/modules/*/`, `src/app/(protected)/(*/`, `src/utils/constants.ts`, `src/app/api/roles/labels/route.ts`
+- Files: `src/modules/*/`, `src/app/(protected)/office/*/`, `src/utils/constants.ts`, `src/app/api/roles/labels/route.ts`
 
 ### 2026-04-27 — Neo Brutalism UI theme
 - All `rounded-*` classes removed from every UI element (flat, sharp corners throughout)
@@ -141,21 +141,21 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **Timestamp fix**: Supabase Realtime omits UTC 'Z' suffix — normalised before `new Date()` parse
 - **Personal Inbox removed**: `PERSONAL_INBOX` rooms no longer created; filtered from all queries
 - **Build fix**: `QuickTicketButton.tsx` line 669 — `technician.id` wrapped in `String()` for `SelectItem.value`
-- Files: `src/components/InboxModule.tsx`, `src/lib/supabase-client.ts`, `src/lib/inbox.ts`, `src/app/(protected)/inbox/page.tsx`, `src/components/QuickTicketButton.tsx`, `.env`
+- Files: `src/modules/message/components/InboxModule.tsx`, `src/lib/supabase-client.ts`, `src/modules/message/lib/inbox.ts`, `src/app/(protected)/office/(message)/inbox/page.tsx`, `src/modules/shared/components/QuickTicketButton.tsx`, `.env`
 
 ### 2026-04-26 — Inbox UI overhaul + expandable sidebar nav
 - **InboxModule rewrite**: rooms now grouped by type (System / Personal / Groups / Others) with collapsible sections; proper chat bubble layout (own messages right, others left, system centered); auto-scroll to bottom; Enter to send / Shift+Enter for newline; relative timestamps ("2m ago")
 - **Sidebar Inbox section**: Inbox moved from flat WORKSPACE_NAV link to an expandable accordion — shows System / Personal / Groups sub-sections each with live unread counts fetched from `/api/inbox/rooms`; total unread badge on the Inbox header
 - **Inbox page**: now passes `currentUserId` (from session) to InboxModule so own messages are aligned right; wrapped in Suspense for `useSearchParams` compatibility
-- Files: `src/components/InboxModule.tsx`, `src/components/Sidebar.tsx`, `src/utils/constants.ts`, `src/app/(protected)/inbox/page.tsx`
+- Files: `src/modules/message/components/InboxModule.tsx`, `src/modules/shared/components/Sidebar.tsx`, `src/utils/constants.ts`, `src/app/(protected)/office/(message)/inbox/page.tsx`
 
 ### 2026-04-24 — Customer + Company model split (Milestone 11 finale)
 - **Separated Account → Customer + Company**: `Customer` model (individuals) + `Company` model (businesses) + `CustomerCompany` join table for many-to-many links; `Account` model retained as legacy bridge
-- **New pages**: `/customers/[id]` full detail + `/companies` list + `/companies/[id]` detail
+- **New pages**: `/office/customers/[id]` full detail + `/office/companies` list + `/office/companies/[id]` detail
 - **New API routes**: `GET/PATCH/DELETE /api/customers/[id]`, `GET/POST /api/companies`, `GET/PATCH/DELETE /api/companies/[id]`, `POST /api/companies/[id]/links`
 - **New components**: `CompanyLinkPanel.tsx`, `CustomerLinkPanel.tsx` — manage many-to-many links inline
 - **QuickTicketButton** refactored to support `initialPipelineId` and pipeline-aware creation flow
-- Files: `prisma/schema.prisma`, `src/app/(protected)/customers/`, `src/app/(protected)/companies/`, `src/app/api/customers/`, `src/app/api/companies/`, `src/components/companies/`, `src/components/customers/`
+- Files: `prisma/schema.prisma`, `src/app/(protected)/office/(customer)/customers/`, `src/app/(protected)/office/(customer)/companies/`, `src/app/api/customers/`, `src/app/api/companies/`, `src/modules/customer/`
 
 ### 2026-04-24 — Account model + PipelineTransferModal
 - Introduced `Account` model (type: individual/company, address, taxId) as step toward CRM; `AccountForm.tsx` reusable form
@@ -164,29 +164,29 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - `/api/accounts` + `/api/accounts/[id]` + `/api/accounts/[id]/relationships` endpoints
 
 ### 2026-04-24 — Navigation overhaul: /assignments as default
-- Default post-login redirect: `/assignments` (was `/dashboard`)
+- Default post-login redirect: `/office/assignments` (staff app; was `/assignments` then `/dashboard` historically)
 - Dashboard now accepts pipeline context; tickets page filtered by pipeline
-- `proxy.ts` updated with new redirect target
-- Files: `src/app/(protected)/dashboard/page.tsx`, `src/app/(protected)/tickets/page.tsx`, `src/proxy.ts`, `src/components/Sidebar.tsx`
+- `proxy.ts` updated with redirect target
+- Files: `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, `src/app/(protected)/office/(repairing)/tickets/page.tsx`, `src/proxy.ts`, `src/modules/shared/components/Sidebar.tsx`
 
 ### 2026-04-24 — UniversalCreateMenu + layout
 - `UniversalCreateMenu.tsx` — floating "+" menu in `ProtectedLayout` for quick access to create actions
 - Sidebar dynamically fetches and displays active pipelines (server-side); pipeline switching navigation
-- Files: `src/components/UniversalCreateMenu.tsx`, `src/app/(protected)/layout.tsx`, `src/components/Sidebar.tsx`
+- Files: `src/modules/shared/components/UniversalCreateMenu.tsx`, `src/app/(protected)/layout.tsx`, `src/modules/shared/components/Sidebar.tsx`
 
 ### 2026-04-24 — Pipeline System (Milestone 11 core)
 - `Pipeline` model: `id`, `name`, `label`, `description`, `color`, `isDefault`, `isActive`, `order`
 - `TicketStatus`, `TicketSubStatus`, `Ticket` all have `pipelineId` — statuses/sub-statuses can be scoped to a pipeline
 - `isEntryPoint Boolean @default(false)` added to `TicketStatus`
 - `isEntryPoint` checkbox added to sub-status form in settings UI
-- New settings page `/settings/pipelines` (full CRUD)
+- New settings page `/office/settings/pipelines` (full CRUD)
 - `seed-pipelines.ts`
-- Files: `prisma/schema.prisma`, `src/app/(protected)/settings/pipelines/page.tsx`, `src/app/(protected)/settings/statuses/page.tsx`, `src/app/(protected)/settings/sub-statuses/page.tsx`
+- Files: `prisma/schema.prisma`, `src/app/(protected)/office/(repairing)/settings/pipelines/page.tsx`, `src/app/(protected)/office/(repairing)/settings/statuses/page.tsx`, `src/app/(protected)/office/(repairing)/settings/sub-statuses/page.tsx`
 
 ### 2026-04-23 — Auth type cleanup + role selection fixes
 - `auth.d.ts` import changed to type-only; role selection logic in `RolesSettingsPage` and `UserForm` refactored
 - `UserForm` enforces at least one role selected; uses role IDs from DB properly
-- Files: `src/auth.d.ts`, `src/components/UserForm.tsx`, `src/app/(protected)/settings/roles/page.tsx`
+- Files: `src/auth.d.ts`, `src/modules/shared/components/UserForm.tsx`, `src/app/(protected)/office/(admin)/roles/page.tsx`
 
 ### 2026-04-23 — Zod validation across all API endpoints (Milestone 10)
 - Zod schemas added to: roles, sub-statuses, ticket-statuses, users, tasks (assign, notes, participants, sub-status, warranty, permissions)
@@ -199,10 +199,10 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - User creation assigns default role from DB (not hardcoded "R2")
 - `ProtectedLayout` passes structured `{ id, roles, permissions }` user object downstream
 - Warranty notifications updated to include all front-desk users regardless of role assignment method
-- Files: `src/app/(protected)/layout.tsx`, `src/components/Sidebar.tsx`, `src/app/(protected)/assignments/page.tsx`, `src/app/(protected)/dashboard/page.tsx`, multiple API routes
+- Files: `src/app/(protected)/layout.tsx`, `src/modules/shared/components/Sidebar.tsx`, `src/app/(protected)/office/(core)/assignments/page.tsx`, `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, multiple API routes
 
 ### 2026-04-21 — Tasks feature removed
-- Entire Tasks system deleted (was Milestone 6): `src/app/(protected)/tasks/`, `src/app/api/tasks/`, `src/components/tasks/`
+- Entire Tasks system deleted (was Milestone 6; historical paths): `src/app/(protected)/tasks/`, `src/app/api/tasks/`, `src/components/tasks/` — removed before `/office` migration
 - Dashboard simplified (no task counts)
 - Sidebar "Tasks" nav item removed
 - Decision: tasks were personal notepad; Assignment system + TicketParticipant handles workflow handoffs
@@ -218,7 +218,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - `PassRejectModal.tsx` — pass shows user picker; reject with confirmation
 - `TicketCard.tsx` — conditional Claim / Pass / Reject buttons; `router.refresh()` after action
 - Assignments page scopes: me = primary OR active secondary; team = direct reports via `managerId`; org = admin only
-- Files: `prisma/schema.prisma`, `src/app/api/tickets/[id]/assign/`, `src/app/api/tickets/[id]/participants/`, `src/components/TicketOwnershipPanel.tsx`, `src/components/assignments/`, `src/app/(protected)/assignments/page.tsx`
+- Files: `prisma/schema.prisma`, `src/app/api/tickets/[id]/assign/`, `src/app/api/tickets/[id]/participants/`, `src/modules/repairing/components/TicketOwnershipPanel.tsx`, `src/modules/repairing/components/assignments/`, `src/app/(protected)/office/(core)/assignments/page.tsx`
 
 ### 2026-04-19 — Phase 4 complete + UX sprint + Bug fixes
 - Fixed "Failed to update status" bug; escalation improvements (config-driven visibility, auto-creates Despatch task on fresh escalation, inline "Add External Ref # / RMA")
@@ -336,9 +336,9 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 | API validation | Zod schemas on all write endpoints | Manual checks / no validation | Consistent error messages; type-safe parsed input |
 | Pipeline system | `Pipeline` model scoping statuses/sub-statuses/tickets | Single flat workflow | Repair shop may have Repair + Sales + B2B pipelines with different workflows |
 | Customer/Company split | Separate `Customer` + `Company` + `CustomerCompany` join | Single `Account` with type flag | Cleaner relations; companies have their own full pages + many-to-many with customers |
-| Default post-login redirect | `/assignments` | `/dashboard` | Assignments page is the primary work surface for all roles |
+| Default post-login redirect | `/office/assignments` | `/dashboard` (historical) | Staff app lives under `/office/*`; assignments remain the primary work surface |
 | Concurrent claim | `update where { primaryOwnerId: null }` optimistic lock | Application-level check | Database atomicity; throws RecordNotFound on race condition |
-| Codebase structure | `src/modules/<domain>/` + Next.js route groups | Flat `src/components/` + `src/app/(protected)/` | Codebase grew large enough to need domain boundaries; route groups keep URLs unchanged |
+| Codebase structure | `src/modules/<domain>/` + `src/app/(protected)/office/` route groups | Flat `src/components/` + `src/app/(protected)/` | Domain modules + `/office`-prefixed staff URLs; public shop/portal stay at `/`, `/shop`, `/portal` |
 | UI theme | Neo Brutalism (sharp corners, `border-2`, theme vars only) | Default shadcn rounded style | Design decision for shop context; enforced by removing all `rounded-*` classes |
 | Role labels | Dynamic fetch from `/api/roles/labels` | Hardcoded `ROLE_LABELS` constant | Roles are DB-driven; hardcoding would break when roles are renamed in settings |
 | Rank on Role not User | `Role.rank` (not per-user) | Per-user rank field | Role defines authority ceiling; individuals inherit via their role assignment |
@@ -363,34 +363,37 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 ```
 src/
 ├── app/
-│   ├── (protected)/                 # Staff app (requires login)
+│   ├── (protected)/                 # Staff shell (auth + sidebar)
 │   │   ├── layout.tsx               # ProtectedLayout with UniversalCreateMenu
-│   │   ├── (core)/
-│   │   │   ├── assignments/         # Primary work surface; me/team/org scopes
-│   │   │   ├── call-log/            # Inbound/outbound call log with filters
-│   │   │   ├── search-slno/         # Device serial number search
-│   │   │   └── accounts/            # Legacy account pages (bridge)
-│   │   ├── (repairing)/
-│   │   │   ├── dashboard/           # Role-specific dashboards (pipeline context)
-│   │   │   ├── tickets/             # Ticket list (pipeline-filtered) + detail
-│   │   │   ├── service-centers/     # Service centre CRUD
-│   │   │   └── settings/            # pipelines, statuses, sub-statuses, roles
-│   │   ├── (customer)/
-│   │   │   ├── customers/           # Individual customer list + detail
-│   │   │   ├── companies/           # Company list + detail
-│   │   │   └── all/                 # Unified customers + companies view
-│   │   ├── (message)/
-│   │   │   └── inbox/               # Real-time inbox (Supabase Realtime)
-│   │   ├── (tally)/
-│   │   │   └── finance/             # Chart of accounts, journal entries, invoices, reports
-│   │   ├── (social)/
-│   │   │   └── users/[id]/          # Staff profile page with wall posts
-│   │   └── (admin)/
-│   │       ├── users/               # User management + permissions modal
-│   │       ├── branches/ + departments/ + roles/  # Org + RBAC settings
-│   │       ├── org-chart/           # Visual org hierarchy
-│   │       ├── posts/               # Internal notice board
-│   │       └── ecommerce/           # Staff product + order management
+│   │   └── office/                  # Staff URLs: `/office/*`
+│   │       ├── (core)/
+│   │       │   ├── assignments/     # Primary work surface; me/team/org scopes
+│   │       │   ├── call-log/        # Inbound/outbound call log with filters
+│   │       │   ├── search-slno/     # Device serial number search
+│   │       │   └── accounts/        # Legacy account pages (bridge)
+│   │       ├── (repairing)/
+│   │       │   ├── dashboard/       # Role-specific dashboards (pipeline context)
+│   │       │   ├── tickets/         # Ticket list (pipeline-filtered) + detail
+│   │       │   ├── service-centers/ # Service centre CRUD
+│   │       │   └── settings/        # pipelines, statuses, sub-statuses
+│   │       ├── (customer)/
+│   │       │   ├── customers/       # Individual customer list + detail
+│   │       │   ├── companies/       # Company list + detail
+│   │       │   └── all/             # Unified customers + companies view
+│   │       ├── (message)/
+│   │       │   └── inbox/           # Real-time inbox (Supabase Realtime)
+│   │       ├── (tally)/
+│   │       │   └── finance/         # Chart of accounts, journal entries, invoices, reports
+│   │       ├── (social)/
+│   │       │   └── users/[id]/      # Staff profile page with wall posts
+│   │       ├── (admin)/
+│   │       │   ├── users/           # User management + permissions modal
+│   │       │   ├── branches/ + departments/ + roles/  # Org + RBAC settings
+│   │       │   ├── org-chart/       # Visual org hierarchy
+│   │       │   ├── posts/           # Internal notice board
+│   │       │   └── role/            # Single-role matrix page
+│   │       └── (e-commerce)/
+│   │           └── ecommerce/       # Staff product + order management
 │   ├── (external)/                  # Public/customer-facing surface (no staff auth)
 │   │   ├── layout.tsx               # ExternalRootShell (SessionProvider for portal)
 │   │   ├── (store)/                 # Store homepage sub-group
@@ -404,10 +407,10 @@ src/
 │   │   │   ├── compare/             # Side-by-side compare (Zustand shopCompareStore)
 │   │   │   ├── checkout/            # Checkout + Razorpay payment
 │   │   │   └── order/[id]/          # Order confirmation page
+│   │   ├── login/page.tsx           # Customer sign-in (`/login`; credentials-portal)
 │   │   └── portal/                  # Customer portal sub-surface (own layout)
-│   │       ├── layout.tsx           # PortalHeader
+│   │       ├── layout.tsx           # PortalAppShell
 │   │       ├── page.tsx             # Portal home
-│   │       ├── login/               # Portal login (phone/email + password)
 │   │       ├── register/            # Portal self-registration
 │   │       └── tickets/             # Customer's repair ticket list
 │   ├── api/
@@ -433,7 +436,7 @@ src/
 │   │   ├── shop/                    # Public shop: products, orders, Razorpay
 │   │   ├── ecommerce/               # Staff ecommerce: products + orders
 │   │   └── portal/                  # Customer portal: register, tickets
-│   └── login/                       # Staff login
+│   └── staff/login/page.tsx         # Staff sign-in (`/staff/login`; credentials-staff)
 ├── modules/                         # Domain modules
 │   ├── core/                        # Shared business logic
 │   ├── customer/                    # Customer + Company components/lib
@@ -484,7 +487,7 @@ src/
 ├── utils/
 │   └── constants.ts                 # Centralised: COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS, GL types, fmt()
 ├── auth.ts / auth.d.ts
-└── proxy.ts                         # Auth middleware; redirects to /assignments
+└── proxy.ts                         # Auth middleware: `/portal/login` → `/login`; staff vs customer sign-in routing; staff post-login → `/office/assignments`
 prisma/
 ├── schema/                          # Split Prisma schema (*.prisma by domain)
 │   ├── base.prisma                  # Core CRM: Customer, Company, CustomerCompany

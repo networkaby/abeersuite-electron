@@ -140,7 +140,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const isModuleChildActive = (childHref: string, siblings: ModuleChild[]) => {
         if (!pathname.startsWith(childHref)) return false;
-        // Prevent broad routes like "/customers" from also matching "/customers/all".
+        // Prevent broad routes like "/office/customers" from also matching "/office/customers/all".
         const hasMoreSpecificSiblingMatch = siblings.some((sibling) => {
             if (!sibling.href || sibling.href === childHref) return false;
             return sibling.href.startsWith(`${childHref}/`) && pathname.startsWith(sibling.href);
@@ -169,7 +169,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isWorkspaceChildActive = (childHref: string, siblings: NavItem[]) => {
         if (isDialogNavItem(childHref)) return false;
         if (!pathname.startsWith(childHref)) return false;
-        // Prevent broad routes like "/customers" from also matching "/customers/all".
+        // Prevent broad routes like "/office/customers" from also matching "/office/customers/all".
         const hasMoreSpecificSiblingMatch = siblings.some(
             (sibling) => sibling.href !== childHref && sibling.href.startsWith(`${childHref}/`) && pathname.startsWith(sibling.href)
         );
@@ -634,7 +634,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 <Button
                     type="button"
                     variant="ghost"
-                    onClick={() => signOut({ callbackUrl: "/login" })}
+                    onClick={() => signOut({ callbackUrl: "/staff/login" })}
                     title={collapsed ? "Sign Out" : ""}
                     className={[
                         "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",

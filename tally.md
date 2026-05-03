@@ -1,3 +1,5 @@
+> **This repo:** Staff finance screens are at **`/office/finance/*`** (`src/app/(protected)/office/(tally)/finance/`). See `ARCHITECTURE.md` §3 for staff vs public URLs.
+
 Alright, let’s break this down simply, like you’re mapping it into your own accounting software 👇
 
 In Tally, everything is organized in **Groups** and **Ledger Types**.

@@ -1,15 +1,15 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-function PortalLoginForm() {
+function CustomerLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || "/portal";
@@ -98,13 +98,19 @@ function PortalLoginForm() {
                             Register
                         </Link>
                     </p>
+                    <p className="mt-2 text-center text-sm text-muted-foreground">
+                        Staff?{" "}
+                        <Link href="/staff/login" className="text-primary underline">
+                            Staff sign in
+                        </Link>
+                    </p>
                 </CardContent>
             </Card>
         </div>
     );
 }
 
-export default function PortalLoginPage() {
+export default function CustomerLoginPage() {
     return (
         <Suspense
             fallback={
@@ -113,7 +119,7 @@ export default function PortalLoginPage() {
                 </div>
             }
         >
-            <PortalLoginForm />
+            <CustomerLoginForm />
         </Suspense>
     );
 }
