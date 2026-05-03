@@ -2,9 +2,19 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import PortalAccountSwitcher from "@/modules/external/portal/PortalAccountSwitcher";
-import PortalPasswordCard from "@/modules/external/portal/PortalPasswordCard";
-import { ArrowRight, ShieldCheck, ShoppingBag, Ticket } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    ArrowRight,
+    Gift,
+    Heart,
+    Percent,
+    Settings,
+    ShieldCheck,
+    ShoppingBag,
+    Ticket,
+    Users,
+    Wallet,
+} from "lucide-react";
 
 export default async function PortalHomePage() {
     const session = await auth();
@@ -61,14 +71,60 @@ export default async function PortalHomePage() {
             </section>
 
             {isCustomer ? (
-                <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-                    <PortalAccountSwitcher />
-                    <PortalPasswordCard />
-                </div>
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    <PortalCard href="/portal/orders" icon={ShoppingBag} title="My Orders" desc="Track purchases and statuses." />
+                    <PortalCard href="/portal/repairs" icon={Ticket} title="My Repairs" desc="Follow service and repair progress." />
+                    <PortalCard href="/portal/social" icon={Users} title="Social" desc="Join and connect with the customer network." />
+                    <PortalCard href="/portal/coupons" icon={Percent} title="My Coupons" desc="View available discount offers." />
+                    <PortalCard href="/portal/wallet" icon={Wallet} title="My Wallet" desc="Check wallet balance and transactions." />
+                    <PortalCard href="/portal/wishlist" icon={Heart} title="Wishlist" desc="Saved items ready to buy." />
+                    <PortalCard href="/portal/settings" icon={Settings} title="Profile Settings" desc="Manage profile and account security." />
+                    <Card className="border-dashed border-border/70 sm:col-span-2 xl:col-span-2">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Gift className="size-4 text-primary" />
+                                More coming in phase 2
+                            </CardTitle>
+                            <CardDescription>Live backend integrations for wallet, coupons, social posting, and order actions.</CardDescription>
+                        </CardHeader>
+                    </Card>
+                </section>
             ) : null}
-            <p className="text-xs text-muted-foreground px-1">
+            <p className="text-xs text-muted-foreground px-1 pb-2">
                 Staff sign-in: <Link className="underline" href="/login">/login</Link>
             </p>
         </main>
+    );
+}
+
+function PortalCard({
+    href,
+    icon: Icon,
+    title,
+    desc,
+}: {
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    desc: string;
+}) {
+    return (
+        <Link href={href} className="group">
+            <Card className="h-full border-border/70 transition hover:border-primary/35 hover:shadow-sm">
+                <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="font-semibold tracking-tight">{title}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
+                        </div>
+                        <Icon className="size-4 shrink-0 text-primary/80" />
+                    </div>
+                    <p className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                        Open
+                        <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
+                    </p>
+                </CardContent>
+            </Card>
+        </Link>
     );
 }
