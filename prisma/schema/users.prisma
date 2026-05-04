@@ -32,6 +32,7 @@ model User {
   journalEntries     JournalEntry[]      @relation("JournalCreatedBy")
   invoices           Invoice[]           @relation("InvoiceCreatedBy")
   payments           Payment[]           @relation("PaymentCreatedBy")
+  invVouchers        InvVoucher[]        @relation("InvVoucherCreatedBy")
   ownedChatRooms     ChatRoom[]          @relation("OwnedChatRooms")
   chatRoomMembers    ChatRoomMember[]
   chatMessages       ChatMessage[]

@@ -84,7 +84,12 @@
       "Bash(pnpm prisma *)",
       "Bash(pnpm tsx *)",
       "Bash(git -C /d/our-own-website/service-mgmt-experiment log --oneline -20)",
-      "Bash(git -C /d/our-own-website/service-mgmt-experiment show --stat customer-ecommerce-Phase2)"
+      "Bash(git -C /d/our-own-website/service-mgmt-experiment show --stat customer-ecommerce-Phase2)",
+      "Bash(mkdir -p \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\inventory\\\\vouchers\\\\[id]\\\\post\")",
+      "Bash(mkdir -p \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\inventory\\\\vouchers\\\\[id]\\\\void\")",
+      "Bash(mkdir -p \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\inventory\\\\stock-ledger\\\\[productId]\")",
+      "Bash(mkdir -p \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\\\(inventory\\)\\\\inventory\\\\purchases\\\\[id]\")",
+      "Bash(mkdir -p \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\\\(inventory\\)\\\\inventory\\\\sales\\\\[id]\")"
     ]
   }
 }

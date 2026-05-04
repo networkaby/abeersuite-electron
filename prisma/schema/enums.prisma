@@ -80,6 +80,16 @@ enum PaymentMethod {
   OTHER
 }
 
+// ── Inventory voucher enums ───────────────────────────────────────────────────
+
+enum InvVoucherType {
+  PURCHASE
+  SALE
+  RECEIPT
+  ISSUE
+  ADJUSTMENT
+}
+
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────
 
 enum OrderSource {

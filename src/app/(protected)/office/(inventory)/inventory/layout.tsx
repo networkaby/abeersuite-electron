@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler } from "lucide-react";
+import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, ShoppingCart, Receipt, BookOpen } from "lucide-react";
 
 const links = [
     { href: "/office/inventory", label: "Overview", icon: ChartArea },
@@ -11,6 +11,9 @@ const links = [
     { href: "/office/inventory/brands", label: "Brands", icon: Tag },
     { href: "/office/inventory/warranty-terms", label: "Warranty terms", icon: ShieldCheck },
     { href: "/office/inventory/products", label: "Products", icon: Box },
+    { href: "/office/inventory/purchases", label: "Purchases", icon: ShoppingCart },
+    { href: "/office/inventory/sales", label: "Sales", icon: Receipt },
+    { href: "/office/inventory/stock-ledger", label: "Stock Ledger", icon: BookOpen },
 ] as const;
 
 export default async function InventoryLayout({ children }: { children: React.ReactNode }) {
@@ -24,7 +27,7 @@ export default async function InventoryLayout({ children }: { children: React.Re
         <div className="container max-w-7xl py-6 space-y-6">
             <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
-                <p className="text-muted-foreground text-sm">Master data for catalogue items. Stock and sales are handled elsewhere.</p>
+                <p className="text-muted-foreground text-sm">Master data, purchase/sale vouchers and stock ledger.</p>
             </div>
             <nav className="flex flex-wrap gap-2 border-b-2 border-border pb-4" aria-label="Inventory sections">
                 {links.map(({ href, label, icon: Icon }) => (

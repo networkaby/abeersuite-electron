@@ -44,6 +44,8 @@ type ProductRow = {
     upc2: string | null;
     upc3: string | null;
     notes: string | null;
+    stock: number | null;
+    lowStockThreshold: number;
     unit: { code: string; label: string };
     category: { name: string } | null;
     brand: { name: string } | null;
@@ -214,7 +216,7 @@ export default function InventoryProductsPage() {
                         <Box className="size-5" aria-hidden />
                         Products
                     </h2>
-                    <p className="text-muted-foreground text-sm">SKU master — no stock quantities here.</p>
+                    <p className="text-muted-foreground text-sm">SKU master — stock updated automatically via Purchase/Sale vouchers.</p>
                 </div>
                 <Button type="button" onClick={openNew}>
                     <Plus className="size-4" />
@@ -258,24 +260,27 @@ export default function InventoryProductsPage() {
                             <TableHead>Unit</TableHead>
                             <TableHead>Category</TableHead>
                             <TableHead>Brand</TableHead>
+                            <TableHead className="text-right">Stock</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-muted-foreground">
+                                <TableCell colSpan={7} className="text-muted-foreground">
                                     Loading…
                                 </TableCell>
                             </TableRow>
                         ) : rows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-muted-foreground">
+                                <TableCell colSpan={7} className="text-muted-foreground">
                                     No products yet. Create a unit first, then add a product.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            rows.map((p) => (
+                            rows.map((p) => {
+                                const isLow = p.stock != null && p.stock <= p.lowStockThreshold;
+                                return (
                                 <TableRow key={p.id}>
                                     <TableCell className="font-mono text-sm">{p.sku}</TableCell>
                                     <TableCell className="font-medium">{p.name}</TableCell>
@@ -284,6 +289,16 @@ export default function InventoryProductsPage() {
                                     </TableCell>
                                     <TableCell className="text-sm">{p.category?.name ?? "—"}</TableCell>
                                     <TableCell className="text-sm">{p.brand?.name ?? "—"}</TableCell>
+                                    <TableCell className="text-right">
+                                        {p.stock == null ? (
+                                            <span className="text-muted-foreground text-xs">—</span>
+                                        ) : (
+                                            <span className={`font-mono text-sm font-semibold ${isLow ? "text-destructive" : ""}`}>
+                                                {p.stock}
+                                                {isLow && <Badge variant="destructive" className="ml-1.5 text-xs py-0 px-1">Low</Badge>}
+                                            </span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!p.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button type="button" variant="outline" size="icon-sm" aria-label="Edit" onClick={() => openEdit(p.id)}>
@@ -294,7 +309,8 @@ export default function InventoryProductsPage() {
                                         </Button>
                                     </TableCell>
                                 </TableRow>
-                            ))
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>
