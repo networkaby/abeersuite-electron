@@ -54,6 +54,15 @@ export default function InvoicesPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [saving, setSaving] = useState(false);
     const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+    const ALL_CHANNELS_VALUE = "ALL_CHANNELS";
+    const orderSourceOptions = [
+        { value: ALL_CHANNELS_VALUE, label: "All Channels" },
+        { value: "ONLINE", label: "Online" },
+        { value: "IN_STORE", label: "In Store" },
+        { value: "PHONE", label: "Phone" },
+        { value: "WHATSAPP", label: "WhatsApp" },
+        { value: "OTHER", label: "Other" },
+    ] as const;
 
     const [form, setForm] = useState({
         issueDate: new Date().toISOString().slice(0, 10),
@@ -152,17 +161,18 @@ export default function InvoicesPage() {
                         </Button>
                     ))}
                 </div>
-                <Select value={orderSourceFilter} onValueChange={setOrderSourceFilter}>
+                <Select value={orderSourceFilter} onValueChange={(nextValue) => {
+                    setOrderSourceFilter(nextValue === ALL_CHANNELS_VALUE ? "" : nextValue);
+                }}>
                     <SelectTrigger className="w-36 h-7 text-xs">
                         <SelectValue placeholder="All Channels" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All Channels</SelectItem>
-                        <SelectItem value="ONLINE">Online</SelectItem>
-                        <SelectItem value="IN_STORE">In Store</SelectItem>
-                        <SelectItem value="PHONE">Phone</SelectItem>
-                        <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
-                        <SelectItem value="OTHER">Other</SelectItem>
+                        {orderSourceOptions.map((option) => (
+                            <SelectItem key={option.label} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </div>
