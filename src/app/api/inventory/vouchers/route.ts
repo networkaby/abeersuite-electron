@@ -44,8 +44,9 @@ export async function POST(req: Request) {
         partyPhone,
         partyAddress,
         paymentMode,
-        shippingAmt = 0,
-        roundOff    = 0,
+        shippingAmt    = 0,
+        roundOff       = 0,
+        amountReceived = 0,
         lines = [],
     } = body as {
         type:         InvVoucherType;
@@ -56,9 +57,10 @@ export async function POST(req: Request) {
         partyId?:     number;
         partyPhone?:  string;
         partyAddress?: string;
-        paymentMode?: string;
-        shippingAmt?: number;
-        roundOff?:    number;
+        paymentMode?:    string;
+        shippingAmt?:    number;
+        roundOff?:       number;
+        amountReceived?: number;
         lines: {
             productId:   number;
             description?: string;
@@ -116,9 +118,10 @@ export async function POST(req: Request) {
                 partyId:      partyId    || null,
                 partyPhone:   partyPhone || null,
                 partyAddress: partyAddress || null,
-                paymentMode:  paymentMode || null,
+                paymentMode:     paymentMode || null,
                 shippingAmt,
                 roundOff,
+                amountReceived,
                 subtotal,
                 taxAmount,
                 totalAmount,

@@ -85,6 +85,7 @@ enum PaymentMethod {
 enum InvVoucherType {
   PURCHASE
   SALE
+  ESTIMATE
   RECEIPT
   ISSUE
   ADJUSTMENT

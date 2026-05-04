@@ -5,6 +5,7 @@ import { InvVoucherType } from "@/generated/prisma/client";
 const PREFIX: Record<InvVoucherType, string> = {
     PURCHASE:   "PV",
     SALE:       "SV",
+    ESTIMATE:   "EV",
     RECEIPT:    "RV",
     ISSUE:      "IV",
     ADJUSTMENT: "AV",
