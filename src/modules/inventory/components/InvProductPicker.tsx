@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,6 @@ export function InvProductPicker({
     const [open, setOpen] = useState(false);
     const [products, setProducts] = useState<InvProductOption[]>([]);
     const [query, setQuery] = useState("");
-    const [selected, setSelected] = useState<InvProductOption | null>(null);
 
     useEffect(() => {
         if (!open) return;
@@ -38,11 +37,9 @@ export function InvProductPicker({
             .catch(() => setProducts([]));
     }, [open]);
 
-    useEffect(() => {
-        if (value == null) { setSelected(null); return; }
-        if (products.length > 0) {
-            setSelected(products.find((p) => p.id === value) ?? null);
-        }
+    const selected = useMemo(() => {
+        if (value == null) return null;
+        return products.find((p) => p.id === value) ?? null;
     }, [value, products]);
 
     const filtered = query.trim()
@@ -54,7 +51,6 @@ export function InvProductPicker({
         : products;
 
     const pick = (p: InvProductOption) => {
-        setSelected(p);
         onChange(p.id);
         setOpen(false);
         setQuery("");
@@ -78,7 +74,7 @@ export function InvProductPicker({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => { setSelected(null); onChange(null); }}
+                        onClick={() => { onChange(null); }}
                         aria-label="Clear"
                     >
                         <X className="size-4" />

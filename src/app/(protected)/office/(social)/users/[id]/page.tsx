@@ -11,8 +11,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import {
-    ArrowLeft, Shield, Mail, Phone, Cake, Building2, Users,
-    ShieldCheck, Pencil, GitBranch, Upload, Link2, ExternalLink,
+    ArrowLeft, Mail, Phone, Cake, Building2, Users,
+    Pencil, GitBranch, Upload, Link2, ExternalLink,
     MessageSquare, Info, Lock, Trash2, PanelRightOpen, PanelRightClose, Home,
     Send, UserCircle, Printer, ChevronDown, ChevronUp, Activity,
 } from "lucide-react";
@@ -20,13 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format-date";
 import type { OrgNode } from "@/app/api/org-chart/route";
@@ -83,7 +76,6 @@ const SCOPE_LABELS: Record<string, string> = {
     OWN: "Own records", TEAM: "Direct reports", DEPARTMENT: "Full department",
     BRANCH: "Full branch", REGION: "Region-wide", ORG: "Entire organisation",
 };
-const MODULE_ORDER = ["core", "customers", "tickets", "assignments", "service", "admin"];
 const COVER_GRADIENT: Record<string, string> = {
     R1: "linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",
     R2: "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%)",

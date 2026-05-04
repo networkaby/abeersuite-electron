@@ -115,7 +115,6 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
         const [orderLineCount, partCount] = await Promise.all([
             prisma.shopOrderLine.count({ where: { productId: id } }),
-            // @ts-expect-error -- run `prisma generate` after migration to resolve
             prisma.ticketPart.count({ where: { invProductId: id } }),
         ]);
         if (orderLineCount > 0) return NextResponse.json({ error: "Cannot delete — referenced in shop orders." }, { status: 400 });

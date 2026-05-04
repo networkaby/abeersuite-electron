@@ -25,7 +25,7 @@ export default async function EcommerceDashboardPage() {
         prisma.shopOrder.count({
             where: { status: { in: ["PAID", "PACKED", "SHIPPED"] } },
         }),
-        prisma.shopProduct.findMany({
+        prisma.invProduct.findMany({
             where: { isActive: true, stock: { not: null } },
             select: { id: true, name: true, stock: true, lowStockThreshold: true },
         }),

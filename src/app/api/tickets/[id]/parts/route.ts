@@ -11,7 +11,6 @@ export async function GET(_: Request, { params }: Ctx) {
     const ticketId = Number((await params).id);
     if (!Number.isFinite(ticketId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
-        // @ts-expect-error -- run `prisma generate` after migration to resolve
         const parts = await prisma.ticketPart.findMany({
             where: { ticketId },
             include: {
@@ -50,7 +49,6 @@ export async function POST(req: Request, { params }: Ctx) {
     try {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
         if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
-        // @ts-expect-error -- run `prisma generate` after migration to resolve
         const part = await prisma.ticketPart.create({
             data: { ticketId, invProductId, quantity, notes: notes ?? null },
             include: {
@@ -82,12 +80,10 @@ export async function DELETE(req: Request, { params }: Ctx) {
         return NextResponse.json({ error: "partId required" }, { status: 400 });
     }
     try {
-        // @ts-expect-error -- run `prisma generate` after migration to resolve
         const part = await prisma.ticketPart.findUnique({ where: { id: partId } });
         if (!part || part.ticketId !== ticketId) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
-        // @ts-expect-error -- run `prisma generate` after migration to resolve
         await prisma.ticketPart.delete({ where: { id: partId } });
         return NextResponse.json({ success: true });
     } catch {

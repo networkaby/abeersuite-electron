@@ -111,7 +111,7 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
                     throw new Error(`Insufficient stock for ${p.name} (need ${line.quantity}, have ${p.stock})`);
                 }
                 const nextStock = p.stock - line.quantity;
-                await tx.shopProduct.update({
+                await tx.invProduct.update({
                     where: { id: p.id },
                     data: { stock: nextStock },
                 });
@@ -132,7 +132,7 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
                 for (const line of order.lines) {
                     const p = line.product;
                     if (p.stock === null) continue;
-                    await tx.shopProduct.update({
+                    await tx.invProduct.update({
                         where: { id: p.id },
                         data: { stock: { increment: line.quantity } },
                     });
