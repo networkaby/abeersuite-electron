@@ -65,28 +65,49 @@ model InvWarrantyTerm {
 }
 
 model InvProduct {
-  id              Int     @id @default(autoincrement())
-  sku             String  @unique
-  name            String
-  unitId          Int
-  categoryId      Int?
-  groupId         Int?
-  brandId         Int?
-  warrantyTermId  Int?
-  modelNo         String?
-  barcode1        String?
-  barcode2        String?
-  barcode3        String?
-  ean1            String?
-  ean2            String?
-  ean3            String?
-  upc1            String?
-  upc2            String?
-  upc3            String?
-  notes           String?
-  isActive        Boolean @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             Int     @id @default(autoincrement())
+  sku            String  @unique
+  name           String
+  unitId         Int
+  categoryId     Int?
+  groupId        Int?
+  brandId        Int?
+  warrantyTermId Int?
+  modelNo        String?
+  barcode1       String?
+  barcode2       String?
+  barcode3       String?
+  ean1           String?
+  ean2           String?
+  ean3           String?
+  upc1           String?
+  upc2           String?
+  upc3           String?
+  notes          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // ── Ecommerce / storefront fields (null = not listed in shop) ──────────────
+  /// URL-safe handle for /shop/product/[handle]
+  slug              String?  @unique
+  shopSubheading    String?
+  shopDescription   String?
+  /// Display category label for storefront (falls back to InvCategory.name)
+  shopCategory      String?
+  /// null = not listed in shop
+  pricePaise        Int?
+  mrpPaise          Int?
+  shopBadge         String?
+  imageUrl          String?
+  /// JSON array of image URLs for gallery
+  galleryJson       Json?
+  /// JSON object of label → value for specs tab
+  specsJson         Json?
+  /// null = stock not tracked
+  stock             Int?
+  lowStockThreshold Int      @default(5)
+  isListedInShop    Boolean  @default(false)
 
   unit         InvUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
   category     InvCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -94,9 +115,13 @@ model InvProduct {
   brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
+  orderLines  ShopOrderLine[]
+  ticketParts TicketPart[]
+
   @@index([unitId])
   @@index([categoryId])
   @@index([groupId])
   @@index([brandId])
   @@index([warrantyTermId])
+  @@index([isListedInShop])
 }

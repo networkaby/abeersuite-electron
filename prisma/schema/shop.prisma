@@ -1,4 +1,5 @@
-// ── Ecommerce MVP (₹ prices stored as integer paise) ───────────────────────────
+// ── Ecommerce (₹ prices stored as integer paise) ────────────────────────────
+// Products live in InvProduct (inventory.prisma) — ShopOrderLine references them directly.
 
 enum ShopOrderStatus {
   DRAFT
@@ -24,59 +25,32 @@ model ShopCoupon {
   orders ShopOrder[]
 }
 
-model ShopProduct {
-  id           Int      @id @default(autoincrement())
-  /// URL-safe handle for /shop/product/[handle]; optional for legacy rows
-  slug         String?  @unique
-  name         String
-  subheading   String?
-  description  String?
-  category     String   @default("Accessories")
-  pricePaise   Int
-  /// Optional list price for “was” / savings UI
-  mrpPaise     Int?
-  badge        String?
-  imageUrl     String?
-  /// JSON array of image URLs for gallery (same host as imageUrl)
-  galleryJson  Json?
-  /// JSON object of label → value for specs tab
-  specsJson    Json?
-  /// When null, stock is not enforced (legacy / open catalogue).
-  stock             Int?
-  lowStockThreshold Int  @default(5)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  lines ShopOrderLine[]
-}
-
 model ShopOrder {
-  id               Int             @id @default(autoincrement())
-  status           ShopOrderStatus @default(DRAFT)
-  customerId       Int?
-  accountId        Int?
-  guestEmail       String?
-  guestPhone       String?
-  shippingName     String?
-  shippingAddress  Json?
-  totalPaise       Int             @default(0)
-  razorpayOrderId  String?         @unique
+  id                Int             @id @default(autoincrement())
+  status            ShopOrderStatus @default(DRAFT)
+  customerId        Int?
+  accountId         Int?
+  guestEmail        String?
+  guestPhone        String?
+  shippingName      String?
+  shippingAddress   Json?
+  totalPaise        Int             @default(0)
+  razorpayOrderId   String?         @unique
   razorpayPaymentId String?
-  courier          String?
-  trackingNumber   String?
-  sourceCouponId   String?
-  paidAt           DateTime?
-  packedAt         DateTime?
-  shippedAt        DateTime?
-  deliveredAt      DateTime?
-  refundedAt       DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  courier           String?
+  trackingNumber    String?
+  sourceCouponId    String?
+  paidAt            DateTime?
+  packedAt          DateTime?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+  refundedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  customer     Customer?    @relation(fields: [customerId], references: [id])
-  account      Account?     @relation(fields: [accountId], references: [id])
-  sourceCoupon ShopCoupon?  @relation(fields: [sourceCouponId], references: [id])
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+  account      Account?      @relation(fields: [accountId], references: [id])
+  sourceCoupon ShopCoupon?   @relation(fields: [sourceCouponId], references: [id])
   lines        ShopOrderLine[]
   tickets      Ticket[]
 
@@ -93,8 +67,8 @@ model ShopOrderLine {
   quantity       Int @default(1)
   unitPricePaise Int
 
-  order   ShopOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product ShopProduct @relation(fields: [productId], references: [id])
+  order   ShopOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product InvProduct @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])

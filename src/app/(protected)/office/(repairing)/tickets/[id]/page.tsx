@@ -18,6 +18,7 @@ import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvertModal";
 import TicketOwnershipPanel from "@/modules/repairing/components/TicketOwnershipPanel";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
+import TicketPartsPanel from "@/modules/repairing/components/TicketPartsPanel";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,6 +256,11 @@ export default function TicketDetailPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* Parts used in repair */}
+                    <div className="rounded-lg border border-border bg-card p-6 shadow">
+                        <TicketPartsPanel ticketId={ticket.id} />
+                    </div>
 
                     {/* Timeline */}
                     <div className="rounded-lg border border-border bg-card p-6 shadow">

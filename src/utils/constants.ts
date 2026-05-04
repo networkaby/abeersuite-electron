@@ -261,7 +261,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 export const ADMIN_NAV: SettingsNavItem[] = [
     { label: "Users", href: "/office/users", icon: UserCog, permission: "users:manage" },
     { label: "Org Chart", href: "/office/org-chart", icon: Network, permission: "users:manage" },
-    { label: "Role", href: "/office/role", icon: ShieldCheck, permission: "role:manage" },
+    { label: "Role", href: "/office/role", icon: ShieldCheck, permission: "roles:manage" },
     { label: "Branches", href: "/office/branches", icon: Building2, permission: "settings:manage" },
     { label: "Departments", href: "/office/departments", icon: Users, permission: "settings:manage" },
     { label: "Posts", href: "/office/posts", icon: Briefcase, permission: "settings:manage" },

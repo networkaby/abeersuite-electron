@@ -59,6 +59,7 @@ model Ticket {
   ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
   logs            TicketLog[]
   participants    TicketParticipant[]
+  parts           TicketPart[]
 
   @@index([status])
   @@index([pipelineId, status])
@@ -105,6 +106,21 @@ model TicketLog {
 
   @@index([ticketId])
   @@index([userId])
+}
+
+model TicketPart {
+  id           Int        @id @default(autoincrement())
+  ticketId     Int
+  invProductId Int
+  quantity     Float      @default(1)
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  ticket   Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  product  InvProduct @relation(fields: [invProductId], references: [id])
+
+  @@index([ticketId])
+  @@index([invProductId])
 }
 
 model ServiceCenter {

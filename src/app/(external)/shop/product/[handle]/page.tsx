@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { shopProductToPublic, productPath } from "@/lib/shop/product-public";
+import { invProductToPublic as shopProductToPublic, productPath } from "@/lib/shop/product-public";
+import { invProductDb } from "@/lib/inventory/types";
 import ProductGallery from "@/modules/external/shop/ProductGallery";
 import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
 import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";
@@ -11,12 +12,19 @@ import { ChevronRight } from "lucide-react";
 
 async function loadProduct(handle: string) {
     const decoded = decodeURIComponent(handle);
+    const db = invProductDb(prisma);
     if (/^\d+$/.test(decoded)) {
         const id = parseInt(decoded, 10);
-        const p = await prisma.shopProduct.findFirst({ where: { id, isActive: true } });
+        const p = await db.findFirst({
+            where: { id, isListedInShop: true, isActive: true },
+            include: { category: { select: { name: true } } },
+        });
         return p ? shopProductToPublic(p) : null;
     }
-    const p = await prisma.shopProduct.findFirst({ where: { slug: decoded, isActive: true } });
+    const p = await db.findFirst({
+        where: { slug: decoded, isListedInShop: true, isActive: true },
+        include: { category: { select: { name: true } } },
+    });
     return p ? shopProductToPublic(p) : null;
 }
 
@@ -39,13 +47,14 @@ export default async function ShopProductPage({ params }: { params: Promise<{ ha
     const product = await loadProduct(handle);
     if (!product) notFound();
 
-    const related = await prisma.shopProduct.findMany({
+    const related = await invProductDb(prisma).findMany({
         where: {
+            isListedInShop: true,
             isActive: true,
-            category: product.category,
+            shopCategory: product.category,
             NOT: { id: product.id },
         },
-        take: 4,
+        include: { category: { select: { name: true } } },
         orderBy: { id: "asc" },
     });
 

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { resolvePortalAccountContext } from "@/lib/auth/portal-account-context";
+import { invProductDb } from "@/lib/inventory/types";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -43,8 +44,8 @@ export async function POST(req: Request) {
         }
 
         const productIds = [...new Set(lines.map((l) => l.productId))];
-        const products = await prisma.shopProduct.findMany({
-            where: { id: { in: productIds }, isActive: true },
+        const products = await invProductDb(prisma).findMany({
+            where: { id: { in: productIds }, isListedInShop: true, isActive: true },
         });
         const byId = new Map(products.map((p) => [p.id, p]));
 
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
         const resolvedLines: { productId: number; quantity: number; unitPricePaise: number }[] = [];
         for (const l of lines) {
             const p = byId.get(l.productId);
-            if (!p) {
+            if (!p || p.pricePaise == null) {
                 return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
             }
             if (p.stock !== null && p.stock < l.quantity) {

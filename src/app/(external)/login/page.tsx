@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 function CustomerLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/portal";
+    const rawCallback = searchParams.get("callbackUrl") ?? "";
+    const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/portal";
 
     const [tab, setTab] = useState<"mobile" | "email">("mobile");
     const [identifier, setIdentifier] = useState("");
@@ -35,7 +36,7 @@ function CustomerLoginForm() {
             setError("Invalid mobile/email or password");
             setLoading(false);
         } else {
-            router.push(callbackUrl.startsWith("/") ? callbackUrl : "/portal");
+            router.push(callbackUrl);
             router.refresh();
         }
     };

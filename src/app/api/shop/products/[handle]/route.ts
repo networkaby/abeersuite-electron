@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { shopProductToPublic } from "@/lib/shop/product-public";
+import { invProductToPublic } from "@/lib/shop/product-public";
+import { invProductDb } from "@/lib/inventory/types";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ handle: string }> }) {
     try {
@@ -8,18 +9,21 @@ export async function GET(_req: Request, ctx: { params: Promise<{ handle: string
         const decoded = decodeURIComponent(handle);
         const asId = /^\d+$/.test(decoded) ? parseInt(decoded, 10) : null;
 
+        const db = invProductDb(prisma);
         const product = asId
-            ? await prisma.shopProduct.findFirst({
-                  where: { id: asId, isActive: true },
+            ? await db.findFirst({
+                  where: { id: asId, isListedInShop: true, isActive: true },
+                  include: { category: { select: { name: true } } },
               })
-            : await prisma.shopProduct.findFirst({
-                  where: { slug: decoded, isActive: true },
+            : await db.findFirst({
+                  where: { slug: decoded, isListedInShop: true, isActive: true },
+                  include: { category: { select: { name: true } } },
               });
 
         if (!product) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
-        return NextResponse.json(shopProductToPublic(product));
+        return NextResponse.json(invProductToPublic(product));
     } catch {
         return NextResponse.json({ error: "Failed to load product" }, { status: 500 });
     }

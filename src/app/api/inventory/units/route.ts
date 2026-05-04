@@ -23,8 +23,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
         }
         const b = parsed.data;
-        const existing = await prisma.invUnit.findUnique({ where: { code: b.code.toUpperCase() } });
-        if (existing) return NextResponse.json({ error: "Unit code already exists" }, { status: 409 });
         const row = await prisma.invUnit.create({
             data: {
                 code: b.code.toUpperCase(),
@@ -34,7 +32,9 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(row, { status: 201 });
-    } catch {
+    } catch (e: unknown) {
+        const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";
+        if (code === "P2002") return NextResponse.json({ error: "Unit code already exists" }, { status: 409 });
         return NextResponse.json({ error: "Failed to create unit" }, { status: 500 });
     }
 }

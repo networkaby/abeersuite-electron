@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
 import { DEMO_SHOP_CATALOG } from "./lib/shop/demo-catalog-seed";
+import { invProductDb } from "./lib/inventory/types";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -621,39 +622,52 @@ async function upsertChartOfAccounts() {
     }
 }
 
-/** Idempotent: upsert full demo catalog (slugs + rich media) for the public shop. */
+/** Idempotent: upsert full demo catalog for the public shop.
+ *  Products live on InvProduct — a "PCS" unit is created if absent.
+ */
 async function upsertShopDemoCatalog() {
+    // Ensure a default unit
+    const pcsUnit = await prisma.invUnit.upsert({
+        where: { code: "PCS" },
+        update: {},
+        create: { code: "PCS", label: "Piece", decimals: 0, isActive: true },
+    });
+
     for (const row of DEMO_SHOP_CATALOG) {
         const galleryJson = row.galleryUrls;
         const specsJson = row.specs;
-        const existing = await prisma.shopProduct.findFirst({
-            where: { OR: [{ slug: row.slug }, { name: row.name }] },
-        });
+        const sku = row.slug.toUpperCase().replace(/-/g, "_");
         const data = {
-            slug: row.slug,
             name: row.name,
-            subheading: row.subheading,
-            description: row.description,
-            category: row.category,
+            unitId: pcsUnit.id,
+            slug: row.slug,
+            shopSubheading: row.subheading,
+            shopDescription: row.description,
+            shopCategory: row.category,
             pricePaise: row.pricePaise,
             mrpPaise: row.mrpPaise,
-            badge: row.badge,
+            shopBadge: row.badge,
             imageUrl: row.imageUrl,
             galleryJson,
             specsJson,
             isActive: true,
+            isListedInShop: true,
         };
+        const db = invProductDb(prisma);
+        const existing = await db.findFirst({
+            where: { OR: [{ slug: row.slug }, { sku }] },
+        });
         if (existing) {
-            await prisma.shopProduct.update({ where: { id: existing.id }, data });
+            await db.update({ where: { id: existing.id }, data });
         } else {
-            await prisma.shopProduct.create({ data });
+            await db.create({ data: { ...data, sku } });
         }
     }
 
     const keepSlugs = DEMO_SHOP_CATALOG.map((r) => r.slug);
-    await prisma.shopProduct.updateMany({
-        where: { slug: { notIn: keepSlugs, not: null } },
-        data: { isActive: false },
+    await invProductDb(prisma).updateMany({
+        where: { slug: { notIn: keepSlugs, not: null }, isListedInShop: true },
+        data: { isListedInShop: false },
     });
 }
 

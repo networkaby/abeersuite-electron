@@ -31,11 +31,14 @@ export default function ProductForm({
     onSaved?: (p: ShopProductAdmin) => void;
     submitLabel?: string;
 }) {
+    // inventory fields
+    const [sku, setSku] = useState(initial?.sku ?? "");
     const [name, setName] = useState(initial?.name ?? "");
+    // shop fields
     const [slug, setSlug] = useState(initial?.slug ?? "");
+    const [shopCategory, setShopCategory] = useState(initial?.category ?? "");
     const [subheading, setSubheading] = useState(initial?.subheading ?? "");
     const [description, setDescription] = useState(initial?.description ?? "");
-    const [category, setCategory] = useState(initial?.category ?? "Accessories");
     const [priceRupees, setPriceRupees] = useState(initial?.pricePaise ? rupeesFromPaise(initial.pricePaise) : "");
     const [mrpRupees, setMrpRupees] = useState(initial?.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
     const [badge, setBadge] = useState(initial?.badge ?? "");
@@ -50,32 +53,36 @@ export default function ProductForm({
         initial?.stock === null || initial?.stock === undefined ? "" : String(initial.stock)
     );
     const [lowStockThreshold, setLowStockThreshold] = useState(String(initial?.lowStockThreshold ?? 5));
+    const [isListedInShop, setIsListedInShop] = useState(initial?.isListedInShop ?? true);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
         if (!initial) return;
+        setSku(initial.sku ?? "");
         setName(initial.name ?? "");
         setSlug(initial.slug ?? "");
+        setShopCategory(initial.category ?? "");
         setSubheading(initial.subheading ?? "");
         setDescription(initial.description ?? "");
-        setCategory(initial.category ?? "Accessories");
         setPriceRupees(initial.pricePaise ? rupeesFromPaise(initial.pricePaise) : "");
         setMrpRupees(initial.mrpPaise ? rupeesFromPaise(initial.mrpPaise) : "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
         setStock(initial.stock === null || initial.stock === undefined ? "" : String(initial.stock));
         setLowStockThreshold(String(initial.lowStockThreshold ?? 5));
+        setIsListedInShop(initial.isListedInShop ?? true);
         setIsActive(initial.isActive ?? true);
     }, [initial]);
 
     const previewProduct: ShopProductAdmin = {
         id: initial?.id ?? 0,
+        sku: sku.trim() || "SKU",
         slug: slug.trim() || null,
         name: name.trim() || "Product name",
         subheading: subheading.trim() || null,
         description: description.trim() || null,
-        category: category.trim() || "Accessories",
+        category: shopCategory.trim() || "Accessories",
         pricePaise: paiseFromRupeesInput(priceRupees) ?? 0,
         mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
         badge: badge.trim() || null,
@@ -84,29 +91,35 @@ export default function ProductForm({
         specs: Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()])),
         stock: stock.trim() === "" ? null : parseInt(stock, 10),
         lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
+        isListedInShop,
         isActive,
+        unitId: initial?.unitId ?? 0,
+        categoryId: initial?.categoryId ?? null,
+        groupId: initial?.groupId ?? null,
+        brandId: initial?.brandId ?? null,
+        warrantyTermId: initial?.warrantyTermId ?? null,
     };
 
     const submit = async () => {
         const pricePaise = paiseFromRupeesInput(priceRupees);
-        if (!name.trim() || pricePaise === null || pricePaise <= 0) {
-            toast.error("Name and valid price are required");
-            return;
-        }
+        if (!name.trim()) { toast.error("Name is required"); return; }
+        if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return; }
         const specs = Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()]));
         const payload = {
+            sku: sku.trim() || undefined,
             name: name.trim(),
             slug: slug.trim() || null,
-            subheading: subheading.trim() || null,
-            description: description.trim() || null,
-            category: category.trim(),
-            pricePaise,
+            shopSubheading: subheading.trim() || null,
+            shopDescription: description.trim() || null,
+            shopCategory: shopCategory.trim() || null,
+            pricePaise: pricePaise ?? null,
             mrpPaise: mrpRupees.trim() ? paiseFromRupeesInput(mrpRupees) : null,
-            badge: badge.trim() || null,
+            shopBadge: badge.trim() || null,
             galleryUrls,
             specs,
             stock: stock.trim() === "" ? null : parseInt(stock, 10),
             lowStockThreshold: parseInt(lowStockThreshold, 10) || 5,
+            isListedInShop,
             isActive,
             imageUrl: galleryUrls[0] ?? null,
         };
@@ -135,17 +148,31 @@ export default function ProductForm({
     return (
         <div className="grid gap-8 lg:grid-cols-2">
             <div className="space-y-4">
-                <div className="grid gap-2">
-                    <Label>Name</Label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} />
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                        <Label>SKU</Label>
+                        <Input
+                            value={sku}
+                            onChange={(e) => setSku(e.target.value)}
+                            disabled={!!initial?.id}
+                            className="font-mono"
+                            placeholder="e.g. LAPTOP-001"
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Name</Label>
+                        <Input value={name} onChange={(e) => setName(e.target.value)} />
+                    </div>
                 </div>
-                <div className="grid gap-2">
-                    <Label>Slug (optional)</Label>
-                    <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto / numeric id on storefront" />
-                </div>
-                <div className="grid gap-2">
-                    <Label>Category</Label>
-                    <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                        <Label>Slug (optional)</Label>
+                        <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Shop category</Label>
+                        <Input value={shopCategory} onChange={(e) => setShopCategory(e.target.value)} placeholder="e.g. Laptops" />
+                    </div>
                 </div>
                 <div className="grid gap-2">
                     <Label>Subheading</Label>
@@ -184,8 +211,12 @@ export default function ProductForm({
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Switch id="listed" checked={isListedInShop} onCheckedChange={setIsListedInShop} />
+                    <Label htmlFor="listed">Listed in shop</Label>
+                </div>
+                <div className="flex items-center gap-2">
                     <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
-                    <Label htmlFor="active">Active on storefront</Label>
+                    <Label htmlFor="active">Active</Label>
                 </div>
 
                 <div className="space-y-2">

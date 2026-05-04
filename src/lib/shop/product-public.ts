@@ -1,4 +1,4 @@
-import type { ShopProduct } from "@/generated/prisma/client";
+import type { InvProductFull } from "@/lib/inventory/types";
 
 /** Serializable storefront shape (SSR → client, APIs). */
 export type ShopProductPublic = {
@@ -20,7 +20,9 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
     return `/shop/product/${p.slug ?? p.id}`;
 }
 
-export function shopProductToPublic(p: ShopProduct): ShopProductPublic {
+export function invProductToPublic(
+    p: InvProductFull & { category?: { name: string } | null }
+): ShopProductPublic {
     const rawGal = p.galleryJson;
     let galleryUrls: string[] = [];
     if (Array.isArray(rawGal)) {
@@ -31,7 +33,7 @@ export function shopProductToPublic(p: ShopProduct): ShopProductPublic {
     const rawSpecs = p.specsJson;
     const specs: Record<string, string> = {};
     if (rawSpecs && typeof rawSpecs === "object" && !Array.isArray(rawSpecs)) {
-        for (const [k, v] of Object.entries(rawSpecs)) {
+        for (const [k, v] of Object.entries(rawSpecs as Record<string, unknown>)) {
             if (typeof v === "string") specs[k] = v;
         }
     }
@@ -40,17 +42,20 @@ export function shopProductToPublic(p: ShopProduct): ShopProductPublic {
         id: p.id,
         slug: p.slug,
         name: p.name,
-        subheading: p.subheading,
-        description: p.description,
-        category: p.category,
-        pricePaise: p.pricePaise,
+        subheading: p.shopSubheading,
+        description: p.shopDescription,
+        category: p.shopCategory ?? p.category?.name ?? "Accessories",
+        pricePaise: p.pricePaise ?? 0,
         mrpPaise: p.mrpPaise,
-        badge: p.badge,
+        badge: p.shopBadge,
         imageUrl: p.imageUrl,
         galleryUrls,
         specs,
     };
 }
+
+/** @deprecated use invProductToPublic */
+export const shopProductToPublic = invProductToPublic;
 
 /** Deterministic demo star rating (4.2–4.9) and review count for UI polish. */
 export function demoRating(productId: number): { stars: number; reviewCount: number } {
