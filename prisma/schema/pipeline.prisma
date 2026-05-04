@@ -14,6 +14,7 @@ model Pipeline {
   statuses    TicketStatus[]
   subStatuses TicketSubStatus[]
   tickets     Ticket[]
+  crmLeads    CrmLead[]
 }
 
 model TicketStatus {
@@ -33,6 +34,7 @@ model TicketStatus {
   toTransitions   StatusTransition[] @relation("ToStatus")
   tickets         Ticket[]
   logs            TicketLog[]
+  crmLeads        CrmLead[]
 }
 
 model TicketSubStatus {

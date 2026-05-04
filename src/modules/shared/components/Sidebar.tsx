@@ -60,8 +60,27 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     });
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
-        repair: pathname.startsWith("/office/tickets") || pathname.startsWith("/office/service-centers") || pathname.startsWith("/office/dashboard"),
+        customers:
+            pathname.startsWith("/office/customers") ||
+            pathname.startsWith("/office/companies") ||
+            pathname.startsWith("/office/all"),
+        repair:
+            pathname.startsWith("/office/tickets") ||
+            pathname.startsWith("/office/service-centers") ||
+            pathname.startsWith("/office/dashboard"),
+        crm: pathname.startsWith("/office/crm"),
+        "e-commerce": pathname.startsWith("/office/ecommerce"),
         tally: pathname.startsWith("/office/finance"),
+        inventory: pathname.startsWith("/office/inventory"),
+        hrm: pathname.startsWith("/office/hrm"),
+        delivery: pathname.startsWith("/office/delivery"),
+        "field-service": pathname.startsWith("/office/field-service"),
+        helpdesk: pathname.startsWith("/office/helpdesk"),
+        projects: pathname.startsWith("/office/projects"),
+        intelligence: pathname.startsWith("/office/intelligence"),
+        administration: pathname.startsWith("/office/administration"),
+        retention: pathname.startsWith("/office/retention"),
+        "pricing-strategy": pathname.startsWith("/office/pricing-strategy"),
     });
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const [showCreatePerson, setShowCreatePerson] = useState(false);

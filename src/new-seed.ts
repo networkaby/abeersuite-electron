@@ -144,6 +144,23 @@ const BUSINESS_PIPELINES: PipelineSeed[] = [
             { id: "S34", label: "Completed", color: "bg-green-100 text-green-600", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P5" },
         ],
     },
+    {
+        id: "P6",
+        name: "crm-leads",
+        label: "CRM Leads",
+        description: "Sales-style leads without repair tickets; stages shared with pipeline settings",
+        color: "bg-cyan-100 text-cyan-800",
+        order: 6,
+        statuses: [
+            { id: "S35", label: "Lead", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P6" },
+            { id: "S36", label: "Contacted", color: "bg-blue-100 text-blue-600", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
+            { id: "S37", label: "Qualified", color: "bg-teal-100 text-teal-600", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
+            { id: "S38", label: "Proposal Sent", color: "bg-yellow-100 text-yellow-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
+            { id: "S39", label: "Negotiation", color: "bg-orange-100 text-orange-600", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P6" },
+            { id: "S40", label: "Won", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P6" },
+            { id: "S41", label: "Lost", color: "bg-red-100 text-red-600", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P6" },
+        ],
+    },
 ];
 
 const GROUPS = [
@@ -247,6 +264,10 @@ const PERMISSIONS = [
     { id: "settings:pipelines:delete", label: "Delete pipelines", module: "admin", description: "Delete pipelines." },
     { id: "ecommerce:manage", label: "Manage ecommerce catalog & orders", module: "admin", description: "Create shop products and view customer orders." },
     { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters." },
+
+    // crm
+    { id: "crm:view", label: "View CRM leads", module: "crm", description: "View the CRM leads list and lead details." },
+    { id: "crm:manage", label: "Manage CRM leads", module: "crm", description: "Create, edit, delete, and reassign CRM leads." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -262,6 +283,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "customers:view", "customers:manage", "companies:manage",
         "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
         "assignments:view-team",
+        "crm:view", "crm:manage",
     ],
     R4: [
         "customers:view",

@@ -24,6 +24,7 @@ model Customer {
   companies CustomerCompany[]
   portalCredential CustomerPortalCredential?
   shopOrders       ShopOrder[]
+  crmLeads         CrmLead[]
 
   @@index([phone])
   @@index([email])
@@ -42,6 +43,7 @@ model Company {
 
   account   Account?
   customers CustomerCompany[]
+  crmLeads  CrmLead[]
 
   @@index([phone])
   @@index([email])

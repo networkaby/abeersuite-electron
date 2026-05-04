@@ -1,0 +1,106 @@
+import { auth } from "@/auth";
+import { redirect, notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCrmPipeline } from "@/lib/crm-pipeline";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatRupeesFromPaise } from "@/lib/money-inr";
+import LeadEditForm, { type LeadEditInitial } from "./LeadEditForm";
+
+export default async function CrmLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const session = await auth();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    if (!permissions.includes("admin:bypass") && !permissions.includes("crm:view")) {
+        redirect("/office/assignments");
+    }
+    const canManage = permissions.includes("admin:bypass") || permissions.includes("crm:manage");
+
+    const id = Number((await params).id);
+    if (!Number.isFinite(id) || id < 1) notFound();
+
+    const pipeline = await getCrmPipeline(prisma);
+    if (!pipeline) notFound();
+
+    const lead = await prisma.crmLead.findFirst({
+        where: { id, pipelineId: pipeline.id },
+        include: {
+            ticketStatus: { select: { id: true, label: true, color: true } },
+            owner: { select: { id: true, name: true } },
+            customer: { select: { id: true, name: true } },
+            company: { select: { id: true, name: true } },
+            createdBy: { select: { id: true, name: true } },
+        },
+    });
+    if (!lead) notFound();
+
+    const users = await prisma.user.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+        take: 200,
+    });
+
+    const initial: LeadEditInitial = {
+        id: lead.id,
+        title: lead.title,
+        contactName: lead.contactName,
+        phone: lead.phone,
+        email: lead.email,
+        companyName: lead.companyName,
+        valuePaise: lead.valuePaise,
+        source: lead.source,
+        notes: lead.notes,
+        status: lead.status,
+        ownerUserId: lead.ownerUserId,
+        ticketStatus: lead.ticketStatus,
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href="/office/crm">Back</Link>
+                    </Button>
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h1 className="text-2xl font-semibold tracking-tight">{lead.title}</h1>
+                            <Badge className={lead.ticketStatus.color}>{lead.ticketStatus.label}</Badge>
+                        </div>
+                        <p className="text-muted-foreground text-sm mt-1">
+                            {lead.valuePaise != null ? formatRupeesFromPaise(lead.valuePaise) : "No value set"}
+                            {" · "}
+                            Owner: {lead.owner?.name ?? "Unassigned"}
+                            {" · "}
+                            Created by {lead.createdBy.name}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {(lead.customer || lead.company) && (
+                <div className="text-sm border-2 border-border bg-muted/30 p-3">
+                    <span className="text-muted-foreground">Linked: </span>
+                    {lead.customer && (
+                        <Link className="text-primary hover:underline" href={`/office/customers/${lead.customer.id}`}>
+                            {lead.customer.name}
+                        </Link>
+                    )}
+                    {lead.customer && lead.company && " · "}
+                    {lead.company && (
+                        <Link className="text-primary hover:underline" href={`/office/companies/${lead.company.id}`}>
+                            {lead.company.name}
+                        </Link>
+                    )}
+                </div>
+            )}
+
+            <LeadEditForm
+                lead={initial}
+                statuses={pipeline.statuses.map((s) => ({ id: s.id, label: s.label }))}
+                users={users}
+                canManage={canManage}
+            />
+        </div>
+    );
+}

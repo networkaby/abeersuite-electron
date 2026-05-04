@@ -39,4 +39,6 @@ model User {
   authoredPosts      WallPost[]          @relation("AuthoredPosts")
   posts              UserPost[]
   userPermissions    UserPermission[]
+  crmLeadsOwned      CrmLead[]          @relation("CrmLeadOwner")
+  crmLeadsCreated    CrmLead[]          @relation("CrmLeadCreatedBy")
 }
