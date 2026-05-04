@@ -79,3 +79,13 @@ enum PaymentMethod {
   MOBILE_PAYMENT
   OTHER
 }
+
+// ── Ecommerce / Order enums ───────────────────────────────────────────────────
+
+enum OrderSource {
+  ONLINE
+  IN_STORE
+  PHONE
+  WHATSAPP
+  OTHER
+}

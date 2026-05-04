@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -18,14 +18,34 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import OrderStatusActions from "@/modules/ecommerce/components/OrderStatusActions";
-import OrderInvoice from "@/modules/ecommerce/components/OrderInvoice";
-import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
-import type { ShopOrderStatus } from "@/generated/prisma/enums";
+import { OrderSourceBadge } from "@/modules/ecommerce/components/OrderSourceBadge";
+import type { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { toast } from "sonner";
+import { FileText, ExternalLink } from "lucide-react";
+
+type NextPipelineStatus = {
+    id: string;
+    label: string;
+    color: string;
+    isTerminal: boolean;
+    actionLabel: string | null;
+};
 
 type OrderDetail = {
     id: number;
+    orderSource: OrderSource;
+    // Legacy enum status (Razorpay / old orders)
     status: ShopOrderStatus;
+    // Pipeline status
+    statusId: string | null;
+    pipelineId: string | null;
+    orderStatus: {
+        id: string;
+        label: string;
+        color: string;
+        isTerminal: boolean;
+        toTransitions: { to: NextPipelineStatus }[];
+    } | null;
     totalPaise: number;
     shippingName: string | null;
     courier: string | null;
@@ -42,6 +62,7 @@ type OrderDetail = {
     } | null;
     account: {
         id: number;
+        customer: { id: number; name: string; phone: string | null } | null;
         company: { id: number; name: string } | null;
     } | null;
     lines: {
@@ -51,17 +72,25 @@ type OrderDetail = {
         product: { id: number; name: string; imageUrl: string | null };
     }[];
     tickets: { id: number; status: string; createdAt: string }[];
+    invoice: {
+        id: number;
+        number: string;
+        status: string;
+        totalAmount: string;
+    } | null;
 };
 
-type CustomerApi = {
-    companies: { id: number; company: { id: number; name: string; phone: string | null } }[];
-};
+function partyLabel(order: OrderDetail): string {
+    if (order.account?.customer?.name) return order.account.customer.name;
+    if (order.account?.company?.name) return order.account.company.name;
+    if (order.customer?.name) return order.customer.name;
+    return "—";
+}
 
 export default function EcommerceOrderDetailPage() {
     const params = useParams();
     const id = Number(params.id);
     const [order, setOrder] = useState<OrderDetail | null>(null);
-    const [customerLinks, setCustomerLinks] = useState<CustomerApi["companies"]>([]);
     const [returnOpen, setReturnOpen] = useState(false);
     const [rBrand, setRBrand] = useState("");
     const [rModel, setRModel] = useState("");
@@ -78,28 +107,6 @@ export default function EcommerceOrderDetailPage() {
     useEffect(() => {
         load();
     }, [load]);
-
-    useEffect(() => {
-        const cid = order?.customerId;
-        if (!cid) {
-            startTransition(() => {
-                setCustomerLinks([]);
-            });
-            return;
-        }
-        let cancelled = false;
-        axios
-            .get<CustomerApi>(`/api/customers/${cid}`)
-            .then((r) => {
-                if (!cancelled) setCustomerLinks(r.data.companies ?? []);
-            })
-            .catch(() => {
-                if (!cancelled) setCustomerLinks([]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [order?.customerId]);
 
     const spawnReturn = async () => {
         if (!rBrand.trim() || !rModel.trim() || !rProblem.trim()) {
@@ -132,6 +139,15 @@ export default function EcommerceOrderDetailPage() {
         return <p className="text-muted-foreground">Loading…</p>;
     }
 
+    // Derive the display status label + color
+    const statusLabel = order.orderStatus?.label ?? order.status;
+    const statusColor = order.orderStatus?.color ?? "bg-gray-100 text-gray-600";
+
+    // Next statuses for pipeline mode
+    const nextStatuses: NextPipelineStatus[] | undefined = order.orderStatus
+        ? order.orderStatus.toTransitions.map((t) => t.to)
+        : undefined;
+
     return (
         <div className="space-y-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -139,31 +155,44 @@ export default function EcommerceOrderDetailPage() {
                     <Button variant="ghost" size="sm" className="mb-2 -ml-2" asChild>
                         <Link href="/office/ecommerce/orders">← Orders</Link>
                     </Button>
-                    <h1 className="text-2xl font-semibold tracking-tight">Order #{order.id}</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {new Date(order.createdAt).toLocaleString("en-IN")} ·{" "}
-                        <Badge variant="secondary">{order.status}</Badge>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <h1 className="text-2xl font-semibold tracking-tight">Order #{order.id}</h1>
+                        <OrderSourceBadge source={order.orderSource} />
+                        <Badge className={`text-xs font-medium ${statusColor}`} variant="outline">
+                            {statusLabel}
+                        </Badge>
+                    </div>
+                    <p className="text-muted-foreground text-sm mt-1">
+                        {new Date(order.createdAt).toLocaleString("en-IN")}
                     </p>
                 </div>
                 <div className="text-right">
                     <p className="text-lg font-semibold">{formatRupeesFromPaise(order.totalPaise)}</p>
-                    {order.courier ? (
+                    {order.courier && (
                         <p className="text-muted-foreground text-xs">
                             {order.courier} · {order.trackingNumber ?? "—"}
                         </p>
-                    ) : null}
+                    )}
                 </div>
             </div>
 
             <div className="grid gap-8 lg:grid-cols-2">
                 <div className="space-y-6">
-                    <OrderStatusActions orderId={order.id} status={order.status} onUpdated={load} />
+                    {/* Status actions — pipeline mode if statusId set, legacy enum otherwise */}
+                    <OrderStatusActions
+                        orderId={order.id}
+                        onUpdated={load}
+                        statusId={order.statusId}
+                        nextStatuses={nextStatuses}
+                        status={order.statusId ? null : order.status}
+                    />
 
+                    {/* Line items */}
                     <div className="rounded-lg border border-border p-4">
                         <h2 className="mb-3 font-medium">Line items</h2>
                         <ul className="space-y-2 text-sm">
                             {order.lines.map((l) => (
-                                <li key={l.id} className="flex justify-between gap-2 border-b border-border/60 pb-2">
+                                <li key={l.id} className="flex justify-between gap-2 border-b border-border/60 pb-2 last:border-0">
                                     <span>{l.product.name}</span>
                                     <span className="text-muted-foreground">
                                         ×{l.quantity} · {formatRupeesFromPaise(l.unitPricePaise * l.quantity)}
@@ -173,9 +202,10 @@ export default function EcommerceOrderDetailPage() {
                         </ul>
                     </div>
 
+                    {/* Return ticket */}
                     <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
                         <DialogTrigger asChild>
-                            <Button type="button" variant="outline" disabled={order.status === "REFUNDED"}>
+                            <Button type="button" variant="outline">
                                 Spawn return ticket
                             </Button>
                         </DialogTrigger>
@@ -205,7 +235,8 @@ export default function EcommerceOrderDetailPage() {
                         </DialogContent>
                     </Dialog>
 
-                    {order.tickets.length > 0 ? (
+                    {/* Linked repair tickets */}
+                    {order.tickets.length > 0 && (
                         <div className="rounded-lg border border-border p-4 text-sm">
                             <h2 className="mb-2 font-medium">Linked tickets</h2>
                             <ul className="space-y-1">
@@ -219,44 +250,56 @@ export default function EcommerceOrderDetailPage() {
                                 ))}
                             </ul>
                         </div>
-                    ) : null}
+                    )}
                 </div>
 
                 <div className="space-y-6">
+                    {/* Party / customer panel */}
                     <div className="rounded-lg border border-border p-4">
-                        <h2 className="mb-2 font-medium">Customer</h2>
-                        {order.customer ? (
-                            <>
-                                <p className="font-medium">{order.customer.name}</p>
-                                <p className="text-muted-foreground text-sm">{order.customer.email}</p>
-                                <p className="text-muted-foreground text-sm">{order.customer.phone}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    {order.account?.company ? `Company profile: ${order.account.company.name}` : "Personal profile order"}
-                                </p>
-                                <div className="mt-4">
-                                    <CustomerLinkPanel
-                                        customerId={order.customer.id}
-                                        initialLinks={customerLinks.map((lc) => ({
-                                            id: lc.id,
-                                            company: lc.company,
-                                        }))}
-                                    />
-                                </div>
-                            </>
-                        ) : (
-                            <p className="text-muted-foreground text-sm">Customer profile unavailable.</p>
+                        <h2 className="mb-2 font-medium">Billed to</h2>
+                        <p className="font-medium">{partyLabel(order)}</p>
+                        {order.account?.customer?.phone && (
+                            <p className="text-muted-foreground text-sm">{order.account.customer.phone}</p>
+                        )}
+                        {order.customer?.email && (
+                            <p className="text-muted-foreground text-sm">{order.customer.email}</p>
+                        )}
+                        {order.account?.company && (
+                            <p className="text-xs text-muted-foreground mt-1">Company: {order.account.company.name}</p>
+                        )}
+                        {!order.account && order.customer && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {order.customer.email} · {order.customer.phone}
+                            </p>
                         )}
                     </div>
 
-                    <OrderInvoice
-                        orderId={order.id}
-                        createdAt={order.createdAt}
-                        status={order.status}
-                        lines={order.lines}
-                        totalPaise={order.totalPaise}
-                        accountLabel={order.account?.company?.name ?? "Personal"}
-                        customerName={order.customer?.name ?? null}
-                    />
+                    {/* Invoice panel */}
+                    <div className="rounded-lg border border-border p-4">
+                        <h2 className="mb-3 font-medium flex items-center gap-2">
+                            <FileText size={15} className="text-muted-foreground" />
+                            Invoice
+                        </h2>
+                        {order.invoice ? (
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-mono text-sm font-semibold text-primary">{order.invoice.number}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {order.invoice.status} · {formatRupeesFromPaise(Math.round(Number(order.invoice.totalAmount) * 100))}
+                                    </p>
+                                </div>
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={`/office/finance/invoices/${order.invoice.id}`}>
+                                        <ExternalLink size={13} /> View in Tally
+                                    </Link>
+                                </Button>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Invoice will be auto-created when the order is <span className="font-medium">Confirmed</span>.
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

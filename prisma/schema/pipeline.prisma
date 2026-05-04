@@ -15,6 +15,7 @@ model Pipeline {
   subStatuses TicketSubStatus[]
   tickets     Ticket[]
   crmLeads    CrmLead[]
+  shopOrders  ShopOrder[]
 }
 
 model TicketStatus {
@@ -35,6 +36,7 @@ model TicketStatus {
   tickets         Ticket[]
   logs            TicketLog[]
   crmLeads        CrmLead[]
+  shopOrders      ShopOrder[]
 }
 
 model TicketSubStatus {

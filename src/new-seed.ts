@@ -145,6 +145,24 @@ const BUSINESS_PIPELINES: PipelineSeed[] = [
         ],
     },
     {
+        id: "P7",
+        name: "sales-orders",
+        label: "Sales Orders",
+        description: "Order processing pipeline — online, in-store, phone, and WhatsApp orders",
+        color: "bg-amber-100 text-amber-800",
+        order: 7,
+        statuses: [
+            { id: "S42", label: "New", color: "bg-gray-100 text-gray-600", order: 1, isEntryPoint: true, isTerminal: false, pipelineId: "P7" },
+            { id: "S43", label: "Under Review", color: "bg-yellow-100 text-yellow-700", order: 2, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Mark Under Review" },
+            { id: "S44", label: "Confirmed", color: "bg-blue-100 text-blue-700", order: 3, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Confirm Order" },
+            { id: "S45", label: "Packing", color: "bg-indigo-100 text-indigo-700", order: 4, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Start Packing" },
+            { id: "S46", label: "Dispatched", color: "bg-purple-100 text-purple-700", order: 5, isEntryPoint: false, isTerminal: false, pipelineId: "P7", actionLabel: "Mark Dispatched" },
+            { id: "S47", label: "Delivered", color: "bg-green-100 text-green-700", order: 6, isEntryPoint: false, isTerminal: true, pipelineId: "P7", actionLabel: "Mark Delivered" },
+            { id: "S48", label: "Cancelled", color: "bg-gray-100 text-gray-400", order: 7, isEntryPoint: false, isTerminal: true, pipelineId: "P7", actionLabel: "Cancel Order" },
+            { id: "S49", label: "Returned", color: "bg-red-100 text-red-600", order: 8, isEntryPoint: false, isTerminal: true, pipelineId: "P7", actionLabel: "Mark Returned" },
+        ],
+    },
+    {
         id: "P6",
         name: "crm-leads",
         label: "CRM Leads",
@@ -293,6 +311,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 const STATUS_TRANSITIONS = [
+    // P1 — Repair pipeline
     { fromStatusId: "S1", toStatusId: "S2" },
     { fromStatusId: "S1", toStatusId: "S9" },
     { fromStatusId: "S2", toStatusId: "S3" },
@@ -308,7 +327,17 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S6", toStatusId: "S7" },
     { fromStatusId: "S7", toStatusId: "S1" },
     { fromStatusId: "S8", toStatusId: "S1" },
-] as const;
+    // P7 — Sales Orders pipeline
+    { fromStatusId: "S42", toStatusId: "S43" }, // New → Under Review
+    { fromStatusId: "S42", toStatusId: "S48" }, // New → Cancelled
+    { fromStatusId: "S43", toStatusId: "S44" }, // Under Review → Confirmed
+    { fromStatusId: "S43", toStatusId: "S48" }, // Under Review → Cancelled
+    { fromStatusId: "S44", toStatusId: "S45" }, // Confirmed → Packing
+    { fromStatusId: "S44", toStatusId: "S48" }, // Confirmed → Cancelled
+    { fromStatusId: "S45", toStatusId: "S46" }, // Packing → Dispatched
+    { fromStatusId: "S46", toStatusId: "S47" }, // Dispatched → Delivered
+    { fromStatusId: "S46", toStatusId: "S49" }, // Dispatched → Returned
+];
 
 const SUB_STATUSES: SubStatusSeed[] = [
     { id: "SS1", label: "Waiting: Customer Info", order: 1, color: "bg-yellow-50 text-yellow-700", groupId: "customer_comm", group: "customer_comm", applicableStatusIds: ["S2", "S3", "S6"], allowedRoles: ["R1", "R2"], notifyRoles: ["R3"], pipelineId: "P1" },
@@ -413,6 +442,7 @@ const CHART_OF_ACCOUNTS = [
     { code: "3100", name: "Retained Earnings", type: "EQUITY", normalBalance: "CREDIT", description: "Accumulated profits carried forward" },
     { code: "4000", name: "Service Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from repair and service work" },
     { code: "4100", name: "Parts Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from parts sales" },
+    { code: "4150", name: "Shop Sales Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from ecommerce and walk-in product sales" },
     { code: "4200", name: "Warranty Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from warranty claim work" },
     { code: "4900", name: "Other Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Miscellaneous income" },
     { code: "5000", name: "Cost of Parts Sold", type: "EXPENSE", normalBalance: "DEBIT", description: "Cost of parts used in repairs" },
@@ -421,6 +451,8 @@ const CHART_OF_ACCOUNTS = [
     { code: "6200", name: "Salaries Expense", type: "EXPENSE", normalBalance: "DEBIT", description: "Staff wages and salaries" },
     { code: "6300", name: "Tools & Equipment", type: "EXPENSE", normalBalance: "DEBIT", description: "Tools, equipment and small asset purchases" },
     { code: "6900", name: "Miscellaneous Expense", type: "EXPENSE", normalBalance: "DEBIT", description: "Other business expenses" },
+    // Walk-in cash customer account — used as accountId for in-store cash sales with no registered customer
+    { code: "CASH-WALKIN", name: "Walk-in Cash Customer", type: "ASSET" as const, normalBalance: "DEBIT" as const, description: "Generic account for unregistered walk-in cash sales" },
 ] as const;
 
 async function upsertPipelines(pipelines: PipelineSeed[]) {

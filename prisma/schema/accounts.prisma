@@ -27,6 +27,7 @@ model Account {
   billedTickets Ticket[]      @relation("TicketBillingAccount")
   devices       Device[]
   shopOrders    ShopOrder[]
+  invoices      Invoice[]     @relation("AccountInvoices")
 
   @@index([type])
   @@index([isActive])

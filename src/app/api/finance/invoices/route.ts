@@ -12,9 +12,8 @@ const lineSchema = z.object({
 });
 
 const createSchema = z.object({
-    partyName: z.string().trim().min(1),
-    partyType: z.enum(["customer", "company"]),
-    partyId: z.number().int().positive(),
+    // Primary GL link — account from PartyPicker
+    accountId: z.number().int().positive(),
     issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     notes: z.string().trim().optional(),
@@ -23,6 +22,20 @@ const createSchema = z.object({
     status: z.enum(["DRAFT", "SENT"]).default("DRAFT"),
 });
 
+const INVOICE_INCLUDE = {
+    createdBy: { select: { id: true, name: true } },
+    account: {
+        select: {
+            id: true,
+            name: true,
+            customer: { select: { id: true, name: true } },
+            company: { select: { id: true, name: true } },
+        },
+    },
+    shopOrder: { select: { id: true, orderSource: true } },
+    _count: { select: { lines: true, payments: true } },
+} as const;
+
 // GET /api/finance/invoices
 export async function GET(req: Request) {
     const { response } = await requireAuth();
@@ -30,21 +43,18 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
-    const partyType = searchParams.get("partyType");
-    const partyId = searchParams.get("partyId");
+    const accountId = searchParams.get("accountId");
+    const orderSource = searchParams.get("orderSource");
 
     try {
         const invoices = await prisma.invoice.findMany({
             where: {
                 ...(status ? { status: status as "DRAFT" | "SENT" | "PARTIAL" | "PAID" | "VOID" } : {}),
-                ...(partyType ? { partyType } : {}),
-                ...(partyId ? { partyId: Number(partyId) } : {}),
+                ...(accountId ? { accountId: Number(accountId) } : {}),
+                ...(orderSource ? { shopOrder: { orderSource: orderSource as never } } : {}),
             },
             orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }],
-            include: {
-                createdBy: { select: { id: true, name: true } },
-                _count: { select: { lines: true, payments: true } },
-            },
+            include: INVOICE_INCLUDE,
         });
         return NextResponse.json(invoices);
     } catch (err) {
@@ -85,9 +95,7 @@ export async function POST(req: Request) {
                     issueDate: new Date(body.issueDate),
                     dueDate: new Date(body.dueDate),
                     notes: body.notes ?? null,
-                    partyName: body.partyName,
-                    partyType: body.partyType,
-                    partyId: body.partyId,
+                    accountId: body.accountId,
                     subtotal,
                     taxAmount,
                     totalAmount,
@@ -164,7 +172,6 @@ export async function postInvoiceJe(
         },
     });
 
-    // Update account balances
     for (const line of lines) {
         const acct = await tx.account.findUnique({ where: { id: line.accountId } });
         if (!acct) continue;
@@ -172,6 +179,5 @@ export async function postInvoiceJe(
         await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
     }
 
-    // Link invoice to je via a note (loose — we don't store the je id on invoice to keep isolation)
     return je;
 }

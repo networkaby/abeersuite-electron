@@ -21,6 +21,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         include: {
             createdBy: { select: { id: true, name: true } },
+            account: {
+                select: {
+                    id: true,
+                    name: true,
+                    customer: { select: { id: true, name: true, phone: true } },
+                    company: { select: { id: true, name: true } },
+                },
+            },
+            shopOrder: { select: { id: true, orderSource: true, totalPaise: true } },
             lines: { orderBy: { id: "asc" } },
             payments: {
                 orderBy: { date: "desc" },
