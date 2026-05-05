@@ -286,6 +286,11 @@ const PERMISSIONS = [
     // crm
     { id: "crm:view", label: "View CRM leads", module: "crm", description: "View the CRM leads list and lead details." },
     { id: "crm:manage", label: "Manage CRM leads", module: "crm", description: "Create, edit, delete, and reassign CRM leads." },
+
+    // finance — three-tier delete on journal entries
+    { id: "finance:journal:void", label: "Void journal entries", module: "finance", description: "Mark a POSTED journal entry as VOIDED. The original stays visible in lists and a reversing entry is written for the audit trail." },
+    { id: "finance:journal:soft-delete", label: "Soft-delete journal entries", module: "finance", description: "Hide a journal entry from normal views and exclude it from balance calculations. Recoverable via restore." },
+    { id: "finance:journal:hard-delete", label: "Hard-delete journal entries", module: "finance", description: "Physically remove a journal entry. A snapshot is written to the audit log so the deletion itself is traceable. Use for cleanup only." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {

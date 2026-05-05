@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { balanceDelta, toNumber, nextRef } from "@/modules/tally/lib/balance";
 import { z } from "zod";
 
@@ -10,7 +10,7 @@ const voidSchema = z.object({
 
 // POST /api/finance/journal-entries/[id]/void
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("finance:journal:void");
     if (response) return response;
 
     const { id } = await params;
@@ -26,6 +26,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (entry.deletedAt) {
+        return NextResponse.json({ error: "Cannot void a deleted entry — restore it first" }, { status: 409 });
+    }
     if (entry.status !== "POSTED") {
         return NextResponse.json({ error: "Only POSTED entries can be voided" }, { status: 409 });
     }
@@ -82,7 +85,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             await tx.journalEntry.update({
                 where: { id: Number(id) },
-                data: { status: "VOIDED", voidedAt: new Date(), voidReason: parsed.data.reason },
+                data: {
+                    status: "VOIDED",
+                    voidedAt: new Date(),
+                    voidReason: parsed.data.reason,
+                    voidedById: user!.id,
+                },
             });
         });
 

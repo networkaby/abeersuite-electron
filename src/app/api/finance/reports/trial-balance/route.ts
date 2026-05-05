@@ -26,6 +26,7 @@ export async function GET(req: Request) {
                     where: {
                         journalEntry: {
                             status: "POSTED",
+                            deletedAt: null,
                             date: { lte: asOf },
                         },
                     },
