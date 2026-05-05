@@ -1,3 +1,24 @@
+// ── AccountGroup (Tally-style group hierarchy) ────────────────────────────────
+//
+// Groups are organisational containers (Primary → Sub-group).
+// Every Account (ledger) optionally belongs to one group via groupId.
+
+model AccountGroup {
+  id        Int           @id @default(autoincrement())
+  name      String
+  type      GroupType
+  parentId  Int?
+  sortOrder Int           @default(0)
+  isActive  Boolean       @default(true)
+
+  parent    AccountGroup?  @relation("GroupHierarchy", fields: [parentId], references: [id])
+  children  AccountGroup[] @relation("GroupHierarchy")
+  accounts  Account[]
+
+  @@index([parentId, sortOrder])
+  @@index([type])
+}
+
 // ── Account (unified chart-of-accounts + identity ledger) ────────────────────
 //
 // Every row is a proper ledger account. Customer/company accounts have
@@ -14,6 +35,7 @@ model Account {
   isActive      Boolean        @default(true)
   balance       Decimal        @default(0) @db.Decimal(14, 2)
   parentId      Int?
+  groupId       Int?
   // Identity linkage — set only for customer / company accounts
   customerId    Int?           @unique
   companyId     Int?           @unique
@@ -21,6 +43,7 @@ model Account {
 
   parent        Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
   children      Account[]     @relation("AccountHierarchy")
+  group         AccountGroup? @relation(fields: [groupId], references: [id])
   customer      Customer?     @relation(fields: [customerId], references: [id])
   company       Company?      @relation(fields: [companyId], references: [id])
   lines         JournalLine[]
@@ -33,4 +56,5 @@ model Account {
   @@index([isActive])
   @@index([customerId])
   @@index([companyId])
+  @@index([groupId])
 }

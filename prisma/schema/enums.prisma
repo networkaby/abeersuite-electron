@@ -39,6 +39,13 @@ enum LogVisibility {
 
 // ── Finance enums ─────────────────────────────────────────────────────────────
 
+enum GroupType {
+  ASSET
+  LIABILITY
+  INCOME
+  EXPENSE
+}
+
 enum GlAccountType {
   ASSET
   LIABILITY

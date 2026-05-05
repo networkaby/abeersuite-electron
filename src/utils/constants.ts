@@ -46,6 +46,7 @@ import {
     ListOrdered,
     PlayCircle,
     Receipt,
+    FolderTree,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -162,6 +163,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "tally",
         // disabled: true,
         children: [
+            { label: "Account Groups", icon: FolderTree, href: "/office/finance/groups" },
+            { label: "Ledgers", icon: BookOpen, href: "/office/finance/ledgers" },
             { label: "New Sale", icon: Receipt, href: "/office/finance/sales/new" },
             { label: "New Purchase", icon: ShoppingCart, href: "/office/finance/purchases/new" },
             { label: "New Estimate", icon: ScrollText, href: "/office/finance/estimates/new" },

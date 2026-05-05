@@ -23,6 +23,7 @@ interface GlAccount {
     description: string | null;
     isActive: boolean;
     balance: number;
+    group: { id: number; name: string } | null;
     _count: { lines: number };
 }
 
@@ -208,6 +209,7 @@ export default function ChartOfAccountsPage() {
                             <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
                                 <th className="px-5 py-2 text-left font-medium">Code</th>
                                 <th className="px-5 py-2 text-left font-medium">Name</th>
+                                <th className="px-5 py-2 text-left font-medium">Group</th>
                                 <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
                                 <th className="px-5 py-2 text-right font-medium">Current Balance</th>
                                 <th className="px-5 py-2 text-right font-medium">Entries</th>
@@ -241,6 +243,11 @@ export default function ChartOfAccountsPage() {
                                                 placeholder="Description"
                                             />
                                         )}
+                                    </td>
+                                    <td className="px-5 py-3">
+                                        <span className="text-xs text-muted-foreground">
+                                            {a.group?.name ?? <span className="italic text-muted-foreground/50">—</span>}
+                                        </span>
                                     </td>
                                     <td className="px-5 py-3">
                                         <span className="text-xs text-muted-foreground">{a.normalBalance}</span>

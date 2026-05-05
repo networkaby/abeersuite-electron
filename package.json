@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "reconcile:shop-orders": "tsx src/scripts/reconcile-shop-order-accounts.ts",
-    "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts"
+    "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts",
+    "seed:accounts": "tsx prisma/seed-accounts.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -33,6 +33,7 @@ export async function GET(req: Request) {
             orderBy: [{ code: "asc" }],
             include: {
                 parent: { select: { id: true, code: true, name: true } },
+                group:  { select: { id: true, name: true, type: true } },
                 _count: { select: { lines: true } },
             },
         });

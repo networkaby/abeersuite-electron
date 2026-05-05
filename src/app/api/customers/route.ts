@@ -159,8 +159,14 @@ export async function POST(req: Request) {
                     agreedAt: body.agreedToTerms ? new Date() : null,
                 },
             });
-            // Auto-create ledger account (name mirrors customer name)
-            await tx.account.create({ data: { customerId: c.id, name: c.name } });
+            // Auto-create ledger account under Sundry Debtors group
+            const sundryDebtors = await tx.accountGroup.findFirst({
+                where: { name: "Sundry Debtors" },
+                select: { id: true },
+            });
+            await tx.account.create({
+                data: { customerId: c.id, name: c.name, groupId: sundryDebtors?.id ?? null },
+            });
             return c;
         });
 
