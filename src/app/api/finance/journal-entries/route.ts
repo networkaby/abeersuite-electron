@@ -19,18 +19,22 @@ const createSchema = z.object({
 
 // GET /api/finance/journal-entries
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
+    const includeDeletedParam = searchParams.get("includeDeleted") === "1";
+    const canSeeDeleted = user!.permissions.includes("admin:bypass") || user!.permissions.includes("finance:journal:soft-delete");
+    const includeDeleted = includeDeletedParam && canSeeDeleted;
 
     try {
         const entries = await prisma.journalEntry.findMany({
             where: {
                 ...(status ? { status: status as "DRAFT" | "POSTED" | "VOIDED" } : {}),
+                ...(includeDeleted ? {} : { deletedAt: null }),
                 ...(from || to ? {
                     date: {
                         ...(from ? { gte: new Date(from) } : {}),

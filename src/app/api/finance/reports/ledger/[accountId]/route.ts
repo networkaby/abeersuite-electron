@@ -33,7 +33,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         const openingLines = await prisma.journalLine.findMany({
             where: {
                 accountId: Number(accountId),
-                journalEntry: { status: "POSTED", date: { lt: from } },
+                journalEntry: { status: "POSTED", deletedAt: null, date: { lt: from } },
             },
             select: { type: true, amount: true },
         });
@@ -45,7 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         const lines = await prisma.journalLine.findMany({
             where: {
                 accountId: Number(accountId),
-                journalEntry: { status: "POSTED", date: { gte: from, lte: to } },
+                journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } },
             },
             orderBy: [{ journalEntry: { date: "asc" } }, { id: "asc" }],
             include: {

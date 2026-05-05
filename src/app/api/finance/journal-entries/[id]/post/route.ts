@@ -17,6 +17,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (entry.deletedAt) {
+        return NextResponse.json({ error: "Cannot post a deleted entry — restore it first" }, { status: 409 });
+    }
     if (entry.status !== "DRAFT") {
         return NextResponse.json({ error: `Entry is already ${entry.status}` }, { status: 409 });
     }

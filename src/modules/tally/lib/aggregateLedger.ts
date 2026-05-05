@@ -43,7 +43,7 @@ export async function aggregateClosingAsOf(
     const sums = await prisma.journalLine.groupBy({
         by: ["accountId", "type"],
         _sum: { amount: true },
-        where: { journalEntry: { status: "POSTED", date: { lte: asOf } } },
+        where: { journalEntry: { status: "POSTED", deletedAt: null, date: { lte: asOf } } },
     });
     const buckets = new Map<number, { d: number; c: number }>();
     for (const r of sums) {
@@ -72,12 +72,12 @@ export async function aggregateRange(
         prisma.journalLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { journalEntry: { status: "POSTED", date: { lt: from } } },
+            where: { journalEntry: { status: "POSTED", deletedAt: null, date: { lt: from } } },
         }),
         prisma.journalLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { journalEntry: { status: "POSTED", date: { gte: from, lte: to } } },
+            where: { journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } } },
         }),
     ]);
 
@@ -135,7 +135,7 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
             _sum: { amount: true },
             where: {
                 accountId: { in: ids },
-                journalEntry: { status: "POSTED", date: { gte: from, lte: to } },
+                journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } },
             },
         });
         let dr = 0, cr = 0;
@@ -153,7 +153,7 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
             _sum: { amount: true },
             where: {
                 accountId: { in: ids },
-                journalEntry: { status: "POSTED", date: { gte: from, lte: to } },
+                journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } },
             },
         });
         let dr = 0, cr = 0;

@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, Loader2, ChevronRight } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Plus, Loader2, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 interface JournalEntry {
     id: number;
@@ -23,6 +25,7 @@ interface JournalEntry {
     reference: string;
     description: string;
     status: "DRAFT" | "POSTED" | "VOIDED";
+    deletedAt: string | null;
     totalDebit: number;
     _count: { lines: number };
     createdBy: { name: string };
@@ -38,12 +41,17 @@ const cellClass  = "w-full rounded-md border border-input bg-background px-2 py-
 
 
 export default function JournalEntriesPage() {
+    const { data: session } = useSession();
+    const permissions = session?.user?.permissions ?? [];
+    const canSeeDeleted = hasPermissionWithScope(permissions, "finance:journal:soft-delete");
+
     const [entries, setEntries] = useState<JournalEntry[]>([]);
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
     const [saving, setSaving] = useState(false);
     const [statusFilter, setStatusFilter] = useState("");
+    const [showDeleted, setShowDeleted] = useState(false);
 
     const [form, setForm] = useState({
         date: new Date().toISOString().slice(0, 10),
@@ -56,14 +64,17 @@ export default function JournalEntriesPage() {
 
     const load = () => {
         setLoading(true);
-        const q = statusFilter ? `?status=${statusFilter}` : "";
+        const params = new URLSearchParams();
+        if (statusFilter) params.set("status", statusFilter);
+        if (showDeleted && canSeeDeleted) params.set("includeDeleted", "1");
+        const q = params.toString() ? `?${params.toString()}` : "";
         axios.get<JournalEntry[]>(`/api/finance/journal-entries${q}`)
             .then((r) => setEntries(r.data))
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, [statusFilter]);
+    useEffect(load, [statusFilter, showDeleted, canSeeDeleted]);
 
     useEffect(() => {
         axios.get<GlAccount[]>("/api/finance/gl-accounts")
@@ -121,7 +132,7 @@ export default function JournalEntriesPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex gap-1">
+            <div className="flex flex-wrap items-center gap-1">
                 {(["", "DRAFT", "POSTED", "VOIDED"] as const).map((s) => (
                     <Button
                         key={s}
@@ -137,6 +148,20 @@ export default function JournalEntriesPage() {
                         {s || "All"}
                     </Button>
                 ))}
+                {canSeeDeleted && (
+                    <Button
+                        onClick={() => setShowDeleted((v) => !v)}
+                        variant="outline"
+                        size="xs"
+                        className={`ml-2 h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
+                            showDeleted
+                                ? "border-destructive bg-destructive/10 text-destructive"
+                                : "border-border bg-card text-muted-foreground hover:bg-muted"
+                        }`}
+                    >
+                        <Trash2 size={12} /> {showDeleted ? "Showing deleted" : "Show deleted"}
+                    </Button>
+                )}
             </div>
 
             {/* Create form */}
@@ -290,10 +315,17 @@ export default function JournalEntriesPage() {
                             </thead>
                             <tbody>
                                 {entries.map((e) => (
-                                    <tr key={e.id} className="border-b last:border-0 hover:bg-muted/40">
+                                    <tr key={e.id} className={`border-b last:border-0 hover:bg-muted/40 ${e.deletedAt ? "opacity-60" : ""}`}>
                                         <td className="px-5 py-3 font-mono text-primary">{e.reference}</td>
                                         <td className="px-5 py-3 text-muted-foreground">{new Date(e.date).toLocaleDateString()}</td>
-                                        <td className="px-5 py-3 text-foreground">{e.description}</td>
+                                        <td className="px-5 py-3 text-foreground">
+                                            {e.description}
+                                            {e.deletedAt && (
+                                                <span className="ml-2 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-destructive">
+                                                    <Trash2 size={10} /> deleted
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-5 py-3 text-right font-mono">{fmt(e.totalDebit)}</td>
                                         <td className="px-5 py-3 text-center">
                                             <span className={`text-xs px-2 py-0.5 font-medium ${STATUS_COLORS[e.status]}`}>
