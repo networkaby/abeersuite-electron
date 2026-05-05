@@ -73,7 +73,8 @@ export default function AccountLedgerPage() {
             .finally(() => setLoading(false));
     }, [id, from, to]);
 
-    useEffect(() => { load(); }, [load]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(load, [load]);
 
     return (
         <div className="max-w-6xl mx-auto space-y-5">

@@ -58,7 +58,8 @@ export default function GroupDetailPage() {
             .finally(() => setLoading(false));
     }, [id]);
 
-    useEffect(() => { load(); }, [load]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(load, [load]);
 
     if (loading) return (
         <div className="flex items-center justify-center h-64">

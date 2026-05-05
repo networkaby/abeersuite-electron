@@ -61,7 +61,9 @@ export default function DayBookPage() {
             .finally(() => setLoading(false));
     }, [from, to]);
 
-    useEffect(() => { load(1, ""); setPage(1); }, [load]);
+    const loadFirst = useCallback(() => { setPage(1); load(1, ""); }, [load]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(loadFirst, [loadFirst]);
 
     const handleSearch = (v: string) => {
         setSearch(v);

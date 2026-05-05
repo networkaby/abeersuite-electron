@@ -107,7 +107,7 @@ export default function AccountGroupsPage() {
     const toggle = (id: number) =>
         setExpanded((prev) => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) { next.delete(id); } else { next.add(id); }
             return next;
         });
 
@@ -372,7 +372,7 @@ export default function AccountGroupsPage() {
                         {flat.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                                    No groups yet. Click "New Group" to create one.
+                                    No groups yet. Click &quot;New Group&quot; to create one.
                                 </td>
                             </tr>
                         )}

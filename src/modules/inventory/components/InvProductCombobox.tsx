@@ -64,13 +64,15 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
 
     // When value changes externally, update the display text
     const selectedProduct = products.find((p) => p.id === value);
-    useEffect(() => {
+    const syncQuery = useCallback(() => {
         if (selectedProduct) {
             setQuery(selectedProduct.name);
         } else if (!value) {
             setQuery("");
         }
-    }, [value, selectedProduct]);
+    }, [selectedProduct, value]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(syncQuery, [syncQuery]);
 
     const filtered = query.trim()
         ? products.filter((p) =>

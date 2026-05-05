@@ -42,7 +42,7 @@ const cellClass  = "w-full rounded-md border border-input bg-background px-2 py-
 
 export default function JournalEntriesPage() {
     const { data: session } = useSession();
-    const permissions = session?.user?.permissions ?? [];
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canSeeDeleted = hasPermissionWithScope(permissions, "finance:journal:soft-delete");
 
     const [entries, setEntries] = useState<JournalEntry[]>([]);

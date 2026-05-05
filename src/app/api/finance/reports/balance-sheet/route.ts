@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { parseAsOf, indianFiscalYearStart } from "@/modules/tally/lib/period";

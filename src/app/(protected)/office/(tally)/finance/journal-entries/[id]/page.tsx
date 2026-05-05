@@ -52,7 +52,7 @@ export default function JournalEntryDetailPage() {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
     const { data: session } = useSession();
-    const permissions = session?.user?.permissions ?? [];
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canVoid = hasPermissionWithScope(permissions, "finance:journal:void");
     const canSoftDelete = hasPermissionWithScope(permissions, "finance:journal:soft-delete");
     const canHardDelete = hasPermissionWithScope(permissions, "finance:journal:hard-delete");

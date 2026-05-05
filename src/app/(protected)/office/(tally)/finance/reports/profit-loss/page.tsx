@@ -143,11 +143,12 @@ export default function ProfitLossPage() {
             .finally(() => setLoading(false));
     }, [from, to]);
 
-    useEffect(() => { load(); }, [load]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(load, [load]);
 
     const toggle = (id: number) => setExpanded((prev) => {
         const next = new Set(prev);
-        next.has(id) ? next.delete(id) : next.add(id);
+        if (next.has(id)) { next.delete(id); } else { next.add(id); }
         return next;
     });
     const goLedger = (id: number) => router.push(`/office/finance/account/${id}?from=${from}&to=${to}`);
