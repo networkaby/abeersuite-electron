@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, UserPlus, ArrowRight, ShieldCheck, Wrench, Building2, User } from "lucide-react";
+import { Search, UserPlus, ArrowRight, ShieldCheck, Wrench, Building2, User, Loader2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useForm, type Resolver } from "react-hook-form";
@@ -445,40 +445,34 @@ export default function QuickTicketButton() {
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) closeModal(); }}>
-            <DialogContent showCloseButton={false} className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
-                <DialogHeader className="border-b border-border px-6 py-5">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-3">
-                            <div>
-                                <DialogTitle>New Ticket</DialogTitle>
-                                <DialogDescription>
-                                    Search for an account, create it if needed, then capture the ticket details.
-                                </DialogDescription>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {stepLabels.map((s, i) => (
-                                    <div key={s.key} className="flex items-center gap-2">
-                                        <Badge
-                                            variant={step === s.key ? "default" : stepLabels.findIndex((x) => x.key === step) > i ? "secondary" : "outline"}
-                                            className="min-w-6 justify-center"
-                                        >
-                                            {i + 1}
-                                        </Badge>
-                                        <span className="text-xs text-muted-foreground">{s.label}</span>
-                                        {i < stepLabels.length - 1 && <ArrowRight size={12} className="text-muted-foreground" />}
-                                    </div>
-                                ))}
-                            </div>
+            <DialogContent className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
+                <DialogHeader className="border-b border-border px-6 py-5 pr-12">
+                    <div className="space-y-3">
+                        <div>
+                            <DialogTitle>New Ticket</DialogTitle>
+                            <DialogDescription>
+                                Search for an account, create it if needed, then capture the ticket details.
+                            </DialogDescription>
                         </div>
-                        <Button type="button" variant="ghost" size="icon-sm" onClick={closeModal}>
-                            <span className="sr-only">Close</span>
-                            <ArrowRight className="rotate-45" />
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {stepLabels.map((s, i) => (
+                                <div key={s.key} className="flex items-center gap-2">
+                                    <Badge
+                                        variant={step === s.key ? "default" : stepLabels.findIndex((x) => x.key === step) > i ? "secondary" : "outline"}
+                                        className="min-w-6 justify-center"
+                                    >
+                                        {i + 1}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">{s.label}</span>
+                                    {i < stepLabels.length - 1 && <ArrowRight size={12} className="text-muted-foreground" />}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </DialogHeader>
 
-                <div className="max-h-[75vh] overflow-y-auto px-6 py-5">
-                    {step === "phone" && (
+                {step === "phone" ? (
+                    <div className="px-6 py-5">
                         <div className="space-y-4">
                             <p className="text-sm text-muted-foreground">
                                 Search account by mobile number or name to get started.
@@ -529,9 +523,14 @@ export default function QuickTicketButton() {
                                         className="pl-9"
                                         autoFocus
                                     />
-                                    {showSuggestions && (suggestions.length > 0 || (phone.trim().length >= 2 && !lookupLoading)) && (
-                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-10 overflow-hidden rounded-md border border-border bg-popover shadow">
-                                            {suggestions.length > 0 ? (
+                                    {showSuggestions && phone.trim().length >= 2 && (
+                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-50 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg ring-1 ring-black/5">
+                                            {lookupLoading && suggestions.length === 0 ? (
+                                                <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+                                                    <Loader2 size={14} className="animate-spin" />
+                                                    <span>Searching…</span>
+                                                </div>
+                                            ) : suggestions.length > 0 ? (
                                                 suggestions.map((suggestion, index) => (
                                                     <Button
                                                         key={`${suggestion.type}-${suggestion.id}`}
@@ -544,33 +543,80 @@ export default function QuickTicketButton() {
                                                         )}
                                                         variant="ghost"
                                                     >
-                                                        <span className="truncate font-medium">
-                                                            {suggestion.name} - {suggestion.phone ?? "No mobile"}
+                                                        <span className="flex min-w-0 items-center gap-2">
+                                                            {suggestion.type === "company" ? (
+                                                                <Building2 size={14} className="shrink-0 text-muted-foreground" />
+                                                            ) : (
+                                                                <User size={14} className="shrink-0 text-muted-foreground" />
+                                                            )}
+                                                            <span className="truncate font-medium">{suggestion.name}</span>
+                                                            <span className="truncate text-muted-foreground">
+                                                                {suggestion.phone ?? "No mobile"}
+                                                            </span>
                                                         </span>
-                                                        <span className="ml-3 shrink-0 text-xs uppercase text-muted-foreground">
+                                                        <Badge variant="secondary" className="ml-3 shrink-0 text-[10px] uppercase">
                                                             {suggestion.type}
-                                                        </span>
+                                                        </Badge>
                                                     </Button>
                                                 ))
                                             ) : (
-                                                <div className="px-4 py-3 text-sm text-muted-foreground">
-                                                    No matching account found.
+                                                <div className="space-y-2 px-4 py-3">
+                                                    <p className="text-sm text-muted-foreground">No matching account found.</p>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onMouseDown={(e) => e.preventDefault()}
+                                                        onClick={searchByPhone}
+                                                        disabled={searching || !phone.trim()}
+                                                    >
+                                                        Create new account for &ldquo;{phone}&rdquo;
+                                                    </Button>
                                                 </div>
                                             )}
                                         </div>
                                     )}
                                 </div>
-                                <Button type="button" onClick={searchByPhone} disabled={searching || !phone.trim()}>
-                                    {searching ? "Searching..." : "Search"}
-                                </Button>
+                                {(() => {
+                                    const trimmed = phone.trim();
+                                    const isBusy = searching || lookupLoading;
+                                    const hasResults = suggestions.length > 0;
+                                    const noResults =
+                                        showSuggestions && trimmed.length >= 2 && !lookupLoading && suggestions.length === 0;
+
+                                    let label = "Search";
+                                    let onClick: () => void = searchByPhone;
+
+                                    if (isBusy) {
+                                        label = "Searching...";
+                                    } else if (showSuggestions && hasResults) {
+                                        label = "Select";
+                                        onClick = () => {
+                                            const target = highlightedIndex >= 0 ? suggestions[highlightedIndex] : suggestions[0];
+                                            if (target) selectIdentity(target);
+                                        };
+                                    } else if (noResults) {
+                                        label = "Create";
+                                    }
+
+                                    return (
+                                        <Button
+                                            type="button"
+                                            onClick={onClick}
+                                            disabled={isBusy || !trimmed}
+                                        >
+                                            {label}
+                                        </Button>
+                                    );
+                                })()}
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 {lookupLoading ? "Searching suggestions..." : "If not found, you’ll create a new account."}
                             </p>
                         </div>
-                    )}
-
-                    {step === "account" && (
+                    </div>
+                ) : (
+                    <div className="max-h-[75vh] overflow-y-auto px-6 py-5">
+                        {step === "account" && (
                         <form onSubmit={accountForm.handleSubmit(createAccount)} className="space-y-4">
                             <div className="border-2 border-secondary/50 bg-secondary/30 px-4 py-3 text-sm text-foreground">
                                 No account found for <strong>{phone}</strong>. Fill in the customer details, and add a company only if this customer belongs to one.
@@ -940,7 +986,8 @@ export default function QuickTicketButton() {
                             </div>
                         </form>
                     )}
-                </div>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );
