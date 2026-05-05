@@ -78,7 +78,13 @@ export async function POST(req: Request) {
                     taxId: body.taxId || null,
                 },
             });
-            await tx.account.create({ data: { companyId: c.id, name: c.name } });
+            const sundryDebtors = await tx.accountGroup.findFirst({
+                where: { name: "Sundry Debtors" },
+                select: { id: true },
+            });
+            await tx.account.create({
+                data: { companyId: c.id, name: c.name, groupId: sundryDebtors?.id ?? null },
+            });
             return c;
         });
 

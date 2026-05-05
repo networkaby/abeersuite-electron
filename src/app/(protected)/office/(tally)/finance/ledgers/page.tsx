@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Loader2, Check, X, TrendingUp, TrendingDown } from "lucide-react";
+import {
+    ChevronRight, ChevronDown, Plus, Loader2, ArrowRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,99 +15,100 @@ import {
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 
-type GlType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
-type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
-type NormalBalance = "DEBIT" | "CREDIT";
+type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
+type GlType     = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
 
-interface GroupOption {
+interface GroupNode {
     id: number;
     name: string;
     type: GroupType;
-}
-
-interface GroupNode extends GroupOption {
+    parentId: number | null;
+    sortOrder: number;
+    isActive: boolean;
+    totalBalance: number;
+    _count: { children: number; accounts: number };
     children: GroupNode[];
 }
 
-interface Ledger {
-    id: number;
-    name: string;
-    code: string | null;
-    type: GlType | null;
-    normalBalance: NormalBalance | null;
-    description: string | null;
-    isActive: boolean;
-    balance: number;
-    groupId: number | null;
-    customerId: number | null;
-    companyId: number | null;
-    group: { id: number; name: string; type: string } | null;
-    _count: { lines: number };
+interface FlatRow extends Omit<GroupNode, "children"> {
+    depth: number;
+    hasChildren: boolean;
 }
 
-const GL_TYPE_COLORS: Record<GlType, string> = {
+const TYPE_COLORS: Record<GroupType, string> = {
     ASSET:     "bg-blue-50 text-blue-700 border-blue-200",
     LIABILITY: "bg-purple-50 text-purple-700 border-purple-200",
-    EQUITY:    "bg-amber-50 text-amber-700 border-amber-200",
-    REVENUE:   "bg-green-50 text-green-700 border-green-200",
+    INCOME:    "bg-green-50 text-green-700 border-green-200",
     EXPENSE:   "bg-red-50 text-red-700 border-red-200",
 };
 
-function flatGroups(nodes: GroupNode[]): GroupOption[] {
-    const result: GroupOption[] = [];
+function flattenVisible(nodes: GroupNode[], expanded: Set<number>, depth = 0): FlatRow[] {
+    const result: FlatRow[] = [];
     for (const n of nodes) {
-        result.push({ id: n.id, name: n.name, type: n.type });
-        result.push(...flatGroups(n.children));
+        result.push({ ...n, depth, hasChildren: n.children.length > 0 });
+        if (expanded.has(n.id) && n.children.length > 0) {
+            result.push(...flattenVisible(n.children, expanded, depth + 1));
+        }
     }
     return result;
 }
 
-function drCr(balance: number, normalBalance: NormalBalance | null): string {
-    if (balance === 0) return "0.00";
-    const sign = balance < 0
-        ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
-        : (normalBalance === "DEBIT" ? "Dr" : "Cr");
-    return `${fmt(Math.abs(balance))} ${sign}`;
+function allGroupsFlat(nodes: GroupNode[]): GroupNode[] {
+    const result: GroupNode[] = [];
+    for (const n of nodes) {
+        result.push(n);
+        result.push(...allGroupsFlat(n.children));
+    }
+    return result;
 }
 
-// "none" sentinel replaces "" throughout — shadcn SelectItem forbids empty string values
+function drCr(balance: number): string {
+    if (balance === 0) return "0.00";
+    const abs = fmt(Math.abs(balance));
+    return balance > 0 ? `${abs} Dr` : `${abs} Cr`;
+}
+
 const NONE = "none";
 
-const cellClass = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-
 export default function LedgersPage() {
-    const [ledgers, setLedgers]     = useState<Ledger[]>([]);
-    const [groups, setGroups]       = useState<GroupOption[]>([]);
-    const [loading, setLoading]     = useState(true);
-    const [filterGroup, setFilterGroup] = useState<string>(NONE);
-    const [showAdd, setShowAdd]     = useState(false);
-    const [saving, setSaving]       = useState(false);
-    const [editId, setEditId]       = useState<number | null>(null);
+    const router = useRouter();
+
+    const [tree, setTree]         = useState<GroupNode[]>([]);
+    const [expanded, setExpanded] = useState<Set<number>>(new Set());
+    const [loading, setLoading]   = useState(true);
+    const [showAdd, setShowAdd]   = useState(false);
+    const [saving, setSaving]     = useState(false);
 
     const [newForm, setNewForm] = useState({
         name: "", groupId: NONE, code: "", description: "",
         type: NONE, normalBalance: NONE,
     });
-    const [editGroupId, setEditGroupId] = useState<string>(NONE);
-
-    const loadGroups = useCallback(() => {
-        axios.get<GroupNode[]>("/api/finance/account-groups")
-            .then((r) => setGroups(flatGroups(r.data)))
-            .catch(() => { /* silent */ });
-    }, []);
 
     const load = useCallback(() => {
         setLoading(true);
-        const params = new URLSearchParams({ activeOnly: "false" });
-        if (filterGroup !== NONE) params.set("groupId", filterGroup);
-        axios.get<Ledger[]>(`/api/finance/ledgers?${params}`)
-            .then((r) => setLedgers(r.data))
-            .catch(() => toast.error("Failed to load ledgers"))
+        axios.get<GroupNode[]>("/api/finance/account-groups")
+            .then((r) => {
+                setTree(r.data);
+                setExpanded((prev) => {
+                    if (prev.size > 0) return prev;
+                    return new Set(r.data.map((g) => g.id));
+                });
+            })
+            .catch(() => toast.error("Failed to load account groups"))
             .finally(() => setLoading(false));
-    }, [filterGroup]);
+    }, []);
 
-    useEffect(() => { loadGroups(); }, [loadGroups]);
     useEffect(() => { load(); }, [load]);
+
+    const toggle = (id: number) =>
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+
+    const allFlat = allGroupsFlat(tree);
+    const flat    = flattenVisible(tree, expanded);
 
     const addLedger = async () => {
         if (!newForm.name.trim()) { toast.error("Name is required"); return; }
@@ -130,23 +134,6 @@ export default function LedgersPage() {
         }
     };
 
-    const saveGroup = async (id: number) => {
-        setSaving(true);
-        try {
-            await axios.patch(`/api/finance/ledgers/${id}`, {
-                groupId: editGroupId !== NONE ? Number(editGroupId) : null,
-            });
-            toast.success("Group updated");
-            setEditId(null);
-            load();
-        } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed");
-        } finally {
-            setSaving(false);
-        }
-    };
-
     if (loading) return (
         <div className="flex items-center justify-center h-64">
             <Loader2 className="animate-spin text-muted-foreground" size={32} />
@@ -154,13 +141,13 @@ export default function LedgersPage() {
     );
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Ledgers</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Multi Ledger Alteration — {ledgers.length} accounts
+                        {allFlat.length} groups — click a group to view its accounts
                     </p>
                 </div>
                 <Button onClick={() => setShowAdd((v) => !v)}>
@@ -168,23 +155,7 @@ export default function LedgersPage() {
                 </Button>
             </div>
 
-            {/* Filter */}
-            <div className="flex items-center gap-3">
-                <Label className="text-sm text-muted-foreground shrink-0">Filter by group:</Label>
-                <Select value={filterGroup} onValueChange={setFilterGroup}>
-                    <SelectTrigger className="w-56">
-                        <SelectValue placeholder="All groups" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={NONE}>All groups</SelectItem>
-                        {groups.map((g) => (
-                            <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Add form */}
+            {/* Add ledger form */}
             {showAdd && (
                 <div className="space-y-4 rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground">New Ledger Account</h2>
@@ -204,7 +175,7 @@ export default function LedgersPage() {
                                 <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value={NONE}>No group</SelectItem>
-                                    {groups.map((g) => (
+                                    {allFlat.map((g) => (
                                         <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -259,108 +230,90 @@ export default function LedgersPage() {
                 </div>
             )}
 
-            {/* Ledger table */}
+            {/* Group tree table */}
             <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
-                            <th className="px-4 py-2.5 text-left font-medium w-12">S.No.</th>
-                            <th className="px-4 py-2.5 text-left font-medium">Name of Ledger</th>
-                            <th className="px-4 py-2.5 text-left font-medium w-44">Under</th>
+                            <th className="px-4 py-2.5 text-left font-medium w-8" />
+                            <th className="px-4 py-2.5 text-left font-medium">Name of Group</th>
                             <th className="px-4 py-2.5 text-left font-medium w-28">Type</th>
+                            <th className="px-4 py-2.5 text-right font-medium w-24">Accounts</th>
                             <th className="px-4 py-2.5 text-right font-medium w-36">Balance</th>
-                            <th className="px-4 py-2.5 text-center font-medium w-20">Status</th>
-                            <th className="px-4 py-2.5 w-20" />
+                            <th className="px-4 py-2.5 w-16" />
                         </tr>
                     </thead>
                     <tbody>
-                        {ledgers.map((l, i) => {
-                            const isEditing  = editId === l.id;
-                            const isIdentity = l.customerId !== null || l.companyId !== null;
-                            return (
-                                <tr key={l.id} className={`border-b last:border-0 hover:bg-muted/40 ${!l.isActive ? "opacity-50" : ""}`}>
-                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{i + 1}.</td>
-                                    <td className="px-4 py-2.5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-foreground">{l.name}</span>
-                                            {l.code && <span className="text-xs font-mono text-muted-foreground">{l.code}</span>}
-                                            {isIdentity && (
-                                                <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
-                                                    {l.customerId ? "Customer" : "Company"}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {l.description && <p className="text-xs text-muted-foreground mt-0.5">{l.description}</p>}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                                        {isEditing ? (
-                                            <Select value={editGroupId} onValueChange={setEditGroupId}>
-                                                <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="No group" /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value={NONE}>No group</SelectItem>
-                                                    {groups.map((g) => (
-                                                        <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            l.group?.name ?? <span className="italic text-muted-foreground/60">—</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-2.5">
-                                        {l.type && (
-                                            <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${GL_TYPE_COLORS[l.type]}`}>
-                                                {l.type}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-sm">
-                                        {l.balance !== 0 && (
-                                            l.balance > 0
-                                                ? <TrendingUp size={11} className="inline mr-1 text-green-500" />
-                                                : <TrendingDown size={11} className="inline mr-1 text-destructive" />
-                                        )}
-                                        <span className={l.balance < 0 ? "text-destructive" : "text-foreground"}>
-                                            {drCr(l.balance, l.normalBalance)}
+                        {flat.map((row) => (
+                            <tr
+                                key={row.id}
+                                className="border-b last:border-0 hover:bg-muted/40"
+                            >
+                                {/* Expand chevron */}
+                                <td className="px-2 py-2.5 text-center w-8">
+                                    {row.hasChildren ? (
+                                        <button
+                                            onClick={() => toggle(row.id)}
+                                            className="text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                            {expanded.has(row.id)
+                                                ? <ChevronDown size={14} />
+                                                : <ChevronRight size={14} />}
+                                        </button>
+                                    ) : null}
+                                </td>
+
+                                {/* Name (indented by depth) */}
+                                <td className="py-2.5 pr-4">
+                                    <div style={{ paddingLeft: row.depth * 20 }}>
+                                        <span className={`font-medium ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                                            {row.name}
                                         </span>
-                                    </td>
-                                    <td className="px-4 py-2.5 text-center">
-                                        <span className={`text-xs px-2 py-0.5 border font-medium ${l.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground border-border"}`}>
-                                            {l.isActive ? "Active" : "Inactive"}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-2.5 text-right">
-                                        <div className="flex items-center gap-1 justify-end">
-                                            {isEditing ? (
-                                                <>
-                                                    <Button variant="ghost" size="icon-sm" className="text-green-600 hover:bg-green-50"
-                                                        onClick={() => saveGroup(l.id)} disabled={saving}>
-                                                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:bg-muted"
-                                                        onClick={() => setEditId(null)}>
-                                                        <X size={14} />
-                                                    </Button>
-                                                </>
-                                            ) : (
-                                                <Button variant="ghost" size="icon-sm"
-                                                    className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                                    onClick={() => {
-                                                        setEditId(l.id);
-                                                        setEditGroupId(l.groupId ? String(l.groupId) : NONE);
-                                                    }}>
-                                                    <Pencil size={14} />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {ledgers.length === 0 && (
+                                    </div>
+                                </td>
+
+                                {/* Type badge */}
+                                <td className="px-4 py-2.5">
+                                    <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${TYPE_COLORS[row.type]}`}>
+                                        {row.type}
+                                    </span>
+                                </td>
+
+                                {/* Account count */}
+                                <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
+                                    {row._count.accounts > 0
+                                        ? <span className="font-medium text-foreground">{row._count.accounts}</span>
+                                        : <span className="text-muted-foreground/50">—</span>}
+                                </td>
+
+                                {/* Balance */}
+                                <td className="px-4 py-2.5 text-right font-mono text-xs">
+                                    {row._count.accounts > 0
+                                        ? <span className={row.totalBalance < 0 ? "text-destructive" : "text-foreground"}>
+                                            {drCr(row.totalBalance)}
+                                          </span>
+                                        : <span className="text-muted-foreground/50">—</span>}
+                                </td>
+
+                                {/* View accounts link */}
+                                <td className="px-4 py-2.5 text-right">
+                                    {row._count.accounts > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
+                                            onClick={() => router.push(`/office/finance/ledgers/${row.id}`)}
+                                        >
+                                            View <ArrowRight size={12} />
+                                        </Button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        {flat.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                                    No ledgers found.
+                                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                                    No groups found.
                                 </td>
                             </tr>
                         )}

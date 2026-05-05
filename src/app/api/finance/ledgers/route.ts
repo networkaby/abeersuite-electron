@@ -13,7 +13,9 @@ const createSchema = z.object({
     sortOrder:   z.number().int().min(0).max(9999).optional(),
 });
 
-// GET /api/finance/ledgers — pure GL ledger accounts (no customer/company identity)
+// GET /api/finance/ledgers
+// Without groupId → pure GL accounts (no customer/company), flat array (existing behaviour)
+// With groupId    → ALL account types in that group, paginated: { items, total }
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -21,14 +23,40 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const groupId    = searchParams.get("groupId");
     const activeOnly = searchParams.get("activeOnly") !== "false";
+    const search     = searchParams.get("search")?.trim() ?? "";
+    const page       = Math.max(1, Number(searchParams.get("page") ?? 1));
+    const limit      = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 20)));
 
     try {
+        // ── Mode B: paginated drill-down for a specific group ──────────────────
+        if (groupId) {
+            const where = {
+                groupId: Number(groupId),
+                ...(activeOnly ? { isActive: true } : {}),
+                ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
+            };
+            const [items, total] = await prisma.$transaction([
+                prisma.account.findMany({
+                    where,
+                    orderBy: { name: "asc" },
+                    skip: (page - 1) * limit,
+                    take: limit,
+                    include: {
+                        group: { select: { id: true, name: true, type: true } },
+                        _count: { select: { lines: true } },
+                    },
+                }),
+                prisma.account.count({ where }),
+            ]);
+            return NextResponse.json({ items, total });
+        }
+
+        // ── Mode A: pure GL accounts, flat array (original behaviour) ──────────
         const ledgers = await prisma.account.findMany({
             where: {
                 customerId: null,
                 companyId:  null,
                 ...(activeOnly ? { isActive: true } : {}),
-                ...(groupId ? { groupId: Number(groupId) } : {}),
             },
             orderBy: [{ groupId: "asc" }, { name: "asc" }],
             include: {

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
+import { resolveSourceBatch } from "@/modules/tally/lib/refResolver";
+import { defaultNormalBalanceForGroupType } from "@/modules/tally/lib/groupNature";
 
 // GET /api/finance/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
@@ -17,8 +19,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
     const to = toParam ? new Date(toParam) : new Date();
     to.setHours(23, 59, 59, 999);
 
-    const account = await prisma.account.findUnique({ where: { id: Number(accountId) } });
+    const account = await prisma.account.findUnique({
+        where: { id: Number(accountId) },
+        include: { group: { select: { id: true, name: true, type: true } } },
+    });
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+
+    const nb = account.normalBalance
+        ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type) : "DEBIT");
 
     try {
         // Opening balance: all posted lines before the 'from' date
@@ -30,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             select: { type: true, amount: true },
         });
         const openingBalance = openingLines.reduce((bal, l) => {
-            return bal + balanceDelta(account.normalBalance!, l.type, toNumber(l.amount));
+            return bal + balanceDelta(nb, l.type, toNumber(l.amount));
         }, 0);
 
         // Lines within the date range
@@ -47,13 +55,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             },
         });
 
-        // Compute running balance
+        // Resolve source documents in bulk
+        const jeIds = [...new Set(lines.map((l) => l.journalEntry.id))];
+        const sourceMap = await resolveSourceBatch(jeIds);
+
+        // Compute running balance and attach source URL
         let runningBalance = openingBalance;
         const rows = lines.map((l) => {
-            const delta = balanceDelta(account.normalBalance!, l.type, toNumber(l.amount));
+            const delta = balanceDelta(nb, l.type, toNumber(l.amount));
             runningBalance += delta;
+            const source = sourceMap.get(l.journalEntry.id) ?? null;
             return {
                 id: l.id,
+                journalEntryId: l.journalEntry.id,
                 date: l.journalEntry.date,
                 reference: l.journalEntry.reference,
                 description: l.journalEntry.description,
@@ -61,11 +75,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 debit: l.type === "DEBIT" ? toNumber(l.amount) : null,
                 credit: l.type === "CREDIT" ? toNumber(l.amount) : null,
                 balance: runningBalance,
+                source,
             };
         });
 
         return NextResponse.json({
-            account: { id: account.id, code: account.code, name: account.name, normalBalance: account.normalBalance },
+            account: {
+                id: account.id, code: account.code, name: account.name,
+                normalBalance: nb,
+                groupId: account.groupId, groupName: account.group?.name ?? null,
+            },
             from: from.toISOString(),
             to: to.toISOString(),
             openingBalance,

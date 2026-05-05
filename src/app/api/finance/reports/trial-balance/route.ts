@@ -1,66 +1,61 @@
-import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
+import { parseRange } from "@/modules/tally/lib/period";
+import { aggregateRange, loadNormalBalanceMap } from "@/modules/tally/lib/aggregateLedger";
+import { buildGroupTree } from "@/modules/tally/lib/groupTree";
 
-// GET /api/finance/reports/trial-balance?asOf=YYYY-MM-DD
+// GET /api/finance/reports/trial-balance?from=YYYY-MM-DD&to=YYYY-MM-DD
+//   (asOf is supported for backwards-compat: if no from/to, default range = FY → asOf)
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const asOfParam = searchParams.get("asOf");
-    const asOf = asOfParam ? new Date(asOfParam) : new Date();
-    // Set time to end of day
-    asOf.setHours(23, 59, 59, 999);
+
+    let from: Date;
+    let to: Date;
+    if (asOfParam && !searchParams.get("from") && !searchParams.get("to")) {
+        const parsedAsOf = new Date(asOfParam);
+        parsedAsOf.setHours(23, 59, 59, 999);
+        const fyYear = parsedAsOf.getMonth() < 3 ? parsedAsOf.getFullYear() - 1 : parsedAsOf.getFullYear();
+        from = new Date(fyYear, 3, 1, 0, 0, 0, 0);
+        to = parsedAsOf;
+    } else {
+        const r = parseRange(searchParams);
+        from = r.from; to = r.to;
+    }
 
     try {
-        const accounts = await prisma.account.findMany({
-            where: {
-                isActive: true,
-                type: { not: null },        // only accounts with a GL type
-                normalBalance: { not: null },
-            },
-            orderBy: { code: "asc" },
-            include: {
-                lines: {
-                    where: {
-                        journalEntry: {
-                            status: "POSTED",
-                            date: { lte: asOf },
-                        },
-                    },
-                    select: { type: true, amount: true },
-                },
+        const nbMap = await loadNormalBalanceMap();
+        const aggMap = await aggregateRange(from, to, nbMap);
+        const tree = await buildGroupTree(aggMap);
+
+        let totalOpening = 0, totalDebits = 0, totalCredits = 0, totalClosing = 0;
+        const walk = (nodes: typeof tree): void => {
+            for (const n of nodes) {
+                walk(n.children);
+                for (const l of n.ledgers) {
+                    totalOpening += l.opening;
+                    totalDebits  += l.debits;
+                    totalCredits += l.credits;
+                    totalClosing += l.closing;
+                }
+            }
+        };
+        walk(tree);
+
+        return NextResponse.json({
+            from: from.toISOString(),
+            to:   to.toISOString(),
+            tree,
+            totals: {
+                opening: totalOpening,
+                debits:  totalDebits,
+                credits: totalCredits,
+                closing: totalClosing,
             },
         });
-
-        const rows = accounts.map((acct) => {
-            const debits = acct.lines
-                .filter((l) => l.type === "DEBIT")
-                .reduce((s, l) => s + Number(l.amount), 0);
-            const credits = acct.lines
-                .filter((l) => l.type === "CREDIT")
-                .reduce((s, l) => s + Number(l.amount), 0);
-
-            const balance =
-                acct.normalBalance === "DEBIT" ? debits - credits : credits - debits;
-
-            return {
-                id: acct.id,
-                code: acct.code,
-                name: acct.name,
-                type: acct.type,
-                normalBalance: acct.normalBalance,
-                totalDebits: debits,
-                totalCredits: credits,
-                balance,
-            };
-        });
-
-        const totalDebits = rows.reduce((s, r) => s + r.totalDebits, 0);
-        const totalCredits = rows.reduce((s, r) => s + r.totalCredits, 0);
-
-        return NextResponse.json({ asOf: asOf.toISOString(), rows, totalDebits, totalCredits });
     } catch (err) {
         console.error(err);
         return NextResponse.json({ error: "Failed to generate trial balance" }, { status: 500 });

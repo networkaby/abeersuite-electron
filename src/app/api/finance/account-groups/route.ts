@@ -17,6 +17,7 @@ type FlatGroup = {
     parentId: number | null;
     sortOrder: number;
     isActive: boolean;
+    totalBalance: number;
     _count: { children: number; accounts: number };
 };
 
@@ -37,17 +38,33 @@ function buildTree(flat: FlatGroup[]): GroupNode[] {
     return roots;
 }
 
-// GET /api/finance/account-groups — returns full tree
+// GET /api/finance/account-groups — returns full tree with totalBalance per group
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
 
     try {
-        const flat = await prisma.accountGroup.findMany({
-            orderBy: [{ parentId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
-            include: { _count: { select: { children: true, accounts: true } } },
-        });
-        return NextResponse.json(buildTree(flat as FlatGroup[]));
+        const [flat, sums] = await Promise.all([
+            prisma.accountGroup.findMany({
+                orderBy: [{ parentId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+                include: { _count: { select: { children: true, accounts: true } } },
+            }),
+            prisma.account.groupBy({
+                by: ["groupId"],
+                _sum: { balance: true },
+                where: { groupId: { not: null } },
+            }),
+        ]);
+
+        const balanceMap = new Map(
+            sums.map((s) => [s.groupId!, Number(s._sum.balance ?? 0)])
+        );
+
+        const flatWithBalance: FlatGroup[] = (flat as Omit<FlatGroup, "totalBalance">[]).map(
+            (g) => ({ ...g, totalBalance: balanceMap.get(g.id) ?? 0 })
+        );
+
+        return NextResponse.json(buildTree(flatWithBalance));
     } catch (err) {
         console.error(err);
         return NextResponse.json({ error: "Failed to fetch account groups" }, { status: 500 });
