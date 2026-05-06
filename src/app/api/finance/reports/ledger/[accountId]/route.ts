@@ -29,7 +29,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type) : "DEBIT");
 
     try {
-        // Opening balance: all posted lines before the 'from' date
+        // Opening balance: all posted lines before the 'from' date, plus the
+        // master-page openingBalance if its as-of date is on/before `from`.
         const openingLines = await prisma.journalLine.findMany({
             where: {
                 accountId: Number(accountId),
@@ -37,9 +38,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             },
             select: { type: true, amount: true },
         });
-        const openingBalance = openingLines.reduce((bal, l) => {
+        let openingBalance = openingLines.reduce((bal, l) => {
             return bal + balanceDelta(nb, l.type, toNumber(l.amount));
         }, 0);
+        if (account.openingBalance && account.openingBalanceType
+            && (!account.openingBalanceDate || account.openingBalanceDate < from)) {
+            openingBalance += balanceDelta(nb, account.openingBalanceType, toNumber(account.openingBalance));
+        }
 
         // Lines within the date range
         const lines = await prisma.journalLine.findMany({

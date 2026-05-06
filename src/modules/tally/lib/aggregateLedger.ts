@@ -35,16 +35,42 @@ export async function loadNormalBalanceMap(): Promise<Map<number, "DEBIT" | "CRE
     return map;
 }
 
+/** Pull master-page opening balances (Account.openingBalance / openingBalanceType / openingBalanceDate).
+ *  Returns Map<accountId, signedOpening> already converted into normal-balance terms (positive
+ *  when on the account's normal side). Only accounts whose openingBalanceDate is null or
+ *  <= the given as-of date are included. */
+export async function loadMasterOpeningBalances(
+    asOf: Date,
+    nbMap: Map<number, "DEBIT" | "CREDIT">,
+): Promise<Map<number, number>> {
+    const accounts = await prisma.account.findMany({
+        where: { openingBalance: { not: null } },
+        select: { id: true, openingBalance: true, openingBalanceType: true, openingBalanceDate: true },
+    });
+    const out = new Map<number, number>();
+    for (const a of accounts) {
+        if (a.openingBalanceDate && a.openingBalanceDate > asOf) continue;
+        const nb = nbMap.get(a.id);
+        if (!nb || !a.openingBalanceType) continue;
+        // Treat the opening figure as a single signed entry on the recorded side.
+        out.set(a.id, balanceDelta(nb, a.openingBalanceType, Number(a.openingBalance ?? 0)));
+    }
+    return out;
+}
+
 /** Closing balances of every account as of a date.  Map<accountId, closing> in rupees. */
 export async function aggregateClosingAsOf(
     asOf: Date,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
 ): Promise<Map<number, number>> {
-    const sums = await prisma.journalLine.groupBy({
-        by: ["accountId", "type"],
-        _sum: { amount: true },
-        where: { journalEntry: { status: "POSTED", deletedAt: null, date: { lte: asOf } } },
-    });
+    const [sums, masterOpening] = await Promise.all([
+        prisma.journalLine.groupBy({
+            by: ["accountId", "type"],
+            _sum: { amount: true },
+            where: { journalEntry: { status: "POSTED", deletedAt: null, date: { lte: asOf } } },
+        }),
+        loadMasterOpeningBalances(asOf, nbMap),
+    ]);
     const buckets = new Map<number, { d: number; c: number }>();
     for (const r of sums) {
         const v = buckets.get(r.accountId) ?? { d: 0, c: 0 };
@@ -57,7 +83,12 @@ export async function aggregateClosingAsOf(
     for (const [accId, v] of buckets) {
         const nb = nbMap.get(accId);
         if (!nb) continue;
-        closing.set(accId, nb === "DEBIT" ? v.d - v.c : v.c - v.d);
+        const fromLines = nb === "DEBIT" ? v.d - v.c : v.c - v.d;
+        closing.set(accId, fromLines + (masterOpening.get(accId) ?? 0));
+    }
+    // Accounts that have a master opening but no journal lines yet still need to appear.
+    for (const [accId, openVal] of masterOpening) {
+        if (!closing.has(accId)) closing.set(accId, openVal);
     }
     return closing;
 }
@@ -68,7 +99,12 @@ export async function aggregateRange(
     to: Date,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
 ): Promise<Map<number, AccountAggregate>> {
-    const [openingSums, periodSums] = await Promise.all([
+    // The "opening" portion of the range is everything before `from`. Master-page
+    // opening balances dated on or before `from` get folded into that bucket.
+    const beforeFrom = new Date(from);
+    beforeFrom.setMilliseconds(beforeFrom.getMilliseconds() - 1);
+
+    const [openingSums, periodSums, masterOpening] = await Promise.all([
         prisma.journalLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
@@ -79,6 +115,7 @@ export async function aggregateRange(
             _sum: { amount: true },
             where: { journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } } },
         }),
+        loadMasterOpeningBalances(beforeFrom, nbMap),
     ]);
 
     const result = new Map<number, AccountAggregate>();
@@ -96,6 +133,12 @@ export async function aggregateRange(
         if (!nb) continue;
         const v = ensure(r.accountId);
         v.opening += balanceDelta(nb, r.type, Number(r._sum.amount ?? 0));
+    }
+    // Master-page opening balances seed the opening bucket too — they represent
+    // the bring-forward from a previous accounting system at books-beginning.
+    for (const [accId, openVal] of masterOpening) {
+        const v = ensure(accId);
+        v.opening += openVal;
     }
     for (const r of periodSums) {
         const v = ensure(r.accountId);

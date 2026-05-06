@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import { reconcileOpeningSuspense } from "@/modules/tally/lib/openingBalance";
 
 // PUT /api/finance/accounts/[id]/opening
 // Sets opening balance + Dr/Cr type + as-of date on a ledger account.
@@ -29,6 +30,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 openingBalanceDate: parsed.data.asOfDate ? new Date(parsed.data.asOfDate) : null,
             },
         });
+        await reconcileOpeningSuspense();
         return NextResponse.json(account);
     } catch (err) {
         console.error(err);
