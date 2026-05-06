@@ -121,88 +121,64 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                     )}
                 </div>
 
-                {/* Action buttons */}
+                {/* Action buttons — sidebar-style: flat rows, deep highlight when active */}
                 <ScrollArea className="flex-1 min-h-0">
-                    <div className="space-y-1 p-2">
+                    <div className="space-y-0.5 p-2">
                         {/* More + button — always first */}
-                        <Button
+                        <button
                             type="button"
                             title={collapsed ? "More actions" : "More — all create actions"}
                             onClick={() => setMoreOpen(true)}
-                            variant="ghost"
                             className={[
-                                "group h-auto w-full rounded-md border border-dashed border-border text-left transition-all duration-150",
-                                collapsed ? "px-0" : "",
-                                "bg-card hover:border-solid hover:border-primary/30 hover:bg-muted active:scale-[0.98]",
+                                "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
+                                collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
+                                "text-muted-foreground hover:bg-muted hover:text-foreground",
                             ].join(" ")}
                         >
-                            <div className={`flex items-center px-2 py-1.5 ${collapsed ? "justify-center" : "gap-2"}`}>
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-muted text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
-                                    <Grid2x2 size={14} />
-                                </div>
-                                {!collapsed && (
-                                    <span className="block truncate text-sm font-semibold text-foreground">
-                                        More +
-                                    </span>
-                                )}
-                            </div>
-                        </Button>
+                            <Grid2x2 size={17} className="shrink-0" />
+                            {!collapsed && <span className="truncate text-left">More +</span>}
+                        </button>
 
                         {/* Module-specific or universal create actions */}
                         {actions.map((action) => {
                             const Icon = action.icon;
-                            const isPrimary = action.variant === "default" && !action.disabled;
+                            const isActive = !!(action.href && pathname.startsWith(action.href));
+
+                            const rowClass = [
+                                "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
+                                collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
+                                action.disabled
+                                    ? "cursor-not-allowed text-muted-foreground/30"
+                                    : isActive
+                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                            ].join(" ");
+
                             const inner = (
-                                <div className={`flex items-center px-2 py-1.5 ${collapsed ? "justify-center" : "gap-2"}`}>
-                                    <div className={[
-                                        "flex h-7 w-7 shrink-0 items-center justify-center transition-colors",
-                                        action.disabled
-                                            ? "bg-muted text-muted-foreground"
-                                            : isPrimary
-                                                ? "bg-primary text-primary-foreground shadow-sm"
-                                                : "bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-accent-foreground",
-                                    ].join(" ")}>
-                                        <Icon size={14} />
-                                    </div>
+                                <>
+                                    <Icon size={17} className="shrink-0" />
                                     {!collapsed && (
-                                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                                            <span className={[
-                                                "block truncate text-sm font-medium",
-                                                action.disabled
-                                                    ? "text-muted-foreground"
-                                                    : isPrimary
-                                                        ? "text-primary"
-                                                        : "text-foreground",
-                                            ].join(" ")}>
-                                                {action.label}
-                                            </span>
+                                        <>
+                                            <span className="flex-1 truncate text-left">{action.label}</span>
                                             {action.disabled && (
                                                 <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
                                                     Soon
                                                 </Badge>
                                             )}
-                                        </div>
+                                        </>
                                     )}
-                                </div>
+                                </>
                             );
 
-                            const buttonClass = [
-                                "group h-auto w-full rounded-md border text-left transition-all duration-150",
-                                collapsed ? "px-0" : "",
-                                action.disabled
-                                    ? "cursor-not-allowed border-border bg-muted opacity-50"
-                                    : isPrimary
-                                        ? "border-primary/20 bg-primary/5 hover:border-primary/30 hover:bg-primary/10 active:scale-[0.98]"
-                                        : "border-border bg-card hover:bg-muted active:scale-[0.98]",
-                            ].join(" ");
+                            const titleAttr = collapsed ? action.label : `${action.label} — ${action.subtitle}`;
 
                             if (action.href && !action.disabled) {
                                 return (
                                     <Link
                                         key={action.label}
                                         href={action.href}
-                                        className={buttonClass}
-                                        title={collapsed ? action.label : `${action.label} — ${action.subtitle}`}
+                                        className={rowClass}
+                                        title={titleAttr}
                                     >
                                         {inner}
                                     </Link>
@@ -210,17 +186,16 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                             }
 
                             return (
-                                <Button
+                                <button
                                     key={action.label}
                                     type="button"
-                                    title={collapsed ? action.label : `${action.label} — ${action.subtitle}`}
+                                    title={titleAttr}
                                     disabled={action.disabled}
                                     onClick={() => handleAction(action)}
-                                    variant="ghost"
-                                    className={buttonClass}
+                                    className={rowClass}
                                 >
                                     {inner}
-                                </Button>
+                                </button>
                             );
                         })}
                     </div>
