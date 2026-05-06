@@ -80,6 +80,7 @@ export type ModuleChild = {
     pipelineRef?: "default";
     permission?: string;
     disabled?: boolean;
+    children?: ModuleChild[];
 };
 
 export type ModuleCreateAction = {
@@ -137,7 +138,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Users,
         key: "customers",
         dashboardHref: "/office/customers",
-        pathPrefixes: ["/office/customers/people", "/office/customers/companies", "/office/customers/all", "/office/customers"],
+        // pathPrefixes: ["/office/customers/people", "/office/customers/companies", "/office/customers/all", "/office/customers"],
+        pathPrefixes: ["/office/customers"],
         createActions: [
             { label: "People +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:view" },
             { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:view" },
@@ -153,13 +155,14 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Wrench,
         key: "repair",
         dashboardHref: "/office/repairing",
-        pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
+        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
+        pathPrefixes: ["/office/repairing"],
         createActions: [
             { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
         ],
         children: [
             { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
-            { label: "Service Centers", icon: Building2, href: "/office/service-centers", permission: "service-centers:view" },
+            { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
         ],
     },
     {
@@ -172,7 +175,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
         ],
         children: [
-            { label: "Leads", icon: ClipboardList, href: "/office/crm", permission: "crm:view" },
+            { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
         ],
     },
     {
@@ -182,7 +185,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/ecommerce",
         pathPrefixes: ["/office/ecommerce"],
         children: [
-            { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
+            // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
             { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
             { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
             { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
@@ -194,7 +197,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Calculator,
         key: "tally",
         dashboardHref: "/office/tally",
-        pathPrefixes: ["/office/tally/account-groups", "/office/tally/ledgers", "/office/tally/sales", "/office/tally/purchases", "/office/tally/estimates", "/office/tally/payments", "/office/tally/receipts", "/office/tally/contras", "/office/tally/credit-notes", "/office/tally/debit-notes", "/office/tally/journal-entries", "/office/tally/invoices", "/office/tally/opening-balance", "/office/tally/reports"],
+        // pathPrefixes: ["/office/tally/account-groups", "/office/tally/ledgers", "/office/tally/sales", "/office/tally/purchases", "/office/tally/estimates", "/office/tally/payments", "/office/tally/receipts", "/office/tally/contras", "/office/tally/credit-notes", "/office/tally/debit-notes", "/office/tally/journal-entries", "/office/tally/invoices", "/office/tally/opening-balance", "/office/tally/reports"],
+        pathPrefixes: ["/office/tally"],
         createActions: [
             { label: "Sale +", subtitle: "New sale voucher", icon: Receipt, variant: "default", href: "/office/tally/sales/new" },
             { label: "Purchase +", subtitle: "New purchase voucher", icon: ShoppingCart, variant: "outline", href: "/office/tally/purchases/new" },
@@ -207,21 +211,64 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Journal +", subtitle: "New journal entry", icon: FileText, variant: "outline", href: "/office/tally/journal-entries", permission: "finance:journal:cancel" },
         ],
         children: [
-            { label: "Account Groups", icon: FolderTree, href: "/office/tally/account-groups" },
-            { label: "Ledgers", icon: BookOpen, href: "/office/tally/ledgers" },
+            { label: "Daybook", icon: ClipboardList, href: "/office/tally/reports/day-book", permission: "finance:voucher:create" },
+
             { label: "Sales", icon: Receipt, href: "/office/tally/sales" },
             { label: "Purchases", icon: ShoppingCart, href: "/office/tally/purchases" },
             { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
-            { label: "Payments", icon: Wallet, href: "/office/finance/payments", permission: "finance:voucher:create" },
-            { label: "Receipts", icon: Wallet, href: "/office/tally/receipts", permission: "finance:voucher:create" },
-            { label: "Contras", icon: Wallet, href: "/office/tally/contras", permission: "finance:voucher:create" },
-            { label: "Credit Notes", icon: FileText, href: "/office/tally/credit-notes", permission: "finance:voucher:create" },
-            { label: "Debit Notes", icon: FileText, href: "/office/tally/debit-notes", permission: "finance:voucher:create" },
-            { label: "Chart of accounts", icon: Wallet, href: "/office/tally/chart-of-accounts" },
-            { label: "Journal entries", icon: FileText, href: "/office/tally/journal-entries" },
-            { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
-            { label: "Opening Balance", icon: Wallet, href: "/office/tally/opening-balance", permission: "finance:opening-balance:manage" },
-            { label: "Reports", icon: ChartArea, href: "/office/tally/reports" },
+            // { label: "Payments", icon: Wallet, href: "/office/tally/payments", permission: "finance:voucher:create" },
+            // { label: "Receipts", icon: Wallet, href: "/office/tally/receipts", permission: "finance:voucher:create" },
+            // { label: "Contras", icon: Wallet, href: "/office/tally/contras", permission: "finance:voucher:create" },
+            // { label: "Credit Notes", icon: FileText, href: "/office/tally/credit-notes", permission: "finance:voucher:create" },
+            // { label: "Debit Notes", icon: FileText, href: "/office/tally/debit-notes", permission: "finance:voucher:create" },
+
+            // { label: "Journal entries", icon: FileText, href: "/office/tally/journal-entries" },
+            // { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
+
+            // { label: "Financial Insights", icon: ChartArea, href: "/office/tally/reports" },
+            {
+                label: "Financial Insights",
+                icon: ChartArea,
+                href: "/office/tally/reports",
+                permission: "finance:voucher:create",
+                children: [
+                    { label: "Balance Sheet", icon: FolderTree, href: "/office/tally/reports/balance-sheet" },
+                    { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/tally/reports/profit-loss" },
+                    { label: "Trial Balance", icon: Wallet, href: "/office/tally/reports/trial-balance" },
+                    // { label: "Day Book", icon: Wallet, href: "/office/tally/opening-balance", permission: "finance:opening-balance:manage" },
+                ]
+            },
+            {
+                label: "Vouchers Reports", icon: ClipboardList, href: "/office/tally/vouchers", permission: "finance:voucher:create",
+                children: [
+                    { label: "Contra", icon: ClipboardList, href: "/office/tally/vouchers/contra", permission: "finance:voucher:create" },
+                    { label: "Payment", icon: ClipboardList, href: "/office/tally/vouchers/payment", permission: "finance:voucher:create" },
+                    { label: "Receipt", icon: ClipboardList, href: "/office/tally/vouchers/receipt", permission: "finance:voucher:create" },
+                    { label: "Credit Note", icon: ClipboardList, href: "/office/tally/vouchers/credit-note", permission: "finance:voucher:create" },
+                    { label: "Debit Note", icon: ClipboardList, href: "/office/tally/vouchers/debit-note", permission: "finance:voucher:create" },
+                    { label: "Journal entries", icon: FileText, href: "/office/tally/journal-entries" },
+                    { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
+                    { label: "Sales", icon: Receipt, href: "/office/tally/sales" },
+                    { label: "Purchases", icon: ShoppingCart, href: "/office/tally/purchases" },
+                    { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
+                ]
+
+            },
+
+            {
+                label: "Masters",
+                icon: ChartArea,
+                href: "/office/tally",
+                permission: "finance:voucher:create",
+                children: [
+                    { label: "Account Groups", icon: FolderTree, href: "/office/tally/groups" },
+                    { label: "Ledgers", icon: BookOpen, href: "/office/tally/ledgers" },
+                    { label: "Chart of accounts", icon: Wallet, href: "/office/tally/chart-of-accounts" },
+                    { label: "Opening Balance", icon: Wallet, href: "/office/tally/opening-balance", permission: "finance:opening-balance:manage" },
+                ]
+            },
+
+
         ],
     },
     {
@@ -241,7 +288,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
         ],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
+            // { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
             { label: "Sales Orders", icon: ClipboardList, href: "/office/inventory/sales-orders", permission: "inventory:manage" },
             { label: "Purchase Orders", icon: ClipboardList, href: "/office/inventory/purchase-orders", permission: "inventory:manage" },
             { label: "GRN", icon: PackageCheck, href: "/office/inventory/grn", permission: "inventory:manage" },
@@ -265,7 +312,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/hrm",
         pathPrefixes: ["/office/hrm"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/hrm" },
+            // { label: "Overview", icon: ChartArea, href: "/office/hrm" },
             { label: "Staff directory", icon: Users, href: "/office/hrm/directory" },
             { label: "Attendance", icon: Clock, href: "/office/hrm/attendance" },
             { label: "Leave", icon: Calendar, href: "/office/hrm/leave" },
@@ -279,7 +326,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/delivery",
         pathPrefixes: ["/office/delivery"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/delivery" },
+            // { label: "Overview", icon: ChartArea, href: "/office/delivery" },
             { label: "Shipments", icon: Package, href: "/office/delivery/shipments" },
             { label: "Couriers", icon: Building2, href: "/office/delivery/couriers" },
             { label: "Proof of delivery", icon: FileText, href: "/office/delivery/pod" },
@@ -292,7 +339,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/field-service",
         pathPrefixes: ["/office/field-service"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/field-service" },
+            // { label: "Overview", icon: ChartArea, href: "/office/field-service" },
             { label: "Jobs", icon: Wrench, href: "/office/field-service/jobs" },
             { label: "Schedule", icon: Calendar, href: "/office/field-service/schedule" },
             { label: "Van stock", icon: Box, href: "/office/field-service/van-stock" },
@@ -305,7 +352,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/helpdesk",
         pathPrefixes: ["/office/helpdesk"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/helpdesk" },
+            // { label: "Overview", icon: ChartArea, href: "/office/helpdesk" },
             { label: "Queues", icon: Inbox, href: "/office/helpdesk/queues" },
             { label: "Knowledge base", icon: BookOpen, href: "/office/helpdesk/knowledge" },
             { label: "SLAs", icon: Timer, href: "/office/helpdesk/slas" },
@@ -318,7 +365,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/projects",
         pathPrefixes: ["/office/projects"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/projects" },
+            // { label: "Overview", icon: ChartArea, href: "/office/projects" },
             { label: "Active", icon: PlayCircle, href: "/office/projects/active" },
             { label: "Tasks", icon: FolderKanban, href: "/office/projects/tasks" },
             { label: "Time log", icon: ClipboardList, href: "/office/projects/time" },
@@ -331,7 +378,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/intelligence",
         pathPrefixes: ["/office/intelligence"],
         children: [
-            { label: "Overview", icon: LayoutDashboard, href: "/office/intelligence" },
+            // { label: "Overview", icon: LayoutDashboard, href: "/office/intelligence" },
             { label: "Dashboards", icon: BarChart2, href: "/office/intelligence/dashboards" },
             { label: "Ticket insights", icon: ClipboardList, href: "/office/intelligence/tickets" },
             { label: "Exports", icon: Download, href: "/office/intelligence/exports" },
@@ -344,7 +391,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/administration",
         pathPrefixes: ["/office/administration"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/administration" },
+            // { label: "Overview", icon: ChartArea, href: "/office/administration" },
             { label: "Audit log", icon: ScrollText, href: "/office/administration/audit" },
             { label: "Policies", icon: ShieldCheck, href: "/office/administration/policies" },
             { label: "Integrations", icon: Plug, href: "/office/administration/integrations" },
@@ -357,7 +404,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/retention",
         pathPrefixes: ["/office/retention"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/retention" },
+            // { label: "Overview", icon: ChartArea, href: "/office/retention" },
             { label: "Coupon programs", icon: BadgePercent, href: "/office/retention/coupons" },
             { label: "Loyalty", icon: Gift, href: "/office/retention/loyalty" },
             { label: "Campaigns", icon: Megaphone, href: "/office/retention/campaigns" },
@@ -370,7 +417,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/pricing-strategy",
         pathPrefixes: ["/office/pricing-strategy"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
+            // { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
             { label: "Rules", icon: Calculator, href: "/office/pricing-strategy/rules" },
             { label: "Discount matrix", icon: Table, href: "/office/pricing-strategy/discounts" },
             { label: "Price lists", icon: ListOrdered, href: "/office/pricing-strategy/price-lists" },

@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import React from 'react'
 
-export default function FinancePage() {
-    redirect("/office/finance/chart-of-accounts");
+function TallyPage() {
+    return (
+        <div>TallyPage</div>
+    )
 }
+
+export default TallyPage

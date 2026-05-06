@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -80,6 +80,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         retention: pathname.startsWith("/office/retention"),
         "pricing-strategy": pathname.startsWith("/office/pricing-strategy"),
     });
+    const [nestedChildOpen, setNestedChildOpen] = useState<Record<string, boolean>>({});
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
 
     // Fetch live avatarUrl so it reflects changes without re-login
@@ -165,6 +166,155 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const canViewChild = (child: ModuleChild) =>
         !child.permission || isAdmin || permissions.includes(child.permission);
+
+    const hasActiveDescendant = (items: ModuleChild[]): boolean =>
+        items.some((item) => {
+            const href = resolveHref(item);
+            const basePath = href?.split("?")[0] ?? "";
+            if (basePath && pathname.startsWith(basePath)) return true;
+            if (!item.children?.length) return false;
+            return hasActiveDescendant(item.children.filter(canViewChild));
+        });
+
+    const renderModuleChildren = (items: ModuleChild[], depth = 0, parentKey = "root"): ReactNode =>
+        items
+            .filter(canViewChild)
+            .map((child, index) => {
+                const CIcon = child.icon;
+                const href = resolveHref(child);
+                const basePath = href?.split("?")[0] ?? "";
+                const isActiveChild = !!basePath && isModuleChildActive(basePath, items);
+                const visibleSubChildren = (child.children ?? []).filter(canViewChild);
+                const hasSubChildren = visibleSubChildren.length > 0;
+                const nodeKey = `${parentKey}-${depth}-${index}-${child.label}`;
+                const isOpen = nestedChildOpen[nodeKey] ?? hasActiveDescendant(visibleSubChildren);
+
+                if (child.action) {
+                    return (
+                        <div key={`${depth}-${child.label}-action`} className="space-y-0.5">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={child.disabled}
+                                onClick={() => handleChildAction(child)}
+                                className={[
+                                    "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                    child.disabled
+                                        ? "cursor-not-allowed text-muted-foreground/30"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                ].join(" ")}
+                            >
+                                <CIcon size={15} className="shrink-0" />
+                                <span className="truncate">{child.label}</span>
+                                {hasSubChildren && (
+                                    <ChevronDown
+                                        size={13}
+                                        className={`ml-auto shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                    />
+                                )}
+                                {child.disabled && (
+                                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                        Soon
+                                    </Badge>
+                                )}
+                            </Button>
+
+                            {hasSubChildren && isOpen && (
+                                <div className="ml-3 space-y-0.5 border-l border-border pl-3">
+                                    {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey)}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+
+                return (
+                    <div key={`${depth}-${child.label}-${child.href ?? "group"}`} className="space-y-0.5">
+                        {href ? (
+                            <div className="flex w-full items-stretch gap-0.5">
+                                <Link
+                                    href={href}
+                                    className={[
+                                        "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                        isActiveChild
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                        child.disabled ? "pointer-events-none opacity-40" : "",
+                                    ].join(" ")}
+                                >
+                                    <CIcon size={15} className="shrink-0" />
+                                    <span className="truncate">{child.label}</span>
+                                    {child.disabled && (
+                                        <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                            Soon
+                                        </Badge>
+                                    )}
+                                </Link>
+                                {hasSubChildren && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label={isOpen ? `Collapse ${child.label}` : `Expand ${child.label}`}
+                                        onClick={() =>
+                                            setNestedChildOpen((prev) => ({
+                                                ...prev,
+                                                [nodeKey]: !(prev[nodeKey] ?? hasActiveDescendant(visibleSubChildren)),
+                                            }))
+                                        }
+                                        className="h-auto shrink-0 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    >
+                                        <ChevronDown
+                                            size={13}
+                                            className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                        />
+                                    </Button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex w-full items-stretch gap-0.5">
+                                <div
+                                    className={[
+                                        "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                                        child.disabled
+                                            ? "cursor-not-allowed text-muted-foreground/30"
+                                            : "text-muted-foreground",
+                                    ].join(" ")}
+                                >
+                                    <CIcon size={15} className="shrink-0" />
+                                    <span className="truncate">{child.label}</span>
+                                </div>
+                                {hasSubChildren && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label={isOpen ? `Collapse ${child.label}` : `Expand ${child.label}`}
+                                        onClick={() =>
+                                            setNestedChildOpen((prev) => ({
+                                                ...prev,
+                                                [nodeKey]: !(prev[nodeKey] ?? hasActiveDescendant(visibleSubChildren)),
+                                            }))
+                                        }
+                                        className="h-auto shrink-0 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    >
+                                        <ChevronDown
+                                            size={13}
+                                            className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                        />
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+
+                        {hasSubChildren && isOpen && (
+                            <div className="ml-3 space-y-0.5 border-l border-border pl-3">
+                                {renderModuleChildren(visibleSubChildren, depth + 1, nodeKey)}
+                            </div>
+                        )}
+                    </div>
+                );
+            });
 
     const visibleAdmin = ADMIN_NAV.filter(
         (item) => isAdmin || permissions.includes(item.permission)
@@ -464,63 +614,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
                                                 {isOpen && (
                                                     <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                                        {mod.children
-                                                            .filter(canViewChild)
-                                                            .map((child) => {
-                                                                const CIcon = child.icon;
-                                                                const href = resolveHref(child);
-                                                                const basePath = href?.split("?")[0] ?? "";
-                                                                const isActiveChild =
-                                                                    !!basePath && isModuleChildActive(basePath, mod.children);
-
-                                                                if (child.action) {
-                                                                    return (
-                                                                        <Button
-                                                                            key={child.label}
-                                                                            type="button"
-                                                                            variant="ghost"
-                                                                            disabled={child.disabled}
-                                                                            onClick={() => handleChildAction(child)}
-                                                                            className={[
-                                                                                "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                                                                child.disabled
-                                                                                    ? "cursor-not-allowed text-muted-foreground/30"
-                                                                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                                                            ].join(" ")}
-                                                                        >
-                                                                            <CIcon size={15} className="shrink-0" />
-                                                                            <span className="truncate">{child.label}</span>
-                                                                            {child.disabled && (
-                                                                                <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                                                                                    Soon
-                                                                                </Badge>
-                                                                            )}
-                                                                        </Button>
-                                                                    );
-                                                                }
-
-                                                                return href ? (
-                                                                    <Link
-                                                                        key={child.label}
-                                                                        href={href}
-                                                                        className={[
-                                                                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                                                            isActiveChild
-                                                                                ? "bg-primary text-primary-foreground"
-                                                                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                                                            child.disabled ? "pointer-events-none opacity-40" : "",
-                                                                        ].join(" ")}
-                                                                    >
-                                                                        <CIcon size={15} className="shrink-0" />
-                                                                        <span className="truncate">{child.label}</span>
-                                                                        {child.disabled && (
-                                                                            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                                                                                Soon
-                                                                            </Badge>
-                                                                        )}
-                                                                    </Link>
-                                                                ) : null;
-                                                            })}
+                                                        {renderModuleChildren(mod.children)}
                                                     </div>
                                                 )}
                                             </>

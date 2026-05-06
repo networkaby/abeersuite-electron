@@ -8,28 +8,28 @@ import {
 const REPORTS = [
     {
         title: "Balance Sheet",
-        href: "/office/finance/reports/balance-sheet",
+        href: "/office/tally/reports/balance-sheet",
         description: "Liabilities & Assets as on a date — fully drill-down to source vouchers.",
         icon: BarChart2,
         color: "from-blue-500/10 to-blue-500/0 text-blue-600",
     },
     {
         title: "Profit & Loss A/c",
-        href: "/office/finance/reports/profit-loss",
+        href: "/office/tally/reports/profit-loss",
         description: "Trading + P&L for a period, with opening / closing stock.",
         icon: BookOpen,
         color: "from-green-500/10 to-green-500/0 text-green-600",
     },
     {
         title: "Trial Balance",
-        href: "/office/finance/reports/trial-balance",
+        href: "/office/tally/reports/trial-balance",
         description: "Opening + transactions Dr/Cr + closing per ledger, group-hierarchical.",
         icon: ClipboardList,
         color: "from-purple-500/10 to-purple-500/0 text-purple-600",
     },
     {
         title: "Day Book",
-        href: "/office/finance/reports/day-book",
+        href: "/office/tally/reports/day-book",
         description: "All posted vouchers in chronological order, jump-to-source.",
         icon: Calendar,
         color: "from-orange-500/10 to-orange-500/0 text-orange-600",
