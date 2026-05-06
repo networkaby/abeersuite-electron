@@ -13,8 +13,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
-import CreateCompanyDialog from "@/modules/shared/components/CreateCompanyDialog";
-import CreatePersonDialog from "@/modules/shared/components/CreatePersonDialog";
 import UserAvatar from "@/modules/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
@@ -83,8 +81,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         "pricing-strategy": pathname.startsWith("/office/pricing-strategy"),
     });
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
-    const [showCreatePerson, setShowCreatePerson] = useState(false);
-    const [showCreateCompany, setShowCreateCompany] = useState(false);
 
     // Fetch live avatarUrl so it reflects changes without re-login
     useEffect(() => {
@@ -181,28 +177,13 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const canViewNavItem = (item: NavItem) =>
         item.permission === null || !item.permission || isAdmin || permissions.includes(item.permission);
 
-    const isCreatePersonItem = (href: string) => href === "/office/customers/new";
-    const isCreateCompanyItem = (href: string) => href === "/office/companies/new";
-    const isDialogNavItem = (href: string) => isCreatePersonItem(href) || isCreateCompanyItem(href);
-
     const isWorkspaceChildActive = (childHref: string, siblings: NavItem[]) => {
-        if (isDialogNavItem(childHref)) return false;
         if (!pathname.startsWith(childHref)) return false;
         // Prevent broad routes like "/office/customers" from also matching "/office/customers/all".
         const hasMoreSpecificSiblingMatch = siblings.some(
             (sibling) => sibling.href !== childHref && sibling.href.startsWith(`${childHref}/`) && pathname.startsWith(sibling.href)
         );
         return !hasMoreSpecificSiblingMatch;
-    };
-
-    const openWorkspaceDialog = (href: string) => {
-        if (isCreatePersonItem(href)) {
-            setShowCreatePerson(true);
-            return;
-        }
-        if (isCreateCompanyItem(href)) {
-            setShowCreateCompany(true);
-        }
     };
 
     return (
@@ -356,21 +337,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         {isOpen && (
                                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
                                                 {visibleChildren.map((child) => {
-                                                    if (isDialogNavItem(child.href)) {
-                                                        return (
-                                                            <Button
-                                                                key={`${item.href}-${child.href}`}
-                                                                type="button"
-                                                                variant="ghost"
-                                                                onClick={() => openWorkspaceDialog(child.href)}
-                                                                className="h-auto w-full justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-                                                            >
-                                                                <child.icon size={15} className="shrink-0" />
-                                                                <span className="truncate">{child.label}</span>
-                                                            </Button>
-                                                        );
-                                                    }
-
                                                     return (
                                                         <Link
                                                             key={`${item.href}-${child.href}`}
@@ -410,52 +376,91 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 return (
                                     <div key={mod.key}>
                                         {collapsed ? (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                title={mod.label}
-                                                className={[
-                                                    "h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
-                                                    mod.disabled
-                                                        ? "cursor-not-allowed text-muted-foreground/30"
-                                                        : "text-muted-foreground hover:bg-muted",
-                                                ].join(" ")}
-                                            >
-                                                <Icon size={17} />
-                                            </Button>
-                                        ) : (
-                                            <>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    disabled={mod.disabled}
-                                                    onClick={() =>
-                                                        !mod.disabled &&
-                                                        setModuleOpen((prev) => ({
-                                                            ...prev,
-                                                            [mod.key]: !prev[mod.key],
-                                                        }))
-                                                    }
+                                            mod.disabled || !mod.dashboardHref ? (
+                                                <div
+                                                    title={mod.label}
                                                     className={[
-                                                        "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                        "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
                                                         mod.disabled
                                                             ? "cursor-not-allowed text-muted-foreground/30"
-                                                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                            : "text-muted-foreground",
                                                     ].join(" ")}
                                                 >
-                                                    <Icon size={17} className="shrink-0" />
-                                                    <span className="flex-1 truncate text-left">{mod.label}</span>
-                                                    {mod.disabled ? (
-                                                        <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                                                            Soon
-                                                        </Badge>
-                                                    ) : (
-                                                        <ChevronDown
-                                                            size={13}
-                                                            className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                                                        />
-                                                    )}
-                                                </Button>
+                                                    <Icon size={17} />
+                                                </div>
+                                            ) : (
+                                                <Link
+                                                    href={mod.dashboardHref}
+                                                    title={mod.label}
+                                                    className={[
+                                                        "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
+                                                        pathname.startsWith(mod.dashboardHref)
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "text-muted-foreground hover:bg-muted",
+                                                    ].join(" ")}
+                                                >
+                                                    <Icon size={17} />
+                                                </Link>
+                                            )
+                                        ) : (
+                                            <>
+                                                {mod.disabled || !mod.dashboardHref ? (
+                                                    <div
+                                                        className={[
+                                                            "flex h-auto w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                                                            mod.disabled
+                                                                ? "cursor-not-allowed text-muted-foreground/30"
+                                                                : "text-muted-foreground",
+                                                        ].join(" ")}
+                                                    >
+                                                        <Icon size={17} className="shrink-0" />
+                                                        <span className="flex-1 truncate text-left">{mod.label}</span>
+                                                        {mod.disabled && (
+                                                            <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                                                                Soon
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex w-full items-stretch gap-0.5">
+                                                        <Link
+                                                            href={mod.dashboardHref}
+                                                            onClick={() =>
+                                                                setModuleOpen((prev) => ({
+                                                                    ...prev,
+                                                                    [mod.key]: true,
+                                                                }))
+                                                            }
+                                                            className={[
+                                                                "flex h-auto flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                pathname.startsWith(mod.dashboardHref)
+                                                                    ? "bg-primary text-primary-foreground"
+                                                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                            ].join(" ")}
+                                                        >
+                                                            <Icon size={17} className="shrink-0" />
+                                                            <span className="flex-1 truncate text-left">{mod.label}</span>
+                                                        </Link>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            aria-label={isOpen ? `Collapse ${mod.label}` : `Expand ${mod.label}`}
+                                                            onClick={() =>
+                                                                setModuleOpen((prev) => ({
+                                                                    ...prev,
+                                                                    [mod.key]: !prev[mod.key],
+                                                                }))
+                                                            }
+                                                            className="h-auto shrink-0 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                        >
+                                                            <ChevronDown
+                                                                size={13}
+                                                                className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                                            />
+                                                        </Button>
+                                                    </div>
+                                                )}
 
                                                 {isOpen && (
                                                     <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
@@ -490,21 +495,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                                                                     Soon
                                                                                 </Badge>
                                                                             )}
-                                                                        </Button>
-                                                                    );
-                                                                }
-
-                                                                if (href && isDialogNavItem(href)) {
-                                                                    return (
-                                                                        <Button
-                                                                            key={child.label}
-                                                                            type="button"
-                                                                            variant="ghost"
-                                                                            className="h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-                                                                            onClick={() => openWorkspaceDialog(href)}
-                                                                        >
-                                                                            <CIcon size={15} className="shrink-0" />
-                                                                            <span className="truncate">{child.label}</span>
                                                                         </Button>
                                                                     );
                                                                 }
@@ -665,8 +655,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 </Button>
             </div>
 
-            <CreatePersonDialog open={showCreatePerson} onOpenChange={setShowCreatePerson} />
-            <CreateCompanyDialog open={showCreateCompany} onOpenChange={setShowCreateCompany} />
         </aside>
     );
 }

@@ -82,12 +82,27 @@ export type ModuleChild = {
     disabled?: boolean;
 };
 
+export type ModuleCreateAction = {
+    label: string;
+    subtitle: string;
+    icon: LucideIcon;
+    variant?: "default" | "outline";
+    href?: string;
+    action?: "new-ticket" | "new-person" | "new-company";
+    pipelineRef?: "default";
+    permission?: string | null;
+    disabled?: boolean;
+};
+
 export type ModuleSection = {
     label: string;
     icon: LucideIcon;
     key: string;
     disabled?: boolean;
     children: ModuleChild[];
+    createActions?: ModuleCreateAction[];
+    dashboardHref?: string;
+    pathPrefixes?: string[];
 };
 
 export type SettingsNavItem = {
@@ -121,21 +136,28 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Customers",
         icon: Users,
         key: "customers",
+        dashboardHref: "/office/customers/dashboard",
+        pathPrefixes: ["/office/customers", "/office/companies", "/office/all"],
+        createActions: [
+            { label: "People +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:view" },
+            { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:view" },
+        ],
         children: [
-            { label: "+ New People", href: "/office/customers/new", icon: Plus, permission: "customers:view" },
-            { label: "+ New Companies", href: "/office/companies/new", icon: Plus, permission: "customers:view" },
             { label: "All Customers", href: "/office/all", icon: Users, permission: "customers:view" },
             { label: "People", href: "/office/customers", icon: Users, permission: "customers:view" },
             { label: "Companies", href: "/office/companies", icon: Building2, permission: "customers:view" },
-
         ],
     },
     {
         label: "Repair & Warranty",
         icon: Wrench,
         key: "repair",
+        dashboardHref: "/office/tickets",
+        pathPrefixes: ["/office/tickets", "/office/service-centers", "/office/dashboard"],
+        createActions: [
+            { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
+        ],
         children: [
-            { label: "+ New Repair", icon: Plus, action: "new-ticket", pipelineRef: "default" },
             { label: "All Repair", icon: ClipboardList, href: "/office/tickets", pipelineRef: "default" },
             { label: "Service Centers", icon: Building2, href: "/office/service-centers", permission: "service-centers:view" },
         ],
@@ -144,15 +166,21 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "CRM",
         icon: Network,
         key: "crm",
+        dashboardHref: "/office/crm",
+        pathPrefixes: ["/office/crm"],
+        createActions: [
+            { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
+        ],
         children: [
             { label: "Leads", icon: ClipboardList, href: "/office/crm", permission: "crm:view" },
-            { label: "+ New Lead", icon: Plus, href: "/office/crm/leads/new", permission: "crm:manage" },
         ],
     },
     {
         label: "E-Commerce",
         icon: ShoppingCart,
         key: "e-commerce",
+        dashboardHref: "/office/ecommerce",
+        pathPrefixes: ["/office/ecommerce"],
         children: [
             { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
             { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
@@ -165,19 +193,22 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Tally",
         icon: Calculator,
         key: "tally",
-        // disabled: true,
+        dashboardHref: "/office/finance/dashboard",
+        pathPrefixes: ["/office/finance"],
+        createActions: [
+            { label: "Sale +", subtitle: "New sale voucher", icon: Receipt, variant: "default", href: "/office/finance/sales/new" },
+            { label: "Purchase +", subtitle: "New purchase voucher", icon: ShoppingCart, variant: "outline", href: "/office/finance/purchases/new" },
+            { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", href: "/office/finance/estimates/new" },
+            { label: "Payment +", subtitle: "New payment", icon: Wallet, variant: "outline", href: "/office/finance/payments/new", permission: "finance:voucher:create" },
+            { label: "Receipt +", subtitle: "New receipt", icon: Wallet, variant: "outline", href: "/office/finance/receipts/new", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra", icon: Wallet, variant: "outline", href: "/office/finance/contras/new", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", href: "/office/finance/credit-notes/new", permission: "finance:voucher:create" },
+            { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", href: "/office/finance/debit-notes/new", permission: "finance:voucher:create" },
+            { label: "Journal +", subtitle: "New journal entry", icon: FileText, variant: "outline", href: "/office/finance/journal-entries", permission: "finance:journal:cancel" },
+        ],
         children: [
             { label: "Account Groups", icon: FolderTree, href: "/office/finance/groups" },
             { label: "Ledgers", icon: BookOpen, href: "/office/finance/ledgers" },
-            { label: "+ New Sale", icon: Receipt, href: "/office/finance/sales/new" },
-            { label: "+ New Purchase", icon: ShoppingCart, href: "/office/finance/purchases/new" },
-            { label: "+ New Estimate", icon: ScrollText, href: "/office/finance/estimates/new" },
-            { label: "+ New Payment", icon: Wallet, href: "/office/finance/payments/new", permission: "finance:voucher:create" },
-            { label: "+ New Receipt", icon: Wallet, href: "/office/finance/receipts/new", permission: "finance:voucher:create" },
-            { label: "+ New Contra", icon: Wallet, href: "/office/finance/contras/new", permission: "finance:voucher:create" },
-            { label: "+ New Credit Note", icon: FileText, href: "/office/finance/credit-notes/new", permission: "finance:voucher:create" },
-            { label: "+ New Debit Note", icon: FileText, href: "/office/finance/debit-notes/new", permission: "finance:voucher:create" },
-            { label: "+ New Journal", icon: FileText, href: "/office/finance/journal-entries", permission: "finance:journal:cancel" },
             { label: "Sales", icon: Receipt, href: "/office/finance/sales" },
             { label: "Purchases", icon: ShoppingCart, href: "/office/finance/purchases" },
             { label: "Estimates", icon: ScrollText, href: "/office/finance/estimates" },
@@ -197,24 +228,28 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Inventory",
         icon: Box,
         key: "inventory",
+        dashboardHref: "/office/inventory",
+        pathPrefixes: ["/office/inventory"],
+        createActions: [
+            { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "default", href: "/office/inventory/sales-orders/new", permission: "inventory:manage" },
+            { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", href: "/office/inventory/purchase-orders/new", permission: "inventory:manage" },
+            { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", href: "/office/inventory/grn/new", permission: "inventory:manage" },
+            { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", href: "/office/inventory/challans/new", permission: "inventory:manage" },
+            { label: "Stock Journal +", subtitle: "New stock journal", icon: ArrowLeftRight, variant: "outline", href: "/office/inventory/stock-journals/new", permission: "inventory:manage" },
+            { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", href: "/office/inventory/physical-stock/new", permission: "inventory:manage" },
+            { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-in/new", permission: "inventory:manage" },
+            { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
+        ],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
-            { label: "+ New Sales Order",    icon: ClipboardList, href: "/office/inventory/sales-orders/new", permission: "inventory:manage" },
-            { label: "+ New Purchase Order", icon: ClipboardList, href: "/office/inventory/purchase-orders/new", permission: "inventory:manage" },
-            { label: "+ New GRN",            icon: PackageCheck,  href: "/office/inventory/grn/new", permission: "inventory:manage" },
-            { label: "+ New Challan",        icon: Truck,         href: "/office/inventory/challans/new", permission: "inventory:manage" },
-            { label: "+ New Stock Journal",  icon: ArrowLeftRight, href: "/office/inventory/stock-journals/new", permission: "inventory:manage" },
-            { label: "+ New Physical Stock", icon: ClipboardCheck, href: "/office/inventory/physical-stock/new", permission: "inventory:manage" },
-            { label: "+ New Rejection In",   icon: PackageX,      href: "/office/inventory/rejections-in/new", permission: "inventory:manage" },
-            { label: "+ New Rejection Out",  icon: PackageX,      href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
-            { label: "Sales Orders",    icon: ClipboardList, href: "/office/inventory/sales-orders", permission: "inventory:manage" },
+            { label: "Sales Orders", icon: ClipboardList, href: "/office/inventory/sales-orders", permission: "inventory:manage" },
             { label: "Purchase Orders", icon: ClipboardList, href: "/office/inventory/purchase-orders", permission: "inventory:manage" },
-            { label: "GRN",             icon: PackageCheck,  href: "/office/inventory/grn", permission: "inventory:manage" },
-            { label: "Challans",        icon: Truck,         href: "/office/inventory/challans", permission: "inventory:manage" },
-            { label: "Stock Journals",  icon: ArrowLeftRight, href: "/office/inventory/stock-journals", permission: "inventory:manage" },
-            { label: "Physical Stock",  icon: ClipboardCheck, href: "/office/inventory/physical-stock", permission: "inventory:manage" },
-            { label: "Rejections In",   icon: PackageX,      href: "/office/inventory/rejections-in", permission: "inventory:manage" },
-            { label: "Rejections Out",  icon: PackageX,      href: "/office/inventory/rejections-out", permission: "inventory:manage" },
+            { label: "GRN", icon: PackageCheck, href: "/office/inventory/grn", permission: "inventory:manage" },
+            { label: "Challans", icon: Truck, href: "/office/inventory/challans", permission: "inventory:manage" },
+            { label: "Stock Journals", icon: ArrowLeftRight, href: "/office/inventory/stock-journals", permission: "inventory:manage" },
+            { label: "Physical Stock", icon: ClipboardCheck, href: "/office/inventory/physical-stock", permission: "inventory:manage" },
+            { label: "Rejections In", icon: PackageX, href: "/office/inventory/rejections-in", permission: "inventory:manage" },
+            { label: "Rejections Out", icon: PackageX, href: "/office/inventory/rejections-out", permission: "inventory:manage" },
             { label: "Units", icon: Ruler, href: "/office/inventory/units", permission: "inventory:manage" },
             { label: "Categories", icon: Layers, href: "/office/inventory/categories", permission: "inventory:manage" },
             { label: "Groups", icon: LayoutGrid, href: "/office/inventory/product-groups", permission: "inventory:manage" },
@@ -227,6 +262,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "HRM",
         icon: UserCog,
         key: "hrm",
+        dashboardHref: "/office/hrm",
+        pathPrefixes: ["/office/hrm"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/hrm" },
             { label: "Staff directory", icon: Users, href: "/office/hrm/directory" },
@@ -239,6 +276,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Delivery",
         icon: Truck,
         key: "delivery",
+        dashboardHref: "/office/delivery",
+        pathPrefixes: ["/office/delivery"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/delivery" },
             { label: "Shipments", icon: Package, href: "/office/delivery/shipments" },
@@ -250,6 +289,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Field Service",
         icon: MapPin,
         key: "field-service",
+        dashboardHref: "/office/field-service",
+        pathPrefixes: ["/office/field-service"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/field-service" },
             { label: "Jobs", icon: Wrench, href: "/office/field-service/jobs" },
@@ -261,6 +302,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "HelpDesk",
         icon: HelpCircle,
         key: "helpdesk",
+        dashboardHref: "/office/helpdesk",
+        pathPrefixes: ["/office/helpdesk"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/helpdesk" },
             { label: "Queues", icon: Inbox, href: "/office/helpdesk/queues" },
@@ -272,6 +315,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Projects",
         icon: Briefcase,
         key: "projects",
+        dashboardHref: "/office/projects",
+        pathPrefixes: ["/office/projects"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/projects" },
             { label: "Active", icon: PlayCircle, href: "/office/projects/active" },
@@ -283,6 +328,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Intelligence",
         icon: ChartArea,
         key: "intelligence",
+        dashboardHref: "/office/intelligence",
+        pathPrefixes: ["/office/intelligence"],
         children: [
             { label: "Overview", icon: LayoutDashboard, href: "/office/intelligence" },
             { label: "Dashboards", icon: BarChart2, href: "/office/intelligence/dashboards" },
@@ -294,6 +341,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Administration",
         icon: Settings,
         key: "administration",
+        dashboardHref: "/office/administration",
+        pathPrefixes: ["/office/administration"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/administration" },
             { label: "Audit log", icon: ScrollText, href: "/office/administration/audit" },
@@ -305,6 +354,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Retention",
         icon: TicketPercent,
         key: "retention",
+        dashboardHref: "/office/retention",
+        pathPrefixes: ["/office/retention"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/retention" },
             { label: "Coupon programs", icon: BadgePercent, href: "/office/retention/coupons" },
@@ -316,6 +367,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Pricing Strategy",
         icon: Wallet,
         key: "pricing-strategy",
+        dashboardHref: "/office/pricing-strategy",
+        pathPrefixes: ["/office/pricing-strategy"],
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
             { label: "Rules", icon: Calculator, href: "/office/pricing-strategy/rules" },
