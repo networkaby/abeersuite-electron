@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type ProductOption = {
     id:         number;
@@ -47,19 +48,46 @@ type Props = {
     autoFocus?: boolean;
 };
 
+const formatINR = (paise: number | null) =>
+    paise != null
+        ? `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : "—";
+
 export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false }: Props) {
     const [products, setProducts]   = useState<ProductOption[]>([]);
     const [query, setQuery]         = useState("");
     const [open, setOpen]           = useState(false);
+    const [loading, setLoading]     = useState(true);
     const [highlighted, setHighlighted] = useState(0);
+    const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef  = useRef<HTMLUListElement>(null);
 
+    // Match dropdown width to the parent voucher table so it spans the row
+    useEffect(() => {
+        if (!open) return;
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        const table = wrapper.closest("table");
+        if (!table) return;
+        const measure = () => {
+            const tableRect   = table.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
+            setDropdownWidth(Math.max(360, tableRect.right - wrapperRect.left));
+        };
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, [open]);
+
     // Load all products once (cached in memory for fast typing)
     useEffect(() => {
+        setLoading(true);
         axios.get<ProductOption[]>("/api/inventory/products/lookup")
             .then((r) => setProducts(r.data))
-            .catch(() => { });
+            .catch(() => { })
+            .finally(() => setLoading(false));
     }, []);
 
     // When value changes externally, update the display text
@@ -127,7 +155,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     }, [highlighted]);
 
     return (
-        <div className={`relative ${className}`}>
+        <div ref={wrapperRef} className={`relative ${className}`}>
             <input
                 ref={inputRef}
                 type="text"
@@ -146,10 +174,13 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                 onKeyDown={handleKeyDown}
             />
 
-            {open && filtered.length > 0 && (
-                <div className="absolute left-0 top-full z-50 mt-0.5 w-[560px] max-h-72 overflow-auto rounded-lg border border-border bg-popover shadow-xl text-sm">
+            {open && (
+                <div
+                    className="absolute left-0 top-full z-50 mt-0.5 rounded-lg border border-border bg-popover shadow-xl text-sm"
+                    style={{ width: dropdownWidth ?? 720 }}
+                >
                     {/* Header row */}
-                    <div className="sticky top-0 grid grid-cols-[1fr_80px_80px_80px_70px] gap-0 border-b border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 border-b border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         <span>Item</span>
                         <span className="text-right">Sale Price</span>
                         <span className="text-right">Cost Price</span>
@@ -157,49 +188,60 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                         <span className="text-right">Stock</span>
                     </div>
 
-                    <ul ref={listRef}>
-                        {filtered.map((p, i) => {
-                            const isLow     = p.stock != null && p.stock <= p.lowStockThreshold;
-                            const stockZero = p.stock === 0;
-                            return (
-                                <li
-                                    key={p.id}
-                                    onMouseDown={() => pick(p)}
-                                    onMouseEnter={() => setHighlighted(i)}
-                                    className={`grid grid-cols-[1fr_80px_80px_80px_70px] gap-0 cursor-pointer px-3 py-2 transition-colors ${
-                                        i === highlighted ? "bg-accent" : "hover:bg-accent/60"
-                                    }`}
-                                >
-                                    {/* Name + SKU + barcode */}
-                                    <div className="min-w-0">
-                                        <span className="font-medium truncate">{p.name}</span>
-                                        {p.barcode1 && (
-                                            <span className="ml-1.5 text-[10px] text-muted-foreground font-mono">({p.barcode1})</span>
-                                        )}
-                                        <div className="text-[10px] text-muted-foreground font-mono">{p.sku} · {p.unit.code}{p.brand ? ` · ${p.brand.name}` : ""}</div>
-                                    </div>
-                                    {/* Sale price */}
-                                    <span className="text-right text-xs tabular-nums">
-                                        {p.pricePaise != null ? `₹${(p.pricePaise / 100).toFixed(2)}` : "—"}
-                                    </span>
-                                    {/* Cost price */}
-                                    <span className="text-right text-xs tabular-nums text-muted-foreground">
-                                        {p.costPaise != null ? `₹${(p.costPaise / 100).toFixed(2)}` : "—"}
-                                    </span>
-                                    {/* MRP */}
-                                    <span className="text-right text-xs tabular-nums text-muted-foreground">
-                                        {p.mrpPaise != null ? `₹${(p.mrpPaise / 100).toFixed(2)}` : "—"}
-                                    </span>
-                                    {/* Stock */}
-                                    <span className={`text-right text-xs font-semibold tabular-nums ${
-                                        stockZero ? "text-destructive" : isLow ? "text-orange-500" : "text-green-600"
-                                    }`}>
-                                        {p.stock ?? "—"}
-                                    </span>
-                                </li>
-                            );
-                        })}
-                    </ul>
+                    {loading && products.length === 0 ? (
+                        <div className="px-3 py-4 text-xs text-muted-foreground text-center">Loading items…</div>
+                    ) : filtered.length === 0 ? (
+                        <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                            No items match <span className="font-mono">{query}</span>
+                        </div>
+                    ) : (
+                        <ScrollArea className="max-h-72 h-72">
+                            <ul ref={listRef} className="divide-y divide-border">
+                                {filtered.map((p, i) => {
+                                    const isLow     = p.stock != null && p.stock <= p.lowStockThreshold;
+                                    const stockZero = p.stock === 0;
+                                    return (
+                                        <li
+                                            key={p.id}
+                                            onMouseDown={() => pick(p)}
+                                            onMouseEnter={() => setHighlighted(i)}
+                                            className={`grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 cursor-pointer px-3 py-2 transition-colors ${
+                                                i === highlighted ? "bg-accent" : "hover:bg-accent/60"
+                                            }`}
+                                        >
+                                            {/* Name + SKU + brand + barcode */}
+                                            <div className="min-w-0 overflow-hidden">
+                                                <div className="font-medium truncate">{p.name}</div>
+                                                <div className="text-[10px] text-muted-foreground font-mono truncate">
+                                                    {p.sku} · {p.unit.code}
+                                                    {p.brand ? ` · ${p.brand.name}` : ""}
+                                                    {p.barcode1 ? ` · ${p.barcode1}` : ""}
+                                                </div>
+                                            </div>
+                                            {/* Sale price */}
+                                            <span className="text-right text-xs tabular-nums self-center">
+                                                {formatINR(p.pricePaise)}
+                                            </span>
+                                            {/* Cost price */}
+                                            <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
+                                                {formatINR(p.costPaise)}
+                                            </span>
+                                            {/* MRP */}
+                                            <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
+                                                {formatINR(p.mrpPaise)}
+                                            </span>
+                                            {/* Stock */}
+                                            <span className={`text-right text-xs font-semibold tabular-nums self-center ${
+                                                stockZero ? "text-destructive" : isLow ? "text-orange-500" : "text-green-600"
+                                            }`}>
+                                                {p.stock ?? "—"}
+                                            </span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </ScrollArea>
+                    )}
                 </div>
             )}
 

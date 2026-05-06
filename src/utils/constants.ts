@@ -166,33 +166,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     {
-        label: "CRM",
-        icon: Network,
-        key: "crm",
-        dashboardHref: "/office/crm",
-        pathPrefixes: ["/office/crm"],
-        createActions: [
-            { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
-        ],
-        children: [
-            { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
-        ],
-    },
-    {
-        label: "E-Commerce",
-        icon: ShoppingCart,
-        key: "e-commerce",
-        dashboardHref: "/office/ecommerce",
-        pathPrefixes: ["/office/ecommerce"],
-        children: [
-            // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
-            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
-            { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
-            { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
-            { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
-        ],
-    },
-    {
         label: "Tally",
         icon: Calculator,
         key: "tally",
@@ -235,7 +208,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Balance Sheet", icon: FolderTree, href: "/office/tally/reports/balance-sheet" },
                     { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/tally/reports/profit-loss" },
                     { label: "Trial Balance", icon: Wallet, href: "/office/tally/reports/trial-balance" },
-                    { label: "Day Book", icon: ClipboardList, href: "/office/tally/reports/day-book" },
+                    // { label: "Day Book", icon: ClipboardList, href: "/office/tally/reports/day-book" },
                     { label: "Cash Book", icon: Wallet, href: "/office/tally/reports/cash-book" },
                     { label: "Bank Book", icon: Wallet, href: "/office/tally/reports/bank-book" },
                     { label: "Receivables", icon: Wallet, href: "/office/tally/reports/receivables" },
@@ -245,9 +218,10 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Ratio Analysis", icon: ClipboardList, href: "/office/tally/reports/ratio-analysis" },
                     { label: "Statistics", icon: ClipboardList, href: "/office/tally/reports/statistics" },
                     { label: "Bank Reconciliation", icon: Wallet, href: "/office/tally/reports/bank-reconciliation" },
-                    { label: "GST Reports", icon: ClipboardList, href: "/office/tally/reports/gst" },
+
                 ]
             },
+
             {
                 label: "Vouchers Register", icon: ClipboardList, href: "/office/tally/journal-entries", permission: "finance:voucher:create",
                 children: [
@@ -281,6 +255,34 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
     },
+    {
+        label: "CRM",
+        icon: Network,
+        key: "crm",
+        dashboardHref: "/office/crm",
+        pathPrefixes: ["/office/crm"],
+        createActions: [
+            { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
+        ],
+        children: [
+            { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
+        ],
+    },
+    {
+        label: "E-Commerce",
+        icon: ShoppingCart,
+        key: "e-commerce",
+        dashboardHref: "/office/ecommerce",
+        pathPrefixes: ["/office/ecommerce"],
+        children: [
+            // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
+            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
+            { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
+            { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
+            { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
+        ],
+    },
+
     {
         label: "Inventory",
         icon: Box,
@@ -432,6 +434,19 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Discount matrix", icon: Table, href: "/office/pricing-strategy/discounts" },
             { label: "Price lists", icon: ListOrdered, href: "/office/pricing-strategy/price-lists" },
         ],
+    },
+    {
+        label: "Complience",
+        icon: ClipboardList,
+        key: "complience",
+        dashboardHref: "/office/tally/reports/gst",
+        pathPrefixes: ["/office/complience"],
+        children: [
+            { label: "Net GST Liability", icon: ClipboardList, href: "/office/tally/reports/gst/liability" },
+            { label: "Outward Supplies", icon: ClipboardList, href: "/office/tally/reports/gst/outward-supplies" },
+            { label: "Inward Supplies", icon: ClipboardList, href: "/office/tally/reports/gst/inward-supplies" },
+            { label: "HSN Summary", icon: ClipboardList, href: "/office/tally/reports/gst/hsn-summary" },
+        ]
     },
 ];
 
