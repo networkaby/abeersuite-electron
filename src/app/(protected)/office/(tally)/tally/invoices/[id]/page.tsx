@@ -150,7 +150,7 @@ export default function InvoiceDetailPage() {
         <div className="max-w-3xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/office/finance/invoices" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/tally/invoices" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
@@ -180,7 +180,7 @@ export default function InvoiceDetailPage() {
                     <LifecycleActions
                         voucher={invoice}
                         apiBasePath={`/api/finance/invoices/${id}`}
-                        listPath="/office/finance/invoices"
+                        listPath="/office/tally/invoices"
                         label="Invoice"
                         canCancel={canCancel}
                         canDelete={canDelete}

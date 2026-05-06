@@ -33,8 +33,8 @@ export function VoucherList({
     type:     VoucherFormType;
     title:    string;
     subtitle: string;
-    basePath: string;  // /office/finance/contras
-    newPath:  string;  // /office/finance/contras/new
+    basePath: string;  // /office/tally/contras
+    newPath:  string;  // /office/tally/contras/new
 }) {
     const [rows, setRows] = useState<VoucherRow[]>([]);
     const [loading, setLoading] = useState(true);

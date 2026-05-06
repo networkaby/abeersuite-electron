@@ -108,7 +108,7 @@ export default function SaleDetailPage() {
         <div className="max-w-4xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/office/finance/sales" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/tally/sales" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
@@ -135,7 +135,7 @@ export default function SaleDetailPage() {
                     <LifecycleActions
                         voucher={voucher}
                         apiBasePath={`/api/inventory/vouchers/${id}`}
-                        listPath="/office/finance/sales"
+                        listPath="/office/tally/sales"
                         label="Sale Voucher"
                         canCancel={canCancel}
                         canDelete={canDelete}
@@ -177,7 +177,7 @@ export default function SaleDetailPage() {
                 {voucher.journalEntryId && (
                     <div>
                         <p className="text-xs text-muted-foreground mb-1">Journal Entry</p>
-                        <Link href={`/office/finance/journal-entries/${voucher.journalEntryId}`} className="text-primary hover:underline flex items-center gap-1 text-sm font-medium">
+                        <Link href={`/office/tally/journal-entries/${voucher.journalEntryId}`} className="text-primary hover:underline flex items-center gap-1 text-sm font-medium">
                             JE #{voucher.journalEntryId} <ExternalLink size={12} />
                         </Link>
                     </div>

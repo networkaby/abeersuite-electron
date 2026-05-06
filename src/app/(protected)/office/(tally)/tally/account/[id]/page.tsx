@@ -14,10 +14,10 @@ import { indianFiscalYearStart, formatDateInput } from "@/modules/tally/lib/peri
 
 interface SourceDoc {
     kind: "sale" | "purchase" | "estimate" | "invoice";
-    id:   number;
+    id: number;
     reference?: string;
-    number?:    string;
-    url:        string;
+    number?: string;
+    url: string;
 }
 interface LedgerRow {
     id: number;
@@ -48,10 +48,10 @@ const SRC_LABEL: Record<SourceDoc["kind"], string> = {
     sale: "Sale", purchase: "Purchase", estimate: "Estimate", invoice: "Invoice",
 };
 const SRC_COLOR: Record<SourceDoc["kind"], string> = {
-    sale:     "bg-green-50 text-green-700 border-green-200",
+    sale: "bg-green-50 text-green-700 border-green-200",
     purchase: "bg-blue-50 text-blue-700 border-blue-200",
     estimate: "bg-amber-50 text-amber-700 border-amber-200",
-    invoice:  "bg-purple-50 text-purple-700 border-purple-200",
+    invoice: "bg-purple-50 text-purple-700 border-purple-200",
 };
 
 export default function AccountLedgerPage() {
@@ -61,7 +61,7 @@ export default function AccountLedgerPage() {
 
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(search.get("from") ?? formatDateInput(fyStart));
-    const [to, setTo]     = useState(search.get("to")   ?? formatDateInput(new Date()));
+    const [to, setTo] = useState(search.get("to") ?? formatDateInput(new Date()));
     const [data, setData] = useState<LedgerData | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -89,7 +89,7 @@ export default function AccountLedgerPage() {
                     </h1>
                     {data?.account.groupName && (
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            <Link href={`/office/finance/groups/${data.account.groupId}`} className="hover:underline">
+                            <Link href={`/office/tally/groups/${data.account.groupId}`} className="hover:underline">
                                 {data.account.groupName}
                             </Link>
                             {" › "}{data.account.name}
@@ -147,7 +147,7 @@ export default function AccountLedgerPage() {
                                     <tr
                                         key={row.id}
                                         className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                        onClick={() => router.push(`/office/finance/journal-entries/${row.journalEntryId}`)}
+                                        onClick={() => router.push(`/office/tally/journal-entries/${row.journalEntryId}`)}
                                     >
                                         <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
                                             {new Date(row.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}

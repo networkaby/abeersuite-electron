@@ -9,33 +9,33 @@ import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
 
 const STATUS_COLORS: Record<string, string> = {
-    DRAFT:  "bg-yellow-100 text-yellow-700",
+    DRAFT: "bg-yellow-100 text-yellow-700",
     POSTED: "bg-blue-100 text-blue-700",
     CANCELLED: "bg-muted text-muted-foreground",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-    DRAFT:     "DRAFT",
-    POSTED:    "FINALISED",
+    DRAFT: "DRAFT",
+    POSTED: "FINALISED",
     CANCELLED: "CANCELLED",
 };
 
 interface Voucher {
-    id:          number;
-    reference:   string;
-    date:        string;
+    id: number;
+    reference: string;
+    date: string;
     description: string;
-    status:      "DRAFT" | "POSTED" | "CANCELLED";
-    partyName:   string | null;
+    status: "DRAFT" | "POSTED" | "CANCELLED";
+    partyName: string | null;
     totalAmount: number;
-    _count:      { lines: number };
-    createdBy:   { name: string };
+    _count: { lines: number };
+    createdBy: { name: string };
 }
 
 export default function EstimatesPage() {
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
-    const [loading,  setLoading]  = useState(true);
-    const [status,   setStatus]   = useState("");
+    const [loading, setLoading] = useState(true);
+    const [status, setStatus] = useState("");
 
     const load = () => {
         setLoading(true);
@@ -56,7 +56,7 @@ export default function EstimatesPage() {
                     <h1 className="text-2xl font-bold text-foreground">Estimates</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Quotations &amp; estimates — no stock impact</p>
                 </div>
-                <Link href="/office/finance/estimates/new">
+                <Link href="/office/tally/estimates/new">
                     <Button><Plus size={16} /> New Estimate</Button>
                 </Link>
             </div>
@@ -69,11 +69,10 @@ export default function EstimatesPage() {
                         onClick={() => setStatus(s)}
                         variant="outline"
                         size="xs"
-                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
-                            status === s
+                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${status === s
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border bg-card text-muted-foreground hover:bg-muted"
-                        }`}
+                            }`}
                     >
                         {s ? (STATUS_LABEL[s] ?? s) : "All"}
                     </Button>
@@ -90,7 +89,7 @@ export default function EstimatesPage() {
                     {vouchers.length === 0 ? (
                         <div className="text-center py-16 text-muted-foreground">
                             No estimates yet.{" "}
-                            <Link href="/office/finance/estimates/new" className="text-primary hover:underline">Create one</Link>
+                            <Link href="/office/tally/estimates/new" className="text-primary hover:underline">Create one</Link>
                         </div>
                     ) : (
                         <table className="w-full text-sm">
@@ -125,7 +124,7 @@ export default function EstimatesPage() {
                                         </td>
                                         <td className="px-5 py-3 text-muted-foreground text-xs">{v.createdBy.name}</td>
                                         <td className="px-3 py-3 text-right">
-                                            <Link href={`/office/finance/estimates/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                            <Link href={`/office/tally/estimates/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

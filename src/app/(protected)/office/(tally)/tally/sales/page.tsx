@@ -57,7 +57,7 @@ export default function SalesPage() {
                     <h1 className="text-2xl font-bold text-foreground">Sales</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Sale vouchers — stock & GL ledger</p>
                 </div>
-                <Link href="/office/finance/sales/new">
+                <Link href="/office/tally/sales/new">
                     <Button><Plus size={16} /> New Sale</Button>
                 </Link>
             </div>
@@ -91,7 +91,7 @@ export default function SalesPage() {
                     {vouchers.length === 0 ? (
                         <div className="text-center py-16 text-muted-foreground">
                             No sale vouchers yet.{" "}
-                            <Link href="/office/finance/sales/new" className="text-primary hover:underline">Create one</Link>
+                            <Link href="/office/tally/sales/new" className="text-primary hover:underline">Create one</Link>
                         </div>
                     ) : (
                         <table className="w-full text-sm">
@@ -140,7 +140,7 @@ export default function SalesPage() {
                                             </td>
                                             <td className="px-5 py-3 text-muted-foreground text-xs">{v.createdBy.name}</td>
                                             <td className="px-3 py-3 text-right">
-                                                <Link href={`/office/finance/sales/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                                <Link href={`/office/tally/sales/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                     <ChevronRight size={16} />
                                                 </Link>
                                             </td>

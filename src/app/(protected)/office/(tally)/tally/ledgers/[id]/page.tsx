@@ -166,7 +166,7 @@ export default function GroupLedgersPage() {
                 <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => router.push("/office/finance/ledgers")}
+                    onClick={() => router.push("/office/tally/ledgers")}
                     className="text-muted-foreground hover:text-foreground"
                 >
                     <ArrowLeft size={16} />
@@ -184,7 +184,7 @@ export default function GroupLedgersPage() {
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         <button
-                            onClick={() => router.push("/office/finance/ledgers")}
+                            onClick={() => router.push("/office/tally/ledgers")}
                             className="hover:underline"
                         >
                             Ledgers

@@ -124,8 +124,8 @@ export default function TrialBalancePage() {
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
         return next;
     });
-    const goLedger = (id: number) => router.push(`/office/finance/account/${id}?from=${from}&to=${to}`);
-    const goGroup  = (id: number) => router.push(`/office/finance/groups/${id}?from=${from}&to=${to}`);
+    const goLedger = (id: number) => router.push(`/office/tally/account/${id}?from=${from}&to=${to}`);
+    const goGroup  = (id: number) => router.push(`/office/tally/groups/${id}?from=${from}&to=${to}`);
 
     return (
         <div className="max-w-7xl mx-auto space-y-5">

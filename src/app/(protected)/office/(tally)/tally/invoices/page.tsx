@@ -345,7 +345,7 @@ export default function InvoicesPage() {
                                             </span>
                                         </td>
                                         <td className="px-5 py-3 text-right">
-                                            <Link href={`/office/finance/invoices/${inv.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                            <Link href={`/office/tally/invoices/${inv.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

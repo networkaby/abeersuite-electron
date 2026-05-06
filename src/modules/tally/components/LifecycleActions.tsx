@@ -33,7 +33,7 @@ export function LifecycleActions({
 }: {
     voucher:       LifecycleVoucher;
     apiBasePath:   string;          // e.g. /api/inventory/vouchers/42
-    listPath:      string;          // e.g. /office/finance/sales (for redirect on hard-delete)
+    listPath:      string;          // e.g. /office/tally/sales (for redirect on hard-delete)
     label:         string;          // e.g. "Sale Voucher", "Invoice"
     canCancel:     boolean;
     canDelete:     boolean;

@@ -117,7 +117,7 @@ export default function DayBookPage() {
                                     <tr
                                         key={r.id}
                                         className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                        onClick={() => router.push(`/office/finance/journal-entries/${r.id}`)}
+                                        onClick={() => router.push(`/office/tally/journal-entries/${r.id}`)}
                                     >
                                         <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
                                             {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}

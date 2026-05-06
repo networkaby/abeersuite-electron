@@ -110,7 +110,7 @@ export default function NewEstimatePage() {
             });
 
             toast.success("Estimate saved");
-            router.push(`/office/finance/estimates/${res.data.id}`);
+            router.push(`/office/tally/estimates/${res.data.id}`);
         } catch (err: unknown) {
             toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Save failed");
         } finally {
@@ -283,7 +283,7 @@ export default function NewEstimatePage() {
                     </div>
 
                     <div className="flex gap-2 shrink-0">
-                        <Button variant="outline" onClick={() => router.push("/office/finance/estimates")}>
+                        <Button variant="outline" onClick={() => router.push("/office/tally/estimates")}>
                             Cancel
                         </Button>
                         <Button onClick={submit} disabled={saving}>

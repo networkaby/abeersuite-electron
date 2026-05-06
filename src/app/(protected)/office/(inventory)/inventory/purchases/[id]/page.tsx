@@ -13,34 +13,34 @@ import { LifecycleActions } from "@/modules/tally/components/LifecycleActions";
 import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 type VoucherDetail = {
-    id:             number;
-    reference:      string;
-    type:           string;
-    date:           string;
-    description:    string;
-    status:         "DRAFT" | "POSTED" | "CANCELLED";
-    partyName:      string | null;
-    partyPhone:     string | null;
-    partyAddress:   string | null;
-    subtotal:       number;
-    taxAmount:      number;
-    shippingAmt:    number;
-    roundOff:       number;
-    totalAmount:    number;
+    id: number;
+    reference: string;
+    type: string;
+    date: string;
+    description: string;
+    status: "DRAFT" | "POSTED" | "CANCELLED";
+    partyName: string | null;
+    partyPhone: string | null;
+    partyAddress: string | null;
+    subtotal: number;
+    taxAmount: number;
+    shippingAmt: number;
+    roundOff: number;
+    totalAmount: number;
     journalEntryId: number | null;
-    postedAt:       string | null;
-    cancelledAt:    string | null;
-    cancelReason:   string | null;
-    createdBy:      { name: string };
+    postedAt: string | null;
+    cancelledAt: string | null;
+    cancelReason: string | null;
+    createdBy: { name: string };
     lines: {
-        id:          number;
-        quantity:    number;
-        rate:        number;
+        id: number;
+        quantity: number;
+        rate: number;
         discountPct: number;
         discountAmt: number;
-        taxRate:     number;
-        taxAmount:   number;
-        amount:      number;
+        taxRate: number;
+        taxAmount: number;
+        amount: number;
         product: { id: number; sku: string; name: string; unit: { code: string; label: string } };
     }[];
 };
@@ -50,13 +50,13 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
-    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
+    const canCancel = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
+    const canDelete = hasPermissionWithScope(permissions, "inventory:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
     const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
     const [loading, setLoading] = useState(true);
-    const [acting,  setActing]  = useState(false);
+    const [acting, setActing] = useState(false);
 
     const load = () => {
         setLoading(true);
@@ -136,7 +136,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                 {voucher.journalEntryId && (
                     <div className="rounded-lg border border-border bg-card p-3 space-y-0.5">
                         <p className="text-muted-foreground text-xs">GL Journal Entry</p>
-                        <Link href={`/office/finance/journal-entries/${voucher.journalEntryId}`}
+                        <Link href={`/office/tally/journal-entries/${voucher.journalEntryId}`}
                             className="font-medium text-primary flex items-center gap-1 hover:underline">
                             View JE <ExternalLink size={12} />
                         </Link>

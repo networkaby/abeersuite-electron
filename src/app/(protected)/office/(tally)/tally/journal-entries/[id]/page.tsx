@@ -149,7 +149,7 @@ export default function JournalEntryDetailPage() {
             await axios.post(`/api/finance/journal-entries/${id}/hard-delete`, { reason: hardDeleteReason });
             toast.success("Entry permanently deleted (snapshot kept in audit log)");
             setShowHardDelete(false);
-            router.push("/office/finance/journal-entries");
+            router.push("/office/tally/journal-entries");
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
             toast.error(msg ?? "Failed to hard-delete");
@@ -172,7 +172,7 @@ export default function JournalEntryDetailPage() {
         <div className="max-w-3xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/office/finance/journal-entries" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/tally/journal-entries" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">

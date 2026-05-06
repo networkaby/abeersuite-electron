@@ -188,7 +188,7 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
                 {voucher.journalEntryId && (
                     <div>
                         <p className="text-xs text-muted-foreground mb-1">Journal Entry</p>
-                        <Link href={`/office/finance/journal-entries/${voucher.journalEntryId}`} className="font-medium text-primary hover:underline">JE #{voucher.journalEntryId}</Link>
+                        <Link href={`/office/tally/journal-entries/${voucher.journalEntryId}`} className="font-medium text-primary hover:underline">JE #{voucher.journalEntryId}</Link>
                     </div>
                 )}
                 {voucher.cancelledAt && (

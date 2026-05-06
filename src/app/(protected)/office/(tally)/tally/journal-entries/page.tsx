@@ -334,7 +334,7 @@ export default function JournalEntriesPage() {
                                         </td>
                                         <td className="px-5 py-3 text-muted-foreground text-xs">{e.createdBy.name}</td>
                                         <td className="px-5 py-3 text-right">
-                                            <Link href={`/office/finance/journal-entries/${e.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                            <Link href={`/office/tally/journal-entries/${e.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

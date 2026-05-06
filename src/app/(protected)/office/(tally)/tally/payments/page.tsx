@@ -7,8 +7,8 @@ export default function PaymentsPage() {
             type="PAYMENT"
             title="Payments"
             subtitle="Money paid out — to suppliers, expenses, or party accounts"
-            basePath="/office/finance/payments"
-            newPath="/office/finance/payments/new"
+            basePath="/office/tally/payments"
+            newPath="/office/tally/payments/new"
         />
     );
 }

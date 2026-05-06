@@ -2,5 +2,5 @@
 import { VoucherDetail } from "@/modules/tally/components/VoucherDetail";
 
 export default function PaymentDetailPage() {
-    return <VoucherDetail basePath="/office/finance/payments" />;
+    return <VoucherDetail basePath="/office/tally/payments" />;
 }

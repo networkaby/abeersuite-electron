@@ -104,7 +104,7 @@ export default function EstimateDetailPage() {
         <div className="max-w-4xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/office/finance/estimates" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/tally/estimates" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
@@ -126,7 +126,7 @@ export default function EstimateDetailPage() {
                     <LifecycleActions
                         voucher={voucher}
                         apiBasePath={`/api/inventory/vouchers/${id}`}
-                        listPath="/office/finance/estimates"
+                        listPath="/office/tally/estimates"
                         label="Estimate"
                         canCancel={canCancel}
                         canDelete={canDelete}

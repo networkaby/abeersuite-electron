@@ -32,9 +32,9 @@ export function DrillRow({ target, period, children, className = "", onClick }: 
         const tail = q ? `?${q}` : "";
 
         switch (target.kind) {
-            case "group":   return `/office/finance/groups/${target.id}${tail}`;
-            case "ledger":  return `/office/finance/account/${target.id}${tail}`;
-            case "journal": return `/office/finance/journal-entries/${target.id}`;
+            case "group":   return `/office/tally/groups/${target.id}${tail}`;
+            case "ledger":  return `/office/tally/account/${target.id}${tail}`;
+            case "journal": return `/office/tally/journal-entries/${target.id}`;
             case "voucher": return target.url;
             case "none":    return null;
         }

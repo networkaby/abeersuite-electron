@@ -2,5 +2,5 @@
 import { VoucherForm } from "@/modules/tally/components/VoucherForm";
 
 export default function NewCreditNotePage() {
-    return <VoucherForm type="CREDIT_NOTE" redirectTo="/office/finance/credit-notes" />;
+    return <VoucherForm type="CREDIT_NOTE" redirectTo="/office/tally/credit-notes" />;
 }

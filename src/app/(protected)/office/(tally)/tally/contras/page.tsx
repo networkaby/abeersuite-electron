@@ -7,8 +7,8 @@ export default function ContrasPage() {
             type="CONTRA"
             title="Contras"
             subtitle="Cash ↔ bank and inter-account transfers"
-            basePath="/office/finance/contras"
-            newPath="/office/finance/contras/new"
+            basePath="/office/tally/contras"
+            newPath="/office/tally/contras/new"
         />
     );
 }

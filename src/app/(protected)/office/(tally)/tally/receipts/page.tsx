@@ -7,8 +7,8 @@ export default function ReceiptsPage() {
             type="RECEIPT"
             title="Receipts"
             subtitle="Money received — from customers, parties, or other sources"
-            basePath="/office/finance/receipts"
-            newPath="/office/finance/receipts/new"
+            basePath="/office/tally/receipts"
+            newPath="/office/tally/receipts/new"
         />
     );
 }

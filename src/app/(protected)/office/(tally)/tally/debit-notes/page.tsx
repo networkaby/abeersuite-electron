@@ -7,8 +7,8 @@ export default function DebitNotesPage() {
             type="DEBIT_NOTE"
             title="Debit Notes"
             subtitle="Purchase returns and supplier debits"
-            basePath="/office/finance/debit-notes"
-            newPath="/office/finance/debit-notes/new"
+            basePath="/office/tally/debit-notes"
+            newPath="/office/tally/debit-notes/new"
         />
     );
 }

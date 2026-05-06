@@ -91,11 +91,11 @@ export default function GroupDetailPage() {
                         </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        <Link href="/office/finance/ledgers" className="hover:underline">Ledgers</Link>
+                        <Link href="/office/tally/ledgers" className="hover:underline">Ledgers</Link>
                         {data.group.parent && (
                             <>
                                 {" › "}
-                                <Link href={`/office/finance/groups/${data.group.parent.id}${periodSuffix}`} className="hover:underline">
+                                <Link href={`/office/tally/groups/${data.group.parent.id}${periodSuffix}`} className="hover:underline">
                                     {data.group.parent.name}
                                 </Link>
                             </>
@@ -130,7 +130,7 @@ export default function GroupDetailPage() {
                                 <tr
                                     key={sg.id}
                                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                    onClick={() => router.push(`/office/finance/groups/${sg.id}${periodSuffix}`)}
+                                    onClick={() => router.push(`/office/tally/groups/${sg.id}${periodSuffix}`)}
                                 >
                                     <td className="px-4 py-2.5">
                                         <span className="font-medium hover:underline">{sg.name}</span>
@@ -171,7 +171,7 @@ export default function GroupDetailPage() {
                                 <tr
                                     key={l.id}
                                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                    onClick={() => router.push(`/office/finance/account/${l.id}${periodSuffix}`)}
+                                    onClick={() => router.push(`/office/tally/account/${l.id}${periodSuffix}`)}
                                 >
                                     <td className="px-4 py-2.5">
                                         <span className="font-medium hover:underline">{l.name}</span>

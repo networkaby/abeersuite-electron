@@ -50,7 +50,7 @@ export default function PurchasesPage() {
                     <h1 className="text-2xl font-bold text-foreground">Purchases</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Purchase vouchers — stock & GL ledger</p>
                 </div>
-                <Link href="/office/finance/purchases/new">
+                <Link href="/office/tally/purchases/new">
                     <Button><Plus size={16} /> New Purchase</Button>
                 </Link>
             </div>
@@ -84,7 +84,7 @@ export default function PurchasesPage() {
                     {vouchers.length === 0 ? (
                         <div className="text-center py-16 text-muted-foreground">
                             No purchase vouchers yet.{" "}
-                            <Link href="/office/finance/purchases/new" className="text-primary hover:underline">
+                            <Link href="/office/tally/purchases/new" className="text-primary hover:underline">
                                 Create one
                             </Link>
                         </div>
@@ -121,7 +121,7 @@ export default function PurchasesPage() {
                                         </td>
                                         <td className="px-5 py-3 text-muted-foreground text-xs">{v.createdBy.name}</td>
                                         <td className="px-3 py-3 text-right">
-                                            <Link href={`/office/finance/purchases/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                            <Link href={`/office/tally/purchases/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
                                                 <ChevronRight size={16} />
                                             </Link>
                                         </td>

@@ -119,7 +119,7 @@ export default function NewPurchasePage() {
                 toast.success("Purchase saved as draft");
             }
 
-            router.push(`/office/finance/purchases/${res.data.id}`);
+            router.push(`/office/tally/purchases/${res.data.id}`);
         } catch (err: unknown) {
             toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Save failed");
         } finally {
@@ -290,7 +290,7 @@ export default function NewPurchasePage() {
 
                     {/* Actions */}
                     <div className="flex gap-2 shrink-0">
-                        <Button variant="outline" onClick={() => router.push("/office/finance/purchases")}>
+                        <Button variant="outline" onClick={() => router.push("/office/tally/purchases")}>
                             Cancel
                         </Button>
                         <Button variant="outline" onClick={() => submit(false)} disabled={saving}>

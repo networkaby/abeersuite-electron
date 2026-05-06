@@ -41,13 +41,13 @@ export async function resolveSource(journalEntryId: number, reference?: string):
             v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
-        return { kind, id: v.id, reference: v.reference, url: `/office/finance/${seg}/${v.id}` };
+        return { kind, id: v.id, reference: v.reference, url: `/office/tally/${seg}/${v.id}` };
     }
     if (reference?.startsWith("INV-")) {
         const inv = await prisma.invoice.findFirst({
             where: { number: reference }, select: { id: true, number: true },
         });
-        if (inv) return { kind: "invoice", id: inv.id, number: inv.number, url: `/office/finance/invoices/${inv.id}` };
+        if (inv) return { kind: "invoice", id: inv.id, number: inv.number, url: `/office/tally/invoices/${inv.id}` };
     }
     return null;
 }
@@ -69,7 +69,7 @@ export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
         out.set(v.journalEntryId, {
-            kind, id: v.id, reference: v.reference, url: `/office/finance/${seg}/${v.id}`,
+            kind, id: v.id, reference: v.reference, url: `/office/tally/${seg}/${v.id}`,
         });
     }
     return out;

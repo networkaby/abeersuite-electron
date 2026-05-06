@@ -151,8 +151,8 @@ export default function ProfitLossPage() {
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
         return next;
     });
-    const goLedger = (id: number) => router.push(`/office/finance/account/${id}?from=${from}&to=${to}`);
-    const goGroup  = (id: number) => router.push(`/office/finance/groups/${id}?from=${from}&to=${to}`);
+    const goLedger = (id: number) => router.push(`/office/tally/account/${id}?from=${from}&to=${to}`);
+    const goGroup  = (id: number) => router.push(`/office/tally/groups/${id}?from=${from}&to=${to}`);
 
     const tradingDr = data
         ? data.trading.debit.openingStock + data.trading.debit.purchaseAccounts + data.trading.debit.directExpenses

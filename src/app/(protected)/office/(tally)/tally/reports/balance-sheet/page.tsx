@@ -143,9 +143,9 @@ export default function BalanceSheetPage() {
     });
 
     const goLedger = (id: number) =>
-        router.push(`/office/finance/account/${id}?asOf=${asOf}`);
+        router.push(`/office/tally/account/${id}?asOf=${asOf}`);
     const goGroup = (id: number) =>
-        router.push(`/office/finance/groups/${id}?asOf=${asOf}`);
+        router.push(`/office/tally/groups/${id}?asOf=${asOf}`);
 
     // Compute side totals (with closing-stock + net P&L injection)
     let liabilitiesTotal = 0;
@@ -209,7 +209,7 @@ export default function BalanceSheetPage() {
                                 {data.netProfitLoss !== 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/finance/reports/profit-loss?from=${data.fyStart.slice(0,10)}&to=${asOf}`)}
+                                        onClick={() => router.push(`/office/tally/reports/profit-loss?from=${data.fyStart.slice(0,10)}&to=${asOf}`)}
                                     >
                                         <td className="py-1.5 text-muted-foreground italic" style={{ paddingLeft: 16 }}>
                                             <span className="hover:underline hover:text-primary">

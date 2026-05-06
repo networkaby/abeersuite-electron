@@ -7,8 +7,8 @@ export default function CreditNotesPage() {
             type="CREDIT_NOTE"
             title="Credit Notes"
             subtitle="Sales returns and customer credits"
-            basePath="/office/finance/credit-notes"
-            newPath="/office/finance/credit-notes/new"
+            basePath="/office/tally/credit-notes"
+            newPath="/office/tally/credit-notes/new"
         />
     );
 }

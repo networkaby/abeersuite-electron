@@ -302,7 +302,7 @@ export default function LedgersPage() {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
-                                            onClick={() => router.push(`/office/finance/ledgers/${row.id}`)}
+                                            onClick={() => router.push(`/office/tally/ledgers/${row.id}`)}
                                         >
                                             View <ArrowRight size={12} />
                                         </Button>

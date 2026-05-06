@@ -289,7 +289,7 @@ export default function EcommerceOrderDetailPage() {
                                     </p>
                                 </div>
                                 <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/office/finance/invoices/${order.invoice.id}`}>
+                                    <Link href={`/office/tally/invoices/${order.invoice.id}`}>
                                         <ExternalLink size={13} /> View in Tally
                                     </Link>
                                 </Button>

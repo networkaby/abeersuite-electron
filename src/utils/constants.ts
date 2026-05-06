@@ -213,8 +213,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/tally/reports/day-book", permission: "finance:voucher:create" },
 
-            { label: "Sales", icon: Receipt, href: "/office/tally/sales" },
-            { label: "Purchases", icon: ShoppingCart, href: "/office/tally/purchases" },
+            { label: "Sales Register", icon: Receipt, href: "/office/tally/sales" },
+            { label: "Purchases Register", icon: ShoppingCart, href: "/office/tally/purchases" },
             { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
             // { label: "Payments", icon: Wallet, href: "/office/tally/payments", permission: "finance:voucher:create" },
             // { label: "Receipts", icon: Wallet, href: "/office/tally/receipts", permission: "finance:voucher:create" },
@@ -239,18 +239,18 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 ]
             },
             {
-                label: "Vouchers Reports", icon: ClipboardList, href: "/office/tally/vouchers", permission: "finance:voucher:create",
+                label: "Vouchers Register", icon: ClipboardList, href: "/office/tally/journal-entries", permission: "finance:voucher:create",
                 children: [
-                    { label: "Contra", icon: ClipboardList, href: "/office/tally/vouchers/contra", permission: "finance:voucher:create" },
-                    { label: "Payment", icon: ClipboardList, href: "/office/tally/vouchers/payment", permission: "finance:voucher:create" },
-                    { label: "Receipt", icon: ClipboardList, href: "/office/tally/vouchers/receipt", permission: "finance:voucher:create" },
-                    { label: "Credit Note", icon: ClipboardList, href: "/office/tally/vouchers/credit-note", permission: "finance:voucher:create" },
-                    { label: "Debit Note", icon: ClipboardList, href: "/office/tally/vouchers/debit-note", permission: "finance:voucher:create" },
+                    { label: "Contras", icon: ClipboardList, href: "/office/tally/contras", permission: "finance:voucher:create" },
+                    { label: "Payment", icon: ClipboardList, href: "/office/tally/payments", permission: "finance:voucher:create" },
+                    { label: "Receipt", icon: ClipboardList, href: "/office/tally/receipts", permission: "finance:voucher:create" },
+                    { label: "Credit Note", icon: ClipboardList, href: "/office/tally/credit-notes", permission: "finance:voucher:create" },
+                    { label: "Debit Note", icon: ClipboardList, href: "/office/tally/debit-notes", permission: "finance:voucher:create" },
                     { label: "Journal entries", icon: FileText, href: "/office/tally/journal-entries" },
-                    { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
-                    { label: "Sales", icon: Receipt, href: "/office/tally/sales" },
-                    { label: "Purchases", icon: ShoppingCart, href: "/office/tally/purchases" },
-                    { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
+                    // { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
+                    // { label: "Sales", icon: Receipt, href: "/office/tally/sales" },
+                    // { label: "Purchases", icon: ShoppingCart, href: "/office/tally/purchases" },
+                    // { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
                 ]
 
             },

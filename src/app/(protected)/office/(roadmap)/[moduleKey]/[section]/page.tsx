@@ -77,7 +77,7 @@ export default async function RoadmapSectionPage({
                         <Link href="/office/tickets">All tickets</Link>
                     </Button>
                     <Button asChild variant="outline">
-                        <Link href="/office/finance/reports">Finance reports</Link>
+                        <Link href="/office/tally/reports">Finance reports</Link>
                     </Button>
                 </CardContent>
             </Card>
