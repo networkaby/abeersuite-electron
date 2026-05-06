@@ -59,10 +59,10 @@ enum NormalBalance {
   CREDIT
 }
 
-enum JournalStatus {
+enum VoucherStatus {
   DRAFT
   POSTED
-  VOIDED
+  CANCELLED
 }
 
 enum EntryType {
@@ -87,6 +87,38 @@ enum PaymentMethod {
   OTHER
 }
 
+// ── Tally accounting voucher types (CONTRA/PAYMENT/RECEIPT/CREDIT_NOTE/DEBIT_NOTE) ─
+
+enum VoucherType {
+  CONTRA
+  PAYMENT
+  RECEIPT
+  CREDIT_NOTE
+  DEBIT_NOTE
+}
+
+// ── Bill-wise allocation (free-form linking between any two vouchers) ────────
+
+enum AllocationMethod {
+  NEW_REF // creates a new bill (used on Sales/Purchase invoices)
+  AGAINST_REF // settles an existing bill
+  ADVANCE // received/paid before the matching bill exists
+  ON_ACCOUNT // unallocated; lump sum
+}
+
+enum AllocationTargetType {
+  INVOICE
+  VOUCHER
+  JOURNAL_ENTRY
+}
+
+enum AllocationSourceType {
+  VOUCHER
+  PAYMENT
+  INVOICE
+  JOURNAL_ENTRY
+}
+
 // ── Inventory voucher enums ───────────────────────────────────────────────────
 
 enum InvVoucherType {
@@ -96,6 +128,14 @@ enum InvVoucherType {
   RECEIPT
   ISSUE
   ADJUSTMENT
+  STOCK_JOURNAL // inter-godown / manufacturing
+  PHYSICAL_STOCK // physical count adjustment
+  GRN // goods-received-note (against PO)
+  CHALLAN // delivery challan (against SO)
+  REJECTION_IN
+  REJECTION_OUT
+  SALES_ORDER
+  PURCHASE_ORDER
 }
 
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────

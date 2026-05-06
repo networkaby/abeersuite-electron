@@ -287,10 +287,38 @@ const PERMISSIONS = [
     { id: "crm:view", label: "View CRM leads", module: "crm", description: "View the CRM leads list and lead details." },
     { id: "crm:manage", label: "Manage CRM leads", module: "crm", description: "Create, edit, delete, and reassign CRM leads." },
 
-    // finance — three-tier delete on journal entries
-    { id: "finance:journal:void", label: "Void journal entries", module: "finance", description: "Mark a POSTED journal entry as VOIDED. The original stays visible in lists and a reversing entry is written for the audit trail." },
-    { id: "finance:journal:soft-delete", label: "Soft-delete journal entries", module: "finance", description: "Hide a journal entry from normal views and exclude it from balance calculations. Recoverable via restore." },
+    // finance — three-tier lifecycle on journal entries (Tally: Cancel / Delete / Hard Delete)
+    { id: "finance:journal:cancel", label: "Cancel journal entries", module: "finance", description: "Mark a POSTED journal entry as CANCELLED. The original keeps its reference number and stays visible in lists; a reversing entry is written for the audit trail." },
+    { id: "finance:journal:delete", label: "Delete journal entries", module: "finance", description: "Soft-delete: hide a journal entry from normal views and exclude it from balance calculations. Recoverable via restore." },
     { id: "finance:journal:hard-delete", label: "Hard-delete journal entries", module: "finance", description: "Physically remove a journal entry. A snapshot is written to the audit log so the deletion itself is traceable. Use for cleanup only." },
+
+    // finance — three-tier lifecycle on invoices
+    { id: "finance:invoice:cancel", label: "Cancel invoices", module: "finance", description: "Reverse posted invoice JE and mark VOID. Reference number preserved." },
+    { id: "finance:invoice:delete", label: "Delete invoices", module: "finance", description: "Soft-delete invoice; reverses GL impact if posted. Recoverable via restore." },
+    { id: "finance:invoice:hard-delete", label: "Hard-delete invoices", module: "finance", description: "Physically remove an invoice. A snapshot is written to the audit log." },
+
+    // finance — three-tier lifecycle on payments
+    { id: "finance:payment:cancel", label: "Cancel payments", module: "finance", description: "Reverse a posted payment and mark CANCELLED." },
+    { id: "finance:payment:delete", label: "Delete payments", module: "finance", description: "Soft-delete a payment; reverses GL impact. Recoverable via restore." },
+    { id: "finance:payment:hard-delete", label: "Hard-delete payments", module: "finance", description: "Physically remove a payment. A snapshot is written to the audit log." },
+
+    // finance — generic Tally accounting vouchers (Contra / Payment / Receipt / Credit Note / Debit Note)
+    { id: "finance:voucher:create",      label: "Create vouchers",      module: "finance", description: "Create Contra / Payment / Receipt / Credit Note / Debit Note vouchers." },
+    { id: "finance:voucher:post",        label: "Post vouchers",        module: "finance", description: "Move a draft voucher to POSTED — applies GL impact." },
+    { id: "finance:voucher:cancel",      label: "Cancel vouchers",      module: "finance", description: "Reverse a posted voucher and mark CANCELLED." },
+    { id: "finance:voucher:delete",      label: "Delete vouchers",      module: "finance", description: "Soft-delete a voucher; reverses GL impact. Recoverable." },
+    { id: "finance:voucher:hard-delete", label: "Hard-delete vouchers", module: "finance", description: "Physically remove a voucher with audit snapshot." },
+
+    // finance — bill-wise allocation
+    { id: "finance:allocation:manage", label: "Manage bill-wise allocations", module: "finance", description: "Link / unlink any voucher to any other voucher (full or partial), drives outstandings + aging." },
+
+    // finance — opening balance
+    { id: "finance:opening-balance:manage", label: "Manage opening balances", module: "finance", description: "Edit per-account opening balance and opening stock at the books-beginning date." },
+
+    // inventory — three-tier lifecycle on stock vouchers
+    { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED." },
+    { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore." },
+    { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {

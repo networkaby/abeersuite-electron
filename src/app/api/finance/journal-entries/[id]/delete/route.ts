@@ -4,18 +4,19 @@ import { requirePermission } from "@/lib/auth-guard";
 import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
 import { z } from "zod";
 
-const softDeleteSchema = z.object({
+const deleteSchema = z.object({
     reason: z.string().trim().min(1, "Delete reason is required"),
 });
 
-// POST /api/finance/journal-entries/[id]/soft-delete
-// Hides the entry from normal views and reverses any GL impact. Recoverable via restore.
+// POST /api/finance/journal-entries/[id]/delete
+// Soft delete: hides the entry from normal views and reverses any GL impact.
+// Recoverable via restore. (Tally label: "Delete"; for permanent removal use hard-delete.)
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:journal:soft-delete");
+    const { user, response } = await requirePermission("finance:journal:delete");
     if (response) return response;
 
     const { id } = await params;
-    const parsed = softDeleteSchema.safeParse(await req.json());
+    const parsed = deleteSchema.safeParse(await req.json());
     if (!parsed.success) {
         return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
     }
@@ -28,15 +29,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (entry.deletedAt) {
         return NextResponse.json({ error: "Already deleted" }, { status: 409 });
     }
-    if (entry.status === "VOIDED") {
-        // VOIDED entries already have a reversal entry; soft-deleting them would double-reverse.
-        return NextResponse.json({ error: "Cannot soft-delete a VOIDED entry — hard-delete instead" }, { status: 409 });
+    if (entry.status === "CANCELLED") {
+        return NextResponse.json({ error: "Cannot delete a CANCELLED entry — hard-delete instead" }, { status: 409 });
     }
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Reverse the live Account.balance impact only for POSTED entries.
-            // DRAFT entries never affected balances, so nothing to reverse.
             if (entry.status === "POSTED") {
                 for (const line of entry.lines) {
                     const delta = balanceDelta(
@@ -65,6 +63,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json(updated);
     } catch (err) {
         console.error(err);
-        return NextResponse.json({ error: "Failed to soft-delete journal entry" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to delete journal entry" }, { status: 500 });
     }
 }

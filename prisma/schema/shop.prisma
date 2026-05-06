@@ -56,12 +56,12 @@ model ShopOrder {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  account      Account?      @relation(fields: [accountId], references: [id])
-  customer     Customer?     @relation(fields: [customerId], references: [id])
-  pipeline     Pipeline?     @relation(fields: [pipelineId], references: [id])
-  orderStatus  TicketStatus? @relation(fields: [statusId], references: [id])
-  invoice      Invoice?      @relation("OrderInvoice")
-  sourceCoupon ShopCoupon?   @relation(fields: [sourceCouponId], references: [id])
+  account      Account?        @relation(fields: [accountId], references: [id])
+  customer     Customer?       @relation(fields: [customerId], references: [id])
+  pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
+  orderStatus  TicketStatus?   @relation(fields: [statusId], references: [id])
+  invoice      Invoice?        @relation("OrderInvoice")
+  sourceCoupon ShopCoupon?     @relation(fields: [sourceCouponId], references: [id])
   lines        ShopOrderLine[]
   tickets      Ticket[]
 

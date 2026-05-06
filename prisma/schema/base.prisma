@@ -20,8 +20,8 @@ model Customer {
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
-  account   Account?
-  companies CustomerCompany[]
+  account          Account?
+  companies        CustomerCompany[]
   portalCredential CustomerPortalCredential?
   shopOrders       ShopOrder[]
   crmLeads         CrmLead[]
@@ -40,6 +40,11 @@ model Company {
   taxId      String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+
+  // Tally-style period anchors (per-company; mid-year migration sets these
+  // differently — financial year starts 1 Apr but books begin from cutover date)
+  financialYearFrom  DateTime? @db.Date
+  booksBeginningFrom DateTime? @db.Date
 
   account   Account?
   customers CustomerCompany[]

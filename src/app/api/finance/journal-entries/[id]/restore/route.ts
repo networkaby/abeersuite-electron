@@ -6,7 +6,7 @@ import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
 // POST /api/finance/journal-entries/[id]/restore
 // Inverse of soft-delete. Re-applies GL impact if the entry was POSTED.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("finance:journal:soft-delete");
+    const { response } = await requirePermission("finance:journal:delete");
     if (response) return response;
 
     const { id } = await params;

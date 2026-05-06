@@ -11,13 +11,13 @@ import { fmt } from "@/utils/constants";
 const STATUS_COLORS: Record<string, string> = {
     DRAFT:  "bg-yellow-100 text-yellow-700",
     POSTED: "bg-blue-100 text-blue-700",
-    VOIDED: "bg-muted text-muted-foreground",
+    CANCELLED: "bg-muted text-muted-foreground",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-    DRAFT:  "DRAFT",
-    POSTED: "FINALISED",
-    VOIDED: "VOIDED",
+    DRAFT:     "DRAFT",
+    POSTED:    "FINALISED",
+    CANCELLED: "CANCELLED",
 };
 
 interface Voucher {
@@ -25,7 +25,7 @@ interface Voucher {
     reference:   string;
     date:        string;
     description: string;
-    status:      "DRAFT" | "POSTED" | "VOIDED";
+    status:      "DRAFT" | "POSTED" | "CANCELLED";
     partyName:   string | null;
     totalAmount: number;
     _count:      { lines: number };
@@ -63,7 +63,7 @@ export default function EstimatesPage() {
 
             {/* Status tabs */}
             <div className="flex gap-1">
-                {(["", "DRAFT", "POSTED", "VOIDED"] as const).map((s) => (
+                {(["", "DRAFT", "POSTED", "CANCELLED"] as const).map((s) => (
                     <Button
                         key={s}
                         onClick={() => setStatus(s)}

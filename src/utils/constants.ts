@@ -118,8 +118,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Users,
         key: "customers",
         children: [
-            { label: "New People", href: "/office/customers/new", icon: Plus, permission: "customers:view" },
-            { label: "New Companies", href: "/office/companies/new", icon: Plus, permission: "customers:view" },
+            { label: "+ New People", href: "/office/customers/new", icon: Plus, permission: "customers:view" },
+            { label: "+ New Companies", href: "/office/companies/new", icon: Plus, permission: "customers:view" },
             { label: "All Customers", href: "/office/all", icon: Users, permission: "customers:view" },
             { label: "People", href: "/office/customers", icon: Users, permission: "customers:view" },
             { label: "Companies", href: "/office/companies", icon: Building2, permission: "customers:view" },
@@ -131,7 +131,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Wrench,
         key: "repair",
         children: [
-            { label: "New Repair", icon: Plus, action: "new-ticket", pipelineRef: "default" },
+            { label: "+ New Repair", icon: Plus, action: "new-ticket", pipelineRef: "default" },
             { label: "All Repair", icon: ClipboardList, href: "/office/tickets", pipelineRef: "default" },
             { label: "Service Centers", icon: Building2, href: "/office/service-centers", permission: "service-centers:view" },
         ],
@@ -142,7 +142,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "crm",
         children: [
             { label: "Leads", icon: ClipboardList, href: "/office/crm", permission: "crm:view" },
-            { label: "New lead", icon: Plus, href: "/office/crm/leads/new", permission: "crm:manage" },
+            { label: "+ New Lead", icon: Plus, href: "/office/crm/leads/new", permission: "crm:manage" },
         ],
     },
     {
@@ -165,15 +165,27 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Account Groups", icon: FolderTree, href: "/office/finance/groups" },
             { label: "Ledgers", icon: BookOpen, href: "/office/finance/ledgers" },
-            { label: "New Sale", icon: Receipt, href: "/office/finance/sales/new" },
-            { label: "New Purchase", icon: ShoppingCart, href: "/office/finance/purchases/new" },
-            { label: "New Estimate", icon: ScrollText, href: "/office/finance/estimates/new" },
+            { label: "+ New Sale", icon: Receipt, href: "/office/finance/sales/new" },
+            { label: "+ New Purchase", icon: ShoppingCart, href: "/office/finance/purchases/new" },
+            { label: "+ New Estimate", icon: ScrollText, href: "/office/finance/estimates/new" },
+            { label: "+ New Payment", icon: Wallet, href: "/office/finance/payments/new", permission: "finance:voucher:create" },
+            { label: "+ New Receipt", icon: Wallet, href: "/office/finance/receipts/new", permission: "finance:voucher:create" },
+            { label: "+ New Contra", icon: Wallet, href: "/office/finance/contras/new", permission: "finance:voucher:create" },
+            { label: "+ New Credit Note", icon: FileText, href: "/office/finance/credit-notes/new", permission: "finance:voucher:create" },
+            { label: "+ New Debit Note", icon: FileText, href: "/office/finance/debit-notes/new", permission: "finance:voucher:create" },
+            { label: "+ New Journal", icon: FileText, href: "/office/finance/journal-entries", permission: "finance:journal:cancel" },
             { label: "Sales", icon: Receipt, href: "/office/finance/sales" },
             { label: "Purchases", icon: ShoppingCart, href: "/office/finance/purchases" },
             { label: "Estimates", icon: ScrollText, href: "/office/finance/estimates" },
+            { label: "Payments", icon: Wallet, href: "/office/finance/payments", permission: "finance:voucher:create" },
+            { label: "Receipts", icon: Wallet, href: "/office/finance/receipts", permission: "finance:voucher:create" },
+            { label: "Contras", icon: Wallet, href: "/office/finance/contras", permission: "finance:voucher:create" },
+            { label: "Credit Notes", icon: FileText, href: "/office/finance/credit-notes", permission: "finance:voucher:create" },
+            { label: "Debit Notes", icon: FileText, href: "/office/finance/debit-notes", permission: "finance:voucher:create" },
             { label: "Chart of accounts", icon: Wallet, href: "/office/finance/chart-of-accounts" },
             { label: "Journal entries", icon: FileText, href: "/office/finance/journal-entries" },
             { label: "Invoices", icon: ClipboardList, href: "/office/finance/invoices" },
+            { label: "Opening Balance", icon: Wallet, href: "/office/finance/opening-balance", permission: "finance:opening-balance:manage" },
             { label: "Reports", icon: ChartArea, href: "/office/finance/reports" },
         ],
     },
@@ -327,7 +339,7 @@ export const INVOICE_STATUS_COLORS: Record<string, string> = {
 export const JOURNAL_STATUS_COLORS: Record<string, string> = {
     DRAFT: "bg-yellow-100 text-yellow-700",
     POSTED: "bg-green-100 text-green-700",
-    VOIDED: "bg-muted text-muted-foreground",
+    CANCELLED: "bg-muted text-muted-foreground",
 };
 
 export type GlAccountType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";

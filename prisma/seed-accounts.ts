@@ -218,6 +218,12 @@ async function main() {
     // Round-off & misc adjustments (used by InvVoucher GL auto-post)
     await upsertLedger("Round Off",               "Indirect Incomes",  "REVENUE",  "CREDIT");
 
+    // Tally-style suspense ledger for opening-balance imbalance.
+    // Reports compute Σ(opening Dr) − Σ(opening Cr) − Σ(opening stock); any non-zero
+    // residual is presented as a virtual line on this account so the trial balance
+    // ties, with a banner prompting the user to reconcile.
+    await upsertLedger("Difference in Opening Balances", "Suspense A/c", "LIABILITY", "CREDIT");
+
     console.log("\nDone.\n");
 }
 

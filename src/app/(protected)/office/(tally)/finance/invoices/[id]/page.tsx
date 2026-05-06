@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Send, XCircle, Plus } from "lucide-react";
+import { ArrowLeft, Loader2, Send, Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
     DialogDescription, DialogFooter,
@@ -18,6 +18,8 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
+import { LifecycleActions } from "@/modules/tally/components/LifecycleActions";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 interface InvoiceLine {
     id: number;
@@ -74,12 +76,15 @@ const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "CHEQUE", "MOBILE_PAYM
 
 export default function InvoiceDetailPage() {
     const { id } = useParams<{ id: string }>();
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "finance:invoice:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "finance:invoice:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "finance:invoice:hard-delete");
+
     const [invoice, setInvoice] = useState<Invoice | null>(null);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
-    const [showVoid, setShowVoid] = useState(false);
-    const [voidReason, setVoidReason] = useState("");
-    const [voiding, setVoiding] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
     const [payForm, setPayForm] = useState({
         amount: "", method: "CASH", date: new Date().toISOString().slice(0, 10),
@@ -107,20 +112,6 @@ export default function InvoiceDetailPage() {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
             toast.error(msg ?? "Failed");
         } finally { setSending(false); }
-    };
-
-    const voidInvoice = async () => {
-        if (!voidReason.trim()) { toast.error("Reason required"); return; }
-        setVoiding(true);
-        try {
-            await axios.post(`/api/finance/invoices/${id}/void`, { reason: voidReason });
-            toast.success("Invoice voided");
-            setShowVoid(false);
-            load();
-        } catch (err: unknown) {
-            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed");
-        } finally { setVoiding(false); }
     };
 
     const recordPayment = async () => {
@@ -154,7 +145,6 @@ export default function InvoiceDetailPage() {
 
     const canSend = invoice.status === "DRAFT";
     const canPay  = ["SENT", "PARTIAL"].includes(invoice.status);
-    const canVoid = !["VOID", "PAID"].includes(invoice.status);
 
     return (
         <div className="max-w-3xl mx-auto space-y-6">
@@ -172,7 +162,7 @@ export default function InvoiceDetailPage() {
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{invoice.partyName} · {invoice.partyType}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                     {canSend && (
                         <Button onClick={sendInvoice} disabled={sending}>
                             {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
@@ -187,11 +177,16 @@ export default function InvoiceDetailPage() {
                             <Plus size={14} /> Record Payment
                         </Button>
                     )}
-                    {canVoid && (
-                        <Button variant="outline" onClick={() => setShowVoid(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10">
-                            <XCircle size={14} /> Void
-                        </Button>
-                    )}
+                    <LifecycleActions
+                        voucher={invoice}
+                        apiBasePath={`/api/finance/invoices/${id}`}
+                        listPath="/office/finance/invoices"
+                        label="Invoice"
+                        canCancel={canCancel}
+                        canDelete={canDelete}
+                        canHardDelete={canHardDelete}
+                        onChanged={load}
+                    />
                 </div>
             </div>
 
@@ -383,36 +378,6 @@ export default function InvoiceDetailPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Void Dialog */}
-            <Dialog open={showVoid} onOpenChange={(open) => { if (!open) setShowVoid(false); }}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Void Invoice</DialogTitle>
-                        <DialogDescription>
-                            This will reverse all posted journal entries for this invoice.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-1.5">
-                        <Label>Reason</Label>
-                        <Textarea
-                            value={voidReason}
-                            onChange={(e) => setVoidReason(e.target.value)}
-                            rows={3}
-                            placeholder="Reason..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowVoid(false)}>Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            onClick={voidInvoice}
-                            disabled={voiding}
-                        >
-                            {voiding && <Loader2 size={14} className="animate-spin" />} Confirm Void
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

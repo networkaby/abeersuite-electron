@@ -3,12 +3,20 @@ import { InvVoucherType } from "@/generated/prisma/client";
 // ── Reference number generation ───────────────────────────────────────────────
 
 const PREFIX: Record<InvVoucherType, string> = {
-    PURCHASE:   "PV",
-    SALE:       "SV",
-    ESTIMATE:   "EV",
-    RECEIPT:    "RV",
-    ISSUE:      "IV",
-    ADJUSTMENT: "AV",
+    PURCHASE:       "PV",
+    SALE:           "SV",
+    ESTIMATE:       "EV",
+    RECEIPT:        "RV",
+    ISSUE:          "IV",
+    ADJUSTMENT:     "AV",
+    STOCK_JOURNAL:  "SJ",
+    PHYSICAL_STOCK: "PS",
+    GRN:            "GRN",
+    CHALLAN:        "DC",
+    REJECTION_IN:   "RIN",
+    REJECTION_OUT:  "ROUT",
+    SALES_ORDER:    "SO",
+    PURCHASE_ORDER: "PO",
 };
 
 /**

@@ -10,13 +10,23 @@ export type SourceDoc =
     | { kind: "estimate"; id: number; reference: string; url: string }
     | { kind: "invoice";  id: number; number: string;    url: string };
 
-const VOUCHER_SEG: Record<"PURCHASE" | "SALE" | "ESTIMATE" | "RECEIPT" | "ISSUE" | "ADJUSTMENT", string> = {
-    PURCHASE:   "purchases",
-    SALE:       "sales",
-    ESTIMATE:   "estimates",
-    RECEIPT:    "purchases",
-    ISSUE:      "sales",
-    ADJUSTMENT: "sales",
+import type { InvVoucherType } from "@/generated/prisma/client";
+
+const VOUCHER_SEG: Record<InvVoucherType, string> = {
+    PURCHASE:       "purchases",
+    SALE:           "sales",
+    ESTIMATE:       "estimates",
+    RECEIPT:        "purchases",
+    ISSUE:          "sales",
+    ADJUSTMENT:     "sales",
+    STOCK_JOURNAL:  "stock-journals",
+    PHYSICAL_STOCK: "physical-stock",
+    GRN:            "grn",
+    CHALLAN:        "challans",
+    REJECTION_IN:   "rejections-in",
+    REJECTION_OUT:  "rejections-out",
+    SALES_ORDER:    "sales-orders",
+    PURCHASE_ORDER: "purchase-orders",
 };
 
 /** Single-record resolver — returns SourceDoc for one journal entry id, or null. */

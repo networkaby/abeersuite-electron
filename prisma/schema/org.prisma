@@ -29,13 +29,13 @@ model Department {
 // Multiple users can hold the same post (job-sharing / dual in-charge).
 
 model Post {
-  id           String     @id
-  title        String
-  branchId     String?
-  departmentId String?
-  parentPostId String?
+  id             String   @id
+  title          String
+  branchId       String?
+  departmentId   String?
+  parentPostId   String?
   roleTemplateId String?
-  createdAt    DateTime   @default(now())
+  createdAt      DateTime @default(now())
 
   branch       Branch?     @relation(fields: [branchId], references: [id])
   department   Department? @relation(fields: [departmentId], references: [id])
@@ -50,9 +50,8 @@ model UserPost {
   postId    String
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@id([userId, postId])
 }
-

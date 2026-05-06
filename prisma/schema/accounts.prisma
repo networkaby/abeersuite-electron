@@ -4,16 +4,16 @@
 // Every Account (ledger) optionally belongs to one group via groupId.
 
 model AccountGroup {
-  id        Int           @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
   type      GroupType
   parentId  Int?
-  sortOrder Int           @default(0)
-  isActive  Boolean       @default(true)
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
 
-  parent    AccountGroup?  @relation("GroupHierarchy", fields: [parentId], references: [id])
-  children  AccountGroup[] @relation("GroupHierarchy")
-  accounts  Account[]
+  parent   AccountGroup?  @relation("GroupHierarchy", fields: [parentId], references: [id])
+  children AccountGroup[] @relation("GroupHierarchy")
+  accounts Account[]
 
   @@index([parentId, sortOrder])
   @@index([type])
@@ -41,16 +41,24 @@ model Account {
   companyId     Int?           @unique
   createdAt     DateTime       @default(now())
 
+  // Tally-style opening balance — entered on the master, dated at booksBeginningFrom.
+  // Imbalance across all accounts auto-parks to the seeded "Difference in Opening Balances" suspense ledger.
+  openingBalance     Decimal?       @db.Decimal(14, 2)
+  openingBalanceType EntryType?
+  openingBalanceDate DateTime?      @db.Date
+
   parent        Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
   children      Account[]     @relation("AccountHierarchy")
   group         AccountGroup? @relation(fields: [groupId], references: [id])
   customer      Customer?     @relation(fields: [customerId], references: [id])
   company       Company?      @relation(fields: [companyId], references: [id])
   lines         JournalLine[]
+  voucherLines  VoucherLine[]
   billedTickets Ticket[]      @relation("TicketBillingAccount")
   devices       Device[]
   shopOrders    ShopOrder[]
   invoices      Invoice[]     @relation("AccountInvoices")
+  voucherParty  Voucher[]     @relation("VoucherPartyAccount")
 
   @@index([type])
   @@index([isActive])

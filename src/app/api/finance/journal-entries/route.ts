@@ -27,13 +27,13 @@ export async function GET(req: Request) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const includeDeletedParam = searchParams.get("includeDeleted") === "1";
-    const canSeeDeleted = user!.permissions.includes("admin:bypass") || user!.permissions.includes("finance:journal:soft-delete");
+    const canSeeDeleted = user!.permissions.includes("admin:bypass") || user!.permissions.includes("finance:journal:delete");
     const includeDeleted = includeDeletedParam && canSeeDeleted;
 
     try {
         const entries = await prisma.journalEntry.findMany({
             where: {
-                ...(status ? { status: status as "DRAFT" | "POSTED" | "VOIDED" } : {}),
+                ...(status ? { status: status as "DRAFT" | "POSTED" | "CANCELLED" } : {}),
                 ...(includeDeleted ? {} : { deletedAt: null }),
                 ...(from || to ? {
                     date: {

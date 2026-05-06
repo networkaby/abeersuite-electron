@@ -12,17 +12,17 @@ enum ChatMessageType {
 }
 
 model ChatRoom {
-  id          String             @id @default(cuid())
-  key         String             @unique
+  id          String           @id @default(cuid())
+  key         String           @unique
   type        ChatRoomType
   name        String
   ownerUserId Int?
   roleId      String?
-  isActive    Boolean            @default(true)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  ownerUser   User?              @relation("OwnedChatRooms", fields: [ownerUserId], references: [id])
-  role        Role?              @relation(fields: [roleId], references: [id])
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  ownerUser   User?            @relation("OwnedChatRooms", fields: [ownerUserId], references: [id])
+  role        Role?            @relation(fields: [roleId], references: [id])
   members     ChatRoomMember[]
   messages    ChatMessage[]
 
@@ -46,15 +46,15 @@ model ChatRoomMember {
 
 model ChatMessage {
   id           Int             @id @default(autoincrement())
-  roomId        String
-  senderUserId  Int?
-  messageType   ChatMessageType @default(USER)
-  title         String?
-  body          String
-  link          String?
-  createdAt     DateTime       @default(now())
-  room          ChatRoom       @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  senderUser    User?          @relation(fields: [senderUserId], references: [id])
+  roomId       String
+  senderUserId Int?
+  messageType  ChatMessageType @default(USER)
+  title        String?
+  body         String
+  link         String?
+  createdAt    DateTime        @default(now())
+  room         ChatRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderUser   User?           @relation(fields: [senderUserId], references: [id])
 
   @@index([roomId, createdAt])
   @@index([senderUserId])

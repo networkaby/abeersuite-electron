@@ -4,14 +4,14 @@ import { requireAuth } from "@/lib/auth-guard";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { InvVoucherType } from "@/generated/prisma/client";
 
-// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|VOIDED
+// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const type   = searchParams.get("type")   as InvVoucherType | null;
-    const status = searchParams.get("status") as "DRAFT" | "POSTED" | "VOIDED" | null;
+    const status = searchParams.get("status") as "DRAFT" | "POSTED" | "CANCELLED" | null;
 
     const vouchers = await prisma.invVoucher.findMany({
         where: {

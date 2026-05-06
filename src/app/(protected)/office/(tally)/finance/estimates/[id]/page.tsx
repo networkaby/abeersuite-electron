@@ -2,18 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/utils/constants";
-import {
-    Dialog, DialogContent, DialogHeader, DialogTitle,
-    DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
+import { LifecycleActions } from "@/modules/tally/components/LifecycleActions";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 interface VoucherLine {
     id:          number;
@@ -31,7 +28,7 @@ interface Voucher {
     reference:    string;
     date:         string;
     description:  string;
-    status:       "DRAFT" | "POSTED" | "VOIDED";
+    status:       "DRAFT" | "POSTED" | "CANCELLED";
     partyName:    string | null;
     partyPhone:   string | null;
     subtotal:     number;
@@ -40,8 +37,8 @@ interface Voucher {
     roundOff:     number;
     totalAmount:  number;
     postedAt:     string | null;
-    voidedAt:     string | null;
-    voidReason:   string | null;
+    cancelledAt:  string | null;
+    cancelReason: string | null;
     createdBy:    { name: string };
     createdAt:    string;
     lines:        VoucherLine[];
@@ -50,23 +47,26 @@ interface Voucher {
 const STATUS_COLORS: Record<string, string> = {
     DRAFT:  "bg-yellow-100 text-yellow-700 border-yellow-200",
     POSTED: "bg-blue-100 text-blue-700 border-blue-200",
-    VOIDED: "bg-muted text-muted-foreground border-border",
+    CANCELLED: "bg-muted text-muted-foreground border-border",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-    DRAFT:  "DRAFT",
-    POSTED: "FINALISED",
-    VOIDED: "VOIDED",
+    DRAFT:     "DRAFT",
+    POSTED:    "FINALISED",
+    CANCELLED: "CANCELLED",
 };
 
 export default function EstimateDetailPage() {
     const { id } = useParams<{ id: string }>();
-    const [voucher,    setVoucher]    = useState<Voucher | null>(null);
-    const [loading,    setLoading]    = useState(true);
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
+
+    const [voucher, setVoucher] = useState<Voucher | null>(null);
+    const [loading, setLoading] = useState(true);
     const [finalising, setFinalising] = useState(false);
-    const [showVoid,   setShowVoid]   = useState(false);
-    const [voidReason, setVoidReason] = useState("");
-    const [voiding,    setVoiding]    = useState(false);
 
     const load = () => {
         setLoading(true);
@@ -89,21 +89,6 @@ export default function EstimateDetailPage() {
             toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Failed");
         } finally {
             setFinalising(false);
-        }
-    };
-
-    const voidVoucher = async () => {
-        if (!voidReason.trim()) { toast.error("Reason required"); return; }
-        setVoiding(true);
-        try {
-            await axios.post(`/api/inventory/vouchers/${id}/void`, { reason: voidReason });
-            toast.success("Estimate voided");
-            setShowVoid(false);
-            load();
-        } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Failed to void");
-        } finally {
-            setVoiding(false);
         }
     };
 
@@ -131,18 +116,23 @@ export default function EstimateDetailPage() {
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.description}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                     {voucher.status === "DRAFT" && (
                         <Button onClick={finalise} disabled={finalising} className="bg-blue-600 hover:bg-blue-700 text-white">
                             {finalising ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
                             Finalise
                         </Button>
                     )}
-                    {voucher.status !== "VOIDED" && (
-                        <Button variant="outline" onClick={() => setShowVoid(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10">
-                            <XCircle size={14} /> Void
-                        </Button>
-                    )}
+                    <LifecycleActions
+                        voucher={voucher}
+                        apiBasePath={`/api/inventory/vouchers/${id}`}
+                        listPath="/office/finance/estimates"
+                        label="Estimate"
+                        canCancel={canCancel}
+                        canDelete={canDelete}
+                        canHardDelete={canHardDelete}
+                        onChanged={load}
+                    />
                 </div>
             </div>
 
@@ -170,16 +160,16 @@ export default function EstimateDetailPage() {
                         <p className="font-medium text-blue-700">{new Date(voucher.postedAt).toLocaleString()}</p>
                     </div>
                 )}
-                {voucher.voidedAt && (
+                {voucher.cancelledAt && (
                     <div>
-                        <p className="text-xs text-muted-foreground mb-1">Voided at</p>
-                        <p className="font-medium text-destructive">{new Date(voucher.voidedAt).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground mb-1">Cancelled at</p>
+                        <p className="font-medium text-destructive">{new Date(voucher.cancelledAt).toLocaleString()}</p>
                     </div>
                 )}
-                {voucher.voidReason && (
+                {voucher.cancelReason && (
                     <div className="col-span-2">
-                        <p className="text-xs text-muted-foreground mb-1">Void reason</p>
-                        <p className="font-medium text-destructive">{voucher.voidReason}</p>
+                        <p className="text-xs text-muted-foreground mb-1">Cancel reason</p>
+                        <p className="font-medium text-destructive">{voucher.cancelReason}</p>
                     </div>
                 )}
             </div>
@@ -243,25 +233,6 @@ export default function EstimateDetailPage() {
                 </table>
             </div>
 
-            {/* Void dialog */}
-            <Dialog open={showVoid} onOpenChange={(open) => { if (!open) setShowVoid(false); }}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Void Estimate</DialogTitle>
-                        <DialogDescription>Mark this estimate as voided / cancelled.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-1.5">
-                        <Label>Reason</Label>
-                        <Textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} rows={3} placeholder="Reason for voiding..." />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowVoid(false)}>Cancel</Button>
-                        <Button variant="destructive" onClick={voidVoucher} disabled={voiding}>
-                            {voiding && <Loader2 size={14} className="animate-spin" />} Confirm Void
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

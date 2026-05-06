@@ -32,8 +32,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Live balance is currently affected only by entries that are POSTED and not soft-deleted.
-    // void() reverses + writes a counter-entry; soft-delete() reverses without a counter-entry.
+    // Live balance is currently affected only by entries that are POSTED and not deleted.
+    // cancel() reverses + writes a counter-entry; delete() reverses without a counter-entry.
     const needsLedgerReversal = entry.status === "POSTED" && !entry.deletedAt;
 
     try {

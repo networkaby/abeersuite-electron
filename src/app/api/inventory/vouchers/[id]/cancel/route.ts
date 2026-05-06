@@ -1,16 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { toNumber } from "@/modules/tally/lib/balance";
+import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
 
-// POST /api/inventory/vouchers/[id]/void
+// POST /api/inventory/vouchers/[id]/cancel
+// Reverses stock + GL impact via counter-entry; preserves voucher reference number.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requireAuth();
+    const { response, user } = await requirePermission("inventory:voucher:cancel");
     if (response) return response;
 
     const { id } = await params;
     const { reason } = (await req.json()) as { reason?: string };
-    if (!reason?.trim()) return NextResponse.json({ error: "Void reason required" }, { status: 400 });
+    if (!reason?.trim()) return NextResponse.json({ error: "Cancel reason required" }, { status: 400 });
 
     const userId = user!.id;
 
@@ -19,32 +21,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         include: { lines: { include: { product: { select: { id: true } } } } },
     });
 
-    if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (voucher.status !== "POSTED") return NextResponse.json({ error: "Only POSTED vouchers can be voided" }, { status: 409 });
+    if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "RECEIPT";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "ISSUE";
+    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "RECEIPT" || voucher.type === "GRN";
+    const isSale     = voucher.type === "SALE"     || voucher.type === "ISSUE"   || voucher.type === "CHALLAN";
 
     try {
+        ensureCancelable(voucher);
+
         await prisma.$transaction(async (tx) => {
             // ── 1. Reverse stock ledger + cached InvProduct.stock ─────────────
             for (const line of voucher.lines) {
                 const qty = toNumber(line.quantity);
 
-                // Write reversal ledger entry (swap inQty/outQty)
                 await tx.invStockLedger.create({
                     data: {
                         productId: line.productId,
                         voucherId: voucher.id,
                         date:      new Date(),
-                        inQty:     isSale     ? qty : 0,  // reversal: sale → put back in
-                        outQty:    isPurchase ? qty : 0,  // reversal: purchase → take out
+                        inQty:     isSale     ? qty : 0,
+                        outQty:    isPurchase ? qty : 0,
                         rate:      line.rate,
                         amount:    -toNumber(line.amount),
                     },
                 });
 
-                // Reverse cached stock
                 await tx.invProduct.update({
                     where: { id: line.productId },
                     data:  {
@@ -70,19 +71,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     const cnt   = await tx.journalEntry.count({ where: { reference: { startsWith: start } } });
                     const ref   = `${start}${String(cnt + 1).padStart(4, "0")}`;
 
-                    // Reversal: swap DEBIT ↔ CREDIT
                     const reversalLines = origJe.lines.map((l) => ({
                         accountId:   l.accountId,
                         type:        (l.type === "DEBIT" ? "CREDIT" : "DEBIT") as "DEBIT" | "CREDIT",
                         amount:      toNumber(l.amount),
-                        description: `VOID: ${l.description ?? ""}`,
+                        description: `CANCEL: ${l.description ?? ""}`,
                     }));
 
                     const revJe = await tx.journalEntry.create({
                         data: {
                             date:        new Date(),
                             reference:   ref,
-                            description: `VOID: ${origJe.description}`,
+                            description: `CANCEL: ${origJe.description}`,
                             status:      "POSTED",
                             postedAt:    new Date(),
                             createdById: userId,
@@ -90,7 +90,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         },
                     });
 
-                    // Reverse Account.balance for each reversal line
                     for (const rl of reversalLines) {
                         const origLine = origJe.lines.find((l) => l.accountId === rl.accountId)!;
                         const delta = origLine.account.normalBalance === "DEBIT"
@@ -102,18 +101,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         });
                     }
 
-                    // Mark original JE as voided
                     await tx.journalEntry.update({
                         where: { id: origJe.id },
-                        data:  { status: "VOIDED", voidedAt: new Date(), voidReason: `Voucher ${voucher.reference} voided. Reversal: ${revJe.reference}` },
+                        data:  {
+                            status: "CANCELLED",
+                            cancelledAt: new Date(),
+                            cancelledById: userId,
+                            cancelReason: `Voucher ${voucher.reference} cancelled. Reversal: ${revJe.reference}`,
+                        },
                     });
                 }
             }
 
-            // ── 3. Mark voucher as VOIDED ─────────────────────────────────────
+            // ── 3. Mark voucher as CANCELLED ──────────────────────────────────
             await tx.invVoucher.update({
                 where: { id: voucher.id },
-                data:  { status: "VOIDED", voidedAt: new Date(), voidReason: reason.trim() },
+                data:  cancelFields(userId, reason.trim()),
             });
         });
 
@@ -126,7 +129,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
         return NextResponse.json(updated);
     } catch (err) {
+        const lifecycle = lifecycleErrorResponse(err);
+        if (lifecycle) return lifecycle;
         console.error(err);
-        return NextResponse.json({ error: "Failed to void voucher" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to cancel voucher" }, { status: 500 });
     }
 }

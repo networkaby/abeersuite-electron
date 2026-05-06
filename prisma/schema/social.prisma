@@ -7,8 +7,8 @@ model WallPost {
   body       String
   createdAt  DateTime @default(now())
 
-  wallUser User @relation("WallPosts",     fields: [wallUserId], references: [id])
-  author   User @relation("AuthoredPosts", fields: [authorId],   references: [id])
+  wallUser User @relation("WallPosts", fields: [wallUserId], references: [id])
+  author   User @relation("AuthoredPosts", fields: [authorId], references: [id])
 
   @@index([wallUserId])
   @@index([authorId])

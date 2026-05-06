@@ -13,15 +13,15 @@ model InvUnit {
 }
 
 model InvCategory {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   name      String
-  slug      String?  @unique
+  slug      String?       @unique
   parentId  Int?
   parent    InvCategory?  @relation("InvCategoryHierarchy", fields: [parentId], references: [id])
   children  InvCategory[] @relation("InvCategoryHierarchy")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   products InvProduct[]
 
@@ -65,8 +65,8 @@ model InvWarrantyTerm {
 }
 
 model InvProduct {
-  id             Int     @id @default(autoincrement())
-  sku            String  @unique
+  id             Int      @id @default(autoincrement())
+  sku            String   @unique
   name           String
   unitId         Int
   categoryId     Int?
@@ -90,7 +90,7 @@ model InvProduct {
 
   // ── Ecommerce / storefront fields (null = not listed in shop) ──────────────
   /// URL-safe handle for /shop/product/[handle]
-  slug              String?  @unique
+  slug              String? @unique
   shopSubheading    String?
   shopDescription   String?
   /// Display category label for storefront (falls back to InvCategory.name)
@@ -104,13 +104,21 @@ model InvProduct {
   galleryJson       Json?
   /// JSON object of label → value for specs tab
   specsJson         Json?
-  /// Cached running stock balance — updated atomically on every voucher post/void
+  /// Cached running stock balance — updated atomically on every voucher post/cancel
   /// (mirrors Account.balance pattern from GL module). null = stock not tracked.
   stock             Int?
-  lowStockThreshold Int      @default(5)
-  isListedInShop    Boolean  @default(false)
+  lowStockThreshold Int     @default(5)
+  isListedInShop    Boolean @default(false)
   /// Last purchase cost in paise — set on PURCHASE voucher post, used for COGS on SALE
   costPaise         Int?
+
+  // ── Tally-style opening stock — entered on the master, dated at booksBeginningFrom.
+  // Mismatch between Σ(openingValue) and the "Stock-in-Hand" line on the
+  // opening journal auto-parks to "Difference in Opening Balances".
+  openingStock     Decimal? @db.Decimal(10, 3)
+  openingRate      Decimal? @db.Decimal(14, 2)
+  openingValue     Decimal? @db.Decimal(14, 2)
+  openingStockDate DateTime? @db.Date
 
   unit         InvUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
   category     InvCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -140,10 +148,10 @@ model InvVoucher {
   reference      String           @unique
   date           DateTime         @db.Date
   description    String
-  /// Reuses existing JournalStatus enum: DRAFT → POSTED → VOIDED
-  status         JournalStatus    @default(DRAFT)
+  /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
+  status         VoucherStatus    @default(DRAFT)
   partyName      String?
-  partyType      String?          // "supplier" | "customer" | "account"
+  partyType      String? // "supplier" | "customer" | "account"
   partyId        Int?
   partyPhone     String?
   partyAddress   String?
@@ -160,10 +168,21 @@ model InvVoucher {
   /// Linked GL journal entry — auto-created on post
   journalEntryId Int?
   postedAt       DateTime?
-  voidedAt       DateTime?
-  voidReason     String?
+  // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
+  showPrices     Boolean          @default(true)
+
+  // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
+  cancelledAt    DateTime?
+  cancelledById  Int?
+  cancelReason   String?
+  deletedAt      DateTime?
+  deletedById    Int?
+  deleteReason   String?
+
   createdById    Int
   createdBy      User             @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy    User?            @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy      User?            @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
   lines          InvVoucherLine[]
   stockEntries   InvStockLedger[]
   createdAt      DateTime         @default(now())
@@ -172,6 +191,23 @@ model InvVoucher {
   @@index([type, status])
   @@index([date])
   @@index([status])
+  @@index([deletedAt])
+}
+
+model InvVoucherAudit {
+  id          Int      @id @default(autoincrement())
+  originalId  Int
+  originalRef String
+  action      String
+  reason      String?
+  snapshot    Json
+  actorId     Int
+  actor       User     @relation("InvVoucherAuditActor", fields: [actorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([originalId])
+  @@index([actorId])
+  @@index([createdAt])
 }
 
 model InvVoucherLine {

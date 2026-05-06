@@ -24,7 +24,7 @@ interface JournalEntry {
     date: string;
     reference: string;
     description: string;
-    status: "DRAFT" | "POSTED" | "VOIDED";
+    status: "DRAFT" | "POSTED" | "CANCELLED";
     deletedAt: string | null;
     totalDebit: number;
     _count: { lines: number };
@@ -43,7 +43,7 @@ const cellClass  = "w-full rounded-md border border-input bg-background px-2 py-
 export default function JournalEntriesPage() {
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canSeeDeleted = hasPermissionWithScope(permissions, "finance:journal:soft-delete");
+    const canSeeDeleted = hasPermissionWithScope(permissions, "finance:journal:delete");
 
     const [entries, setEntries] = useState<JournalEntry[]>([]);
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
@@ -133,7 +133,7 @@ export default function JournalEntriesPage() {
 
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-1">
-                {(["", "DRAFT", "POSTED", "VOIDED"] as const).map((s) => (
+                {(["", "DRAFT", "POSTED", "CANCELLED"] as const).map((s) => (
                     <Button
                         key={s}
                         onClick={() => setStatusFilter(s)}

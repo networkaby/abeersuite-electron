@@ -4,17 +4,19 @@ import { requirePermission } from "@/lib/auth-guard";
 import { balanceDelta, toNumber, nextRef } from "@/modules/tally/lib/balance";
 import { z } from "zod";
 
-const voidSchema = z.object({
-    reason: z.string().trim().min(1, "Void reason is required"),
+const cancelSchema = z.object({
+    reason: z.string().trim().min(1, "Cancel reason is required"),
 });
 
-// POST /api/finance/journal-entries/[id]/void
+// POST /api/finance/journal-entries/[id]/cancel
+// Tally-style: reverses GL impact via a counter-entry. Original keeps its
+// reference number and stays visible (struck through) for audit.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:journal:void");
+    const { user, response } = await requirePermission("finance:journal:cancel");
     if (response) return response;
 
     const { id } = await params;
-    const parsed = voidSchema.safeParse(await req.json());
+    const parsed = cancelSchema.safeParse(await req.json());
     if (!parsed.success) {
         return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
     }
@@ -27,15 +29,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (entry.deletedAt) {
-        return NextResponse.json({ error: "Cannot void a deleted entry — restore it first" }, { status: 409 });
+        return NextResponse.json({ error: "Cannot cancel a deleted entry — restore it first" }, { status: 409 });
     }
     if (entry.status !== "POSTED") {
-        return NextResponse.json({ error: "Only POSTED entries can be voided" }, { status: 409 });
+        return NextResponse.json({ error: "Only POSTED entries can be cancelled" }, { status: 409 });
     }
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Reverse each account balance
             for (const line of entry.lines) {
                 const delta = balanceDelta(
                     line.account.normalBalance!,
@@ -48,7 +49,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
             }
 
-            // Create reversal journal entry for audit trail
             const reversalRef = await nextRef(tx, "journalEntry", "JE");
             await tx.journalEntry.create({
                 data: {
@@ -69,7 +69,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 },
             });
 
-            // Re-apply reversed entry balance changes
             for (const line of entry.lines) {
                 const reversedType = line.type === "DEBIT" ? "CREDIT" : "DEBIT";
                 const delta = balanceDelta(
@@ -86,18 +85,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             await tx.journalEntry.update({
                 where: { id: Number(id) },
                 data: {
-                    status: "VOIDED",
-                    voidedAt: new Date(),
-                    voidReason: parsed.data.reason,
-                    voidedById: user!.id,
+                    status: "CANCELLED",
+                    cancelledAt: new Date(),
+                    cancelReason: parsed.data.reason,
+                    cancelledById: user!.id,
                 },
             });
         });
 
-        const voided = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
-        return NextResponse.json(voided);
+        const cancelled = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
+        return NextResponse.json(cancelled);
     } catch (err) {
         console.error(err);
-        return NextResponse.json({ error: "Failed to void journal entry" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to cancel journal entry" }, { status: 500 });
     }
 }

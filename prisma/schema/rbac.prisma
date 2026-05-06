@@ -1,23 +1,23 @@
 // ── RBAC ──────────────────────────────────────────────────────────────────────
 
 model Role {
-  id          String           @id
-  label       String
-  color       String
-  rank        Int              @default(0)
-  isSystem    Boolean          @default(false)
-  users       User[]
+  id             String           @id
+  label          String
+  color          String
+  rank           Int              @default(0)
+  isSystem       Boolean          @default(false)
+  users          User[]
   templatedPosts Post[]
-  permissions RolePermission[]
-  chatRooms   ChatRoom[]
+  permissions    RolePermission[]
+  chatRooms      ChatRoom[]
 }
 
 model Permission {
-  id           String            @id
-  label        String
-  description  String?
-  module       String            @default("core")
-  roleGrants   RolePermission[]
+  id            String           @id
+  label         String
+  description   String?
+  module        String           @default("core")
+  roleGrants    RolePermission[]
   userOverrides UserPermission[]
 }
 

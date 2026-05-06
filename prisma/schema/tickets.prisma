@@ -21,33 +21,33 @@ model Device {
 }
 
 model Ticket {
-  id               Int              @id @default(autoincrement())
+  id                Int             @id @default(autoincrement())
   /// Optional link when ticket was spawned from an ecommerce return / RMA.
   sourceShopOrderId Int?
-  pipelineId       String?
-  status           String           @default("S1")
-  priority         Priority         @default(MEDIUM)
-  notes            String?
-  accessInfo       String?
-  estimatedCost    Float?
-  deviceId         Int
-  escalated        Boolean          @default(false)
-  escalatedAt      DateTime?
-  escalationType   EscalationType?
-  expectedReturn   DateTime?
-  receivedBackAt   DateTime?
-  externalRef      String?
-  serviceCenterId  Int?
-  subStatusId      String?
-  isWarranty       Boolean          @default(false)
-  warrantyStatus   WarrantyStatus   @default(NONE)
-  warrantyRef      String?
-  purchaseDate     DateTime?
-  voidReason       String?
-  primaryOwnerId   Int?
-  billingAccountId Int?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  pipelineId        String?
+  status            String          @default("S1")
+  priority          Priority        @default(MEDIUM)
+  notes             String?
+  accessInfo        String?
+  estimatedCost     Float?
+  deviceId          Int
+  escalated         Boolean         @default(false)
+  escalatedAt       DateTime?
+  escalationType    EscalationType?
+  expectedReturn    DateTime?
+  receivedBackAt    DateTime?
+  externalRef       String?
+  serviceCenterId   Int?
+  subStatusId       String?
+  isWarranty        Boolean         @default(false)
+  warrantyStatus    WarrantyStatus  @default(NONE)
+  warrantyRef       String?
+  purchaseDate      DateTime?
+  voidReason        String?
+  primaryOwnerId    Int?
+  billingAccountId  Int?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   shopOrder       ShopOrder?          @relation(fields: [sourceShopOrderId], references: [id])
   pipeline        Pipeline?           @relation(fields: [pipelineId], references: [id])
@@ -109,15 +109,15 @@ model TicketLog {
 }
 
 model TicketPart {
-  id           Int        @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   ticketId     Int
   invProductId Int
-  quantity     Float      @default(1)
+  quantity     Float    @default(1)
   notes        String?
-  createdAt    DateTime   @default(now())
+  createdAt    DateTime @default(now())
 
-  ticket   Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  product  InvProduct @relation(fields: [invProductId], references: [id])
+  ticket  Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  product InvProduct @relation(fields: [invProductId], references: [id])
 
   @@index([ticketId])
   @@index([invProductId])

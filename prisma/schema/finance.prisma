@@ -7,17 +7,17 @@ model JournalEntry {
   date          DateTime      @db.Date
   reference     String        @unique
   description   String
-  status        JournalStatus @default(DRAFT)
+  status        VoucherStatus @default(DRAFT)
   postedAt      DateTime?
-  voidedAt      DateTime?
-  voidReason    String?
-  voidedById    Int?
+  cancelledAt   DateTime?
+  cancelReason  String?
+  cancelledById Int?
   deletedAt     DateTime?
   deletedById   Int?
   deleteReason  String?
   createdById   Int
   createdBy     User          @relation("JournalCreatedBy", fields: [createdById], references: [id])
-  voidedBy      User?         @relation("JournalVoidedBy", fields: [voidedById], references: [id])
+  cancelledBy   User?         @relation("JournalCancelledBy", fields: [cancelledById], references: [id])
   deletedBy     User?         @relation("JournalDeletedBy", fields: [deletedById], references: [id])
   lines         JournalLine[]
   createdAt     DateTime      @default(now())
@@ -31,15 +31,15 @@ model JournalEntry {
 // Snapshot of hard-deleted journal entries. Created in the same transaction as the
 // physical row deletion so the deletion itself is traceable (who/when/why + full data).
 model JournalEntryAudit {
-  id              Int      @id @default(autoincrement())
-  originalId      Int
-  originalRef     String
-  action          String
-  reason          String?
-  snapshot        Json
-  actorId         Int
-  actor           User     @relation("JournalAuditActor", fields: [actorId], references: [id])
-  createdAt       DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  originalId  Int
+  originalRef String
+  action      String
+  reason      String?
+  snapshot    Json
+  actorId     Int
+  actor       User     @relation("JournalAuditActor", fields: [actorId], references: [id])
+  createdAt   DateTime @default(now())
 
   @@index([originalId])
   @@index([actorId])
@@ -63,6 +63,11 @@ model JournalLine {
 model Invoice {
   id          Int           @id @default(autoincrement())
   number      String        @unique
+  // InvoiceStatus tracks workflow + payment progress (DRAFT/SENT/PARTIAL/PAID/VOID).
+  // VOID is treated as the cancel-tier sentinel for invoices; cancelledAt below
+  // captures the metadata in the same shape as other voucher types so the
+  // shared lifecycle helpers in src/modules/tally/lib/voucherLifecycle.ts can
+  // operate uniformly across Invoice, Payment, InvVoucher, and Voucher.
   status      InvoiceStatus @default(DRAFT)
   issueDate   DateTime      @db.Date
   dueDate     DateTime      @db.Date
@@ -80,7 +85,18 @@ model Invoice {
   totalAmount Decimal       @db.Decimal(14, 2)
   amountPaid  Decimal       @default(0) @db.Decimal(14, 2)
   createdById Int
+
+  // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
+  cancelledAt   DateTime?
+  cancelledById Int?
+  cancelReason  String?
+  deletedAt     DateTime?
+  deletedById   Int?
+  deleteReason  String?
+
   createdBy   User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  cancelledBy User?         @relation("InvoiceCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy   User?         @relation("InvoiceDeletedBy", fields: [deletedById], references: [id])
   account     Account?      @relation("AccountInvoices", fields: [accountId], references: [id])
   shopOrder   ShopOrder?    @relation("OrderInvoice", fields: [shopOrderId], references: [id], onDelete: SetNull)
   lines       InvoiceLine[]
@@ -92,6 +108,24 @@ model Invoice {
   @@index([accountId])
   @@index([shopOrderId])
   @@index([issueDate])
+  @@index([deletedAt])
+}
+
+// Hard-delete snapshot for invoices (mirrors JournalEntryAudit shape).
+model InvoiceAudit {
+  id          Int      @id @default(autoincrement())
+  originalId  Int
+  originalRef String
+  action      String
+  reason      String?
+  snapshot    Json
+  actorId     Int
+  actor       User     @relation("InvoiceAuditActor", fields: [actorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([originalId])
+  @@index([actorId])
+  @@index([createdAt])
 }
 
 model InvoiceLine {
@@ -110,6 +144,8 @@ model InvoiceLine {
 
 model Payment {
   id             Int           @id @default(autoincrement())
+  // invoiceId stays for legacy 1:1 payments; bill-wise allocations use
+  // VoucherAllocation (free-form linking — see model below).
   invoiceId      Int
   invoice        Invoice       @relation(fields: [invoiceId], references: [id])
   amount         Decimal       @db.Decimal(14, 2)
@@ -119,9 +155,132 @@ model Payment {
   notes          String?
   journalEntryId Int?
   createdById    Int
-  createdBy      User          @relation("PaymentCreatedBy", fields: [createdById], references: [id])
-  createdAt      DateTime      @default(now())
+
+  // ── Voucher-style lifecycle (Cancel / Delete / Hard Delete) ─────────────
+  status        VoucherStatus @default(POSTED) // payments default POSTED on creation
+  postedAt      DateTime?
+  cancelledAt   DateTime?
+  cancelledById Int?
+  cancelReason  String?
+  deletedAt     DateTime?
+  deletedById   Int?
+  deleteReason  String?
+
+  createdBy   User    @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  cancelledBy User?   @relation("PaymentCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy   User?   @relation("PaymentDeletedBy", fields: [deletedById], references: [id])
+  createdAt   DateTime @default(now())
 
   @@index([invoiceId])
   @@index([journalEntryId])
+  @@index([status, date])
+  @@index([deletedAt])
+}
+
+model PaymentAudit {
+  id          Int      @id @default(autoincrement())
+  originalId  Int
+  originalRef String
+  action      String
+  reason      String?
+  snapshot    Json
+  actorId     Int
+  actor       User     @relation("PaymentAuditActor", fields: [actorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([originalId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+// ── Unified accounting voucher (Contra / Payment / Receipt / Credit Note / Debit Note) ───────────
+// Each row's lines must sum to zero (Σ debits = Σ credits). On POST the helper
+// in src/modules/tally/lib/voucherLifecycle.ts creates a JournalEntry with the
+// same lines so the GL stays consistent with traditional double-entry tooling.
+model Voucher {
+  id             Int          @id @default(autoincrement())
+  type           VoucherType
+  reference      String       @unique
+  date           DateTime     @db.Date
+  narration      String?
+  partyAccountId Int?
+  totalAmount    Decimal      @db.Decimal(14, 2)
+  status         VoucherStatus @default(DRAFT)
+  postedAt       DateTime?
+  // Counter-entry created on POST — lets reports tie back to GL.
+  journalEntryId Int?
+  createdById    Int
+
+  // ── Lifecycle metadata ──────────────────────────────────────────────────
+  cancelledAt   DateTime?
+  cancelledById Int?
+  cancelReason  String?
+  deletedAt     DateTime?
+  deletedById   Int?
+  deleteReason  String?
+
+  partyAccount Account? @relation("VoucherPartyAccount", fields: [partyAccountId], references: [id])
+  createdBy    User     @relation("VoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy  User?    @relation("VoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy    User?    @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
+  lines        VoucherLine[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([type, status])
+  @@index([date])
+  @@index([deletedAt])
+  @@index([partyAccountId])
+}
+
+model VoucherLine {
+  id          Int       @id @default(autoincrement())
+  voucherId   Int
+  voucher     Voucher   @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  accountId   Int
+  account     Account   @relation(fields: [accountId], references: [id])
+  type        EntryType
+  amount      Decimal   @db.Decimal(14, 2)
+  description String?
+
+  @@index([voucherId])
+  @@index([accountId])
+}
+
+model VoucherAudit {
+  id          Int      @id @default(autoincrement())
+  originalId  Int
+  originalRef String
+  action      String
+  reason      String?
+  snapshot    Json
+  actorId     Int
+  actor       User     @relation("VoucherAuditActor", fields: [actorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([originalId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+// ── Bill-wise allocation (free-form linking) ─────────────────────────────
+// Polymorphic: any voucher (target) can be settled by any other voucher (source),
+// fully or partially, now or later. AllocationMethod mirrors Tally's four modes:
+// New Ref / Against Ref / Advance / On Account.
+model VoucherAllocation {
+  id          Int                   @id @default(autoincrement())
+  targetType  AllocationTargetType
+  targetId    Int
+  sourceType  AllocationSourceType
+  sourceId    Int
+  amount      Decimal               @db.Decimal(14, 2)
+  method      AllocationMethod
+  reference   String?
+  createdById Int
+  createdBy   User                  @relation("VoucherAllocationCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime              @default(now())
+
+  @@index([targetType, targetId])
+  @@index([sourceType, sourceId])
+  @@index([method])
 }

@@ -30,10 +30,10 @@ interface JournalEntry {
     date: string;
     reference: string;
     description: string;
-    status: "DRAFT" | "POSTED" | "VOIDED";
+    status: "DRAFT" | "POSTED" | "CANCELLED";
     postedAt: string | null;
-    voidedAt: string | null;
-    voidReason: string | null;
+    cancelledAt: string | null;
+    cancelReason: string | null;
     deletedAt: string | null;
     deleteReason: string | null;
     createdBy: { id: number; name: string };
@@ -42,9 +42,9 @@ interface JournalEntry {
 }
 
 const STATUS_COLORS = {
-    DRAFT:  "bg-yellow-100 text-yellow-700 border-yellow-200",
-    POSTED: "bg-green-100 text-green-700 border-green-200",
-    VOIDED: "bg-muted text-muted-foreground border-border",
+    DRAFT:     "bg-yellow-100 text-yellow-700 border-yellow-200",
+    POSTED:    "bg-green-100 text-green-700 border-green-200",
+    CANCELLED: "bg-muted text-muted-foreground border-border",
 };
 
 
@@ -53,19 +53,19 @@ export default function JournalEntryDetailPage() {
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canVoid = hasPermissionWithScope(permissions, "finance:journal:void");
-    const canSoftDelete = hasPermissionWithScope(permissions, "finance:journal:soft-delete");
+    const canCancel = hasPermissionWithScope(permissions, "finance:journal:cancel");
+    const canDelete = hasPermissionWithScope(permissions, "finance:journal:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "finance:journal:hard-delete");
 
     const [entry, setEntry] = useState<JournalEntry | null>(null);
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
-    const [showVoid, setShowVoid] = useState(false);
-    const [voidReason, setVoidReason] = useState("");
-    const [voiding, setVoiding] = useState(false);
-    const [showSoftDelete, setShowSoftDelete] = useState(false);
-    const [softDeleteReason, setSoftDeleteReason] = useState("");
-    const [softDeleting, setSoftDeleting] = useState(false);
+    const [showCancel, setShowCancel] = useState(false);
+    const [cancelReason, setCancelReason] = useState("");
+    const [cancelling, setCancelling] = useState(false);
+    const [showDelete, setShowDelete] = useState(false);
+    const [deleteReason, setDeleteReason] = useState("");
+    const [deleting, setDeleting] = useState(false);
     const [showHardDelete, setShowHardDelete] = useState(false);
     const [hardDeleteReason, setHardDeleteReason] = useState("");
     const [hardDeleting, setHardDeleting] = useState(false);
@@ -95,36 +95,36 @@ export default function JournalEntryDetailPage() {
         }
     };
 
-    const voidEntry = async () => {
-        if (!voidReason.trim()) { toast.error("Reason required"); return; }
-        setVoiding(true);
+    const cancelEntry = async () => {
+        if (!cancelReason.trim()) { toast.error("Reason required"); return; }
+        setCancelling(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/void`, { reason: voidReason });
-            toast.success("Entry voided — reversal entry created");
-            setShowVoid(false);
+            await axios.post(`/api/finance/journal-entries/${id}/cancel`, { reason: cancelReason });
+            toast.success("Entry cancelled — reversal entry created");
+            setShowCancel(false);
             load();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed to void");
+            toast.error(msg ?? "Failed to cancel");
         } finally {
-            setVoiding(false);
+            setCancelling(false);
         }
     };
 
-    const softDelete = async () => {
-        if (!softDeleteReason.trim()) { toast.error("Reason required"); return; }
-        setSoftDeleting(true);
+    const deleteEntry = async () => {
+        if (!deleteReason.trim()) { toast.error("Reason required"); return; }
+        setDeleting(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/soft-delete`, { reason: softDeleteReason });
-            toast.success("Entry soft-deleted — hidden from views and excluded from balances");
-            setShowSoftDelete(false);
-            setSoftDeleteReason("");
+            await axios.post(`/api/finance/journal-entries/${id}/delete`, { reason: deleteReason });
+            toast.success("Entry deleted — hidden from views and excluded from balances");
+            setShowDelete(false);
+            setDeleteReason("");
             load();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
-            toast.error(msg ?? "Failed to soft-delete");
+            toast.error(msg ?? "Failed to delete");
         } finally {
-            setSoftDeleting(false);
+            setDeleting(false);
         }
     };
 
@@ -187,7 +187,7 @@ export default function JournalEntryDetailPage() {
                 <div className="flex gap-2">
                     {entry.deletedAt ? (
                         <>
-                            {canSoftDelete && (
+                            {canDelete && (
                                 <Button variant="outline" onClick={restore} disabled={restoring}>
                                     {restoring ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />} Restore
                                 </Button>
@@ -210,14 +210,14 @@ export default function JournalEntryDetailPage() {
                                     Post Entry
                                 </Button>
                             )}
-                            {entry.status === "POSTED" && canVoid && (
-                                <Button variant="outline" onClick={() => setShowVoid(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10">
-                                    <XCircle size={14} /> Void
+                            {entry.status === "POSTED" && canCancel && (
+                                <Button variant="outline" onClick={() => setShowCancel(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10">
+                                    <XCircle size={14} /> Cancel
                                 </Button>
                             )}
-                            {entry.status !== "VOIDED" && canSoftDelete && (
-                                <Button variant="outline" onClick={() => setShowSoftDelete(true)}>
-                                    <Trash2 size={14} /> Soft Delete
+                            {entry.status !== "CANCELLED" && canDelete && (
+                                <Button variant="outline" onClick={() => setShowDelete(true)}>
+                                    <Trash2 size={14} /> Delete
                                 </Button>
                             )}
                             {canHardDelete && (
@@ -264,16 +264,16 @@ export default function JournalEntryDetailPage() {
                         <p className="font-medium text-green-700">{new Date(entry.postedAt).toLocaleString()}</p>
                     </div>
                 )}
-                {entry.voidedAt && (
+                {entry.cancelledAt && (
                     <div>
-                        <p className="text-xs text-muted-foreground mb-1">Voided at</p>
-                        <p className="font-medium text-destructive">{new Date(entry.voidedAt).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground mb-1">Cancelled at</p>
+                        <p className="font-medium text-destructive">{new Date(entry.cancelledAt).toLocaleString()}</p>
                     </div>
                 )}
-                {entry.voidReason && (
+                {entry.cancelReason && (
                     <div className="col-span-2">
-                        <p className="text-xs text-muted-foreground mb-1">Void reason</p>
-                        <p className="font-medium text-destructive">{entry.voidReason}</p>
+                        <p className="text-xs text-muted-foreground mb-1">Cancel reason</p>
+                        <p className="font-medium text-destructive">{entry.cancelReason}</p>
                     </div>
                 )}
             </div>
@@ -330,38 +330,38 @@ export default function JournalEntryDetailPage() {
                 </table>
             </div>
 
-            {/* Void Dialog */}
-            <Dialog open={showVoid} onOpenChange={(open) => { if (!open) setShowVoid(false); }}>
+            {/* Cancel Dialog */}
+            <Dialog open={showCancel} onOpenChange={(open) => { if (!open) setShowCancel(false); }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Void Journal Entry</DialogTitle>
+                        <DialogTitle>Cancel Journal Entry</DialogTitle>
                         <DialogDescription>
-                            This will create a reversal entry and update GL balances. This action cannot be undone.
+                            Keeps the voucher number, reverses GL balances via a counter-entry, and marks this entry as CANCELLED. This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-1.5">
                         <Label>Reason</Label>
                         <Textarea
-                            value={voidReason}
-                            onChange={(e) => setVoidReason(e.target.value)}
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
                             rows={3}
-                            placeholder="Reason for voiding..."
+                            placeholder="Reason for cancelling..."
                         />
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowVoid(false)}>Cancel</Button>
-                        <Button variant="destructive" onClick={voidEntry} disabled={voiding}>
-                            {voiding && <Loader2 size={14} className="animate-spin" />} Confirm Void
+                        <Button variant="outline" onClick={() => setShowCancel(false)}>Back</Button>
+                        <Button variant="destructive" onClick={cancelEntry} disabled={cancelling}>
+                            {cancelling && <Loader2 size={14} className="animate-spin" />} Confirm Cancel
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Soft Delete Dialog */}
-            <Dialog open={showSoftDelete} onOpenChange={(open) => { if (!open) setShowSoftDelete(false); }}>
+            {/* Delete Dialog */}
+            <Dialog open={showDelete} onOpenChange={(open) => { if (!open) setShowDelete(false); }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Soft Delete Journal Entry</DialogTitle>
+                        <DialogTitle>Delete Journal Entry</DialogTitle>
                         <DialogDescription>
                             Hides the entry from default views and excludes it from balance calculations. Recoverable via Restore.
                         </DialogDescription>
@@ -369,16 +369,16 @@ export default function JournalEntryDetailPage() {
                     <div className="space-y-1.5">
                         <Label>Reason</Label>
                         <Textarea
-                            value={softDeleteReason}
-                            onChange={(e) => setSoftDeleteReason(e.target.value)}
+                            value={deleteReason}
+                            onChange={(e) => setDeleteReason(e.target.value)}
                             rows={3}
                             placeholder="Reason for deleting..."
                         />
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowSoftDelete(false)}>Cancel</Button>
-                        <Button variant="destructive" onClick={softDelete} disabled={softDeleting}>
-                            {softDeleting && <Loader2 size={14} className="animate-spin" />} Confirm Soft Delete
+                        <Button variant="outline" onClick={() => setShowDelete(false)}>Back</Button>
+                        <Button variant="destructive" onClick={deleteEntry} disabled={deleting}>
+                            {deleting && <Loader2 size={14} className="animate-spin" />} Confirm Delete
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -405,7 +405,7 @@ export default function JournalEntryDetailPage() {
                         />
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowHardDelete(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setShowHardDelete(false)}>Back</Button>
                         <Button variant="destructive" onClick={hardDelete} disabled={hardDeleting}>
                             {hardDeleting && <Loader2 size={14} className="animate-spin" />} Permanently Delete
                         </Button>

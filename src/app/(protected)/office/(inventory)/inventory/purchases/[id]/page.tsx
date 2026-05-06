@@ -4,10 +4,13 @@ import { useEffect, useState, use } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
+import { LifecycleActions } from "@/modules/tally/components/LifecycleActions";
+import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 type VoucherDetail = {
     id:             number;
@@ -15,7 +18,7 @@ type VoucherDetail = {
     type:           string;
     date:           string;
     description:    string;
-    status:         "DRAFT" | "POSTED" | "VOIDED";
+    status:         "DRAFT" | "POSTED" | "CANCELLED";
     partyName:      string | null;
     partyPhone:     string | null;
     partyAddress:   string | null;
@@ -26,8 +29,8 @@ type VoucherDetail = {
     totalAmount:    number;
     journalEntryId: number | null;
     postedAt:       string | null;
-    voidedAt:       string | null;
-    voidReason:     string | null;
+    cancelledAt:    string | null;
+    cancelReason:   string | null;
     createdBy:      { name: string };
     lines: {
         id:          number;
@@ -45,12 +48,15 @@ type VoucherDetail = {
 export default function PurchaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
     const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [acting,  setActing]  = useState(false);
-    const [voidReason, setVoidReason] = useState("");
-    const [showVoid,   setShowVoid]   = useState(false);
 
     const load = () => {
         setLoading(true);
@@ -73,19 +79,6 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
         } finally { setActing(false); }
     };
 
-    const voidVoucher = async () => {
-        if (!voidReason.trim()) { toast.error("Void reason required"); return; }
-        setActing(true);
-        try {
-            await axios.post(`/api/inventory/vouchers/${id}/void`, { reason: voidReason });
-            toast.success("Voucher voided — stock reversed");
-            setShowVoid(false);
-            load();
-        } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Failed to void");
-        } finally { setActing(false); }
-    };
-
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>;
     if (!voucher) return <div className="py-20 text-center text-muted-foreground">Voucher not found.</div>;
 
@@ -105,38 +98,24 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.description}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                     {voucher.status === "DRAFT" && (
                         <Button onClick={post} disabled={acting}>
                             {acting && <Loader2 size={14} className="animate-spin mr-1" />} Post Voucher
                         </Button>
                     )}
-                    {voucher.status === "POSTED" && (
-                        <Button variant="destructive" onClick={() => setShowVoid((v) => !v)} disabled={acting}>
-                            Void
-                        </Button>
-                    )}
+                    <LifecycleActions
+                        voucher={voucher}
+                        apiBasePath={`/api/inventory/vouchers/${id}`}
+                        listPath="/office/inventory/purchases"
+                        label="Purchase Voucher"
+                        canCancel={canCancel}
+                        canDelete={canDelete}
+                        canHardDelete={canHardDelete}
+                        onChanged={load}
+                    />
                 </div>
             </div>
-
-            {/* Void form */}
-            {showVoid && (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 space-y-3">
-                    <p className="text-sm font-medium text-destructive">Voiding will reverse all stock changes and create a reversal GL entry.</p>
-                    <input
-                        className="w-full rounded border border-input bg-background px-3 py-2 text-sm"
-                        placeholder="Reason for voiding *"
-                        value={voidReason}
-                        onChange={(e) => setVoidReason(e.target.value)}
-                    />
-                    <div className="flex gap-2">
-                        <Button variant="destructive" size="sm" onClick={voidVoucher} disabled={acting}>
-                            {acting && <Loader2 size={12} className="animate-spin mr-1" />} Confirm Void
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setShowVoid(false)}>Cancel</Button>
-                    </div>
-                </div>
-            )}
 
             {/* Info cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -165,9 +144,9 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                 )}
             </div>
 
-            {voucher.voidReason && (
+            {voucher.cancelReason && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                    Void reason: {voucher.voidReason}
+                    Cancel reason: {voucher.cancelReason}
                 </div>
             )}
 

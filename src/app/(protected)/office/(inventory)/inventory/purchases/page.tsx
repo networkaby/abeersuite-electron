@@ -18,7 +18,7 @@ type VoucherRow = {
     description: string;
     partyName:   string | null;
     totalAmount: number;
-    status:      "DRAFT" | "POSTED" | "VOIDED";
+    status:      "DRAFT" | "POSTED" | "CANCELLED";
     _count:      { lines: number };
     createdBy:   { name: string };
 };
@@ -143,7 +143,7 @@ export default function PurchasesPage() {
 
             {/* Status filter tabs */}
             <div className="flex gap-1">
-                {(["", "DRAFT", "POSTED", "VOIDED"] as const).map((s) => (
+                {(["", "DRAFT", "POSTED", "CANCELLED"] as const).map((s) => (
                     <Button key={s} variant="outline" size="xs"
                         onClick={() => setStatusFilter(s)}
                         className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
