@@ -29,39 +29,76 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!voucher)                  return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
 
-    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "RECEIPT";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "ISSUE";
+    // Stock-direction classification per voucher type:
+    //   incoming stock: PURCHASE, RECEIPT, GRN, REJECTION_IN
+    //   outgoing stock: SALE, ISSUE, CHALLAN, REJECTION_OUT
+    //   no stock:      ESTIMATE, ADJUSTMENT, STOCK_JOURNAL, PHYSICAL_STOCK, SALES_ORDER, PURCHASE_ORDER
+    //                  (Stock Journal and Physical Stock have explicit per-line in/out quantities;
+    //                   handled separately below)
+    //   commitments:   SALES_ORDER, PURCHASE_ORDER — no stock movement at all on POST.
+    const isPurchase = ["PURCHASE", "RECEIPT", "GRN", "REJECTION_IN"].includes(voucher.type);
+    const isSale     = ["SALE", "ISSUE", "CHALLAN", "REJECTION_OUT"].includes(voucher.type);
+    const isCommitment = voucher.type === "SALES_ORDER" || voucher.type === "PURCHASE_ORDER";
+    const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
+    const isStockJournal = voucher.type === "STOCK_JOURNAL";
 
     try {
         const { result, notes } = await prisma.$transaction(async (tx) => {
             // ── 1. Stock ledger + cached InvProduct.stock ─────────────────
-            for (const line of voucher.lines) {
-                const qty = toNumber(line.quantity);
-                await tx.invStockLedger.create({
-                    data: {
-                        productId: line.productId,
-                        voucherId: voucher.id,
-                        date:      voucher.date,
-                        inQty:     isPurchase ? qty : 0,
-                        outQty:    isSale     ? qty : 0,
-                        rate:      line.rate,
-                        amount:    line.amount,
-                    },
-                });
-                await tx.invProduct.update({
-                    where: { id: line.productId },
-                    data:  {
-                        stock: isPurchase
-                            ? { increment: Math.round(qty) }
-                            : isSale
-                            ? { decrement: Math.round(qty) }
-                            : undefined,
-                        ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
-                    },
-                });
+            // Commitments (SO / PO) skip stock entirely. Physical Stock writes the
+            // delta needed to reach the recorded count. Stock Journal currently
+            // treats positive amount as IN and negative as OUT; richer per-line
+            // direction can be added when the form supports it.
+            if (!isCommitment) {
+                for (const line of voucher.lines) {
+                    const qty = toNumber(line.quantity);
+                    let inQty = 0, outQty = 0;
+                    if (isPurchase)         inQty = qty;
+                    else if (isSale)        outQty = qty;
+                    else if (isPhysicalStock) {
+                        // Quantity here is interpreted as the new on-hand value.
+                        // The delta (qty - product.stock) is what we ledger.
+                        const current = line.product.stock ?? 0;
+                        const delta = qty - current;
+                        if (delta >= 0) inQty = delta;
+                        else            outQty = -delta;
+                    }
+                    else if (isStockJournal) {
+                        // Sign of line.amount drives direction (positive = IN, negative = OUT).
+                        if (toNumber(line.amount) >= 0) inQty = qty;
+                        else                            outQty = qty;
+                    }
+
+                    if (inQty > 0 || outQty > 0) {
+                        await tx.invStockLedger.create({
+                            data: {
+                                productId: line.productId,
+                                voucherId: voucher.id,
+                                date:      voucher.date,
+                                inQty,
+                                outQty,
+                                rate:      line.rate,
+                                amount:    line.amount,
+                            },
+                        });
+                        await tx.invProduct.update({
+                            where: { id: line.productId },
+                            data:  {
+                                stock: inQty > 0
+                                    ? { increment: Math.round(inQty) }
+                                    : { decrement: Math.round(outQty) },
+                                ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
+                            },
+                        });
+                    }
+                }
             }
 
-            // ── 2. Auto-post to GL (only for SALE / PURCHASE) ─────────────
+            // ── 2. Auto-post to GL (only the two accounting voucher types) ────
+            // Other types (GRN, Challan, Rejections, Stock Journal, Physical
+            // Stock, Sales Order, Purchase Order) intentionally don't touch GL
+            // on POST — they get linked to a separate Sales/Purchase invoice
+            // (or stay non-accounting per Tally convention).
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
             if (voucher.type === "SALE" || voucher.type === "PURCHASE") {

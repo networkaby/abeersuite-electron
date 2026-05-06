@@ -47,6 +47,10 @@ import {
     PlayCircle,
     Receipt,
     FolderTree,
+    PackageCheck,
+    PackageX,
+    ArrowLeftRight,
+    ClipboardCheck,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -195,6 +199,22 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         key: "inventory",
         children: [
             { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
+            { label: "+ New Sales Order",    icon: ClipboardList, href: "/office/inventory/sales-orders/new", permission: "inventory:manage" },
+            { label: "+ New Purchase Order", icon: ClipboardList, href: "/office/inventory/purchase-orders/new", permission: "inventory:manage" },
+            { label: "+ New GRN",            icon: PackageCheck,  href: "/office/inventory/grn/new", permission: "inventory:manage" },
+            { label: "+ New Challan",        icon: Truck,         href: "/office/inventory/challans/new", permission: "inventory:manage" },
+            { label: "+ New Stock Journal",  icon: ArrowLeftRight, href: "/office/inventory/stock-journals/new", permission: "inventory:manage" },
+            { label: "+ New Physical Stock", icon: ClipboardCheck, href: "/office/inventory/physical-stock/new", permission: "inventory:manage" },
+            { label: "+ New Rejection In",   icon: PackageX,      href: "/office/inventory/rejections-in/new", permission: "inventory:manage" },
+            { label: "+ New Rejection Out",  icon: PackageX,      href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
+            { label: "Sales Orders",    icon: ClipboardList, href: "/office/inventory/sales-orders", permission: "inventory:manage" },
+            { label: "Purchase Orders", icon: ClipboardList, href: "/office/inventory/purchase-orders", permission: "inventory:manage" },
+            { label: "GRN",             icon: PackageCheck,  href: "/office/inventory/grn", permission: "inventory:manage" },
+            { label: "Challans",        icon: Truck,         href: "/office/inventory/challans", permission: "inventory:manage" },
+            { label: "Stock Journals",  icon: ArrowLeftRight, href: "/office/inventory/stock-journals", permission: "inventory:manage" },
+            { label: "Physical Stock",  icon: ClipboardCheck, href: "/office/inventory/physical-stock", permission: "inventory:manage" },
+            { label: "Rejections In",   icon: PackageX,      href: "/office/inventory/rejections-in", permission: "inventory:manage" },
+            { label: "Rejections Out",  icon: PackageX,      href: "/office/inventory/rejections-out", permission: "inventory:manage" },
             { label: "Units", icon: Ruler, href: "/office/inventory/units", permission: "inventory:manage" },
             { label: "Categories", icon: Layers, href: "/office/inventory/categories", permission: "inventory:manage" },
             { label: "Groups", icon: LayoutGrid, href: "/office/inventory/product-groups", permission: "inventory:manage" },

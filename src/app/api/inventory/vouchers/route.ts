@@ -47,6 +47,7 @@ export async function POST(req: Request) {
         shippingAmt    = 0,
         roundOff       = 0,
         amountReceived = 0,
+        showPrices,
         lines = [],
     } = body as {
         type:         InvVoucherType;
@@ -61,6 +62,8 @@ export async function POST(req: Request) {
         shippingAmt?:    number;
         roundOff?:       number;
         amountReceived?: number;
+        // Challan-only: when false the printed challan hides rate/amount columns.
+        showPrices?:     boolean;
         lines: {
             productId:   number;
             description?: string;
@@ -122,6 +125,7 @@ export async function POST(req: Request) {
                 shippingAmt,
                 roundOff,
                 amountReceived,
+                ...(typeof showPrices === "boolean" ? { showPrices } : {}),
                 subtotal,
                 taxAmount,
                 totalAmount,
