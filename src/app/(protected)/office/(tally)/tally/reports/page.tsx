@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-    BookOpen, BarChart2, ClipboardList, Calendar,
+    BookOpen, BarChart2, ClipboardList, Calendar, Wallet, CreditCard,
 } from "lucide-react";
 
 const REPORTS = [
@@ -33,6 +33,20 @@ const REPORTS = [
         description: "All posted vouchers in chronological order, jump-to-source.",
         icon: Calendar,
         color: "from-orange-500/10 to-orange-500/0 text-orange-600",
+    },
+    {
+        title: "Receivables",
+        href: "/office/tally/reports/receivables",
+        description: "Open bills from Sundry Debtors, with 0–30 / 30–60 / 60–90 / 90+ ageing.",
+        icon: Wallet,
+        color: "from-emerald-500/10 to-emerald-500/0 text-emerald-600",
+    },
+    {
+        title: "Payables",
+        href: "/office/tally/reports/payables",
+        description: "Open bills to Sundry Creditors, with the same ageing buckets.",
+        icon: CreditCard,
+        color: "from-rose-500/10 to-rose-500/0 text-rose-600",
     },
 ];
 

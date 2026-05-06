@@ -17,10 +17,30 @@ import {
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { BillAllocationDrawer, type AllocationDraft } from "./BillAllocationDrawer";
+import { PartyCombobox, type SelectedParty } from "./PartyCombobox";
 
 export type VoucherFormType = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
 interface GlAccount { id: number; code: string; name: string; type: string }
+
+// On which side of the journal does the party ledger sit for each voucher type?
+// PAYMENT  — party is Debited (settling a creditor reduces liability)
+// RECEIPT  — party is Credited (settlement reduces a debtor's balance)
+// CREDIT_NOTE — party Credited (sales return reduces what customer owes)
+// DEBIT_NOTE  — party Debited  (purchase return reduces what we owe)
+// CONTRA   — no party (cash↔bank movement)
+function partyLineSide(t: VoucherFormType): "DEBIT" | "CREDIT" | null {
+    switch (t) {
+        case "PAYMENT":
+        case "DEBIT_NOTE":
+            return "DEBIT";
+        case "RECEIPT":
+        case "CREDIT_NOTE":
+            return "CREDIT";
+        case "CONTRA":
+            return null;
+    }
+}
 
 type LineInput = {
     accountId:   number;
@@ -59,11 +79,11 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
     const router = useRouter();
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [saving, setSaving] = useState(false);
+    const [party, setParty] = useState<SelectedParty | null>(null);
 
     const [form, setForm] = useState({
         date:           new Date().toISOString().slice(0, 10),
         narration:      "",
-        partyAccountId: 0,
         lines: [
             { accountId: 0, type: "DEBIT" as const, amount: "", description: "" },
             { accountId: 0, type: "CREDIT" as const, amount: "", description: "" },
@@ -71,14 +91,43 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
     });
     const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
 
-    // Reset allocations whenever the party account changes — they reference the old account.
-    useEffect(() => { setAllocations([]); }, [form.partyAccountId]);
+    const partyAccountId = party?.accountId ?? 0;
+    const partySide = partyLineSide(type);
+
+    // When a party is picked, auto-fill the matching line with their ledger so
+    // the user doesn't have to find their account in the line dropdown — same
+    // flow as Tally's "Account: <party>" autofill.
+    useEffect(() => {
+        setAllocations([]); // referencing the old account
+        if (!party || !partySide) return;
+        setForm((f) => {
+            const idx = f.lines.findIndex((l) => l.type === partySide);
+            if (idx === -1) return f;
+            // Avoid clobbering a different account the user may already have set.
+            if (f.lines[idx].accountId && f.lines[idx].accountId !== party.accountId) return f;
+            return {
+                ...f,
+                lines: f.lines.map((l, i) =>
+                    i === idx ? { ...l, accountId: party.accountId } : l,
+                ),
+            };
+        });
+    }, [party, partySide]);
 
     useEffect(() => {
         axios.get<GlAccount[]>("/api/finance/gl-accounts")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
     }, []);
+
+    // Line-account dropdown options — GL accounts plus the selected party
+    // ledger (so its line shows the party name instead of "Select account").
+    const lineAccountOptions: GlAccount[] = party
+        ? [
+            { id: party.accountId, code: party.partyType === "company" ? "CO" : "CU", name: party.name, type: "PARTY" },
+            ...accounts,
+        ]
+        : accounts;
 
     const updateLine = (i: number, patch: Partial<LineInput>) =>
         setForm((f) => ({ ...f, lines: f.lines.map((l, idx) => idx === i ? { ...l, ...patch } : l) }));
@@ -99,7 +148,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
                 type,
                 date:           form.date,
                 narration:      form.narration || undefined,
-                partyAccountId: form.partyAccountId || undefined,
+                partyAccountId: partyAccountId || undefined,
                 lines:          form.lines.map((l) => ({
                     accountId:   l.accountId,
                     type:        l.type,
@@ -151,18 +200,11 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
                     </div>
                     <div className="space-y-1.5 md:col-span-2">
                         <Label>{PARTY_LABEL[type]}</Label>
-                        <Select
-                            value={String(form.partyAccountId)}
-                            onValueChange={(v) => setForm((f) => ({ ...f, partyAccountId: Number(v) }))}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Select party account" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="0">— None —</SelectItem>
-                                {accounts.map((a) => (
-                                    <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <PartyCombobox
+                            value={party}
+                            onChange={setParty}
+                            placeholder="Search by name or phone — type to find or create…"
+                        />
                     </div>
                 </div>
 
@@ -198,8 +240,10 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
                                             <SelectTrigger className={cell}><SelectValue placeholder="Select account" /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="0">Select account</SelectItem>
-                                                {accounts.map((a) => (
-                                                    <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                                                {lineAccountOptions.map((a) => (
+                                                    <SelectItem key={a.id} value={String(a.id)}>
+                                                        {a.type === "PARTY" ? `★ ${a.name}` : `${a.code} — ${a.name}`}
+                                                    </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -273,9 +317,9 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
             </div>
 
             {/* Bill-wise allocation — visible only when a party account is selected. */}
-            {form.partyAccountId > 0 && (
+            {partyAccountId > 0 && (
                 <BillAllocationDrawer
-                    accountId={form.partyAccountId}
+                    accountId={partyAccountId}
                     voucherAmount={totalDebits}
                     allocations={allocations}
                     onChange={setAllocations}

@@ -235,7 +235,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Balance Sheet", icon: FolderTree, href: "/office/tally/reports/balance-sheet" },
                     { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/tally/reports/profit-loss" },
                     { label: "Trial Balance", icon: Wallet, href: "/office/tally/reports/trial-balance" },
-                    // { label: "Day Book", icon: Wallet, href: "/office/tally/opening-balance", permission: "finance:opening-balance:manage" },
+                    { label: "Day Book", icon: ClipboardList, href: "/office/tally/reports/day-book" },
+                    { label: "Receivables", icon: Wallet, href: "/office/tally/reports/receivables" },
+                    { label: "Payables", icon: Wallet, href: "/office/tally/reports/payables" },
                 ]
             },
             {

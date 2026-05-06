@@ -8,6 +8,7 @@ import { Loader2, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
+import { PartyCombobox, type SelectedParty } from "@/modules/tally/components/PartyCombobox";
 import { fmt } from "@/utils/constants";
 
 type LineState = {
@@ -48,11 +49,10 @@ export default function NewSalePage() {
     const [payMode,   setPayMode]   = useState<"CREDIT" | "CASH">("CASH");
     const today = new Date().toISOString().slice(0, 10);
 
+    const [party, setParty] = useState<SelectedParty | null>(null);
     const [header, setHeader] = useState({
         date:          today,
         description:   "",
-        customerName:  "",
-        customerPhone: "",
         shippingAmt:   "",
         roundOff:      "",
         received:      "",
@@ -89,18 +89,26 @@ export default function NewSalePage() {
     const balance    = grandTotal - received;
 
     const submit = async (andPost = false) => {
-        if (!header.description.trim()) { toast.error("Narration/description required"); return; }
+        if (payMode === "CREDIT" && !party) { toast.error("Pick or create a party for a credit sale"); return; }
         const validLines = lines.filter((l) => l.product && parseFloat(l.quantity) > 0);
         if (!validLines.length) { toast.error("Add at least one item with a product and quantity"); return; }
+
+        // Narration is optional — fall back to a sensible default so we don't
+        // bother the user. The voucher reference (SV-YYYY-NNNN) is auto-generated
+        // server-side regardless.
+        const description = header.description.trim()
+            || (party ? `Sale to ${party.name}` : "Cash sale");
 
         setSaving(true);
         try {
             const res = await axios.post<{ id: number }>("/api/inventory/vouchers", {
                 type:        "SALE",
                 date:        header.date,
-                description: header.description.trim(),
-                partyName:   header.customerName  || undefined,
-                partyPhone:  header.customerPhone || undefined,
+                description,
+                partyName:   party?.name  || undefined,
+                partyPhone:  party?.phone || undefined,
+                partyType:   party?.partyType,
+                partyId:     party?.partyId,
                 paymentMode: payMode,
                 shippingAmt: shipping,
                 roundOff,
@@ -167,22 +175,20 @@ export default function NewSalePage() {
 
             {/* ── Customer row ─────────────────────────────────────────────── */}
             <div className="flex items-center gap-4 border-b border-border bg-card/60 px-6 py-3 shrink-0">
-                <Input
-                    value={header.customerName}
-                    onChange={(e) => setHeader((h) => ({ ...h, customerName: e.target.value }))}
-                    placeholder="Customer name"
-                    className="h-8 max-w-xs"
-                />
-                <Input
-                    value={header.customerPhone}
-                    onChange={(e) => setHeader((h) => ({ ...h, customerPhone: e.target.value }))}
-                    placeholder="Phone"
-                    className="h-8 w-36"
-                />
+                <div className="w-80">
+                    <PartyCombobox
+                        value={party}
+                        onChange={setParty}
+                        placeholder="Search party by name or phone…"
+                    />
+                </div>
+                {party?.phone && (
+                    <span className="text-xs text-muted-foreground tabular-nums">{party.phone}</span>
+                )}
                 <Input
                     value={header.description}
                     onChange={(e) => setHeader((h) => ({ ...h, description: e.target.value }))}
-                    placeholder="Narration / invoice ref *"
+                    placeholder={party ? `Narration (default: Sale to ${party.name})` : "Narration (optional — invoice no auto-generated)"}
                     className="h-8 flex-1"
                 />
             </div>
