@@ -120,6 +120,14 @@ model InvProduct {
   openingValue     Decimal? @db.Decimal(14, 2)
   openingStockDate DateTime? @db.Date
 
+  // ── GST classification ──────────────────────────────────────────────────
+  /// HSN (goods) or SAC (services) code — drives the rate-wise summary
+  hsnCode    String?
+  /// Default GST rate at point-of-sale (0 / 5 / 12 / 18 / 28). Voucher line
+  /// can still override on entry.
+  gstRate    Decimal?    @db.Decimal(5, 2)
+  taxability Taxability?
+
   unit         InvUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
   category     InvCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   group        InvProductGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
@@ -157,6 +165,9 @@ model InvVoucher {
   partyAddress   String?
   /// "CASH" or "CREDIT" — affects GL auto-post account selection
   paymentMode    String?
+  /// State code where the supply happens — drives intra/inter-state GST split.
+  /// Defaults to the company's state code when unset.
+  placeOfSupply  String?
   discountPct    Decimal?         @db.Decimal(5, 2)
   discountAmt    Decimal?         @db.Decimal(14, 2)
   shippingAmt    Decimal          @default(0) @db.Decimal(14, 2)

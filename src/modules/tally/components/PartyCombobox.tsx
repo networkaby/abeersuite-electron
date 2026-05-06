@@ -41,13 +41,17 @@ type Props = {
     placeholder?: string;
     autoFocus?:   boolean;
     className?:   string;
+    // Where to put the auto-created ledger when a brand-new party is created
+    // from the dropdown's "+ Create" item. Defaults to Sundry Debtors.
+    createUnderGroup?: "Sundry Debtors" | "Sundry Creditors";
 };
 
 export function PartyCombobox({
     value, onChange,
-    placeholder = "Search party by name or phone…",
-    autoFocus   = false,
-    className   = "",
+    placeholder      = "Search party by name or phone…",
+    autoFocus        = false,
+    className        = "",
+    createUnderGroup = "Sundry Debtors",
 }: Props) {
     // Local typed text — only relevant when no party is selected.
     // When a party IS selected we show value.name and ignore typedQuery, so we
@@ -212,6 +216,7 @@ export function PartyCombobox({
                 open={createOpen}
                 onOpenChange={setCreateOpen}
                 seed={createSeed}
+                accountGroup={createUnderGroup}
                 onCreated={(party) => {
                     onChange(party);
                     setTypedQuery("");
@@ -230,19 +235,23 @@ export function PartyCombobox({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CreatePartyDialog({
-    open, onOpenChange, seed, onCreated,
+    open, onOpenChange, seed, accountGroup, onCreated,
 }: {
     open:         boolean;
     onOpenChange: (open: boolean) => void;
     seed:         { name: string; phone: string };
+    accountGroup: "Sundry Debtors" | "Sundry Creditors";
     onCreated:    (party: SelectedParty) => void;
 }) {
-    const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
+    const [form, setForm] = useState({
+        name: "", phone: "", email: "", address: "",
+        gstin: "",
+    });
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (open) {
-            setForm({ name: seed.name, phone: seed.phone, email: "", address: "" });
+            setForm({ name: seed.name, phone: seed.phone, email: "", address: "", gstin: "" });
         }
     }, [open, seed.name, seed.phone]);
 
@@ -260,9 +269,11 @@ function CreatePartyDialog({
                 phone:   form.phone.trim() || undefined,
                 email:   form.email.trim() || undefined,
                 address: form.address.trim() || undefined,
+                gstin:   form.gstin.trim().toUpperCase() || undefined,
+                accountGroup,
             });
             if (!res.data.account?.id) {
-                toast.error("Customer created but no ledger account — check Sundry Debtors group exists");
+                toast.error(`Created but no ledger account — check that "${accountGroup}" group exists`);
                 return;
             }
             onCreated({
@@ -283,9 +294,9 @@ function CreatePartyDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>New Customer</DialogTitle>
+                    <DialogTitle>New {accountGroup === "Sundry Creditors" ? "Supplier" : "Customer"}</DialogTitle>
                     <DialogDescription>
-                        We&apos;ll auto-create a Sundry Debtors ledger so this party can be billed.
+                        We&apos;ll auto-create a {accountGroup} ledger so this party can be billed.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2">
@@ -326,6 +337,20 @@ function CreatePartyDialog({
                             onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                             placeholder="optional"
                         />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="party-gstin">GSTIN</Label>
+                        <Input
+                            id="party-gstin"
+                            value={form.gstin}
+                            onChange={(e) => setForm((f) => ({ ...f, gstin: e.target.value }))}
+                            placeholder="15-char GSTIN, e.g. 27AAACR5055K1Z5 (optional)"
+                            maxLength={15}
+                            className="font-mono uppercase"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            We&apos;ll auto-fill the state code from the first 2 digits.
+                        </p>
                     </div>
                 </div>
                 <DialogFooter>

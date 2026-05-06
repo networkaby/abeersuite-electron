@@ -8,6 +8,7 @@ import { Loader2, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
+import { PartyCombobox, type SelectedParty } from "@/modules/tally/components/PartyCombobox";
 import { fmt } from "@/utils/constants";
 
 type LineState = {
@@ -47,12 +48,10 @@ export default function NewPurchasePage() {
     const [lines, setLines]     = useState<LineState[]>([newLine()]);
     const today   = new Date().toISOString().slice(0, 10);
 
+    const [supplier, setSupplier] = useState<SelectedParty | null>(null);
     const [header, setHeader] = useState({
         date:         today,
         description:  "",
-        partyName:    "",
-        partyPhone:   "",
-        partyAddress: "",
         shippingAmt:  "",
         roundOff:     "",
     });
@@ -88,19 +87,24 @@ export default function NewPurchasePage() {
     const grandTotal = subtotal + shipping + roundOff;
 
     const submit = async (andPost = false) => {
-        if (!header.description.trim()) { toast.error("Narration/description required"); return; }
         const validLines = lines.filter((l) => l.product && parseFloat(l.quantity) > 0);
         if (!validLines.length) { toast.error("Add at least one item with a product and quantity"); return; }
+
+        // Narration is optional; default to "Purchase from <supplier>" or "Cash purchase".
+        const description = header.description.trim()
+            || (supplier ? `Purchase from ${supplier.name}` : "Cash purchase");
 
         setSaving(true);
         try {
             const res = await axios.post<{ id: number }>("/api/inventory/vouchers", {
                 type:         "PURCHASE",
                 date:         header.date,
-                description:  header.description.trim(),
-                partyName:    header.partyName    || undefined,
-                partyPhone:   header.partyPhone   || undefined,
-                partyAddress: header.partyAddress || undefined,
+                description,
+                partyName:    supplier?.name  || undefined,
+                partyPhone:   supplier?.phone || undefined,
+                partyType:    supplier?.partyType,
+                partyId:      supplier?.partyId,
+                paymentMode:  supplier ? "CREDIT" : "CASH",
                 shippingAmt:  shipping,
                 roundOff,
                 lines: validLines.map((l) => ({
@@ -148,24 +152,21 @@ export default function NewPurchasePage() {
 
             {/* ── Supplier row ─────────────────────────────────────────────── */}
             <div className="flex items-center gap-4 border-b border-border bg-card/60 px-6 py-3 shrink-0">
-                <div className="flex-1 space-y-0.5">
-                    <Input
-                        value={header.partyName}
-                        onChange={(e) => setHeader((h) => ({ ...h, partyName: e.target.value }))}
-                        placeholder="Supplier name"
-                        className="h-8 max-w-xs"
+                <div className="w-80">
+                    <PartyCombobox
+                        value={supplier}
+                        onChange={setSupplier}
+                        placeholder="Search supplier by name or phone…"
+                        createUnderGroup="Sundry Creditors"
                     />
                 </div>
-                <Input
-                    value={header.partyPhone}
-                    onChange={(e) => setHeader((h) => ({ ...h, partyPhone: e.target.value }))}
-                    placeholder="Phone"
-                    className="h-8 w-36"
-                />
+                {supplier?.phone && (
+                    <span className="text-xs text-muted-foreground tabular-nums">{supplier.phone}</span>
+                )}
                 <Input
                     value={header.description}
                     onChange={(e) => setHeader((h) => ({ ...h, description: e.target.value }))}
-                    placeholder="Narration / bill ref *"
+                    placeholder={supplier ? `Narration (default: Purchase from ${supplier.name})` : "Narration (optional — bill ref auto-generated)"}
                     className="h-8 flex-1"
                 />
             </div>

@@ -9,6 +9,13 @@ const createCustomerSchema = z.object({
     email: z.string().email("Invalid email").optional().or(z.literal("")),
     address: z.string().trim().optional().or(z.literal("")),
     agreedToTerms: z.boolean().optional(),
+    // Where to put the auto-created ledger account. Defaults to Sundry Debtors
+    // (i.e. a customer). Pass "Sundry Creditors" to register a supplier.
+    accountGroup: z.enum(["Sundry Debtors", "Sundry Creditors"]).optional(),
+    // GST profile (optional)
+    gstin:        z.string().trim().optional().or(z.literal("")),
+    gstStateCode: z.string().trim().optional().or(z.literal("")),
+    gstRegType:   z.enum(["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"]).optional(),
 });
 
 type LookupResult = {
@@ -157,15 +164,21 @@ export async function POST(req: Request) {
                     address: body.address || null,
                     agreedToTerms: body.agreedToTerms ?? false,
                     agreedAt: body.agreedToTerms ? new Date() : null,
+                    gstin:        body.gstin?.trim() || null,
+                    gstStateCode: body.gstStateCode?.trim()
+                                  || (body.gstin?.trim()?.slice(0, 2) || null),
+                    gstRegType:   body.gstRegType ?? (body.gstin ? "REGULAR" : null),
                 },
             });
-            // Auto-create ledger account under Sundry Debtors group
-            const sundryDebtors = await tx.accountGroup.findFirst({
-                where: { name: "Sundry Debtors" },
+            // Auto-create ledger account under the requested group
+            // (default Sundry Debtors — i.e. customer/buyer side).
+            const groupName = body.accountGroup ?? "Sundry Debtors";
+            const group = await tx.accountGroup.findFirst({
+                where: { name: groupName },
                 select: { id: true },
             });
             await tx.account.create({
-                data: { customerId: c.id, name: c.name, groupId: sundryDebtors?.id ?? null },
+                data: { customerId: c.id, name: c.name, groupId: group?.id ?? null },
             });
             return c;
         });

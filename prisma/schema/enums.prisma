@@ -138,6 +138,22 @@ enum InvVoucherType {
   PURCHASE_ORDER
 }
 
+// ── GST enums ─────────────────────────────────────────────────────────────────
+
+enum GstRegType {
+  REGULAR // standard GST-registered party
+  COMPOSITION // composition-scheme dealer (no ITC)
+  SEZ // special economic zone (zero-rated)
+  UNREGISTERED // no GSTIN
+}
+
+enum Taxability {
+  TAXABLE // standard rate (0/5/12/18/28)
+  EXEMPT // GST-exempt (e.g. unprocessed food)
+  NIL_RATED // 0% GST
+  NON_GST // outside GST regime entirely (alcohol, fuel)
+}
+
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────
 
 enum OrderSource {

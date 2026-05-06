@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, ArrowDownRight, FileText, Info, Construction } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, FileText, Hash, Construction } from "lucide-react";
 
 const SECTIONS = [
     {
@@ -25,6 +25,13 @@ const SECTIONS = [
         icon: FileText,
         color: "from-violet-500/10 to-violet-500/0 text-violet-700",
     },
+    {
+        title: "HSN / SAC Summary",
+        href: "/office/tally/reports/gst/hsn-summary",
+        description: "HSN-wise rollup of taxable value + tax — the table you copy into GSTR-1 § 12.",
+        icon: Hash,
+        color: "from-amber-500/10 to-amber-500/0 text-amber-700",
+    },
 ];
 
 export default function GstHubPage() {
@@ -36,21 +43,6 @@ export default function GstHubPage() {
                     Day-to-day GST summaries computed from voucher-line tax fields. Returns (GSTR-1, 3B) and
                     HSN-wise breakdown will arrive once GSTIN / HSN fields are added to the masters.
                 </p>
-            </div>
-
-            <div className="rounded-lg border border-amber-300/40 bg-amber-50 dark:bg-amber-900/10 px-4 py-3">
-                <div className="flex items-start gap-2 text-sm">
-                    <Info size={16} className="shrink-0 text-amber-700 dark:text-amber-400 mt-0.5" />
-                    <div className="text-amber-900 dark:text-amber-200">
-                        <strong>What works today:</strong> rate-wise GST summary on sales and purchases, computed from
-                        the <code className="text-xs">taxRate</code> and <code className="text-xs">taxAmount</code> already on every
-                        inventory-voucher line.
-                        <div className="mt-1.5">
-                            <strong>What needs schema additions before it&apos;ll work:</strong> party GSTIN, place of supply, item HSN /
-                            SAC code, taxability flags, CGST/SGST/IGST split. Approve the migration and these come online.
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -82,7 +74,7 @@ export default function GstHubPage() {
                     <div className="text-sm text-muted-foreground space-y-1">
                         <p><strong className="text-foreground">Roadmap (deferred):</strong></p>
                         <ul className="list-disc list-inside space-y-0.5">
-                            <li>HSN / SAC summary (needs HSN field on InvProduct)</li>
+                            <li>Auto CGST/SGST/IGST split on Sales/Purchase posting (using place of supply)</li>
                             <li>GSTR-1 export for portal upload</li>
                             <li>GSTR-3B monthly summary</li>
                             <li>GSTR-2A reconciliation against portal import</li>

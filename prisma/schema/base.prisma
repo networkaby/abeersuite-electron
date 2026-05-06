@@ -20,6 +20,13 @@ model Customer {
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
+  // ── GST profile (optional; only meaningful for B2B parties) ──────────────
+  /// 15-char GSTIN. Indian format: 2 digits state + 10 PAN + entity + Z + check
+  gstin        String?
+  /// State code (first two digits of GSTIN, also used for place-of-supply)
+  gstStateCode String?
+  gstRegType   GstRegType?
+
   account          Account?
   companies        CustomerCompany[]
   portalCredential CustomerPortalCredential?
@@ -40,6 +47,12 @@ model Company {
   taxId      String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+
+  // ── GST profile ──────────────────────────────────────────────────────────
+  /// 15-char GSTIN
+  gstin        String?
+  gstStateCode String?
+  gstRegType   GstRegType?
 
   // Tally-style period anchors (per-company; mid-year migration sets these
   // differently — financial year starts 1 Apr but books begin from cutover date)
