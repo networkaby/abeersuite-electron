@@ -51,10 +51,14 @@ export default function LedgerOutstandingsPage({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
 
-    const billUrl = (kind: "invoice" | "voucher", id: number): string =>
-        kind === "invoice"
-            ? `/office/tally/invoices/${id}`
-            : `/office/tally/journal-entries/${id}`;
+    const billUrl = (kind: "invoice" | "voucher" | "sale" | "purchase", id: number): string => {
+        switch (kind) {
+            case "invoice":  return `/office/tally/invoices/${id}`;
+            case "voucher":  return `/office/tally/journal-entries/${id}`;
+            case "sale":     return `/office/tally/sales/${id}`;
+            case "purchase": return `/office/tally/purchases/${id}`;
+        }
+    };
 
     return (
         <div className="max-w-7xl mx-auto space-y-5">

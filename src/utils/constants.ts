@@ -236,8 +236,16 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/tally/reports/profit-loss" },
                     { label: "Trial Balance", icon: Wallet, href: "/office/tally/reports/trial-balance" },
                     { label: "Day Book", icon: ClipboardList, href: "/office/tally/reports/day-book" },
+                    { label: "Cash Book", icon: Wallet, href: "/office/tally/reports/cash-book" },
+                    { label: "Bank Book", icon: Wallet, href: "/office/tally/reports/bank-book" },
                     { label: "Receivables", icon: Wallet, href: "/office/tally/reports/receivables" },
                     { label: "Payables", icon: Wallet, href: "/office/tally/reports/payables" },
+                    { label: "Cash Flow", icon: ClipboardList, href: "/office/tally/reports/cash-flow" },
+                    { label: "Fund Flow", icon: ClipboardList, href: "/office/tally/reports/fund-flow" },
+                    { label: "Ratio Analysis", icon: ClipboardList, href: "/office/tally/reports/ratio-analysis" },
+                    { label: "Statistics", icon: ClipboardList, href: "/office/tally/reports/statistics" },
+                    { label: "Bank Reconciliation", icon: Wallet, href: "/office/tally/reports/bank-reconciliation" },
+                    { label: "GST Reports", icon: ClipboardList, href: "/office/tally/reports/gst" },
                 ]
             },
             {

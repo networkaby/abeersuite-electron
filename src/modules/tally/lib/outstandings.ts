@@ -10,7 +10,9 @@ export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
 export type Buckets = Record<AgeingBucket, number>;
 
 export type OutstandingBill = {
-    kind:        "invoice" | "voucher";
+    // "invoice" — finance Invoice row · "voucher" — finance Voucher row
+    // "sale" / "purchase" — InvVoucher (inventory voucher) of that type
+    kind:        "invoice" | "voucher" | "sale" | "purchase";
     id:          number;
     ref:         string;
     billDate:    string;
@@ -103,25 +105,29 @@ async function accountIdsUnderGroup(groupName: string): Promise<number[]> {
 }
 
 type RawBill = {
-    kind:        "invoice" | "voucher";
+    kind:        OutstandingBill["kind"];
     id:          number;
     accountId:   number;
     ref:         string;
     billDate:    Date;
     dueDate:     Date;
     totalAmount: number;
+    paid:        number;
 };
 
-async function loadOpenBills(accountIds: number[], asOf: Date): Promise<{
-    bills:        RawBill[];
-    paidByInv:    Record<number, number>;
-    paidByVch:    Record<number, number>;
-}> {
-    if (accountIds.length === 0) {
-        return { bills: [], paidByInv: {}, paidByVch: {} };
-    }
+// `invType` controls which side of inventory vouchers we sweep in:
+//   "SALE"     — for Receivables (debtors, customers owe us)
+//   "PURCHASE" — for Payables    (creditors, we owe vendors)
+//   "BOTH"     — for single-ledger drill-down (show whatever's open against
+//                this party regardless of direction)
+async function loadOpenBills(
+    accountIds: number[],
+    asOf: Date,
+    invType: "SALE" | "PURCHASE" | "BOTH",
+): Promise<RawBill[]> {
+    if (accountIds.length === 0) return [];
 
-    const [invoices, vouchers] = await Promise.all([
+    const [invoices, vouchers, accounts] = await Promise.all([
         prisma.invoice.findMany({
             where: {
                 accountId: { in: accountIds },
@@ -146,11 +152,54 @@ async function loadOpenBills(accountIds: number[], asOf: Date): Promise<{
                 date: true, totalAmount: true,
             },
         }),
+        prisma.account.findMany({
+            where:  { id: { in: accountIds } },
+            select: { id: true, customerId: true, companyId: true },
+        }),
     ]);
 
     const invIds = invoices.map((i) => i.id);
     const vchIds = vouchers.map((v) => v.id);
-    const [invAllocs, vchAllocs] = await Promise.all([
+
+    // Build identity → account maps so we can resolve InvVoucher.partyId back
+    // to the matching ledger row.
+    const customerToAcc: Record<number, number> = {};
+    const companyToAcc:  Record<number, number> = {};
+    for (const a of accounts) {
+        if (a.customerId !== null) customerToAcc[a.customerId] = a.id;
+        if (a.companyId  !== null) companyToAcc[a.companyId]   = a.id;
+    }
+    const customerIds = Object.keys(customerToAcc).map(Number);
+    const companyIds  = Object.keys(companyToAcc).map(Number);
+
+    const partyOr: { partyType: string; partyId: { in: number[] } }[] = [];
+    if (customerIds.length > 0) partyOr.push({ partyType: "customer", partyId: { in: customerIds } });
+    if (companyIds.length  > 0) partyOr.push({ partyType: "company",  partyId: { in: companyIds  } });
+
+    const invVouchers = partyOr.length === 0 ? [] : await prisma.invVoucher.findMany({
+        where: {
+            ...(invType === "BOTH"
+                ? { type: { in: ["SALE", "PURCHASE"] } }
+                : { type: invType }),
+            status:    "POSTED",
+            deletedAt: null,
+            date:      { lte: asOf },
+            OR: partyOr,
+        },
+        select: {
+            id: true, type: true, reference: true, date: true,
+            totalAmount: true, amountReceived: true,
+            partyType: true, partyId: true, journalEntryId: true,
+        },
+    });
+
+    // Allocations may target any of the three voucher kinds — JournalEntry is
+    // how a Receipt voucher settles a posted Sale (whose JE was created at post).
+    const jeIds = invVouchers
+        .map((v) => v.journalEntryId)
+        .filter((x): x is number => x !== null);
+
+    const [invAllocs, vchAllocs, jeAllocs] = await Promise.all([
         invIds.length > 0
             ? prisma.voucherAllocation.findMany({
                 where: { targetType: "INVOICE", targetId: { in: invIds } },
@@ -163,9 +212,20 @@ async function loadOpenBills(accountIds: number[], asOf: Date): Promise<{
                 select: { targetId: true, amount: true },
             })
             : Promise.resolve([] as { targetId: number; amount: unknown }[]),
+        jeIds.length > 0
+            ? prisma.voucherAllocation.findMany({
+                where: { targetType: "JOURNAL_ENTRY", targetId: { in: jeIds } },
+                select: { targetId: true, amount: true },
+            })
+            : Promise.resolve([] as { targetId: number; amount: unknown }[]),
     ]);
 
+    const paidByInv = sumByTarget(invAllocs);
+    const paidByVch = sumByTarget(vchAllocs);
+    const paidByJe  = sumByTarget(jeAllocs);
+
     const bills: RawBill[] = [];
+
     for (const inv of invoices) {
         if (inv.accountId === null) continue;
         bills.push({
@@ -176,8 +236,10 @@ async function loadOpenBills(accountIds: number[], asOf: Date): Promise<{
             billDate:    inv.issueDate,
             dueDate:     inv.dueDate,
             totalAmount: Number(inv.totalAmount),
+            paid:        paidByInv[inv.id] ?? 0,
         });
     }
+
     for (const v of vouchers) {
         if (v.partyAccountId === null) continue;
         const due = new Date(v.date);
@@ -190,18 +252,43 @@ async function loadOpenBills(accountIds: number[], asOf: Date): Promise<{
             billDate:    v.date,
             dueDate:     due,
             totalAmount: Number(v.totalAmount),
+            paid:        paidByVch[v.id] ?? 0,
         });
     }
 
-    return {
-        bills,
-        paidByInv: sumByTarget(invAllocs),
-        paidByVch: sumByTarget(vchAllocs),
-    };
+    for (const v of invVouchers) {
+        if (v.partyId === null) continue;
+        const accountId = v.partyType === "customer"
+            ? customerToAcc[v.partyId] ?? null
+            : v.partyType === "company"
+                ? companyToAcc[v.partyId] ?? null
+                : null;
+        if (accountId === null) continue;
+        const due = new Date(v.date);
+        due.setDate(due.getDate() + DEFAULT_DUE_DAYS);
+        const total = Number(v.totalAmount);
+        // Paid = up-front cash recorded on the voucher + any later receipts
+        // allocated against the linked GL journal entry.
+        const paid =
+            Number(v.amountReceived) +
+            (v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0);
+        bills.push({
+            kind:        v.type === "SALE" ? "sale" : "purchase",
+            id:          v.id,
+            accountId,
+            ref:         v.reference,
+            billDate:    v.date,
+            dueDate:     due,
+            totalAmount: total,
+            paid,
+        });
+    }
+
+    return bills;
 }
 
-function toOutstandingBill(raw: RawBill, paid: number, asOf: Date): OutstandingBill | null {
-    const outstanding = raw.totalAmount - paid;
+function toOutstandingBill(raw: RawBill, asOf: Date): OutstandingBill | null {
+    const outstanding = raw.totalAmount - raw.paid;
     if (outstanding <= 0.005) return null;
     const days = daysBetween(raw.billDate, asOf);
     return {
@@ -211,7 +298,7 @@ function toOutstandingBill(raw: RawBill, paid: number, asOf: Date): OutstandingB
         billDate:    raw.billDate.toISOString(),
         dueDate:     raw.dueDate.toISOString(),
         totalAmount: raw.totalAmount,
-        paid,
+        paid:        raw.paid,
         outstanding,
         daysOverdue: days,
         bucket:      bucketFor(days),
@@ -233,13 +320,14 @@ export async function getOutstandings(
         };
     }
 
-    const [accounts, { bills, paidByInv, paidByVch }] = await Promise.all([
+    const invType = groupName === "Sundry Debtors" ? "SALE" : "PURCHASE";
+    const [accounts, bills] = await Promise.all([
         prisma.account.findMany({
             where: { id: { in: accountIds } },
             select: { id: true, name: true, customerId: true, companyId: true },
             orderBy: [{ name: "asc" }],
         }),
-        loadOpenBills(accountIds, asOf),
+        loadOpenBills(accountIds, asOf, invType),
     ]);
 
     const partyMap = new Map<number, PartyOutstanding>();
@@ -256,8 +344,7 @@ export async function getOutstandings(
     }
 
     for (const raw of bills) {
-        const paid = raw.kind === "invoice" ? (paidByInv[raw.id] ?? 0) : (paidByVch[raw.id] ?? 0);
-        const bill = toOutstandingBill(raw, paid, asOf);
+        const bill = toOutstandingBill(raw, asOf);
         if (!bill) continue;
         const party = partyMap.get(raw.accountId);
         if (!party) continue;
@@ -299,14 +386,13 @@ export async function getLedgerOutstanding(
     });
     if (!account) return null;
 
-    const { bills, paidByInv, paidByVch } = await loadOpenBills([accountId], asOf);
+    const bills = await loadOpenBills([accountId], asOf, "BOTH");
     const buckets = emptyBuckets();
     let totalOutstanding = 0;
     const out: OutstandingBill[] = [];
 
     for (const raw of bills) {
-        const paid = raw.kind === "invoice" ? (paidByInv[raw.id] ?? 0) : (paidByVch[raw.id] ?? 0);
-        const bill = toOutstandingBill(raw, paid, asOf);
+        const bill = toOutstandingBill(raw, asOf);
         if (!bill) continue;
         out.push(bill);
         buckets[bill.bucket] += bill.outstanding;

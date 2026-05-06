@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-    BookOpen, BarChart2, ClipboardList, Calendar, Wallet, CreditCard,
+    BookOpen, BarChart2, ClipboardList, Calendar, Wallet, CreditCard, Coins, Landmark, Activity, PieChart, TrendingUp, GitBranch, Receipt,
 } from "lucide-react";
 
 const REPORTS = [
@@ -47,6 +47,55 @@ const REPORTS = [
         description: "Open bills to Sundry Creditors, with the same ageing buckets.",
         icon: CreditCard,
         color: "from-rose-500/10 to-rose-500/0 text-rose-600",
+    },
+    {
+        title: "Cash Book",
+        href: "/office/tally/reports/cash-book",
+        description: "Cash ledgers with opening + period movement + closing — drills into the running register.",
+        icon: Coins,
+        color: "from-yellow-500/10 to-yellow-500/0 text-yellow-700",
+    },
+    {
+        title: "Bank Book",
+        href: "/office/tally/reports/bank-book",
+        description: "Every bank ledger with running balances — click to see its detailed register.",
+        icon: Landmark,
+        color: "from-cyan-500/10 to-cyan-500/0 text-cyan-700",
+    },
+    {
+        title: "Statistics",
+        href: "/office/tally/reports/statistics",
+        description: "Voucher and master counts — what Tally shows on F11 stats. Cheap pulse-check on the data.",
+        icon: Activity,
+        color: "from-slate-500/10 to-slate-500/0 text-slate-700",
+    },
+    {
+        title: "Ratio Analysis",
+        href: "/office/tally/reports/ratio-analysis",
+        description: "Current Ratio, Quick Ratio, Debt/Equity, GP%, NP%, ROI, Receivables turnover days, and more.",
+        icon: PieChart,
+        color: "from-violet-500/10 to-violet-500/0 text-violet-700",
+    },
+    {
+        title: "Cash Flow",
+        href: "/office/tally/reports/cash-flow",
+        description: "Cash and bank inflows / outflows aggregated by counter-side ledger, with net change.",
+        icon: TrendingUp,
+        color: "from-teal-500/10 to-teal-500/0 text-teal-700",
+    },
+    {
+        title: "Fund Flow",
+        href: "/office/tally/reports/fund-flow",
+        description: "Sources & application of funds, plus working-capital movement across the period.",
+        icon: GitBranch,
+        color: "from-indigo-500/10 to-indigo-500/0 text-indigo-700",
+    },
+    {
+        title: "GST Reports",
+        href: "/office/tally/reports/gst",
+        description: "Output / input tax summaries by rate, net liability — the day-to-day GST view.",
+        icon: Receipt,
+        color: "from-pink-500/10 to-pink-500/0 text-pink-700",
     },
 ];
 
