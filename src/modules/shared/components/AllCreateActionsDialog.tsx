@@ -2,17 +2,17 @@
 
 import Link from "next/link";
 import { Grid2x2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type Props = {
     open: boolean;
@@ -50,18 +50,20 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[80vh] max-w-xl overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+            <DialogContent className="flex h-[85vh] max-h-[85vh] w-[95vw] max-w-[95vw] flex-col gap-0 p-0 sm:max-w-3xl">
+                <DialogHeader className="border-b border-border px-5 py-3">
+                    <DialogTitle className="flex items-center gap-2 text-base">
                         <Grid2x2 size={16} />
                         All Create Actions
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Browse every creation action grouped by module. Click an item to open the form.
+                    </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="h-[70vh]">
-
-                    <div className="space-y-5 pt-2">
-                        {modulesWithActions.map((mod) => {
+                <ScrollArea className="flex-1 min-h-0">
+                    <div className="space-y-5 px-5 py-4">
+                        {modulesWithActions.map((mod, idx) => {
                             const visibleActions = (mod.createActions ?? []).filter((a) => canDo(a.permission));
                             if (!visibleActions.length) return null;
 
@@ -69,36 +71,48 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
 
                             return (
                                 <div key={mod.key}>
-                                    <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    {idx > 0 && <div className="mb-5 -mx-5 border-t border-border/50" />}
+                                    <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                         <ModIcon size={12} />
                                         {mod.label}
                                     </div>
-                                    <div className="grid grid-cols-3 gap-1.5">
+                                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleActions.map((action) => {
                                             const Icon = action.icon;
                                             const isPrimary = action.variant === "default";
+                                            const tooltip = `${action.label} — ${action.subtitle}`;
 
                                             const inner = (
-                                                <div className="flex items-center gap-2.5 px-3 py-2">
+                                                <div className="flex h-full items-center gap-2.5 px-3 py-2">
                                                     <div className={[
-                                                        "flex h-7 w-7 shrink-0 items-center justify-center",
+                                                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm",
                                                         isPrimary
                                                             ? "bg-primary text-primary-foreground"
                                                             : "bg-muted text-muted-foreground",
                                                     ].join(" ")}>
                                                         <Icon size={13} />
                                                     </div>
-                                                    <span className="truncate text-sm font-medium">{action.label}</span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="truncate text-sm font-medium leading-tight text-foreground">
+                                                            {action.label}
+                                                        </div>
+                                                        <div className="truncate text-[11px] leading-tight text-muted-foreground">
+                                                            {action.subtitle}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             );
+
+                                            const baseClass = "block rounded-md border border-border/70 bg-card transition-colors hover:border-primary/30 hover:bg-muted";
 
                                             if (action.href && !action.disabled) {
                                                 return (
                                                     <Link
                                                         key={action.label}
                                                         href={action.href}
+                                                        title={tooltip}
                                                         onClick={() => onOpenChange(false)}
-                                                        className="rounded-md border border-border bg-card hover:bg-muted transition-colors"
+                                                        className={baseClass}
                                                     >
                                                         {inner}
                                                     </Link>
@@ -106,16 +120,16 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
                                             }
 
                                             return (
-                                                <Button
+                                                <button
                                                     key={action.label}
                                                     type="button"
-                                                    variant="ghost"
+                                                    title={tooltip}
                                                     disabled={action.disabled}
                                                     onClick={() => handleAction(action)}
-                                                    className="h-auto w-full rounded-md border border-border bg-card text-left hover:bg-muted"
+                                                    className={`${baseClass} w-full text-left ${action.disabled ? "cursor-not-allowed opacity-50" : ""}`}
                                                 >
                                                     {inner}
-                                                </Button>
+                                                </button>
                                             );
                                         })}
                                     </div>
@@ -123,7 +137,6 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
                             );
                         })}
                     </div>
-
                     <ScrollBar orientation="vertical" />
                 </ScrollArea>
             </DialogContent>
