@@ -131,6 +131,7 @@ export default function PosScreen() {
     const custSearchRef = useRef<HTMLInputElement>(null);
 
     // ── Product search + cart ───────────────────────────────────────────────
+    const productSearchRef = useRef<HTMLInputElement>(null);
     const [productQuery, setProductQuery] = useState("");
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
     const [cart, setCart] = useState<CartLine[]>([]);
@@ -229,6 +230,9 @@ export default function PosScreen() {
         setCustQuery(displayName);
         setCustHits([]);
         setLoadingSnapshot(true);
+        // Once a party is picked the search becomes readOnly until Clear; focus
+        // shifts to the product search so cashier can scan/type immediately.
+        setTimeout(() => productSearchRef.current?.focus(), 50);
         try {
             const { data } = await axios.get<Snapshot>(`/api/pos/account-snapshot/${accountId}`);
             setSnapshot(data);
@@ -484,7 +488,9 @@ export default function PosScreen() {
                         onChange={(e) => { setCustQuery(e.target.value); if (snapshot) setSnapshot(null); }}
                         onKeyDown={onSearchKeyDown}
                         placeholder="Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"
-                        className="pl-9"
+                        className={`pl-9 ${snapshot ? "bg-muted/50 cursor-default" : ""}`}
+                        readOnly={!!snapshot}
+                        title={snapshot ? "Locked — press Clear to search again" : undefined}
                     />
                     {(custHits.length > 0 || (custQuery.trim().length >= 2 && !snapshot)) && (
                         <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
@@ -547,6 +553,7 @@ export default function PosScreen() {
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                             <Input
+                                ref={productSearchRef}
                                 value={productQuery}
                                 onChange={(e) => setProductQuery(e.target.value)}
                                 placeholder="Scan / type product name or SKU…"
@@ -779,7 +786,7 @@ export default function PosScreen() {
                                             ref={phoneRef}
                                             value={newParty.phone}
                                             onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
-                                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); nameRef.current?.focus(); } }}
+                                            onKeyDown={onAnyEnterToSubmit}
                                             placeholder="10-digit"
                                             inputMode="tel"
                                             aria-invalid={!!phoneError(newParty.phone)}
@@ -808,13 +815,7 @@ export default function PosScreen() {
                                     ref={nameRef}
                                     value={newParty.name}
                                     onChange={(e) => setNewParty((s) => ({ ...s, name: e.target.value }))}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey) {
-                                            e.preventDefault();
-                                            if (!openedAsPhoneQuery && !newParty.phone.trim()) phoneRef.current?.focus();
-                                            else addressRef.current?.focus();
-                                        }
-                                    }}
+                                    onKeyDown={onAnyEnterToSubmit}
                                     placeholder="Customer name"
                                 />
                             </div>
@@ -828,13 +829,7 @@ export default function PosScreen() {
                                             ref={phoneRef}
                                             value={newParty.phone}
                                             onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter" && !e.shiftKey) {
-                                                    e.preventDefault();
-                                                    if (!newParty.name.trim()) nameRef.current?.focus();
-                                                    else addressRef.current?.focus();
-                                                }
-                                            }}
+                                            onKeyDown={onAnyEnterToSubmit}
                                             placeholder="10-digit"
                                             inputMode="tel"
                                             aria-invalid={!!phoneError(newParty.phone)}
@@ -878,13 +873,7 @@ export default function PosScreen() {
                                     ref={companyNameRef}
                                     value={newParty.companyName}
                                     onChange={(e) => setNewParty((s) => ({ ...s, companyName: e.target.value }))}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey) {
-                                            e.preventDefault();
-                                            if (newParty.companyName.trim()) companyPhoneRef.current?.focus();
-                                            else if (canSubmitCreate) void submitCreate();
-                                        }
-                                    }}
+                                    onKeyDown={onAnyEnterToSubmit}
                                     placeholder="Company name (leave empty to bill the person)"
                                 />
                             </div>
