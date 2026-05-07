@@ -27,7 +27,7 @@ export default async function CrmLeadDetailPage({ params }: { params: Promise<{ 
         include: {
             ticketStatus: { select: { id: true, label: true, color: true } },
             owner: { select: { id: true, name: true } },
-            customer: { select: { id: true, name: true } },
+            person: { select: { id: true, name: true } },
             company: { select: { id: true, name: true } },
             createdBy: { select: { id: true, name: true } },
         },
@@ -78,15 +78,15 @@ export default async function CrmLeadDetailPage({ params }: { params: Promise<{ 
                 </div>
             </div>
 
-            {(lead.customer || lead.company) && (
+            {(lead.person || lead.company) && (
                 <div className="text-sm border-2 border-border bg-muted/30 p-3">
                     <span className="text-muted-foreground">Linked: </span>
-                    {lead.customer && (
-                        <Link className="text-primary hover:underline" href={`/office/customers/${lead.customer.id}`}>
-                            {lead.customer.name}
+                    {lead.person && (
+                        <Link className="text-primary hover:underline" href={`/office/customers/${lead.person.id}`}>
+                            {lead.person.name}
                         </Link>
                     )}
-                    {lead.customer && lead.company && " · "}
+                    {lead.person && lead.company && " · "}
                     {lead.company && (
                         <Link className="text-primary hover:underline" href={`/office/customers/companies/${lead.company.id}`}>
                             {lead.company.name}

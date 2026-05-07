@@ -7,7 +7,7 @@ import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
-    customerId: z.coerce.number().int().positive().optional(),
+    personId: z.coerce.number().int().positive().optional(),
     companyId: z.coerce.number().int().positive().optional(),
     billingAccountId: z.preprocess(
         (val) => (val == null || val === "") ? undefined : val,
@@ -30,9 +30,9 @@ const createTicketSchema = z.object({
     purchaseDate: z.string().trim().optional().or(z.literal("")),
     pipelineId: z.string().trim().optional(),
 }).refine(
-    (d) => Boolean(d.customerId || d.companyId || d.billingAccountId || d.sourceShopOrderId),
+    (d) => Boolean(d.personId || d.companyId || d.billingAccountId || d.sourceShopOrderId),
     {
-        message: "Either customerId, companyId, billingAccountId, or sourceShopOrderId is required",
+        message: "Either personId, companyId, billingAccountId, or sourceShopOrderId is required",
     }
 );
 
@@ -61,8 +61,16 @@ export async function GET(req: Request) {
                         account: {
                             select: {
                                 id: true, name: true,
-                                customer: { select: { phone: true } },
-                                company:  { select: { phone: true } },
+                                person: {
+                                    select: {
+                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    },
+                                },
+                                company: {
+                                    select: {
+                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    },
+                                },
                             },
                         },
                     },
@@ -82,7 +90,10 @@ export async function GET(req: Request) {
                 ...t.device,
                 account: t.device.account ? {
                     ...t.device.account,
-                    phone: t.device.account.customer?.phone ?? t.device.account.company?.phone ?? null,
+                    phone:
+                        t.device.account.person?.phones?.[0]?.phone
+                        ?? t.device.account.company?.phones?.[0]?.phone
+                        ?? null,
                 } : null,
             },
         }));

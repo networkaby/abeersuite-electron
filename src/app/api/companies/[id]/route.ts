@@ -2,11 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
+import { getCompanyContacts } from "@/lib/company-contacts";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
-    phone: z.string().trim().optional().nullable(),
-    email: z.string().email().optional().nullable().or(z.literal("")),
     address: z.string().trim().optional().nullable(),
     companyReg: z.string().trim().optional().nullable(),
     taxId: z.string().trim().optional().nullable(),
@@ -20,8 +19,9 @@ export async function GET(
     if (response) return response;
 
     const { id } = await params;
+    const companyId = Number(id);
     const company = await prisma.company.findUnique({
-        where: { id: Number(id) },
+        where: { id: companyId },
         include: {
             account: {
                 include: {
@@ -37,11 +37,15 @@ export async function GET(
                     },
                 },
             },
-            customers: {
+            persons: {
                 where: { unlinkedAt: null },
                 include: {
-                    customer: {
-                        select: { id: true, name: true, phone: true },
+                    person: {
+                        select: {
+                            id: true,
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        },
                     },
                 },
             },
@@ -52,10 +56,29 @@ export async function GET(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Normalise: expose devices at the top level for client compatibility
+    const contacts = await getCompanyContacts(companyId);
+    // Backward-compat shape: expose `customers` (linked persons) and primary phone/email scalars.
+    const linkedCustomers = company.persons.map(link => ({
+        id: link.id,
+        customer: {
+            id: link.person.id,
+            name: link.person.name,
+            phone: link.person.phones[0]?.phone ?? null,
+        },
+    }));
+
     return NextResponse.json({
         ...company,
         devices: company.account?.devices ?? [],
+        customers: linkedCustomers,
+        phone: contacts.phones[0]?.value ?? contacts.derivedPhones[0]?.value ?? null,
+        email: contacts.emails[0]?.value ?? contacts.derivedEmails[0]?.value ?? null,
+        contactRows: {
+            phones: contacts.phones,
+            emails: contacts.emails,
+            derivedPhones: contacts.derivedPhones,
+            derivedEmails: contacts.derivedEmails,
+        },
     });
 }
 
@@ -78,8 +101,6 @@ export async function PUT(
             where: { id: Number(id) },
             data: {
                 ...(body.name !== undefined && { name: body.name }),
-                ...(body.phone !== undefined && { phone: body.phone }),
-                ...(body.email !== undefined && { email: body.email || null }),
                 ...(body.address !== undefined && { address: body.address }),
                 ...(body.companyReg !== undefined && { companyReg: body.companyReg }),
                 ...(body.taxId !== undefined && { taxId: body.taxId }),

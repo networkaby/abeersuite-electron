@@ -17,9 +17,11 @@ export default async function CustomerDetailPage({
     const permissions = ((session?.user as { permissions?: string[] } | undefined)?.permissions ?? []);
     const canEmergencyReset = permissions.includes("users:manage") || permissions.includes("admin:bypass");
 
-    const customer = await prisma.customer.findUnique({
+    const person = await prisma.person.findUnique({
         where: { id: Number(id) },
         include: {
+            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
             account: {
                 include: {
                     devices: {
@@ -38,13 +40,19 @@ export default async function CustomerDetailPage({
             companies: {
                 where: { unlinkedAt: null },
                 include: {
-                    company: { select: { id: true, name: true, phone: true } },
+                    company: {
+                        select: {
+                            id: true,
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        },
+                    },
                 },
             },
         },
     });
 
-    if (!customer || !customer.isActive) notFound();
+    if (!person || !person.isActive) notFound();
 
     return (
         <div>
@@ -55,8 +63,8 @@ export default async function CustomerDetailPage({
                 <div className="flex items-center gap-3">
                     <User size={22} className="text-primary" />
                     <div>
-                        <h1 className="text-2xl font-bold">{customer.name}</h1>
-                        <p className="text-muted-foreground text-sm">Customer #{customer.id}</p>
+                        <h1 className="text-2xl font-bold">{person.name}</h1>
+                        <p className="text-muted-foreground text-sm">Customer #{person.id}</p>
                     </div>
                 </div>
             </div>
@@ -66,32 +74,50 @@ export default async function CustomerDetailPage({
                 <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">Contact Info</h2>
                     <div className="space-y-2 text-sm">
-                        {customer.phone && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Phone</span>
-                                <span className="font-medium">{customer.phone}</span>
+                        {person.phones.length > 0 && (
+                            <div>
+                                <span className="text-muted-foreground block mb-1">Phones</span>
+                                <ul className="space-y-1">
+                                    {person.phones.map(p => (
+                                        <li key={p.id} className="flex items-center justify-between gap-2">
+                                            <span className="font-medium">{p.phone}</span>
+                                            {p.isPrimary && (
+                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">primary</span>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
-                        {customer.email && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Email</span>
-                                <span className="font-medium">{customer.email}</span>
+                        {person.emails.length > 0 && (
+                            <div>
+                                <span className="text-muted-foreground block mb-1">Emails</span>
+                                <ul className="space-y-1">
+                                    {person.emails.map(e => (
+                                        <li key={e.id} className="flex items-center justify-between gap-2">
+                                            <span className="font-medium">{e.email}</span>
+                                            {e.isPrimary && (
+                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">primary</span>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
-                        {customer.address && (
+                        {person.address && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Address</span>
-                                <span className="font-medium text-right max-w-[200px]">{customer.address}</span>
+                                <span className="font-medium text-right max-w-[200px]">{person.address}</span>
                             </div>
                         )}
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Customer since</span>
-                            <span className="font-medium">{formatDate(customer.createdAt.toISOString())}</span>
+                            <span className="font-medium">{formatDate(person.createdAt.toISOString())}</span>
                         </div>
-                        {customer.account && (
+                        {person.account && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Account #</span>
-                                <span className="font-medium text-muted-foreground">{customer.account.id}</span>
+                                <span className="font-medium text-muted-foreground">{person.account.id}</span>
                             </div>
                         )}
                     </div>
@@ -104,9 +130,13 @@ export default async function CustomerDetailPage({
                             <Building2 size={14} /> Linked Companies
                         </h2>
                     </div>
-                    <CustomerLinkPanel customerId={customer.id} initialLinks={customer.companies.map(cc => ({
+                    <CustomerLinkPanel customerId={person.id} initialLinks={person.companies.map(cc => ({
                         id: cc.id,
-                        company: { id: cc.company.id, name: cc.company.name, phone: cc.company.phone },
+                        company: {
+                            id: cc.company.id,
+                            name: cc.company.name,
+                            phone: cc.company.phones[0]?.phone ?? null,
+                        },
                     }))} />
                 </div>
 
@@ -115,11 +145,11 @@ export default async function CustomerDetailPage({
                     <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
                         <Smartphone size={14} /> Devices &amp; Tickets
                     </h2>
-                    {(customer.account?.devices ?? []).length === 0 ? (
+                    {(person.account?.devices ?? []).length === 0 ? (
                         <p className="text-sm text-muted-foreground">No devices yet.</p>
                     ) : (
                         <div className="space-y-4">
-                            {(customer.account?.devices ?? []).map(d => (
+                            {(person.account?.devices ?? []).map(d => (
                                 <div key={d.id} className="rounded-md border border-border p-3">
                                     <p className="font-medium text-sm">{d.brand} {d.model}</p>
                                     <p className="text-xs text-muted-foreground">{d.type}</p>
@@ -147,7 +177,7 @@ export default async function CustomerDetailPage({
             </div>
             {canEmergencyReset ? (
                 <div className="mt-6">
-                    <CustomerEmergencyPasswordResetCard customerId={customer.id} />
+                    <CustomerEmergencyPasswordResetCard customerId={person.id} />
                 </div>
             ) : null}
         </div>

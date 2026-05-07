@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
 
-// GET /api/companies/[id]/links — list linked customers
+// GET /api/companies/[id]/links — list linked persons
 export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -12,20 +12,40 @@ export async function GET(
     if (response) return response;
 
     const { id } = await params;
-    const links = await prisma.customerCompany.findMany({
+    const links = await prisma.personCompany.findMany({
         where: { companyId: Number(id), unlinkedAt: null },
-        include: { customer: { select: { id: true, name: true, phone: true, email: true } } },
+        include: {
+            person: {
+                select: {
+                    id: true,
+                    name: true,
+                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                },
+            },
+        },
         orderBy: { linkedAt: "desc" },
     });
-    return NextResponse.json(links);
+    // Backward-compat shape: expose phone/email scalars on the embedded person
+    return NextResponse.json(
+        links.map(l => ({
+            ...l,
+            person: {
+                id: l.person.id,
+                name: l.person.name,
+                phone: l.person.phones[0]?.phone ?? null,
+                email: l.person.emails[0]?.email ?? null,
+            },
+        }))
+    );
 }
 
 const linkSchema = z.object({
-    customerId: z.coerce.number().int().positive(),
+    personId: z.coerce.number().int().positive(),
     role: z.string().trim().optional().or(z.literal("")),
 });
 
-// POST /api/companies/[id]/links — link a customer
+// POST /api/companies/[id]/links — link a person
 export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -38,32 +58,31 @@ export async function POST(
     if (!parsed.success) {
         return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
     }
-    const { customerId, role } = parsed.data;
+    const { personId, role } = parsed.data;
     const companyId = Number(id);
 
-    // Reactivate if previously unlinked
-    const existing = await prisma.customerCompany.findFirst({
-        where: { customerId, companyId },
+    const existing = await prisma.personCompany.findFirst({
+        where: { personId, companyId },
     });
 
     if (existing) {
         if (existing.unlinkedAt === null) {
             return NextResponse.json({ error: "Already linked" }, { status: 409 });
         }
-        const updated = await prisma.customerCompany.update({
+        const updated = await prisma.personCompany.update({
             where: { id: existing.id },
             data: { unlinkedAt: null, role: role || null, linkedAt: new Date() },
         });
         return NextResponse.json(updated);
     }
 
-    const link = await prisma.customerCompany.create({
-        data: { customerId, companyId, role: role || null },
+    const link = await prisma.personCompany.create({
+        data: { personId, companyId, role: role || null },
     });
     return NextResponse.json(link, { status: 201 });
 }
 
-// DELETE /api/companies/[id]/links?customerId=... — unlink
+// DELETE /api/companies/[id]/links?personId=... — unlink
 export async function DELETE(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -73,19 +92,19 @@ export async function DELETE(
 
     const { id } = await params;
     const { searchParams } = new URL(req.url);
-    const customerId = Number(searchParams.get("customerId"));
-    if (!customerId) {
-        return NextResponse.json({ error: "customerId is required" }, { status: 400 });
+    const personId = Number(searchParams.get("personId"));
+    if (!personId) {
+        return NextResponse.json({ error: "personId is required" }, { status: 400 });
     }
 
-    const link = await prisma.customerCompany.findFirst({
-        where: { companyId: Number(id), customerId, unlinkedAt: null },
+    const link = await prisma.personCompany.findFirst({
+        where: { companyId: Number(id), personId, unlinkedAt: null },
     });
     if (!link) {
         return NextResponse.json({ error: "Link not found" }, { status: 404 });
     }
 
-    const updated = await prisma.customerCompany.update({
+    const updated = await prisma.personCompany.update({
         where: { id: link.id },
         data: { unlinkedAt: new Date() },
     });

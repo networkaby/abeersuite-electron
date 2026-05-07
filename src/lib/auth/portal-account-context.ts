@@ -18,20 +18,20 @@ export type PortalAccountContext = {
     active: PortalAccountOption;
 };
 
-async function ensurePersonalAccount(customerId: number, customerName: string) {
+async function ensurePersonalAccount(personId: number, personName: string) {
     return prisma.account.upsert({
-        where: { customerId },
+        where: { personId },
         update: {},
         create: {
-            customerId,
-            name: customerName,
+            personId,
+            name: personName,
         },
         select: { id: true },
     });
 }
 
 export async function getPortalAccountOptions(customerId: number): Promise<PortalAccountOption[]> {
-    const customer = await prisma.customer.findUnique({
+    const person = await prisma.person.findUnique({
         where: { id: customerId },
         select: {
             id: true,
@@ -52,20 +52,20 @@ export async function getPortalAccountOptions(customerId: number): Promise<Porta
         },
     });
 
-    if (!customer) return [];
+    if (!person) return [];
 
-    const personalAccount = customer.account ?? (await ensurePersonalAccount(customer.id, customer.name));
+    const personalAccount = person.account ?? (await ensurePersonalAccount(person.id, person.name));
     const options: PortalAccountOption[] = [
         {
             accountId: personalAccount.id,
             accountType: "personal",
-            label: `${customer.name} (Personal)`,
+            label: `${person.name} (Personal)`,
             companyId: null,
             companyName: null,
         },
     ];
 
-    for (const link of customer.companies) {
+    for (const link of person.companies) {
         const company = link.company;
         if (!company.account) continue;
         options.push({

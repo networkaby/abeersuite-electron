@@ -45,8 +45,16 @@ export async function GET(
                             select: {
                                 id: true,
                                 name: true,
-                                customer: { select: { phone: true } },
-                                company: { select: { phone: true } },
+                                person: {
+                                    select: {
+                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    },
+                                },
+                                company: {
+                                    select: {
+                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    },
+                                },
                             },
                         },
                     },
@@ -67,7 +75,10 @@ export async function GET(
                 model: device.model,
                 problem: device.problem,
                 customerName: device.account?.name ?? "Unknown",
-                customerPhone: device.account?.customer?.phone ?? device.account?.company?.phone ?? null,
+                customerPhone:
+                    device.account?.person?.phones?.[0]?.phone
+                    ?? device.account?.company?.phones?.[0]?.phone
+                    ?? null,
                 slNo: tickets[0].externalRef ?? tickets[0].warrantyRef ?? "",
                 updatedAt: tickets[0].updatedAt.toISOString(),
             },

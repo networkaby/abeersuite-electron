@@ -98,7 +98,7 @@ export function PartyPicker({
         if (q.length < 2) { setResults([]); return; }
         setSearching(true);
         try {
-            const { data } = await axios.get<PartyResult[]>(`/api/customers?phone=${encodeURIComponent(q)}`);
+            const { data } = await axios.get<PartyResult[]>(`/api/people?phone=${encodeURIComponent(q)}`);
             setResults(data);
         } catch {
             setResults([]);
@@ -143,10 +143,10 @@ export function PartyPicker({
     async function onCreate(data: CreateFormData) {
         setCreating(true);
         try {
-            const endpoint = createAsCompany ? "/api/companies" : "/api/customers";
+            const endpoint = createAsCompany ? "/api/companies" : "/api/people";
             const { data: created } = await axios.post<{ id: number; account?: { id: number } }>(endpoint, {
                 name: data.name,
-                phone: data.phone,
+                phones: data.phone ? [data.phone] : [],
             });
             const accountId = created.account?.id ?? null;
             if (!accountId) throw new Error("Account not created");

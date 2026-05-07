@@ -26,96 +26,119 @@ export async function POST(req: Request) {
         }
         const { mode, identifier, password, name } = parsed.data;
 
-        let phone: string | null = null;
-        let email: string | null = null;
+        let phoneRaw: string | null = null;
+        let emailRaw: string | null = null;
         let phoneNorm: string | null = null;
         let emailNorm: string | null = null;
 
         if (mode === "email" || isLikelyEmail(identifier)) {
             emailNorm = normalizePortalEmail(identifier);
-            email = emailNorm;
+            emailRaw = emailNorm;
         } else {
             phoneNorm = normalizePortalPhone(identifier);
             if (!phoneNorm) {
                 return NextResponse.json({ error: "Invalid mobile number" }, { status: 400 });
             }
-            phone = identifier.trim();
+            phoneRaw = identifier.trim();
         }
 
         const existingCred =
             phoneNorm != null
-                ? await prisma.customerPortalCredential.findFirst({ where: { phoneNormalized: phoneNorm } })
+                ? await prisma.personPortalCredential.findFirst({ where: { phoneNormalized: phoneNorm } })
                 : emailNorm != null
-                  ? await prisma.customerPortalCredential.findFirst({ where: { emailNormalized: emailNorm } })
+                  ? await prisma.personPortalCredential.findFirst({ where: { emailNormalized: emailNorm } })
                   : null;
         if (existingCred) {
             return NextResponse.json({ error: "An account already exists for this mobile or email" }, { status: 409 });
         }
 
-        let customer: { id: number; name: string; phone: string | null; email: string | null } | null = null;
+        // Look up an existing person by stored phone/email rows.
+        let person: { id: number; name: string } | null = null;
         if (emailNorm) {
-            customer = await prisma.customer.findFirst({
-                where: { email: { equals: emailNorm, mode: "insensitive" } },
+            const match = await prisma.email.findFirst({
+                where: { email: { equals: emailNorm, mode: "insensitive" }, personId: { not: null } },
+                select: { person: { select: { id: true, name: true } } },
             });
+            person = match?.person ?? null;
         }
-        if (!customer && phoneNorm) {
-            const candidates = await prisma.customer.findMany({
-                where: { phone: { not: null } },
-                select: { id: true, name: true, phone: true, email: true },
+        if (!person && phoneNorm) {
+            // Phone rows may store the prefixed format; scan candidates and normalise.
+            const phoneCandidates = await prisma.phone.findMany({
+                where: { personId: { not: null } },
+                select: { phone: true, person: { select: { id: true, name: true } } },
                 take: 500,
             });
-            customer =
-                candidates.find((c) => c.phone && normalizePortalPhone(c.phone) === phoneNorm) ?? null;
+            person =
+                phoneCandidates.find(
+                    (row) => row.phone && normalizePortalPhone(row.phone) === phoneNorm,
+                )?.person ?? null;
         }
 
-        if (!customer) {
-            customer = await prisma.$transaction(async (tx) => {
-                const created = await tx.customer.create({
+        if (!person) {
+            const created = await prisma.$transaction(async (tx) => {
+                const p = await tx.person.create({
                     data: {
                         name: name || (emailNorm ? emailNorm.split("@")[0] : "Customer") || "Customer",
-                        phone: phoneNorm ? `+91${phoneNorm}` : phone ?? undefined,
-                        email: emailNorm ?? undefined,
                     },
                 });
+                if (phoneNorm || phoneRaw) {
+                    await tx.phone.create({
+                        data: {
+                            phone: phoneNorm ? `+91${phoneNorm}` : phoneRaw!,
+                            personId: p.id,
+                            isPrimary: true,
+                        },
+                    });
+                }
+                if (emailNorm) {
+                    await tx.email.create({
+                        data: { email: emailNorm, personId: p.id, isPrimary: true },
+                    });
+                }
                 await tx.account.create({
-                    data: {
-                        customerId: created.id,
-                        name: created.name,
-                    },
+                    data: { personId: p.id, name: p.name },
                 });
-                return created;
+                return p;
             });
+            person = { id: created.id, name: created.name };
         } else {
-            const data: { name?: string; phone?: string; email?: string } = {};
-            if (name) data.name = name;
-            if (phone && !customer.phone) data.phone = phone;
-            if (email && !customer.email) data.email = email;
-            if (Object.keys(data).length) {
-                customer = await prisma.customer.update({
-                    where: { id: customer.id },
-                    data,
-                });
+            if (name) {
+                await prisma.person.update({ where: { id: person.id }, data: { name } });
+                person.name = name;
+            }
+            // If a phone or email was provided that the person doesn't yet have,
+            // attach it (best-effort; ignore unique violations).
+            if (phoneRaw || phoneNorm) {
+                const phoneVal = phoneNorm ? `+91${phoneNorm}` : phoneRaw!;
+                try {
+                    await prisma.phone.create({
+                        data: { phone: phoneVal, personId: person.id },
+                    });
+                } catch {
+                    /* already exists — ignore */
+                }
+            }
+            if (emailNorm) {
+                try {
+                    await prisma.email.create({
+                        data: { email: emailNorm, personId: person.id },
+                    });
+                } catch {
+                    /* already exists — ignore */
+                }
             }
             const existingAccount = await prisma.account.findUnique({
-                where: { customerId: customer.id },
+                where: { personId: person.id },
                 select: { id: true },
             });
             if (!existingAccount) {
                 await prisma.account.create({
-                    data: {
-                        customerId: customer.id,
-                        name: customer.name,
-                    },
+                    data: { personId: person.id, name: person.name },
                 });
             }
         }
 
-        const finalPhoneNorm =
-            phoneNorm ?? (customer.phone ? normalizePortalPhone(customer.phone) : null) ?? null;
-        const finalEmailNorm =
-            emailNorm ?? (customer.email ? normalizePortalEmail(customer.email) : null) ?? null;
-
-        if (!finalPhoneNorm && !finalEmailNorm) {
+        if (!phoneNorm && !emailNorm) {
             return NextResponse.json(
                 { error: "Provide a valid mobile or email so you can sign in later" },
                 { status: 400 }
@@ -123,11 +146,11 @@ export async function POST(req: Request) {
         }
 
         const hash = await bcrypt.hash(password, 10);
-        await prisma.customerPortalCredential.create({
+        await prisma.personPortalCredential.create({
             data: {
-                customerId: customer.id,
-                phoneNormalized: finalPhoneNorm,
-                emailNormalized: finalEmailNorm,
+                personId: person.id,
+                phoneNormalized: phoneNorm,
+                emailNormalized: emailNorm,
                 passwordHash: hash,
             },
         });

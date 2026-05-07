@@ -115,9 +115,9 @@ model InvProduct {
   // ── Tally-style opening stock — entered on the master, dated at booksBeginningFrom.
   // Mismatch between Σ(openingValue) and the "Stock-in-Hand" line on the
   // opening journal auto-parks to "Difference in Opening Balances".
-  openingStock     Decimal? @db.Decimal(10, 3)
-  openingRate      Decimal? @db.Decimal(14, 2)
-  openingValue     Decimal? @db.Decimal(14, 2)
+  openingStock     Decimal?  @db.Decimal(10, 3)
+  openingRate      Decimal?  @db.Decimal(14, 2)
+  openingValue     Decimal?  @db.Decimal(14, 2)
   openingStockDate DateTime? @db.Date
 
   // ── GST classification ──────────────────────────────────────────────────
@@ -149,14 +149,14 @@ model InvProduct {
 // ── Stock Vouchers (Purchase / Sale) ─────────────────────────────────────────
 
 model InvVoucher {
-  id             Int              @id @default(autoincrement())
+  id             Int            @id @default(autoincrement())
   type           InvVoucherType
   /// Auto-generated: PV-2026-0001 for PURCHASE, SV-2026-0001 for SALE
-  reference      String           @unique
-  date           DateTime         @db.Date
+  reference      String         @unique
+  date           DateTime       @db.Date
   description    String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
-  status         VoucherStatus    @default(DRAFT)
+  status         VoucherStatus  @default(DRAFT)
   partyName      String?
   partyType      String? // "supplier" | "customer" | "account"
   partyId        Int?
@@ -167,36 +167,36 @@ model InvVoucher {
   /// State code where the supply happens — drives intra/inter-state GST split.
   /// Defaults to the company's state code when unset.
   placeOfSupply  String?
-  discountPct    Decimal?         @db.Decimal(5, 2)
-  discountAmt    Decimal?         @db.Decimal(14, 2)
-  shippingAmt    Decimal          @default(0) @db.Decimal(14, 2)
-  roundOff       Decimal          @default(0) @db.Decimal(14, 2)
-  subtotal       Decimal          @db.Decimal(14, 2)
-  taxAmount      Decimal          @default(0) @db.Decimal(14, 2)
-  totalAmount    Decimal          @db.Decimal(14, 2)
-  amountReceived Decimal          @default(0) @db.Decimal(14, 2)
+  discountPct    Decimal?       @db.Decimal(5, 2)
+  discountAmt    Decimal?       @db.Decimal(14, 2)
+  shippingAmt    Decimal        @default(0) @db.Decimal(14, 2)
+  roundOff       Decimal        @default(0) @db.Decimal(14, 2)
+  subtotal       Decimal        @db.Decimal(14, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(14, 2)
+  totalAmount    Decimal        @db.Decimal(14, 2)
+  amountReceived Decimal        @default(0) @db.Decimal(14, 2)
   /// Linked GL journal entry — auto-created on post
   journalEntryId Int?
   postedAt       DateTime?
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
-  showPrices     Boolean          @default(true)
+  showPrices     Boolean        @default(true)
 
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
-  cancelledAt    DateTime?
-  cancelledById  Int?
-  cancelReason   String?
-  deletedAt      DateTime?
-  deletedById    Int?
-  deleteReason   String?
+  cancelledAt   DateTime?
+  cancelledById Int?
+  cancelReason  String?
+  deletedAt     DateTime?
+  deletedById   Int?
+  deleteReason  String?
 
-  createdById    Int
-  createdBy      User             @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
-  cancelledBy    User?            @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy      User?            @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
-  lines          InvVoucherLine[]
-  stockEntries   InvStockLedger[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdById  Int
+  createdBy    User             @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy  User?            @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy    User?            @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
+  lines        InvVoucherLine[]
+  stockEntries InvStockLedger[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@index([type, status])
   @@index([date])

@@ -47,7 +47,12 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
 
         setSaving(true);
         try {
-            await axios.post("/api/customers", form);
+            await axios.post("/api/people", {
+                name: form.name,
+                phones: form.phone ? [form.phone] : [],
+                emails: form.email ? [form.email] : [],
+                address: form.address,
+            });
             toast.success("Person created");
             onOpenChange(false);
             setForm(INITIAL_FORM);

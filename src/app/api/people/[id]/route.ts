@@ -5,8 +5,6 @@ import { z } from "zod";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
-    phone: z.string().trim().optional().nullable(),
-    email: z.string().email().optional().nullable().or(z.literal("")),
     address: z.string().trim().optional().nullable(),
     agreedToTerms: z.boolean().optional(),
 });
@@ -19,9 +17,11 @@ export async function GET(
     if (response) return response;
 
     const { id } = await params;
-    const customer = await prisma.customer.findUnique({
+    const person = await prisma.person.findUnique({
         where: { id: Number(id) },
         include: {
+            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
             account: {
                 include: {
                     devices: {
@@ -40,21 +40,35 @@ export async function GET(
                 where: { unlinkedAt: null },
                 include: {
                     company: {
-                        select: { id: true, name: true, phone: true, account: { select: { id: true } } },
+                        select: {
+                            id: true,
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            account: { select: { id: true } },
+                        },
                     },
                 },
             },
         },
     });
 
-    if (!customer || !customer.isActive) {
+    if (!person || !person.isActive) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Normalise: expose devices at the top level for client compatibility
     return NextResponse.json({
-        ...customer,
-        devices: customer.account?.devices ?? [],
+        ...person,
+        // Backward-compat scalar accessors from the primary contact rows.
+        phone: person.phones[0]?.phone ?? null,
+        email: person.emails[0]?.email ?? null,
+        devices: person.account?.devices ?? [],
+        companies: person.companies.map(link => ({
+            ...link,
+            company: {
+                ...link.company,
+                phone: link.company.phones[0]?.phone ?? null,
+            },
+        })),
     });
 }
 
@@ -73,12 +87,10 @@ export async function PUT(
     const body = parsed.data;
 
     try {
-        const customer = await prisma.customer.update({
+        const person = await prisma.person.update({
             where: { id: Number(id) },
             data: {
                 ...(body.name !== undefined && { name: body.name }),
-                ...(body.phone !== undefined && { phone: body.phone }),
-                ...(body.email !== undefined && { email: body.email || null }),
                 ...(body.address !== undefined && { address: body.address }),
                 ...(body.agreedToTerms !== undefined && {
                     agreedToTerms: body.agreedToTerms,
@@ -86,10 +98,10 @@ export async function PUT(
                 }),
             },
         });
-        return NextResponse.json(customer);
+        return NextResponse.json(person);
     } catch (error) {
         console.error(error);
-        return NextResponse.json({ error: "Failed to update customer" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to update person" }, { status: 500 });
     }
 }
 
@@ -101,14 +113,14 @@ export async function DELETE(
     if (response) return response;
 
     const { id } = await params;
-    const hasDevices = await prisma.device.count({ where: { account: { customerId: Number(id) } } });
+    const hasDevices = await prisma.device.count({ where: { account: { personId: Number(id) } } });
     if (hasDevices > 0) {
-        return NextResponse.json({ error: "Cannot deactivate a customer with devices" }, { status: 409 });
+        return NextResponse.json({ error: "Cannot deactivate a person with devices" }, { status: 409 });
     }
 
-    const customer = await prisma.customer.update({
+    const person = await prisma.person.update({
         where: { id: Number(id) },
         data: { isActive: false },
     });
-    return NextResponse.json(customer);
+    return NextResponse.json(person);
 }

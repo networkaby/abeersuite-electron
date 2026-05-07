@@ -8,24 +8,52 @@ export async function GET(req: Request) {
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
-    const customerId = searchParams.get("customerId");
+    // Accept either personId (preferred) or customerId (legacy alias) as filter
+    const personId = searchParams.get("personId") ?? searchParams.get("customerId");
     const companyId = searchParams.get("companyId");
-    const filtered = Boolean(customerId || companyId);
+    const filtered = Boolean(personId || companyId);
     const take = Math.min(500, Math.max(1, Number(searchParams.get("limit")) || (filtered ? 50 : 50)));
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
 
     const accounts = await prisma.account.findMany({
         where: {
-            ...(customerId ? { customerId: Number(customerId) } : {}),
+            ...(personId ? { personId: Number(personId) } : {}),
             ...(companyId ? { companyId: Number(companyId) } : {}),
         },
         include: {
-            customer: { select: { id: true, name: true, phone: true } },
-            company: { select: { id: true, name: true, phone: true } },
+            person: {
+                select: {
+                    id: true,
+                    name: true,
+                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                },
+            },
+            company: {
+                select: {
+                    id: true,
+                    name: true,
+                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                },
+            },
         },
         take,
         skip: (page - 1) * take,
     });
 
-    return NextResponse.json(accounts);
+    // Backward-compat shape: surface `phone` scalar on the embedded person/company.
+    return NextResponse.json(
+        accounts.map(a => ({
+            ...a,
+            person: a.person ? {
+                id: a.person.id,
+                name: a.person.name,
+                phone: a.person.phones[0]?.phone ?? null,
+            } : null,
+            company: a.company ? {
+                id: a.company.id,
+                name: a.company.name,
+                phone: a.company.phones[0]?.phone ?? null,
+            } : null,
+        })),
+    );
 }

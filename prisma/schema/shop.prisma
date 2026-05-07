@@ -36,7 +36,7 @@ model ShopOrder {
   // accountId is the primary GL link — all financial activity goes through Account
   accountId         Int?
   // Legacy identity fields — kept for backward compat; prefer accountId
-  customerId        Int?
+  personId          Int?
   guestEmail        String?
   guestPhone        String?
   // invoiceId lives on Invoice.shopOrderId (FK is on Invoice side)
@@ -57,7 +57,7 @@ model ShopOrder {
   updatedAt         DateTime        @updatedAt
 
   account      Account?        @relation(fields: [accountId], references: [id])
-  customer     Customer?       @relation(fields: [customerId], references: [id])
+  person       Person?         @relation(fields: [personId], references: [id])
   pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
   orderStatus  TicketStatus?   @relation(fields: [statusId], references: [id])
   invoice      Invoice?        @relation("OrderInvoice")
@@ -66,7 +66,7 @@ model ShopOrder {
   tickets      Ticket[]
 
   @@index([accountId])
-  @@index([customerId])
+  @@index([personId])
   @@index([status])
   @@index([pipelineId])
   @@index([statusId])

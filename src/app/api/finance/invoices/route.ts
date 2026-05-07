@@ -29,7 +29,7 @@ const INVOICE_INCLUDE = {
         select: {
             id: true,
             name: true,
-            customer: { select: { id: true, name: true } },
+            person: { select: { id: true, name: true } },
             company: { select: { id: true, name: true } },
         },
     },

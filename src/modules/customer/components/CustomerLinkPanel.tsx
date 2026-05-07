@@ -44,7 +44,7 @@ export default function CustomerLinkPanel({ customerId, initialLinks }: Props) {
 
     const link = async (companyId: number, companyName: string) => {
         try {
-            await axios.post(`/api/companies/${companyId}/links`, { customerId });
+            await axios.post(`/api/companies/${companyId}/links`, { personId: customerId });
             toast.success(`Linked to ${companyName}`);
             setShowSearch(false);
             setQuery("");
@@ -58,7 +58,7 @@ export default function CustomerLinkPanel({ customerId, initialLinks }: Props) {
 
     const unlink = async (companyId: number, linkId: number) => {
         try {
-            await axios.delete(`/api/companies/${companyId}/links?customerId=${customerId}`);
+            await axios.delete(`/api/companies/${companyId}/links?personId=${customerId}`);
             setLinks(prev => prev.filter(l => l.id !== linkId));
             toast.success("Unlinked");
         } catch {

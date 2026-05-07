@@ -21,8 +21,8 @@ model AccountGroup {
 
 // ── Account (unified chart-of-accounts + identity ledger) ────────────────────
 //
-// Every row is a proper ledger account. Customer/company accounts have
-// customerId / companyId set and are created automatically on signup.
+// Every row is a proper ledger account. Person/company accounts have
+// personId / companyId set and are created automatically on signup.
 // Pure GL accounts (Cash, Revenue, etc.) leave those fields null.
 
 model Account {
@@ -36,21 +36,25 @@ model Account {
   balance       Decimal        @default(0) @db.Decimal(14, 2)
   parentId      Int?
   groupId       Int?
-  // Identity linkage — set only for customer / company accounts
-  customerId    Int?           @unique
+  // Identity linkage — set only for person / company accounts
+  personId      Int?           @unique
   companyId     Int?           @unique
   createdAt     DateTime       @default(now())
 
+  // Per-customer credit limit (future use; null = no limit). Lives on Account
+  // because every Person and every Company gets exactly one Account row.
+  creditLimit Decimal? @db.Decimal(14, 2)
+
   // Tally-style opening balance — entered on the master, dated at booksBeginningFrom.
   // Imbalance across all accounts auto-parks to the seeded "Difference in Opening Balances" suspense ledger.
-  openingBalance     Decimal?       @db.Decimal(14, 2)
+  openingBalance     Decimal?   @db.Decimal(14, 2)
   openingBalanceType EntryType?
-  openingBalanceDate DateTime?      @db.Date
+  openingBalanceDate DateTime?  @db.Date
 
   parent        Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
   children      Account[]     @relation("AccountHierarchy")
   group         AccountGroup? @relation(fields: [groupId], references: [id])
-  customer      Customer?     @relation(fields: [customerId], references: [id])
+  person        Person?       @relation(fields: [personId], references: [id])
   company       Company?      @relation(fields: [companyId], references: [id])
   lines         JournalLine[]
   voucherLines  VoucherLine[]
@@ -62,7 +66,7 @@ model Account {
 
   @@index([type])
   @@index([isActive])
-  @@index([customerId])
+  @@index([personId])
   @@index([companyId])
   @@index([groupId])
 }

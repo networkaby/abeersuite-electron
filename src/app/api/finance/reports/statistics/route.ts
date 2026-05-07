@@ -52,10 +52,10 @@ export async function GET(req: Request) {
             }),
             prisma.accountGroup.count({ where: { isActive: true } }),
             prisma.account.count({
-                where: { isActive: true, customerId: null, companyId: null },
+                where: { isActive: true, personId: null, companyId: null },
             }),
             prisma.account.count({
-                where: { isActive: true, OR: [{ customerId: { not: null } }, { companyId: { not: null } }] },
+                where: { isActive: true, OR: [{ personId: { not: null } }, { companyId: { not: null } }] },
             }),
             prisma.invProduct.count({ where: { isActive: true } }),
             prisma.invUnit.count({ where: { isActive: true } }),

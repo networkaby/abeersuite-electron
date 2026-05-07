@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatDate } from "@/lib/format-date";
 import { ArrowLeft, Building2, User, Smartphone, Eye } from "lucide-react";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
+import { getCompanyContacts } from "@/lib/company-contacts";
 
 export default async function CompanyDetailPage({
     params,
@@ -11,9 +12,10 @@ export default async function CompanyDetailPage({
     params: Promise<{ id: string }>;
 }) {
     const { id } = await params;
+    const companyId = Number(id);
 
     const company = await prisma.company.findUnique({
-        where: { id: Number(id) },
+        where: { id: companyId },
         include: {
             account: {
                 select: { id: true },
@@ -31,16 +33,24 @@ export default async function CompanyDetailPage({
                     },
                 },
             },
-            customers: {
+            persons: {
                 where: { unlinkedAt: null },
                 include: {
-                    customer: { select: { id: true, name: true, phone: true } },
+                    person: {
+                        select: {
+                            id: true,
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        },
+                    },
                 },
             },
         },
     });
 
     if (!company || !company.isActive) notFound();
+
+    const contacts = await getCompanyContacts(companyId);
 
     return (
         <div>
@@ -62,16 +72,49 @@ export default async function CompanyDetailPage({
                 <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">Company Info</h2>
                     <div className="space-y-2 text-sm">
-                        {company.phone && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Phone</span>
-                                <span className="font-medium">{company.phone}</span>
+                        {contacts.phones.length > 0 && (
+                            <div>
+                                <span className="text-muted-foreground block mb-1">Phones</span>
+                                <ul className="space-y-1">
+                                    {contacts.phones.map(p => (
+                                        <li key={p.id} className="flex items-center justify-between">
+                                            <span className="font-medium">{p.value}</span>
+                                            {p.isPrimary && <span className="text-[10px] uppercase text-muted-foreground">primary</span>}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
-                        {company.email && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Email</span>
-                                <span className="font-medium">{company.email}</span>
+                        {contacts.emails.length > 0 && (
+                            <div>
+                                <span className="text-muted-foreground block mb-1">Emails</span>
+                                <ul className="space-y-1">
+                                    {contacts.emails.map(e => (
+                                        <li key={e.id} className="flex items-center justify-between">
+                                            <span className="font-medium">{e.value}</span>
+                                            {e.isPrimary && <span className="text-[10px] uppercase text-muted-foreground">primary</span>}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {(contacts.derivedPhones.length > 0 || contacts.derivedEmails.length > 0) && (
+                            <div className="pt-2 border-t border-border">
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground block mb-1">From linked people</span>
+                                <ul className="space-y-1 text-xs">
+                                    {contacts.derivedPhones.map(p => (
+                                        <li key={`p${p.id}`} className="flex items-center justify-between">
+                                            <span>{p.value}</span>
+                                            <span className="text-muted-foreground">{p.fromPersonName}</span>
+                                        </li>
+                                    ))}
+                                    {contacts.derivedEmails.map(e => (
+                                        <li key={`e${e.id}`} className="flex items-center justify-between">
+                                            <span>{e.value}</span>
+                                            <span className="text-muted-foreground">{e.fromPersonName}</span>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
                         {company.address && (
@@ -112,9 +155,13 @@ export default async function CompanyDetailPage({
                             <User size={14} /> Linked Contacts
                         </h2>
                     </div>
-                    <CompanyLinkPanel companyId={company.id} initialLinks={company.customers.map(cc => ({
+                    <CompanyLinkPanel companyId={company.id} initialLinks={company.persons.map(cc => ({
                         id: cc.id,
-                        customer: { id: cc.customer.id, name: cc.customer.name, phone: cc.customer.phone },
+                        customer: {
+                            id: cc.person.id,
+                            name: cc.person.name,
+                            phone: cc.person.phones[0]?.phone ?? null,
+                        },
                     }))} />
                 </div>
 

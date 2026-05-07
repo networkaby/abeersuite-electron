@@ -105,7 +105,7 @@ export default function AllCustomersPage() {
     const [companyTab, setCompanyTab] = useState<CompanyTab>("contacts");
 
     useEffect(() => {
-        axios.get<PersonRow[]>("/api/customers").then((res) => setPeople(res.data)).catch(() => setPeople([]));
+        axios.get<PersonRow[]>("/api/people").then((res) => setPeople(res.data)).catch(() => setPeople([]));
         axios.get<CompanyRow[]>("/api/companies").then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
     }, []);
 
@@ -129,7 +129,7 @@ export default function AllCustomersPage() {
 
             if (selected.kind === "person") {
                 axios
-                    .get<PersonDetail>(`/api/customers/${selected.id}`)
+                    .get<PersonDetail>(`/api/people/${selected.id}`)
                     .then((res) => {
                         if (cancelled) return;
                         setPersonDetail(res.data);

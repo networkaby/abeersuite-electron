@@ -4,21 +4,21 @@ import { normalizePortalEmail, normalizePortalPhone } from "@/lib/auth/portal-id
 type ReconcileResult = {
     scanned: number;
     updated: number;
-    createdCustomers: number;
+    createdPersons: number;
     createdAccounts: number;
     skipped: number;
 };
 
-async function ensureCustomerAccount(customerId: number, fallbackName: string, dryRun: boolean) {
+async function ensurePersonAccount(personId: number, fallbackName: string, dryRun: boolean) {
     const existing = await prisma.account.findUnique({
-        where: { customerId },
+        where: { personId },
         select: { id: true },
     });
     if (existing) return { accountId: existing.id, created: false };
 
     if (dryRun) return { accountId: -1, created: true };
     const created = await prisma.account.create({
-        data: { customerId, name: fallbackName || "Customer" },
+        data: { personId, name: fallbackName || "Customer" },
         select: { id: true },
     });
     return { accountId: created.id, created: true };
@@ -28,7 +28,7 @@ async function run(dryRun: boolean): Promise<ReconcileResult> {
     const result: ReconcileResult = {
         scanned: 0,
         updated: 0,
-        createdCustomers: 0,
+        createdPersons: 0,
         createdAccounts: 0,
         skipped: 0,
     };
@@ -38,7 +38,7 @@ async function run(dryRun: boolean): Promise<ReconcileResult> {
         orderBy: { createdAt: "asc" },
         select: {
             id: true,
-            customerId: true,
+            personId: true,
             guestEmail: true,
             guestPhone: true,
             createdAt: true,
@@ -50,62 +50,77 @@ async function run(dryRun: boolean): Promise<ReconcileResult> {
         const guestEmailNorm = order.guestEmail ? normalizePortalEmail(order.guestEmail) : null;
         const guestPhoneNorm = order.guestPhone ? normalizePortalPhone(order.guestPhone) : null;
 
-        let customerId = order.customerId;
-        let customerName = "Customer";
+        let personId = order.personId;
+        let personName = "Customer";
 
-        if (!customerId) {
+        if (!personId) {
             const credential = guestEmailNorm || guestPhoneNorm
-                ? await prisma.customerPortalCredential.findFirst({
+                ? await prisma.personPortalCredential.findFirst({
                       where: {
                           OR: [
                               ...(guestEmailNorm ? [{ emailNormalized: guestEmailNorm }] : []),
                               ...(guestPhoneNorm ? [{ phoneNormalized: guestPhoneNorm }] : []),
                           ],
                       },
-                      include: { customer: { select: { id: true, name: true } } },
+                      include: { person: { select: { id: true, name: true } } },
                   })
                 : null;
 
-            if (credential?.customer?.id) {
-                customerId = credential.customer.id;
-                customerName = credential.customer.name;
+            if (credential?.person?.id) {
+                personId = credential.person.id;
+                personName = credential.person.name;
             } else if (guestEmailNorm || guestPhoneNorm) {
                 if (dryRun) {
-                    customerId = -1;
-                    customerName = guestEmailNorm ? guestEmailNorm.split("@")[0] : "Customer";
+                    personId = -1;
+                    personName = guestEmailNorm ? guestEmailNorm.split("@")[0] : "Customer";
                 } else {
-                    const createdCustomer = await prisma.customer.create({
-                        data: {
-                            name: guestEmailNorm ? guestEmailNorm.split("@")[0] : "Customer",
-                            email: guestEmailNorm ?? undefined,
-                            phone: guestPhoneNorm ? `+91${guestPhoneNorm}` : order.guestPhone ?? undefined,
-                        },
-                        select: { id: true, name: true },
+                    const created = await prisma.$transaction(async (tx) => {
+                        const p = await tx.person.create({
+                            data: {
+                                name: guestEmailNorm ? guestEmailNorm.split("@")[0] : "Customer",
+                            },
+                            select: { id: true, name: true },
+                        });
+                        if (guestEmailNorm) {
+                            await tx.email.create({
+                                data: { email: guestEmailNorm, personId: p.id, isPrimary: true },
+                            });
+                        }
+                        if (guestPhoneNorm || order.guestPhone) {
+                            await tx.phone.create({
+                                data: {
+                                    phone: guestPhoneNorm ? `+91${guestPhoneNorm}` : order.guestPhone!,
+                                    personId: p.id,
+                                    isPrimary: true,
+                                },
+                            });
+                        }
+                        return p;
                     });
-                    customerId = createdCustomer.id;
-                    customerName = createdCustomer.name;
-                    result.createdCustomers += 1;
+                    personId = created.id;
+                    personName = created.name;
+                    result.createdPersons += 1;
                 }
             } else {
                 result.skipped += 1;
                 continue;
             }
         } else {
-            const customer = await prisma.customer.findUnique({
-                where: { id: customerId },
+            const person = await prisma.person.findUnique({
+                where: { id: personId },
                 select: { name: true },
             });
-            customerName = customer?.name ?? "Customer";
+            personName = person?.name ?? "Customer";
         }
 
-        const ensured = await ensureCustomerAccount(customerId, customerName, dryRun);
+        const ensured = await ensurePersonAccount(personId, personName, dryRun);
         if (ensured.created) result.createdAccounts += 1;
 
         if (!dryRun) {
             await prisma.shopOrder.update({
                 where: { id: order.id },
                 data: {
-                    customerId,
+                    personId,
                     accountId: ensured.accountId,
                 },
             });
@@ -140,4 +155,3 @@ main()
     .finally(async () => {
         await prisma.$disconnect();
     });
-

@@ -50,7 +50,7 @@ export async function PATCH(
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            include: { device: { include: { account: { include: { customer: true, company: true } } } } },
+            include: { device: { include: { account: { include: { person: true, company: true } } } } },
         });
         if (!ticket) {
             return NextResponse.json({ error: "Ticket not found" }, { status: 404 });

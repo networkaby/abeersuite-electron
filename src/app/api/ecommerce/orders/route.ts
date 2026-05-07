@@ -2,15 +2,23 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
+import { Prisma } from "@/generated/prisma/client";
 import { getOrdersPipeline } from "@/lib/orders-pipeline";
 import { z } from "zod";
 
 const ACCOUNT_SELECT = {
     id: true,
     name: true,
-    customer: { select: { id: true, name: true, phone: true, email: true } },
+    person: {
+        select: {
+            id: true,
+            name: true,
+            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+        },
+    },
     company: { select: { id: true, name: true } },
-} as const;
+} satisfies Prisma.AccountSelect;
 
 export async function GET(req: Request) {
     const { response } = await requirePermission("ecommerce:manage");
@@ -47,12 +55,12 @@ export async function GET(req: Request) {
                 ...(q
                     ? {
                           OR: [
-                              { account: { customer: { name: { contains: q, mode: "insensitive" as const } } } },
-                              { account: { customer: { phone: { contains: q } } } },
-                              { account: { customer: { email: { contains: q, mode: "insensitive" as const } } } },
+                              { account: { person: { name: { contains: q, mode: "insensitive" as const } } } },
+                              { account: { person: { phones: { some: { phone: { contains: q } } } } } },
+                              { account: { person: { emails: { some: { email: { contains: q, mode: "insensitive" as const } } } } } },
                               { account: { company: { name: { contains: q, mode: "insensitive" as const } } } },
-                              // Legacy compat — orders still using customerId
-                              { customer: { name: { contains: q, mode: "insensitive" as const } } },
+                              // Legacy compat — orders still using personId
+                              { person: { name: { contains: q, mode: "insensitive" as const } } },
                               ...(Number.isFinite(Number(q)) && String(Number(q)) === q.trim()
                                   ? [{ id: Number(q) }]
                                   : []),
@@ -65,7 +73,14 @@ export async function GET(req: Request) {
             skip: (page - 1) * take,
             include: {
                 account: { select: ACCOUNT_SELECT },
-                customer: { select: { id: true, name: true, email: true, phone: true } },
+                person: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    },
+                },
                 orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
                 invoice: { select: { id: true, number: true, status: true } },
                 lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },

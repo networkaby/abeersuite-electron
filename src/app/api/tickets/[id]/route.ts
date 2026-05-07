@@ -53,8 +53,16 @@ export async function GET(
                         account: {
                             select: {
                                 id: true, name: true,
-                                customer: { select: { phone: true } },
-                                company:  { select: { phone: true } },
+                                person: {
+                                    select: {
+                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    },
+                                },
+                                company: {
+                                    select: {
+                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    },
+                                },
                             },
                         },
                     },
@@ -95,7 +103,10 @@ export async function GET(
                 ...ticket.device,
                 account: ticket.device.account ? {
                     ...ticket.device.account,
-                    phone: ticket.device.account.customer?.phone ?? ticket.device.account.company?.phone ?? null,
+                    phone:
+                        ticket.device.account.person?.phones?.[0]?.phone
+                        ?? ticket.device.account.company?.phones?.[0]?.phone
+                        ?? null,
                 } : null,
             },
         });

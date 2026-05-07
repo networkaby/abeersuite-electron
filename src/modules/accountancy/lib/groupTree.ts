@@ -11,7 +11,7 @@ export type LedgerNode = {
     code: string | null;
     type: string | null;
     normalBalance: "DEBIT" | "CREDIT" | null;
-    customerId: number | null;
+    personId: number | null;
     companyId:  number | null;
     opening: number;
     debits:  number;
@@ -56,7 +56,7 @@ export async function buildGroupTree(
             select: {
                 id: true, name: true, code: true, type: true,
                 normalBalance: true, groupId: true,
-                customerId: true, companyId: true,
+                personId: true, companyId: true,
             },
             orderBy: [{ name: "asc" }],
         }),
@@ -91,7 +91,7 @@ export async function buildGroupTree(
             code: a.code,
             type: a.type,
             normalBalance: a.normalBalance,
-            customerId: a.customerId,
+            personId: a.personId,
             companyId:  a.companyId,
             opening: agg?.opening ?? 0,
             debits:  agg?.debits  ?? 0,

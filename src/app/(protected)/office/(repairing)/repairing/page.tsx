@@ -63,7 +63,7 @@ async function AdminDashboardServer({ name, context }: { name: string; context: 
             orderBy: { updatedAt: "desc" },
             take: 100,
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
@@ -76,8 +76,12 @@ async function AdminDashboardServer({ name, context }: { name: string; context: 
         ...t,
         device: {
             ...t.device,
-            customer: t.device.account?.customer ?? null,
-            company: t.device.account?.company ?? null,
+            customer: t.device.account?.person
+                ? { name: t.device.account.person.name, phone: t.device.account.person.phones[0]?.phone ?? null }
+                : null,
+            company: t.device.account?.company
+                ? { name: t.device.account.company.name, phone: t.device.account.company.phones[0]?.phone ?? null }
+                : null,
         },
         pendingTeam: (t.ticketSubStatus?.notifyRoles.length ?? 0) > 0
             ? t.ticketSubStatus!.notifyRoles
@@ -104,7 +108,7 @@ async function TechnicianDashboardServer({ name, userId, context }: { name: stri
             where: { ...ticketWhere(context), ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
@@ -119,16 +123,25 @@ async function TechnicianDashboardServer({ name, userId, context }: { name: stri
             orderBy: { createdAt: "asc" },
             take: 10,
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
             },
         }),
         prisma.role.findMany({ orderBy: { id: "asc" } }),
     ]);
 
-    const normaliseDevice = <T extends { device: { account?: { customer?: { name: string; phone?: string | null } | null; company?: { name: string; phone?: string | null } | null } | null } }>(t: T) => ({
+    type Phoneable = { name: string; phones: { phone: string }[] };
+    const normaliseDevice = <T extends { device: { account?: { person?: Phoneable | null; company?: Phoneable | null } | null } }>(t: T) => ({
         ...t,
-        device: { ...t.device, customer: t.device.account?.customer ?? null, company: t.device.account?.company ?? null },
+        device: {
+            ...t.device,
+            customer: t.device.account?.person
+                ? { name: t.device.account.person.name, phone: t.device.account.person.phones[0]?.phone ?? null }
+                : null,
+            company: t.device.account?.company
+                ? { name: t.device.account.company.name, phone: t.device.account.company.phones[0]?.phone ?? null }
+                : null,
+        },
     });
 
     const allActiveTickets = rawTickets.map(t => ({
@@ -173,7 +186,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 primaryOwner: { select: { name: true } },
@@ -183,7 +196,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
                 ticketSubStatus: { select: { label: true, color: true } },
             },
@@ -240,7 +253,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>
                                     </div>
                                     <p className="text-sm font-medium text-foreground mt-1">
-                                        {(t.device.account?.customer ?? t.device.account?.company)?.name}
+                                        {(t.device.account?.person ?? t.device.account?.company)?.name}
                                         <span className="text-muted-foreground font-normal text-xs ml-2">· {t.device.brand} {t.device.model}</span>
                                     </p>
                                     {t.ticketStatus.actionLabel && (
@@ -285,8 +298,8 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
                                         <span className="text-xs text-muted-foreground">{timeAgo(t.updatedAt)}</span>
                                     </div>
                                     <p className="text-sm font-medium text-foreground mt-1">
-                                        {(t.device.account?.customer ?? t.device.account?.company)?.name}
-                                        <span className="text-muted-foreground font-normal"> · {(t.device.account?.customer ?? t.device.account?.company)?.phone}</span>
+                                        {(t.device.account?.person ?? t.device.account?.company)?.name}
+                                        <span className="text-muted-foreground font-normal"> · {(t.device.account?.person?.phones[0]?.phone ?? t.device.account?.company?.phones[0]?.phone)}</span>
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                         {t.device.brand} {t.device.model}
@@ -330,7 +343,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
@@ -341,7 +354,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { customer: { select: { name: true, phone: true } }, company: { select: { name: true, phone: true } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
             },
@@ -399,7 +412,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                     </div>
                                     <p className="text-sm font-medium text-foreground mt-1">
                                         {t.device.brand} {t.device.model}
-                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {(t.device.account?.customer ?? t.device.account?.company)?.name}</span>
+                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {(t.device.account?.person ?? t.device.account?.company)?.name}</span>
                                     </p>
                                     {t.serviceCenter && (
                                         <p className="text-xs text-muted-foreground mt-0.5">Service Centre: {t.serviceCenter.name}</p>
@@ -447,7 +460,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
                                     </div>
                                     <p className="text-sm font-medium text-foreground mt-1">
                                         {t.device.brand} {t.device.model}
-                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {(t.device.account?.customer ?? t.device.account?.company)?.name}</span>
+                                        <span className="text-muted-foreground font-normal text-xs ml-2">· {(t.device.account?.person ?? t.device.account?.company)?.name}</span>
                                     </p>
                                     {t.serviceCenter && (
                                         <p className="text-xs text-muted-foreground mt-0.5">Service Centre: {t.serviceCenter.name}</p>

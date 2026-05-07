@@ -2,17 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
+import { ContactConflictError } from "@/lib/contact-write";
 
-const createCustomerSchema = z.object({
+const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
-    phone: z.string().trim().optional().or(z.literal("")),
-    email: z.string().email("Invalid email").optional().or(z.literal("")),
+    // Multi-value contacts. The first entry is treated as primary unless an
+    // entry explicitly carries `isPrimary: true`.
+    phones: z.array(z.string().trim().min(1)).optional().default([]),
+    emails: z.array(z.string().email()).optional().default([]),
     address: z.string().trim().optional().or(z.literal("")),
     agreedToTerms: z.boolean().optional(),
-    // Where to put the auto-created ledger account. Defaults to Sundry Debtors
-    // (i.e. a customer). Pass "Sundry Creditors" to register a supplier.
     accountGroup: z.enum(["Sundry Debtors", "Sundry Creditors"]).optional(),
-    // GST profile (optional)
     gstin:        z.string().trim().optional().or(z.literal("")),
     gstStateCode: z.string().trim().optional().or(z.literal("")),
     gstRegType:   z.enum(["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"]).optional(),
@@ -22,23 +22,26 @@ type LookupResult = {
     id: number;
     name: string;
     phone: string | null;
+    // Discriminator kept as "customer"/"company" for back-compat with existing
+    // consumers (POS, QuickTicket, party pickers).
     type: "customer" | "company";
     accountId: number | null;
     linkedCompanies: { id: number; name: string; accountId: number | null }[];
 };
 
 async function lookupAccounts(term: string): Promise<LookupResult[]> {
-    const [customers, companies] = await Promise.all([
-        prisma.customer.findMany({
+    const [persons, companies] = await Promise.all([
+        prisma.person.findMany({
             where: {
                 isActive: true,
                 OR: [
                     { name: { contains: term, mode: "insensitive" } },
-                    { phone: { contains: term } },
+                    { phones: { some: { phone: { contains: term } } } },
                 ],
             },
             include: {
                 account: { select: { id: true } },
+                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
                 companies: {
                     where: { unlinkedAt: null },
                     include: {
@@ -56,23 +59,26 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
                 isActive: true,
                 OR: [
                     { name: { contains: term, mode: "insensitive" } },
-                    { phone: { contains: term } },
+                    { phones: { some: { phone: { contains: term } } } },
                 ],
             },
-            include: { account: { select: { id: true } } },
+            include: {
+                account: { select: { id: true } },
+                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+            },
             take: 8,
             orderBy: { createdAt: "desc" },
         }),
     ]);
 
     return [
-        ...customers.map(c => ({
-            id: c.id,
-            name: c.name,
-            phone: c.phone,
+        ...persons.map(p => ({
+            id: p.id,
+            name: p.name,
+            phone: p.phones[0]?.phone ?? null,
             type: "customer" as const,
-            accountId: c.account?.id ?? null,
-            linkedCompanies: c.companies.map(lc => ({
+            accountId: p.account?.id ?? null,
+            linkedCompanies: p.companies.map(lc => ({
                 id: lc.company.id,
                 name: lc.company.name,
                 accountId: lc.company.account?.id ?? null,
@@ -81,7 +87,7 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
         ...companies.map(c => ({
             id: c.id,
             name: c.name,
-            phone: c.phone,
+            phone: c.phones[0]?.phone ?? null,
             type: "company" as const,
             accountId: c.account?.id ?? null,
             linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],
@@ -89,7 +95,7 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
     ].slice(0, 8);
 }
 
-// GET /api/customers?phone=...&q=...&lookup=...
+// GET /api/people?phone=...&q=...&lookup=...
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -102,23 +108,17 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
 
     try {
-        if (phone) {
-            return NextResponse.json(await lookupAccounts(phone));
-        }
+        if (phone) return NextResponse.json(await lookupAccounts(phone));
+        if (lookup) return NextResponse.json(await lookupAccounts(lookup));
 
-        if (lookup) {
-            return NextResponse.json(await lookupAccounts(lookup));
-        }
-
-        // General list / search
-        const customers = await prisma.customer.findMany({
+        const persons = await prisma.person.findMany({
             where: {
                 isActive: true,
                 ...(q ? {
                     OR: [
                         { name: { contains: q, mode: "insensitive" } },
-                        { phone: { contains: q } },
-                        { email: { contains: q, mode: "insensitive" } },
+                        { phones: { some: { phone: { contains: q } } } },
+                        { emails: { some: { email: { contains: q, mode: "insensitive" } } } },
                     ],
                 } : {}),
             },
@@ -127,44 +127,48 @@ export async function GET(req: Request) {
             skip: (page - 1) * take,
             include: {
                 _count: { select: { companies: true } },
+                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
                 account: {
                     select: { id: true, _count: { select: { devices: true } } },
                 },
             },
         });
 
-        const normalised = customers.map(c => ({
-            ...c,
+        const normalised = persons.map(p => ({
+            ...p,
+            phone: p.phones[0]?.phone ?? null,
+            email: p.emails[0]?.email ?? null,
             _count: {
-                companies: c._count.companies,
-                devices: c.account?._count?.devices ?? 0,
+                companies: p._count.companies,
+                devices: p.account?._count?.devices ?? 0,
             },
         }));
         return NextResponse.json(normalised);
     } catch (error) {
         console.error(error);
-        return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to fetch people" }, { status: 500 });
     }
 }
 
-// POST /api/customers — create customer + auto-create ledger account
+// POST /api/people — create person + auto-create ledger account + contact rows
 export async function POST(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
-    const parsed = createCustomerSchema.safeParse(await req.json());
+    const parsed = createPersonSchema.safeParse(await req.json());
     if (!parsed.success) {
         return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
     }
     const body = parsed.data;
+    const phones = body.phones.filter(p => p.trim().length > 0);
+    const emails = body.emails.filter(e => e.trim().length > 0);
 
     try {
-        const customer = await prisma.$transaction(async (tx) => {
-            const c = await tx.customer.create({
+        const person = await prisma.$transaction(async (tx) => {
+            const p = await tx.person.create({
                 data: {
                     name: body.name,
-                    phone: body.phone || null,
-                    email: body.email || null,
                     address: body.address || null,
                     agreedToTerms: body.agreedToTerms ?? false,
                     agreedAt: body.agreedToTerms ? new Date() : null,
@@ -174,27 +178,60 @@ export async function POST(req: Request) {
                     gstRegType:   body.gstRegType ?? (body.gstin ? "REGULAR" : null),
                 },
             });
-            // Auto-create ledger account under the requested group
-            // (default Sundry Debtors — i.e. customer/buyer side).
+
+            for (let i = 0; i < phones.length; i++) {
+                await tx.phone.create({
+                    data: { phone: phones[i], personId: p.id, isPrimary: i === 0 },
+                });
+            }
+            for (let i = 0; i < emails.length; i++) {
+                await tx.email.create({
+                    data: { email: emails[i], personId: p.id, isPrimary: i === 0 },
+                });
+            }
+
             const groupName = body.accountGroup ?? "Sundry Debtors";
             const group = await tx.accountGroup.findFirst({
                 where: { name: groupName },
                 select: { id: true },
             });
             await tx.account.create({
-                data: { customerId: c.id, name: c.name, groupId: group?.id ?? null },
+                data: { personId: p.id, name: p.name, groupId: group?.id ?? null },
             });
-            return c;
+            return p;
         });
 
-        const full = await prisma.customer.findUnique({
-            where: { id: customer.id },
-            include: { account: { select: { id: true } } },
+        const full = await prisma.person.findUnique({
+            where: { id: person.id },
+            include: {
+                account: { select: { id: true } },
+                phones: true,
+                emails: true,
+            },
         });
 
         return NextResponse.json(full, { status: 201 });
     } catch (error) {
+        if (error instanceof ContactConflictError) {
+            return NextResponse.json({ error: error.message, field: error.field }, { status: 409 });
+        }
+        // Duck-type instead of instanceof — across the rsc bundling boundary the
+        // Prisma error class identity isn't guaranteed to match.
+        const e = error as { code?: string; meta?: { modelName?: string; target?: string[] | string } } | null;
+        if (e?.code === "P2002") {
+            const model = e.meta?.modelName?.toLowerCase();
+            const tgt = Array.isArray(e.meta?.target) ? e.meta.target.join(",") : e.meta?.target;
+            const isPhone = model === "phone" || (typeof tgt === "string" && tgt.includes("phone"));
+            const isEmail = model === "email" || (typeof tgt === "string" && tgt.includes("email"));
+            if (isPhone || isEmail) {
+                const field = isPhone ? "phone" : "email";
+                return NextResponse.json(
+                    { error: `This ${field} is already used by another contact`, field },
+                    { status: 409 },
+                );
+            }
+        }
         console.error(error);
-        return NextResponse.json({ error: "Failed to create customer" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to create person" }, { status: 500 });
     }
 }

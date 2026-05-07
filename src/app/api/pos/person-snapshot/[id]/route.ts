@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-guard";
 
-// GET /api/pos/customer-snapshot/[id]
+// GET /api/pos/person-snapshot/[id]
 // "We know you" panel for the POS — aggregates everything in one call so the UI
 // can render quickly without N round-trips.
 //
 // Returns:
-//   customer       — id, name, phone, email, gstin
+//   person         — id, name, primaryPhone, primaryEmail, gstin
 //   account        — current ledger balance + opening balance
 //   turnover       — lifetime invoice total + last-12-month total
 //   discountPct    — TODO (no schema field yet) — placeholder tier from turnover
@@ -24,16 +24,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     try {
-        const customer = await prisma.customer.findUnique({
+        const person = await prisma.person.findUnique({
             where: { id },
             select: {
-                id: true, name: true, phone: true, email: true, gstin: true,
+                id: true, name: true, gstin: true,
+                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
                 account: { select: { id: true, balance: true, openingBalance: true } },
             },
         });
-        if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+        if (!person) return NextResponse.json({ error: "Person not found" }, { status: 404 });
 
-        const accountId = customer.account?.id;
+        const accountId = person.account?.id;
 
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -84,7 +86,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         const ytdTotal = Number(ytdAgg?._sum.totalAmount ?? 0);
         const invoiceCount = lifetimeAgg?._count._all ?? 0;
 
-        // Placeholder tier: 0% under ₹10k lifetime, 2% under ₹50k, 5% under ₹2L, 8% above.
         const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
         const loyaltyPoints = Math.floor(lifetimeTotal / 100);
 
@@ -97,18 +98,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         })();
 
         return NextResponse.json({
-            customer: {
-                id: customer.id,
-                name: customer.name,
-                phone: customer.phone,
-                email: customer.email,
-                gstin: customer.gstin,
+            person: {
+                id: person.id,
+                name: person.name,
+                phone: person.phones[0]?.phone ?? null,
+                email: person.emails[0]?.email ?? null,
+                gstin: person.gstin,
             },
-            account: customer.account
+            account: person.account
                 ? {
-                    id: customer.account.id,
-                    balance: Number(customer.account.balance),
-                    openingBalance: customer.account.openingBalance ? Number(customer.account.openingBalance) : null,
+                    id: person.account.id,
+                    balance: Number(person.account.balance),
+                    openingBalance: person.account.openingBalance ? Number(person.account.openingBalance) : null,
                 }
                 : null,
             turnover: {
@@ -125,7 +126,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
                 statusLabel: t.ticketStatus?.label ?? "—",
                 statusColor: t.ticketStatus?.color ?? "",
             })),
-            // Placeholder; real warranty-end-date isn't in schema yet
             warrantiesEnding: [] as Array<{ productName: string; endsAt: string }>,
         });
     } catch (err) {

@@ -22,40 +22,49 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const customerId = Number(id);
-    if (Number.isNaN(customerId)) {
-        return NextResponse.json({ error: "Invalid customer id" }, { status: 400 });
+    const personId = Number(id);
+    if (Number.isNaN(personId)) {
+        return NextResponse.json({ error: "Invalid person id" }, { status: 400 });
     }
 
-    const customer = await prisma.customer.findUnique({
-        where: { id: customerId },
-        select: { id: true, isActive: true, email: true, phone: true, name: true },
+    const person = await prisma.person.findUnique({
+        where: { id: personId },
+        select: {
+            id: true,
+            isActive: true,
+            name: true,
+            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+        },
     });
-    if (!customer || !customer.isActive) {
-        return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    if (!person || !person.isActive) {
+        return NextResponse.json({ error: "Person not found" }, { status: 404 });
     }
 
-    const emailNormalized = customer.email ? normalizePortalEmail(customer.email) : null;
-    const phoneNormalized = customer.phone ? normalizePortalPhone(customer.phone) : null;
+    const primaryEmail = person.emails[0]?.email ?? null;
+    const primaryPhone = person.phones[0]?.phone ?? null;
+
+    const emailNormalized = primaryEmail ? normalizePortalEmail(primaryEmail) : null;
+    const phoneNormalized = primaryPhone ? normalizePortalPhone(primaryPhone) : null;
 
     if (!emailNormalized && !phoneNormalized) {
         return NextResponse.json(
-            { error: "Customer must have email or mobile to receive a portal login credential" },
+            { error: "Person must have email or mobile to receive a portal login credential" },
             { status: 409 }
         );
     }
 
     try {
         const passwordHash = await bcrypt.hash(parsed.data.tempPassword, 10);
-        await prisma.customerPortalCredential.upsert({
-            where: { customerId },
+        await prisma.personPortalCredential.upsert({
+            where: { personId },
             update: {
                 passwordHash,
                 emailNormalized,
                 phoneNormalized,
             },
             create: {
-                customerId,
+                personId,
                 passwordHash,
                 emailNormalized,
                 phoneNormalized,
@@ -64,11 +73,10 @@ export async function PATCH(
 
         return NextResponse.json({
             success: true,
-            customerId,
-            customerName: customer.name,
+            personId,
+            personName: person.name,
         });
     } catch {
-        return NextResponse.json({ error: "Failed to reset customer portal password" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to reset person portal password" }, { status: 500 });
     }
 }
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -8,11 +8,13 @@ import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
     ShoppingCart, Plus, Minus, Trash2, Receipt, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
+    ChevronDown,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -22,10 +24,20 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type CustomerHit = { id: number; name: string; phone: string | null; email: string | null };
+type PartyKind = "customer" | "company";
+
+// Mixed-type lookup row from /api/people?lookup=...
+type PartyHit = {
+    id: number;
+    name: string;
+    phone: string | null;
+    type: PartyKind;
+    accountId: number | null;
+    linkedCompanies?: { id: number; name: string; accountId: number | null }[];
+};
 
 type Snapshot = {
-    customer: { id: number; name: string; phone: string | null; email: string | null; gstin: string | null };
+    party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null };
     account: { id: number; balance: number; openingBalance: number | null } | null;
     turnover: { lifetime: number; last12Months: number; invoiceCount: number };
     discountPct: number;
@@ -36,7 +48,6 @@ type Snapshot = {
 };
 
 type ProductOption = { id: number; sku: string; name: string; pricePaise?: number | null; unit?: { code: string } };
-
 type CartLine = { productId: number; sku: string; name: string; qty: number; unitPrice: number };
 
 type PaymentMethod = "CASH" | "UPI" | "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET" | "CREDIT";
@@ -68,40 +79,68 @@ const since = (iso: string | null) => {
     return `${Math.floor(days / 365)} yr ago`;
 };
 
+// "9876543210" or "+91 98765 43210" → phone-like.
+// "Ramesh", "Ramesh 9876" → name-like.
+function isPhoneLike(q: string): boolean {
+    const trimmed = q.trim();
+    if (trimmed.length < 4) return false;
+    const digits = trimmed.replace(/\D/g, "").length;
+    const letters = trimmed.replace(/[^a-zA-Z]/g, "").length;
+    return digits >= 4 && letters === 0;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function PosScreen() {
-    // Customer state
+    // ── Customer search omnibox ─────────────────────────────────────────────
     const [custQuery, setCustQuery] = useState("");
-    const [custHits, setCustHits] = useState<CustomerHit[]>([]);
+    const [custHits, setCustHits] = useState<PartyHit[]>([]);
+    const [highlightedHit, setHighlightedHit] = useState(0);
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
+    const custSearchRef = useRef<HTMLInputElement>(null);
 
-    // Product state
+    // ── Product search + cart ───────────────────────────────────────────────
     const [productQuery, setProductQuery] = useState("");
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
     const [cart, setCart] = useState<CartLine[]>([]);
 
-    // Checkout / payment splits
+    // ── Checkout / payment splits ───────────────────────────────────────────
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [splits, setSplits] = useState<PaymentSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
-    // Quick "create new customer" dialog (walk-ins not yet in the system)
-    const [newCustomerOpen, setNewCustomerOpen] = useState(false);
-    const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "", gstin: "" });
-    const [creatingCustomer, setCreatingCustomer] = useState(false);
+    // ── Smart create-party dialog ───────────────────────────────────────────
+    const [newPartyOpen, setNewPartyOpen] = useState(false);
+    const [newParty, setNewParty] = useState({
+        name: "", phone: "", email: "", address: "", gstin: "",
+        companyName: "", companyPhone: "", companyAddress: "", companyGstin: "",
+    });
+    // Track whether the user has manually edited the company address —
+    // until they do, we mirror person.address into companyAddress.
+    const [companyAddressTouched, setCompanyAddressTouched] = useState(false);
+    const [creatingParty, setCreatingParty] = useState(false);
+
+    const nameRef       = useRef<HTMLInputElement>(null);
+    const phoneRef      = useRef<HTMLInputElement>(null);
+    const addressRef    = useRef<HTMLTextAreaElement>(null);
+    const companyNameRef    = useRef<HTMLInputElement>(null);
+    const companyPhoneRef   = useRef<HTMLInputElement>(null);
+    const companyAddressRef = useRef<HTMLTextAreaElement>(null);
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
-    // Search customers (debounced)
+    // Search persons + companies (debounced) via the polymorphic /api/people endpoint
     useEffect(() => {
         if (custQuery.trim().length < 2) { setCustHits([]); return; }
         const t = setTimeout(() => {
-            axios.get<CustomerHit[]>(`/api/pos/customers/search?q=${encodeURIComponent(custQuery)}`)
-                .then((r) => setCustHits(r.data))
+            axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(custQuery)}`)
+                .then((r) => {
+                    setCustHits(r.data);
+                    setHighlightedHit(0);
+                })
                 .catch(() => setCustHits([]));
-        }, 250);
+        }, 200);
         return () => clearTimeout(t);
     }, [custQuery]);
 
@@ -111,6 +150,24 @@ export default function PosScreen() {
             .then((r) => setAllProducts(r.data))
             .catch(() => { /* page is still useful without it */ });
     }, []);
+
+    // Auto-focus on dialog open: phone-like query → name field, otherwise phone field
+    useEffect(() => {
+        if (!newPartyOpen) return;
+        const t = setTimeout(() => {
+            const phoneLike = isPhoneLike(custQuery);
+            (phoneLike ? nameRef.current : phoneRef.current)?.focus();
+        }, 50);
+        return () => clearTimeout(t);
+    }, [newPartyOpen, custQuery]);
+
+    // Mirror person address → company address until user touches the company-address field
+    useEffect(() => {
+        if (companyAddressTouched) return;
+        if (!newParty.companyName.trim()) return;
+        if (newParty.companyAddress === newParty.address) return;
+        setNewParty((s) => ({ ...s, companyAddress: s.address }));
+    }, [newParty.address, newParty.companyName, newParty.companyAddress, companyAddressTouched]);
 
     // ── Computed ────────────────────────────────────────────────────────────
 
@@ -128,14 +185,17 @@ export default function PosScreen() {
     const tax = 0; // placeholder — wire to GST engine later
     const total = subtotal - discountAmount + tax;
 
+    const showCompanySection = newParty.companyName.trim().length > 0;
+    const canSubmitCreate = newParty.name.trim().length > 0;
+
     // ── Actions ─────────────────────────────────────────────────────────────
 
-    const pickCustomer = async (c: CustomerHit) => {
-        setCustQuery(c.name);
+    const pickByAccountId = async (accountId: number, displayName: string) => {
+        setCustQuery(displayName);
         setCustHits([]);
         setLoadingSnapshot(true);
         try {
-            const { data } = await axios.get<Snapshot>(`/api/pos/customer-snapshot/${c.id}`);
+            const { data } = await axios.get<Snapshot>(`/api/pos/account-snapshot/${accountId}`);
             setSnapshot(data);
         } catch {
             toast.error("Could not load customer details");
@@ -145,38 +205,136 @@ export default function PosScreen() {
         }
     };
 
-    const clearCustomer = () => { setSnapshot(null); setCustQuery(""); };
-
-    const openNewCustomer = () => {
-        // Carry over whatever the user typed in the search box as the name —
-        // saves them retyping for a brand-new walk-in.
-        setNewCustomer({ name: custQuery.trim(), phone: "", email: "", gstin: "" });
-        setCustHits([]);
-        setNewCustomerOpen(true);
+    const pickHit = async (hit: PartyHit) => {
+        if (hit.accountId == null) {
+            toast.error(`${hit.name} has no ledger account yet`);
+            return;
+        }
+        await pickByAccountId(hit.accountId, hit.name);
     };
 
-    const createCustomer = async () => {
-        const name = newCustomer.name.trim();
-        if (!name) { toast.error("Name is required"); return; }
-        setCreatingCustomer(true);
-        try {
-            const { data } = await axios.post<{ id: number; name: string; phone: string | null; email: string | null }>("/api/customers", {
-                name,
-                phone: newCustomer.phone.trim(),
-                email: newCustomer.email.trim(),
-                gstin: newCustomer.gstin.trim(),
-            });
-            toast.success(`Customer added · ${data.name}`);
-            setNewCustomerOpen(false);
-            await pickCustomer({ id: data.id, name: data.name, phone: data.phone, email: data.email });
-        } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Could not create customer");
-        } finally {
-            setCreatingCustomer(false);
+    const clearCustomer = () => { setSnapshot(null); setCustQuery(""); custSearchRef.current?.focus(); };
+
+    const openNewParty = () => {
+        const q = custQuery.trim();
+        const phoneLike = isPhoneLike(q);
+        setNewParty({
+            name:           phoneLike ? "" : q,
+            phone:          phoneLike ? q  : "",
+            email:          "",
+            address:        "",
+            gstin:          "",
+            companyName:    "",
+            companyPhone:   "",
+            companyAddress: "",
+            companyGstin:   "",
+        });
+        setCompanyAddressTouched(false);
+        setCustHits([]);
+        setNewPartyOpen(true);
+    };
+
+    // ── Search box keyboard handler ─────────────────────────────────────────
+    const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "ArrowDown") {
+            if (custHits.length === 0) return;
+            e.preventDefault();
+            setHighlightedHit((i) => Math.min(i + 1, custHits.length - 1));
+        } else if (e.key === "ArrowUp") {
+            if (custHits.length === 0) return;
+            e.preventDefault();
+            setHighlightedHit((i) => Math.max(i - 1, 0));
+        } else if (e.key === "Enter") {
+            if (custQuery.trim().length < 2) return;
+            e.preventDefault();
+            if (custHits.length === 0) {
+                openNewParty();
+            } else {
+                const hit = custHits[highlightedHit] ?? custHits[0];
+                if (hit) void pickHit(hit);
+            }
+        } else if (e.key === "Escape") {
+            setCustHits([]);
         }
     };
 
+    // ── Create dialog: Enter / Tab handlers ─────────────────────────────────
+    const onAddressKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Enter (without shift) on address → submit. Tab → company name (default).
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (canSubmitCreate) void submitCreate();
+        }
+    };
+
+    const onAnyEnterToSubmit = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (canSubmitCreate) void submitCreate();
+        }
+    };
+
+    const submitCreate = async () => {
+        if (!canSubmitCreate) {
+            toast.error("Name is required");
+            nameRef.current?.focus();
+            return;
+        }
+        setCreatingParty(true);
+        try {
+            // 1. Create the Person + Person.Account
+            const personRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
+                "/api/people",
+                {
+                    name:    newParty.name.trim(),
+                    phones:  newParty.phone.trim()   ? [newParty.phone.trim()]   : [],
+                    emails:  newParty.email.trim()   ? [newParty.email.trim()]   : [],
+                    address: newParty.address.trim(),
+                    gstin:   newParty.gstin.trim(),
+                },
+            );
+            const personAccountId = personRes.data.account?.id ?? null;
+
+            let companyAccountId: number | null = null;
+            let companyName = "";
+            if (showCompanySection) {
+                // 2. Create the Company + Company.Account (separate ledger)
+                const companyRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
+                    "/api/companies",
+                    {
+                        name:    newParty.companyName.trim(),
+                        phones:  newParty.companyPhone.trim() ? [newParty.companyPhone.trim()] : [],
+                        emails:  [],
+                        address: newParty.companyAddress.trim(),
+                    },
+                );
+                companyAccountId = companyRes.data.account?.id ?? null;
+                companyName = companyRes.data.name;
+            }
+
+            // Bill to the company if one was created, else to the person
+            const billingAccountId = companyAccountId ?? personAccountId;
+            const billingName      = companyAccountId ? companyName : newParty.name.trim();
+
+            if (!billingAccountId) {
+                toast.error("Created, but no ledger account was returned — try again");
+                return;
+            }
+
+            toast.success(showCompanySection
+                ? `Added · ${newParty.name.trim()} @ ${companyName} — billing to company`
+                : `Added · ${newParty.name.trim()}`);
+            setNewPartyOpen(false);
+            await pickByAccountId(billingAccountId, billingName);
+        } catch (e: unknown) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+            toast.error(msg ?? "Could not create");
+        } finally {
+            setCreatingParty(false);
+        }
+    };
+
+    // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
         const defaultPrice = p.pricePaise ? p.pricePaise / 100 : 0;
         setCart((prev) => {
@@ -199,7 +357,6 @@ export default function PosScreen() {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-        // Pre-seed with one Cash line equal to the full total — the common case.
         setSplits([{ id: crypto.randomUUID(), method: "CASH", amount: total, reference: "" }]);
         setCheckoutOpen(true);
     };
@@ -207,7 +364,6 @@ export default function PosScreen() {
     const generateInvoice = async () => {
         if (!snapshot?.account) return;
         const allocated = splits.reduce((s, p) => s + p.amount, 0);
-        // Allow ±0.01 rounding tolerance
         if (Math.abs(allocated - total) > 0.01) {
             toast.error(`Allocate exactly ${fmtINR(total)} (${fmtINR(total - allocated)} remaining)`);
             return;
@@ -263,22 +419,29 @@ export default function PosScreen() {
                 <div className="relative flex-1 max-w-2xl">
                     <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                     <Input
+                        ref={custSearchRef}
                         value={custQuery}
                         onChange={(e) => { setCustQuery(e.target.value); if (snapshot) setSnapshot(null); }}
-                        placeholder="Search customer by name, phone, or email…"
+                        onKeyDown={onSearchKeyDown}
+                        placeholder="Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"
                         className="pl-9"
                     />
                     {(custHits.length > 0 || (custQuery.trim().length >= 2 && !snapshot)) && (
-                        <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                            {custHits.map((c) => (
-                                <li key={c.id}>
+                        <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                            {custHits.map((c, i) => (
+                                <li key={`${c.type}-${c.id}`}>
                                     <button
                                         type="button"
-                                        onClick={() => pickCustomer(c)}
-                                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                                        onClick={() => pickHit(c)}
+                                        onMouseEnter={() => setHighlightedHit(i)}
+                                        className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
                                     >
-                                        <span>{c.name}</span>
-                                        <span className="text-xs text-muted-foreground">{c.phone ?? c.email ?? ""}</span>
+                                        {c.type === "company" ? <Building2 size={14} className="shrink-0 text-muted-foreground" /> : <User size={14} className="shrink-0 text-muted-foreground" />}
+                                        <span className="flex-1 truncate">{c.name}</span>
+                                        <Badge variant="secondary" className="text-[10px]">
+                                            {c.type === "company" ? "Company" : "Person"}
+                                        </Badge>
+                                        <span className="w-32 truncate text-right text-xs text-muted-foreground">{c.phone ?? ""}</span>
                                     </button>
                                 </li>
                             ))}
@@ -286,11 +449,12 @@ export default function PosScreen() {
                                 <li className="border-t border-border">
                                     <button
                                         type="button"
-                                        onClick={openNewCustomer}
+                                        onClick={openNewParty}
                                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
                                     >
                                         <UserPlus size={14} />
                                         New customer{custHits.length === 0 ? `: "${custQuery.trim()}"` : ""}
+                                        <span className="ml-auto text-[10px] text-muted-foreground">↵</span>
                                     </button>
                                 </li>
                             )}
@@ -302,7 +466,7 @@ export default function PosScreen() {
                         <X size={14} /> Clear
                     </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={openNewCustomer} title="Walk-in customer not in the system yet — create on the fly">
+                <Button variant="outline" size="sm" onClick={openNewParty} title="Walk-in customer not in the system yet — create on the fly">
                     <UserPlus size={14} /> New customer
                 </Button>
                 <Button
@@ -315,11 +479,10 @@ export default function PosScreen() {
                 </Button>
             </header>
 
-            {/* Main grid: products+cart on left, customer panel on right */}
+            {/* Main grid */}
             <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_360px]">
                 {/* Left column — product picker + cart */}
                 <main className="flex min-h-0 flex-col border-r border-border">
-                    {/* Product search */}
                     <div className="shrink-0 border-b border-border p-4">
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
@@ -532,58 +695,163 @@ export default function PosScreen() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── New customer dialog (walk-ins) ──────────────────────────────────── */}
-            <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
-                <DialogContent className="sm:max-w-md">
+            {/* ── New person/company dialog (smart focus + progressive company section) ── */}
+            <Dialog open={newPartyOpen} onOpenChange={setNewPartyOpen}>
+                <DialogContent className={showCompanySection ? "sm:max-w-2xl" : "sm:max-w-md"}>
                     <DialogHeader>
-                        <DialogTitle>New customer</DialogTitle>
+                        <DialogTitle>New customer · ↵ to save</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-3">
-                        <div className="space-y-1.5">
-                            <Label>Name *</Label>
-                            <Input
-                                autoFocus
-                                value={newCustomer.name}
-                                onChange={(e) => setNewCustomer((s) => ({ ...s, name: e.target.value }))}
-                                placeholder="Customer name"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
+
+                    <div className={`grid gap-4 ${showCompanySection ? "sm:grid-cols-2" : ""}`}>
+                        {/* Person section */}
+                        <div className="space-y-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Person
+                            </div>
                             <div className="space-y-1.5">
-                                <Label>Phone</Label>
+                                <Label>Name *</Label>
                                 <Input
-                                    value={newCustomer.phone}
-                                    onChange={(e) => setNewCustomer((s) => ({ ...s, phone: e.target.value }))}
-                                    placeholder="10-digit"
-                                    inputMode="tel"
+                                    ref={nameRef}
+                                    value={newParty.name}
+                                    onChange={(e) => setNewParty((s) => ({ ...s, name: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            // Enter on Name → if phone empty, jump to phone; else submit
+                                            if (!newParty.phone.trim()) phoneRef.current?.focus();
+                                            else if (canSubmitCreate) void submitCreate();
+                                        }
+                                    }}
+                                    placeholder="Customer name"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label>Phone</Label>
+                                    <Input
+                                        ref={phoneRef}
+                                        value={newParty.phone}
+                                        onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && !e.shiftKey) {
+                                                e.preventDefault();
+                                                // Enter on Phone → if name empty, jump to name; else move to address
+                                                if (!newParty.name.trim()) nameRef.current?.focus();
+                                                else addressRef.current?.focus();
+                                            }
+                                        }}
+                                        placeholder="10-digit"
+                                        inputMode="tel"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Email</Label>
+                                    <Input
+                                        value={newParty.email}
+                                        onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
+                                        onKeyDown={onAnyEnterToSubmit}
+                                        placeholder="optional"
+                                        inputMode="email"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Address</Label>
+                                <Textarea
+                                    ref={addressRef}
+                                    value={newParty.address}
+                                    onChange={(e) => setNewParty((s) => ({ ...s, address: e.target.value }))}
+                                    onKeyDown={onAddressKeyDown}
+                                    placeholder="optional · ↵ to save · Tab → company"
+                                    rows={2}
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Email</Label>
+                                <Label>GSTIN</Label>
                                 <Input
-                                    value={newCustomer.email}
-                                    onChange={(e) => setNewCustomer((s) => ({ ...s, email: e.target.value }))}
-                                    placeholder="optional"
-                                    inputMode="email"
+                                    value={newParty.gstin}
+                                    onChange={(e) => setNewParty((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))}
+                                    onKeyDown={onAnyEnterToSubmit}
+                                    placeholder="optional · 15 chars"
+                                    className="font-mono"
+                                />
+                            </div>
+                            <div className="space-y-1.5 pt-1">
+                                <Label className="flex items-center gap-1.5 text-muted-foreground">
+                                    <ChevronDown size={12} className={showCompanySection ? "rotate-180" : ""} />
+                                    Company (optional)
+                                </Label>
+                                <Input
+                                    ref={companyNameRef}
+                                    value={newParty.companyName}
+                                    onChange={(e) => setNewParty((s) => ({ ...s, companyName: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            // Enter on company name → if filled, jump to company phone; else submit
+                                            if (newParty.companyName.trim()) companyPhoneRef.current?.focus();
+                                            else if (canSubmitCreate) void submitCreate();
+                                        }
+                                    }}
+                                    placeholder="Company name (leave empty to bill the person)"
                                 />
                             </div>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label>GSTIN</Label>
-                            <Input
-                                value={newCustomer.gstin}
-                                onChange={(e) => setNewCustomer((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))}
-                                placeholder="optional · 15 chars"
-                                className="font-mono"
-                            />
-                        </div>
+
+                        {/* Company section — only visible when companyName is non-empty */}
+                        {showCompanySection && (
+                            <div className="space-y-3 sm:border-l sm:border-border sm:pl-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Company · billing here
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Company phone</Label>
+                                    <Input
+                                        ref={companyPhoneRef}
+                                        value={newParty.companyPhone}
+                                        onChange={(e) => setNewParty((s) => ({ ...s, companyPhone: e.target.value }))}
+                                        onKeyDown={onAnyEnterToSubmit}
+                                        placeholder="own number — duplicates not allowed"
+                                        inputMode="tel"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Company address</Label>
+                                    <Textarea
+                                        ref={companyAddressRef}
+                                        value={newParty.companyAddress}
+                                        onChange={(e) => {
+                                            setCompanyAddressTouched(true);
+                                            setNewParty((s) => ({ ...s, companyAddress: e.target.value }));
+                                        }}
+                                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (canSubmitCreate) void submitCreate(); } }}
+                                        placeholder={`autofilled from person address${companyAddressTouched ? " (edited)" : ""}`}
+                                        rows={2}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Company GSTIN</Label>
+                                    <Input
+                                        value={newParty.companyGstin}
+                                        onChange={(e) => setNewParty((s) => ({ ...s, companyGstin: e.target.value.toUpperCase() }))}
+                                        onKeyDown={onAnyEnterToSubmit}
+                                        placeholder="optional · 15 chars"
+                                        className="font-mono"
+                                    />
+                                </div>
+                                <div className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
+                                    The bill goes to the company&apos;s ledger. The person stays as a contact.
+                                </div>
+                            </div>
+                        )}
                     </div>
+
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setNewCustomerOpen(false)} disabled={creatingCustomer}>
+                        <Button variant="ghost" onClick={() => setNewPartyOpen(false)} disabled={creatingParty}>
                             Cancel
                         </Button>
-                        <Button onClick={createCustomer} disabled={creatingCustomer || !newCustomer.name.trim()}>
-                            <UserPlus size={16} /> {creatingCustomer ? "Creating…" : "Create & continue"}
+                        <Button onClick={submitCreate} disabled={creatingParty || !canSubmitCreate}>
+                            <UserPlus size={16} /> {creatingParty ? "Creating…" : showCompanySection ? "Create person + company & bill" : "Create & bill"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -604,11 +872,14 @@ function Row({ label, value, muted, highlight }: { label: string; value: string;
 }
 
 function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
-    const c = snapshot.customer;
+    const c = snapshot.party;
     return (
         <div className="space-y-4">
             <div>
-                <h2 className="truncate text-lg font-semibold">{c.name}</h2>
+                <div className="flex items-center gap-2">
+                    {c.kind === "company" ? <Building2 size={16} className="shrink-0 text-muted-foreground" /> : <User size={16} className="shrink-0 text-muted-foreground" />}
+                    <h2 className="truncate text-lg font-semibold">{c.name}</h2>
+                </div>
                 <div className="space-y-0.5 text-xs text-muted-foreground">
                     {c.phone && <div className="flex items-center gap-1.5"><Phone size={11} /> {c.phone}</div>}
                     {c.email && <div className="flex items-center gap-1.5"><Mail size={11} /> {c.email}</div>}
@@ -616,33 +887,13 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 </div>
             </div>
 
-            {/* Stats grid */}
             <div className="grid grid-cols-2 gap-2">
-                <Stat
-                    icon={<TrendingUp size={14} />}
-                    label="Lifetime turnover"
-                    value={fmtINR(snapshot.turnover.lifetime)}
-                    sub={`${snapshot.turnover.invoiceCount} invoices`}
-                />
-                <Stat
-                    icon={<TrendingUp size={14} />}
-                    label="Last 12 mo"
-                    value={fmtINR(snapshot.turnover.last12Months)}
-                />
-                <Stat
-                    icon={<Award size={14} />}
-                    label="Loyalty points"
-                    value={String(snapshot.loyaltyPoints)}
-                    sub={snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"}
-                />
-                <Stat
-                    icon={<Clock size={14} />}
-                    label="Last visit"
-                    value={since(snapshot.lastVisitAt)}
-                />
+                <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={fmtINR(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
+                <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={fmtINR(snapshot.turnover.last12Months)} />
+                <Stat icon={<Award size={14} />} label="Loyalty points" value={String(snapshot.loyaltyPoints)} sub={snapshot.discountPct > 0 ? `${snapshot.discountPct}% discount tier` : "No tier yet"} />
+                <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 
-            {/* Ledger */}
             {snapshot.account && (
                 <div className="rounded-md border border-border bg-card p-3 text-sm">
                     <div className="text-xs text-muted-foreground">Ledger balance</div>
@@ -655,7 +906,6 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 </div>
             )}
 
-            {/* Recent tickets */}
             {snapshot.recentTickets.length > 0 && (
                 <div>
                     <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent tickets</div>
@@ -671,7 +921,6 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 </div>
             )}
 
-            {/* Warranties expiring — placeholder zone for now */}
             {snapshot.warrantiesEnding.length > 0 && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
                     <div className="mb-1 font-semibold text-amber-700">Warranties ending soon</div>

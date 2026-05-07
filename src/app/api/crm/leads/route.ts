@@ -19,18 +19,18 @@ const leadWriteBase = z.object({
     valuePaise: z.coerce.number().int().positive().optional().nullable(),
     source: z.string().trim().max(80).optional().nullable(),
     notes: z.string().trim().max(20000).optional().nullable(),
-    customerId: z.coerce.number().int().positive().optional().nullable(),
+    personId: z.coerce.number().int().positive().optional().nullable(),
     companyId: z.coerce.number().int().positive().optional().nullable(),
     ownerUserId: z.coerce.number().int().positive().optional().nullable(),
     status: z.string().trim().min(1).optional(),
 });
 
 const createLeadSchema = leadWriteBase.superRefine((data, ctx) => {
-    if (data.customerId != null && data.companyId != null) {
+    if (data.personId != null && data.companyId != null) {
         ctx.addIssue({
             code: "custom",
-            message: "Link at most one of customer or company",
-            path: ["customerId"],
+            message: "Link at most one of person or company",
+            path: ["personId"],
         });
     }
 });
@@ -38,7 +38,7 @@ const createLeadSchema = leadWriteBase.superRefine((data, ctx) => {
 const leadInclude = {
     ticketStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
     owner: { select: { id: true, name: true } },
-    customer: { select: { id: true, name: true } },
+    person: { select: { id: true, name: true } },
     company: { select: { id: true, name: true } },
     createdBy: { select: { id: true, name: true } },
 } as const;
@@ -135,9 +135,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: check.message }, { status: 400 });
     }
 
-    const [customerOk, companyOk, ownerOk] = await Promise.all([
-        data.customerId != null
-            ? prisma.customer.findUnique({ where: { id: data.customerId }, select: { id: true } })
+    const [personOk, companyOk, ownerOk] = await Promise.all([
+        data.personId != null
+            ? prisma.person.findUnique({ where: { id: data.personId }, select: { id: true } })
             : Promise.resolve(true),
         data.companyId != null
             ? prisma.company.findUnique({ where: { id: data.companyId }, select: { id: true } })
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
             ? prisma.user.findUnique({ where: { id: data.ownerUserId }, select: { id: true } })
             : Promise.resolve(true),
     ]);
-    if (!customerOk) return NextResponse.json({ error: "Customer not found" }, { status: 400 });
+    if (!personOk) return NextResponse.json({ error: "Person not found" }, { status: 400 });
     if (!companyOk) return NextResponse.json({ error: "Company not found" }, { status: 400 });
     if (!ownerOk) return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
 
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
             valuePaise: data.valuePaise ?? null,
             source: emptyToNull(data.source) ?? null,
             notes: emptyToNull(data.notes) ?? null,
-            customerId: data.customerId ?? null,
+            personId: data.personId ?? null,
             companyId: data.companyId ?? null,
             ownerUserId: data.ownerUserId ?? null,
             createdById: user.id,

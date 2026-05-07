@@ -12,7 +12,7 @@ model CrmLead {
   valuePaise  Int?
   source      String?
   notes       String?  @db.Text
-  customerId  Int?
+  personId    Int?
   companyId   Int?
   ownerUserId Int?
   createdById Int
@@ -21,7 +21,7 @@ model CrmLead {
 
   pipeline     Pipeline     @relation(fields: [pipelineId], references: [id])
   ticketStatus TicketStatus @relation(fields: [status], references: [id])
-  customer     Customer?    @relation(fields: [customerId], references: [id])
+  person       Person?      @relation(fields: [personId], references: [id])
   company      Company?     @relation(fields: [companyId], references: [id])
   owner        User?        @relation("CrmLeadOwner", fields: [ownerUserId], references: [id])
   createdBy    User         @relation("CrmLeadCreatedBy", fields: [createdById], references: [id])

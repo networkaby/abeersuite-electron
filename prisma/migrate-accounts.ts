@@ -8,15 +8,15 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter } as never) as PrismaClient;
 
 async function main() {
-    const customers = await prisma.customer.findMany({
+    const persons = await prisma.person.findMany({
         where: { account: null },
     });
 
-    console.log(`Creating accounts for ${customers.length} customers without accounts...`);
+    console.log(`Creating accounts for ${persons.length} persons without accounts...`);
 
-    for (const c of customers) {
-        await prisma.account.create({ data: { customerId: c.id, name: c.name } });
-        console.log(`  Created account for customer #${c.id} (${c.name})`);
+    for (const p of persons) {
+        await prisma.account.create({ data: { personId: p.id, name: p.name } });
+        console.log(`  Created account for person #${p.id} (${p.name})`);
     }
 
     console.log("Done.");

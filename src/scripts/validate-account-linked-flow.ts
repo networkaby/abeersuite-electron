@@ -1,17 +1,17 @@
 import { prisma } from "@/lib/prisma";
 
 async function main() {
-    const [missingAccountLink, missingCustomerForAccountLinked, missingPersonalAccounts] = await Promise.all([
+    const [missingAccountLink, missingPersonForAccountLinked, missingPersonalAccounts] = await Promise.all([
         prisma.shopOrder.count({
             where: { accountId: null },
         }),
         prisma.shopOrder.count({
             where: {
                 accountId: { not: null },
-                customerId: null,
+                personId: null,
             },
         }),
-        prisma.customer.count({
+        prisma.person.count({
             where: {
                 account: null,
             },
@@ -20,11 +20,11 @@ async function main() {
 
     const report = {
         missingAccountLink,
-        missingCustomerForAccountLinked,
+        missingPersonForAccountLinked,
         missingPersonalAccounts,
         passed:
             missingAccountLink === 0 &&
-            missingCustomerForAccountLinked === 0 &&
+            missingPersonForAccountLinked === 0 &&
             missingPersonalAccounts === 0,
     };
 

@@ -31,7 +31,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     try {
         const order = await prisma.shopOrder.findUnique({
             where: { id: oid },
-            include: { customer: true },
+            include: { person: true },
         });
         if (!order) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -56,7 +56,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
                 priority: Priority.MEDIUM,
                 notes:
                     `Return / RMA — shop order #${oid}. ` +
-                    (order.customer ? `Customer: ${order.customer.name} (#${order.customer.id}). ` : "") +
+                    (order.person ? `Customer: ${order.person.name} (#${order.person.id}). ` : "") +
                     (billingAccountId ? `Account #${billingAccountId}.` : ""),
                 pipelineId: body.pipelineId ?? "P1",
                 billingAccountId: billingAccountId ?? null,

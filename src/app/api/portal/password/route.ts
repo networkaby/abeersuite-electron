@@ -19,8 +19,8 @@ export async function PATCH(req: Request) {
     }
 
     try {
-        const credential = await prisma.customerPortalCredential.findUnique({
-            where: { customerId: authResult.customerId! },
+        const credential = await prisma.personPortalCredential.findUnique({
+            where: { personId: authResult.customerId! },
             select: { passwordHash: true },
         });
         if (!credential) {
@@ -33,8 +33,8 @@ export async function PATCH(req: Request) {
         }
 
         const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
-        await prisma.customerPortalCredential.update({
-            where: { customerId: authResult.customerId! },
+        await prisma.personPortalCredential.update({
+            where: { personId: authResult.customerId! },
             data: { passwordHash },
         });
 

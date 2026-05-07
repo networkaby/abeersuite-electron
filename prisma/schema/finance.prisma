@@ -171,9 +171,9 @@ model Payment {
   deletedById   Int?
   deleteReason  String?
 
-  createdBy   User    @relation("PaymentCreatedBy", fields: [createdById], references: [id])
-  cancelledBy User?   @relation("PaymentCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy   User?   @relation("PaymentDeletedBy", fields: [deletedById], references: [id])
+  createdBy   User     @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  cancelledBy User?    @relation("PaymentCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy   User?    @relation("PaymentDeletedBy", fields: [deletedById], references: [id])
   createdAt   DateTime @default(now())
 
   @@index([invoiceId])
@@ -203,13 +203,13 @@ model PaymentAudit {
 // in src/modules/tally/lib/voucherLifecycle.ts creates a JournalEntry with the
 // same lines so the GL stays consistent with traditional double-entry tooling.
 model Voucher {
-  id             Int          @id @default(autoincrement())
+  id             Int           @id @default(autoincrement())
   type           VoucherType
-  reference      String       @unique
-  date           DateTime     @db.Date
+  reference      String        @unique
+  date           DateTime      @db.Date
   narration      String?
   partyAccountId Int?
-  totalAmount    Decimal      @db.Decimal(14, 2)
+  totalAmount    Decimal       @db.Decimal(14, 2)
   status         VoucherStatus @default(DRAFT)
   postedAt       DateTime?
   // Counter-entry created on POST — lets reports tie back to GL.
@@ -224,13 +224,13 @@ model Voucher {
   deletedById   Int?
   deleteReason  String?
 
-  partyAccount Account? @relation("VoucherPartyAccount", fields: [partyAccountId], references: [id])
-  createdBy    User     @relation("VoucherCreatedBy", fields: [createdById], references: [id])
-  cancelledBy  User?    @relation("VoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy    User?    @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
+  partyAccount Account?      @relation("VoucherPartyAccount", fields: [partyAccountId], references: [id])
+  createdBy    User          @relation("VoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy  User?         @relation("VoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy    User?         @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
   lines        VoucherLine[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@index([type, status])
   @@index([date])
@@ -273,17 +273,17 @@ model VoucherAudit {
 // fully or partially, now or later. AllocationMethod mirrors Tally's four modes:
 // New Ref / Against Ref / Advance / On Account.
 model VoucherAllocation {
-  id          Int                   @id @default(autoincrement())
+  id          Int                  @id @default(autoincrement())
   targetType  AllocationTargetType
   targetId    Int
   sourceType  AllocationSourceType
   sourceId    Int
-  amount      Decimal               @db.Decimal(14, 2)
+  amount      Decimal              @db.Decimal(14, 2)
   method      AllocationMethod
   reference   String?
   createdById Int
-  createdBy   User                  @relation("VoucherAllocationCreatedBy", fields: [createdById], references: [id])
-  createdAt   DateTime              @default(now())
+  createdBy   User                 @relation("VoucherAllocationCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime             @default(now())
 
   @@index([targetType, targetId])
   @@index([sourceType, sourceId])

@@ -49,7 +49,7 @@ async function findLedgerByNames(tx: Tx, names: readonly string[]): Promise<Ledg
         const a = await tx.account.findFirst({
             where: {
                 name: { equals: n, mode: "insensitive" },
-                customerId: null, companyId: null, isActive: true,
+                personId: null, companyId: null, isActive: true,
             },
             select: {
                 id: true, name: true, normalBalance: true,
@@ -70,7 +70,7 @@ async function findPartyAccount(
 ): Promise<LedgerLite | null> {
     if (!partyType || !partyId) return null;
     let where: Record<string, number> | null = null;
-    if (partyType === "customer") where = { customerId: partyId };
+    if (partyType === "customer") where = { personId: partyId };
     else if (partyType === "company") where = { companyId: partyId };
     else if (partyType === "account") where = { id: partyId };
     if (!where) return null;

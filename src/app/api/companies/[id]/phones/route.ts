@@ -1,0 +1,37 @@
+import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-guard";
+import { prisma } from "@/lib/prisma";
+import { ContactConflictError, contactValueSchema, createPhone } from "@/lib/contact-write";
+
+// POST /api/companies/[id]/phones — add a phone to a company
+export async function POST(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> },
+) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const companyId = Number((await params).id);
+    if (!Number.isFinite(companyId)) {
+        return NextResponse.json({ error: "Invalid company id" }, { status: 400 });
+    }
+
+    const exists = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    if (!exists) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+
+    const parsed = contactValueSchema.safeParse(await req.json());
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    }
+
+    try {
+        const row = await createPhone({ companyId }, parsed.data);
+        return NextResponse.json(row, { status: 201 });
+    } catch (err) {
+        if (err instanceof ContactConflictError) {
+            return NextResponse.json({ error: err.message, field: err.field }, { status: 409 });
+        }
+        console.error(err);
+        return NextResponse.json({ error: "Failed to add phone" }, { status: 500 });
+    }
+}

@@ -14,7 +14,7 @@ const createSchema = z.object({
 });
 
 // GET /api/finance/ledgers
-// Without groupId → pure GL accounts (no customer/company), flat array (existing behaviour)
+// Without groupId → pure GL accounts (no person/company), flat array (existing behaviour)
 // With groupId    → ALL account types in that group, paginated: { items, total }
 export async function GET(req: Request) {
     const { response } = await requirePermission("accountancy:view:org");
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         // ── Mode A: pure GL accounts, flat array (original behaviour) ──────────
         const ledgers = await prisma.account.findMany({
             where: {
-                customerId: null,
+                personId: null,
                 companyId:  null,
                 ...(activeOnly ? { isActive: true } : {}),
             },

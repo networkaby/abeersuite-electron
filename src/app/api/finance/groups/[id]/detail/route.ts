@@ -74,7 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             orderBy: [{ name: "asc" }],
             select: {
                 id: true, name: true, code: true,
-                customerId: true, companyId: true, balance: true,
+                personId: true, companyId: true, balance: true,
                 normalBalance: true,
             },
         });

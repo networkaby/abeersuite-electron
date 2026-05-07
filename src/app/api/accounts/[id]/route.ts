@@ -13,11 +13,36 @@ export async function GET(_: Request, { params }: Params) {
     const account = await prisma.account.findUnique({
         where: { id: Number(id) },
         include: {
-            customer: { select: { id: true, name: true, phone: true } },
-            company: { select: { id: true, name: true, phone: true } },
+            person: {
+                select: {
+                    id: true,
+                    name: true,
+                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                },
+            },
+            company: {
+                select: {
+                    id: true,
+                    name: true,
+                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                },
+            },
         },
     });
 
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(account);
+
+    return NextResponse.json({
+        ...account,
+        person: account.person ? {
+            id: account.person.id,
+            name: account.person.name,
+            phone: account.person.phones[0]?.phone ?? null,
+        } : null,
+        company: account.company ? {
+            id: account.company.id,
+            name: account.company.name,
+            phone: account.company.phones[0]?.phone ?? null,
+        } : null,
+    });
 }

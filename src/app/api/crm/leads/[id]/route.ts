@@ -7,7 +7,7 @@ import { z } from "zod";
 const leadInclude = {
     ticketStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
     owner: { select: { id: true, name: true } },
-    customer: { select: { id: true, name: true } },
+    person: { select: { id: true, name: true } },
     company: { select: { id: true, name: true } },
     createdBy: { select: { id: true, name: true } },
 } as const;
@@ -28,17 +28,17 @@ const patchLeadSchema = z
         valuePaise: z.coerce.number().int().positive().optional().nullable(),
         source: z.string().trim().max(80).optional().nullable(),
         notes: z.string().trim().max(20000).optional().nullable(),
-        customerId: z.coerce.number().int().positive().optional().nullable(),
+        personId: z.coerce.number().int().positive().optional().nullable(),
         companyId: z.coerce.number().int().positive().optional().nullable(),
         ownerUserId: z.coerce.number().int().positive().optional().nullable(),
         status: z.string().trim().min(1).optional(),
     })
     .superRefine((data, ctx) => {
-        if (data.customerId != null && data.companyId != null) {
+        if (data.personId != null && data.companyId != null) {
             ctx.addIssue({
                 code: "custom",
-                message: "Link at most one of customer or company",
-                path: ["customerId"],
+                message: "Link at most one of person or company",
+                path: ["personId"],
             });
         }
     });
@@ -110,9 +110,9 @@ export async function PATCH(req: Request, { params }: Params) {
         if (!check.ok) return NextResponse.json({ error: check.message }, { status: 400 });
     }
 
-    if (data.customerId !== undefined && data.customerId != null) {
-        const c = await prisma.customer.findUnique({ where: { id: data.customerId } });
-        if (!c) return NextResponse.json({ error: "Customer not found" }, { status: 400 });
+    if (data.personId !== undefined && data.personId != null) {
+        const p = await prisma.person.findUnique({ where: { id: data.personId } });
+        if (!p) return NextResponse.json({ error: "Person not found" }, { status: 400 });
     }
     if (data.companyId !== undefined && data.companyId != null) {
         const c = await prisma.company.findUnique({ where: { id: data.companyId } });
@@ -123,12 +123,12 @@ export async function PATCH(req: Request, { params }: Params) {
         if (!u) return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
     }
 
-    const customerId =
-        data.customerId === undefined ? undefined : data.customerId === null ? null : data.customerId;
+    const personId =
+        data.personId === undefined ? undefined : data.personId === null ? null : data.personId;
     const companyId =
         data.companyId === undefined ? undefined : data.companyId === null ? null : data.companyId;
-    if (customerId != null && companyId != null) {
-        return NextResponse.json({ error: "Link at most one of customer or company" }, { status: 400 });
+    if (personId != null && companyId != null) {
+        return NextResponse.json({ error: "Link at most one of person or company" }, { status: 400 });
     }
 
     const lead = await prisma.crmLead.update({
@@ -142,7 +142,7 @@ export async function PATCH(req: Request, { params }: Params) {
             ...(data.valuePaise !== undefined ? { valuePaise: data.valuePaise } : {}),
             ...(data.source !== undefined ? { source: emptyToNull(data.source) ?? null } : {}),
             ...(data.notes !== undefined ? { notes: emptyToNull(data.notes) ?? null } : {}),
-            ...(data.customerId !== undefined ? { customerId } : {}),
+            ...(data.personId !== undefined ? { personId } : {}),
             ...(data.companyId !== undefined ? { companyId } : {}),
             ...(data.ownerUserId !== undefined
                 ? { ownerUserId: data.ownerUserId === null ? null : data.ownerUserId }

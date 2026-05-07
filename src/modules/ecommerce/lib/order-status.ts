@@ -245,7 +245,13 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
             where: { id: orderId },
             include: {
                 lines: { include: { product: true } },
-                customer: { select: { id: true, name: true, email: true } },
+                person: {
+                    select: {
+                        id: true,
+                        name: true,
+                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    },
+                },
             },
         });
         if (!order) throw new Error("Order not found");
@@ -311,7 +317,13 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
             data,
             include: {
                 lines: { include: { product: true } },
-                customer: { select: { id: true, name: true, email: true } },
+                person: {
+                    select: {
+                        id: true,
+                        name: true,
+                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    },
+                },
             },
         });
 

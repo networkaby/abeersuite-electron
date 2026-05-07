@@ -52,7 +52,7 @@ _Last updated: <YYYY-MM-DD> — covers state after <change>._
 - [repair.md](./repair.md) — Tickets, devices, service centres, warranty
 - [inventory.md](./inventory.md) — Products, GRN, POs, units, categories
 - [sales.md](./sales.md) — Store, online (ecommerce), wholesale, coupons, shop orders
-- [customers.md](./customers.md) — Customer / Company / Account (GL ledger), CRM leads
+- [people.md](./people.md) — Person (was Customer) / Company / shared Phone & Email tables / Account (GL ledger), CRM leads
 - [admin.md](./admin.md) — Roles, users, branches, departments, posts, pipelines, statuses
 - [messaging.md](./messaging.md) — Internal chat, notifications, social wall
 - [customer-portal.md](./customer-portal.md) — External `/shop` + customer self-service

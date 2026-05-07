@@ -25,7 +25,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 select: {
                     id: true,
                     name: true,
-                    customer: { select: { id: true, name: true, phone: true } },
+                    person: {
+                        select: {
+                            id: true,
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        },
+                    },
                     company: { select: { id: true, name: true } },
                 },
             },

@@ -133,7 +133,14 @@ export default function CompaniesPage() {
         }
         setSaving(true);
         try {
-            const response = await axios.post<CompanyListItem>("/api/companies", form);
+            const response = await axios.post<CompanyListItem>("/api/companies", {
+                name: form.name,
+                phones: form.phone ? [form.phone] : [],
+                emails: form.email ? [form.email] : [],
+                address: form.address,
+                companyReg: form.companyReg,
+                taxId: form.taxId,
+            });
             toast.success("Company created");
             setShowCreate(false);
             setForm({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });

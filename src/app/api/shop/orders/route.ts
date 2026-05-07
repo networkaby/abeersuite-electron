@@ -74,7 +74,7 @@ export async function POST(req: Request) {
             data: {
                 status: "PENDING_PAYMENT",
                 totalPaise,
-                customerId,
+                personId: customerId,
                 accountId: context.active.accountId,
                 guestEmail: null,
                 guestPhone: null,

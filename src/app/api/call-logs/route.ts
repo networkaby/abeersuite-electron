@@ -101,8 +101,18 @@ export async function GET(req: Request) {
                                     account: {
                                         select: {
                                             name: true,
-                                            customer: { select: { name: true, phone: true } },
-                                            company: { select: { name: true, phone: true } },
+                                            person: {
+                                                select: {
+                                                    name: true,
+                                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                                },
+                                            },
+                                            company: {
+                                                select: {
+                                                    name: true,
+                                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                                },
+                                            },
                                         },
                                     },
                                 },
@@ -122,14 +132,14 @@ export async function GET(req: Request) {
                     ticketId: log.ticketId,
                     customerName:
                         parsed.customerName ||
-                        log.ticket.device.account?.customer?.name ||
+                        log.ticket.device.account?.person?.name ||
                         log.ticket.device.account?.company?.name ||
                         log.ticket.device.account?.name ||
                         "Unknown",
                     phone:
                         parsed.phone ||
-                        log.ticket.device.account?.customer?.phone ||
-                        log.ticket.device.account?.company?.phone ||
+                        log.ticket.device.account?.person?.phones?.[0]?.phone ||
+                        log.ticket.device.account?.company?.phones?.[0]?.phone ||
                         "",
                     direction: parsed.direction,
                     status: parsed.status,

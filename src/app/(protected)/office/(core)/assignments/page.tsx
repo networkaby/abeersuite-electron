@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -24,8 +25,18 @@ const TICKET_INCLUDE = {
         include: {
             account: {
                 include: {
-                    customer: { select: { name: true, phone: true } },
-                    company: { select: { name: true, phone: true } },
+                    person: {
+                        select: {
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        },
+                    },
+                    company: {
+                        select: {
+                            name: true,
+                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        },
+                    },
                 },
             },
         },
@@ -38,7 +49,7 @@ const TICKET_INCLUDE = {
         where: { removedAt: null },
         select: { userId: true, user: { select: { id: true, name: true } } },
     },
-} as const;
+} satisfies Prisma.TicketInclude;
 
 type RawTicket = Awaited<ReturnType<typeof prisma.ticket.findMany<{ include: typeof TICKET_INCLUDE }>>>[0];
 
@@ -50,11 +61,17 @@ function toCard(t: RawTicket): TicketCardData {
         device: {
             brand: t.device.brand,
             model: t.device.model,
-            customer: t.device.account?.customer
-                ? { name: t.device.account.customer.name, phone: t.device.account.customer.phone }
+            customer: t.device.account?.person
+                ? {
+                      name: t.device.account.person.name,
+                      phone: t.device.account.person.phones[0]?.phone ?? null,
+                  }
                 : null,
             company: t.device.account?.company
-                ? { name: t.device.account.company.name, phone: t.device.account.company.phone }
+                ? {
+                      name: t.device.account.company.name,
+                      phone: t.device.account.company.phones[0]?.phone ?? null,
+                  }
                 : null,
         },
         primaryOwner: t.primaryOwner,

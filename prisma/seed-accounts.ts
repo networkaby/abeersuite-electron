@@ -67,7 +67,7 @@ async function upsertLedger(
     const { rows } = await pool.query<{ id: number; "groupId": number | null }>(
         `SELECT id, "groupId" FROM "Account"
          WHERE LOWER(name) = LOWER($1)
-           AND "customerId" IS NULL AND "companyId" IS NULL
+           AND "personId" IS NULL AND "companyId" IS NULL
          LIMIT 1`,
         [name],
     );
@@ -104,10 +104,10 @@ async function main() {
         WHERE id NOT IN (
             SELECT MIN(id)
             FROM "Account"
-            WHERE "customerId" IS NULL AND "companyId" IS NULL
+            WHERE "personId" IS NULL AND "companyId" IS NULL
             GROUP BY LOWER(name)
         )
-        AND "customerId" IS NULL
+        AND "personId" IS NULL
         AND "companyId" IS NULL
     `);
     console.log(`  ✓ Removed ${del.rowCount} duplicate GL account(s)`);
@@ -167,7 +167,7 @@ async function main() {
     console.log("\n── Backfill customer & company accounts → Sundry Debtors ──────────────────");
     const upd = await pool.query(
         `UPDATE "Account" SET "groupId" = $1
-         WHERE ("customerId" IS NOT NULL OR "companyId" IS NOT NULL)
+         WHERE ("personId" IS NOT NULL OR "companyId" IS NOT NULL)
            AND "groupId" IS NULL`,
         [sundryDebtorsId],
     );

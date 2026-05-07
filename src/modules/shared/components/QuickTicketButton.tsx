@@ -261,7 +261,7 @@ export default function QuickTicketButton() {
         const timer = window.setTimeout(async () => {
             setLookupLoading(true);
             try {
-                const res = await axios.get<SearchSuggestion[]>(`/api/customers?lookup=${encodeURIComponent(query)}`);
+                const res = await axios.get<SearchSuggestion[]>(`/api/people?lookup=${encodeURIComponent(query)}`);
                 setSuggestions(res.data);
                 setShowSuggestions(true);
                 setHighlightedIndex(res.data.length > 0 ? 0 : -1);
@@ -326,7 +326,7 @@ export default function QuickTicketButton() {
         if (!phone.trim()) return;
         setSearching(true);
         try {
-            const res = await axios.get<BasicIdentity[]>(`/api/customers?lookup=${encodeURIComponent(phone.trim())}`);
+            const res = await axios.get<BasicIdentity[]>(`/api/people?lookup=${encodeURIComponent(phone.trim())}`);
             if (res.data && res.data.length > 0) {
                 selectIdentity(res.data[0]);
             } else {
@@ -352,23 +352,23 @@ export default function QuickTicketButton() {
                     ? { data: selectedCompany }
                     : await axios.post("/api/companies", {
                         name: data.companyName,
-                        phone: data.companyPhone,
-                        email: data.companyEmail,
+                        phones: data.companyPhone ? [data.companyPhone] : [],
+                        emails: data.companyEmail ? [data.companyEmail] : [],
                         address: data.companyAddress,
                         companyReg: data.companyReg,
                         taxId: data.taxId,
                     });
                 const company = companyRes.data as CompanySuggestion;
-                const customerRes = await axios.post("/api/customers", {
+                const customerRes = await axios.post("/api/people", {
                     name: data.name,
-                    phone: data.phone,
-                    email: data.email,
+                    phones: data.phone ? [data.phone] : [],
+                    emails: data.email ? [data.email] : [],
                     address: data.address,
                 });
                 const customer = customerRes.data;
 
                 await axios.post(`/api/companies/${company.id}/links`, {
-                    customerId: customer.id,
+                    personId: customer.id,
                 });
 
                 setIdentity({
@@ -391,10 +391,10 @@ export default function QuickTicketButton() {
                 return;
             }
 
-            const res = await axios.post("/api/customers", {
+            const res = await axios.post("/api/people", {
                 name: data.name,
-                phone: data.phone,
-                email: data.email,
+                phones: data.phone ? [data.phone] : [],
+                emails: data.email ? [data.email] : [],
                 address: data.address,
             });
             const raw = res.data;

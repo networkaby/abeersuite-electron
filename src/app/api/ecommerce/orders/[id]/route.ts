@@ -14,11 +14,27 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         const order = await prisma.shopOrder.findUnique({
             where: { id: oid },
             include: {
-                customer: true,
+                person: {
+                    include: {
+                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                    },
+                },
                 account: {
                     include: {
-                        company: true,
-                        customer: { select: { id: true, name: true, phone: true } },
+                        company: {
+                            include: {
+                                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                                emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+                            },
+                        },
+                        person: {
+                            select: {
+                                id: true,
+                                name: true,
+                                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            },
+                        },
                     },
                 },
                 sourceCoupon: true,

@@ -27,7 +27,7 @@ export type OutstandingBill = {
 export type PartyOutstanding = {
     accountId:        number;
     accountName:      string;
-    customerId:       number | null;
+    personId:       number | null;
     companyId:        number | null;
     totalOutstanding: number;
     buckets:          Buckets;
@@ -154,7 +154,7 @@ async function loadOpenBills(
         }),
         prisma.account.findMany({
             where:  { id: { in: accountIds } },
-            select: { id: true, customerId: true, companyId: true },
+            select: { id: true, personId: true, companyId: true },
         }),
     ]);
 
@@ -163,17 +163,17 @@ async function loadOpenBills(
 
     // Build identity → account maps so we can resolve InvVoucher.partyId back
     // to the matching ledger row.
-    const customerToAcc: Record<number, number> = {};
+    const personToAcc: Record<number, number> = {};
     const companyToAcc:  Record<number, number> = {};
     for (const a of accounts) {
-        if (a.customerId !== null) customerToAcc[a.customerId] = a.id;
+        if (a.personId !== null) personToAcc[a.personId] = a.id;
         if (a.companyId  !== null) companyToAcc[a.companyId]   = a.id;
     }
-    const customerIds = Object.keys(customerToAcc).map(Number);
+    const personIds = Object.keys(personToAcc).map(Number);
     const companyIds  = Object.keys(companyToAcc).map(Number);
 
     const partyOr: { partyType: string; partyId: { in: number[] } }[] = [];
-    if (customerIds.length > 0) partyOr.push({ partyType: "customer", partyId: { in: customerIds } });
+    if (personIds.length > 0) partyOr.push({ partyType: "customer", partyId: { in: personIds } });
     if (companyIds.length  > 0) partyOr.push({ partyType: "company",  partyId: { in: companyIds  } });
 
     const invVouchers = partyOr.length === 0 ? [] : await prisma.invVoucher.findMany({
@@ -259,7 +259,7 @@ async function loadOpenBills(
     for (const v of invVouchers) {
         if (v.partyId === null) continue;
         const accountId = v.partyType === "customer"
-            ? customerToAcc[v.partyId] ?? null
+            ? personToAcc[v.partyId] ?? null
             : v.partyType === "company"
                 ? companyToAcc[v.partyId] ?? null
                 : null;
@@ -324,7 +324,7 @@ export async function getOutstandings(
     const [accounts, bills] = await Promise.all([
         prisma.account.findMany({
             where: { id: { in: accountIds } },
-            select: { id: true, name: true, customerId: true, companyId: true },
+            select: { id: true, name: true, personId: true, companyId: true },
             orderBy: [{ name: "asc" }],
         }),
         loadOpenBills(accountIds, asOf, invType),
@@ -335,7 +335,7 @@ export async function getOutstandings(
         partyMap.set(a.id, {
             accountId:        a.id,
             accountName:      a.name,
-            customerId:       a.customerId,
+            personId:       a.personId,
             companyId:        a.companyId,
             totalOutstanding: 0,
             buckets:          emptyBuckets(),

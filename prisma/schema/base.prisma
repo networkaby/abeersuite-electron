@@ -8,12 +8,14 @@ datasource db {
 }
 
 // ── Identity models ───────────────────────────────────────────────────────────
+//
+// Both `Person` and `Company` are kinds of customer. Phones and emails live in
+// shared polymorphic child tables (`Phone`, `Email`) — globally unique values,
+// owned by exactly one of Person or Company per row.
 
-model Customer {
+model Person {
   id            Int       @id @default(autoincrement())
   name          String
-  phone         String?
-  email         String?
   address       String?
   agreedToTerms Boolean   @default(false)
   agreedAt      DateTime?
@@ -28,20 +30,17 @@ model Customer {
   gstRegType   GstRegType?
 
   account          Account?
-  companies        CustomerCompany[]
-  portalCredential CustomerPortalCredential?
+  companies        PersonCompany[]
+  portalCredential PersonPortalCredential?
   shopOrders       ShopOrder[]
   crmLeads         CrmLead[]
-
-  @@index([phone])
-  @@index([email])
+  phones           Phone[]
+  emails           Email[]
 }
 
 model Company {
   id         Int      @id @default(autoincrement())
   name       String
-  phone      String?
-  email      String?
   address    String?
   companyReg String?
   taxId      String?
@@ -59,24 +58,66 @@ model Company {
   financialYearFrom  DateTime? @db.Date
   booksBeginningFrom DateTime? @db.Date
 
-  account   Account?
-  customers CustomerCompany[]
-  crmLeads  CrmLead[]
-
-  @@index([phone])
-  @@index([email])
+  account  Account?
+  persons  PersonCompany[]
+  crmLeads CrmLead[]
+  phones   Phone[]
+  emails   Email[]
 }
 
-model CustomerCompany {
+model PersonCompany {
   id         Int       @id @default(autoincrement())
-  customerId Int
+  personId   Int
   companyId  Int
   role       String?
   linkedAt   DateTime  @default(now())
   unlinkedAt DateTime?
-  customer   Customer  @relation(fields: [customerId], references: [id])
+  person     Person    @relation(fields: [personId], references: [id])
   company    Company   @relation(fields: [companyId], references: [id])
 
-  @@index([customerId])
+  @@index([personId])
+  @@index([companyId])
+}
+
+// ── Shared polymorphic contact tables ─────────────────────────────────────────
+//
+// Each row is owned by exactly one of Person or Company (XOR enforced by:
+//   (a) Zod refinement on every write path, and
+//   (b) Postgres CHECK ((person_id IS NULL) != (company_id IS NULL))
+//   added in the migration).
+//
+// Global @unique on the value column means no two parties (person OR company)
+// can hold the same phone/email. A company "uses" a related person's phone by
+// joining through PersonCompany — it never owns a duplicate row.
+
+model Phone {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  personId  Int?
+  companyId Int?
+  label     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  person  Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([companyId])
+}
+
+model Email {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  personId  Int?
+  companyId Int?
+  label     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  person  Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
   @@index([companyId])
 }

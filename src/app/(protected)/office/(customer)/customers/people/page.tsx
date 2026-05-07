@@ -99,7 +99,7 @@ export default function CustomersPage() {
 
     const loadList = useCallback(async () => {
         try {
-            const response = await axios.get<CustomerListItem[]>("/api/customers");
+            const response = await axios.get<CustomerListItem[]>("/api/people");
             setCustomers(response.data);
         } catch {
             toast.error("Failed to load customers");
@@ -114,7 +114,7 @@ export default function CustomersPage() {
             return;
         }
         setDetailLoading(true);
-        axios.get<CustomerDetail>(`/api/customers/${selectedId}`)
+        axios.get<CustomerDetail>(`/api/people/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
                 setTab("tickets");
@@ -131,7 +131,12 @@ export default function CustomersPage() {
         }
         setSaving(true);
         try {
-            const response = await axios.post<CustomerListItem>("/api/customers", form);
+            const response = await axios.post<CustomerListItem>("/api/people", {
+                name: form.name,
+                phones: form.phone ? [form.phone] : [],
+                emails: form.email ? [form.email] : [],
+                address: form.address,
+            });
             toast.success("Customer created");
             setShowCreate(false);
             setForm({ name: "", phone: "", email: "", address: "" });
@@ -159,12 +164,12 @@ export default function CustomersPage() {
         if (!detail) return;
         setEditSaving(true);
         try {
-            await axios.put(`/api/customers/${detail.id}`, editForm);
+            await axios.put(`/api/people/${detail.id}`, editForm);
             toast.success("Saved");
             setEditing(false);
             const [listResponse, detailResponse] = await Promise.all([
-                axios.get<CustomerListItem[]>("/api/customers"),
-                axios.get<CustomerDetail>(`/api/customers/${detail.id}`),
+                axios.get<CustomerListItem[]>("/api/people"),
+                axios.get<CustomerDetail>(`/api/people/${detail.id}`),
             ]);
             setCustomers(listResponse.data);
             setDetail(detailResponse.data);

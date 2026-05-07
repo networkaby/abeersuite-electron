@@ -13,7 +13,26 @@ export default async function ReceiptPage({
     const ticket = await prisma.ticket.findUnique({
         where: { id: Number(id) },
         include: {
-            device: { include: { account: { include: { customer: true, company: true } } } },
+            device: {
+                include: {
+                    account: {
+                        include: {
+                            person: {
+                                include: {
+                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                },
+                            },
+                            company: {
+                                include: {
+                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
             primaryOwner: true,
         },
     });
@@ -21,7 +40,14 @@ export default async function ReceiptPage({
     if (!ticket) notFound();
 
     const { device } = ticket;
-    const account = device.account?.customer ?? device.account?.company;
+    const owner = device.account?.person ?? device.account?.company;
+    const account = owner
+        ? {
+              name: owner.name,
+              phone: owner.phones[0]?.phone ?? null,
+              email: owner.emails[0]?.email ?? null,
+          }
+        : null;
 
     return (
         <html>

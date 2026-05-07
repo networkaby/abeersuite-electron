@@ -33,7 +33,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
         if (!query.trim()) return;
         setSearching(true);
         try {
-            const res = await axios.get(`/api/customers?q=${encodeURIComponent(query)}`);
+            const res = await axios.get(`/api/people?q=${encodeURIComponent(query)}`);
             setResults(res.data);
         } catch {
             toast.error("Search failed");
@@ -44,7 +44,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
 
     const link = async (customerId: number, customerName: string) => {
         try {
-            await axios.post(`/api/companies/${companyId}/links`, { customerId });
+            await axios.post(`/api/companies/${companyId}/links`, { personId: customerId });
             toast.success(`Linked ${customerName}`);
             setShowSearch(false);
             setQuery("");
@@ -58,7 +58,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks }: Props) {
 
     const unlink = async (customerId: number, linkId: number) => {
         try {
-            await axios.delete(`/api/companies/${companyId}/links?customerId=${customerId}`);
+            await axios.delete(`/api/companies/${companyId}/links?personId=${customerId}`);
             setLinks(prev => prev.filter(l => l.id !== linkId));
             toast.success("Unlinked");
         } catch {
