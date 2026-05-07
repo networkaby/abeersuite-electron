@@ -8,7 +8,7 @@ import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
     ShoppingCart, Plus, Minus, Trash2, Receipt, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
-    ChevronDown,
+    ChevronDown, MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -37,18 +37,26 @@ type PartyHit = {
 };
 
 type Snapshot = {
-    party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null };
+    party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
     account: { id: number; balance: number; openingBalance: number | null } | null;
     turnover: { lifetime: number; last12Months: number; invoiceCount: number };
     discountPct: number;
     loyaltyPoints: number;
+    customerLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
+    creditLimit: number;
+    balanceDue: number;
+    balanceOverdue: number;
+    availableCredit: number;
+    rating: number | null;
+    favouriteCategory: string | null;
+    personalizedOffers: Array<{ id: string; label: string; tag: string }>;
     lastVisitAt: string | null;
     recentTickets: Array<{ id: number; createdAt: string; statusLabel: string; statusColor: string }>;
     warrantiesEnding: Array<{ productName: string; endsAt: string }>;
 };
 
 type ProductOption = { id: number; sku: string; name: string; pricePaise?: number | null; unit?: { code: string } };
-type CartLine = { productId: number; sku: string; name: string; qty: number; unitPrice: number };
+type CartLine = { productId: number; sku: string; name: string; qty: number; unitPrice: number; description: string };
 
 type PaymentMethod = "CASH" | "UPI" | "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET" | "CREDIT";
 type PaymentSplit = { id: string; method: PaymentMethod; amount: number; reference: string };
@@ -133,6 +141,7 @@ export default function PosScreen() {
     // ── Product search + cart ───────────────────────────────────────────────
     const productSearchRef = useRef<HTMLInputElement>(null);
     const [productQuery, setProductQuery] = useState("");
+    const [productHighlight, setProductHighlight] = useState(0);
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
     const [cart, setCart] = useState<CartLine[]>([]);
 
@@ -408,9 +417,12 @@ export default function PosScreen() {
         setCart((prev) => {
             const exist = prev.find((l) => l.productId === p.id);
             if (exist) return prev.map((l) => l.productId === p.id ? { ...l, qty: l.qty + 1 } : l);
-            return [...prev, { productId: p.id, sku: p.sku, name: p.name, qty: 1, unitPrice: defaultPrice }];
+            return [...prev, { productId: p.id, sku: p.sku, name: p.name, qty: 1, unitPrice: defaultPrice, description: "" }];
         });
         setProductQuery("");
+        // Clear highlight + return focus to the search box so cashier can scan next item
+        setProductHighlight(0);
+        setTimeout(() => productSearchRef.current?.focus(), 0);
     };
 
     const setQty = (productId: number, qty: number) => {
@@ -420,6 +432,27 @@ export default function PosScreen() {
 
     const setPrice = (productId: number, unitPrice: number) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, unitPrice } : l));
+
+    const setLineDescription = (productId: number, description: string) =>
+        setCart((p) => p.map((l) => l.productId === productId ? { ...l, description } : l));
+
+    // ── Product dropdown keyboard nav ──────────────────────────────────────
+    const onProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (filteredProducts.length === 0) return;
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setProductHighlight((i) => Math.min(i + 1, filteredProducts.length - 1));
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setProductHighlight((i) => Math.max(i - 1, 0));
+        } else if (e.key === "Enter") {
+            e.preventDefault();
+            const pick = filteredProducts[productHighlight] ?? filteredProducts[0];
+            if (pick) addToCart(pick);
+        } else if (e.key === "Escape") {
+            setProductQuery("");
+        }
+    };
 
     const openCheckout = () => {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
@@ -453,7 +486,7 @@ export default function PosScreen() {
                 dueDate: due.toISOString().slice(0, 10),
                 notes: `POS sale (discount ${discountPct}%) | Payments: ${splitSummary}`,
                 lines: cart.map((l) => ({
-                    description: `${l.sku} — ${l.name}`,
+                    description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
                     quantity: l.qty,
                     unitPrice: l.unitPrice,
                     taxRate: 0,
@@ -559,22 +592,25 @@ export default function PosScreen() {
                             <Input
                                 ref={productSearchRef}
                                 value={productQuery}
-                                onChange={(e) => setProductQuery(e.target.value)}
-                                placeholder="Scan / type product name or SKU…"
+                                onChange={(e) => { setProductQuery(e.target.value); setProductHighlight(0); }}
+                                onKeyDown={onProductKeyDown}
+                                placeholder="Scan / type · ↑↓ to highlight · ↵ to add"
                                 className="pl-9"
                             />
                             {filteredProducts.length > 0 && (
                                 <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                                    {filteredProducts.map((p) => (
+                                    {filteredProducts.map((p, i) => (
                                         <li key={p.id}>
                                             <button
                                                 type="button"
                                                 onClick={() => addToCart(p)}
-                                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                                                onMouseEnter={() => setProductHighlight(i)}
+                                                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === productHighlight ? "bg-muted" : "hover:bg-muted"}`}
                                             >
                                                 <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
                                                 <span className="flex-1 px-3 truncate">{p.name}</span>
-                                                <Plus size={14} className="text-muted-foreground" />
+                                                <span className="text-xs text-muted-foreground">{p.pricePaise ? `₹${(p.pricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
+                                                <Plus size={14} className="ml-2 text-muted-foreground" />
                                             </button>
                                         </li>
                                     ))}
@@ -595,34 +631,52 @@ export default function PosScreen() {
                                 </div>
                             ) : (
                                 <ul className="divide-y divide-border">
-                                    {cart.map((l) => (
-                                        <li key={l.productId} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-3">
-                                            <div className="min-w-0">
-                                                <div className="truncate text-sm font-medium">{l.name}</div>
-                                                <div className="font-mono text-xs text-muted-foreground">{l.sku}</div>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
+                                    {cart.map((l) => {
+                                        // Enter on any cart-line input → refocus the product search so the
+                                        // cashier can scan the next item without reaching for the mouse.
+                                        const enterToNextProduct = (e: React.KeyboardEvent) => {
+                                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); productSearchRef.current?.focus(); }
+                                        };
+                                        return (
+                                            <li key={l.productId} className="space-y-1.5 px-4 py-3">
+                                                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-sm font-medium">{l.name}</div>
+                                                        <div className="font-mono text-xs text-muted-foreground">{l.sku}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
+                                                        <Input
+                                                            value={l.qty}
+                                                            onChange={(e) => setQty(l.productId, Number(e.target.value) || 0)}
+                                                            onKeyDown={enterToNextProduct}
+                                                            className="w-14 text-center"
+                                                            inputMode="decimal"
+                                                        />
+                                                        <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
+                                                    </div>
+                                                    <Input
+                                                        value={l.unitPrice || ""}
+                                                        onChange={(e) => setPrice(l.productId, Number(e.target.value) || 0)}
+                                                        onKeyDown={enterToNextProduct}
+                                                        placeholder="₹ price"
+                                                        className="w-28 text-right"
+                                                        inputMode="decimal"
+                                                    />
+                                                    <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, 0)} title="Remove">
+                                                        <Trash2 size={12} className="text-destructive" />
+                                                    </Button>
+                                                </div>
                                                 <Input
-                                                    value={l.qty}
-                                                    onChange={(e) => setQty(l.productId, Number(e.target.value) || 0)}
-                                                    className="w-14 text-center"
-                                                    inputMode="decimal"
+                                                    value={l.description}
+                                                    onChange={(e) => setLineDescription(l.productId, e.target.value)}
+                                                    onKeyDown={enterToNextProduct}
+                                                    placeholder="Note (optional) — colour, config, special request…"
+                                                    className="text-sm"
                                                 />
-                                                <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
-                                            </div>
-                                            <Input
-                                                value={l.unitPrice || ""}
-                                                onChange={(e) => setPrice(l.productId, Number(e.target.value) || 0)}
-                                                placeholder="₹ price"
-                                                className="w-28 text-right"
-                                                inputMode="decimal"
-                                            />
-                                            <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, 0)} title="Remove">
-                                                <Trash2 size={12} className="text-destructive" />
-                                            </Button>
-                                        </li>
-                                    ))}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>
@@ -1007,20 +1061,50 @@ function Row({ label, value, muted, highlight }: { label: string; value: string;
 
 function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
     const c = snapshot.party;
+    const levelColor =
+        snapshot.customerLevel === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
+        snapshot.customerLevel === "Gold"     ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"   :
+        snapshot.customerLevel === "Silver"   ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"     :
+                                                "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
         <div className="space-y-4">
             <div>
                 <div className="flex items-center gap-2">
                     {c.kind === "company" ? <Building2 size={16} className="shrink-0 text-muted-foreground" /> : <User size={16} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-lg font-semibold">{c.name}</h2>
+                    <Badge className={`text-[10px] ${levelColor}`}>{snapshot.customerLevel}</Badge>
                 </div>
-                <div className="space-y-0.5 text-xs text-muted-foreground">
+                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                     {c.phone && <div className="flex items-center gap-1.5"><Phone size={11} /> {c.phone}</div>}
                     {c.email && <div className="flex items-center gap-1.5"><Mail size={11} /> {c.email}</div>}
+                    {c.address && <div className="flex items-start gap-1.5"><MapPin size={11} className="mt-0.5 shrink-0" /> <span className="whitespace-pre-line">{c.address}</span></div>}
                     {c.gstin && <div className="font-mono">GSTIN {c.gstin}</div>}
                 </div>
             </div>
 
+            {/* Money row — Available credit, Due, Overdue */}
+            <div className="grid grid-cols-3 gap-2">
+                <Stat
+                    icon={<CreditCard size={14} />}
+                    label="Avail. credit"
+                    value={fmtINR(snapshot.availableCredit)}
+                    sub={`limit ${fmtINR(snapshot.creditLimit)}`}
+                />
+                <Stat
+                    icon={<TrendingDown size={14} />}
+                    label="Due"
+                    value={fmtINR(snapshot.balanceDue)}
+                    sub={snapshot.balanceDue > 0 ? "outstanding" : "clean"}
+                />
+                <Stat
+                    icon={<AlertCircle size={14} />}
+                    label="Overdue"
+                    value={fmtINR(snapshot.balanceOverdue)}
+                    sub={snapshot.balanceOverdue > 0 ? "past due" : "—"}
+                />
+            </div>
+
+            {/* Lifetime + visits row */}
             <div className="grid grid-cols-2 gap-2">
                 <Stat icon={<TrendingUp size={14} />} label="Lifetime turnover" value={fmtINR(snapshot.turnover.lifetime)} sub={`${snapshot.turnover.invoiceCount} invoices`} />
                 <Stat icon={<TrendingUp size={14} />} label="Last 12 mo" value={fmtINR(snapshot.turnover.last12Months)} />
@@ -1028,7 +1112,45 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 <Stat icon={<Clock size={14} />} label="Last visit" value={since(snapshot.lastVisitAt)} />
             </div>
 
-            {snapshot.account && (
+            {/* Performance row — rating + favourite category */}
+            <div className="grid grid-cols-2 gap-2">
+                <Stat
+                    icon={<Star size={14} />}
+                    label="Rating"
+                    value={snapshot.rating != null ? `${snapshot.rating.toFixed(1)} / 5` : "—"}
+                    sub={snapshot.rating == null ? "no rating yet" : undefined}
+                />
+                <Stat
+                    icon={<Tag size={14} />}
+                    label="Favourite category"
+                    value={snapshot.favouriteCategory ?? "—"}
+                    sub={snapshot.favouriteCategory == null ? "needs invoice→product link" : undefined}
+                />
+            </div>
+
+            {/* Personalized offers / coupons */}
+            {snapshot.personalizedOffers.length > 0 ? (
+                <div>
+                    <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        <Sparkles size={11} /> Offers for {c.name}
+                    </div>
+                    <ul className="space-y-1.5">
+                        {snapshot.personalizedOffers.map((o) => (
+                            <li key={o.id} className="flex items-center justify-between rounded-md border border-emerald-300/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs">
+                                <span>{o.label}</span>
+                                <Badge variant="secondary" className="text-[10px]">{o.tag}</Badge>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : (
+                <div className="rounded-md border border-dashed border-border p-2 text-[11px] text-muted-foreground">
+                    <div className="mb-0.5 flex items-center gap-1 font-semibold uppercase tracking-wider"><Sparkles size={10} /> Personalized offers</div>
+                    No offers linked yet — wire <code className="font-mono">/api/coupons</code> + segments to populate.
+                </div>
+            )}
+
+            {snapshot.account && snapshot.account.balance !== 0 && (
                 <div className="rounded-md border border-border bg-card p-3 text-sm">
                     <div className="text-xs text-muted-foreground">Ledger balance</div>
                     <div className={`text-lg font-semibold ${snapshot.account.balance > 0 ? "text-amber-600" : "text-emerald-600"}`}>

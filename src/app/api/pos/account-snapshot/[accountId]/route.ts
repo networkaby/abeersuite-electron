@@ -38,6 +38,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         id: true,
                         name: true,
                         gstin: true,
+                        address: true,
                         phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
                         emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
                     },
@@ -47,6 +48,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         id: true,
                         name: true,
                         gstin: true,
+                        address: true,
                         phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
                         emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
                     },
@@ -55,7 +57,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         });
         if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
-        let party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null } | null = null;
+        let party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null } | null = null;
         if (account.person) {
             const p = account.person;
             party = {
@@ -65,6 +67,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 phone: p.phones[0]?.phone ?? null,
                 email: p.emails[0]?.email ?? null,
                 gstin: p.gstin,
+                address: p.address,
             };
         } else if (account.company) {
             const c = account.company;
@@ -75,14 +78,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 phone: c.phones[0]?.phone ?? null,
                 email: c.emails[0]?.email ?? null,
                 gstin: c.gstin,
+                address: c.address,
             };
         }
         if (!party) return NextResponse.json({ error: "Account is not linked to a person or company" }, { status: 400 });
 
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const today = new Date();
 
-        const [lifetimeAgg, ytdAgg, latestInvoice, latestTicket, recentTickets] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, overdueRows, latestInvoice, latestTicket, recentTickets] = await Promise.all([
             prisma.invoice.aggregate({
                 where: { accountId, deletedAt: null, status: { not: "VOID" } },
                 _sum: { totalAmount: true },
@@ -91,6 +96,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             prisma.invoice.aggregate({
                 where: { accountId, deletedAt: null, status: { not: "VOID" }, issueDate: { gte: oneYearAgo } },
                 _sum: { totalAmount: true },
+            }),
+            prisma.invoice.findMany({
+                where: {
+                    accountId, deletedAt: null,
+                    status: { in: ["SENT", "PARTIAL"] },
+                    dueDate: { lt: today },
+                },
+                select: { totalAmount: true, amountPaid: true },
             }),
             prisma.invoice.findFirst({
                 where: { accountId, deletedAt: null, status: { not: "VOID" } },
@@ -121,6 +134,22 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
         const loyaltyPoints = Math.floor(lifetimeTotal / 100);
 
+        // Tier label drives "Customer level" UI. Same thresholds as discountPct.
+        const customerLevel = lifetimeTotal >= 200000 ? "Platinum"
+                              : lifetimeTotal >= 50000  ? "Gold"
+                              : lifetimeTotal >= 10000  ? "Silver"
+                                                        : "Bronze";
+
+        // Placeholder credit-limit tier — schema has no credit_limit field yet.
+        // Bronze/Silver get ₹10k, Gold ₹50k, Platinum ₹2L.
+        const creditLimit = lifetimeTotal >= 200000 ? 200000
+                            : lifetimeTotal >= 50000  ? 50000
+                                                      : 10000;
+        const balance = Number(account.balance);                       // ledger balance (positive = customer owes)
+        const balanceDue = Math.max(0, balance);
+        const overdueDue = overdueRows.reduce((s, r) => s + Math.max(0, Number(r.totalAmount) - Number(r.amountPaid)), 0);
+        const availableCredit = Math.max(0, creditLimit - balanceDue);
+
         const lastVisitAt = (() => {
             const a = latestInvoice?.issueDate ?? null;
             const b = latestTicket?.createdAt ?? null;
@@ -133,12 +162,21 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             party,
             account: {
                 id: account.id,
-                balance: Number(account.balance),
+                balance,
                 openingBalance: account.openingBalance ? Number(account.openingBalance) : null,
             },
             turnover: { lifetime: lifetimeTotal, last12Months: ytdTotal, invoiceCount },
             discountPct,
             loyaltyPoints,
+            customerLevel,
+            creditLimit,
+            balanceDue,
+            balanceOverdue: overdueDue,
+            availableCredit,
+            // Placeholders — surface as soft "—" in UI; wire to real data later.
+            rating: null,
+            favouriteCategory: null,
+            personalizedOffers: [] as Array<{ id: string; label: string; tag: string }>,
             lastVisitAt,
             recentTickets: recentTickets.map((t) => ({
                 id: t.id,
