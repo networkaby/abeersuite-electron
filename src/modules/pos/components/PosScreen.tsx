@@ -54,13 +54,13 @@ type PaymentMethod = "CASH" | "UPI" | "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WAL
 type PaymentSplit = { id: string; method: PaymentMethod; amount: number; reference: string };
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
-    { value: "CASH",          label: "Cash",          icon: <Banknote size={14} /> },
-    { value: "UPI",           label: "UPI",           icon: <Smartphone size={14} /> },
-    { value: "CARD",          label: "Card",          icon: <CreditCard size={14} /> },
-    { value: "CHEQUE",        label: "Cheque",        icon: <FileText size={14} /> },
+    { value: "CASH", label: "Cash", icon: <Banknote size={14} /> },
+    { value: "UPI", label: "UPI", icon: <Smartphone size={14} /> },
+    { value: "CARD", label: "Card", icon: <CreditCard size={14} /> },
+    { value: "CHEQUE", label: "Cheque", icon: <FileText size={14} /> },
     { value: "BANK_TRANSFER", label: "Bank transfer", icon: <Building2 size={14} /> },
-    { value: "WALLET",        label: "Wallet",        icon: <Wallet size={14} /> },
-    { value: "CREDIT",        label: "On credit",     icon: <Clock size={14} /> },
+    { value: "WALLET", label: "Wallet", icon: <Wallet size={14} /> },
+    { value: "CREDIT", label: "On credit", icon: <Clock size={14} /> },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,6 +89,36 @@ function isPhoneLike(q: string): boolean {
     return digits >= 4 && letters === 0;
 }
 
+// Phone validators — Indian numbers must be 10 digits starting 6-9 (no country
+// code). International numbers must start with `+` and a 1-3 digit country code,
+// then 6-14 more digits (E.164-ish, allowing optional spaces/dashes between).
+const RE_INDIAN_PHONE = /^[6-9]\d{9}$/;
+const RE_INTL_PHONE = /^\+\d{1,3}[\s-]?\d{6,14}$/;
+function phoneError(raw: string): string | null {
+    const v = raw.trim().replace(/\s+/g, " ");
+    if (!v) return null;                                  // empty is allowed (field is optional)
+    if (RE_INDIAN_PHONE.test(v.replace(/\s|-/g, ""))) return null;
+    if (RE_INTL_PHONE.test(v)) return null;
+    return "10-digit Indian (6/7/8/9 first) or +CC…";
+}
+
+const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+function emailError(raw: string): string | null {
+    const v = raw.trim();
+    if (!v) return null;
+    if (RE_EMAIL.test(v)) return null;
+    return "Looks invalid";
+}
+
+// Indian PIN code — 6 digits, can't start with 0.
+const RE_PIN = /^[1-9]\d{5}$/;
+function pinError(raw: string): string | null {
+    const v = raw.trim();
+    if (!v) return null;
+    if (RE_PIN.test(v)) return null;
+    return "6 digits";
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function PosScreen() {
@@ -114,7 +144,8 @@ export default function PosScreen() {
     const [newPartyOpen, setNewPartyOpen] = useState(false);
     const [newParty, setNewParty] = useState({
         name: "", phone: "", email: "", address: "",
-        companyName: "", companyPhone: "", companyEmail: "", companyAddress: "", companyGstin: "",
+        companyName: "", companyPhone: "", companyEmail: "", companyAddress: "",
+        companyState: "", companyPinCode: "", companyGstin: "",
     });
     // Captured at open time — drives form layout (phone-query swaps Phone/Email
     // row above Name so Tab forward from Name skips the pre-filled Phone).
@@ -124,11 +155,11 @@ export default function PosScreen() {
     const [companyAddressTouched, setCompanyAddressTouched] = useState(false);
     const [creatingParty, setCreatingParty] = useState(false);
 
-    const nameRef       = useRef<HTMLInputElement>(null);
-    const phoneRef      = useRef<HTMLInputElement>(null);
-    const addressRef    = useRef<HTMLTextAreaElement>(null);
-    const companyNameRef    = useRef<HTMLInputElement>(null);
-    const companyPhoneRef   = useRef<HTMLInputElement>(null);
+    const nameRef = useRef<HTMLInputElement>(null);
+    const phoneRef = useRef<HTMLInputElement>(null);
+    const addressRef = useRef<HTMLTextAreaElement>(null);
+    const companyNameRef = useRef<HTMLInputElement>(null);
+    const companyPhoneRef = useRef<HTMLInputElement>(null);
     const companyAddressRef = useRef<HTMLTextAreaElement>(null);
 
     // ── Effects ─────────────────────────────────────────────────────────────
@@ -224,15 +255,17 @@ export default function PosScreen() {
         const phoneLike = isPhoneLike(q);
         setOpenedAsPhoneQuery(phoneLike);
         setNewParty({
-            name:           phoneLike ? "" : q,
-            phone:          phoneLike ? q  : "",
-            email:          "",
-            address:        "",
-            companyName:    "",
-            companyPhone:   "",
-            companyEmail:   "",
+            name: phoneLike ? "" : q,
+            phone: phoneLike ? q : "",
+            email: "",
+            address: "",
+            companyName: "",
+            companyPhone: "",
+            companyEmail: "",
             companyAddress: "",
-            companyGstin:   "",
+            companyState: "",
+            companyPinCode: "",
+            companyGstin: "",
         });
         setCompanyAddressTouched(false);
         setCustHits([]);
@@ -280,12 +313,23 @@ export default function PosScreen() {
     };
 
     const submitCreate = async () => {
-        const hasPerson  = newParty.name.trim().length > 0;
+        const hasPerson = newParty.name.trim().length > 0;
         const hasCompany = newParty.companyName.trim().length > 0;
         if (!hasPerson && !hasCompany) {
             toast.error("Need at least a name or a company");
             nameRef.current?.focus();
             return;
+        }
+        // Validation gate — phone / email / PIN must be valid (or empty)
+        const checks: Array<[string | null, string, () => void]> = [
+            [phoneError(newParty.phone),        "Phone",         () => phoneRef.current?.focus()],
+            [emailError(newParty.email),        "Email",         () => { /* tab-skipped */ }],
+            [phoneError(newParty.companyPhone), "Company phone", () => companyPhoneRef.current?.focus()],
+            [emailError(newParty.companyEmail), "Company email", () => { /* tab-skipped */ }],
+            [pinError(newParty.companyPinCode), "PIN code",      () => { /* no ref */ }],
+        ];
+        for (const [err, label, focus] of checks) {
+            if (err) { toast.error(`${label}: ${err}`); focus(); return; }
         }
         setCreatingParty(true);
         try {
@@ -294,9 +338,9 @@ export default function PosScreen() {
                 const personRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
                     "/api/people",
                     {
-                        name:    newParty.name.trim(),
-                        phones:  newParty.phone.trim()   ? [newParty.phone.trim()]   : [],
-                        emails:  newParty.email.trim()   ? [newParty.email.trim()]   : [],
+                        name: newParty.name.trim(),
+                        phones: newParty.phone.trim() ? [newParty.phone.trim()] : [],
+                        emails: newParty.email.trim() ? [newParty.email.trim()] : [],
                         address: newParty.address.trim(),
                     },
                 );
@@ -309,11 +353,17 @@ export default function PosScreen() {
                 const companyRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
                     "/api/companies",
                     {
-                        name:    newParty.companyName.trim(),
-                        phones:  newParty.companyPhone.trim() ? [newParty.companyPhone.trim()] : [],
-                        emails:  newParty.companyEmail.trim() ? [newParty.companyEmail.trim()] : [],
-                        address: newParty.companyAddress.trim(),
-                        taxId:   newParty.companyGstin.trim(),
+                        name: newParty.companyName.trim(),
+                        phones: newParty.companyPhone.trim() ? [newParty.companyPhone.trim()] : [],
+                        emails: newParty.companyEmail.trim() ? [newParty.companyEmail.trim()] : [],
+                        // State + PIN code are appended to the address line until the
+                        // Company schema gains dedicated columns. Renders cleanly on
+                        // invoices and is one block-search away when the columns land.
+                        address: [
+                            newParty.companyAddress.trim(),
+                            [newParty.companyState.trim(), newParty.companyPinCode.trim()].filter(Boolean).join(" - "),
+                        ].filter(Boolean).join("\n"),
+                        taxId: newParty.companyGstin.trim(),
                     },
                 );
                 companyAccountId = companyRes.data.account?.id ?? null;
@@ -322,7 +372,7 @@ export default function PosScreen() {
 
             // Bill to the company if one was created, else to the person
             const billingAccountId = companyAccountId ?? personAccountId;
-            const billingName      = companyAccountId ? companyName : newParty.name.trim();
+            const billingName = companyAccountId ? companyName : newParty.name.trim();
 
             if (!billingAccountId) {
                 toast.error("Created, but no ledger account was returned — try again");
@@ -331,8 +381,8 @@ export default function PosScreen() {
 
             toast.success(
                 hasPerson && hasCompany ? `Added · ${newParty.name.trim()} @ ${companyName} — billing to company`
-                : hasCompany             ? `Added · ${companyName}`
-                                         : `Added · ${newParty.name.trim()}`
+                    : hasCompany ? `Added · ${companyName}`
+                        : `Added · ${newParty.name.trim()}`
             );
             setNewPartyOpen(false);
             await pickByAccountId(billingAccountId, billingName);
@@ -732,7 +782,9 @@ export default function PosScreen() {
                                             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); nameRef.current?.focus(); } }}
                                             placeholder="10-digit"
                                             inputMode="tel"
+                                            aria-invalid={!!phoneError(newParty.phone)}
                                         />
+                                        <FieldError msg={phoneError(newParty.phone)} />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
@@ -743,7 +795,9 @@ export default function PosScreen() {
                                             placeholder="optional"
                                             inputMode="email"
                                             tabIndex={-1}
+                                            aria-invalid={!!emailError(newParty.email)}
                                         />
+                                        <FieldError msg={emailError(newParty.email)} />
                                     </div>
                                 </div>
                             )}
@@ -783,7 +837,9 @@ export default function PosScreen() {
                                             }}
                                             placeholder="10-digit"
                                             inputMode="tel"
+                                            aria-invalid={!!phoneError(newParty.phone)}
                                         />
+                                        <FieldError msg={phoneError(newParty.phone)} />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
@@ -794,7 +850,9 @@ export default function PosScreen() {
                                             placeholder="optional"
                                             inputMode="email"
                                             tabIndex={-1}
+                                            aria-invalid={!!emailError(newParty.email)}
                                         />
+                                        <FieldError msg={emailError(newParty.email)} />
                                     </div>
                                 </div>
                             )}
@@ -848,10 +906,12 @@ export default function PosScreen() {
                                             onKeyDown={onAnyEnterToSubmit}
                                             placeholder="own number — no duplicates"
                                             inputMode="tel"
+                                            aria-invalid={!!phoneError(newParty.companyPhone)}
                                         />
+                                        <FieldError msg={phoneError(newParty.companyPhone)} />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label>Company email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
+                                        <Label>Company email</Label>
                                         <Input
                                             value={newParty.companyEmail}
                                             onChange={(e) => setNewParty((s) => ({ ...s, companyEmail: e.target.value }))}
@@ -859,7 +919,9 @@ export default function PosScreen() {
                                             placeholder="optional"
                                             inputMode="email"
                                             tabIndex={-1}
+                                            aria-invalid={!!emailError(newParty.companyEmail)}
                                         />
+                                        <FieldError msg={emailError(newParty.companyEmail)} />
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
@@ -875,6 +937,29 @@ export default function PosScreen() {
                                         placeholder={`autofilled from person address${companyAddressTouched ? " (edited)" : ""}`}
                                         rows={2}
                                     />
+                                </div>
+                                <div className="grid grid-cols-[1fr_140px] gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label>State</Label>
+                                        <Input
+                                            value={newParty.companyState}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, companyState: e.target.value }))}
+                                            onKeyDown={onAnyEnterToSubmit}
+                                            placeholder="e.g. Assam"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>PIN code</Label>
+                                        <Input
+                                            value={newParty.companyPinCode}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, companyPinCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                                            onKeyDown={onAnyEnterToSubmit}
+                                            placeholder="6 digits"
+                                            inputMode="numeric"
+                                            aria-invalid={!!pinError(newParty.companyPinCode)}
+                                        />
+                                        <FieldError msg={pinError(newParty.companyPinCode)} />
+                                    </div>
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Company GSTIN</Label>
@@ -901,8 +986,8 @@ export default function PosScreen() {
                             <UserPlus size={16} /> {creatingParty
                                 ? "Creating…"
                                 : newParty.name.trim() && showCompanySection ? "Create person + company & bill"
-                                : showCompanySection                          ? "Create company & bill"
-                                                                              : "Create & bill"}
+                                    : showCompanySection ? "Create company & bill"
+                                        : "Create & bill"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -912,6 +997,11 @@ export default function PosScreen() {
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+function FieldError({ msg }: { msg: string | null }) {
+    if (!msg) return null;
+    return <p className="text-[11px] text-destructive">{msg}</p>;
+}
 
 function Row({ label, value, muted, highlight }: { label: string; value: string; muted?: boolean; highlight?: boolean }) {
     return (
