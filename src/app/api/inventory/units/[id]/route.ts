@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { invUnitUpdateSchema } from "@/lib/inventory/schemas";
+import { revalidateTag } from "next/cache";
+import { INV_UNITS_TAG } from "../route";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -28,6 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
             },
         });
+        revalidateTag(INV_UNITS_TAG);
         return NextResponse.json(row);
     } catch {
         return NextResponse.json({ error: "Failed to update unit" }, { status: 500 });
@@ -45,6 +48,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Cannot delete unit while products reference it." }, { status: 400 });
         }
         await prisma.invUnit.delete({ where: { id } });
+        revalidateTag(INV_UNITS_TAG);
         return NextResponse.json({ success: true });
     } catch {
         return NextResponse.json({ error: "Failed to delete unit" }, { status: 500 });
