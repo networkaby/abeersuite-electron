@@ -17,11 +17,11 @@ This document describes the current implementation architecture of
 Core domain modules are in `src/modules`:
 
 - `core` - shared business workflows (assignment-oriented pages/logic)
-- `customer` - customer/company domain components and helpers
+- `customer` - customer/company/lead domain components and helpers
 - `message` - inbox and messaging domain
 - `repairing` - ticket lifecycle, repair workflow UI/domain
-- `tally` - finance and accounting features
-- `inventory` - inventory master data (units, categories, product groups, brands, warranty terms, internal SKU products)
+- `tally` - finance and accounting features (`PartyCombobox`, `BookPage`, `GstSummaryView`, `lib/outstandings.ts`, `lib/openingBalance.ts`, `lib/aggregateLedger.ts`)
+- `inventory` - inventory master data + voucher UI (`InvProductCombobox`, `InvProductPicker`, `InvVoucherForm`, `InvVoucherDetail`)
 - `shared` - cross-domain reusable module-level pieces
 - `external` - customer-facing shop, store homepage, and portal UI components
 
@@ -50,15 +50,15 @@ Route groups under `office/` (each maps under `/office/...`):
 
 - `(admin)` — users, roles, role matrix, branches, departments, org chart, posts, staff ecommerce admin
 - `(core)` — assignments, call log, serial number search, accounts
-- `(customer)` — customers, companies, unified “all” view
+- `(customer)` — customers, companies, unified “all” view, CRM leads
 - `(message)` — inbox (`/office/inbox`)
 - `(repairing)` — dashboard, tickets, service centers, repair settings (statuses, pipelines, …)
 - `(social)` — staff profile pages with wall (`/office/users/[id]`)
-- `(tally)` — finance (`/office/finance/...`)
+- `(tally)` — accounting (`/office/tally/...`) — was `(tally)/finance/` → renamed `(tally)/tally/` on 2026-05-07
 - `(e-commerce)` — staff shop admin (`/office/ecommerce/...`)
-- `(inventory)` — inventory masters (`/office/inventory/...`): units, categories, groups, brands, warranty terms, products (barcode/EAN/UPC slots; no stock transactions in this module)
+- `(inventory)` — inventory masters (`/office/inventory/...`): units, categories, groups, brands, warranty terms, products (barcode/EAN/UPC slots, HSN/GST fields). Stock transactions live in `(tally)/tally/inventory/`.
 
-Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/finance/invoices`, `/office/inventory/products`.
+Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/leads`, `/office/tally/invoices`, `/office/tally/reports/gst`, `/office/inventory/products`.
 
 Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/assignments`** (or `callbackUrl` when present).
 
@@ -83,16 +83,18 @@ Parentheses route groups do not add URL segments; public URLs stay **`/`**, **`/
 - `/api/roles/*`, `/api/permissions` - RBAC
 - `/api/branches/*`, `/api/departments/*` - org structure
 - `/api/org-chart` - hierarchical org data
-- `/api/customers/*`, `/api/companies/*`, `/api/accounts/*` - customer/company domain
+- `/api/customers/*`, `/api/companies/*`, `/api/accounts/*` - customer/company domain (now returns GSTIN/state/regType for party-picker autofill)
+- `/api/crm/leads/*` - CRM lead pipeline CRUD
 - `/api/inbox/*` - room listing, read state, messages
-- `/api/finance/*` - GL accounts, journal entries, invoices, reports
+- `/api/finance/*` - account groups, ledgers, journal entries (with three-tier delete: void/soft/hard), invoices, vouchers (sales/purchases/estimates), opening balances + suspense
+- `/api/finance/reports/*` - cash-flow, fund-flow, ratio-analysis, statistics, gst-summary, gst-hsn-summary, payables, receivables, ledger-outstandings/[ledgerId]
 - `/api/call-logs/*` - inbound/outbound call record CRUD
 - `/api/notifications/*` - per-user notification list + mark-read
 - `/api/posts/*`, `/api/wall-posts/*` - staff notice board + user wall posts
 - `/api/search-slno/*` - device serial number search
 - `/api/upload-signature` - Cloudinary signed upload params
-- `/api/ecommerce/*` - staff-side product and order management
-- `/api/inventory/*` - inventory master CRUD (`units`, `categories`, `product-groups`, `brands`, `warranty-terms`, `products`); requires `inventory:manage`. Stock movements and sales are not part of this surface.
+- `/api/ecommerce/*` - staff-side product and order management (products come from unified `InvProduct`)
+- `/api/inventory/*` - inventory master CRUD (`units`, `categories`, `product-groups`, `brands`, `warranty-terms`, `products`) **plus** voucher CRUD (receipt/issue/transfer/adjust); requires `inventory:manage`.
 
 ### Customer-facing API
 
@@ -128,16 +130,17 @@ Prisma uses split schema mode:
 
 - `prisma.config.ts` points to `prisma/schema`
 - schema files include:
-  - `base.prisma` - core CRM: `Customer`, `Company`, `CustomerCompany`
+  - `base.prisma` - core CRM: `Customer`, `Company`, `CustomerCompany` (with GST fields: `gstin`, `gstStateCode`, `gstRegType`, `financialYearFrom`, `booksBeginningFrom`)
   - `users.prisma`, `rbac.prisma`, `org.prisma` - users, roles/permissions, branches/departments
   - `pipeline.prisma`, `tickets.prisma`, `accounts.prisma` - ticket workflow + legacy accounts
-  - `finance.prisma` - `GlAccount`, `JournalEntry`, `Invoice`
+  - `finance.prisma` - `AccountType`, `AccountGroup`, `Ledger`, `JournalEntry` (with `VOID`/`SOFT_DELETED` status), `Invoice`, voucher records, opening balances
+  - `crm.prisma` - `CrmLead` (prospect → conversion to `Customer`)
   - `inbox.prisma` - `ChatRoom`, `ChatMessage`
   - `social.prisma` - `WallPost` (staff wall/profile posts)
-  - `shop.prisma` - `ShopProduct`, `ShopOrder`, `ShopOrderLine` (prices in integer paise)
-  - `inventory.prisma` - `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (internal catalogue masters; quantities live in future transaction modules)
+  - `shop.prisma` - `ShopOrder`, `ShopOrderLine` (prices in integer paise; **no `ShopProduct` — merged into `InvProduct` on 2026-05-04**)
+  - `inventory.prisma` - `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (now with `hsnCode`, `gstRate`, `taxability`; **single source of truth for shop + warehouse**) + voucher models (receipt/issue/transfer/adjust)
   - `portal.prisma` - `CustomerPortalCredential`
-  - `enums.prisma` - shared enums
+  - `enums.prisma` - shared enums (`GstRegType`, `Taxability`, …)
 
 This supports modular ownership of schema areas while sharing one datasource.
 
@@ -147,7 +150,14 @@ This supports modular ownership of schema areas while sharing one datasource.
 - Ownership model uses a primary owner plus participant helpers.
 - Pipeline model allows multiple business workflows (repair/sales/etc).
 - Customer and company are separated; account is retained as legacy bridge.
-- Finance follows a Tally-style mental model, but normalized as `AccountType -> AccountGroup -> Account`.
+- Finance follows a Tally-style mental model, normalized as `AccountType -> AccountGroup -> Ledger`.
+- GST identity (GSTIN, state code, registration type) lives on `Customer` and `Company` directly — no separate `Party` model. `PartyCombobox` autofills these on voucher entry.
+- HSN code and GST rate live on `InvProduct`, not per voucher line — single place to update when GST rates change.
+- `InvProduct` is the single product source of truth for both shop catalog and inventory vouchers (since 2026-05-04 `ShopProduct` merge).
+- Journal entries support a three-tier delete: **void** (preserves row, no GL impact), **soft-delete** (hides but retains audit), **hard-delete** (admin-only).
+- Opening-balance mismatches route into a system "Suspense" ledger so trial balance always balances during legacy-book imports.
+- `CrmLead` represents prospects only; conversion promotes a lead into a `Customer` row. Don't dual-write.
+- Composition GST parties (`Customer.gstRegType === 'COMPOSITION'`) skip GST lines on sales vouchers regardless of the product's `gstRate`.
 - Shop prices are stored as integer paise (₹1 = 100 paise) to avoid floating-point errors; use `src/lib/money-inr.ts` for display formatting.
 - Portal and staff auth are fully separate; `CustomerPortalCredential` is not connected to the NextAuth session.
 - Razorpay payment confirmation relies on the signed webhook, not the client-side payment response.

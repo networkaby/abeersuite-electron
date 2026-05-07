@@ -35,27 +35,29 @@ See `ARCHITECTURE.md` for full details.
 
 High-level:
 
-- `src/app/(protected)/layout.tsx` — staff shell (auth); child routes under **`office/`** → browser URLs **`/office/*`** (tickets, customers, finance, inbox, admin, …)
-- `src/app/(protected)/office/*` route groups: `(admin)`, `(core)`, `(customer)`, `(message)`, `(repairing)`, `(social)`, `(tally)`, `(e-commerce)`
+- `src/app/(protected)/layout.tsx` — staff shell (auth); child routes under **`office/`** → browser URLs **`/office/*`** (tickets, customers, tally, inbox, admin, …)
+- `src/app/(protected)/office/*` route groups: `(admin)`, `(core)`, `(customer)`, `(message)`, `(repairing)`, `(social)`, `(tally)`, `(e-commerce)`, `(inventory)`
 - `src/app/(external)/*` route groups: store homepage, shop (`/shop/*`), customer portal (`/portal/*`) — **not** under `/office`
 - Sign-in URLs: customer **`/login`** (`src/app/(external)/login/page.tsx`), staff **`/staff/login`** (`src/app/staff/login/page.tsx`). Legacy **`/portal/login`** redirects to **`/login`** in `src/proxy.ts`.
 - `src/app/api/*` route handlers (staff API + public shop/portal API)
-- `src/modules/*` domain modules (`core`, `customer`, `external`, `message`, `repairing`, `shared`, `tally`)
+- `src/modules/*` domain modules (`core`, `customer`, `external`, `inventory`, `message`, `repairing`, `shared`, `tally`)
 - `src/lib/*` infrastructure, auth guards, shop helpers
 - `src/store/*` Zustand stores (staff: quickTicket, reference; external: cart, wishlist, compare)
 - `prisma/schema/*` split Prisma schema files
 
 ## Finance (Tally Context)
 
-The finance module under `(protected)/office/(tally)` (URLs **`/office/finance/*`**) is accounting-oriented and intentionally maps
-Tally-style thinking into a cleaner software model:
+The finance module under `(protected)/office/(tally)/tally/` (URLs **`/office/tally/*`** — renamed from `/office/finance/*` on 2026-05-07) is accounting-oriented and intentionally maps Tally-style thinking into a cleaner software model:
 
 - `AccountType` = top-level accounting class (`ASSET`, `LIABILITY`, `INCOME`, `EXPENSE`)
 - `AccountGroup` = category bucket (for example, debtors, creditors, cash, expenses)
-- `Account` = actual ledger account used in journal/invoice/payment entries
+- `Ledger` = actual ledger account used in journal/invoice/payment entries
 
-Design intent: keep Tally familiarity (groups + ledgers) while preserving a clean
-relational model for reporting and automation.
+Vouchers under `/office/tally/`: sales, purchases, estimates, journal, inventory (receipt/issue/transfer/adjust). Reports: cash-book, bank-book, bank-reconciliation, cash-flow, fund-flow, ratio-analysis, statistics, receivables, payables, ledger-outstandings, GST hub (HSN summary, inward/outward supplies, liability).
+
+GST: `Customer` and `Company` carry `gstin`, `gstStateCode`, `gstRegType` (REGULAR/COMPOSITION/SEZ/UNREGISTERED), `financialYearFrom`, `booksBeginningFrom`. `InvProduct` carries `hsnCode`, `gstRate`, `taxability`. Vouchers use `PartyCombobox` (`src/modules/tally/components/PartyCombobox.tsx`) for searchable party selection with GST autofill.
+
+Design intent: keep Tally familiarity (groups + ledgers) while preserving a clean relational model for reporting and automation.
 
 ## Quick Start
 

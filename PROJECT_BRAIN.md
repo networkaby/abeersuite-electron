@@ -3,9 +3,9 @@
 > Internal service management system for an electronics repair shop — tracking tickets, team handoffs, and customer communication across Front Desk, Technician, Despatch, and Admin roles.
 
 **Stack:** Next.js 16.2.3 (App Router), React 19, PostgreSQL (Supabase), Prisma 7.7.0, NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Sonner (toasts), Axios, React Hook Form, Zod, Razorpay (payments)  
-**Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `UI-Update`)  
+**Repo:** `D:\our-own-website\service-mgmt-experiment` (local, git branch: `dev`)  
 **Started:** 2026-04-17  
-**Last Updated:** 2026-05-02
+**Last Updated:** 2026-05-07
 
 ---
 
@@ -38,16 +38,73 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 | 9 | Assignment & Ownership System | ✅ Done | 2026-04-21 |
 | 10 | Permission-based auth + API hardening | ✅ Done | 2026-04-23 |
 | 11 | Pipeline System + CRM Foundation | ✅ Done | 2026-04-24 |
-| 12 | Reporting & Analytics | ⏳ Not Started | — |
+| 12 | Reporting & Analytics (Tally side) | ✅ Done | 2026-05-07 |
 | 13 | External Shop + Customer Portal | ✅ Done | 2026-05-02 |
 | 14 | Social / Staff Profiles + Call Log | ✅ Done | 2026-05-02 |
 | 15 | Ecommerce Admin + Org Chart | ✅ Done | 2026-05-02 |
+| 16 | CRM Lead Management | ✅ Done | 2026-05-04 |
+| 17 | Inventory unification — ShopProduct → InvProduct + voucher models | ✅ Done | 2026-05-04 |
+| 18 | Tally Phase 4 — Account groups, ledgers, estimates, journal lifecycle, opening balances + suspense | ✅ Done | 2026-05-05 |
+| 19 | Tally Phase 5a — Reports hub, GST hub w/ HSN, Party CRM | ✅ Done | 2026-05-07 |
 
-> **Current Milestone:** Milestone #12 — Reporting & Analytics (nothing in progress yet; shop/portal/social now stable)
+> **Current Milestone:** Milestone #20 — Tally Phase 5b (GSTR-1/3B, e-Invoice IRN, RCM) — deferred per `tally_module_status.md`; nothing actively in progress.
 
 ---
 
 ## ✅ Completed Work
+
+### 2026-05-07 — Tally Phase 5a: Reports hub + GST hub + Party CRM (Milestones 12 + 19)
+
+- **Tally route group renamed**: `(tally)/finance/` → `(tally)/tally/`. Module page is `/office/tally`. Sidebar nav flattened (single prefix per module).
+- **New report pages** under `src/app/(protected)/office/(tally)/tally/reports/`:
+  - `cash-book/`, `bank-book/`, `bank-reconciliation/`
+  - `cash-flow/`, `fund-flow/`, `ratio-analysis/`, `statistics/`
+  - `receivables/`, `payables/`, `ledger-outstandings/[ledgerId]/`
+  - `gst/` (hub) + `gst/hsn-summary/`, `gst/inward-supplies/`, `gst/outward-supplies/`, `gst/liability/`
+- **New API routes** under `src/app/api/finance/reports/`: `cash-flow`, `fund-flow`, `ratio-analysis`, `statistics`, `gst-summary`, `gst-hsn-summary`, `payables`, `receivables`, `ledger-outstandings/[ledgerId]`
+- **Shared report components**: `src/modules/tally/components/BookPage.tsx` (reusable cash/bank book layout), `src/modules/tally/components/GstSummaryView.tsx`
+- **Tally lib**: `src/modules/tally/lib/outstandings.ts` (party outstanding tracking)
+- **GST schema additions**:
+  - `prisma/schema/base.prisma` — added `gstin`, `gstStateCode`, `gstRegType`, `financialYearFrom`, `booksBeginningFrom` to **both** `Customer` and `Company`
+  - `prisma/schema/enums.prisma` — `GstRegType` (REGULAR, COMPOSITION, SEZ, UNREGISTERED), `Taxability` (TAXABLE, EXEMPT, NIL_RATED, NON_GST)
+  - `prisma/schema/inventory.prisma` — `hsnCode`, `gstRate`, `taxability` on `InvProduct`
+- **`PartyCombobox`** (`src/modules/tally/components/PartyCombobox.tsx`): searchable customer/supplier picker; autofills GSTIN/state/regType on selection. Wired into `tally/sales/new`, `tally/purchases/new`, `tally/estimates/new`.
+- **`InvProductCombobox`** (`src/modules/inventory/components/InvProductCombobox.tsx`): inline Tally-style product picker with stock/price/unit/brand columns; replaces modal dialog for voucher line entry.
+- **Customers API**: `GET /api/customers` returns GSTIN/state/regType for party matching.
+- **`createDialogStore`** (`src/store/createDialogStore.ts`): Zustand store driving the unified person/company creation modal triggered from the create-actions dialog.
+- **Shared UI updates**: `AllCreateActionsDialog.tsx`, `ButtonBar.tsx`, `Sidebar.tsx` — refactored for the new flattened module nav and the unified create modal.
+- **`.claude/scheduled_tasks.lock`** committed (commit 3fd8d88) — JSON `{sessionId, pid, acquiredAt}` to prevent concurrent scheduled-task execution.
+
+### 2026-05-05 — Tally Phase 4: Account groups, ledgers, estimates, journal lifecycle, opening balances (Milestone 18)
+
+- **Account groups + ledgers**: full CRUD for chart-of-accounts hierarchy (`AccountGroup`, `Ledger`); replaces the older flat `GlAccount` workflow. New API endpoints under `src/app/api/finance/`.
+- **Estimates / quotation voucher**: new voucher type alongside sales and purchases; pages under `(tally)/tally/estimates/` (`page.tsx`, `new/`, `[id]/`).
+- **Three-tier journal delete** (commit c1e4fa0) on journal entries:
+  - **Void** — keeps row, marks status `VOID`, no GL impact
+  - **Soft-delete** — hides from lists, retains audit trail
+  - **Hard-delete** — admin-only, fully removes
+- **Suspense ledger for opening balances** (commit f14acf0): when manually-entered opening balances don't tie out, the difference posts to a system "Suspense" ledger so trial balance always balances.
+- **Master opening balances** (commit 81070d2): `src/modules/tally/lib/openingBalance.ts` + `aggregateLedger.ts` — books-beginning-from date drives opening balance carry-forward; year-end close logic.
+
+### 2026-05-04 — CRM Leads + Inventory unification + Inventory vouchers (Milestones 16 + 17)
+
+- **CRM Lead module** (commit 4226994):
+  - `prisma/schema/crm.prisma` — `CrmLead` model (status pipeline, assigned-to, source, expected value, customer link)
+  - Pages under `(protected)/office/(customer)/leads/` (list + detail) with kanban-style status pipeline
+  - API `src/app/api/crm/leads/`
+- **InvProduct unification** (commit 9066da3): `ShopProduct` model **merged into** `InvProduct`. The catalog (shop) and inventory (warehouse) now share one product model. `prisma/schema/shop.prisma` reduced to order-side models; `inventory.prisma` is the product source of truth.
+- **Inventory vouchers** (commits 82fb35f, 2ab5f16, 7383be7): receipt/issue/transfer/adjustment voucher models + pages under `(tally)/tally/inventory/...`. New API under `src/app/api/inventory/`. Components: `InvVoucherForm`, `InvVoucherDetail`, `InvProductFormFields`, `InvProductPicker`.
+- **Order source filter** on invoices page (commit dfecf61): filter invoices by origin channel (shop, ticket, manual).
+- **Permissions + sidebar restructure** (commit 7779177): inventory + CRM permissions added; sidebar groups updated; new permission keys seeded.
+- **Routing restructure + auth flows** (commit 5eedcb0): authentication redirect logic refined for staff vs portal split.
+- **`/office/` prefix** finalised (commit 2217a0d): all staff routes confirmed under `/office/*`; branches/departments/roles pages live under `(admin)`.
+
+### 2026-05-03 — Customer portal + ecommerce account management
+
+- **Customer portal account hub**: order history, ticket list, profile page under `/portal/...`. Scrollable areas, mobile UX polish.
+- **Emergency password reset** (commit b1636ca): customer-facing `POST /api/portal/password-reset` flow with token issued via email/phone; admin can also force-reset from staff side.
+- **Order status transitions module** (commit 191e3ce): extracted into a dedicated module so both staff and portal use the same state machine.
+- **Ecommerce account management** (commit 4f0eb55): customer can manage ecommerce identity (addresses, default payment) from the portal.
 
 ### 2026-05-02 — Ecommerce Admin + Org Chart + Sub-status Groups (Milestone 15)
 
@@ -245,31 +302,33 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 
 ## 📋 Next Up (Prioritized)
 
-### Milestone 12 — Reporting & Analytics
-1. **Reporting dashboard** — Recharts; key metrics: tickets by status/pipeline, avg resolution time, technician workload
-2. **Ticket list pagination** — cursor-based or offset; current list loads all records
+### Tally Phase 5b — deferred (most likely to get picked up next)
+1. **GSTR-1 / GSTR-3B export** — JSON download in GSTN portal format from the GST hub
+2. **e-Invoice (IRN) integration** — IRP API integration on sales voucher above threshold
+3. **RCM (Reverse Charge Mechanism)** handling on purchase vouchers
+4. **Repair-side reporting dashboard** — tickets by status/pipeline, avg resolution time, technician workload (still missing for the repair side; finance side now covered)
+5. **Ticket list pagination** — cursor-based or offset; current list loads all records
 
-### Org RBAC — next steps (after reporting)
-3. **Branch-scoped data filtering** — tickets, customers, invoices filtered by user's `branchId` when `scope` is BRANCH or below
-4. **`settings:manage` permission** — needs to be seeded into Admin role so Branches/Departments pages are accessible
-5. **Position model** — named slots in the org chart (future; needed at 50+ users)
+### Org RBAC — next steps
+6. **Branch-scoped data filtering** — tickets, customers, invoices filtered by user's `branchId` when `scope` is BRANCH or below
+7. **`settings:manage` permission** — needs to be seeded into Admin role so Branches/Departments pages are accessible
+8. **Position model** — named slots in the org chart (future; needed at 50+ users)
 
 ### Shop / Portal — next steps
-6. **Portal ticket detail** — customers can see full ticket notes and status history, not just the list
-7. **Shop order history** — logged-in portal users see their past orders
-8. **Razorpay payment status page** — post-payment redirect with real-time status polling
-9. **Product inventory / stock tracking** — `stockQty` on `ShopProduct`; decrement on order confirm
+9. **Portal ticket detail** — customers see full ticket notes and status history, not just the list
+10. **Razorpay payment status page** — post-payment redirect with real-time status polling
+11. **Stock decrement on shop order confirm** — now possible since `InvProduct` is unified
 
-### Quick UX wins (after reporting)
-10. **U2 — duplicate Name column** in ticket list
-11. **U4 — mobile grid** layout fixes
-12. **U11 — toast label** improvements
-13. **U16 — default date sort** on ticket list (newest first)
+### Quick UX wins
+12. **U2 — duplicate Name column** in ticket list
+13. **U4 — mobile grid** layout fixes
+14. **U11 — toast label** improvements
+15. **U16 — default date sort** on ticket list (newest first)
 
 ### Longer term
-14. **SLA alerts** — flag tickets in same status too long (e.g. "Diagnosing 5+ days")
-15. **Company portal** — B2B version of customer portal; companies see all linked devices/tickets
-16. **ERP Module Foundation** — `AppSetting` model, static module registry, module toggle settings page (archived Phase 5)
+16. **SLA alerts** — flag tickets in same status too long (e.g. "Diagnosing 5+ days")
+17. **Company portal** — B2B version of customer portal; companies see all linked devices/tickets
+18. **ERP Module Foundation** — `AppSetting` model, static module registry, module toggle settings page (archived Phase 5)
 
 ---
 
@@ -285,6 +344,10 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - 2026-05-02 **Shop guest vs. logged-in**: `ShopOrder.customerId` is nullable — guest orders use `guestEmail`/`guestPhone`. Future: merge guest orders on portal login.
 - 2026-05-02 **Prices in paise**: all shop prices stored as integer paise (₹1 = 100 paise); `money-inr.ts` handles formatting. Never store floats for currency.
 - 2026-05-02 **External app split**: `docs/customer-site-shared-imports.md` tracks every import that crosses the `(external)/` boundary, to make future extraction into a separate Next.js app traceable.
+- 2026-05-04 **InvProduct unification gain**: now that catalog and warehouse share one product model, shop checkout can reserve stock, and inventory adjustments propagate to the storefront with no sync layer.
+- 2026-05-05 **Suspense ledger**: trial balance always balances by routing entry mismatches into a system "Suspense" ledger — easier to import legacy books from Tally without manually reconciling cents.
+- 2026-05-07 **Party autofill from GSTIN**: `PartyCombobox` could call a GST lookup API to prefill name/state/regType when the user types a 15-char GSTIN.
+- 2026-05-07 **Tally route rename**: `(tally)/finance/` → `(tally)/tally/` was deliberate to match the user-facing module label; any remaining `office/finance/...` links are now broken and should be migrated.
 
 ---
 
@@ -309,6 +372,12 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - **Shop prices in paise**: `ShopProduct.pricePaise` and `ShopOrder.totalPaise` are integers representing paise. Always use `money-inr.ts` helpers to format for display; never divide by 100 inline.
 - **External stores are client-only**: `shopCartStore`, `shopWishlistStore`, `shopCompareStore` use Zustand with localStorage persistence. They are not synced to the DB — cart is lost on a different browser/device until checkout creates a `ShopOrder`.
 - **`(store)` sub-group**: The store homepage lives under `src/app/(external)/(store)/` as its own route sub-group so it gets a different layout from the shop pages.
+- **Tally route rename**: any link to `/office/finance/...` is broken — current root is `/office/tally/...`. Sidebar already updated; check older bookmarks/screenshots before reusing.
+- **`.claude/scheduled_tasks.lock` is committed** (commit 3fd8d88). Tracks active scheduled-task session (`{sessionId, pid, acquiredAt}`). A previous merge already removed a similar artifact (commit 19ed1de). If this becomes a coordination headache, move it to `.gitignore` — confirm with the user first.
+- **GST fields are nullable**: `gstin`, `gstStateCode`, `gstRegType` etc. are optional on `Customer`/`Company` — non-GST consumers don't need them. Treat empty as "unregistered/consumer" in voucher logic.
+- **Composition party = no GST charge**: when `Customer.gstRegType === 'COMPOSITION'`, sales vouchers should not add GST lines even if the product has `hsnCode` and `gstRate`. Voucher logic must check both sides.
+- **InvProduct is now the single product source of truth** (post 2026-05-04). Shop product pages and inventory vouchers read from the same model; there is no `ShopProduct` table anymore. Migrations from older shop seed scripts will fail.
+- **CrmLead vs Customer**: a `CrmLead` is a prospect (no purchase yet); converting a lead promotes it to `Customer`. Don't dual-write — the lead-to-customer transition is the conversion event.
 
 ---
 
@@ -353,6 +422,18 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 | Store homepage in `(store)` sub-group | `(external)/(store)/` sub-group with own layout | Flat under `(external)/` | Allows different layout (no ShopHeader/Footer) for the marketing homepage vs. the shop pages |
 | Social wall on staff profiles | `WallPost` model; any staff member can post on any other's wall | Post only on own wall | Encourages team communication; wall is visible to all staff |
 | Call log as CRM primitive | `CallLog` records linked to customer optionally | Notes-only approach | Makes calls searchable, filterable, and reportable; foundation for future auto-dialer or CRM pipeline |
+| GST fields on Customer + Company (not new Party model) | Both models carry GSTIN/state/regType/financialYearFrom/booksBeginningFrom | Single unified `Party` model | Existing Customer/Company split is load-bearing across CRM, tickets, vouchers — duplicating five fields was cheaper than a model migration |
+| Tally route group rename | `(tally)/finance/` → `(tally)/tally/` | Keep `finance` | "Tally" is the user-facing label that accountants recognise; matching the URL avoids the mental hop |
+| Party picker autofills GST | `PartyCombobox` returns full party with GST fields | Voucher manually re-fetches | One round trip; party data is small; reduces flicker on voucher entry |
+| Inv product picker style | Inline dropdown (`InvProductCombobox`) | Modal dialog | Tally-style fast keyboard entry; modals break the rhythm of voucher line entry |
+| HSN + gstRate on `InvProduct` | Stored per product | Per voucher line | HSN is a property of the product, not the transaction; one place to update when GST rates change |
+| ShopProduct merged into InvProduct | One product model serves both shop + warehouse | Keep separate, sync via worker | No sync layer to write or maintain; stock decrement on order confirm is direct |
+| Three-tier journal delete | Void / soft-delete / hard-delete | Single hard-delete | Accountants need to neutralise an entry without losing audit trail; void keeps the row visible in audit; hard-delete is admin-only emergency tool |
+| Suspense ledger for opening balance mismatch | System "Suspense" ledger absorbs mismatch | Block save until balanced | Tally users routinely import imbalanced legacy books; Suspense lets them save and reconcile incrementally |
+| Master opening balances | Books-beginning-from date drives carry-forward | Period-by-period manual entry | Single source of truth; year-end close auto-rolls; matches Tally mental model |
+| CrmLead is a prospect (separate from Customer) | `CrmLead` table; conversion promotes to Customer | Reuse Customer with status flag | Customer table represents people who have transacted; mixing prospects pollutes reports and CAC math |
+| Inventory vouchers as their own model family | Receipt/issue/transfer/adjustment as voucher records | Adjustments via raw stock writes | Auditable, reversible, supports multi-line and multi-warehouse moves |
+| Order source filter on invoices | Single field on invoice indicating channel | Separate invoice tables per channel | One invoice list; cleaner reports; channel is a lens, not a different document |
 
 ---
 
@@ -379,11 +460,22 @@ src/
 │   │       ├── (customer)/
 │   │       │   ├── customers/       # Individual customer list + detail
 │   │       │   ├── companies/       # Company list + detail
-│   │       │   └── all/             # Unified customers + companies view
+│   │       │   ├── all/             # Unified customers + companies view
+│   │       │   └── leads/           # CRM lead pipeline (kanban + detail)
 │   │       ├── (message)/
 │   │       │   └── inbox/           # Real-time inbox (Supabase Realtime)
 │   │       ├── (tally)/
-│   │       │   └── finance/         # Chart of accounts, journal entries, invoices, reports
+│   │       │   └── tally/           # Was `finance/` — renamed 2026-05-07
+│   │       │       ├── account-groups/ + ledgers/        # Chart of accounts hierarchy
+│   │       │       ├── sales/ + purchases/ + estimates/  # Voucher entry (with PartyCombobox)
+│   │       │       ├── inventory/                        # Inventory vouchers (receipt/issue/transfer/adjust)
+│   │       │       ├── invoices/                         # Invoice list (filter by order source)
+│   │       │       ├── journal/                          # Journal entries with three-tier delete
+│   │       │       └── reports/                          # cash-book, bank-book, bank-reconciliation,
+│   │       │                                             # cash-flow, fund-flow, ratio-analysis, statistics,
+│   │       │                                             # receivables, payables, ledger-outstandings/[id],
+│   │       │                                             # gst/ (hub) + hsn-summary, inward-supplies,
+│   │       │                                             # outward-supplies, liability
 │   │       ├── (social)/
 │   │       │   └── users/[id]/      # Staff profile page with wall posts
 │   │       ├── (admin)/
@@ -432,17 +524,24 @@ src/
 │   │   ├── posts/ + wall-posts/     # Notice board + user wall posts
 │   │   ├── search-slno/             # Device serial number search
 │   │   ├── upload-signature/        # Cloudinary signed upload params
-│   │   ├── finance/*                # GL accounts, journal entries, invoices, reports
-│   │   ├── shop/                    # Public shop: products, orders, Razorpay
-│   │   ├── ecommerce/               # Staff ecommerce: products + orders
-│   │   └── portal/                  # Customer portal: register, tickets
+│   │   ├── finance/                 # account-groups, ledgers, journal, invoices, vouchers
+│   │   │   └── reports/             # cash-flow, fund-flow, ratio-analysis, statistics,
+│   │   │                            # gst-summary, gst-hsn-summary, payables, receivables,
+│   │   │                            # ledger-outstandings/[ledgerId]
+│   │   ├── inventory/               # Product CRUD, voucher CRUD (receipt/issue/transfer/adjust)
+│   │   ├── crm/                     # CRM leads
+│   │   ├── shop/                    # Public shop: products (now from InvProduct), orders, Razorpay
+│   │   ├── ecommerce/               # Staff ecommerce: products + orders (uses InvProduct)
+│   │   └── portal/                  # Customer portal: register, tickets, password-reset
 │   └── staff/login/page.tsx         # Staff sign-in (`/staff/login`; credentials-staff)
 ├── modules/                         # Domain modules
 │   ├── core/                        # Shared business logic
-│   ├── customer/                    # Customer + Company components/lib
+│   ├── customer/                    # Customer + Company + Leads components/lib
 │   ├── message/                     # Inbox components + lib/inbox.ts
 │   ├── repairing/                   # Ticket, assignment, dashboard components
-│   ├── tally/                       # Finance/accounting components
+│   ├── tally/                       # Finance/accounting components — BookPage, GstSummaryView, PartyCombobox
+│   │   └── lib/                     # outstandings.ts, openingBalance.ts, aggregateLedger.ts
+│   ├── inventory/                   # InvProductCombobox, InvProductPicker, InvVoucherForm/Detail, InvProductFormFields
 │   ├── shared/                      # Cross-module shared utilities
 │   └── external/                    # Customer-facing surface components
 │       ├── ExternalRootShell.tsx    # Root layout shell with SessionProvider
@@ -480,6 +579,7 @@ src/
 ├── store/                           # Zustand stores
 │   ├── quickTicketStore.ts          # Staff quick-ticket creation state
 │   ├── referenceStore.ts            # Reference data cache
+│   ├── createDialogStore.ts         # Unified person/company create-modal state
 │   └── external/                   # Customer-facing stores (localStorage-persisted)
 │       ├── shopCartStore.ts
 │       ├── shopWishlistStore.ts
@@ -490,12 +590,14 @@ src/
 └── proxy.ts                         # Auth middleware: `/portal/login` → `/login`; staff vs customer sign-in routing; staff post-login → `/office/assignments`
 prisma/
 ├── schema/                          # Split Prisma schema (*.prisma by domain)
-│   ├── base.prisma                  # Core CRM: Customer, Company, CustomerCompany
+│   ├── base.prisma                  # Core CRM: Customer, Company, CustomerCompany (+ GST fields)
 │   ├── users.prisma / rbac.prisma / org.prisma
 │   ├── pipeline.prisma / tickets.prisma / accounts.prisma
-│   ├── finance.prisma / inbox.prisma / enums.prisma
+│   ├── finance.prisma / inbox.prisma / enums.prisma  # enums: GstRegType, Taxability
+│   ├── inventory.prisma             # InvProduct (unified, w/ HSN+gstRate+taxability) + voucher models
+│   ├── crm.prisma                   # CrmLead model
 │   ├── social.prisma                # WallPost model
-│   ├── shop.prisma                  # ShopProduct, ShopOrder, ShopOrderLine
+│   ├── shop.prisma                  # ShopOrder, ShopOrderLine (product comes from InvProduct)
 │   └── portal.prisma                # CustomerPortalCredential
 ├── prisma.config.ts                 # schema path + datasource + seed command
 ├── seed*.ts                         # seed and migration helper scripts
