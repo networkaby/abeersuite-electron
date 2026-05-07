@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { isBalanced } from "@/modules/tally/lib/balance";
+import { isBalanced } from "@/modules/accountancy/lib/balance";
 
 // Reference number prefixes per voucher type. Tally uses similar conventions:
 // CV-2026-0001, PV-2026-0001, RV-2026-0001, CRN-2026-0001, DRN-2026-0001.
@@ -31,7 +31,7 @@ const createSchema = z.object({
 
 // GET /api/finance/vouchers?type=CONTRA&status=DRAFT&includeDeleted=1
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

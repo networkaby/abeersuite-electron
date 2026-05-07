@@ -319,6 +319,18 @@ const PERMISSIONS = [
     { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED." },
     { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
+
+    // accountancy — module-level CRUD gate (Owner / CA only). Fine-grained finance:* keys above are additive.
+    { id: "accountancy:create:own",  label: "Create accountancy entries (own)",   module: "accountancy", description: "Create vouchers / invoices / journal entries within own scope." },
+    { id: "accountancy:view:own",    label: "View accountancy (own)",             module: "accountancy", description: "View accountancy data scoped to own records." },
+    { id: "accountancy:view:br",     label: "View accountancy (branch)",          module: "accountancy", description: "View accountancy data across the user's branch." },
+    { id: "accountancy:view:org",    label: "View accountancy (organisation)",    module: "accountancy", description: "View the full accountancy module across the organisation. This is the gate that shows / hides the Accountancy sidebar section." },
+    { id: "accountancy:edit:own",    label: "Edit accountancy (own)",             module: "accountancy", description: "Edit accountancy entries within own scope." },
+    { id: "accountancy:edit:br",     label: "Edit accountancy (branch)",          module: "accountancy", description: "Edit accountancy entries across the user's branch." },
+    { id: "accountancy:edit:org",    label: "Edit accountancy (organisation)",    module: "accountancy", description: "Edit any accountancy entry organisation-wide." },
+    { id: "accountancy:delete:own",  label: "Delete accountancy (own)",           module: "accountancy", description: "Delete own accountancy entries (subject to per-operation guards)." },
+    { id: "accountancy:delete:br",   label: "Delete accountancy (branch)",        module: "accountancy", description: "Delete branch-scoped accountancy entries." },
+    { id: "accountancy:delete:org",  label: "Delete accountancy (organisation)",  module: "accountancy", description: "Delete any accountancy entry organisation-wide." },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -758,18 +770,27 @@ async function upsertShopDemoCatalog() {
     });
 }
 
-async function ensureAdminUser() {
-    const password = await bcrypt.hash("admin123", 10);
-    await prisma.user.upsert({
-        where: { email: "admin@networkservice.in" },
-        update: {},
-        create: {
-            name: "Admin",
-            email: "admin@networkservice.in",
-            password,
-            role: "R1",
-        },
-    });
+const DEMO_USERS: { email: string; name: string; role: string; password: string }[] = [
+    { email: "admin@networkservice.in", name: "Admin",      role: "R1", password: "admin123" },
+    { email: "tech@networkservice.in",  name: "Technician", role: "R2", password: "tech123"  },
+    { email: "front@networkservice.in", name: "Front Desk", role: "R3", password: "front123" },
+    { email: "des@networkservice.in",   name: "Despatch",   role: "R4", password: "des123"   },
+];
+
+async function ensureDemoUsers() {
+    for (const u of DEMO_USERS) {
+        const password = await bcrypt.hash(u.password, 10);
+        await prisma.user.upsert({
+            where: { email: u.email },
+            update: { role: u.role, name: u.name },
+            create: {
+                name: u.name,
+                email: u.email,
+                password,
+                role: u.role,
+            },
+        });
+    }
 }
 
 async function main() {
@@ -797,8 +818,8 @@ async function main() {
     await upsertChartOfAccounts();
     console.log(`  Seeded ${CHART_OF_ACCOUNTS.length} GL accounts`);
 
-    await ensureAdminUser();
-    console.log("  Ensured admin user exists (admin@networkservice.in / admin123 on first seed only)");
+    await ensureDemoUsers();
+    console.log(`  Ensured ${DEMO_USERS.length} demo users exist (admin / tech / front / des @networkservice.in — passwords reset to defaults each seed)`);
 
     await upsertShopDemoCatalog();
     console.log("  Upserted demo shop catalog (products + imagery)");

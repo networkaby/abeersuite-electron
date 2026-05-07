@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { aggregateRange, loadNormalBalanceMap } from "@/modules/tally/lib/aggregateLedger";
-import { buildGroupTree, type GroupNode } from "@/modules/tally/lib/groupTree";
-import { getClosingStockValue } from "@/modules/tally/lib/closingStock";
+import { requirePermission } from "@/lib/auth-guard";
+import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
+import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 
 // GET /api/finance/reports/ratio-analysis?asOf=YYYY-MM-DD
 // Period: Indian fiscal year start (1-Apr) → asOf.
 // Returns Tally's "Principal Groups" and "Principal Ratios" panels.
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

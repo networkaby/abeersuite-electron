@@ -22,6 +22,20 @@ const nextConfig: NextConfig = {
       { source: "/office/companies/:path*", destination: "/office/customers/companies/:path*", permanent: false },
       { source: "/office/service-centers", destination: "/office/repairing/service-centers", permanent: false },
       { source: "/office/dashboard", destination: "/office/repairing", permanent: false },
+      // Compat: legacy /office/tally URLs (renamed to /office/accountancy 2026-05-07)
+      { source: "/office/tally", destination: "/office/accountancy", permanent: false },
+      { source: "/office/tally/:path*", destination: "/office/accountancy/:path*", permanent: false },
+      // Compat: pipeline/status/sub-status settings moved out of repair into admin module 2026-05-07
+      { source: "/office/repairing/settings/pipelines", destination: "/office/pipelines", permanent: false },
+      { source: "/office/repairing/settings/pipelines/:path*", destination: "/office/pipelines/:path*", permanent: false },
+      { source: "/office/repairing/settings/statuses", destination: "/office/statuses", permanent: false },
+      { source: "/office/repairing/settings/statuses/:path*", destination: "/office/statuses/:path*", permanent: false },
+      { source: "/office/repairing/settings/sub-statuses", destination: "/office/sub-statuses", permanent: false },
+      { source: "/office/repairing/settings/sub-statuses/:path*", destination: "/office/sub-statuses/:path*", permanent: false },
+      // Compat: pre-existing /office/settings/* sidebar URLs that pointed at non-existent pages
+      { source: "/office/settings/pipelines", destination: "/office/pipelines", permanent: false },
+      { source: "/office/settings/statuses", destination: "/office/statuses", permanent: false },
+      { source: "/office/settings/sub-statuses", destination: "/office/sub-statuses", permanent: false },
     ];
   },
 };

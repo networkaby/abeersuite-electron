@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { nextRef, balanceDelta } from "@/modules/tally/lib/balance";
+import { nextRef, balanceDelta } from "@/modules/accountancy/lib/balance";
 
 const paymentSchema = z.object({
     amount: z.number().positive(),
@@ -16,7 +16,7 @@ const paymentSchema = z.object({
 
 // POST /api/finance/invoices/[id]/payments
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { id } = await params;
@@ -115,7 +115,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 // GET /api/finance/invoices/[id]/payments
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { id } = await params;

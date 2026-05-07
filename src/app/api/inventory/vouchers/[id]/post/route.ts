@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
-import { toNumber } from "@/modules/tally/lib/balance";
-import { postInvVoucherToGl } from "@/modules/tally/lib/postInvVoucher";
+import { toNumber } from "@/modules/accountancy/lib/balance";
+import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 
 // POST /api/inventory/vouchers/[id]/post
 //   1. Write InvStockLedger entries + update cached InvProduct.stock

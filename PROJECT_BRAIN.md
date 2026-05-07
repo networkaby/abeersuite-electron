@@ -55,7 +55,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 
 ### 2026-05-07 — Tally Phase 5a: Reports hub + GST hub + Party CRM (Milestones 12 + 19)
 
-- **Tally route group renamed**: `(tally)/finance/` → `(tally)/tally/`. Module page is `/office/tally`. Sidebar nav flattened (single prefix per module).
+- **Tally route group renamed**: `(tally)/finance/` → `(tally)/tally/`. Module page is `/office/accountancy`. Sidebar nav flattened (single prefix per module).
 - **New report pages** under `src/app/(protected)/office/(tally)/tally/reports/`:
   - `cash-book/`, `bank-book/`, `bank-reconciliation/`
   - `cash-flow/`, `fund-flow/`, `ratio-analysis/`, `statistics/`
@@ -372,7 +372,7 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 - **Shop prices in paise**: `ShopProduct.pricePaise` and `ShopOrder.totalPaise` are integers representing paise. Always use `money-inr.ts` helpers to format for display; never divide by 100 inline.
 - **External stores are client-only**: `shopCartStore`, `shopWishlistStore`, `shopCompareStore` use Zustand with localStorage persistence. They are not synced to the DB — cart is lost on a different browser/device until checkout creates a `ShopOrder`.
 - **`(store)` sub-group**: The store homepage lives under `src/app/(external)/(store)/` as its own route sub-group so it gets a different layout from the shop pages.
-- **Tally route rename**: any link to `/office/finance/...` is broken — current root is `/office/tally/...`. Sidebar already updated; check older bookmarks/screenshots before reusing.
+- **Tally route rename**: any link to `/office/finance/...` is broken — current root is `/office/accountancy/...`. Sidebar already updated; check older bookmarks/screenshots before reusing.
 - **`.claude/scheduled_tasks.lock` is committed** (commit 3fd8d88). Tracks active scheduled-task session (`{sessionId, pid, acquiredAt}`). A previous merge already removed a similar artifact (commit 19ed1de). If this becomes a coordination headache, move it to `.gitignore` — confirm with the user first.
 - **GST fields are nullable**: `gstin`, `gstStateCode`, `gstRegType` etc. are optional on `Customer`/`Company` — non-GST consumers don't need them. Treat empty as "unregistered/consumer" in voucher logic.
 - **Composition party = no GST charge**: when `Customer.gstRegType === 'COMPOSITION'`, sales vouchers should not add GST lines even if the product has `hsnCode` and `gstRate`. Voucher logic must check both sides.

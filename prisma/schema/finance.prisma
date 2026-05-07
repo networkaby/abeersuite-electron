@@ -76,6 +76,9 @@ model Invoice {
   accountId   Int?
   // Linked shop order — null for direct walk-in invoices
   shopOrderId Int?          @unique
+  // Linked repair ticket — soft back-link so reports can find "all invoices for ticket #N"
+  // and "tickets without an invoice." Replaced the deprecated TicketPart model 2026-05-07.
+  ticketId    Int?
   // Legacy loose-party fields — nullable; kept for old invoices created before accountId
   partyName   String?
   partyType   String?
@@ -99,6 +102,7 @@ model Invoice {
   deletedBy   User?         @relation("InvoiceDeletedBy", fields: [deletedById], references: [id])
   account     Account?      @relation("AccountInvoices", fields: [accountId], references: [id])
   shopOrder   ShopOrder?    @relation("OrderInvoice", fields: [shopOrderId], references: [id], onDelete: SetNull)
+  ticket      Ticket?       @relation("TicketInvoices", fields: [ticketId], references: [id], onDelete: SetNull)
   lines       InvoiceLine[]
   payments    Payment[]
   createdAt   DateTime      @default(now())
@@ -107,6 +111,7 @@ model Invoice {
   @@index([status])
   @@index([accountId])
   @@index([shopOrderId])
+  @@index([ticketId])
   @@index([issueDate])
   @@index([deletedAt])
 }

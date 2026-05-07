@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { balanceDelta, toNumber, nextRef } from "@/modules/tally/lib/balance";
-import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
+import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
+import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Cancel reason required") });
 

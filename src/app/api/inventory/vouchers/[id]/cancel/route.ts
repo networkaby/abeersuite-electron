@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
-import { toNumber } from "@/modules/tally/lib/balance";
-import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
+import { toNumber } from "@/modules/accountancy/lib/balance";
+import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 
 // POST /api/inventory/vouchers/[id]/cancel
 // Reverses stock + GL impact via counter-entry; preserves voucher reference number.

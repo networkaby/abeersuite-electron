@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, CheckCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
-import { LifecycleActions } from "@/modules/tally/components/LifecycleActions";
+import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 type Voucher = {
@@ -130,7 +130,7 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
                 </Card>
                 {voucher.journalEntryId && (
                     <Card label="GL Journal Entry">
-                        <Link href={`/office/tally/journal-entries/${voucher.journalEntryId}`} className="font-medium text-primary flex items-center gap-1 hover:underline">
+                        <Link href={`/office/accountancy/journal-entries/${voucher.journalEntryId}`} className="font-medium text-primary flex items-center gap-1 hover:underline">
                             View JE <ExternalLink size={12} />
                         </Link>
                     </Card>

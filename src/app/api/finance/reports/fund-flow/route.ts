@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { parseRange } from "@/modules/tally/lib/period";
-import { aggregateRange, loadNormalBalanceMap } from "@/modules/tally/lib/aggregateLedger";
-import { buildGroupTree, type GroupNode } from "@/modules/tally/lib/groupTree";
+import { requirePermission } from "@/lib/auth-guard";
+import { parseRange } from "@/modules/accountancy/lib/period";
+import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 
 // GET /api/finance/reports/fund-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Sources & application of funds, plus working-capital movement between
 // the start and end of the period. Mirrors Tally's MIS Fund Flow.
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

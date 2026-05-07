@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
-import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
-import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
+import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 
 // POST /api/finance/vouchers/[id]/restore
 // Inverse of delete — re-applies GL impact if the voucher was posted.

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
-import { parseRange } from "@/modules/tally/lib/period";
+import { parseRange } from "@/modules/accountancy/lib/period";
 
 // GET /api/finance/reports/gst-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&direction=OUTWARD|INWARD
 //   OUTWARD = SALE  (output tax, what you collected from customers)
@@ -11,7 +11,7 @@ import { parseRange } from "@/modules/tally/lib/period";
 // added to InvProduct + Customer/Company we can break this down further by
 // HSN and party type — for now rate-wise is the daily-useful summary.
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

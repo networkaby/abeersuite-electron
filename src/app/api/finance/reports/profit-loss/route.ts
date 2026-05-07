@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { parseRange } from "@/modules/tally/lib/period";
-import { aggregateRange, loadNormalBalanceMap } from "@/modules/tally/lib/aggregateLedger";
-import { buildGroupTree } from "@/modules/tally/lib/groupTree";
-import { getClosingStockValue } from "@/modules/tally/lib/closingStock";
+import { requirePermission } from "@/lib/auth-guard";
+import { parseRange } from "@/modules/accountancy/lib/period";
+import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
+import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/finance/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

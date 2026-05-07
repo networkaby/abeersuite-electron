@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { getLedgerOutstanding } from "@/modules/tally/lib/outstandings";
+import { requirePermission } from "@/lib/auth-guard";
+import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/finance/reports/ledger-outstandings/:ledgerId?asOf=YYYY-MM-DD
 // Open bills for a single party ledger, with ageing buckets.
@@ -8,7 +8,7 @@ export async function GET(
     req: Request,
     { params }: { params: Promise<{ ledgerId: string }> },
 ) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { ledgerId } = await params;

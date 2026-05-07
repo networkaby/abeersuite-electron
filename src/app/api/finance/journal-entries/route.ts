@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { isBalanced, nextRef } from "@/modules/tally/lib/balance";
+import { isBalanced, nextRef } from "@/modules/accountancy/lib/balance";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -19,7 +19,7 @@ const createSchema = z.object({
 
 // GET /api/finance/journal-entries
 export async function GET(req: Request) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/journal-entries
 export async function POST(req: Request) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const parsed = createSchema.safeParse(await req.json());

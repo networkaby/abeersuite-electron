@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
-import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
+import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 
 const hardDeleteSchema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 

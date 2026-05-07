@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 import { postInvoiceJe } from "../route";
 
@@ -13,7 +13,7 @@ const updateSchema = z.object({
 
 // GET /api/finance/invoices/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { id } = await params;
@@ -43,7 +43,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 // PATCH /api/finance/invoices/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { id } = await params;

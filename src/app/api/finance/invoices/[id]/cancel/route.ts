@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { nextRef, balanceDelta, toNumber } from "@/modules/tally/lib/balance";
-import { ensureCancelable, cancelInvoiceFields, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
+import { nextRef, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { ensureCancelable, cancelInvoiceFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 
 const cancelSchema = z.object({ reason: z.string().trim().min(1) });
 

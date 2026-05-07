@@ -135,7 +135,6 @@ model InvProduct {
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
   orderLines   ShopOrderLine[]
-  ticketParts  TicketPart[]
   voucherLines InvVoucherLine[]
   stockEntries InvStockLedger[]
 

@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { toNumber, balanceDelta } from "@/modules/tally/lib/balance";
-import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/tally/lib/voucherLifecycle";
+import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 

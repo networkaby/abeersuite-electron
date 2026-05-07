@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { parseAsOf, indianFiscalYearStart } from "@/modules/tally/lib/period";
+import { requirePermission } from "@/lib/auth-guard";
+import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,
-} from "@/modules/tally/lib/aggregateLedger";
-import { buildGroupTree } from "@/modules/tally/lib/groupTree";
-import { getClosingStockValue } from "@/modules/tally/lib/closingStock";
+} from "@/modules/accountancy/lib/aggregateLedger";
+import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
+import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 
 // GET /api/finance/reports/balance-sheet?asOf=YYYY-MM-DD
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

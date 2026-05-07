@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -15,7 +15,7 @@ const createSchema = z.object({
 // GET /api/finance/gl-accounts
 // Returns only pure GL accounts (no customer/company identity linkage).
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/gl-accounts
 export async function POST(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const parsed = createSchema.safeParse(await req.json());

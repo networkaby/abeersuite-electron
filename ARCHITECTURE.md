@@ -54,11 +54,11 @@ Route groups under `office/` (each maps under `/office/...`):
 - `(message)` — inbox (`/office/inbox`)
 - `(repairing)` — dashboard, tickets, service centers, repair settings (statuses, pipelines, …)
 - `(social)` — staff profile pages with wall (`/office/users/[id]`)
-- `(tally)` — accounting (`/office/tally/...`) — was `(tally)/finance/` → renamed `(tally)/tally/` on 2026-05-07
+- `(tally)` — accounting (`/office/accountancy/...`) — was `(tally)/finance/` → renamed `(tally)/tally/` on 2026-05-07
 - `(e-commerce)` — staff shop admin (`/office/ecommerce/...`)
 - `(inventory)` — inventory masters (`/office/inventory/...`): units, categories, groups, brands, warranty terms, products (barcode/EAN/UPC slots, HSN/GST fields). Stock transactions live in `(tally)/tally/inventory/`.
 
-Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/leads`, `/office/tally/invoices`, `/office/tally/reports/gst`, `/office/inventory/products`.
+Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/leads`, `/office/accountancy/invoices`, `/office/accountancy/reports/gst`, `/office/inventory/products`.
 
 Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/assignments`** (or `callbackUrl` when present).
 

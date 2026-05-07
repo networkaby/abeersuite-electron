@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
-import { toNumber } from "@/modules/tally/lib/balance";
+import { toNumber } from "@/modules/accountancy/lib/balance";
 
 // GET /api/inventory/stock-ledger/[productId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ productId: string }> }) {

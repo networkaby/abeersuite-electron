@@ -47,13 +47,13 @@ High-level:
 
 ## Finance (Tally Context)
 
-The finance module under `(protected)/office/(tally)/tally/` (URLs **`/office/tally/*`** — renamed from `/office/finance/*` on 2026-05-07) is accounting-oriented and intentionally maps Tally-style thinking into a cleaner software model:
+The finance module under `(protected)/office/(tally)/tally/` (URLs **`/office/accountancy/*`** — renamed from `/office/finance/*` on 2026-05-07) is accounting-oriented and intentionally maps Tally-style thinking into a cleaner software model:
 
 - `AccountType` = top-level accounting class (`ASSET`, `LIABILITY`, `INCOME`, `EXPENSE`)
 - `AccountGroup` = category bucket (for example, debtors, creditors, cash, expenses)
 - `Ledger` = actual ledger account used in journal/invoice/payment entries
 
-Vouchers under `/office/tally/`: sales, purchases, estimates, journal, inventory (receipt/issue/transfer/adjust). Reports: cash-book, bank-book, bank-reconciliation, cash-flow, fund-flow, ratio-analysis, statistics, receivables, payables, ledger-outstandings, GST hub (HSN summary, inward/outward supplies, liability).
+Vouchers under `/office/accountancy/`: sales, purchases, estimates, journal, inventory (receipt/issue/transfer/adjust). Reports: cash-book, bank-book, bank-reconciliation, cash-flow, fund-flow, ratio-analysis, statistics, receivables, payables, ledger-outstandings, GST hub (HSN summary, inward/outward supplies, liability).
 
 GST: `Customer` and `Company` carry `gstin`, `gstStateCode`, `gstRegType` (REGULAR/COMPOSITION/SEZ/UNREGISTERED), `financialYearFrom`, `booksBeginningFrom`. `InvProduct` carries `hsnCode`, `gstRate`, `taxability`. Vouchers use `PartyCombobox` (`src/modules/tally/components/PartyCombobox.tsx`) for searchable party selection with GST autofill.
 

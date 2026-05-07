@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 
 // GET /api/finance/allocations/open?accountId=N
 // Returns invoices/vouchers tied to the given party account that still have
@@ -9,7 +9,7 @@ import { requireAuth } from "@/lib/auth-guard";
 // Used by the bill-wise drawer when entering a Receipt or Payment voucher
 // to show which open bills can be settled.
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

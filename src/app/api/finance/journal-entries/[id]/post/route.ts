@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { isBalanced, balanceDelta, toNumber } from "@/modules/tally/lib/balance";
+import { requirePermission } from "@/lib/auth-guard";
+import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 // POST /api/finance/journal-entries/[id]/post
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { id } = await params;

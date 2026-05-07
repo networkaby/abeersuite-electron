@@ -519,7 +519,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             </p>
                         )}
                         <div className="space-y-0.5">
-                            {MODULE_SECTIONS.map((mod) => {
+                            {MODULE_SECTIONS.filter((mod) => !mod.permission || isAdmin || permissions.includes(mod.permission)).map((mod) => {
                                 const Icon = mod.icon;
                                 const isOpen = moduleOpen[mod.key] ?? false;
 

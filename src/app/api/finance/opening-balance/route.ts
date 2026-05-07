@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 
 // GET /api/finance/opening-balance
 // Returns: per-account opening balance rows, per-product opening stock rows,
 // totals, and the Difference in Opening Balances (auto-parked to suspense).
 export async function GET() {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     try {

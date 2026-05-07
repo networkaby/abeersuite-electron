@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
-import { parseRange } from "@/modules/tally/lib/period";
+import { parseRange } from "@/modules/accountancy/lib/period";
 
 // GET /api/finance/reports/gst-hsn-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&direction=OUTWARD|INWARD
 // HSN-wise rollup of posted inventory voucher lines. Lines whose product has
 // no HSN code fall into a "(no HSN)" bucket so the user notices the gap.
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -100,6 +100,8 @@ export type ModuleSection = {
     icon: LucideIcon;
     key: string;
     disabled?: boolean;
+    /** When set, the entire module is hidden from the sidebar unless the user holds this permission (admin:bypass also passes). */
+    permission?: string;
     children: ModuleChild[];
     createActions?: ModuleCreateAction[];
     dashboardHref?: string;
@@ -166,75 +168,76 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     {
-        label: "Tally",
+        label: "Accountancy",
         icon: Calculator,
-        key: "tally",
-        dashboardHref: "/office/tally",
-        // pathPrefixes: ["/office/tally/account-groups", "/office/tally/ledgers", "/office/tally/sales", "/office/tally/purchases", "/office/tally/estimates", "/office/tally/payments", "/office/tally/receipts", "/office/tally/contras", "/office/tally/credit-notes", "/office/tally/debit-notes", "/office/tally/journal-entries", "/office/tally/invoices", "/office/tally/opening-balance", "/office/tally/reports"],
-        pathPrefixes: ["/office/tally"],
+        key: "accountancy",
+        permission: "accountancy:view:org",
+        dashboardHref: "/office/accountancy",
+        // pathPrefixes: ["/office/accountancy/account-groups", "/office/accountancy/ledgers", "/office/accountancy/sales", "/office/accountancy/purchases", "/office/accountancy/estimates", "/office/accountancy/payments", "/office/accountancy/receipts", "/office/accountancy/contras", "/office/accountancy/credit-notes", "/office/accountancy/debit-notes", "/office/accountancy/journal-entries", "/office/accountancy/invoices", "/office/accountancy/opening-balance", "/office/accountancy/reports"],
+        pathPrefixes: ["/office/accountancy"],
         createActions: [
-            { label: "Sale +", subtitle: "New sale voucher", icon: Receipt, variant: "default", href: "/office/tally/sales/new" },
-            { label: "Purchase +", subtitle: "New purchase voucher", icon: ShoppingCart, variant: "outline", href: "/office/tally/purchases/new" },
-            { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", href: "/office/tally/estimates/new" },
-            { label: "Payment +", subtitle: "New payment", icon: Wallet, variant: "outline", href: "/office/tally/payments/new", permission: "finance:voucher:create" },
-            { label: "Receipt +", subtitle: "New receipt", icon: Wallet, variant: "outline", href: "/office/tally/receipts/new", permission: "finance:voucher:create" },
-            { label: "Contra +", subtitle: "New contra", icon: Wallet, variant: "outline", href: "/office/tally/contras/new", permission: "finance:voucher:create" },
-            { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", href: "/office/tally/credit-notes/new", permission: "finance:voucher:create" },
-            { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", href: "/office/tally/debit-notes/new", permission: "finance:voucher:create" },
-            { label: "Journal +", subtitle: "New journal entry", icon: FileText, variant: "outline", href: "/office/tally/journal-entries", permission: "finance:journal:cancel" },
+            { label: "Sale +", subtitle: "New sale voucher", icon: Receipt, variant: "default", href: "/office/accountancy/sales/new" },
+            { label: "Purchase +", subtitle: "New purchase voucher", icon: ShoppingCart, variant: "outline", href: "/office/accountancy/purchases/new" },
+            { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", href: "/office/accountancy/estimates/new" },
+            { label: "Payment +", subtitle: "New payment", icon: Wallet, variant: "outline", href: "/office/accountancy/payments/new", permission: "finance:voucher:create" },
+            { label: "Receipt +", subtitle: "New receipt", icon: Wallet, variant: "outline", href: "/office/accountancy/receipts/new", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra", icon: Wallet, variant: "outline", href: "/office/accountancy/contras/new", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", href: "/office/accountancy/credit-notes/new", permission: "finance:voucher:create" },
+            { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", href: "/office/accountancy/debit-notes/new", permission: "finance:voucher:create" },
+            { label: "Journal +", subtitle: "New journal entry", icon: FileText, variant: "outline", href: "/office/accountancy/journal-entries", permission: "finance:journal:cancel" },
         ],
         children: [
-            { label: "Daybook", icon: ClipboardList, href: "/office/tally/reports/day-book", permission: "finance:voucher:create" },
+            { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
 
-            { label: "Sales Register", icon: Receipt, href: "/office/tally/sales" },
-            { label: "Purchases Register", icon: ShoppingCart, href: "/office/tally/purchases" },
-            { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
-            // { label: "Payments", icon: Wallet, href: "/office/tally/payments", permission: "finance:voucher:create" },
-            // { label: "Receipts", icon: Wallet, href: "/office/tally/receipts", permission: "finance:voucher:create" },
-            // { label: "Contras", icon: Wallet, href: "/office/tally/contras", permission: "finance:voucher:create" },
-            // { label: "Credit Notes", icon: FileText, href: "/office/tally/credit-notes", permission: "finance:voucher:create" },
-            // { label: "Debit Notes", icon: FileText, href: "/office/tally/debit-notes", permission: "finance:voucher:create" },
+            { label: "Sales Register", icon: Receipt, href: "/office/accountancy/sales" },
+            { label: "Purchases Register", icon: ShoppingCart, href: "/office/accountancy/purchases" },
+            { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
+            // { label: "Payments", icon: Wallet, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
+            // { label: "Receipts", icon: Wallet, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
+            // { label: "Contras", icon: Wallet, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
+            // { label: "Credit Notes", icon: FileText, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
+            // { label: "Debit Notes", icon: FileText, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
 
-            // { label: "Journal entries", icon: FileText, href: "/office/tally/journal-entries" },
-            // { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
+            // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
+            // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
 
-            // { label: "Financial Insights", icon: ChartArea, href: "/office/tally/reports" },
+            // { label: "Financial Insights", icon: ChartArea, href: "/office/accountancy/reports" },
             {
                 label: "Financial Insights",
                 icon: ChartArea,
-                href: "/office/tally/reports",
+                href: "/office/accountancy/reports",
                 permission: "finance:voucher:create",
                 children: [
-                    { label: "Balance Sheet", icon: FolderTree, href: "/office/tally/reports/balance-sheet" },
-                    { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/tally/reports/profit-loss" },
-                    { label: "Trial Balance", icon: Wallet, href: "/office/tally/reports/trial-balance" },
-                    // { label: "Day Book", icon: ClipboardList, href: "/office/tally/reports/day-book" },
-                    { label: "Cash Book", icon: Wallet, href: "/office/tally/reports/cash-book" },
-                    { label: "Bank Book", icon: Wallet, href: "/office/tally/reports/bank-book" },
-                    { label: "Receivables", icon: Wallet, href: "/office/tally/reports/receivables" },
-                    { label: "Payables", icon: Wallet, href: "/office/tally/reports/payables" },
-                    { label: "Cash Flow", icon: ClipboardList, href: "/office/tally/reports/cash-flow" },
-                    { label: "Fund Flow", icon: ClipboardList, href: "/office/tally/reports/fund-flow" },
-                    { label: "Ratio Analysis", icon: ClipboardList, href: "/office/tally/reports/ratio-analysis" },
-                    { label: "Statistics", icon: ClipboardList, href: "/office/tally/reports/statistics" },
-                    { label: "Bank Reconciliation", icon: Wallet, href: "/office/tally/reports/bank-reconciliation" },
+                    { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
+                    { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
+                    { label: "Trial Balance", icon: Wallet, href: "/office/accountancy/reports/trial-balance" },
+                    // { label: "Day Book", icon: ClipboardList, href: "/office/accountancy/reports/day-book" },
+                    { label: "Cash Book", icon: Wallet, href: "/office/accountancy/reports/cash-book" },
+                    { label: "Bank Book", icon: Wallet, href: "/office/accountancy/reports/bank-book" },
+                    { label: "Receivables", icon: Wallet, href: "/office/accountancy/reports/receivables" },
+                    { label: "Payables", icon: Wallet, href: "/office/accountancy/reports/payables" },
+                    { label: "Cash Flow", icon: ClipboardList, href: "/office/accountancy/reports/cash-flow" },
+                    { label: "Fund Flow", icon: ClipboardList, href: "/office/accountancy/reports/fund-flow" },
+                    { label: "Ratio Analysis", icon: ClipboardList, href: "/office/accountancy/reports/ratio-analysis" },
+                    { label: "Statistics", icon: ClipboardList, href: "/office/accountancy/reports/statistics" },
+                    { label: "Bank Reconciliation", icon: Wallet, href: "/office/accountancy/reports/bank-reconciliation" },
 
                 ]
             },
 
             {
-                label: "Vouchers Register", icon: ClipboardList, href: "/office/tally/journal-entries", permission: "finance:voucher:create",
+                label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/journal-entries", permission: "finance:voucher:create",
                 children: [
-                    { label: "Contras", icon: ClipboardList, href: "/office/tally/contras", permission: "finance:voucher:create" },
-                    { label: "Payment", icon: ClipboardList, href: "/office/tally/payments", permission: "finance:voucher:create" },
-                    { label: "Receipt", icon: ClipboardList, href: "/office/tally/receipts", permission: "finance:voucher:create" },
-                    { label: "Credit Note", icon: ClipboardList, href: "/office/tally/credit-notes", permission: "finance:voucher:create" },
-                    { label: "Debit Note", icon: ClipboardList, href: "/office/tally/debit-notes", permission: "finance:voucher:create" },
-                    { label: "Journal entries", icon: FileText, href: "/office/tally/journal-entries" },
-                    // { label: "Invoices", icon: ClipboardList, href: "/office/tally/invoices" },
-                    // { label: "Sales", icon: Receipt, href: "/office/tally/sales" },
-                    // { label: "Purchases", icon: ShoppingCart, href: "/office/tally/purchases" },
-                    // { label: "Estimates", icon: ScrollText, href: "/office/tally/estimates" },
+                    { label: "Contras", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
+                    { label: "Payment", icon: ClipboardList, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
+                    { label: "Receipt", icon: ClipboardList, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
+                    { label: "Credit Note", icon: ClipboardList, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
+                    { label: "Debit Note", icon: ClipboardList, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
+                    { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
+                    // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
+                    // { label: "Sales", icon: Receipt, href: "/office/accountancy/sales" },
+                    // { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/purchases" },
+                    // { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
                 ]
 
             },
@@ -242,13 +245,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             {
                 label: "Masters",
                 icon: ChartArea,
-                href: "/office/tally",
+                href: "/office/accountancy",
                 permission: "finance:voucher:create",
                 children: [
-                    { label: "Account Groups", icon: FolderTree, href: "/office/tally/groups" },
-                    { label: "Ledgers", icon: BookOpen, href: "/office/tally/ledgers" },
-                    { label: "Chart of accounts", icon: Wallet, href: "/office/tally/chart-of-accounts" },
-                    { label: "Opening Balance", icon: Wallet, href: "/office/tally/opening-balance", permission: "finance:opening-balance:manage" },
+                    { label: "Account Groups", icon: FolderTree, href: "/office/accountancy/groups" },
+                    { label: "Ledgers", icon: BookOpen, href: "/office/accountancy/ledgers" },
+                    { label: "Chart of accounts", icon: Wallet, href: "/office/accountancy/chart-of-accounts" },
+                    { label: "Opening Balance", icon: Wallet, href: "/office/accountancy/opening-balance", permission: "finance:opening-balance:manage" },
                 ]
             },
 
@@ -439,13 +442,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Complience",
         icon: ClipboardList,
         key: "complience",
-        dashboardHref: "/office/tally/reports/gst",
+        dashboardHref: "/office/accountancy/reports/gst",
         pathPrefixes: ["/office/complience"],
         children: [
-            { label: "Net GST Liability", icon: ClipboardList, href: "/office/tally/reports/gst/liability" },
-            { label: "Outward Supplies", icon: ClipboardList, href: "/office/tally/reports/gst/outward-supplies" },
-            { label: "Inward Supplies", icon: ClipboardList, href: "/office/tally/reports/gst/inward-supplies" },
-            { label: "HSN Summary", icon: ClipboardList, href: "/office/tally/reports/gst/hsn-summary" },
+            { label: "Net GST Liability", icon: ClipboardList, href: "/office/accountancy/reports/gst/liability" },
+            { label: "Outward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/outward-supplies" },
+            { label: "Inward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/inward-supplies" },
+            { label: "HSN Summary", icon: ClipboardList, href: "/office/accountancy/reports/gst/hsn-summary" },
         ]
     },
 ];
@@ -460,9 +463,9 @@ export const ADMIN_NAV: SettingsNavItem[] = [
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
-    { label: "Statuses", href: "/office/settings/statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Sub-Statuses", href: "/office/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Pipelines", href: "/office/settings/pipelines", icon: GitBranch, permission: "settings:pipelines" },
+    { label: "Statuses", href: "/office/statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Sub-Statuses", href: "/office/sub-statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Pipelines", href: "/office/pipelines", icon: GitBranch, permission: "settings:pipelines" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

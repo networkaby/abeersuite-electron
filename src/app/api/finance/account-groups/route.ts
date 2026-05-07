@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -40,7 +40,7 @@ function buildTree(flat: FlatGroup[]): GroupNode[] {
 
 // GET /api/finance/account-groups — returns full tree with totalBalance per group
 export async function GET() {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     try {
@@ -73,7 +73,7 @@ export async function GET() {
 
 // POST /api/finance/account-groups — create a group
 export async function POST(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const parsed = createSchema.safeParse(await req.json());

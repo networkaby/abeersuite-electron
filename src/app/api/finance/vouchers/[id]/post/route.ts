@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
-import { balanceDelta, toNumber, nextRef } from "@/modules/tally/lib/balance";
+import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 
 // POST /api/finance/vouchers/[id]/post
 // DRAFT → POSTED: applies GL impact, creates a mirror JournalEntry for the audit

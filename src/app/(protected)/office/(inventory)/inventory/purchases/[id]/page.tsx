@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
-import { LifecycleActions } from "@/modules/tally/components/LifecycleActions";
+import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { hasPermissionWithScope } from "@/lib/permission-scope";
 
 type VoucherDetail = {
@@ -136,7 +136,7 @@ export default function PurchaseDetailPage({ params }: { params: Promise<{ id: s
                 {voucher.journalEntryId && (
                     <div className="rounded-lg border border-border bg-card p-3 space-y-0.5">
                         <p className="text-muted-foreground text-xs">GL Journal Entry</p>
-                        <Link href={`/office/tally/journal-entries/${voucher.journalEntryId}`}
+                        <Link href={`/office/accountancy/journal-entries/${voucher.journalEntryId}`}
                             className="font-medium text-primary flex items-center gap-1 hover:underline">
                             View JE <ExternalLink size={12} />
                         </Link>

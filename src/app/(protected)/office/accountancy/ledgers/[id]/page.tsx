@@ -1,0 +1,362 @@
+"use client";
+
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
+import axios from "axios";
+import { toast } from "sonner";
+import {
+    ArrowLeft, Search, ChevronLeft, ChevronRight as ChevronRightIcon,
+    Loader2, Pencil, Check, X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { fmt } from "@/utils/constants";
+
+type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
+type NormalBalance = "DEBIT" | "CREDIT";
+
+interface GroupOption {
+    id: number;
+    name: string;
+    type: GroupType;
+}
+
+interface GroupNode extends GroupOption {
+    children: GroupNode[];
+}
+
+interface LedgerItem {
+    id: number;
+    name: string;
+    code: string | null;
+    type: string | null;
+    normalBalance: NormalBalance | null;
+    balance: number;
+    isActive: boolean;
+    customerId: number | null;
+    companyId: number | null;
+    groupId: number | null;
+    group: { id: number; name: string; type: string } | null;
+    _count: { lines: number };
+}
+
+function flatGroups(nodes: GroupNode[]): GroupOption[] {
+    const result: GroupOption[] = [];
+    for (const n of nodes) {
+        result.push({ id: n.id, name: n.name, type: n.type });
+        result.push(...flatGroups(n.children));
+    }
+    return result;
+}
+
+function drCr(balance: number, normalBalance: NormalBalance | null): string {
+    if (balance === 0) return "0.00";
+    const sign = balance < 0
+        ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
+        : (normalBalance === "DEBIT" ? "Dr" : "Cr");
+    return `${fmt(Math.abs(balance))} ${sign}`;
+}
+
+const NONE = "none";
+const LIMIT = 20;
+
+export default function GroupLedgersPage() {
+    const { id } = useParams<{ id: string }>();
+    const router  = useRouter();
+
+    const [groupName, setGroupName]   = useState<string>("");
+    const [groupType, setGroupType]   = useState<GroupType | null>(null);
+    const [items, setItems]           = useState<LedgerItem[]>([]);
+    const [total, setTotal]           = useState(0);
+    const [page, setPage]             = useState(1);
+    const [search, setSearch]         = useState("");
+    const [loading, setLoading]       = useState(true);
+    const [groups, setGroups]         = useState<GroupOption[]>([]);
+    const [editId, setEditId]         = useState<number | null>(null);
+    const [editGroupId, setEditGroupId] = useState<string>(NONE);
+    const [saving, setSaving]         = useState(false);
+
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Load all groups for the edit dropdown (once)
+    useEffect(() => {
+        axios.get<GroupNode[]>("/api/finance/account-groups")
+            .then((r) => setGroups(flatGroups(r.data)))
+            .catch(() => { /* silent */ });
+    }, []);
+
+    const load = useCallback((p: number, q: string) => {
+        setLoading(true);
+        const params = new URLSearchParams({
+            groupId:    id,
+            page:       String(p),
+            limit:      String(LIMIT),
+            activeOnly: "false",
+            ...(q ? { search: q } : {}),
+        });
+        axios.get<{ items: LedgerItem[]; total: number }>(`/api/finance/ledgers?${params}`)
+            .then((r) => {
+                setItems(r.data.items);
+                setTotal(r.data.total);
+            })
+            .catch(() => toast.error("Failed to load accounts"))
+            .finally(() => setLoading(false));
+    }, [id]);
+
+    // Load group name from the groups list
+    useEffect(() => {
+        axios.get<GroupNode[]>("/api/finance/account-groups")
+            .then((r) => {
+                const all = flatGroups(r.data);
+                const g = all.find((x) => x.id === Number(id));
+                if (g) { setGroupName(g.name); setGroupType(g.type); }
+            })
+            .catch(() => { /* silent */ });
+    }, [id]);
+
+    useEffect(() => { load(1, ""); }, [load]);
+
+    const handleSearch = (value: string) => {
+        setSearch(value);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            setPage(1);
+            load(1, value);
+        }, 400);
+    };
+
+    const goPage = (p: number) => {
+        setPage(p);
+        load(p, search);
+    };
+
+    const saveGroup = async (itemId: number) => {
+        setSaving(true);
+        try {
+            await axios.patch(`/api/finance/ledgers/${itemId}`, {
+                groupId: editGroupId !== NONE ? Number(editGroupId) : null,
+            });
+            toast.success("Group updated");
+            setEditId(null);
+            load(page, search);
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
+            toast.error(msg ?? "Failed");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+
+    const TYPE_COLORS: Record<GroupType, string> = {
+        ASSET:     "bg-blue-50 text-blue-700 border-blue-200",
+        LIABILITY: "bg-purple-50 text-purple-700 border-purple-200",
+        INCOME:    "bg-green-50 text-green-700 border-green-200",
+        EXPENSE:   "bg-red-50 text-red-700 border-red-200",
+    };
+
+    return (
+        <div className="max-w-5xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+                <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => router.push("/office/accountancy/ledgers")}
+                    className="text-muted-foreground hover:text-foreground"
+                >
+                    <ArrowLeft size={16} />
+                </Button>
+                <div>
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-2xl font-bold text-foreground">
+                            {groupName || "Accounts"}
+                        </h1>
+                        {groupType && (
+                            <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${TYPE_COLORS[groupType]}`}>
+                                {groupType}
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        <button
+                            onClick={() => router.push("/office/accountancy/ledgers")}
+                            className="hover:underline"
+                        >
+                            Ledgers
+                        </button>
+                        {" › "}
+                        {groupName}
+                        {" — "}
+                        {total.toLocaleString()} account{total !== 1 ? "s" : ""}
+                    </p>
+                </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    value={search}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    placeholder="Search by account name…"
+                    className="pl-9"
+                />
+            </div>
+
+            {/* Table */}
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
+                            <th className="px-4 py-2.5 text-left font-medium w-12">S.No.</th>
+                            <th className="px-4 py-2.5 text-left font-medium">Name</th>
+                            <th className="px-4 py-2.5 text-left font-medium w-28">Code</th>
+                            <th className="px-4 py-2.5 text-right font-medium w-36">Balance</th>
+                            <th className="px-4 py-2.5 text-center font-medium w-20">Status</th>
+                            <th className="px-4 py-2.5 w-20" />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-12 text-center">
+                                    <Loader2 className="animate-spin text-muted-foreground mx-auto" size={24} />
+                                </td>
+                            </tr>
+                        ) : items.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                                    {search ? `No accounts matching "${search}"` : "No accounts in this group."}
+                                </td>
+                            </tr>
+                        ) : items.map((item, i) => {
+                            const isEditing  = editId === item.id;
+                            const isIdentity = item.customerId !== null || item.companyId !== null;
+                            const rowNum     = (page - 1) * LIMIT + i + 1;
+
+                            return (
+                                <tr
+                                    key={item.id}
+                                    className={`border-b last:border-0 hover:bg-muted/40 ${!item.isActive ? "opacity-50" : ""}`}
+                                >
+                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{rowNum}.</td>
+
+                                    <td className="px-4 py-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-foreground">{item.name}</span>
+                                            {isIdentity && (
+                                                <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded-sm">
+                                                    {item.customerId ? "Customer" : "Company"}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {/* Inline group edit selector */}
+                                        {isEditing && (
+                                            <div className="mt-1.5">
+                                                <Select value={editGroupId} onValueChange={setEditGroupId}>
+                                                    <SelectTrigger className="h-7 text-xs w-48">
+                                                        <SelectValue placeholder="No group" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value={NONE}>No group</SelectItem>
+                                                        {groups.map((g) => (
+                                                            <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    <td className="px-4 py-2.5 text-muted-foreground text-xs font-mono">
+                                        {item.code ?? "—"}
+                                    </td>
+
+                                    <td className="px-4 py-2.5 text-right font-mono text-sm">
+                                        <span className={item.balance < 0 ? "text-destructive" : "text-foreground"}>
+                                            {drCr(item.balance, item.normalBalance)}
+                                        </span>
+                                    </td>
+
+                                    <td className="px-4 py-2.5 text-center">
+                                        <span className={`text-xs px-2 py-0.5 border font-medium ${item.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground border-border"}`}>
+                                            {item.isActive ? "Active" : "Inactive"}
+                                        </span>
+                                    </td>
+
+                                    <td className="px-4 py-2.5 text-right">
+                                        <div className="flex items-center gap-1 justify-end">
+                                            {isEditing ? (
+                                                <>
+                                                    <Button
+                                                        variant="ghost" size="icon-sm"
+                                                        className="text-green-600 hover:bg-green-50"
+                                                        onClick={() => saveGroup(item.id)}
+                                                        disabled={saving}
+                                                    >
+                                                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost" size="icon-sm"
+                                                        className="text-muted-foreground hover:bg-muted"
+                                                        onClick={() => setEditId(null)}
+                                                    >
+                                                        <X size={14} />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <Button
+                                                    variant="ghost" size="icon-sm"
+                                                    className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                    onClick={() => {
+                                                        setEditId(item.id);
+                                                        setEditGroupId(item.groupId ? String(item.groupId) : NONE);
+                                                    }}
+                                                >
+                                                    <Pencil size={14} />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>
+                        Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total.toLocaleString()}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline" size="sm"
+                            onClick={() => goPage(page - 1)}
+                            disabled={page <= 1}
+                        >
+                            <ChevronLeft size={14} /> Prev
+                        </Button>
+                        <span className="text-xs px-2">
+                            Page {page} of {totalPages}
+                        </span>
+                        <Button
+                            variant="outline" size="sm"
+                            onClick={() => goPage(page + 1)}
+                            disabled={page >= totalPages}
+                        >
+                            Next <ChevronRightIcon size={14} />
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

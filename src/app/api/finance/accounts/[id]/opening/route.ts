@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { reconcileOpeningSuspense } from "@/modules/tally/lib/openingBalance";
+import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 
 // PUT /api/finance/accounts/[id]/opening
 // Sets opening balance + Dr/Cr type + as-of date on a ledger account.

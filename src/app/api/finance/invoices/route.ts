@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { nextRef, balanceDelta } from "@/modules/tally/lib/balance";
+import { nextRef, balanceDelta } from "@/modules/accountancy/lib/balance";
 import type { Prisma } from "@/generated/prisma/client";
 
 const lineSchema = z.object({
@@ -39,19 +39,21 @@ const INVOICE_INCLUDE = {
 
 // GET /api/finance/invoices
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const accountId = searchParams.get("accountId");
     const orderSource = searchParams.get("orderSource");
+    const ticketId = searchParams.get("ticketId");
 
     try {
         const invoices = await prisma.invoice.findMany({
             where: {
                 ...(status ? { status: status as "DRAFT" | "SENT" | "PARTIAL" | "PAID" | "VOID" } : {}),
                 ...(accountId ? { accountId: Number(accountId) } : {}),
+                ...(ticketId ? { ticketId: Number(ticketId) } : {}),
                 ...(orderSource ? { shopOrder: { orderSource: orderSource as never } } : {}),
             },
             orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }],
@@ -66,7 +68,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/invoices
 export async function POST(req: Request) {
-    const { user, response } = await requireAuth();
+    const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
     const parsed = createSchema.safeParse(await req.json());

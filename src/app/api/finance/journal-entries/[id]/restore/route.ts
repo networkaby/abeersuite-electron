@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
-import { balanceDelta, toNumber } from "@/modules/tally/lib/balance";
+import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 // POST /api/finance/journal-entries/[id]/restore
 // Inverse of soft-delete. Re-applies GL impact if the entry was POSTED.
