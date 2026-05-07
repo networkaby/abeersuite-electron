@@ -7,8 +7,9 @@ import Link from "next/link";
 import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
     ShoppingCart, Plus, Minus, Trash2, Receipt, ArrowLeft, ExternalLink,
-    Banknote, Wallet, CreditCard, Smartphone, Building2, FileText,
+    Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,11 @@ export default function PosScreen() {
     const [splits, setSplits] = useState<PaymentSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
+    // Quick "create new customer" dialog (walk-ins not yet in the system)
+    const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+    const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "", gstin: "" });
+    const [creatingCustomer, setCreatingCustomer] = useState(false);
+
     // ── Effects ─────────────────────────────────────────────────────────────
 
     // Search customers (debounced)
@@ -140,6 +146,36 @@ export default function PosScreen() {
     };
 
     const clearCustomer = () => { setSnapshot(null); setCustQuery(""); };
+
+    const openNewCustomer = () => {
+        // Carry over whatever the user typed in the search box as the name —
+        // saves them retyping for a brand-new walk-in.
+        setNewCustomer({ name: custQuery.trim(), phone: "", email: "", gstin: "" });
+        setCustHits([]);
+        setNewCustomerOpen(true);
+    };
+
+    const createCustomer = async () => {
+        const name = newCustomer.name.trim();
+        if (!name) { toast.error("Name is required"); return; }
+        setCreatingCustomer(true);
+        try {
+            const { data } = await axios.post<{ id: number; name: string; phone: string | null; email: string | null }>("/api/customers", {
+                name,
+                phone: newCustomer.phone.trim(),
+                email: newCustomer.email.trim(),
+                gstin: newCustomer.gstin.trim(),
+            });
+            toast.success(`Customer added · ${data.name}`);
+            setNewCustomerOpen(false);
+            await pickCustomer({ id: data.id, name: data.name, phone: data.phone, email: data.email });
+        } catch (e: unknown) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+            toast.error(msg ?? "Could not create customer");
+        } finally {
+            setCreatingCustomer(false);
+        }
+    };
 
     const addToCart = (p: ProductOption) => {
         const defaultPrice = p.pricePaise ? p.pricePaise / 100 : 0;
@@ -232,7 +268,7 @@ export default function PosScreen() {
                         placeholder="Search customer by name, phone, or email…"
                         className="pl-9"
                     />
-                    {custHits.length > 0 && (
+                    {(custHits.length > 0 || (custQuery.trim().length >= 2 && !snapshot)) && (
                         <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                             {custHits.map((c) => (
                                 <li key={c.id}>
@@ -246,6 +282,18 @@ export default function PosScreen() {
                                     </button>
                                 </li>
                             ))}
+                            {custQuery.trim().length >= 2 && (
+                                <li className="border-t border-border">
+                                    <button
+                                        type="button"
+                                        onClick={openNewCustomer}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
+                                    >
+                                        <UserPlus size={14} />
+                                        New customer{custHits.length === 0 ? `: "${custQuery.trim()}"` : ""}
+                                    </button>
+                                </li>
+                            )}
                         </ul>
                     )}
                 </div>
@@ -254,6 +302,9 @@ export default function PosScreen() {
                         <X size={14} /> Clear
                     </Button>
                 )}
+                <Button variant="outline" size="sm" onClick={openNewCustomer} title="Walk-in customer not in the system yet — create on the fly">
+                    <UserPlus size={14} /> New customer
+                </Button>
                 <Button
                     variant="outline"
                     size="sm"
@@ -476,6 +527,63 @@ export default function PosScreen() {
                         </Button>
                         <Button onClick={generateInvoice} disabled={submitting || Math.abs(remaining) > 0.01}>
                             <Receipt size={16} /> {submitting ? "Generating…" : `Confirm · ${fmtINR(total)}`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── New customer dialog (walk-ins) ──────────────────────────────────── */}
+            <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>New customer</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <div className="space-y-1.5">
+                            <Label>Name *</Label>
+                            <Input
+                                autoFocus
+                                value={newCustomer.name}
+                                onChange={(e) => setNewCustomer((s) => ({ ...s, name: e.target.value }))}
+                                placeholder="Customer name"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Phone</Label>
+                                <Input
+                                    value={newCustomer.phone}
+                                    onChange={(e) => setNewCustomer((s) => ({ ...s, phone: e.target.value }))}
+                                    placeholder="10-digit"
+                                    inputMode="tel"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Email</Label>
+                                <Input
+                                    value={newCustomer.email}
+                                    onChange={(e) => setNewCustomer((s) => ({ ...s, email: e.target.value }))}
+                                    placeholder="optional"
+                                    inputMode="email"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>GSTIN</Label>
+                            <Input
+                                value={newCustomer.gstin}
+                                onChange={(e) => setNewCustomer((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))}
+                                placeholder="optional · 15 chars"
+                                className="font-mono"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setNewCustomerOpen(false)} disabled={creatingCustomer}>
+                            Cancel
+                        </Button>
+                        <Button onClick={createCustomer} disabled={creatingCustomer || !newCustomer.name.trim()}>
+                            <UserPlus size={16} /> {creatingCustomer ? "Creating…" : "Create & continue"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
