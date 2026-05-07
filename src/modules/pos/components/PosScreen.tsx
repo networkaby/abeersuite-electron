@@ -69,18 +69,17 @@ type CartLine = {
     warrantyLabel?: string | null;
 };
 
-type PaymentMethod = "CASH" | "UPI" | "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET" | "CREDIT";
-type PaymentSplit = { id: string; method: PaymentMethod; amount: number; reference: string };
+// Extras = Card / Cheque / Bank Transfer / Wallet (Cash / UPI / Credit are fixed rows)
+type ExtraMethod = "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET";
+type ExtraSplit = { id: string; method: ExtraMethod; amount: number; reference: string };
 
-const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
-    { value: "CASH", label: "Cash", icon: <Banknote size={14} /> },
-    { value: "UPI", label: "UPI", icon: <Smartphone size={14} /> },
-    { value: "CARD", label: "Card", icon: <CreditCard size={14} /> },
-    { value: "CHEQUE", label: "Cheque", icon: <FileText size={14} /> },
+const EXTRA_METHODS: { value: ExtraMethod; label: string; icon: React.ReactNode }[] = [
+    { value: "CARD",          label: "Card",          icon: <CreditCard size={14} /> },
+    { value: "CHEQUE",        label: "Cheque",        icon: <FileText size={14} /> },
     { value: "BANK_TRANSFER", label: "Bank transfer", icon: <Building2 size={14} /> },
-    { value: "WALLET", label: "Wallet", icon: <Wallet size={14} /> },
-    { value: "CREDIT", label: "On credit", icon: <Clock size={14} /> },
+    { value: "WALLET",        label: "Wallet",        icon: <Wallet size={14} /> },
 ];
+
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,9 +156,14 @@ export default function PosScreen() {
     const [cart, setCart] = useState<CartLine[]>([]);
 
     // ── Checkout / payment splits ───────────────────────────────────────────
+    // Fixed three-row checkout: Cash (with a separate "return" sub-input),
+    // UPI, and Credit (auto-balanced). No method dropdown, no UPI ref.
     const [checkoutOpen, setCheckoutOpen] = useState(false);
-    const [splits, setSplits] = useState<PaymentSplit[]>([]);
+    const [pay, setPay] = useState({ cashTendered: 0, cashReturn: 0, upi: 0 });
+    const [extras, setExtras] = useState<ExtraSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
+    const cashTenderedRef = useRef<HTMLInputElement>(null);
+    const upiAmountRef = useRef<HTMLInputElement>(null);
 
     // ── Smart create-party dialog ───────────────────────────────────────────
     const [newPartyOpen, setNewPartyOpen] = useState(false);
@@ -497,32 +501,36 @@ export default function PosScreen() {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-        // Default split shape: Cash + UPI both visible (cashier types into whichever
-        // the customer hands over), and "On credit" auto-holds the remainder.
-        setSplits([
-            { id: "cash",   method: "CASH",   amount: 0,     reference: "" },
-            { id: "upi",    method: "UPI",    amount: 0,     reference: "" },
-            { id: "credit", method: "CREDIT", amount: total, reference: "" },
-        ]);
+        setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
+        setExtras([]);
         setCheckoutOpen(true);
+        setTimeout(() => cashTenderedRef.current?.focus(), 50);
     };
 
     const generateInvoice = async () => {
         if (!snapshot?.account) return;
-        // Over-allocation is fine (extra goes to arrear / advance). Just drop
-        // zero lines from the summary and proceed.
-        const nonZero = splits.filter((p) => p.amount > 0);
-        if (nonZero.length === 0) {
-            toast.error("Allocate at least one payment line");
+        // Build the summary from the named pay fields. Cash net = tendered − return.
+        const summaryParts: string[] = [];
+        if (cashNet > 0) {
+            const tenderedNote = pay.cashReturn > 0 ? ` (₹${pay.cashTendered} − ₹${pay.cashReturn} return)` : "";
+            summaryParts.push(`Cash ${fmtINR(cashNet)}${tenderedNote}`);
+        }
+        if (pay.upi > 0) summaryParts.push(`UPI ${fmtINR(pay.upi)}`);
+        for (const e of extras) {
+            if (e.amount <= 0) continue;
+            const label = EXTRA_METHODS.find((m) => m.value === e.method)?.label ?? e.method;
+            summaryParts.push(`${label} ${fmtINR(e.amount)}${e.reference ? ` (${e.reference})` : ""}`);
+        }
+        if (onCredit > 0) summaryParts.push(`On credit ${fmtINR(onCredit)}`);
+        if (summaryParts.length === 0) {
+            toast.error("Enter Cash or UPI — or it'll all go on credit (which is fine, just say so)");
             return;
         }
         setSubmitting(true);
         try {
             const today = new Date().toISOString().slice(0, 10);
             const due = new Date(); due.setDate(due.getDate() + 30);
-            const splitSummary = nonZero
-                .map((p) => `${PAYMENT_METHODS.find((m) => m.value === p.method)?.label ?? p.method} ${fmtINR(p.amount)}${p.reference ? ` (${p.reference})` : ""}`)
-                .join(" + ");
+            const splitSummary = summaryParts.join(" + ");
             const tail =
                 advanceTaken > 0 ? ` | Advance ${fmtINR(advanceTaken)}` :
                 arrearPaid   > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
@@ -542,7 +550,8 @@ export default function PosScreen() {
             });
             toast.success(`Invoice generated · ${fmtINR(total)}`);
             setCart([]);
-            setSplits([]);
+            setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
+            setExtras([]);
             setCheckoutOpen(false);
         } catch {
             toast.error("Failed to generate invoice");
@@ -551,30 +560,15 @@ export default function PosScreen() {
         }
     };
 
-    // Auto-credit balancing: when any non-credit split amount changes, the
-    // "credit" line absorbs whatever's left between collected and total.
-    // Excess (collected > total) shows up as arrear-cleared / advance below.
-    const autoBalanceCredit = (next: PaymentSplit[]): PaymentSplit[] => {
-        const creditIdx = next.findIndex((s) => s.id === "credit");
-        if (creditIdx < 0) return next;
-        const collected = next.reduce((s, p, i) => i === creditIdx ? s : s + p.amount, 0);
-        const credit = Math.max(0, total - collected);
-        return next.map((s, i) => i === creditIdx ? { ...s, amount: credit } : s);
-    };
-
-    const setSplitAmount = (id: string, amount: number) =>
-        setSplits((prev) => autoBalanceCredit(prev.map((x) => x.id === id ? { ...x, amount } : x)));
-
-    // Money math for the breakdown row in the dialog
-    const collected   = splits.filter((s) => s.id !== "credit").reduce((s, p) => s + p.amount, 0);
-    const onCredit    = Math.max(0, total - collected);
-    const overpaid    = Math.max(0, collected - total);
-    const balanceDue  = snapshot?.balanceDue ?? 0;
-    const arrearPaid  = Math.min(overpaid, balanceDue);
+    // Money math derived from pay — Cash net = tendered − return.
+    const cashNet      = Math.max(0, pay.cashTendered - pay.cashReturn);
+    const extrasSum    = extras.reduce((s, e) => s + e.amount, 0);
+    const collected    = cashNet + pay.upi + extrasSum;
+    const onCredit     = Math.max(0, total - collected);
+    const overpaid     = Math.max(0, collected - total);
+    const balanceDue   = snapshot?.balanceDue ?? 0;
+    const arrearPaid   = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
-
-    const allocated = splits.reduce((s, p) => s + p.amount, 0);
-    const remaining = total - allocated;
 
     // ── Render ──────────────────────────────────────────────────────────────
 
@@ -800,7 +794,7 @@ export default function PosScreen() {
                 </aside>
             </div>
 
-            {/* ── Checkout dialog — split payments by mode ────────────────────────── */}
+            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows ──────────────── */}
             <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
@@ -814,91 +808,131 @@ export default function PosScreen() {
                                 <div className="font-semibold">{fmtINR(total)}</div>
                             </div>
                             <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Allocated</div>
-                                <div className="font-semibold">{fmtINR(allocated)}</div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Collected</div>
+                                <div className="font-semibold">{fmtINR(collected)}</div>
                             </div>
                             <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Remaining</div>
-                                <div className={`font-semibold ${Math.abs(remaining) < 0.01 ? "text-emerald-600" : remaining > 0 ? "text-amber-600" : "text-destructive"}`}>
-                                    {fmtINR(remaining)}
-                                </div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">On credit</div>
+                                <div className={`font-semibold ${onCredit > 0 ? "text-amber-600" : "text-emerald-600"}`}>{fmtINR(onCredit)}</div>
                             </div>
                         </div>
 
-                        <ul className="space-y-2">
-                            {splits.map((p, i) => {
-                                const isCreditAuto = p.id === "credit";
-                                return (
-                                <li key={p.id} className="grid grid-cols-[160px_1fr_1fr_auto] items-center gap-2">
-                                    <Select
-                                        value={p.method}
-                                        disabled={isCreditAuto}
-                                        onValueChange={(v) =>
-                                            setSplits((prev) => autoBalanceCredit(prev.map((x) => x.id === p.id ? { ...x, method: v as PaymentMethod } : x)))
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {PAYMENT_METHODS.map((m) => (
-                                                <SelectItem key={m.value} value={m.value}>
-                                                    <span className="flex items-center gap-2">{m.icon} {m.label}</span>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Input
-                                        value={p.amount || ""}
-                                        readOnly={isCreditAuto}
-                                        onChange={(e) => setSplitAmount(p.id, Number(e.target.value) || 0)}
-                                        placeholder={isCreditAuto ? "auto" : "₹ amount"}
-                                        className={`text-right ${isCreditAuto ? "bg-muted/50 cursor-default" : ""}`}
-                                        inputMode="decimal"
-                                        title={isCreditAuto ? "Auto-balanced — fill cash / UPI and the rest goes on credit" : undefined}
-                                    />
-                                    <Input
-                                        value={p.reference}
-                                        onChange={(e) =>
-                                            setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, reference: e.target.value } : x))
-                                        }
-                                        placeholder={isCreditAuto ? "—" : p.method === "CASH" ? "—" : "Ref / last-4 / UPI ID"}
-                                        disabled={isCreditAuto || p.method === "CASH"}
-                                    />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        onClick={() => setSplits((prev) => autoBalanceCredit(prev.filter((x) => x.id !== p.id)))}
-                                        disabled={splits.length === 1 || isCreditAuto}
-                                        title={isCreditAuto ? "Auto-balancing line — can't remove" : splits.length === 1 ? "Need at least one payment line" : "Remove"}
-                                    >
-                                        <Trash2 size={12} className="text-destructive" />
-                                    </Button>
-                                    {!isCreditAuto && i === splits.length - 1 && Math.abs(remaining) > 0.01 && (
-                                        <button
-                                            type="button"
-                                            className="col-span-4 text-left text-xs text-primary hover:underline"
-                                            onClick={() =>
-                                                setSplits((prev) => autoBalanceCredit(prev.map((x) => x.id === p.id ? { ...x, amount: x.amount + remaining } : x)))
-                                            }
-                                        >
-                                            Auto-fill remaining ({fmtINR(remaining)}) on this line
-                                        </button>
+                        {(() => {
+                            // Enter on any amount field → confirm. Tab walks Cash → UPI → Confirm
+                            // (Cash-return is tabIndex=-1 and skipped; clickable for chip-changing).
+                            const enterToSubmit = (e: React.KeyboardEvent) => {
+                                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void generateInvoice(); }
+                            };
+                            return (
+                                <div className="space-y-2">
+                                    {/* Cash — tendered + return on the same row, hint with net cash */}
+                                    <div className="grid grid-cols-[80px_1fr_auto_1fr] items-center gap-2">
+                                        <Label className="flex items-center gap-1.5 text-xs"><Banknote size={12} /> Cash</Label>
+                                        <Input
+                                            ref={cashTenderedRef}
+                                            value={pay.cashTendered || ""}
+                                            onChange={(e) => setPay((s) => ({ ...s, cashTendered: Number(e.target.value) || 0 }))}
+                                            onKeyDown={enterToSubmit}
+                                            placeholder="₹ tendered"
+                                            inputMode="decimal"
+                                            className="text-right"
+                                        />
+                                        <Label className="flex items-center gap-1 text-[10px] text-muted-foreground">return</Label>
+                                        <Input
+                                            value={pay.cashReturn || ""}
+                                            onChange={(e) => setPay((s) => ({ ...s, cashReturn: Number(e.target.value) || 0 }))}
+                                            onKeyDown={enterToSubmit}
+                                            placeholder="₹ change back"
+                                            inputMode="decimal"
+                                            className="text-right"
+                                        />
+                                    </div>
+                                    {pay.cashReturn > 0 && (
+                                        <div className="pl-[88px] text-[11px] text-muted-foreground">
+                                            net cash {fmtINR(cashNet)} = ₹{pay.cashTendered} − ₹{pay.cashReturn} return
+                                        </div>
                                     )}
-                                </li>
-                                );
-                            })}
-                        </ul>
 
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                setSplits((prev) => autoBalanceCredit([...prev, { id: crypto.randomUUID(), method: "CARD", amount: 0, reference: "" }]))
-                            }
-                        >
-                            <Plus size={14} /> Add payment line
-                        </Button>
+                                    {/* UPI — single amount field, no reference */}
+                                    <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                                        <Label className="flex items-center gap-1.5 text-xs"><Smartphone size={12} /> UPI</Label>
+                                        <Input
+                                            ref={upiAmountRef}
+                                            value={pay.upi || ""}
+                                            onChange={(e) => setPay((s) => ({ ...s, upi: Number(e.target.value) || 0 }))}
+                                            onKeyDown={enterToSubmit}
+                                            placeholder="₹ amount"
+                                            inputMode="decimal"
+                                            className="text-right"
+                                        />
+                                    </div>
+
+                                    {/* Extras — Card / Cheque / Bank Transfer / Wallet (added on demand) */}
+                                    {extras.map((e) => (
+                                        <div key={e.id} className="grid grid-cols-[160px_1fr_1fr_auto] items-center gap-2">
+                                            <Select
+                                                value={e.method}
+                                                onValueChange={(v) => setExtras((prev) => prev.map((x) => x.id === e.id ? { ...x, method: v as ExtraMethod } : x))}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {EXTRA_METHODS.map((m) => (
+                                                        <SelectItem key={m.value} value={m.value}>
+                                                            <span className="flex items-center gap-2">{m.icon} {m.label}</span>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <Input
+                                                value={e.amount || ""}
+                                                onChange={(ev) => setExtras((prev) => prev.map((x) => x.id === e.id ? { ...x, amount: Number(ev.target.value) || 0 } : x))}
+                                                onKeyDown={enterToSubmit}
+                                                placeholder="₹ amount"
+                                                className="text-right"
+                                                inputMode="decimal"
+                                            />
+                                            <Input
+                                                value={e.reference}
+                                                onChange={(ev) => setExtras((prev) => prev.map((x) => x.id === e.id ? { ...x, reference: ev.target.value } : x))}
+                                                onKeyDown={enterToSubmit}
+                                                placeholder="Ref / last-4"
+                                            />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => setExtras((prev) => prev.filter((x) => x.id !== e.id))}
+                                                title="Remove"
+                                            >
+                                                <Trash2 size={12} className="text-destructive" />
+                                            </Button>
+                                        </div>
+                                    ))}
+
+                                    {/* Credit — readonly, auto-balanced */}
+                                    <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                                        <Label className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock size={12} /> Credit</Label>
+                                        <Input
+                                            value={onCredit ? onCredit.toFixed(2) : ""}
+                                            readOnly
+                                            tabIndex={-1}
+                                            placeholder="auto"
+                                            className="bg-muted/50 cursor-default text-right"
+                                            title="Auto-balanced — fill Cash / UPI / Card etc. and the rest goes on credit"
+                                        />
+                                    </div>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setExtras((prev) => [...prev, { id: crypto.randomUUID(), method: "CARD", amount: 0, reference: "" }])}
+                                    >
+                                        <Plus size={14} /> Add payment line
+                                    </Button>
+                                </div>
+                            );
+                        })()}
 
                         {/* Arrear / advance breakdown — when collected > total or customer has dues */}
                         {(overpaid > 0 || balanceDue > 0) && (
@@ -909,15 +943,9 @@ export default function PosScreen() {
                                         <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
                                     </div>
                                 )}
-                                {onCredit > 0 && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Goes on credit</span>
-                                        <span className="font-medium text-amber-600">+ {fmtINR(onCredit)}</span>
-                                    </div>
-                                )}
                                 {arrearPaid > 0 && (
                                     <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Arrear cleared</span>
+                                        <span className="text-muted-foreground">Arrear cleared this visit</span>
                                         <span className="font-medium text-emerald-600">− {fmtINR(arrearPaid)}</span>
                                     </div>
                                 )}
