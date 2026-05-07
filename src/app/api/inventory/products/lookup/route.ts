@@ -25,8 +25,9 @@ export async function GET() {
             costPaise:         true,
             mrpPaise:          true,
             barcode1:          true,
-            unit:  { select: { code: true } },
-            brand: { select: { name: true } },
+            unit:         { select: { code: true } },
+            brand:        { select: { name: true } },
+            warrantyTerm: { select: { name: true, durationMonths: true } },
         },
     });
 

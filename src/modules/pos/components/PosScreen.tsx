@@ -55,8 +55,19 @@ type Snapshot = {
     warrantiesEnding: Array<{ productName: string; endsAt: string }>;
 };
 
-type ProductOption = { id: number; sku: string; name: string; pricePaise?: number | null; unit?: { code: string } };
-type CartLine = { productId: number; sku: string; name: string; qty: number; unitPrice: number; description: string };
+type ProductOption = {
+    id: number; sku: string; name: string;
+    pricePaise?: number | null;
+    mrpPaise?: number | null;
+    unit?: { code: string };
+    warrantyTerm?: { name: string; durationMonths: number | null } | null;
+};
+type CartLine = {
+    productId: number; sku: string; name: string;
+    qty: number; unitPrice: number; description: string;
+    mrpPaise?: number | null;
+    warrantyLabel?: string | null;
+};
 
 type PaymentMethod = "CASH" | "UPI" | "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET" | "CREDIT";
 type PaymentSplit = { id: string; method: PaymentMethod; amount: number; reference: string };
@@ -207,6 +218,22 @@ export default function PosScreen() {
         }, 50);
         return () => clearTimeout(t);
     }, [newPartyOpen, openedAsPhoneQuery]);
+
+    // Ctrl/Cmd+Enter from anywhere → open checkout dialog (skip when modals are already open)
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "Enter") return;
+            if (!(e.ctrlKey || e.metaKey)) return;
+            if (newPartyOpen || checkoutOpen) return;
+            if (cart.length === 0 || !snapshot?.account) return;
+            e.preventDefault();
+            openCheckout();
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+        // openCheckout closes over current state; safe to depend on the listed values
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cart.length, snapshot?.account, newPartyOpen, checkoutOpen]);
 
     // Mirror person address → company address until user touches the company-address field
     useEffect(() => {
@@ -414,10 +441,22 @@ export default function PosScreen() {
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
         const defaultPrice = p.pricePaise ? p.pricePaise / 100 : 0;
+        const warrantyLabel = p.warrantyTerm
+            ? (p.warrantyTerm.durationMonths
+                ? (p.warrantyTerm.durationMonths >= 12
+                    ? `${Math.floor(p.warrantyTerm.durationMonths / 12)}y${p.warrantyTerm.durationMonths % 12 ? ` ${p.warrantyTerm.durationMonths % 12}m` : ""}`
+                    : `${p.warrantyTerm.durationMonths}m`)
+                : p.warrantyTerm.name)
+            : null;
         setCart((prev) => {
             const exist = prev.find((l) => l.productId === p.id);
             if (exist) return prev.map((l) => l.productId === p.id ? { ...l, qty: l.qty + 1 } : l);
-            return [...prev, { productId: p.id, sku: p.sku, name: p.name, qty: 1, unitPrice: defaultPrice, description: "" }];
+            return [...prev, {
+                productId: p.id, sku: p.sku, name: p.name,
+                qty: 1, unitPrice: defaultPrice, description: "",
+                mrpPaise: p.mrpPaise ?? null,
+                warrantyLabel,
+            }];
         });
         setProductQuery("");
         // Clear highlight + return focus to the search box so cashier can scan next item
@@ -458,33 +497,41 @@ export default function PosScreen() {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-        setSplits([{ id: crypto.randomUUID(), method: "CASH", amount: total, reference: "" }]);
+        // Default split shape: Cash + UPI both visible (cashier types into whichever
+        // the customer hands over), and "On credit" auto-holds the remainder.
+        setSplits([
+            { id: "cash",   method: "CASH",   amount: 0,     reference: "" },
+            { id: "upi",    method: "UPI",    amount: 0,     reference: "" },
+            { id: "credit", method: "CREDIT", amount: total, reference: "" },
+        ]);
         setCheckoutOpen(true);
     };
 
     const generateInvoice = async () => {
         if (!snapshot?.account) return;
-        const allocated = splits.reduce((s, p) => s + p.amount, 0);
-        if (Math.abs(allocated - total) > 0.01) {
-            toast.error(`Allocate exactly ${fmtINR(total)} (${fmtINR(total - allocated)} remaining)`);
-            return;
-        }
-        if (splits.some((p) => p.amount <= 0)) {
-            toast.error("Each payment line needs an amount > 0");
+        // Over-allocation is fine (extra goes to arrear / advance). Just drop
+        // zero lines from the summary and proceed.
+        const nonZero = splits.filter((p) => p.amount > 0);
+        if (nonZero.length === 0) {
+            toast.error("Allocate at least one payment line");
             return;
         }
         setSubmitting(true);
         try {
             const today = new Date().toISOString().slice(0, 10);
             const due = new Date(); due.setDate(due.getDate() + 30);
-            const splitSummary = splits
+            const splitSummary = nonZero
                 .map((p) => `${PAYMENT_METHODS.find((m) => m.value === p.method)?.label ?? p.method} ${fmtINR(p.amount)}${p.reference ? ` (${p.reference})` : ""}`)
                 .join(" + ");
+            const tail =
+                advanceTaken > 0 ? ` | Advance ${fmtINR(advanceTaken)}` :
+                arrearPaid   > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
+                                   "";
             await axios.post("/api/finance/invoices", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
-                notes: `POS sale (discount ${discountPct}%) | Payments: ${splitSummary}`,
+                notes: `POS sale (discount ${discountPct}%) | Payments: ${splitSummary}${tail}`,
                 lines: cart.map((l) => ({
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
                     quantity: l.qty,
@@ -503,6 +550,28 @@ export default function PosScreen() {
             setSubmitting(false);
         }
     };
+
+    // Auto-credit balancing: when any non-credit split amount changes, the
+    // "credit" line absorbs whatever's left between collected and total.
+    // Excess (collected > total) shows up as arrear-cleared / advance below.
+    const autoBalanceCredit = (next: PaymentSplit[]): PaymentSplit[] => {
+        const creditIdx = next.findIndex((s) => s.id === "credit");
+        if (creditIdx < 0) return next;
+        const collected = next.reduce((s, p, i) => i === creditIdx ? s : s + p.amount, 0);
+        const credit = Math.max(0, total - collected);
+        return next.map((s, i) => i === creditIdx ? { ...s, amount: credit } : s);
+    };
+
+    const setSplitAmount = (id: string, amount: number) =>
+        setSplits((prev) => autoBalanceCredit(prev.map((x) => x.id === id ? { ...x, amount } : x)));
+
+    // Money math for the breakdown row in the dialog
+    const collected   = splits.filter((s) => s.id !== "credit").reduce((s, p) => s + p.amount, 0);
+    const onCredit    = Math.max(0, total - collected);
+    const overpaid    = Math.max(0, collected - total);
+    const balanceDue  = snapshot?.balanceDue ?? 0;
+    const arrearPaid  = Math.min(overpaid, balanceDue);
+    const advanceTaken = Math.max(0, overpaid - balanceDue);
 
     const allocated = splits.reduce((s, p) => s + p.amount, 0);
     const remaining = total - allocated;
@@ -637,12 +706,37 @@ export default function PosScreen() {
                                         const enterToNextProduct = (e: React.KeyboardEvent) => {
                                             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); productSearchRef.current?.focus(); }
                                         };
+                                        const mrp = l.mrpPaise ? l.mrpPaise / 100 : null;
                                         return (
-                                            <li key={l.productId} className="space-y-1.5 px-4 py-3">
-                                                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
+                                            <li key={l.productId} className="px-4 py-2.5">
+                                                {/* Wide layout: name | warranty | note | mrp | qty | price | trash all on one line.
+                                                    Narrow (<lg) stacks name above and the rest below. */}
+                                                <div className="grid items-center gap-2 lg:grid-cols-[minmax(180px,1.4fr)_70px_minmax(160px,1fr)_90px_auto_110px_auto]">
                                                     <div className="min-w-0">
                                                         <div className="truncate text-sm font-medium">{l.name}</div>
-                                                        <div className="font-mono text-xs text-muted-foreground">{l.sku}</div>
+                                                        <div className="font-mono text-[10px] text-muted-foreground">{l.sku}</div>
+                                                    </div>
+                                                    <div className="hidden lg:flex justify-center">
+                                                        {l.warrantyLabel ? (
+                                                            <Badge variant="secondary" className="text-[10px]">⛨ {l.warrantyLabel}</Badge>
+                                                        ) : (
+                                                            <span className="text-[10px] text-muted-foreground/60">—</span>
+                                                        )}
+                                                    </div>
+                                                    <Input
+                                                        value={l.description}
+                                                        onChange={(e) => setLineDescription(l.productId, e.target.value)}
+                                                        onKeyDown={enterToNextProduct}
+                                                        placeholder="Note — colour, config…"
+                                                        className="h-8 text-sm"
+                                                    />
+                                                    <div className="hidden lg:flex flex-col items-end text-[10px] leading-tight text-muted-foreground">
+                                                        {mrp != null ? (
+                                                            <>
+                                                                <span className="uppercase tracking-wider">MRP</span>
+                                                                <span className={mrp !== l.unitPrice ? "line-through" : ""}>{fmtINR(mrp)}</span>
+                                                            </>
+                                                        ) : <span>—</span>}
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty - 1)}><Minus size={12} /></Button>
@@ -650,7 +744,7 @@ export default function PosScreen() {
                                                             value={l.qty}
                                                             onChange={(e) => setQty(l.productId, Number(e.target.value) || 0)}
                                                             onKeyDown={enterToNextProduct}
-                                                            className="w-14 text-center"
+                                                            className="h-8 w-12 text-center"
                                                             inputMode="decimal"
                                                         />
                                                         <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
@@ -660,20 +754,13 @@ export default function PosScreen() {
                                                         onChange={(e) => setPrice(l.productId, Number(e.target.value) || 0)}
                                                         onKeyDown={enterToNextProduct}
                                                         placeholder="₹ price"
-                                                        className="w-28 text-right"
+                                                        className="h-8 text-right"
                                                         inputMode="decimal"
                                                     />
                                                     <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, 0)} title="Remove">
                                                         <Trash2 size={12} className="text-destructive" />
                                                     </Button>
                                                 </div>
-                                                <Input
-                                                    value={l.description}
-                                                    onChange={(e) => setLineDescription(l.productId, e.target.value)}
-                                                    onKeyDown={enterToNextProduct}
-                                                    placeholder="Note (optional) — colour, config, special request…"
-                                                    className="text-sm"
-                                                />
                                             </li>
                                         );
                                     })}
@@ -692,6 +779,7 @@ export default function PosScreen() {
                             </div>
                             <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="w-full" size="lg">
                                 <Receipt size={16} /> Checkout
+                                <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
                     </div>
@@ -738,12 +826,15 @@ export default function PosScreen() {
                         </div>
 
                         <ul className="space-y-2">
-                            {splits.map((p, i) => (
+                            {splits.map((p, i) => {
+                                const isCreditAuto = p.id === "credit";
+                                return (
                                 <li key={p.id} className="grid grid-cols-[160px_1fr_1fr_auto] items-center gap-2">
                                     <Select
                                         value={p.method}
+                                        disabled={isCreditAuto}
                                         onValueChange={(v) =>
-                                            setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, method: v as PaymentMethod } : x))
+                                            setSplits((prev) => autoBalanceCredit(prev.map((x) => x.id === p.id ? { ...x, method: v as PaymentMethod } : x)))
                                         }
                                     >
                                         <SelectTrigger>
@@ -759,62 +850,98 @@ export default function PosScreen() {
                                     </Select>
                                     <Input
                                         value={p.amount || ""}
-                                        onChange={(e) =>
-                                            setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, amount: Number(e.target.value) || 0 } : x))
-                                        }
-                                        placeholder="₹ amount"
-                                        className="text-right"
+                                        readOnly={isCreditAuto}
+                                        onChange={(e) => setSplitAmount(p.id, Number(e.target.value) || 0)}
+                                        placeholder={isCreditAuto ? "auto" : "₹ amount"}
+                                        className={`text-right ${isCreditAuto ? "bg-muted/50 cursor-default" : ""}`}
                                         inputMode="decimal"
+                                        title={isCreditAuto ? "Auto-balanced — fill cash / UPI and the rest goes on credit" : undefined}
                                     />
                                     <Input
                                         value={p.reference}
                                         onChange={(e) =>
                                             setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, reference: e.target.value } : x))
                                         }
-                                        placeholder={p.method === "CASH" ? "—" : "Ref / last-4 / UPI ID"}
-                                        disabled={p.method === "CASH"}
+                                        placeholder={isCreditAuto ? "—" : p.method === "CASH" ? "—" : "Ref / last-4 / UPI ID"}
+                                        disabled={isCreditAuto || p.method === "CASH"}
                                     />
                                     <Button
                                         variant="ghost"
                                         size="icon-sm"
-                                        onClick={() => setSplits((prev) => prev.filter((x) => x.id !== p.id))}
-                                        disabled={splits.length === 1}
-                                        title={splits.length === 1 ? "Need at least one payment line" : "Remove"}
+                                        onClick={() => setSplits((prev) => autoBalanceCredit(prev.filter((x) => x.id !== p.id)))}
+                                        disabled={splits.length === 1 || isCreditAuto}
+                                        title={isCreditAuto ? "Auto-balancing line — can't remove" : splits.length === 1 ? "Need at least one payment line" : "Remove"}
                                     >
                                         <Trash2 size={12} className="text-destructive" />
                                     </Button>
-                                    {i === splits.length - 1 && Math.abs(remaining) > 0.01 && (
+                                    {!isCreditAuto && i === splits.length - 1 && Math.abs(remaining) > 0.01 && (
                                         <button
                                             type="button"
                                             className="col-span-4 text-left text-xs text-primary hover:underline"
                                             onClick={() =>
-                                                setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, amount: x.amount + remaining } : x))
+                                                setSplits((prev) => autoBalanceCredit(prev.map((x) => x.id === p.id ? { ...x, amount: x.amount + remaining } : x)))
                                             }
                                         >
                                             Auto-fill remaining ({fmtINR(remaining)}) on this line
                                         </button>
                                     )}
                                 </li>
-                            ))}
+                                );
+                            })}
                         </ul>
 
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                                setSplits((prev) => [...prev, { id: crypto.randomUUID(), method: "UPI", amount: Math.max(remaining, 0), reference: "" }])
+                                setSplits((prev) => autoBalanceCredit([...prev, { id: crypto.randomUUID(), method: "CARD", amount: 0, reference: "" }]))
                             }
                         >
                             <Plus size={14} /> Add payment line
                         </Button>
+
+                        {/* Arrear / advance breakdown — when collected > total or customer has dues */}
+                        {(overpaid > 0 || balanceDue > 0) && (
+                            <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
+                                {balanceDue > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">Existing dues</span>
+                                        <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
+                                    </div>
+                                )}
+                                {onCredit > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">Goes on credit</span>
+                                        <span className="font-medium text-amber-600">+ {fmtINR(onCredit)}</span>
+                                    </div>
+                                )}
+                                {arrearPaid > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">Arrear cleared</span>
+                                        <span className="font-medium text-emerald-600">− {fmtINR(arrearPaid)}</span>
+                                    </div>
+                                )}
+                                {advanceTaken > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">Advance from customer</span>
+                                        <span className="font-medium text-emerald-700">+ {fmtINR(advanceTaken)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submitting}>
                             Cancel
                         </Button>
-                        <Button onClick={generateInvoice} disabled={submitting || Math.abs(remaining) > 0.01}>
-                            <Receipt size={16} /> {submitting ? "Generating…" : `Confirm · ${fmtINR(total)}`}
+                        <Button onClick={generateInvoice} disabled={submitting}>
+                            <Receipt size={16} /> {submitting
+                                ? "Generating…"
+                                : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
+                                : arrearPaid > 0   ? `Confirm · ${fmtINR(total)} + ${fmtINR(arrearPaid)} arrear`
+                                : onCredit > 0     ? `Confirm · ${fmtINR(collected)} + ${fmtINR(onCredit)} credit`
+                                                   : `Confirm · ${fmtINR(total)}`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
