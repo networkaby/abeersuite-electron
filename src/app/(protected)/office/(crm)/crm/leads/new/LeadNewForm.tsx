@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import axios from "axios";
@@ -62,6 +62,12 @@ export default function LeadNewForm({
         },
     });
 
+    // Subscribe only to the fields rendered as controlled <Select>s — avoids the
+    // whole-form re-render that `form.watch(...)` triggers (and the
+    // react-hooks/incompatible-library lint warning).
+    const status = useWatch({ control: form.control, name: "status" });
+    const ownerUserId = useWatch({ control: form.control, name: "ownerUserId" });
+
     const onSubmit = form.handleSubmit(async (values) => {
         const rupees = values.valueRupees?.trim() ? Number.parseFloat(values.valueRupees) : NaN;
         const valuePaise = Number.isFinite(rupees) && rupees > 0 ? Math.round(rupees * 100) : null;
@@ -100,7 +106,7 @@ export default function LeadNewForm({
                 <div className="space-y-2">
                     <Label htmlFor="status">Stage</Label>
                     <Select
-                        value={form.watch("status")}
+                        value={status}
                         onValueChange={(v) => form.setValue("status", v)}
                     >
                         <SelectTrigger id="status">
@@ -118,7 +124,7 @@ export default function LeadNewForm({
                 <div className="space-y-2">
                     <Label htmlFor="ownerUserId">Owner</Label>
                     <Select
-                        value={form.watch("ownerUserId") || "__none__"}
+                        value={ownerUserId || "__none__"}
                         onValueChange={(v) => form.setValue("ownerUserId", v === "__none__" ? "" : v)}
                     >
                         <SelectTrigger id="ownerUserId">
