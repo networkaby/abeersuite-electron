@@ -735,13 +735,14 @@ export default function PosScreen() {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label>Email</Label>
+                                        <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
                                         <Input
                                             value={newParty.email}
                                             onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
                                             onKeyDown={onAnyEnterToSubmit}
                                             placeholder="optional"
                                             inputMode="email"
+                                            tabIndex={-1}
                                         />
                                     </div>
                                 </div>
@@ -785,13 +786,14 @@ export default function PosScreen() {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label>Email</Label>
+                                        <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
                                         <Input
                                             value={newParty.email}
                                             onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
                                             onKeyDown={onAnyEnterToSubmit}
                                             placeholder="optional"
                                             inputMode="email"
+                                            tabIndex={-1}
                                         />
                                     </div>
                                 </div>
@@ -849,13 +851,14 @@ export default function PosScreen() {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label>Company email</Label>
+                                        <Label>Company email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
                                         <Input
                                             value={newParty.companyEmail}
                                             onChange={(e) => setNewParty((s) => ({ ...s, companyEmail: e.target.value }))}
                                             onKeyDown={onAnyEnterToSubmit}
                                             placeholder="optional"
                                             inputMode="email"
+                                            tabIndex={-1}
                                         />
                                     </div>
                                 </div>
