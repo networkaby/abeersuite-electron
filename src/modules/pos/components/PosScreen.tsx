@@ -6,11 +6,18 @@ import { toast } from "sonner";
 import Link from "next/link";
 import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
-    ShoppingCart, Plus, Minus, Trash2, Receipt, ArrowLeft,
+    ShoppingCart, Plus, Minus, Trash2, Receipt, ArrowLeft, ExternalLink,
+    Banknote, Wallet, CreditCard, Smartphone, Building2, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +37,19 @@ type Snapshot = {
 type ProductOption = { id: number; sku: string; name: string; pricePaise?: number | null; unit?: { code: string } };
 
 type CartLine = { productId: number; sku: string; name: string; qty: number; unitPrice: number };
+
+type PaymentMethod = "CASH" | "UPI" | "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET" | "CREDIT";
+type PaymentSplit = { id: string; method: PaymentMethod; amount: number; reference: string };
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
+    { value: "CASH",          label: "Cash",          icon: <Banknote size={14} /> },
+    { value: "UPI",           label: "UPI",           icon: <Smartphone size={14} /> },
+    { value: "CARD",          label: "Card",          icon: <CreditCard size={14} /> },
+    { value: "CHEQUE",        label: "Cheque",        icon: <FileText size={14} /> },
+    { value: "BANK_TRANSFER", label: "Bank transfer", icon: <Building2 size={14} /> },
+    { value: "WALLET",        label: "Wallet",        icon: <Wallet size={14} /> },
+    { value: "CREDIT",        label: "On credit",     icon: <Clock size={14} /> },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +81,9 @@ export default function PosScreen() {
     const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
     const [cart, setCart] = useState<CartLine[]>([]);
 
-    // Submitting
+    // Checkout / payment splits
+    const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const [splits, setSplits] = useState<PaymentSplit[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
     // ── Effects ─────────────────────────────────────────────────────────────
@@ -137,19 +159,39 @@ export default function PosScreen() {
     const setPrice = (productId: number, unitPrice: number) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, unitPrice } : l));
 
-    const generateInvoice = async () => {
+    const openCheckout = () => {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+        // Pre-seed with one Cash line equal to the full total — the common case.
+        setSplits([{ id: crypto.randomUUID(), method: "CASH", amount: total, reference: "" }]);
+        setCheckoutOpen(true);
+    };
+
+    const generateInvoice = async () => {
+        if (!snapshot?.account) return;
+        const allocated = splits.reduce((s, p) => s + p.amount, 0);
+        // Allow ±0.01 rounding tolerance
+        if (Math.abs(allocated - total) > 0.01) {
+            toast.error(`Allocate exactly ${fmtINR(total)} (${fmtINR(total - allocated)} remaining)`);
+            return;
+        }
+        if (splits.some((p) => p.amount <= 0)) {
+            toast.error("Each payment line needs an amount > 0");
+            return;
+        }
         setSubmitting(true);
         try {
             const today = new Date().toISOString().slice(0, 10);
             const due = new Date(); due.setDate(due.getDate() + 30);
+            const splitSummary = splits
+                .map((p) => `${PAYMENT_METHODS.find((m) => m.value === p.method)?.label ?? p.method} ${fmtINR(p.amount)}${p.reference ? ` (${p.reference})` : ""}`)
+                .join(" + ");
             await axios.post("/api/finance/invoices", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
-                notes: `POS sale (discount ${discountPct}%)`,
+                notes: `POS sale (discount ${discountPct}%) | Payments: ${splitSummary}`,
                 lines: cart.map((l) => ({
                     description: `${l.sku} — ${l.name}`,
                     quantity: l.qty,
@@ -160,12 +202,17 @@ export default function PosScreen() {
             });
             toast.success(`Invoice generated · ${fmtINR(total)}`);
             setCart([]);
+            setSplits([]);
+            setCheckoutOpen(false);
         } catch {
             toast.error("Failed to generate invoice");
         } finally {
             setSubmitting(false);
         }
     };
+
+    const allocated = splits.reduce((s, p) => s + p.amount, 0);
+    const remaining = total - allocated;
 
     // ── Render ──────────────────────────────────────────────────────────────
 
@@ -207,6 +254,14 @@ export default function PosScreen() {
                         <X size={14} /> Clear
                     </Button>
                 )}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/pos", "_blank", "noopener")}
+                    title="Open another POS in a new tab — start a parallel bill while this one waits"
+                >
+                    <ExternalLink size={14} /> New tab
+                </Button>
             </header>
 
             {/* Main grid: products+cart on left, customer panel on right */}
@@ -296,8 +351,8 @@ export default function PosScreen() {
                                 <span>Total</span>
                                 <span>{fmtINR(total)}</span>
                             </div>
-                            <Button onClick={generateInvoice} disabled={submitting || cart.length === 0 || !snapshot?.account} className="w-full" size="lg">
-                                <Receipt size={16} /> {submitting ? "Generating…" : "Generate invoice"}
+                            <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="w-full" size="lg">
+                                <Receipt size={16} /> Checkout
                             </Button>
                         </div>
                     </div>
@@ -317,6 +372,114 @@ export default function PosScreen() {
                     )}
                 </aside>
             </div>
+
+            {/* ── Checkout dialog — split payments by mode ────────────────────────── */}
+            <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Checkout · {fmtINR(total)}</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3 text-center text-sm">
+                            <div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</div>
+                                <div className="font-semibold">{fmtINR(total)}</div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Allocated</div>
+                                <div className="font-semibold">{fmtINR(allocated)}</div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Remaining</div>
+                                <div className={`font-semibold ${Math.abs(remaining) < 0.01 ? "text-emerald-600" : remaining > 0 ? "text-amber-600" : "text-destructive"}`}>
+                                    {fmtINR(remaining)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <ul className="space-y-2">
+                            {splits.map((p, i) => (
+                                <li key={p.id} className="grid grid-cols-[160px_1fr_1fr_auto] items-center gap-2">
+                                    <Select
+                                        value={p.method}
+                                        onValueChange={(v) =>
+                                            setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, method: v as PaymentMethod } : x))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {PAYMENT_METHODS.map((m) => (
+                                                <SelectItem key={m.value} value={m.value}>
+                                                    <span className="flex items-center gap-2">{m.icon} {m.label}</span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Input
+                                        value={p.amount || ""}
+                                        onChange={(e) =>
+                                            setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, amount: Number(e.target.value) || 0 } : x))
+                                        }
+                                        placeholder="₹ amount"
+                                        className="text-right"
+                                        inputMode="decimal"
+                                    />
+                                    <Input
+                                        value={p.reference}
+                                        onChange={(e) =>
+                                            setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, reference: e.target.value } : x))
+                                        }
+                                        placeholder={p.method === "CASH" ? "—" : "Ref / last-4 / UPI ID"}
+                                        disabled={p.method === "CASH"}
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() => setSplits((prev) => prev.filter((x) => x.id !== p.id))}
+                                        disabled={splits.length === 1}
+                                        title={splits.length === 1 ? "Need at least one payment line" : "Remove"}
+                                    >
+                                        <Trash2 size={12} className="text-destructive" />
+                                    </Button>
+                                    {i === splits.length - 1 && Math.abs(remaining) > 0.01 && (
+                                        <button
+                                            type="button"
+                                            className="col-span-4 text-left text-xs text-primary hover:underline"
+                                            onClick={() =>
+                                                setSplits((prev) => prev.map((x) => x.id === p.id ? { ...x, amount: x.amount + remaining } : x))
+                                            }
+                                        >
+                                            Auto-fill remaining ({fmtINR(remaining)}) on this line
+                                        </button>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                                setSplits((prev) => [...prev, { id: crypto.randomUUID(), method: "UPI", amount: Math.max(remaining, 0), reference: "" }])
+                            }
+                        >
+                            <Plus size={14} /> Add payment line
+                        </Button>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submitting}>
+                            Cancel
+                        </Button>
+                        <Button onClick={generateInvoice} disabled={submitting || Math.abs(remaining) > 0.01}>
+                            <Receipt size={16} /> {submitting ? "Generating…" : `Confirm · ${fmtINR(total)}`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
