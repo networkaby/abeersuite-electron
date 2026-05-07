@@ -113,9 +113,12 @@ export default function PosScreen() {
     // ── Smart create-party dialog ───────────────────────────────────────────
     const [newPartyOpen, setNewPartyOpen] = useState(false);
     const [newParty, setNewParty] = useState({
-        name: "", phone: "", email: "", address: "", gstin: "",
-        companyName: "", companyPhone: "", companyAddress: "", companyGstin: "",
+        name: "", phone: "", email: "", address: "",
+        companyName: "", companyPhone: "", companyEmail: "", companyAddress: "", companyGstin: "",
     });
+    // Captured at open time — drives form layout (phone-query swaps Phone/Email
+    // row above Name so Tab forward from Name skips the pre-filled Phone).
+    const [openedAsPhoneQuery, setOpenedAsPhoneQuery] = useState(false);
     // Track whether the user has manually edited the company address —
     // until they do, we mirror person.address into companyAddress.
     const [companyAddressTouched, setCompanyAddressTouched] = useState(false);
@@ -155,11 +158,10 @@ export default function PosScreen() {
     useEffect(() => {
         if (!newPartyOpen) return;
         const t = setTimeout(() => {
-            const phoneLike = isPhoneLike(custQuery);
-            (phoneLike ? nameRef.current : phoneRef.current)?.focus();
+            (openedAsPhoneQuery ? nameRef.current : phoneRef.current)?.focus();
         }, 50);
         return () => clearTimeout(t);
-    }, [newPartyOpen, custQuery]);
+    }, [newPartyOpen, openedAsPhoneQuery]);
 
     // Mirror person address → company address until user touches the company-address field
     useEffect(() => {
@@ -186,7 +188,9 @@ export default function PosScreen() {
     const total = subtotal - discountAmount + tax;
 
     const showCompanySection = newParty.companyName.trim().length > 0;
-    const canSubmitCreate = newParty.name.trim().length > 0;
+    // Allow submit when EITHER a person (name) OR a company (companyName) is given.
+    // User can clear the auto-filled Name to create only a company.
+    const canSubmitCreate = newParty.name.trim().length > 0 || newParty.companyName.trim().length > 0;
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -218,14 +222,15 @@ export default function PosScreen() {
     const openNewParty = () => {
         const q = custQuery.trim();
         const phoneLike = isPhoneLike(q);
+        setOpenedAsPhoneQuery(phoneLike);
         setNewParty({
             name:           phoneLike ? "" : q,
             phone:          phoneLike ? q  : "",
             email:          "",
             address:        "",
-            gstin:          "",
             companyName:    "",
             companyPhone:   "",
+            companyEmail:   "",
             companyAddress: "",
             companyGstin:   "",
         });
@@ -275,37 +280,40 @@ export default function PosScreen() {
     };
 
     const submitCreate = async () => {
-        if (!canSubmitCreate) {
-            toast.error("Name is required");
+        const hasPerson  = newParty.name.trim().length > 0;
+        const hasCompany = newParty.companyName.trim().length > 0;
+        if (!hasPerson && !hasCompany) {
+            toast.error("Need at least a name or a company");
             nameRef.current?.focus();
             return;
         }
         setCreatingParty(true);
         try {
-            // 1. Create the Person + Person.Account
-            const personRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
-                "/api/people",
-                {
-                    name:    newParty.name.trim(),
-                    phones:  newParty.phone.trim()   ? [newParty.phone.trim()]   : [],
-                    emails:  newParty.email.trim()   ? [newParty.email.trim()]   : [],
-                    address: newParty.address.trim(),
-                    gstin:   newParty.gstin.trim(),
-                },
-            );
-            const personAccountId = personRes.data.account?.id ?? null;
+            let personAccountId: number | null = null;
+            if (hasPerson) {
+                const personRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
+                    "/api/people",
+                    {
+                        name:    newParty.name.trim(),
+                        phones:  newParty.phone.trim()   ? [newParty.phone.trim()]   : [],
+                        emails:  newParty.email.trim()   ? [newParty.email.trim()]   : [],
+                        address: newParty.address.trim(),
+                    },
+                );
+                personAccountId = personRes.data.account?.id ?? null;
+            }
 
             let companyAccountId: number | null = null;
             let companyName = "";
-            if (showCompanySection) {
-                // 2. Create the Company + Company.Account (separate ledger)
+            if (hasCompany) {
                 const companyRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
                     "/api/companies",
                     {
                         name:    newParty.companyName.trim(),
                         phones:  newParty.companyPhone.trim() ? [newParty.companyPhone.trim()] : [],
-                        emails:  [],
+                        emails:  newParty.companyEmail.trim() ? [newParty.companyEmail.trim()] : [],
                         address: newParty.companyAddress.trim(),
+                        taxId:   newParty.companyGstin.trim(),
                     },
                 );
                 companyAccountId = companyRes.data.account?.id ?? null;
@@ -321,9 +329,11 @@ export default function PosScreen() {
                 return;
             }
 
-            toast.success(showCompanySection
-                ? `Added · ${newParty.name.trim()} @ ${companyName} — billing to company`
-                : `Added · ${newParty.name.trim()}`);
+            toast.success(
+                hasPerson && hasCompany ? `Added · ${newParty.name.trim()} @ ${companyName} — billing to company`
+                : hasCompany             ? `Added · ${companyName}`
+                                         : `Added · ${newParty.name.trim()}`
+            );
             setNewPartyOpen(false);
             await pickByAccountId(billingAccountId, billingName);
         } catch (e: unknown) {
@@ -706,10 +716,39 @@ export default function PosScreen() {
                         {/* Person section */}
                         <div className="space-y-3">
                             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Person
+                                Person {newParty.name.trim() === "" && newParty.companyName.trim() !== "" && <span className="ml-1 text-[10px] normal-case">· skipped</span>}
                             </div>
+
+                            {/* When the search query was a phone, show Phone+Email row FIRST so
+                                Tab forward from the focused Name skips the pre-filled Phone. */}
+                            {openedAsPhoneQuery && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label>Phone</Label>
+                                        <Input
+                                            ref={phoneRef}
+                                            value={newParty.phone}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
+                                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); nameRef.current?.focus(); } }}
+                                            placeholder="10-digit"
+                                            inputMode="tel"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Email</Label>
+                                        <Input
+                                            value={newParty.email}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
+                                            onKeyDown={onAnyEnterToSubmit}
+                                            placeholder="optional"
+                                            inputMode="email"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-1.5">
-                                <Label>Name *</Label>
+                                <Label>Name {showCompanySection ? <span className="text-[10px] text-muted-foreground">— blank for company-only</span> : "*"}</Label>
                                 <Input
                                     ref={nameRef}
                                     value={newParty.name}
@@ -717,44 +756,47 @@ export default function PosScreen() {
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
                                             e.preventDefault();
-                                            // Enter on Name → if phone empty, jump to phone; else submit
-                                            if (!newParty.phone.trim()) phoneRef.current?.focus();
-                                            else if (canSubmitCreate) void submitCreate();
+                                            if (!openedAsPhoneQuery && !newParty.phone.trim()) phoneRef.current?.focus();
+                                            else addressRef.current?.focus();
                                         }
                                     }}
                                     placeholder="Customer name"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Phone</Label>
-                                    <Input
-                                        ref={phoneRef}
-                                        value={newParty.phone}
-                                        onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" && !e.shiftKey) {
-                                                e.preventDefault();
-                                                // Enter on Phone → if name empty, jump to name; else move to address
-                                                if (!newParty.name.trim()) nameRef.current?.focus();
-                                                else addressRef.current?.focus();
-                                            }
-                                        }}
-                                        placeholder="10-digit"
-                                        inputMode="tel"
-                                    />
+
+                            {/* Default layout: Phone+Email AFTER Name. */}
+                            {!openedAsPhoneQuery && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label>Phone</Label>
+                                        <Input
+                                            ref={phoneRef}
+                                            value={newParty.phone}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    if (!newParty.name.trim()) nameRef.current?.focus();
+                                                    else addressRef.current?.focus();
+                                                }
+                                            }}
+                                            placeholder="10-digit"
+                                            inputMode="tel"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Email</Label>
+                                        <Input
+                                            value={newParty.email}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
+                                            onKeyDown={onAnyEnterToSubmit}
+                                            placeholder="optional"
+                                            inputMode="email"
+                                        />
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label>Email</Label>
-                                    <Input
-                                        value={newParty.email}
-                                        onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
-                                        onKeyDown={onAnyEnterToSubmit}
-                                        placeholder="optional"
-                                        inputMode="email"
-                                    />
-                                </div>
-                            </div>
+                            )}
+
                             <div className="space-y-1.5">
                                 <Label>Address</Label>
                                 <Textarea
@@ -766,16 +808,7 @@ export default function PosScreen() {
                                     rows={2}
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>GSTIN</Label>
-                                <Input
-                                    value={newParty.gstin}
-                                    onChange={(e) => setNewParty((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))}
-                                    onKeyDown={onAnyEnterToSubmit}
-                                    placeholder="optional · 15 chars"
-                                    className="font-mono"
-                                />
-                            </div>
+
                             <div className="space-y-1.5 pt-1">
                                 <Label className="flex items-center gap-1.5 text-muted-foreground">
                                     <ChevronDown size={12} className={showCompanySection ? "rotate-180" : ""} />
@@ -788,7 +821,6 @@ export default function PosScreen() {
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
                                             e.preventDefault();
-                                            // Enter on company name → if filled, jump to company phone; else submit
                                             if (newParty.companyName.trim()) companyPhoneRef.current?.focus();
                                             else if (canSubmitCreate) void submitCreate();
                                         }
@@ -804,16 +836,28 @@ export default function PosScreen() {
                                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     Company · billing here
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label>Company phone</Label>
-                                    <Input
-                                        ref={companyPhoneRef}
-                                        value={newParty.companyPhone}
-                                        onChange={(e) => setNewParty((s) => ({ ...s, companyPhone: e.target.value }))}
-                                        onKeyDown={onAnyEnterToSubmit}
-                                        placeholder="own number — duplicates not allowed"
-                                        inputMode="tel"
-                                    />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label>Company phone</Label>
+                                        <Input
+                                            ref={companyPhoneRef}
+                                            value={newParty.companyPhone}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, companyPhone: e.target.value }))}
+                                            onKeyDown={onAnyEnterToSubmit}
+                                            placeholder="own number — no duplicates"
+                                            inputMode="tel"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Company email</Label>
+                                        <Input
+                                            value={newParty.companyEmail}
+                                            onChange={(e) => setNewParty((s) => ({ ...s, companyEmail: e.target.value }))}
+                                            onKeyDown={onAnyEnterToSubmit}
+                                            placeholder="optional"
+                                            inputMode="email"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Company address</Label>
@@ -851,7 +895,11 @@ export default function PosScreen() {
                             Cancel
                         </Button>
                         <Button onClick={submitCreate} disabled={creatingParty || !canSubmitCreate}>
-                            <UserPlus size={16} /> {creatingParty ? "Creating…" : showCompanySection ? "Create person + company & bill" : "Create & bill"}
+                            <UserPlus size={16} /> {creatingParty
+                                ? "Creating…"
+                                : newParty.name.trim() && showCompanySection ? "Create person + company & bill"
+                                : showCompanySection                          ? "Create company & bill"
+                                                                              : "Create & bill"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
