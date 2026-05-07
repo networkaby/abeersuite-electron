@@ -27,7 +27,7 @@ type Snapshot = {
     warrantiesEnding: Array<{ productName: string; endsAt: string }>;
 };
 
-type ProductOption = { id: number; sku: string; name: string; unit?: { code: string } };
+type ProductOption = { id: number; sku: string; name: string; pricePaise?: number | null; unit?: { code: string } };
 
 type CartLine = { productId: number; sku: string; name: string; qty: number; unitPrice: number };
 
@@ -120,10 +120,11 @@ export default function PosScreen() {
     const clearCustomer = () => { setSnapshot(null); setCustQuery(""); };
 
     const addToCart = (p: ProductOption) => {
+        const defaultPrice = p.pricePaise ? p.pricePaise / 100 : 0;
         setCart((prev) => {
             const exist = prev.find((l) => l.productId === p.id);
             if (exist) return prev.map((l) => l.productId === p.id ? { ...l, qty: l.qty + 1 } : l);
-            return [...prev, { productId: p.id, sku: p.sku, name: p.name, qty: 1, unitPrice: 0 }];
+            return [...prev, { productId: p.id, sku: p.sku, name: p.name, qty: 1, unitPrice: defaultPrice }];
         });
         setProductQuery("");
     };
