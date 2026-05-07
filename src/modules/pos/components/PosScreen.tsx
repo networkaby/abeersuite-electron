@@ -165,8 +165,12 @@ export default function PosScreen() {
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
-    // Search persons + companies (debounced) via the polymorphic /api/people endpoint
+    // Search persons + companies (debounced) via the polymorphic /api/people endpoint.
+    // Skip entirely when a party is already picked — pickByAccountId() sets
+    // custQuery to the picked name, which would otherwise re-fetch hits and reopen
+    // the dropdown right after pick.
     useEffect(() => {
+        if (snapshot) { setCustHits([]); return; }
         if (custQuery.trim().length < 2) { setCustHits([]); return; }
         const t = setTimeout(() => {
             axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(custQuery)}`)
@@ -177,7 +181,7 @@ export default function PosScreen() {
                 .catch(() => setCustHits([]));
         }, 200);
         return () => clearTimeout(t);
-    }, [custQuery]);
+    }, [custQuery, snapshot]);
 
     // Load all products once for fast typing
     useEffect(() => {
@@ -492,7 +496,7 @@ export default function PosScreen() {
                         readOnly={!!snapshot}
                         title={snapshot ? "Locked — press Clear to search again" : undefined}
                     />
-                    {(custHits.length > 0 || (custQuery.trim().length >= 2 && !snapshot)) && (
+                    {!snapshot && (custHits.length > 0 || custQuery.trim().length >= 2) && (
                         <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                             {custHits.map((c, i) => (
                                 <li key={`${c.type}-${c.id}`}>
