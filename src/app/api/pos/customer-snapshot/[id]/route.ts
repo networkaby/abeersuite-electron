@@ -1,0 +1,135 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-guard";
+
+// GET /api/pos/customer-snapshot/[id]
+// "We know you" panel for the POS — aggregates everything in one call so the UI
+// can render quickly without N round-trips.
+//
+// Returns:
+//   customer       — id, name, phone, email, gstin
+//   account        — current ledger balance + opening balance
+//   turnover       — lifetime invoice total + last-12-month total
+//   discountPct    — TODO (no schema field yet) — placeholder tier from turnover
+//   loyaltyPoints  — TODO (no schema field yet) — placeholder = ⌊totalInvoiced / 100⌋
+//   lastVisitAt    — most recent of (latest invoice issueDate, latest ticket createdAt)
+//   recentTickets  — last 3 tickets w/ status label
+//   warrantiesEnding — TODO (no warranty-end-date field) — surfaced as warning copy
+
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { response } = await requireAuth();
+    if (response) return response;
+
+    const id = Number((await params).id);
+    if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+    try {
+        const customer = await prisma.customer.findUnique({
+            where: { id },
+            select: {
+                id: true, name: true, phone: true, email: true, gstin: true,
+                account: { select: { id: true, balance: true, openingBalance: true } },
+            },
+        });
+        if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+
+        const accountId = customer.account?.id;
+
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+        const [lifetimeAgg, ytdAgg, latestInvoice, latestTicket, recentTickets] = await Promise.all([
+            accountId
+                ? prisma.invoice.aggregate({
+                    where: { accountId, deletedAt: null, status: { not: "VOID" } },
+                    _sum: { totalAmount: true },
+                    _count: { _all: true },
+                })
+                : Promise.resolve(null),
+            accountId
+                ? prisma.invoice.aggregate({
+                    where: { accountId, deletedAt: null, status: { not: "VOID" }, issueDate: { gte: oneYearAgo } },
+                    _sum: { totalAmount: true },
+                })
+                : Promise.resolve(null),
+            accountId
+                ? prisma.invoice.findFirst({
+                    where: { accountId, deletedAt: null, status: { not: "VOID" } },
+                    orderBy: { issueDate: "desc" },
+                    select: { issueDate: true, number: true, totalAmount: true },
+                })
+                : Promise.resolve(null),
+            accountId
+                ? prisma.ticket.findFirst({
+                    where: { billingAccountId: accountId },
+                    orderBy: { createdAt: "desc" },
+                    select: { id: true, createdAt: true },
+                })
+                : Promise.resolve(null),
+            accountId
+                ? prisma.ticket.findMany({
+                    where: { billingAccountId: accountId },
+                    orderBy: { createdAt: "desc" },
+                    take: 3,
+                    select: {
+                        id: true,
+                        createdAt: true,
+                        ticketStatus: { select: { label: true, color: true } },
+                    },
+                })
+                : Promise.resolve([] as Array<{ id: number; createdAt: Date; ticketStatus: { label: string; color: string } | null }>),
+        ]);
+
+        const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
+        const ytdTotal = Number(ytdAgg?._sum.totalAmount ?? 0);
+        const invoiceCount = lifetimeAgg?._count._all ?? 0;
+
+        // Placeholder tier: 0% under ₹10k lifetime, 2% under ₹50k, 5% under ₹2L, 8% above.
+        const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
+        const loyaltyPoints = Math.floor(lifetimeTotal / 100);
+
+        const lastVisitAt = (() => {
+            const a = latestInvoice?.issueDate ?? null;
+            const b = latestTicket?.createdAt ?? null;
+            if (!a) return b;
+            if (!b) return a;
+            return a > b ? a : b;
+        })();
+
+        return NextResponse.json({
+            customer: {
+                id: customer.id,
+                name: customer.name,
+                phone: customer.phone,
+                email: customer.email,
+                gstin: customer.gstin,
+            },
+            account: customer.account
+                ? {
+                    id: customer.account.id,
+                    balance: Number(customer.account.balance),
+                    openingBalance: customer.account.openingBalance ? Number(customer.account.openingBalance) : null,
+                }
+                : null,
+            turnover: {
+                lifetime: lifetimeTotal,
+                last12Months: ytdTotal,
+                invoiceCount,
+            },
+            discountPct,
+            loyaltyPoints,
+            lastVisitAt,
+            recentTickets: recentTickets.map((t) => ({
+                id: t.id,
+                createdAt: t.createdAt,
+                statusLabel: t.ticketStatus?.label ?? "—",
+                statusColor: t.ticketStatus?.color ?? "",
+            })),
+            // Placeholder; real warranty-end-date isn't in schema yet
+            warrantiesEnding: [] as Array<{ productName: string; endsAt: string }>,
+        });
+    } catch (err) {
+        console.error("[pos snapshot]", err);
+        return NextResponse.json({ error: "Snapshot failed" }, { status: 500 });
+    }
+}
