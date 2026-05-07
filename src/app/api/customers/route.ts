@@ -98,6 +98,8 @@ export async function GET(req: Request) {
     const phone = searchParams.get("phone")?.trim();
     const q = searchParams.get("q")?.trim();
     const lookup = searchParams.get("lookup")?.trim();
+    const take = Math.min(200, Math.max(1, Number(searchParams.get("limit")) || 50));
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
 
     try {
         if (phone) {
@@ -121,6 +123,8 @@ export async function GET(req: Request) {
                 } : {}),
             },
             orderBy: { createdAt: "desc" },
+            take,
+            skip: (page - 1) * take,
             include: {
                 _count: { select: { companies: true } },
                 account: {

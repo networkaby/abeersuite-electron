@@ -75,7 +75,7 @@ export default function CustomerLinkPanel({ customerId, initialLinks }: Props) {
                 <div key={lc.id} className="flex items-center justify-between rounded-md border border-border p-2 text-sm">
                     <div className="flex items-center gap-2">
                         <Building2 size={13} className="text-primary" />
-                        <Link href={`/office/companies/${lc.company.id}`} className="font-medium hover:text-primary">
+                        <Link href={`/office/customers/companies/${lc.company.id}`} className="font-medium hover:text-primary">
                             {lc.company.name}
                         </Link>
                         {lc.company.phone && <span className="text-xs text-muted-foreground">· {lc.company.phone}</span>}

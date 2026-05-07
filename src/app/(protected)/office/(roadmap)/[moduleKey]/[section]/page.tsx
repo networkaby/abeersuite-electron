@@ -49,10 +49,10 @@ export default async function RoadmapSectionPage({
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                     <Button asChild variant="default">
-                        <Link href="/office/tickets">Open tickets</Link>
+                        <Link href="/office/repairing/tickets">Open tickets</Link>
                     </Button>
                     <Button asChild variant="outline">
-                        <Link href="/office/dashboard">Repair dashboard</Link>
+                        <Link href="/office/repairing">Repair dashboard</Link>
                     </Button>
                 </CardContent>
             </Card>
@@ -71,10 +71,10 @@ export default async function RoadmapSectionPage({
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                     <Button asChild variant="default">
-                        <Link href="/office/dashboard">Repair dashboard</Link>
+                        <Link href="/office/repairing">Repair dashboard</Link>
                     </Button>
                     <Button asChild variant="outline">
-                        <Link href="/office/tickets">All tickets</Link>
+                        <Link href="/office/repairing/tickets">All tickets</Link>
                     </Button>
                     <Button asChild variant="outline">
                         <Link href="/office/tally/reports">Finance reports</Link>

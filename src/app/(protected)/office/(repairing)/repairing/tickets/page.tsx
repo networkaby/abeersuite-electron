@@ -315,7 +315,7 @@ export default function TicketsPage() {
                                     <td className="px-6 py-4 text-muted-foreground">{t.primaryOwner?.name || "—"}</td>
                                     <td className="px-6 py-4 text-muted-foreground">{formatDate(t.createdAt)}</td>
                                     <td className="px-6 py-4">
-                                        <Link href={`/office/tickets/${t.id}`} className="inline-flex p-1.5 text-primary hover:bg-primary/10">
+                                        <Link href={`/office/repairing/tickets/${t.id}`} className="inline-flex p-1.5 text-primary hover:bg-primary/10">
                                             <Eye size={15} />
                                         </Link>
                                     </td>

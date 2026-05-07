@@ -1183,7 +1183,7 @@ function ActivityTimelineTab({
                                     </div>
                                     <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
                                     {item.meta?.ticketId && (
-                                        <Link href={`/office/tickets/${item.meta.ticketId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                                        <Link href={`/office/repairing/tickets/${item.meta.ticketId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
                                             Open ticket #{item.meta.ticketId}
                                         </Link>
                                     )}

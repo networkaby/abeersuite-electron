@@ -242,7 +242,7 @@ export default function EcommerceOrderDetailPage() {
                             <ul className="space-y-1">
                                 {order.tickets.map((t) => (
                                     <li key={t.id}>
-                                        <Link href={`/office/tickets/${t.id}`} className="text-primary hover:underline">
+                                        <Link href={`/office/repairing/tickets/${t.id}`} className="text-primary hover:underline">
                                             Ticket #{t.id}
                                         </Link>{" "}
                                         · {t.status}

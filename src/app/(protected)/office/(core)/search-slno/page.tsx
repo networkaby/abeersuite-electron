@@ -257,7 +257,7 @@ export default function SearchSlNoPage() {
                                                     </TableCell>
                                                     <TableCell>
                                                         <Button asChild size="sm" variant="outline">
-                                                            <Link href={`/office/tickets/${ticket.id}`}>Open</Link>
+                                                            <Link href={`/office/repairing/tickets/${ticket.id}`}>Open</Link>
                                                         </Button>
                                                     </TableCell>
                                                 </TableRow>

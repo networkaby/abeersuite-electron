@@ -377,7 +377,7 @@ export default function CustomersPage() {
                                                             <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
                                                             <TableCell className="text-right">
                                                                 {/* <Button asChild variant="link" size="sm">
-                                                                    <Link href={`/office/tickets/${ticket.id}`}>View</Link>
+                                                                    <Link href={`/office/repairing/tickets/${ticket.id}`}>View</Link>
                                                                 </Button> //breaking*/}
                                                             </TableCell>
                                                         </TableRow>
@@ -432,7 +432,7 @@ export default function CustomersPage() {
                                                         </div>
                                                     </div>
                                                     <Button asChild variant="link" size="sm">
-                                                        <Link href={`/office/companies/${companyLink.company.id}`}>View</Link>
+                                                        <Link href={`/office/customers/companies/${companyLink.company.id}`}>View</Link>
                                                     </Button>
                                                 </CardContent>
                                             </Card>

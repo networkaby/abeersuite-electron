@@ -54,18 +54,18 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     );
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/office/settings"));
     const [workspaceOpen, setWorkspaceOpen] = useState<Record<string, boolean>>({
-        customers: pathname.startsWith("/office/customers") || pathname.startsWith("/office/companies"),
+        customers: pathname.startsWith("/office/customers") || pathname.startsWith("/office/customers/companies"),
     });
     const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
         customers:
             pathname.startsWith("/office/customers") ||
-            pathname.startsWith("/office/companies") ||
+            pathname.startsWith("/office/customers/companies") ||
             pathname.startsWith("/office/all"),
         repair:
-            pathname.startsWith("/office/tickets") ||
-            pathname.startsWith("/office/service-centers") ||
-            pathname.startsWith("/office/dashboard"),
+            pathname.startsWith("/office/repairing/tickets") ||
+            pathname.startsWith("/office/repairing/service-centers") ||
+            pathname.startsWith("/office/repairing"),
         crm: pathname.startsWith("/office/crm"),
         "e-commerce": pathname.startsWith("/office/ecommerce"),
         tally: pathname.startsWith("/office/finance"),

@@ -135,18 +135,20 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: check.message }, { status: 400 });
     }
 
-    if (data.customerId != null) {
-        const c = await prisma.customer.findUnique({ where: { id: data.customerId } });
-        if (!c) return NextResponse.json({ error: "Customer not found" }, { status: 400 });
-    }
-    if (data.companyId != null) {
-        const c = await prisma.company.findUnique({ where: { id: data.companyId } });
-        if (!c) return NextResponse.json({ error: "Company not found" }, { status: 400 });
-    }
-    if (data.ownerUserId != null) {
-        const u = await prisma.user.findUnique({ where: { id: data.ownerUserId } });
-        if (!u) return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
-    }
+    const [customerOk, companyOk, ownerOk] = await Promise.all([
+        data.customerId != null
+            ? prisma.customer.findUnique({ where: { id: data.customerId }, select: { id: true } })
+            : Promise.resolve(true),
+        data.companyId != null
+            ? prisma.company.findUnique({ where: { id: data.companyId }, select: { id: true } })
+            : Promise.resolve(true),
+        data.ownerUserId != null
+            ? prisma.user.findUnique({ where: { id: data.ownerUserId }, select: { id: true } })
+            : Promise.resolve(true),
+    ]);
+    if (!customerOk) return NextResponse.json({ error: "Customer not found" }, { status: 400 });
+    if (!companyOk) return NextResponse.json({ error: "Company not found" }, { status: 400 });
+    if (!ownerOk) return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
 
     const lead = await prisma.crmLead.create({
         data: {

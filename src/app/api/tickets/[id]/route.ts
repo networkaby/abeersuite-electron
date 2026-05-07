@@ -201,7 +201,7 @@ export async function PUT(
                     actorUserId: userId,
                     title: `Ticket #${ticket.id} moved to ${targetStatus.label}`,
                     body: `Next action is now with ${targetStatus.notifyRoles.join(", ")}.`,
-                    link: `/office/tickets/${ticket.id}`,
+                    link: `/office/repairing/tickets/${ticket.id}`,
                 });
             }
         }

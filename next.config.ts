@@ -11,6 +11,19 @@ const nextConfig: NextConfig = {
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  // Compatibility redirects for legacy URLs that pre-date the (route-group)/route
+  // restructure. Catches stored notification links and stale bookmarks while the
+  // source-code refs are migrated.
+  async redirects() {
+    return [
+      { source: "/office/tickets", destination: "/office/repairing/tickets", permanent: false },
+      { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },
+      { source: "/office/companies", destination: "/office/customers/companies", permanent: false },
+      { source: "/office/companies/:path*", destination: "/office/customers/companies/:path*", permanent: false },
+      { source: "/office/service-centers", destination: "/office/repairing/service-centers", permanent: false },
+      { source: "/office/dashboard", destination: "/office/repairing", permanent: false },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

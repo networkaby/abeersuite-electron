@@ -132,7 +132,7 @@ export default function TicketDetailPage() {
         <div className="max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex items-center gap-4 mb-6">
-                <Link href="/office/tickets" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/repairing/tickets" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">

@@ -431,7 +431,7 @@ export default function QuickTicketButton() {
             toast.success(`Ticket #${res.data.id} created!`);
             closeModal();
             window.open(`/receipt/${res.data.id}`, "_blank");
-            router.push(`/office/tickets/${res.data.id}`);
+            router.push(`/office/repairing/tickets/${res.data.id}`);
         } catch {
             toast.error("Failed to create ticket");
         }

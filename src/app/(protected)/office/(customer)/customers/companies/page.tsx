@@ -317,7 +317,7 @@ export default function CompaniesPage() {
                                                 <Pencil size={14} />
                                             </Button>
                                             <Button asChild type="button" variant="outline" size="icon-sm">
-                                                <Link href={`/office/companies/${detail.id}`}>
+                                                <Link href={`/office/customers/companies/${detail.id}`}>
                                                     <ExternalLink size={14} />
                                                 </Link>
                                             </Button>
@@ -407,7 +407,7 @@ export default function CompaniesPage() {
                                                                 <TableCell className="text-right">
                                                                     {latest && (
                                                                         <Button asChild variant="link" size="sm">
-                                                                            <Link href={`/office/tickets/${latest.id}`}>View</Link>
+                                                                            <Link href={`/office/repairing/tickets/${latest.id}`}>View</Link>
                                                                         </Button>
                                                                     )}
                                                                 </TableCell>

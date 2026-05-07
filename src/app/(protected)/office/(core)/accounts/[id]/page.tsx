@@ -192,7 +192,7 @@ export default function AccountDetailPage() {
                                             <div className="space-y-1.5">
                                                 {d.tickets.map(t => (
                                                     <div key={t.id} className="flex items-center gap-2 text-xs">
-                                                        <Link href={`/office/tickets/${t.id}`} className="font-medium text-primary hover:underline">
+                                                        <Link href={`/office/repairing/tickets/${t.id}`} className="font-medium text-primary hover:underline">
                                                             #{t.id}
                                                         </Link>
                                                         {t.pipeline && (

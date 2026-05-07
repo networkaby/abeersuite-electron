@@ -88,7 +88,7 @@ export default async function CrmLeadDetailPage({ params }: { params: Promise<{ 
                     )}
                     {lead.customer && lead.company && " · "}
                     {lead.company && (
-                        <Link className="text-primary hover:underline" href={`/office/companies/${lead.company.id}`}>
+                        <Link className="text-primary hover:underline" href={`/office/customers/companies/${lead.company.id}`}>
                             {lead.company.name}
                         </Link>
                     )}

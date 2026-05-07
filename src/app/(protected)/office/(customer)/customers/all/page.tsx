@@ -418,7 +418,7 @@ export default function AllCustomersPage() {
                                     </div>
                                 </div>
                                 <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/companies/${companyDetail.id}`}>
+                                    <Link href={`/office/customers/companies/${companyDetail.id}`}>
                                         <ExternalLink size={14} />
                                     </Link>
                                 </Button>

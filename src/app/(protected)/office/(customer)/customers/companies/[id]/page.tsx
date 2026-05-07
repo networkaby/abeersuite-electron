@@ -45,7 +45,7 @@ export default async function CompanyDetailPage({
     return (
         <div>
             <div className="flex items-center gap-3 mb-6">
-                <Link href="/office/companies" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/customers/companies" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex items-center gap-3">
@@ -134,13 +134,13 @@ export default async function CompanyDetailPage({
                                     <div className="mt-2 space-y-1">
                                         {d.tickets.map(t => (
                                             <div key={t.id} className="flex items-center justify-between text-xs">
-                                                <Link href={`/office/tickets/${t.id}`} className="text-primary hover:underline">
+                                                <Link href={`/office/repairing/tickets/${t.id}`} className="text-primary hover:underline">
                                                     #{t.id}
                                                 </Link>
                                                 <span className={`px-2 py-0.5 font-medium ${t.ticketStatus.color}`}>
                                                     {t.ticketStatus.label}
                                                 </span>
-                                                <Link href={`/office/tickets/${t.id}`} className="text-muted-foreground hover:text-primary">
+                                                <Link href={`/office/repairing/tickets/${t.id}`} className="text-muted-foreground hover:text-primary">
                                                     <Eye size={12} />
                                                 </Link>
                                             </div>

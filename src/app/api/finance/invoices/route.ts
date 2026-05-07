@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { z } from "zod";
 import { nextRef, balanceDelta } from "@/modules/tally/lib/balance";
+import type { Prisma } from "@/generated/prisma/client";
 
 const lineSchema = z.object({
     description: z.string().trim().min(1),
@@ -132,8 +133,7 @@ export async function POST(req: Request) {
 
 /** Post the accounts-receivable / revenue journal entry for an invoice. */
 export async function postInvoiceJe(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tx: any,
+    tx: Prisma.TransactionClient,
     invoiceId: number,
     invoiceNumber: string,
     subtotal: number,

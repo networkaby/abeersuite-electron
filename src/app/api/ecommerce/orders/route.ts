@@ -23,6 +23,8 @@ export async function GET(req: Request) {
         const q = searchParams.get("q")?.trim();
         const from = searchParams.get("from");
         const to = searchParams.get("to");
+        const take = Math.min(200, Math.max(1, Number(searchParams.get("limit")) || 50));
+        const page = Math.max(1, Number(searchParams.get("page")) || 1);
 
         const legacyStatusFilter =
             statusParam && Object.values(ShopOrderStatus).includes(statusParam as ShopOrderStatus)
@@ -59,7 +61,8 @@ export async function GET(req: Request) {
                     : {}),
             },
             orderBy: { createdAt: "desc" },
-            take: 500,
+            take,
+            skip: (page - 1) * take,
             include: {
                 account: { select: ACCOUNT_SELECT },
                 customer: { select: { id: true, name: true, email: true, phone: true } },
