@@ -56,6 +56,7 @@ export default function OpeningBalancePage() {
             .finally(() => setLoading(false));
     }, []);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
 
     useEffect(() => {

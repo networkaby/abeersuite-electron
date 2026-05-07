@@ -46,7 +46,7 @@ export default function EstimatesPage() {
             .finally(() => setLoading(false));
     };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [status]);
 
     return (

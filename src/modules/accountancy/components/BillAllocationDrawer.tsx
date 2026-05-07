@@ -14,9 +14,6 @@ import { toast } from "sonner";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 
 type AllocationMethod = "NEW_REF" | "AGAINST_REF" | "ADVANCE" | "ON_ACCOUNT";
@@ -72,6 +69,7 @@ export function BillAllocationDrawer({
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (!accountId) { setOpenBills([]); return; }
         setLoading(true);
         axios.get<OpenResponse>(`/api/finance/allocations/open?accountId=${accountId}`)

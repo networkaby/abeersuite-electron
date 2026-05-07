@@ -37,7 +37,6 @@ import {
     Timer,
     FolderKanban,
     BarChart2,
-    LayoutDashboard,
     Download,
     ScrollText,
     Plug,

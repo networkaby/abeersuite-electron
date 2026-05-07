@@ -41,7 +41,7 @@ export async function POST(req: Request) {
                 isActive: b.isActive ?? true,
             },
         });
-        revalidateTag(INV_UNITS_TAG);
+        revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json(row, { status: 201 });
     } catch (e: unknown) {
         const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";

@@ -287,6 +287,7 @@ export function InvVoucherList({
     const [statusFilter, setStatusFilter] = useState("");
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const q = new URLSearchParams({ type, ...(statusFilter && { status: statusFilter }) });
         axios.get<ListRow[]>(`/api/inventory/vouchers?${q}`)

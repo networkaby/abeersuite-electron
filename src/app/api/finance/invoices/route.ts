@@ -154,7 +154,7 @@ export async function postInvoiceJe(
     }
 
     const jeRef = await nextRef(tx, "journalEntry", "JE");
-    const lines = [
+    const lines: Prisma.JournalLineUncheckedCreateWithoutJournalEntryInput[] = [
         { accountId: ar.id, type: "DEBIT",  amount: totalAmount, description: `Invoice ${invoiceNumber}` },
         { accountId: revenue.id, type: "CREDIT", amount: subtotal, description: `Invoice ${invoiceNumber}` },
     ];
@@ -177,7 +177,7 @@ export async function postInvoiceJe(
     for (const line of lines) {
         const acct = await tx.account.findUnique({ where: { id: line.accountId } });
         if (!acct) continue;
-        const delta = balanceDelta(acct.normalBalance!, line.type as "DEBIT" | "CREDIT", line.amount);
+        const delta = balanceDelta(acct.normalBalance!, line.type as "DEBIT" | "CREDIT", Number(line.amount));
         await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
     }
 

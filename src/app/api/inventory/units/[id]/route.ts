@@ -30,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
             },
         });
-        revalidateTag(INV_UNITS_TAG);
+        revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json(row);
     } catch {
         return NextResponse.json({ error: "Failed to update unit" }, { status: 500 });
@@ -48,7 +48,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Cannot delete unit while products reference it." }, { status: 400 });
         }
         await prisma.invUnit.delete({ where: { id } });
-        revalidateTag(INV_UNITS_TAG);
+        revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json({ success: true });
     } catch {
         return NextResponse.json({ error: "Failed to delete unit" }, { status: 500 });
