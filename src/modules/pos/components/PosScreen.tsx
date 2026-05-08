@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import Link from "next/link";
 import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
-    ShoppingCart, Plus, Minus, Trash2, Receipt, ArrowLeft, ExternalLink,
+    ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     ChevronDown, MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
+    ReceiptIndianRupee,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -74,10 +75,10 @@ type ExtraMethod = "CARD" | "CHEQUE" | "BANK_TRANSFER" | "WALLET";
 type ExtraSplit = { id: string; method: ExtraMethod; amount: number; reference: string };
 
 const EXTRA_METHODS: { value: ExtraMethod; label: string; icon: React.ReactNode }[] = [
-    { value: "CARD",          label: "Card",          icon: <CreditCard size={14} /> },
-    { value: "CHEQUE",        label: "Cheque",        icon: <FileText size={14} /> },
+    { value: "CARD", label: "Card", icon: <CreditCard size={14} /> },
+    { value: "CHEQUE", label: "Cheque", icon: <FileText size={14} /> },
     { value: "BANK_TRANSFER", label: "Bank transfer", icon: <Building2 size={14} /> },
-    { value: "WALLET",        label: "Wallet",        icon: <Wallet size={14} /> },
+    { value: "WALLET", label: "Wallet", icon: <Wallet size={14} /> },
 ];
 
 
@@ -298,8 +299,21 @@ export default function PosScreen() {
 
     const clearCustomer = () => { setSnapshot(null); setCustQuery(""); custSearchRef.current?.focus(); };
 
-    const openNewParty = () => {
+    const openNewParty = async () => {
         const q = custQuery.trim();
+        // Defensive re-check before opening the create dialog: an exact-match may
+        // exist that the debounce missed.
+        if (q.length >= 2) {
+            try {
+                const { data } = await axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(q)}`);
+                if (data.length > 0) {
+                    setCustHits(data);
+                    setHighlightedHit(0);
+                    void pickHit(data[0]);
+                    return;
+                }
+            } catch { /* fall through to create */ }
+        }
         const phoneLike = isPhoneLike(q);
         setOpenedAsPhoneQuery(phoneLike);
         setNewParty({
@@ -321,7 +335,7 @@ export default function PosScreen() {
     };
 
     // ── Search box keyboard handler ─────────────────────────────────────────
-    const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const onSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "ArrowDown") {
             if (custHits.length === 0) return;
             e.preventDefault();
@@ -333,12 +347,23 @@ export default function PosScreen() {
         } else if (e.key === "Enter") {
             if (custQuery.trim().length < 2) return;
             e.preventDefault();
-            if (custHits.length === 0) {
-                openNewParty();
-            } else {
+            if (custHits.length > 0) {
                 const hit = custHits[highlightedHit] ?? custHits[0];
                 if (hit) void pickHit(hit);
+                return;
             }
+            // Defensive re-check — debounce may not have fired yet for the current
+            // query, so an exact-match record might still exist in the DB.
+            try {
+                const { data } = await axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(custQuery)}`);
+                if (data.length > 0) {
+                    setCustHits(data);
+                    setHighlightedHit(0);
+                    void pickHit(data[0]);
+                    return;
+                }
+            } catch { /* fall through to create dialog */ }
+            openNewParty();
         } else if (e.key === "Escape") {
             setCustHits([]);
         }
@@ -370,11 +395,11 @@ export default function PosScreen() {
         }
         // Validation gate — phone / email / PIN must be valid (or empty)
         const checks: Array<[string | null, string, () => void]> = [
-            [phoneError(newParty.phone),        "Phone",         () => phoneRef.current?.focus()],
-            [emailError(newParty.email),        "Email",         () => { /* tab-skipped */ }],
+            [phoneError(newParty.phone), "Phone", () => phoneRef.current?.focus()],
+            [emailError(newParty.email), "Email", () => { /* tab-skipped */ }],
             [phoneError(newParty.companyPhone), "Company phone", () => companyPhoneRef.current?.focus()],
             [emailError(newParty.companyEmail), "Company email", () => { /* tab-skipped */ }],
-            [pinError(newParty.companyPinCode), "PIN code",      () => { /* no ref */ }],
+            [pinError(newParty.companyPinCode), "PIN code", () => { /* no ref */ }],
         ];
         for (const [err, label, focus] of checks) {
             if (err) { toast.error(`${label}: ${err}`); focus(); return; }
@@ -507,7 +532,7 @@ export default function PosScreen() {
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
     };
 
-    const generateInvoice = async () => {
+    const generateInvoice = async (printAfter = false) => {
         if (!snapshot?.account) return;
         // Build the summary from the named pay fields. Cash net = tendered − return.
         const summaryParts: string[] = [];
@@ -533,41 +558,45 @@ export default function PosScreen() {
             const splitSummary = summaryParts.join(" + ");
             const tail =
                 advanceTaken > 0 ? ` | Advance ${fmtINR(advanceTaken)}` :
-                arrearPaid   > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
-                                   "";
-            await axios.post("/api/finance/invoices", {
+                    arrearPaid > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
+                        "";
+            const { data } = await axios.post<{ invoiceId: number; invoiceNumber: string }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
                 notes: `POS sale (discount ${discountPct}%) | Payments: ${splitSummary}${tail}`,
                 lines: cart.map((l) => ({
+                    productId: l.productId,
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
                     quantity: l.qty,
                     unitPrice: l.unitPrice,
                     taxRate: 0,
                 })),
-                status: "SENT",
             });
-            toast.success(`Invoice generated · ${fmtINR(total)}`);
+            toast.success(`Invoice ${data.invoiceNumber} · ${fmtINR(total)}`);
             setCart([]);
             setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
             setExtras([]);
             setCheckoutOpen(false);
-        } catch {
-            toast.error("Failed to generate invoice");
+            if (printAfter) {
+                window.open(`/receipt/invoice/${data.invoiceId}?autoprint=1`, "_blank", "noopener");
+            }
+        } catch (e: unknown) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
+            toast.error(msg ?? "Failed to generate invoice");
         } finally {
             setSubmitting(false);
         }
     };
 
     // Money math derived from pay — Cash net = tendered − return.
-    const cashNet      = Math.max(0, pay.cashTendered - pay.cashReturn);
-    const extrasSum    = extras.reduce((s, e) => s + e.amount, 0);
-    const collected    = cashNet + pay.upi + extrasSum;
-    const onCredit     = Math.max(0, total - collected);
-    const overpaid     = Math.max(0, collected - total);
-    const balanceDue   = snapshot?.balanceDue ?? 0;
-    const arrearPaid   = Math.min(overpaid, balanceDue);
+    const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
+    const extrasSum = extras.reduce((s, e) => s + e.amount, 0);
+    const collected = cashNet + pay.upi + extrasSum;
+    const onCredit = Math.max(0, total - collected);
+    const overpaid = Math.max(0, collected - total);
+    const balanceDue = snapshot?.balanceDue ?? 0;
+    const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
 
     // ── Render ──────────────────────────────────────────────────────────────
@@ -772,7 +801,7 @@ export default function PosScreen() {
                                 <span>{fmtINR(total)}</span>
                             </div>
                             <Button onClick={openCheckout} disabled={cart.length === 0 || !snapshot?.account} className="w-full" size="lg">
-                                <Receipt size={16} /> Checkout
+                                <ReceiptIndianRupee size={16} /> Checkout
                                 <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                             </Button>
                         </div>
@@ -821,7 +850,10 @@ export default function PosScreen() {
                             // Enter on any amount field → confirm. Tab walks Cash → UPI → Confirm
                             // (Cash-return is tabIndex=-1 and skipped; clickable for chip-changing).
                             const enterToSubmit = (e: React.KeyboardEvent) => {
-                                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void generateInvoice(); }
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    void generateInvoice(e.ctrlKey || e.metaKey);
+                                }
                             };
                             return (
                                 <div className="space-y-2">
@@ -922,54 +954,73 @@ export default function PosScreen() {
                                             title="Auto-balanced — fill Cash / UPI / Card etc. and the rest goes on credit"
                                         />
                                     </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setExtras((prev) => [...prev, { id: crypto.randomUUID(), method: "CARD", amount: 0, reference: "" }])}
+                                        >
+                                            <Plus size={14} /> Add payment line
+                                        </Button>
 
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setExtras((prev) => [...prev, { id: crypto.randomUUID(), method: "CARD", amount: 0, reference: "" }])}
-                                    >
-                                        <Plus size={14} /> Add payment line
-                                    </Button>
+                                        <ReceiptIndianRupee size={16} /> {submitting
+                                            ? "Saving…"
+                                            : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
+                                                : arrearPaid > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(arrearPaid)} arrear`
+                                                    : onCredit > 0 ? `Confirm · ${fmtINR(collected)} + ${fmtINR(onCredit)} credit`
+                                                        : `Confirm · ${fmtINR(total)}`}
+                                        <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
+                                    </div>
+                                    {/* Arrear / advance breakdown — when collected > total or customer has dues */}
+                                    {(overpaid > 0 || balanceDue > 0) && (
+                                        <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
+                                            {balanceDue > 0 && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-muted-foreground">Existing dues</span>
+                                                    <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
+                                                </div>
+                                            )}
+                                            {arrearPaid > 0 && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-muted-foreground">Arrear cleared this visit</span>
+                                                    <span className="font-medium text-emerald-600">− {fmtINR(arrearPaid)}</span>
+                                                </div>
+                                            )}
+                                            {advanceTaken > 0 && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-muted-foreground">Advance from customer</span>
+                                                    <span className="font-medium text-emerald-700">+ {fmtINR(advanceTaken)}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                        <Button onClick={() => generateInvoice(false)} disabled={submitting} size="lg" variant="outline">
+                                            {/* <Receipt size={16} /> {submitting
+                                                ? "Saving…"
+                                                : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
+                                                    : arrearPaid > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(arrearPaid)} arrear`
+                                                        : onCredit > 0 ? `Confirm · ${fmtINR(collected)} + ${fmtINR(onCredit)} credit`
+                                                            : `Confirm · ${fmtINR(total)}`}
+                                            <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span> */}
+                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm"}
+                                            <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
+                                        </Button>
+                                        <Button onClick={() => generateInvoice(true)} disabled={submitting} size="lg" >
+                                            <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm + Print"}
+                                            <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             );
                         })()}
-
-                        {/* Arrear / advance breakdown — when collected > total or customer has dues */}
-                        {(overpaid > 0 || balanceDue > 0) && (
-                            <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
-                                {balanceDue > 0 && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Existing dues</span>
-                                        <span className="font-medium text-amber-600">{fmtINR(balanceDue)}</span>
-                                    </div>
-                                )}
-                                {arrearPaid > 0 && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Arrear cleared this visit</span>
-                                        <span className="font-medium text-emerald-600">− {fmtINR(arrearPaid)}</span>
-                                    </div>
-                                )}
-                                {advanceTaken > 0 && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-muted-foreground">Advance from customer</span>
-                                        <span className="font-medium text-emerald-700">+ {fmtINR(advanceTaken)}</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
 
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submitting}>
                             Cancel
-                        </Button>
-                        <Button onClick={generateInvoice} disabled={submitting}>
-                            <Receipt size={16} /> {submitting
-                                ? "Generating…"
-                                : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
-                                : arrearPaid > 0   ? `Confirm · ${fmtINR(total)} + ${fmtINR(arrearPaid)} arrear`
-                                : onCredit > 0     ? `Confirm · ${fmtINR(collected)} + ${fmtINR(onCredit)} credit`
-                                                   : `Confirm · ${fmtINR(total)}`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1218,9 +1269,9 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
     const c = snapshot.party;
     const levelColor =
         snapshot.customerLevel === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
-        snapshot.customerLevel === "Gold"     ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"   :
-        snapshot.customerLevel === "Silver"   ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"     :
-                                                "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
+            snapshot.customerLevel === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
+                snapshot.customerLevel === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                    "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
         <div className="space-y-4">
             <div>
