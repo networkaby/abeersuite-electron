@@ -9,13 +9,21 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 
-type Kind = "Sale" | "Purchase" | "Estimate" | "Invoice" | "Journal";
+type Kind = "Sale" | "Purchase" | "Estimate" | "Invoice"
+    | "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note"
+    | "Journal";
+type KindFilter = "All" | Kind;
+const KIND_OPTIONS: KindFilter[] = ["All", "Sale", "Purchase", "Estimate", "Invoice",
+    "Contra", "Payment", "Receipt", "Credit Note", "Debit Note", "Journal"];
 
 interface SourceDoc {
-    kind: "sale" | "purchase" | "estimate" | "invoice";
+    kind: "sale" | "purchase" | "estimate" | "invoice" | "voucher";
     id: number; reference?: string; number?: string; url: string;
 }
 interface DayBookRow {
@@ -35,11 +43,16 @@ interface DayBookData {
 }
 
 const KIND_COLOR: Record<Kind, string> = {
-    Sale:     "bg-green-50 text-green-700 border-green-200",
-    Purchase: "bg-blue-50 text-blue-700 border-blue-200",
-    Estimate: "bg-amber-50 text-amber-700 border-amber-200",
-    Invoice:  "bg-purple-50 text-purple-700 border-purple-200",
-    Journal:  "bg-muted text-muted-foreground border-border",
+    Sale:          "bg-green-50 text-green-700 border-green-200",
+    Purchase:      "bg-blue-50 text-blue-700 border-blue-200",
+    Estimate:      "bg-amber-50 text-amber-700 border-amber-200",
+    Invoice:       "bg-purple-50 text-purple-700 border-purple-200",
+    Contra:        "bg-cyan-50 text-cyan-700 border-cyan-200",
+    Payment:       "bg-rose-50 text-rose-700 border-rose-200",
+    Receipt:       "bg-teal-50 text-teal-700 border-teal-200",
+    "Credit Note": "bg-pink-50 text-pink-700 border-pink-200",
+    "Debit Note":  "bg-indigo-50 text-indigo-700 border-indigo-200",
+    Journal:       "bg-muted text-muted-foreground border-border",
 };
 
 export default function DayBookPage() {
@@ -48,29 +61,34 @@ export default function DayBookPage() {
     const [from, setFrom] = useState(formatDateInput(fyStart));
     const [to, setTo]     = useState(formatDateInput(new Date()));
     const [search, setSearch] = useState("");
+    const [kind, setKind] = useState<KindFilter>("All");
     const [page, setPage] = useState(1);
     const [data, setData] = useState<DayBookData | null>(null);
     const [loading, setLoading] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const load = useCallback((p: number, q: string) => {
+    const load = useCallback((p: number, q: string, k: KindFilter) => {
         setLoading(true);
-        axios.get<DayBookData>(`/api/finance/reports/day-book?from=${from}&to=${to}&page=${p}&limit=50${q ? `&search=${encodeURIComponent(q)}` : ""}`)
+        const url = `/api/finance/reports/day-book?from=${from}&to=${to}&page=${p}&limit=50`
+            + (q ? `&search=${encodeURIComponent(q)}` : "")
+            + (k !== "All" ? `&kind=${encodeURIComponent(k)}` : "");
+        axios.get<DayBookData>(url)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load day book"))
             .finally(() => setLoading(false));
     }, [from, to]);
 
-    const loadFirst = useCallback(() => { setPage(1); load(1, ""); }, [load]);
+    const loadFirst = useCallback(() => { setPage(1); load(1, "", "All"); }, [load]);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(loadFirst, [loadFirst]);
 
     const handleSearch = (v: string) => {
         setSearch(v);
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => { setPage(1); load(1, v); }, 400);
+        debounceRef.current = setTimeout(() => { setPage(1); load(1, v, kind); }, 400);
     };
-    const goPage = (p: number) => { setPage(p); load(p, search); };
+    const handleKind = (k: KindFilter) => { setKind(k); setPage(1); load(1, search, k); };
+    const goPage = (p: number) => { setPage(p); load(p, search, kind); };
 
     const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
@@ -84,13 +102,25 @@ export default function DayBookPage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></div>
                     <div className="space-y-1"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" /></div>
-                    <Button onClick={() => { setPage(1); load(1, search); }}>Run</Button>
+                    <Button onClick={() => { setPage(1); load(1, search, kind); }}>Run</Button>
                 </div>
             </div>
 
-            <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input value={search} onChange={(e) => handleSearch(e.target.value)} placeholder="Search by reference or description…" className="pl-9" />
+            <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={search} onChange={(e) => handleSearch(e.target.value)} placeholder="Search by reference or description…" className="pl-9" />
+                </div>
+                <Select value={kind} onValueChange={(v) => handleKind(v as KindFilter)}>
+                    <SelectTrigger className="w-44" aria-label="Filter by voucher type">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {KIND_OPTIONS.map((k) => (
+                            <SelectItem key={k} value={k}>{k === "All" ? "All types" : k}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {loading && <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>}
