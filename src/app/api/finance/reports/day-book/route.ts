@@ -111,7 +111,15 @@ export async function GET(req: Request) {
                 take: limit,
                 select: {
                     id: true, reference: true, description: true, date: true,
-                    lines: { select: { type: true, amount: true } },
+                    // Stable line order — first line is the principal "By" account
+                    // shown in the row's single Amount column.
+                    lines: {
+                        orderBy: { id: "asc" },
+                        select: {
+                            type: true, amount: true, description: true,
+                            account: { select: { id: true, name: true, code: true, normalBalance: true } },
+                        },
+                    },
                 },
             }),
             prisma.journalEntry.count({ where }),
@@ -140,6 +148,14 @@ export async function GET(req: Request) {
             CREDIT_NOTE: "Credit Note",
             DEBIT_NOTE:  "Debit Note",
         };
+        // Per-type drilldown URL — each voucher kind has its own list page.
+        const VOUCHER_URL_SEG: Record<string, string> = {
+            CONTRA:      "contras",
+            PAYMENT:     "payments",
+            RECEIPT:     "receipts",
+            CREDIT_NOTE: "credit-notes",
+            DEBIT_NOTE:  "debit-notes",
+        };
 
         const rows = entries.map((e) => {
             let dr = 0, cr = 0;
@@ -157,6 +173,15 @@ export async function GET(req: Request) {
               : source?.kind === "invoice"  ? "Invoice"
               : gl                          ? VOUCHER_KIND_LABEL[gl.type] ?? "Journal"
               :                               "Journal";
+            // Principal account = first line in stable order. Tally-style display:
+            // single Amount column with Dr/Cr suffix matching this side.
+            const first = e.lines[0];
+            const principal = first ? {
+                accountId:   first.account.id,
+                accountName: first.account.name,
+                side:        first.type,
+                amount:      Number(first.amount),
+            } : null;
             return {
                 id: e.id,
                 date: e.date,
@@ -165,12 +190,22 @@ export async function GET(req: Request) {
                 kind,
                 debit: dr,
                 credit: cr,
+                principal,
+                // Compact line list for the right-click expand view.
+                lines: e.lines.map((l) => ({
+                    accountId:   l.account.id,
+                    accountName: l.account.name,
+                    accountCode: l.account.code,
+                    side:        l.type,
+                    amount:      Number(l.amount),
+                    description: l.description,
+                })),
                 // Prefer the InvVoucher/Invoice source link; fall back to the
-                // GL voucher detail page so users can drill in either way.
+                // per-type GL voucher detail page (contras / payments / etc.).
                 source: source ?? (gl ? {
                     kind: "voucher" as const,
                     id: gl.id, reference: gl.reference,
-                    url: `/office/accountancy/voucher/${gl.id}`,
+                    url: `/office/accountancy/${VOUCHER_URL_SEG[gl.type] ?? "journal-entries"}/${gl.id}`,
                 } : null),
             };
         });

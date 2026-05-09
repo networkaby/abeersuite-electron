@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { fmt } from "@/utils/constants";
 import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
 
 import type { VoucherFormType } from "./VoucherForm";
 
@@ -56,6 +57,8 @@ interface Voucher {
 export function VoucherDetail({ basePath }: { basePath: string }) {
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
+    // Escape returns to the previous page (typically Day Book or the voucher list).
+    useEscapeBack();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel");

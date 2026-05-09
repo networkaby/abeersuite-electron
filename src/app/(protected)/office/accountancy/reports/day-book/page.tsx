@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -26,6 +26,14 @@ interface SourceDoc {
     kind: "sale" | "purchase" | "estimate" | "invoice" | "voucher";
     id: number; reference?: string; number?: string; url: string;
 }
+interface DayBookLine {
+    accountId: number;
+    accountName: string;
+    accountCode: string | null;
+    side: "DEBIT" | "CREDIT";
+    amount: number;
+    description: string | null;
+}
 interface DayBookRow {
     id: number;
     date: string;
@@ -34,6 +42,8 @@ interface DayBookRow {
     kind: Kind;
     debit: number;
     credit: number;
+    principal: { accountId: number; accountName: string; side: "DEBIT" | "CREDIT"; amount: number } | null;
+    lines: DayBookLine[];
     source: SourceDoc | null;
 }
 interface DayBookData {
@@ -65,7 +75,33 @@ export default function DayBookPage() {
     const [page, setPage] = useState(1);
     const [data, setData] = useState<DayBookData | null>(null);
     const [loading, setLoading] = useState(false);
+    const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Esc behavior:
+    //   • If any row is expanded → collapse all (don't navigate).
+    //   • Otherwise → router.back() to the previous page.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (expanded.size > 0) {
+                setExpanded(new Set());
+            } else {
+                router.back();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [expanded, router]);
+
+    const toggleExpand = (id: number) => setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
 
     const load = useCallback((p: number, q: string, k: KindFilter) => {
         setLoading(true);
@@ -133,47 +169,87 @@ export default function DayBookPage() {
                                 <tr>
                                     <th className="px-3 py-2 text-left font-medium">Date</th>
                                     <th className="px-3 py-2 text-left font-medium">Type</th>
-                                    <th className="px-3 py-2 text-left font-medium">Reference</th>
+                                    {/* Reference column hidden by default — uncomment for troubleshooting.
+                                        <th className="px-3 py-2 text-left font-medium">Reference</th>  */}
                                     <th className="px-3 py-2 text-left font-medium">Description</th>
-                                    <th className="px-3 py-2 text-right font-medium">Debit</th>
-                                    <th className="px-3 py-2 text-right font-medium">Credit</th>
+                                    <th className="px-3 py-2 text-right font-medium">Amount</th>
                                     <th className="px-3 py-2 text-left font-medium">Source</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.rows.length === 0 ? (
-                                    <tr><td colSpan={7} className="py-12 text-center text-muted-foreground text-sm">No vouchers in this period.</td></tr>
-                                ) : data.rows.map((r) => (
-                                    <tr
-                                        key={r.id}
-                                        className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                        onClick={() => router.push(`/office/accountancy/journal-entries/${r.id}`)}
-                                    >
-                                        <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                                            {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
-                                        </td>
-                                        <td className="px-3 py-2.5">
-                                            <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${KIND_COLOR[r.kind]}`}>
-                                                {r.kind}
-                                            </span>
-                                        </td>
-                                        <td className="px-3 py-2.5 font-mono text-primary">{r.reference}</td>
-                                        <td className="px-3 py-2.5 text-foreground truncate max-w-md">{r.description}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{r.debit > 0 ? fmt(r.debit) : <span className="text-muted-foreground/40">—</span>}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono">{r.credit > 0 ? fmt(r.credit) : <span className="text-muted-foreground/40">—</span>}</td>
-                                        <td className="px-3 py-2.5">
-                                            {r.source ? (
-                                                <Link
-                                                    href={r.source.url}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="text-xs text-primary hover:underline font-mono"
-                                                >
-                                                    {r.source.reference ?? r.source.number} ↗
-                                                </Link>
-                                            ) : <span className="text-muted-foreground/40 text-xs">—</span>}
-                                        </td>
-                                    </tr>
-                                ))}
+                                    <tr><td colSpan={5} className="py-12 text-center text-muted-foreground text-sm">No vouchers in this period.</td></tr>
+                                ) : data.rows.map((r) => {
+                                    const drillUrl = r.source?.url ?? `/office/accountancy/journal-entries/${r.id}`;
+                                    const isOpen = expanded.has(r.id);
+                                    return (
+                                        <Fragment key={r.id}>
+                                            <tr
+                                                className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
+                                                title="Right-click to see accounts · Left-click to open voucher"
+                                                onClick={() => router.push(drillUrl)}
+                                                onContextMenu={(e) => { e.preventDefault(); toggleExpand(r.id); }}
+                                            >
+                                                <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                                                    {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${KIND_COLOR[r.kind]}`}>
+                                                        {r.kind}
+                                                    </span>
+                                                </td>
+                                                {/* Reference column hidden by default — uncomment for troubleshooting.
+                                                    <td className="px-3 py-2.5 font-mono text-primary">{r.reference}</td>  */}
+                                                <td className="px-3 py-2.5 text-foreground truncate max-w-md">{r.description}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono whitespace-nowrap">
+                                                    {r.principal ? (
+                                                        <>
+                                                            {fmt(r.principal.amount)}
+                                                            <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                                                                {r.principal.side === "DEBIT" ? "Dr" : "Cr"}
+                                                            </span>
+                                                        </>
+                                                    ) : <span className="text-muted-foreground/40">—</span>}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    {r.source ? (
+                                                        <Link
+                                                            href={r.source.url}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="text-xs text-primary hover:underline font-mono"
+                                                        >
+                                                            {r.source.reference ?? r.source.number} ↗
+                                                        </Link>
+                                                    ) : <span className="text-muted-foreground/40 text-xs">—</span>}
+                                                </td>
+                                            </tr>
+                                            {isOpen && r.lines.map((l, i) => (
+                                                <tr key={`${r.id}-line-${i}`} className="bg-muted/20 border-b last:border-0">
+                                                    <td />
+                                                    <td />
+                                                    <td className="px-3 py-1 italic text-sm" style={{ paddingLeft: 28 }}>
+                                                        <span className="text-muted-foreground mr-1">{l.side === "DEBIT" ? "By" : "To"}</span>
+                                                        <Link
+                                                            href={`/office/accountancy/account/${l.accountId}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="hover:underline hover:text-primary"
+                                                        >
+                                                            {l.accountName}
+                                                        </Link>
+                                                        {l.description && <span className="ml-2 text-xs text-muted-foreground">— {l.description}</span>}
+                                                    </td>
+                                                    <td className="px-3 py-1 text-right font-mono text-xs whitespace-nowrap">
+                                                        {fmt(l.amount)}
+                                                        <span className="ml-1 text-[10px] text-muted-foreground">
+                                                            {l.side === "DEBIT" ? "Dr" : "Cr"}
+                                                        </span>
+                                                    </td>
+                                                    <td />
+                                                </tr>
+                                            ))}
+                                        </Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
