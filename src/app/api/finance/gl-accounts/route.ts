@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
 
 const createSchema = z.object({
     code: z.string().trim().min(1),
@@ -46,7 +47,15 @@ export async function GET(req: Request) {
                 _count: { select: { lines: true } },
             },
         });
-        return NextResponse.json(accounts);
+        // Replace the raw `balance` (transactions only) with the effective
+        // closing balance (running + opening) so every consumer — chart of
+        // accounts, voucher dropdowns, party combobox — shows numbers that
+        // reconcile with the Balance Sheet.
+        const accountsWithEffective = accounts.map((a) => ({
+            ...a,
+            balance: effectiveLedgerBalance(a),
+        }));
+        return NextResponse.json(accountsWithEffective);
     } catch (err) {
         console.error(err);
         return NextResponse.json({ error: "Failed to fetch GL accounts" }, { status: 500 });

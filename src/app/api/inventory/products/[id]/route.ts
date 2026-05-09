@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { invProductUpdateSchema } from "@/lib/inventory/schemas";
+import {
+    productOpeningValue, syncProductCacheFromOpening,
+} from "@/modules/inventory/lib/stockValue";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -104,24 +107,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...((b.openingStock !== undefined || b.openingRate !== undefined) ? {
                     openingStock: b.openingStock ?? null,
                     openingRate:  b.openingRate  ?? null,
-                    openingValue: (b.openingStock != null && b.openingRate != null)
-                        ? b.openingStock * b.openingRate
-                        : null,
+                    openingValue: productOpeningValue(b),
+                    // Sync running caches via shared helper. Explicit
+                    // costPaise (Pricing tab) wins over opening-derived cost.
+                    ...syncProductCacheFromOpening(b),
                 } : {}),
                 ...(b.openingStockDate !== undefined ? {
                     openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
                 } : {}),
-                // Sync running caches when opening qty / rate are explicitly set
-                // — same baseline rule as the create path. The operator can still
-                // override costPaise via the explicit Pricing-tab field, which
-                // wins because it appears later below.
-                ...(b.openingStock !== undefined && b.openingStock != null ? {
-                    stock: Math.round(b.openingStock),
-                } : {}),
-                ...((b.costPaise === undefined && b.openingRate !== undefined && b.openingRate != null) ? {
-                    costPaise: Math.round(b.openingRate * 100),
-                } : {}),
-                // Explicit costPaise from the Pricing tab wins last.
                 ...(b.costPaise !== undefined ? { costPaise: b.costPaise } : {}),
             },
             include: productInclude,

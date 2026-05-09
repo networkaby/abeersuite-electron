@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -23,12 +24,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         include: {
             parent: { select: { id: true, code: true, name: true } },
-            children: { select: { id: true, code: true, name: true, balance: true } },
+            children: {
+                select: {
+                    id: true, code: true, name: true,
+                    balance: true, normalBalance: true,
+                    openingBalance: true, openingBalanceType: true,
+                },
+            },
             _count: { select: { lines: true } },
         },
     });
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(account);
+    // Replace raw balance with effective (running + opening) for both the
+    // account itself and any children rendered alongside it.
+    return NextResponse.json({
+        ...account,
+        balance: effectiveLedgerBalance(account),
+        children: account.children.map((c) => ({
+            id: c.id, code: c.code, name: c.name,
+            balance: effectiveLedgerBalance(c),
+        })),
+    });
 }
 
 // PATCH /api/finance/gl-accounts/[id]

@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { invProductCreateSchema } from "@/lib/inventory/schemas";
+import {
+    productOpeningValue, syncProductCacheFromOpening,
+} from "@/modules/inventory/lib/stockValue";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -97,18 +100,13 @@ export async function POST(req: Request) {
                 // Books-beginning opening stock — server computes openingValue.
                 openingStock:     b.openingStock ?? null,
                 openingRate:      b.openingRate  ?? null,
-                openingValue:     (b.openingStock != null && b.openingRate != null)
-                    ? b.openingStock * b.openingRate
-                    : null,
+                openingValue:     productOpeningValue(b),
                 openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
-                // Sync the running caches so reports light up immediately.
-                // Opening qty seeds stock; opening rate seeds cost basis when no
-                // explicit cost was provided. Subsequent Purchase/Sale vouchers
-                // will adjust both from this baseline.
-                stock: b.openingStock != null ? Math.round(b.openingStock) : 0,
-                costPaise: b.costPaise ?? (b.openingRate != null
-                    ? Math.round(b.openingRate * 100)
-                    : null),
+                // Sync running caches via shared helper so reports light up
+                // immediately. Explicit costPaise (Pricing tab) wins over the
+                // helper's opening-derived costPaise — see merge below.
+                ...syncProductCacheFromOpening(b),
+                ...(b.costPaise != null ? { costPaise: b.costPaise } : {}),
             },
             include: productInclude,
         });

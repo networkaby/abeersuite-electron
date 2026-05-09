@@ -1,7 +1,9 @@
-// Live closing-stock valuation: SUM(InvProduct.stock × InvProduct.costPaise) / 100.
-// Tally-style "Closing Stock" line for the Balance Sheet and P&L Trading account.
+// Live closing-stock valuation: SUM of every product's `productClosingValue`.
+// Tally-style "Closing Stock" line for the Balance Sheet and P&L Trading
+// account. Per-product math lives in `src/modules/inventory/lib/stockValue.ts`.
 
 import { prisma } from "@/lib/prisma";
+import { productClosingValue } from "@/modules/inventory/lib/stockValue";
 
 export type ClosingStockResult = {
     /** Computed valuation in rupees (live). */
@@ -18,9 +20,9 @@ export async function getClosingStockValue(): Promise<ClosingStockResult> {
     let total = 0;
     let count = 0;
     for (const p of products) {
-        if (p.stock === null || p.costPaise === null) continue;
-        if (p.stock === 0) continue;
-        total += (p.stock * p.costPaise) / 100;
+        const v = productClosingValue(p);
+        if (v === 0) continue;
+        total += v;
         count += 1;
     }
     return { computed: total, productCount: count };

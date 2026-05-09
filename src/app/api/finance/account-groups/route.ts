@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import { loadGroupRolledUpBalances } from "@/modules/accountancy/lib/effectiveBalance";
 
 const createSchema = z.object({
     name:      z.string().trim().min(1).max(200),
@@ -44,21 +45,15 @@ export async function GET() {
     if (response) return response;
 
     try {
-        const [flat, sums] = await Promise.all([
-            prisma.accountGroup.findMany({
-                orderBy: [{ parentId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
-                include: { _count: { select: { children: true, accounts: true } } },
-            }),
-            prisma.account.groupBy({
-                by: ["groupId"],
-                _sum: { balance: true },
-                where: { groupId: { not: null } },
-            }),
-        ]);
+        const flat = await prisma.accountGroup.findMany({
+            orderBy: [{ parentId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+            include: { _count: { select: { children: true, accounts: true } } },
+        });
 
-        const balanceMap = new Map(
-            sums.map((s) => [s.groupId!, Number(s._sum.balance ?? 0)])
-        );
+        // totalBalance per group is the rolled-up effective balance (running
+        // + opening) of every account under it. The shared helper folds in
+        // opening so this list reconciles with the Balance Sheet drilldowns.
+        const balanceMap = await loadGroupRolledUpBalances(flat.map((g) => g.id));
 
         const flatWithBalance: FlatGroup[] = (flat as Omit<FlatGroup, "totalBalance">[]).map(
             (g) => ({ ...g, totalBalance: balanceMap.get(g.id) ?? 0 })

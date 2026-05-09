@@ -46,6 +46,13 @@ _Last updated: <YYYY-MM-DD> — covers state after <change>._
 - Cross-link, don't duplicate. Link to source files and to other module docs when concerns cross.
 - Date the doc footer so readers know when it might be stale.
 
+## Reusable helpers — start here before writing new code ⚠️
+
+Each module doc has a **"Reusable helpers — DO NOT duplicate"** table listing the central helpers for balance, valuation, posting, and aggregation math. Search those tables (Ctrl-F "DO NOT duplicate") before writing inline arithmetic — every report must agree, and the only way to keep them in sync is one helper for one calculation. Live registries:
+
+- [accountancy.md → Reusable helpers](./accountancy.md#reusable-helpers--do-not-duplicate-) — `balanceDelta`, `effectiveLedgerBalance`, `loadGroupRolledUpBalances`, `aggregateClosingAsOf`, `aggregateRange`, `netProfitLoss`, `computeTradingStockAdjustment`, `getClosingStockValue`, `isStockEligibleAccount`, `voucherLifecycle`…
+- [inventory.md → Reusable helpers](./inventory.md#reusable-helpers--do-not-duplicate-) — `productOpeningValue`, `syncProductCacheFromOpening`, `productClosingValue`, `invNextRef`, `calcLineTotals`, `calcVoucherTotals`…
+
 ## Module list
 
 - [accountancy.md](./accountancy.md) — Tally/finance suite (renamed 2026-05-07)

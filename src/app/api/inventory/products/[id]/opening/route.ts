@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
+import {
+    productOpeningValue, syncProductCacheFromOpening,
+} from "@/modules/inventory/lib/stockValue";
 
 // PUT /api/inventory/products/[id]/opening
 // Sets opening stock qty, rate, and value on a product master.
@@ -19,9 +22,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
 
-    const value = parsed.data.qty != null && parsed.data.rate != null
-        ? parsed.data.qty * parsed.data.rate
-        : null;
+    // Map { qty, rate } → shared { openingStock, openingRate } shape so the
+    // helpers in stockValue.ts can be reused.
+    const opening = { openingStock: parsed.data.qty, openingRate: parsed.data.rate };
 
     try {
         const product = await prisma.invProduct.update({
@@ -29,15 +32,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             data: {
                 openingStock:     parsed.data.qty,
                 openingRate:      parsed.data.rate,
-                openingValue:     value,
+                openingValue:     productOpeningValue(opening),
                 openingStockDate: parsed.data.asOfDate ? new Date(parsed.data.asOfDate) : null,
-                // Sync the running caches so reports light up immediately.
-                // Same baseline rule as POST/PATCH /api/inventory/products:
-                // opening qty seeds `stock`, opening rate seeds `costPaise`.
-                // Clearing opening (qty = null) resets both back to zero so
-                // closingStock helper doesn't keep the stale valuation.
-                stock:     parsed.data.qty != null ? Math.round(parsed.data.qty) : 0,
-                costPaise: parsed.data.rate != null ? Math.round(parsed.data.rate * 100) : null,
+                // Sync running caches via shared helper. Clearing opening
+                // (qty = null) resets stock=0 and costPaise=null so the
+                // closingStock helper doesn't keep stale valuation.
+                ...syncProductCacheFromOpening(opening),
             },
         });
         return NextResponse.json(product);

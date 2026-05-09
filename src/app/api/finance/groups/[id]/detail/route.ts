@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
+import {
+    effectiveLedgerBalance, EFFECTIVE_BALANCE_SELECT,
+} from "@/modules/accountancy/lib/effectiveBalance";
 
 // GET /api/finance/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
@@ -53,17 +56,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const subGroups = await Promise.all(
             subGroupsRaw.map(async (sg) => {
                 const ids = descendantIds(sg.id);
-                const sum = await prisma.account.aggregate({
-                    _sum: { balance: true },
+                // Walk descendant accounts so we can fold in opening balances —
+                // a single _sum aggregate can't combine balance + opening.
+                const accs = await prisma.account.findMany({
                     where: { groupId: { in: ids } },
+                    select: EFFECTIVE_BALANCE_SELECT,
                 });
+                const rolledUpBalance = accs.reduce((s, a) => s + effectiveLedgerBalance(a), 0);
                 return {
                     id: sg.id,
                     name: sg.name,
                     type: sg.type,
                     accountCount: sg._count.accounts,
                     childGroupCount: sg._count.children,
-                    rolledUpBalance: Number(sum._sum.balance ?? 0),
+                    rolledUpBalance,
                 };
             }),
         );
@@ -76,11 +82,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 id: true, name: true, code: true,
                 personId: true, companyId: true, balance: true,
                 normalBalance: true,
+                openingBalance: true, openingBalanceType: true,
             },
         });
+        const ledgersWithEffective = ledgers.map((l) => ({
+            ...l,
+            balance: effectiveLedgerBalance(l),
+        }));
 
         // Total = own ledgers + sub-group rolled-up balances
-        const totalBalance = ledgers.reduce((s, l) => s + Number(l.balance), 0)
+        const totalBalance = ledgersWithEffective.reduce((s, l) => s + l.balance, 0)
             + subGroups.reduce((s, g) => s + g.rolledUpBalance, 0);
 
         return NextResponse.json({
@@ -90,7 +101,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 parent: group.parent,
             },
             subGroups,
-            ledgers: ledgers.map((l) => ({ ...l, balance: Number(l.balance) })),
+            ledgers: ledgersWithEffective.map((l) => ({
+                id: l.id, name: l.name, code: l.code,
+                personId: l.personId, companyId: l.companyId,
+                normalBalance: l.normalBalance,
+                balance: l.balance,
+            })),
             totalBalance,
         });
     } catch (err) {
