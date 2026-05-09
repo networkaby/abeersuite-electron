@@ -98,7 +98,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.upc3 !== undefined ? { upc3: b.upc3 } : {}),
                 ...(b.notes !== undefined ? { notes: b.notes } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
-                ...(b.costPaise  !== undefined ? { costPaise:  b.costPaise  } : {}),
                 ...(b.pricePaise !== undefined ? { pricePaise: b.pricePaise } : {}),
                 ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
                 // Opening fields are written together so openingValue stays consistent.
@@ -112,6 +111,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.openingStockDate !== undefined ? {
                     openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
                 } : {}),
+                // Sync running caches when opening qty / rate are explicitly set
+                // — same baseline rule as the create path. The operator can still
+                // override costPaise via the explicit Pricing-tab field, which
+                // wins because it appears later below.
+                ...(b.openingStock !== undefined && b.openingStock != null ? {
+                    stock: Math.round(b.openingStock),
+                } : {}),
+                ...((b.costPaise === undefined && b.openingRate !== undefined && b.openingRate != null) ? {
+                    costPaise: Math.round(b.openingRate * 100),
+                } : {}),
+                // Explicit costPaise from the Pricing tab wins last.
+                ...(b.costPaise !== undefined ? { costPaise: b.costPaise } : {}),
             },
             include: productInclude,
         });

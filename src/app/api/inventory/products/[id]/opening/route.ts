@@ -31,6 +31,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 openingRate:      parsed.data.rate,
                 openingValue:     value,
                 openingStockDate: parsed.data.asOfDate ? new Date(parsed.data.asOfDate) : null,
+                // Sync the running caches so reports light up immediately.
+                // Same baseline rule as POST/PATCH /api/inventory/products:
+                // opening qty seeds `stock`, opening rate seeds `costPaise`.
+                // Clearing opening (qty = null) resets both back to zero so
+                // closingStock helper doesn't keep the stale valuation.
+                stock:     parsed.data.qty != null ? Math.round(parsed.data.qty) : 0,
+                costPaise: parsed.data.rate != null ? Math.round(parsed.data.rate * 100) : null,
             },
         });
         return NextResponse.json(product);

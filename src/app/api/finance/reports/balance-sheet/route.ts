@@ -4,7 +4,7 @@ import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/peri
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,
 } from "@/modules/accountancy/lib/aggregateLedger";
-import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
+import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 
 // GET /api/finance/reports/balance-sheet?asOf=YYYY-MM-DD
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
         const stockGlBalance = (() => {
             // Sum of GL balance for accounts under "Stock-in-Hand" group
             let s = 0;
-            const walk = (nodes: typeof tree): void => {
+            const walk = (nodes: GroupNode[]): void => {
                 for (const n of nodes) {
                     if (n.name === "Stock-in-Hand") {
                         for (const l of n.ledgers) s += l.closing;
@@ -47,6 +47,41 @@ export async function GET(req: Request) {
             walk(tree);
             return s;
         })();
+
+        // Tally convention: closing stock isn't posted per voucher to a GL
+        // ledger. We surface it as a synthetic ledger inside Stock-in-Hand so
+        // the reader sees the value where they expect (under Current Assets),
+        // and the existing tree-renderer rolls it up into Stock-in-Hand and
+        // Current Assets totals naturally.
+        const liveStockDelta = stockResult.computed - stockGlBalance;
+        if (liveStockDelta !== 0) {
+            const inject = (nodes: GroupNode[]): boolean => {
+                for (const n of nodes) {
+                    if (n.name === "Stock-in-Hand") {
+                        n.ledgers.push({
+                            id: -1,                          // sentinel — no real Account row
+                            name: "Closing Stock (live)",
+                            code: null,
+                            normalBalance: "DEBIT",
+                            personId: null,
+                            companyId: null,
+                            opening: 0,
+                            debits:  0,
+                            credits: 0,
+                            closing: liveStockDelta,
+                        });
+                        n.rolledUpClosing += liveStockDelta;
+                        return true;
+                    }
+                    if (inject(n.children)) {
+                        n.rolledUpClosing += liveStockDelta;  // bubble up Current Assets etc.
+                        return true;
+                    }
+                }
+                return false;
+            };
+            inject(assets);
+        }
 
         // ── Net P&L for current FY → surface under Capital Account ──────
         const fyStart = indianFiscalYearStart(asOf);

@@ -142,8 +142,10 @@ export default function BalanceSheetPage() {
         return next;
     });
 
-    const goLedger = (id: number) =>
+    const goLedger = (id: number) => {
+        if (id <= 0) return;  // synthetic ledger (e.g. injected Closing Stock) — no drill-in
         router.push(`/office/accountancy/account/${id}?asOf=${asOf}`);
+    };
     const goGroup = (id: number) =>
         router.push(`/office/accountancy/groups/${id}?asOf=${asOf}`);
 
@@ -156,14 +158,10 @@ export default function BalanceSheetPage() {
     }
     let assetsTotal = 0;
     if (data) {
+        // The API now injects the live closing-stock delta as a synthetic
+        // ledger inside the Stock-in-Hand group, so its rolledUpClosing
+        // already includes the inventory value — no extra addition needed.
         assetsTotal = data.assets.reduce((s, g) => s + g.rolledUpClosing, 0);
-        // Tally convention: Closing Stock is computed live (not posted per
-        // voucher), and shown as a separate Current Asset line. We add the
-        // delta (live computed − whatever the GL Stock-in-Hand ledger
-        // already holds) so the totals don't double-count.
-        if (data.closingStock.computed > 0) {
-            assetsTotal += data.closingStock.computed - data.closingStock.postedToGl;
-        }
     }
     const difference = liabilitiesTotal - assetsTotal;
 
@@ -253,19 +251,8 @@ export default function BalanceSheetPage() {
                                         onLedger={goLedger} onGroup={goGroup}
                                     />
                                 ))}
-                                {/* Closing stock — Tally-style standalone Current Asset row.
-                                    Always shown when there's stock on hand, regardless of
-                                    whether a GL Stock-in-Hand ledger has been posted. */}
-                                {data.closingStock.computed > 0 && (
-                                    <tr className="bg-amber-50/30 dark:bg-amber-950/10">
-                                        <td className="py-1.5 italic text-muted-foreground" style={{ paddingLeft: 16 }} title="Live valuation: SUM(stock × cost)">
-                                            Closing Stock (live valuation)
-                                        </td>
-                                        <td className="py-1.5 pr-3 text-right font-mono text-sm">
-                                            {fmt(data.closingStock.computed - data.closingStock.postedToGl)}
-                                        </td>
-                                    </tr>
-                                )}
+                                {/* Live closing-stock now appears as a synthetic ledger
+                                    inside the Stock-in-Hand group (injected by the API). */}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-border bg-muted/30">

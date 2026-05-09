@@ -92,7 +92,6 @@ export async function POST(req: Request) {
                 upc3: b.upc3 ?? null,
                 notes: b.notes ?? null,
                 isActive: b.isActive ?? true,
-                costPaise:  b.costPaise  ?? null,
                 pricePaise: b.pricePaise ?? null,
                 mrpPaise:   b.mrpPaise   ?? null,
                 // Books-beginning opening stock — server computes openingValue.
@@ -102,9 +101,14 @@ export async function POST(req: Request) {
                     ? b.openingStock * b.openingRate
                     : null,
                 openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
-                // Default to tracked-at-zero so future Purchase increments
-                // actually move the cache (NULL + n = NULL in Postgres).
-                stock: 0,
+                // Sync the running caches so reports light up immediately.
+                // Opening qty seeds stock; opening rate seeds cost basis when no
+                // explicit cost was provided. Subsequent Purchase/Sale vouchers
+                // will adjust both from this baseline.
+                stock: b.openingStock != null ? Math.round(b.openingStock) : 0,
+                costPaise: b.costPaise ?? (b.openingRate != null
+                    ? Math.round(b.openingRate * 100)
+                    : null),
             },
             include: productInclude,
         });
