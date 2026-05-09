@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Pencil, RotateCcw, X, Check } from "lucide-react";
+import { Pencil, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -23,67 +32,128 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    assembleReference,
+    fyClosingDate,
+    type SeriesShape,
+    type YearFormat,
+} from "@/modules/accountancy/lib/voucherRef";
 
-interface SeriesRow {
+interface SeriesRow extends SeriesShape {
     kind: string;
     label: string;
-    prefix: string;
-    suffix: string;
-    startFrom: number;
-    padWidth: number;
-    nextSeq: number;
     updatedAt: string;
 }
 
-interface EditForm {
-    prefix: string;
-    suffix: string;
-    startFrom: number;
-    padWidth: number;
+interface BooksConfig {
+    id: number;
+    restartMonth: number;
+    restartDay: number;
+    updatedAt: string;
 }
 
-function previewRef(prefix: string, suffix: string, startFrom: number, padWidth: number, nextSeq: number): string {
-    const num = startFrom + nextSeq;
-    return `${prefix}${String(num).padStart(padWidth, "0")}${suffix}`;
+const YEAR_FORMATS: { value: YearFormat; label: string; example: string }[] = [
+    { value: "CALENDAR",       label: "Calendar (2026)",       example: "2026" },
+    { value: "CALENDAR_SHORT", label: "Calendar short (26)",   example: "26" },
+    { value: "FY_SHORT",       label: "Fiscal short (26-27)",  example: "26-27" },
+    { value: "FY_LONG",        label: "Fiscal long (2026-27)", example: "2026-27" },
+];
+
+// Each preset is a CSV of reserved tokens (type/user/year/number) and
+// literals (anything else — e.g. "/" "-" "india"). Mix freely.
+const PART_PRESETS = [
+    "type,-,year,-,number",
+    "type,/,number,/,year",
+    "type,-,user,-,year,-,number",
+    "user,/,type,-,year,-,number",
+    "type,number,/,year",
+    "type,/,number",
+];
+
+const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+];
+
+function previewNext(row: SeriesShape, sampleUserId = 7): string {
+    return assembleReference({ ...row, nextSeq: row.nextSeq + 1 }, sampleUserId);
+}
+
+function fmtDate(d: Date): string {
+    return d.toISOString().slice(0, 10);
 }
 
 export default function YearEndingPage() {
     const [series, setSeries] = useState<SeriesRow[]>([]);
+    const [config, setConfig] = useState<BooksConfig | null>(null);
+    const [configDraft, setConfigDraft] = useState<{ restartMonth: number; restartDay: number } | null>(null);
+    const [savingConfig, setSavingConfig] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [editId, setEditId] = useState<string | null>(null);
-    const [form, setForm] = useState<EditForm>({ prefix: "", suffix: "", startFrom: 1, padWidth: 4 });
+    const [editKind, setEditKind] = useState<string | null>(null);
+    const [draft, setDraft] = useState<SeriesRow | null>(null);
     const [saving, setSaving] = useState(false);
     const [resetKind, setResetKind] = useState<string | null>(null);
     const [resetting, setResetting] = useState(false);
 
     useEffect(() => {
-        axios
-            .get<SeriesRow[]>("/api/finance/voucher-series")
-            .then((r) => setSeries(r.data))
-            .catch(() => toast.error("Failed to load voucher series"))
+        Promise.all([
+            axios.get<SeriesRow[]>("/api/finance/voucher-series"),
+            axios.get<BooksConfig>("/api/finance/books-config"),
+        ])
+            .then(([s, c]) => {
+                setSeries(s.data);
+                setConfig(c.data);
+                setConfigDraft({ restartMonth: c.data.restartMonth, restartDay: c.data.restartDay });
+            })
+            .catch(() => toast.error("Failed to load year-ending settings"))
             .finally(() => setLoading(false));
     }, []);
 
-    function startEdit(row: SeriesRow) {
-        setEditId(row.kind);
-        setForm({ prefix: row.prefix, suffix: row.suffix, startFrom: row.startFrom, padWidth: row.padWidth });
+    const configDirty =
+        config && configDraft &&
+        (config.restartMonth !== configDraft.restartMonth || config.restartDay !== configDraft.restartDay);
+
+    async function saveConfig() {
+        if (!configDraft) return;
+        setSavingConfig(true);
+        try {
+            const { data } = await axios.patch<BooksConfig>("/api/finance/books-config", configDraft);
+            setConfig(data);
+            toast.success("Books restart updated");
+        } catch (err) {
+            const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
+            toast.error(msg ?? "Failed to save");
+        } finally {
+            setSavingConfig(false);
+        }
     }
 
-    function cancelEdit() {
-        setEditId(null);
+    function openEdit(row: SeriesRow) {
+        setEditKind(row.kind);
+        setDraft({ ...row });
     }
 
-    async function handleSave(kind: string) {
+    async function handleSave() {
+        if (!draft || !editKind) return;
         setSaving(true);
         try {
-            const { data } = await axios.patch<SeriesRow>(`/api/finance/voucher-series/${kind}`, {
-                prefix: form.prefix,
-                suffix: form.suffix,
-                startFrom: form.startFrom,
-                padWidth: form.padWidth,
-            });
-            setSeries((prev) => prev.map((r) => (r.kind === kind ? data : r)));
-            setEditId(null);
+            const payload = {
+                label:        draft.label,
+                typeEnabled:  draft.typeEnabled,
+                typeValue:    draft.typeValue,
+                userEnabled:  draft.userEnabled,
+                userMaxWidth: draft.userMaxWidth,
+                yearEnabled:  draft.yearEnabled,
+                yearFormat:   draft.yearFormat,
+                startFrom:    draft.startFrom,
+                padWidth:     draft.padWidth,
+                partOrder:    draft.partOrder,
+            };
+            const { data } = await axios.patch<SeriesRow>(`/api/finance/voucher-series/${editKind}`, payload);
+            setSeries((prev) => prev.map((r) => (r.kind === editKind ? data : r)));
+            setEditKind(null);
+            setDraft(null);
             toast.success("Voucher series updated");
         } catch (err) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
@@ -109,25 +179,76 @@ export default function YearEndingPage() {
     }
 
     const resetRow = series.find((r) => r.kind === resetKind);
+    const previewLengthNote = useMemo(
+        () => (draft ? previewNext(draft).length : 0),
+        [draft],
+    );
 
     return (
         <div className="space-y-6 p-6">
             <div>
                 <h1 className="text-xl font-semibold">Year Ending — Voucher Numbering</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Configure how reference numbers are generated per voucher type. At year-end, update the
-                    prefix or suffix and reset the counter to restart numbering.
+                    The Books Restart date below applies to every voucher series. When today crosses it,
+                    each series advances its year part and resets its counter automatically.
                 </p>
             </div>
 
-            <div className="rounded border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-yellow-900">
-                <span className="font-medium">Formula:</span>{" "}
-                <code className="rounded bg-yellow-100 px-1">prefix + padded-number + suffix</code>
-                {"  "}— e.g. prefix <code className="rounded bg-yellow-100 px-1">PV-2026-</code> start&nbsp;1
-                pad&nbsp;4 → <code className="rounded bg-yellow-100 px-1">PV-2026-0001</code>. Tally-style:
-                prefix <code className="rounded bg-yellow-100 px-1">TI/</code> suffix{" "}
-                <code className="rounded bg-yellow-100 px-1">/25-26</code> →{" "}
-                <code className="rounded bg-yellow-100 px-1">TI/0001/25-26</code>
+            {/* Books Restart — global setting */}
+            <div className="rounded-lg border bg-card p-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <div className="text-sm font-semibold">Books restart on</div>
+                        <p className="text-xs text-muted-foreground">
+                            Common closing/restart date for every voucher type (e.g. 1 April for Indian FY).
+                        </p>
+                    </div>
+                    {configDraft && (
+                        <div className="flex items-end gap-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Month</Label>
+                                <Select
+                                    value={String(configDraft.restartMonth)}
+                                    onValueChange={(v) =>
+                                        setConfigDraft((d) => d && { ...d, restartMonth: Number(v) })
+                                    }
+                                >
+                                    <SelectTrigger className="h-9 w-36">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {MONTHS.map((m, i) => (
+                                            <SelectItem key={i} value={String(i + 1)}>
+                                                {m}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Day</Label>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    max={31}
+                                    className="h-9 w-20"
+                                    value={configDraft.restartDay}
+                                    onChange={(e) =>
+                                        setConfigDraft((d) => d && { ...d, restartDay: Number(e.target.value) })
+                                    }
+                                />
+                            </div>
+                            <Button
+                                size="sm"
+                                onClick={saveConfig}
+                                disabled={!configDirty || savingConfig}
+                            >
+                                <Save className="mr-1 size-3.5" />
+                                {savingConfig ? "Saving…" : "Save"}
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {loading ? (
@@ -137,115 +258,51 @@ export default function YearEndingPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Voucher Type</TableHead>
-                            <TableHead>Prefix</TableHead>
-                            <TableHead>Suffix</TableHead>
-                            <TableHead className="text-right">Start&nbsp;#</TableHead>
-                            <TableHead className="text-right">Width</TableHead>
+                            <TableHead>Type Code</TableHead>
+                            <TableHead>FY Start</TableHead>
+                            <TableHead>Closes</TableHead>
+                            <TableHead>Order</TableHead>
                             <TableHead className="text-right">Issued</TableHead>
-                            <TableHead>Next Number Preview</TableHead>
+                            <TableHead>Next Number</TableHead>
+                            <TableHead className="text-right">Len</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {series.map((row) =>
-                            editId === row.kind ? (
-                                <TableRow key={row.kind} className="bg-muted/40">
-                                    <TableCell>
-                                        <div className="font-medium">{row.label}</div>
-                                        <code className="text-xs text-muted-foreground">{row.kind}</code>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            value={form.prefix}
-                                            onChange={(e) => setForm((f) => ({ ...f, prefix: e.target.value }))}
-                                            className="h-8 w-32 font-mono text-xs"
-                                            placeholder="PV-2026-"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            value={form.suffix}
-                                            onChange={(e) => setForm((f) => ({ ...f, suffix: e.target.value }))}
-                                            className="h-8 w-24 font-mono text-xs"
-                                            placeholder="/25-26"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            value={form.startFrom}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, startFrom: Number(e.target.value) }))
-                                            }
-                                            className="h-8 w-20 text-right text-xs"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            max={10}
-                                            value={form.padWidth}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, padWidth: Number(e.target.value) }))
-                                            }
-                                            className="h-8 w-16 text-right text-xs"
-                                        />
-                                    </TableCell>
-                                    <TableCell className="text-right text-xs text-muted-foreground">
-                                        {row.nextSeq}
-                                    </TableCell>
-                                    <TableCell>
-                                        <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                                            {previewRef(form.prefix, form.suffix, form.startFrom, form.padWidth, row.nextSeq)}
-                                        </code>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                size="sm"
-                                                onClick={() => handleSave(row.kind)}
-                                                disabled={saving}
-                                            >
-                                                <Check className="size-3.5" />
-                                            </Button>
-                                            <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
-                                                <X className="size-3.5" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
+                        {series.map((row) => {
+                            const next = previewNext(row);
+                            const closing =
+                                row.fyStartYear != null && config
+                                    ? fmtDate(fyClosingDate(row.fyStartYear, config.restartMonth, config.restartDay))
+                                    : "—";
+                            return (
                                 <TableRow key={row.kind}>
                                     <TableCell>
                                         <div className="font-medium">{row.label}</div>
                                         <code className="text-xs text-muted-foreground">{row.kind}</code>
                                     </TableCell>
                                     <TableCell>
-                                        <code className="font-mono text-xs">{row.prefix || <span className="text-muted-foreground italic">—</span>}</code>
-                                    </TableCell>
-                                    <TableCell>
-                                        <code className="font-mono text-xs">{row.suffix || <span className="text-muted-foreground italic">—</span>}</code>
-                                    </TableCell>
-                                    <TableCell className="text-right text-sm">{row.startFrom}</TableCell>
-                                    <TableCell className="text-right text-sm">{row.padWidth}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Badge variant="secondary">{row.nextSeq} issued</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                                            {previewRef(row.prefix, row.suffix, row.startFrom, row.padWidth, row.nextSeq)}
+                                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                                            {row.typeEnabled ? row.typeValue || "—" : <span className="opacity-50">off</span>}
                                         </code>
+                                    </TableCell>
+                                    <TableCell className="text-sm">{row.fyStartYear ?? "—"}</TableCell>
+                                    <TableCell className="text-sm">{closing}</TableCell>
+                                    <TableCell>
+                                        <code className="text-xs text-muted-foreground">{row.partOrder}</code>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Badge variant="secondary">{row.nextSeq}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{next}</code>
+                                    </TableCell>
+                                    <TableCell className="text-right text-xs text-muted-foreground">
+                                        {next.length}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => startEdit(row)}
-                                                title="Edit"
-                                            >
+                                            <Button size="sm" variant="outline" onClick={() => openEdit(row)} title="Edit">
                                                 <Pencil className="size-3.5" />
                                             </Button>
                                             <Button
@@ -259,29 +316,256 @@ export default function YearEndingPage() {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ),
-                        )}
+                            );
+                        })}
                     </TableBody>
                 </Table>
             )}
 
-            {/* Reset confirmation dialog */}
+            {/* Edit dialog */}
+            <Dialog
+                open={!!editKind}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditKind(null);
+                        setDraft(null);
+                    }
+                }}
+            >
+                <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-4xl">
+                    <DialogHeader className="border-b px-6 py-4">
+                        <DialogTitle>Configure {draft?.label}</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Toggle each part on/off, set max width, and reorder via the part-order field.
+                            Books restart date is configured once on the main page.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {draft && (
+                        <ScrollArea className="flex-1">
+                            <div className="space-y-4 px-6 py-4">
+                                {/* Type + User parts side-by-side */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <fieldset className="space-y-2 rounded border p-3">
+                                        <legend className="flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide">
+                                            <Switch
+                                                checked={draft.typeEnabled}
+                                                onCheckedChange={(v) => setDraft((d) => d && { ...d, typeEnabled: v })}
+                                            />
+                                            Type part
+                                        </legend>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Code (e.g. CV, PV)</Label>
+                                            <Input
+                                                className="h-8"
+                                                value={draft.typeValue}
+                                                onChange={(e) => setDraft((d) => d && { ...d, typeValue: e.target.value })}
+                                                disabled={!draft.typeEnabled}
+                                            />
+                                        </div>
+                                    </fieldset>
+
+                                    <fieldset className="space-y-2 rounded border p-3">
+                                        <legend className="flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide">
+                                            <Switch
+                                                checked={draft.userEnabled}
+                                                onCheckedChange={(v) => setDraft((d) => d && { ...d, userEnabled: v })}
+                                            />
+                                            User part
+                                        </legend>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Creator's user ID, zero-padded.
+                                        </p>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Max width</Label>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={10}
+                                                className="h-8"
+                                                value={draft.userMaxWidth}
+                                                onChange={(e) =>
+                                                    setDraft((d) => d && { ...d, userMaxWidth: Number(e.target.value) })
+                                                }
+                                                disabled={!draft.userEnabled}
+                                            />
+                                        </div>
+                                    </fieldset>
+                                </div>
+
+                                {/* Year + Number side-by-side */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <fieldset className="space-y-2 rounded border p-3">
+                                        <legend className="flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide">
+                                            <Switch
+                                                checked={draft.yearEnabled}
+                                                onCheckedChange={(v) => setDraft((d) => d && { ...d, yearEnabled: v })}
+                                            />
+                                            Year part
+                                        </legend>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Format</Label>
+                                            <Select
+                                                value={draft.yearFormat}
+                                                onValueChange={(v) => setDraft((d) => d && { ...d, yearFormat: v })}
+                                                disabled={!draft.yearEnabled}
+                                            >
+                                                <SelectTrigger className="h-8">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {YEAR_FORMATS.map((f) => (
+                                                        <SelectItem key={f.value} value={f.value}>
+                                                            {f.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </fieldset>
+
+                                    <fieldset className="space-y-2 rounded border p-3">
+                                        <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Number part (always on)
+                                        </legend>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Start</Label>
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    className="h-8"
+                                                    value={draft.startFrom}
+                                                    onChange={(e) =>
+                                                        setDraft((d) => d && { ...d, startFrom: Number(e.target.value) })
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Width</Label>
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    max={10}
+                                                    className="h-8"
+                                                    value={draft.padWidth}
+                                                    onChange={(e) =>
+                                                        setDraft((d) => d && { ...d, padWidth: Number(e.target.value) })
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Issued</Label>
+                                                <Input className="h-8" value={draft.nextSeq} disabled />
+                                            </div>
+                                        </div>
+                                    </fieldset>
+                                </div>
+
+                                {/* Assembly — tokens + literals mixed CSV */}
+                                <fieldset className="space-y-3 rounded border p-3">
+                                    <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Part order &amp; separators
+                                    </legend>
+                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                        CSV of pieces. Reserved tokens{" "}
+                                        <code className="rounded bg-muted px-1 text-[10px]">type</code>{" "}
+                                        <code className="rounded bg-muted px-1 text-[10px]">user</code>{" "}
+                                        <code className="rounded bg-muted px-1 text-[10px]">year</code>{" "}
+                                        <code className="rounded bg-muted px-1 text-[10px]">number</code>{" "}
+                                        expand to their values. Anything else is taken as literal text — use it for
+                                        separators (<code className="text-[10px]">/</code>,{" "}
+                                        <code className="text-[10px]">-</code>) or labels (e.g.{" "}
+                                        <code className="text-[10px]">india</code>).
+                                    </p>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Preset</Label>
+                                        <Select
+                                            value={
+                                                PART_PRESETS.includes(draft.partOrder) ? draft.partOrder : "custom"
+                                            }
+                                            onValueChange={(v) => {
+                                                if (v !== "custom") {
+                                                    setDraft((d) => d && { ...d, partOrder: v });
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {PART_PRESETS.map((p) => (
+                                                    <SelectItem key={p} value={p}>
+                                                        <code className="text-xs">{p}</code>
+                                                    </SelectItem>
+                                                ))}
+                                                <SelectItem value="custom">Custom…</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">
+                                            Custom order (e.g.{" "}
+                                            <code className="text-[10px]">type,/,year,-,user,number,/india</code>)
+                                        </Label>
+                                        <Input
+                                            value={draft.partOrder}
+                                            onChange={(e) =>
+                                                setDraft((d) => d && { ...d, partOrder: e.target.value })
+                                            }
+                                            className="h-8 font-mono text-xs"
+                                            placeholder="type,-,year,-,number"
+                                        />
+                                    </div>
+                                </fieldset>
+                            </div>
+                        </ScrollArea>
+                    )}
+
+                    {draft && (
+                        <div className="border-t bg-yellow-50 px-6 py-3">
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-yellow-900">
+                                    Preview
+                                </span>
+                                <code className="font-mono text-base text-yellow-900">{previewNext(draft)}</code>
+                                <Badge variant="outline" className="border-yellow-300 text-yellow-900">
+                                    {previewLengthNote} chars
+                                </Badge>
+                                <span className="ml-auto text-[11px] text-yellow-700">(sample user&nbsp;7)</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="border-t px-6 py-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setEditKind(null);
+                                setDraft(null);
+                            }}
+                            disabled={saving}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSave} disabled={saving}>
+                            {saving ? "Saving…" : "Save"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reset confirmation */}
             <Dialog open={!!resetKind} onOpenChange={(open) => !open && setResetKind(null)}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Reset Counter — {resetRow?.label}</DialogTitle>
                         <DialogDescription>
-                            This will set <strong>nextSeq to 0</strong>. The next voucher created will be:
+                            This sets <strong>nextSeq → 0</strong>. The next voucher will be:
                             <br />
-                            <code className="mt-1 inline-block rounded bg-muted px-2 py-1 text-sm font-mono">
-                                {resetRow
-                                    ? previewRef(resetRow.prefix, resetRow.suffix, resetRow.startFrom, resetRow.padWidth, 0)
-                                    : ""}
+                            <code className="mt-2 inline-block rounded bg-muted px-2 py-1 font-mono text-sm">
+                                {resetRow ? assembleReference({ ...resetRow, nextSeq: 1 }, 7) : ""}
                             </code>
-                            <br />
-                            <br />
-                            Use this at <strong>year-end</strong> after updating the prefix/suffix. This cannot
-                            be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

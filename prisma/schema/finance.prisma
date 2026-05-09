@@ -291,18 +291,59 @@ model VoucherAllocation {
 }
 
 // ── Voucher Series (numbering configuration per voucher kind) ─────────────
-// One row per kind. Admins configure prefix/suffix/startFrom/padWidth here.
-// At year-end: update suffix (e.g. /24-25 → /25-26) and reset nextSeq to 0.
-// Reference formula: prefix + padStart(startFrom + nextSeq - 1, padWidth) + suffix
-// where nextSeq is the post-increment value from an atomic UPDATE in $transaction.
+// Reference is assembled from configurable parts (type/user/year/number) joined
+// by a separator. On the next voucher creation past `yearClosingDate`, the year
+// part rolls forward and `nextSeq` resets to 0 automatically.
+//
+// Reference = parts in `partOrder` (subset of: type,user,year,number) joined by `separator`.
+//   type   → typeValue (truncated to typeMaxWidth)
+//   user   → creator's User.id (zero-padded to userMaxWidth)
+//   year   → fiscal year derived from fyStartYear, formatted per yearFormat
+//   number → startFrom + nextSeq - 1 (zero-padded to padWidth)
+// Singleton org-level configuration. The book-restart day is shared by every
+// voucher series so a single year-end change rolls the whole business forward.
+model BooksConfig {
+  id           Int      @id @default(1) // singleton — always row id=1
+  restartMonth Int      @default(4) // 1-12; default April (Indian FY)
+  restartDay   Int      @default(1) // 1-31; default 1
+  updatedAt    DateTime @updatedAt
+}
+
 model VoucherSeries {
   // Values: CONTRA | PAYMENT | RECEIPT | CREDIT_NOTE | DEBIT_NOTE | INVOICE | JOURNAL
-  kind      String   @id
-  label     String
-  prefix    String   @default("")
-  suffix    String   @default("")
-  startFrom Int      @default(1)
-  padWidth  Int      @default(4)
-  nextSeq   Int      @default(0)
-  updatedAt DateTime @updatedAt
+  kind            String    @id
+  label           String
+
+  // Per-series fiscal year tracker. The closing date is derived from
+  // BooksConfig.restartMonth/restartDay + this year. Rollover happens
+  // automatically when today >= next restart date.
+  fyStartYear     Int? // e.g. 2026 = FY Apr-2026 → Mar-2027
+
+  // Type part (voucher type code, used as-is — keep it short)
+  typeEnabled     Boolean   @default(true)
+  typeValue       String    @default("")
+
+  // User part (creator's user ID)
+  userEnabled     Boolean   @default(false)
+  userMaxWidth    Int       @default(3)
+
+  // Year part
+  yearEnabled     Boolean   @default(true)
+  // CALENDAR (2026) | CALENDAR_SHORT (26) | FY_SHORT (26-27) | FY_LONG (2026-27)
+  yearFormat      String    @default("FY_SHORT")
+
+  // Number part (always part of the reference — it's the actual counter)
+  startFrom       Int       @default(1)
+  padWidth        Int       @default(4)
+  nextSeq         Int       @default(0)
+
+  // Assembly: comma-separated list of parts. Reserved tokens — type, user,
+  // year, number — expand to their values. Anything else is a literal,
+  // letting the admin embed separators or text inline. Examples:
+  //   "type,/,year,-,number"     →  INV/26-27-0001
+  //   "type,number,-,user"       →  INV0001-007
+  //   "type,/,year,/,user,number"→  INV/26-27/0070001
+  partOrder       String    @default("type,-,year,-,number")
+
+  updatedAt       DateTime  @updatedAt
 }

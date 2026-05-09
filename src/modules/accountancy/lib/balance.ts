@@ -47,16 +47,58 @@ export function computeBalance(
 /**
  * Atomically increment nextSeq for the given kind and return the formatted reference.
  * Must be called inside a prisma.$transaction callback.
- * Throws if the VoucherSeries row is missing — visit Settings → Year Ending to seed.
+ *
+ * Behavior:
+ *  1. If the year-closing date has passed → advance fyStartYear by 1, push the
+ *     closing date forward by 1 year, reset nextSeq to 0.
+ *  2. Atomically increment nextSeq.
+ *  3. Assemble the reference from configured parts.
+ *
+ * Throws if the VoucherSeries row is missing — visit Settings → Year Ending.
  */
-export async function nextRefFromSeries(tx: import("@/generated/prisma/client").Prisma.TransactionClient, kind: string): Promise<string> {
+export async function nextRefFromSeries(
+    tx: import("@/generated/prisma/client").Prisma.TransactionClient,
+    kind: string,
+    userId?: number | null,
+): Promise<string> {
+    const { assembleReference, fyClosingDate } = await import("./voucherRef");
+
+    // Load the org-level books config (singleton). Auto-create on first call
+    // so a fresh install never throws.
+    const config = await tx.booksConfig.upsert({
+        where: { id: 1 },
+        create: { id: 1 },
+        update: {},
+    });
+
+    // Read once to check rollover. We do this BEFORE the atomic increment so
+    // that the reset (nextSeq → 0) and the increment can happen together.
+    const current = await tx.voucherSeries.findUnique({ where: { kind } });
+    if (!current) {
+        throw new Error(`VoucherSeries for kind '${kind}' not found. Visit Settings → Year Ending to initialise.`);
+    }
+
+    const today = new Date();
+    if (current.fyStartYear != null) {
+        const closing = fyClosingDate(current.fyStartYear, config.restartMonth, config.restartDay);
+        if (today > closing) {
+            await tx.voucherSeries.update({
+                where: { kind },
+                data: {
+                    fyStartYear: current.fyStartYear + 1,
+                    nextSeq:     0,
+                },
+            });
+        }
+    }
+
+    // Atomic post-increment
     const series = await tx.voucherSeries.update({
         where: { kind },
         data: { nextSeq: { increment: 1 } },
-        select: { prefix: true, suffix: true, startFrom: true, padWidth: true, nextSeq: true },
     });
-    const num = series.startFrom + series.nextSeq - 1;
-    return `${series.prefix}${String(num).padStart(series.padWidth, "0")}${series.suffix}`;
+
+    return assembleReference(series, userId);
 }
 
 /**

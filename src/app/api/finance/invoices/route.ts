@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
     try {
         const invoice = await prisma.$transaction(async (tx) => {
-            const number = await nextRefFromSeries(tx, "INVOICE");
+            const number = await nextRefFromSeries(tx, "INVOICE", user!.id);
 
             const inv = await tx.invoice.create({
                 data: {

@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
     try {
         const voucher = await prisma.$transaction(async (tx) => {
-            const reference = await nextRefFromSeries(tx, body.type);
+            const reference = await nextRefFromSeries(tx, body.type, user!.id);
 
             return tx.voucher.create({
                 data: {
