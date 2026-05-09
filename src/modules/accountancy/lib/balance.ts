@@ -44,7 +44,25 @@ export function computeBalance(
     return normalBalance === "DEBIT" ? debits - credits : credits - debits;
 }
 
-/** Generate sequential reference numbers: e.g. JE-2026-0001 */
+/**
+ * Atomically increment nextSeq for the given kind and return the formatted reference.
+ * Must be called inside a prisma.$transaction callback.
+ * Throws if the VoucherSeries row is missing — visit Settings → Year Ending to seed.
+ */
+export async function nextRefFromSeries(tx: import("@/generated/prisma/client").Prisma.TransactionClient, kind: string): Promise<string> {
+    const series = await tx.voucherSeries.update({
+        where: { kind },
+        data: { nextSeq: { increment: 1 } },
+        select: { prefix: true, suffix: true, startFrom: true, padWidth: true, nextSeq: true },
+    });
+    const num = series.startFrom + series.nextSeq - 1;
+    return `${series.prefix}${String(num).padStart(series.padWidth, "0")}${series.suffix}`;
+}
+
+/**
+ * @deprecated Use nextRefFromSeries() instead.
+ * Generate sequential reference numbers: e.g. JE-2026-0001
+ */
 export async function nextRef(
     tx: { journalEntry: { count: (a: object) => Promise<number> } } | { invoice: { count: (a: object) => Promise<number> } },
     model: "journalEntry" | "invoice",

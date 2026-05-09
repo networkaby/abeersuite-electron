@@ -289,3 +289,20 @@ model VoucherAllocation {
   @@index([sourceType, sourceId])
   @@index([method])
 }
+
+// ── Voucher Series (numbering configuration per voucher kind) ─────────────
+// One row per kind. Admins configure prefix/suffix/startFrom/padWidth here.
+// At year-end: update suffix (e.g. /24-25 → /25-26) and reset nextSeq to 0.
+// Reference formula: prefix + padStart(startFrom + nextSeq - 1, padWidth) + suffix
+// where nextSeq is the post-increment value from an atomic UPDATE in $transaction.
+model VoucherSeries {
+  // Values: CONTRA | PAYMENT | RECEIPT | CREDIT_NOTE | DEBIT_NOTE | INVOICE | JOURNAL
+  kind      String   @id
+  label     String
+  prefix    String   @default("")
+  suffix    String   @default("")
+  startFrom Int      @default(1)
+  padWidth  Int      @default(4)
+  nextSeq   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}

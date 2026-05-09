@@ -2,17 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { isBalanced } from "@/modules/accountancy/lib/balance";
-
-// Reference number prefixes per voucher type. Tally uses similar conventions:
-// CV-2026-0001, PV-2026-0001, RV-2026-0001, CRN-2026-0001, DRN-2026-0001.
-const PREFIX: Record<string, string> = {
-    CONTRA:      "CV",
-    PAYMENT:     "PV",
-    RECEIPT:     "RV",
-    CREDIT_NOTE: "CRN",
-    DEBIT_NOTE:  "DRN",
-};
+import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 
 const lineSchema = z.object({
     accountId:   z.number().int().positive(),
@@ -91,12 +81,7 @@ export async function POST(req: Request) {
 
     try {
         const voucher = await prisma.$transaction(async (tx) => {
-            // Generate reference number
-            const year = new Date().getFullYear();
-            const prefix = PREFIX[body.type];
-            const startsWith = `${prefix}-${year}-`;
-            const cnt = await tx.voucher.count({ where: { reference: { startsWith } } });
-            const reference = `${startsWith}${String(cnt + 1).padStart(4, "0")}`;
+            const reference = await nextRefFromSeries(tx, body.type);
 
             return tx.voucher.create({
                 data: {

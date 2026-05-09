@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { isBalanced, nextRef } from "@/modules/accountancy/lib/balance";
+import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
     try {
         const entry = await prisma.$transaction(async (tx) => {
-            const reference = await nextRef(tx, "journalEntry", "JE");
+            const reference = await nextRefFromSeries(tx, "JOURNAL");
             return tx.journalEntry.create({
                 data: {
                     date: new Date(body.date),

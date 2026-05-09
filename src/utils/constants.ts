@@ -465,6 +465,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Statuses", href: "/office/statuses", icon: Settings, permission: "settings:statuses" },
     { label: "Sub-Statuses", href: "/office/sub-statuses", icon: Settings, permission: "settings:statuses" },
     { label: "Pipelines", href: "/office/pipelines", icon: GitBranch, permission: "settings:pipelines" },
+    { label: "Year Ending", href: "/office/year-ending", icon: Calendar, permission: "settings:manage" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

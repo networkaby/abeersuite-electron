@@ -1,0 +1,25 @@
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth-guard";
+
+// POST /api/finance/voucher-series/[kind]/reset
+// Resets nextSeq to 0. Used at year-end to restart numbering from startFrom.
+export async function POST(
+    _: Request,
+    { params }: { params: Promise<{ kind: string }> },
+) {
+    const { response } = await requirePermission("settings:manage");
+    if (response) return response;
+
+    const { kind } = await params;
+
+    try {
+        const series = await prisma.voucherSeries.update({
+            where: { kind },
+            data: { nextSeq: 0 },
+        });
+        return NextResponse.json(series);
+    } catch {
+        return NextResponse.json({ error: "Voucher series not found" }, { status: 404 });
+    }
+}
