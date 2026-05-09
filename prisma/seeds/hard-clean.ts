@@ -112,9 +112,15 @@ async function main(): Promise<void> {
     console.log("");
 
     // ── Phase 7 — Reset cached running balances on bootstrap rows ──────
-    console.log("[7/7] Resetting cached running balances");
+    console.log("[7/7] Resetting cached running balances + legacy hygiene");
     await pool.query(`UPDATE "Account" SET balance = 0`);
-    console.log("      ✓ Account.balance reset to 0 (opening fields preserved)\n");
+    console.log("      ✓ Account.balance reset to 0 (opening fields preserved)");
+    // Legacy: pre-2026-05-09 bootstrap seeded a real ledger by this name. It's
+    // purely synthetic in the BS now — wipe so it doesn't double-count.
+    const dop = await pool.query(
+        `DELETE FROM "Account" WHERE name = 'Difference in Opening Balances'`,
+    );
+    console.log(`      ✓ Removed legacy 'Difference in Opening Balances' ledger (${dop.rowCount})\n`);
 
     // ── Summary ────────────────────────────────────────────────────────
     const k = await pool.query<{ users: string; roles: string; groups: string; accounts: string; pipelines: string; products: string }>(`

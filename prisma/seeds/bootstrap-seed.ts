@@ -784,7 +784,10 @@ async function main() {
     await upsertLedger("Advance to Suppliers",    "Loans & Advances (Asset)", "DEBIT");
     await upsertLedger("TDS Receivable",          "Loans & Advances (Asset)", "DEBIT");
     await upsertLedger("Preliminary Expenses",    "Misc. Expenses (Asset)",  "DEBIT");
-    await upsertLedger("Difference in Opening Balances", "Suspense A/c", "CREDIT");
+    // "Difference in Opening Balances" is intentionally NOT seeded — it's
+    // a pure synthetic computed by the BS UI = |Σ Dr opening − Σ Cr opening|,
+    // shown on the side that needs balancing. Don't add a real ledger by
+    // this name; it would double-count.
 
     console.log(`      ✓ 28 groups · ~50 GL ledgers (Stock-in-Hand: empty by design)\n`);
 

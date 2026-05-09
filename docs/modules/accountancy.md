@@ -94,6 +94,7 @@ These are the **single source of truth** for every balance/value calculation in 
 - **2026-05-09 — Suspense ledger**: When opening Dr ≠ opening Cr (incl. opening stock value), the gap auto-parks in "Difference in Opening Balances". Surface this on any opening-balance UI; never silently absorb the diff.
 - **2026-05-09 — Stock-in-Hand has no GL children**: `bootstrap-seed.ts` creates the Stock-in-Hand account group but no ledgers under it. Live closing-stock value is injected as a synthetic ledger at report time (`balance-sheet/route.ts`). DO NOT add real Account rows under this group — they would double-count with the synthetic injection.
 - **2026-05-09 — Single bootstrap seed**: `pnpm prisma db seed` runs `bootstrap-seed.ts` (the only production seed). All other `dummy-*.ts` are dev-only and removed by `pnpm seed:hard-clean`. Schema changes must be mirrored in `bootstrap-seed.ts`.
+- **2026-05-09 — `Difference in Opening Balances` is synthetic**: there is no GL ledger by this name in the chart of accounts. The Balance Sheet auto-computes `assetsTotal − liabilitiesTotal` and shows the absolute value as a standalone "Difference in opening balances" row on whichever side is short (Liabilities when assets exceed; Assets when liabilities exceed). Once the user enters a balancing Capital / Loan opening, the row disappears. Don't add a real ledger by this name — `hard-clean.ts` deletes it from legacy DBs anyway.
 
 ## Out of scope / deferred
 

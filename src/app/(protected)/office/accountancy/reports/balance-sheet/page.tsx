@@ -149,21 +149,21 @@ export default function BalanceSheetPage() {
     const goGroup = (id: number) =>
         router.push(`/office/accountancy/groups/${id}?asOf=${asOf}`);
 
-    // Compute side totals (with closing-stock + net P&L injection)
-    let liabilitiesTotal = 0;
-    if (data) {
-        liabilitiesTotal = data.liabilities.reduce((s, g) => s + g.rolledUpClosing, 0);
-        // Surface net P&L on Liabilities side under Capital Account
-        liabilitiesTotal += data.netProfitLoss;
-    }
-    let assetsTotal = 0;
-    if (data) {
-        // The API now injects the live closing-stock delta as a synthetic
-        // ledger inside the Stock-in-Hand group, so its rolledUpClosing
-        // already includes the inventory value — no extra addition needed.
-        assetsTotal = data.assets.reduce((s, g) => s + g.rolledUpClosing, 0);
-    }
-    const difference = liabilitiesTotal - assetsTotal;
+    // Compute side totals + auto-balancing "Difference in opening balances".
+    //
+    // baselineLiab/Asset = the real rolled-up totals before any synthetic
+    // suspense entry. rawDifference > 0 means assets exceed liabilities so
+    // we need a synthetic Cr on the LIABILITY side to balance the books.
+    // < 0 means the opposite (rare — happens when user opens a Loan but no
+    // matching asset). Whichever side gets the synthetic, we add it to that
+    // side's total so both grand totals reconcile.
+    const liabBaseline   = data ? data.liabilities.reduce((s, g) => s + g.rolledUpClosing, 0) + data.netProfitLoss : 0;
+    const assetBaseline  = data ? data.assets.reduce((s, g) => s + g.rolledUpClosing, 0) : 0;
+    const rawDifference  = assetBaseline - liabBaseline;
+    const synthOnLiability = rawDifference >  0.005 ?  rawDifference : 0;
+    const synthOnAsset     = rawDifference < -0.005 ? -rawDifference : 0;
+    const liabilitiesTotal = liabBaseline  + synthOnLiability;
+    const assetsTotal      = assetBaseline + synthOnAsset;
 
     return (
         <div className="max-w-7xl mx-auto space-y-5">
@@ -224,6 +224,13 @@ export default function BalanceSheetPage() {
                                         </td>
                                     </tr>
                                 )}
+                                {/* Auto-computed plug — appears here when Σ Dr opening > Σ Cr opening. */}
+                                {synthOnLiability > 0 && (
+                                    <tr className="text-amber-700 dark:text-amber-400" title="Auto-computed: assets exceed liabilities by this amount. Add Capital / Loan opening to clear.">
+                                        <td className="py-1.5 px-3 italic text-xs">Difference in opening balances</td>
+                                        <td className="py-1.5 pr-3 text-right font-mono text-xs">{fmt(synthOnLiability)}</td>
+                                    </tr>
+                                )}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-border bg-muted/30">
@@ -253,6 +260,13 @@ export default function BalanceSheetPage() {
                                 ))}
                                 {/* Live closing-stock now appears as a synthetic ledger
                                     inside the Stock-in-Hand group (injected by the API). */}
+                                {/* Auto-computed plug — rare; appears here when Σ Cr opening > Σ Dr opening. */}
+                                {synthOnAsset > 0 && (
+                                    <tr className="text-amber-700 dark:text-amber-400" title="Auto-computed: liabilities exceed assets by this amount. Add Bank / Cash opening to clear.">
+                                        <td className="py-1.5 px-3 italic text-xs">Difference in opening balances</td>
+                                        <td className="py-1.5 pr-3 text-right font-mono text-xs">{fmt(synthOnAsset)}</td>
+                                    </tr>
+                                )}
                             </tbody>
                             <tfoot>
                                 <tr className="border-t-2 border-border bg-muted/30">
@@ -261,14 +275,6 @@ export default function BalanceSheetPage() {
                                         {fmt(assetsTotal)}
                                     </td>
                                 </tr>
-                                {Math.abs(difference) > 0.005 && (
-                                    <tr className="border-t border-dashed text-amber-700 dark:text-amber-400">
-                                        <td className="py-1.5 px-3 italic text-xs">Difference in opening balances</td>
-                                        <td className="py-1.5 pr-3 text-right font-mono text-xs">
-                                            {fmt(Math.abs(difference))}
-                                        </td>
-                                    </tr>
-                                )}
                             </tfoot>
                         </table>
                     </div>
