@@ -11,6 +11,7 @@ import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
 import { getActiveModule } from "@/utils/active-module";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
+import { useJournalVoucherStore } from "@/store/journalVoucherStore";
 import CreatePersonDialog from "@/modules/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/modules/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/modules/shared/components/AllCreateActionsDialog";
@@ -33,6 +34,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { personOpen, companyOpen, setPersonOpen, setCompanyOpen } = useCreateDialogStore();
+    const { setOpen: openJournalVoucher } = useJournalVoucherStore();
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes("admin:bypass");
@@ -68,6 +70,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             setPersonOpen(true);
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
+        } else if (action.action === "new-journal-voucher") {
+            openJournalVoucher(true);
         }
     };
 

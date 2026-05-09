@@ -88,7 +88,7 @@ export type ModuleCreateAction = {
     icon: LucideIcon;
     variant?: "default" | "outline";
     href?: string;
-    action?: "new-ticket" | "new-person" | "new-company";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -183,7 +183,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Contra +", subtitle: "New contra", icon: Wallet, variant: "outline", href: "/office/accountancy/contras/new", permission: "finance:voucher:create" },
             { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", href: "/office/accountancy/credit-notes/new", permission: "finance:voucher:create" },
             { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", href: "/office/accountancy/debit-notes/new", permission: "finance:voucher:create" },
-            { label: "Journal +", subtitle: "New journal entry", icon: FileText, variant: "outline", href: "/office/accountancy/journal-entries", permission: "finance:journal:cancel" },
+            { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
         ],
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
@@ -225,7 +225,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             },
 
             {
-                label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/journal-entries", permission: "finance:voucher:create",
+                label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create",
                 children: [
                     { label: "Contras", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
                     { label: "Payment", icon: ClipboardList, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
