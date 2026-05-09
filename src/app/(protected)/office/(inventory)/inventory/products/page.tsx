@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Box } from "lucide-react";
+import { Plus, Pencil, Trash2, Box, Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -46,9 +47,23 @@ type ProductRow = {
     notes: string | null;
     stock: number | null;
     lowStockThreshold: number;
+    costPaise:  number | null;
+    pricePaise: number | null;
+    mrpPaise:   number | null;
     unit: { code: string; label: string };
     category: { name: string } | null;
     brand: { name: string } | null;
+};
+
+const paiseToRupees = (p: number | null): string =>
+    p == null ? "" : (p / 100).toFixed(2);
+
+const rupeesToPaise = (r: string): number | null => {
+    const t = r.trim();
+    if (t === "") return null;
+    const n = parseFloat(t);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.round(n * 100);
 };
 
 function optionalId(s: string): number | null {
@@ -83,6 +98,9 @@ function rowToForm(p: ProductRow): InvProductFormState {
         upc3: p.upc3 ?? "",
         notes: p.notes ?? "",
         isActive: p.isActive,
+        costRupees:  paiseToRupees(p.costPaise),
+        priceRupees: paiseToRupees(p.pricePaise),
+        mrpRupees:   paiseToRupees(p.mrpPaise),
     };
 }
 
@@ -96,6 +114,7 @@ export default function InventoryProductsPage() {
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
+    const [editStock, setEditStock] = useState<number | null>(null);
     const [form, setForm] = useState<InvProductFormState>(emptyInvProductForm);
     const [saving, setSaving] = useState(false);
 
@@ -122,6 +141,7 @@ export default function InventoryProductsPage() {
 
     const openNew = () => {
         setEditId(null);
+        setEditStock(null);
         setForm(emptyInvProductForm);
         setOpen(true);
     };
@@ -131,6 +151,7 @@ export default function InventoryProductsPage() {
             const { data } = await axios.get<ProductRow>(`/api/inventory/products/${id}`);
             setForm(rowToForm(data));
             setEditId(id);
+            setEditStock(data.stock);
             setOpen(true);
         } catch {
             toast.error("Failed to load product");
@@ -177,6 +198,9 @@ export default function InventoryProductsPage() {
             upc3: optionalStr(form.upc3),
             notes: optionalStr(form.notes),
             isActive: form.isActive,
+            costPaise:  rupeesToPaise(form.costRupees),
+            pricePaise: rupeesToPaise(form.priceRupees),
+            mrpPaise:   rupeesToPaise(form.mrpRupees),
         };
 
         setSaving(true);
@@ -227,6 +251,25 @@ export default function InventoryProductsPage() {
                         <DialogHeader>
                             <DialogTitle>{editId == null ? "New product" : "Edit product"}</DialogTitle>
                         </DialogHeader>
+                        {/* Stock summary + adjust shortcut — only shown in Edit mode.
+                            Stock is read-only here; use Physical-Stock voucher to change it. */}
+                        {editId != null && (
+                            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
+                                <div className="flex items-center gap-2 text-sm">
+                                    <Boxes className="size-4 text-muted-foreground" />
+                                    <span className="text-muted-foreground">Current stock:</span>
+                                    <span className="font-mono font-semibold">
+                                        {editStock == null ? "not tracked" : editStock}
+                                    </span>
+                                </div>
+                                <Link
+                                    href={`/office/inventory/physical-stock/new?productId=${editId}`}
+                                    onClick={() => setOpen(false)}
+                                >
+                                    <Button type="button" variant="outline" size="sm">Adjust stock</Button>
+                                </Link>
+                            </div>
+                        )}
                         <div className="space-y-4 pt-2">
                             <InvProductFormFields
                                 form={form}

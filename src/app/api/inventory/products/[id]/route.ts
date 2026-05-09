@@ -98,6 +98,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.upc3 !== undefined ? { upc3: b.upc3 } : {}),
                 ...(b.notes !== undefined ? { notes: b.notes } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
+                ...(b.costPaise  !== undefined ? { costPaise:  b.costPaise  } : {}),
+                ...(b.pricePaise !== undefined ? { pricePaise: b.pricePaise } : {}),
+                ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
             },
             include: productInclude,
         });

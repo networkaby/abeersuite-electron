@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,7 @@ const cell = "w-full rounded border border-input bg-background px-2 py-1 text-sm
 
 export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; redirectTo: string }) {
     const router = useRouter();
+    const search = useSearchParams();
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState({
@@ -78,6 +79,18 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
         showPrices:   true,
         lines:        [{ productId: 0, quantity: "1", rate: "0", description: "" }] as LineInput[],
     });
+
+    // Pre-fill the first line's product when ?productId=N is present in the URL.
+    // Used by the "Adjust stock" button on the products list to deep-link directly
+    // into a Physical-Stock voucher with the right product preselected.
+    useEffect(() => {
+        const pid = Number(search.get("productId") ?? "");
+        if (!Number.isFinite(pid) || pid <= 0) return;
+        setForm((f) => f.lines[0]?.productId
+            ? f
+            : { ...f, lines: f.lines.map((l, i) => i === 0 ? { ...l, productId: pid } : l) },
+        );
+    }, [search]);
 
     // Stock Journal needs an explicit IN/OUT toggle per line via signed amount.
     // Keeping the form simple for now: positive entries = IN, negative = OUT.

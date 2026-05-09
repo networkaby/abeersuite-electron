@@ -70,6 +70,13 @@ const productIdentifiers = {
     notes: zOptStr(5000),
 };
 
+// All three are stored in paise (₹500.00 → 50000) — the form converts in the UI.
+const productPricing = {
+    costPaise:  z.number().int().nonnegative().nullish(),
+    pricePaise: z.number().int().nonnegative().nullish(),
+    mrpPaise:   z.number().int().nonnegative().nullish(),
+};
+
 export const invProductCreateSchema = z.object({
     sku: z.string().trim().min(1).max(64),
     name: z.string().trim().min(1).max(500),
@@ -80,6 +87,7 @@ export const invProductCreateSchema = z.object({
     warrantyTermId: z.number().int().positive().nullish(),
     isActive: z.boolean().optional().default(true),
     ...productIdentifiers,
+    ...productPricing,
 });
 
 export const invProductUpdateSchema = invProductCreateSchema.partial().extend({

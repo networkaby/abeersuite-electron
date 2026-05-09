@@ -32,6 +32,10 @@ export type InvProductFormState = {
     upc3: string;
     notes: string;
     isActive: boolean;
+    // Pricing — entered in rupees, converted to paise on submit.
+    costRupees:  string;
+    priceRupees: string;
+    mrpRupees:   string;
 };
 
 export const emptyInvProductForm: InvProductFormState = {
@@ -54,6 +58,9 @@ export const emptyInvProductForm: InvProductFormState = {
     upc3: "",
     notes: "",
     isActive: true,
+    costRupees:  "",
+    priceRupees: "",
+    mrpRupees:   "",
 };
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
@@ -180,9 +187,41 @@ export function InvProductFormFields({
             </TabsContent>
 
             <TabsContent value="pricing" className="mt-4">
-                <p className="text-sm text-muted-foreground">
-                    Retail / wholesale / repair-centre price fields are not yet on the schema. This tab will fill in once those columns are added to <code>InvProduct</code>.
+                <p className="text-xs text-muted-foreground mb-3">
+                    All amounts in rupees (₹). Cost auto-updates on every Purchase voucher; you can override here.
                 </p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                        <Label>Cost price (₹)</Label>
+                        <Input
+                            type="number" min="0" step="0.01" inputMode="decimal"
+                            value={form.costRupees}
+                            onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))}
+                            placeholder="0.00"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Last purchase rate; basis for COGS.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Sale price (₹)</Label>
+                        <Input
+                            type="number" min="0" step="0.01" inputMode="decimal"
+                            value={form.priceRupees}
+                            onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))}
+                            placeholder="0.00"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Default sale rate (shop / retail).</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>MRP (₹)</Label>
+                        <Input
+                            type="number" min="0" step="0.01" inputMode="decimal"
+                            value={form.mrpRupees}
+                            onChange={(e) => setForm((f) => ({ ...f, mrpRupees: e.target.value }))}
+                            placeholder="0.00"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Maximum retail price (printed).</p>
+                    </div>
+                </div>
             </TabsContent>
 
             <TabsContent value="stock" className="mt-4">

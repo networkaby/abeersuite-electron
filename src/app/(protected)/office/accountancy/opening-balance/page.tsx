@@ -14,6 +14,9 @@ import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { fmt } from "@/utils/constants";
 
 type AccountRow = {
@@ -41,6 +44,9 @@ type Summary = {
 interface AllAccount { id: number; code: string; name: string }
 interface AllProduct { id: number; sku: string; name: string; unit: { code: string } }
 
+interface AccountGroupOpt { id: number; name: string; type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE"; parentId: number | null }
+interface UnitOpt { id: number; code: string; label: string }
+
 export default function OpeningBalancePage() {
     const [data, setData] = useState<Summary | null>(null);
     const [loading, setLoading] = useState(true);
@@ -56,17 +62,25 @@ export default function OpeningBalancePage() {
             .finally(() => setLoading(false));
     }, []);
 
+    const loadAccounts = useCallback(() => {
+        return axios.get<AllAccount[]>("/api/finance/gl-accounts")
+            .then((r) => setAllAccounts(r.data))
+            .catch(() => { /* page still useful without picker */ });
+    }, []);
+
+    const loadProducts = useCallback(() => {
+        return axios.get<AllProduct[]>("/api/inventory/products")
+            .then((r) => setAllProducts(r.data))
+            .catch(() => { /* same */ });
+    }, []);
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
 
     useEffect(() => {
-        axios.get<AllAccount[]>("/api/finance/gl-accounts")
-            .then((r) => setAllAccounts(r.data))
-            .catch(() => { /* page still useful without picker */ });
-        axios.get<{ id: number; sku: string; name: string; unit: { code: string } }[]>("/api/inventory/products")
-            .then((r) => setAllProducts(r.data))
-            .catch(() => { /* same */ });
-    }, []);
+        loadAccounts();
+        loadProducts();
+    }, [loadAccounts, loadProducts]);
 
     if (loading) {
         return (
@@ -120,6 +134,7 @@ export default function OpeningBalancePage() {
                 accounts={data.accounts}
                 allAccounts={allAccounts}
                 onChanged={load}
+                onAccountListChanged={loadAccounts}
                 openingDrTotal={data.openingDrTotal}
                 openingCrTotal={data.openingCrTotal}
                 balanced={balanced}
@@ -131,6 +146,7 @@ export default function OpeningBalancePage() {
                 products={data.products}
                 allProducts={allProducts}
                 onChanged={load}
+                onProductListChanged={loadProducts}
                 openingStockTotal={data.openingStockTotal}
             />
         </div>
@@ -147,18 +163,20 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
 }
 
 function AccountOpeningSection({
-    accounts, allAccounts, onChanged, openingDrTotal, openingCrTotal, balanced, suspenseSide, suspenseAmount,
+    accounts, allAccounts, onChanged, onAccountListChanged, openingDrTotal, openingCrTotal, balanced, suspenseSide, suspenseAmount,
 }: {
-    accounts:        AccountRow[];
-    allAccounts:     AllAccount[];
-    onChanged:       () => void;
-    openingDrTotal:  number;
-    openingCrTotal:  number;
-    balanced:        boolean;
-    suspenseSide:    "DEBIT" | "CREDIT" | null;
-    suspenseAmount:  number;
+    accounts:             AccountRow[];
+    allAccounts:          AllAccount[];
+    onChanged:            () => void;
+    onAccountListChanged: () => Promise<void> | void;
+    openingDrTotal:       number;
+    openingCrTotal:       number;
+    balanced:             boolean;
+    suspenseSide:         "DEBIT" | "CREDIT" | null;
+    suspenseAmount:       number;
 }) {
     const [showAdd, setShowAdd] = useState(false);
+    const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({
         accountId: 0,
         amount:    "",
@@ -166,6 +184,13 @@ function AccountOpeningSection({
         asOfDate:  new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
+
+    const handleAccountCreated = async (newId: number) => {
+        await onAccountListChanged();
+        setShowCreate(false);
+        setShowAdd(true);
+        setForm((f) => ({ ...f, accountId: newId }));
+    };
 
     // Pre-fill the form when an existing account is selected so editing is in-place.
     useEffect(() => {
@@ -212,10 +237,21 @@ function AccountOpeningSection({
                     <h3 className="text-sm font-semibold">Account Opening Balances</h3>
                     <p className="text-xs text-muted-foreground">{accounts.length} {accounts.length === 1 ? "account" : "accounts"} with opening balance</p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setShowAdd((v) => !v)}>
-                    <Plus size={14} /> {showAdd ? "Hide editor" : "Add / Edit"}
-                </Button>
+                <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setShowCreate(true)}>
+                        <Plus size={14} /> New account
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowAdd((v) => !v)}>
+                        <Plus size={14} /> {showAdd ? "Hide editor" : "Add / Edit"}
+                    </Button>
+                </div>
             </div>
+
+            <QuickCreateAccountDialog
+                open={showCreate}
+                onOpenChange={setShowCreate}
+                onCreated={handleAccountCreated}
+            />
 
             {showAdd && (
                 <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
@@ -318,14 +354,16 @@ function AccountOpeningSection({
 }
 
 function ProductOpeningSection({
-    products, allProducts, onChanged, openingStockTotal,
+    products, allProducts, onChanged, onProductListChanged, openingStockTotal,
 }: {
-    products:          ProductRow[];
-    allProducts:       AllProduct[];
-    onChanged:         () => void;
-    openingStockTotal: number;
+    products:             ProductRow[];
+    allProducts:          AllProduct[];
+    onChanged:            () => void;
+    onProductListChanged: () => Promise<void> | void;
+    openingStockTotal:    number;
 }) {
     const [showAdd, setShowAdd] = useState(false);
+    const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({
         productId: 0,
         qty:       "",
@@ -333,6 +371,13 @@ function ProductOpeningSection({
         asOfDate:  new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
+
+    const handleProductCreated = async (newId: number) => {
+        await onProductListChanged();
+        setShowCreate(false);
+        setShowAdd(true);
+        setForm((f) => ({ ...f, productId: newId }));
+    };
 
     useEffect(() => {
         if (!form.productId) return;
@@ -379,10 +424,21 @@ function ProductOpeningSection({
                     <h3 className="text-sm font-semibold">Product Opening Stock</h3>
                     <p className="text-xs text-muted-foreground">{products.length} {products.length === 1 ? "product" : "products"} with opening stock</p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setShowAdd((v) => !v)}>
-                    <Plus size={14} /> {showAdd ? "Hide editor" : "Add / Edit"}
-                </Button>
+                <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setShowCreate(true)}>
+                        <Plus size={14} /> New product
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowAdd((v) => !v)}>
+                        <Plus size={14} /> {showAdd ? "Hide editor" : "Add / Edit"}
+                    </Button>
+                </div>
             </div>
+
+            <QuickCreateProductDialog
+                open={showCreate}
+                onOpenChange={setShowCreate}
+                onCreated={handleProductCreated}
+            />
 
             {showAdd && (
                 <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
@@ -465,5 +521,222 @@ function ProductOpeningSection({
                 </table>
             )}
         </div>
+    );
+}
+
+// ── Quick-create dialogs ─────────────────────────────────────────────────
+// Bare-minimum forms so a user can add a missing master without leaving
+// the opening-balance page. Full-featured forms still live on the
+// dedicated master pages (/office/accountancy/, /office/inventory/products).
+
+function QuickCreateAccountDialog({
+    open, onOpenChange, onCreated,
+}: {
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+    onCreated: (newId: number) => void | Promise<void>;
+}) {
+    const [groups, setGroups] = useState<AccountGroupOpt[]>([]);
+    const [form, setForm] = useState({
+        code: "",
+        name: "",
+        groupId: "",
+        normalBalance: "DEBIT" as "DEBIT" | "CREDIT",
+    });
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+        // Flatten the group tree so the user picks a leaf-or-anywhere group easily.
+        type Node = AccountGroupOpt & { children?: Node[] };
+        axios.get<Node[]>("/api/finance/account-groups").then((r) => {
+            const flat: AccountGroupOpt[] = [];
+            const walk = (nodes: Node[]) => {
+                for (const n of nodes) {
+                    flat.push({ id: n.id, name: n.name, type: n.type, parentId: n.parentId });
+                    if (n.children?.length) walk(n.children);
+                }
+            };
+            walk(r.data);
+            setGroups(flat);
+        }).catch(() => toast.error("Failed to load groups"));
+    }, [open]);
+
+    const reset = () => setForm({ code: "", name: "", groupId: "", normalBalance: "DEBIT" });
+
+    const save = async () => {
+        if (!form.code.trim() || !form.name.trim()) { toast.error("Code and name required"); return; }
+        if (!form.groupId)                          { toast.error("Pick a group"); return; }
+        setSaving(true);
+        try {
+            const { data } = await axios.post<{ id: number }>("/api/finance/gl-accounts", {
+                code:          form.code.trim(),
+                name:          form.name.trim(),
+                groupId:       Number(form.groupId),
+                normalBalance: form.normalBalance,
+            });
+            toast.success(`Account "${form.name}" created`);
+            reset();
+            await onCreated(data.id);
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
+            toast.error(msg ?? "Failed");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>New ledger account</DialogTitle></DialogHeader>
+                <div className="space-y-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Code</Label>
+                            <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="e.g. 1300" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Dr / Cr (normal)</Label>
+                            <Select value={form.normalBalance} onValueChange={(v) => setForm((f) => ({ ...f, normalBalance: v as "DEBIT" | "CREDIT" }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="DEBIT">Debit</SelectItem>
+                                    <SelectItem value="CREDIT">Credit</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Petty Cash" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Group</Label>
+                        <Select value={form.groupId} onValueChange={(v) => setForm((f) => ({ ...f, groupId: v }))}>
+                            <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                            <SelectContent>
+                                {groups.map((g) => (
+                                    <SelectItem key={g.id} value={String(g.id)}>
+                                        {g.name} <span className="text-muted-foreground text-xs">({g.type})</span>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
+                        <Button onClick={save} disabled={saving}>
+                            {saving && <Loader2 size={14} className="animate-spin" />} Create
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function QuickCreateProductDialog({
+    open, onOpenChange, onCreated,
+}: {
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+    onCreated: (newId: number) => void | Promise<void>;
+}) {
+    const [units, setUnits] = useState<UnitOpt[]>([]);
+    const [form, setForm] = useState({
+        sku: "", name: "", unitId: "",
+        costRupees: "", priceRupees: "",
+    });
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+        axios.get<UnitOpt[]>("/api/inventory/units")
+            .then((r) => setUnits(r.data))
+            .catch(() => toast.error("Failed to load units"));
+    }, [open]);
+
+    const reset = () => setForm({ sku: "", name: "", unitId: "", costRupees: "", priceRupees: "" });
+
+    const rupeesToPaise = (r: string): number | null => {
+        const t = r.trim(); if (t === "") return null;
+        const n = parseFloat(t); if (!Number.isFinite(n) || n < 0) return null;
+        return Math.round(n * 100);
+    };
+
+    const save = async () => {
+        if (!form.sku.trim() || !form.name.trim()) { toast.error("SKU and name required"); return; }
+        if (!form.unitId)                          { toast.error("Pick a unit"); return; }
+        setSaving(true);
+        try {
+            const { data } = await axios.post<{ id: number }>("/api/inventory/products", {
+                sku:        form.sku.trim(),
+                name:       form.name.trim(),
+                unitId:     Number(form.unitId),
+                costPaise:  rupeesToPaise(form.costRupees),
+                pricePaise: rupeesToPaise(form.priceRupees),
+            });
+            toast.success(`Product "${form.name}" created`);
+            reset();
+            await onCreated(data.id);
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
+            toast.error(msg ?? "Failed");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>New product</DialogTitle></DialogHeader>
+                <div className="space-y-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>SKU</Label>
+                            <Input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} className="font-mono" placeholder="e.g. ENV_A4" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Unit</Label>
+                            <Select value={form.unitId} onValueChange={(v) => setForm((f) => ({ ...f, unitId: v }))}>
+                                <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
+                                <SelectContent>
+                                    {units.map((u) => (
+                                        <SelectItem key={u.id} value={String(u.id)}>
+                                            {u.code} — {u.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Envelope A4 — white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Cost (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
+                            <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.costRupees}
+                                onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))} placeholder="0.00" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Sale price (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
+                            <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.priceRupees}
+                                onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))} placeholder="0.00" />
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Stock starts at 0. Use the form below or a Physical Stock voucher to set opening qty.</p>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
+                        <Button onClick={save} disabled={saving}>
+                            {saving && <Loader2 size={14} className="animate-spin" />} Create
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
