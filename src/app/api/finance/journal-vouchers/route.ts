@@ -227,12 +227,23 @@ export async function POST(req: Request) {
                         },
                     });
 
+                    // Coalesce null → numeric. NULL + n = NULL in Postgres,
+                    // so increment/decrement silently no-op on untracked
+                    // products. Read current stock first; if null, set the
+                    // absolute delta; otherwise apply the delta.
+                    const current = await tx.invProduct.findUnique({
+                        where:  { id: item.productId },
+                        select: { stock: true },
+                    });
+                    const delta = inQty > 0 ? Math.round(inQty) : -Math.round(outQty);
                     await tx.invProduct.update({
                         where: { id: item.productId },
                         data:  {
-                            stock: inQty > 0
-                                ? { increment: Math.round(inQty) }
-                                : { decrement: Math.round(outQty) },
+                            stock: current?.stock === null
+                                ? delta
+                                : delta > 0
+                                    ? { increment: delta }
+                                    : { decrement: -delta },
                         },
                     });
 

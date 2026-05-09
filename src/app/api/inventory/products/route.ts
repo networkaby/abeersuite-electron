@@ -92,6 +92,9 @@ export async function POST(req: Request) {
                 upc3: b.upc3 ?? null,
                 notes: b.notes ?? null,
                 isActive: b.isActive ?? true,
+                // Default to tracked-at-zero so future Purchase increments
+                // actually move the cache (NULL + n = NULL in Postgres).
+                stock: 0,
             },
             include: productInclude,
         });

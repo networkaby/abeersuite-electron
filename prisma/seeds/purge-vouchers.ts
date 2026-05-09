@@ -60,11 +60,10 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE "Account" SET balance = 0`);
     console.log("  ✓ Account.balance reset to 0");
 
-    // Reset cached InvProduct.stock so Purchase vouchers can rebuild it.
-    // null → "not tracked" — Purchase posting will increment from the
-    // posting handler. We start tracked products at 0 so increments work.
-    await pool.query(`UPDATE "InvProduct" SET stock = 0 WHERE stock IS NOT NULL`);
-    console.log("  ✓ InvProduct.stock zeroed (tracked products only)");
+    // Reset every product to stock = 0 so Purchase increments actually move the
+    // cache. (NULL + 1 = NULL in Postgres — see init-product-stock.ts comment.)
+    await pool.query(`UPDATE "InvProduct" SET stock = 0`);
+    console.log("  ✓ InvProduct.stock zeroed (all products)");
 
     console.log("Done. Books are now at opening-balance state.");
     await pool.end();

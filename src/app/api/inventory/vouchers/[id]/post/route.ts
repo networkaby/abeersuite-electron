@@ -81,12 +81,20 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                 amount:    line.amount,
                             },
                         });
+                        // Postgres `NULL + n = NULL` — Prisma's increment/
+                        // decrement silently no-ops on a null cache. If stock
+                        // is null, set the absolute value; otherwise apply the
+                        // delta. Keeps the closing-stock valuation accurate.
+                        const startsAtNull = line.product.stock === null;
+                        const delta = inQty > 0 ? Math.round(inQty) : -Math.round(outQty);
                         await tx.invProduct.update({
                             where: { id: line.productId },
                             data:  {
-                                stock: inQty > 0
-                                    ? { increment: Math.round(inQty) }
-                                    : { decrement: Math.round(outQty) },
+                                stock: startsAtNull
+                                    ? delta
+                                    : delta > 0
+                                        ? { increment: delta }
+                                        : { decrement: -delta },
                                 ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
                             },
                         });

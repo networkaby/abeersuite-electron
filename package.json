@@ -14,6 +14,7 @@
     "seed:accounts":         "tsx prisma/seeds/accounts.ts",
     "seed:opening-balances": "tsx prisma/seeds/opening-balances.ts",
     "seed:purge-vouchers":   "tsx prisma/seeds/purge-vouchers.ts",
+    "seed:init-product-stock": "tsx prisma/seeds/init-product-stock.ts",
     "seed:db-checks":        "tsx prisma/seeds/db-checks.ts",
     "seed:all":              "pnpm seed:baseline && pnpm seed:org && pnpm seed:accounts && pnpm seed:opening-balances && pnpm seed:db-checks",
     "seed:dummy-users": "tsx prisma/seeds/dummy-users.ts",

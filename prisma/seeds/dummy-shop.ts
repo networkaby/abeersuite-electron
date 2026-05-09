@@ -54,7 +54,9 @@ async function upsertShopDemoCatalog() {
         if (existing) {
             await db.update({ where: { id: existing.id }, data });
         } else {
-            await db.create({ data: { ...data, sku } });
+            // Default new products to stock=0 (tracked) so Purchase increments
+            // actually move the cache. NULL + n = NULL in Postgres.
+            await db.create({ data: { ...data, sku, stock: 0 } });
         }
     }
 

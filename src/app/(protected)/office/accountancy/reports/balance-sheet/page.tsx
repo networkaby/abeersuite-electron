@@ -157,8 +157,13 @@ export default function BalanceSheetPage() {
     let assetsTotal = 0;
     if (data) {
         assetsTotal = data.assets.reduce((s, g) => s + g.rolledUpClosing, 0);
-        // Replace any zero/missing closing-stock GL with the live computed value
-        if (data.closingStock.diff !== 0) assetsTotal += data.closingStock.diff;
+        // Tally convention: Closing Stock is computed live (not posted per
+        // voucher), and shown as a separate Current Asset line. We add the
+        // delta (live computed − whatever the GL Stock-in-Hand ledger
+        // already holds) so the totals don't double-count.
+        if (data.closingStock.computed > 0) {
+            assetsTotal += data.closingStock.computed - data.closingStock.postedToGl;
+        }
     }
     const difference = liabilitiesTotal - assetsTotal;
 
@@ -248,14 +253,16 @@ export default function BalanceSheetPage() {
                                         onLedger={goLedger} onGroup={goGroup}
                                     />
                                 ))}
-                                {/* Closing stock — synthetic row showing live valuation if different from GL */}
-                                {data.closingStock.diff !== 0 && (
+                                {/* Closing stock — Tally-style standalone Current Asset row.
+                                    Always shown when there's stock on hand, regardless of
+                                    whether a GL Stock-in-Hand ledger has been posted. */}
+                                {data.closingStock.computed > 0 && (
                                     <tr className="bg-amber-50/30 dark:bg-amber-950/10">
                                         <td className="py-1.5 italic text-muted-foreground" style={{ paddingLeft: 16 }} title="Live valuation: SUM(stock × cost)">
                                             Closing Stock (live valuation)
                                         </td>
                                         <td className="py-1.5 pr-3 text-right font-mono text-sm">
-                                            {fmt(data.closingStock.diff)}
+                                            {fmt(data.closingStock.computed - data.closingStock.postedToGl)}
                                         </td>
                                     </tr>
                                 )}
