@@ -92,6 +92,8 @@ These are the **single source of truth** for every balance/value calculation in 
 - **2026-05-09 — Trading-aware netProfitLoss**: `netProfitLoss(from, to)` includes the closing-stock − opening-stock adjustment from `computeTradingStockAdjustment`. Both BS Equity and P&L net profit use it, so they always reconcile. Don't sum INCOME − EXPENSE journal lines yourself.
 - **2026-05-09 — Closing Stock injection**: BS API injects the live `closingStock.computed − postedToGl` value as a synthetic ledger (`id: -1`, name "Closing Stock (live)") inside the Stock-in-Hand group so the rolled-up totals flow naturally. `goLedger` short-circuits on negative ids — keep that guard if you copy the click handler elsewhere.
 - **2026-05-09 — Suspense ledger**: When opening Dr ≠ opening Cr (incl. opening stock value), the gap auto-parks in "Difference in Opening Balances". Surface this on any opening-balance UI; never silently absorb the diff.
+- **2026-05-09 — Stock-in-Hand has no GL children**: `bootstrap-seed.ts` creates the Stock-in-Hand account group but no ledgers under it. Live closing-stock value is injected as a synthetic ledger at report time (`balance-sheet/route.ts`). DO NOT add real Account rows under this group — they would double-count with the synthetic injection.
+- **2026-05-09 — Single bootstrap seed**: `pnpm prisma db seed` runs `bootstrap-seed.ts` (the only production seed). All other `dummy-*.ts` are dev-only and removed by `pnpm seed:hard-clean`. Schema changes must be mirrored in `bootstrap-seed.ts`.
 
 ## Out of scope / deferred
 

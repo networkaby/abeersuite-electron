@@ -1,5 +1,6 @@
-// DUMMY DATA — 4 demo logins (admin/tech/front/des @networkservice.in).
-// Run only in dev; remove manually before production.
+// DUMMY DATA — 3 demo non-admin staff logins (tech / front / des).
+// Admin is seeded by bootstrap-seed.ts (production), not here.
+// Run only in dev. `pnpm seed:hard-clean` removes these.
 // Run: pnpm seed:dummy-users  (npx tsx prisma/seeds/dummy-users.ts)
 
 import { PrismaClient } from "../../src/generated/prisma/client";
@@ -17,7 +18,6 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 const DEMO_USERS: { email: string; name: string; role: string; password: string }[] = [
-    { email: "admin@networkservice.in", name: "Admin",      role: "R1", password: "admin123" },
     { email: "tech@networkservice.in",  name: "Technician", role: "R2", password: "tech123"  },
     { email: "front@networkservice.in", name: "Front Desk", role: "R3", password: "front123" },
     { email: "des@networkservice.in",   name: "Despatch",   role: "R4", password: "des123"   },

@@ -11,6 +11,6 @@ export default defineConfig({
   },
   migrations: {
     path: "prisma/migrations",
-    seed: "pnpm exec tsx prisma/seeds/baseline.ts",
+    seed: "pnpm exec tsx prisma/seeds/bootstrap-seed.ts",
   },
 });

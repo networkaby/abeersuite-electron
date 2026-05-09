@@ -74,6 +74,7 @@ For per-product stock-value display, **always use `productClosingValue(p)`** —
 - **2026-05-09 — Opening sync is destructive on PATCH**: when opening qty/rate change, the cache is overwritten (last-write-wins). Subsequent Purchase/Sale vouchers move from the new baseline. To change `costPaise` without touching opening, set explicit `costPaise` in the Pricing tab — it merges last and wins.
 - **GST/HSN drift**: `gstRate`, `hsnCode`, `taxability` columns were added to `InvProduct` via `prisma db push` rather than a migration file. Any future `migrate reset` will lose these columns — they need a proper migration. The schema file already has them.
 - **Channels are opt-out, not opt-in**: a product is sellable everywhere unless a flag explicitly restricts.
+- **2026-05-09 — All inventory masters are dummy data**: `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` are seeded **only** by `dummy-shop.ts`. `bootstrap-seed.ts` doesn't touch any of them. `pnpm seed:hard-clean` wipes them all. Real production users create masters via the UI; dummy-shop is for demo only.
 
 ## Out of scope / deferred
 

@@ -9,16 +9,13 @@
     "lint": "eslint",
     "reconcile:shop-orders": "tsx src/scripts/reconcile-shop-order-accounts.ts",
     "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts",
-    "seed:baseline":         "prisma db seed",
-    "seed:org":              "tsx prisma/seeds/org.ts",
-    "seed:accounts":         "tsx prisma/seeds/accounts.ts",
-    "seed:opening-balances": "tsx prisma/seeds/opening-balances.ts",
-    "seed:purge-vouchers":   "tsx prisma/seeds/purge-vouchers.ts",
-    "seed:init-product-stock": "tsx prisma/seeds/init-product-stock.ts",
-    "seed:db-checks":        "tsx prisma/seeds/db-checks.ts",
-    "seed:all":              "pnpm seed:baseline && pnpm seed:org && pnpm seed:accounts && pnpm seed:opening-balances && pnpm seed:db-checks",
-    "seed:dummy-users": "tsx prisma/seeds/dummy-users.ts",
-    "seed:dummy-shop":  "tsx prisma/seeds/dummy-shop.ts"
+    "seed:dummy-users":     "tsx prisma/seeds/dummy-users.ts",
+    "seed:dummy-shop":      "tsx prisma/seeds/dummy-shop.ts",
+    "seed:dummy-customers": "tsx prisma/seeds/dummy-customers.ts",
+    "seed:dummy-vouchers":  "tsx prisma/seeds/dummy-vouchers.ts",
+    "seed:dummy-all":       "pnpm seed:dummy-customers && pnpm seed:dummy-users && pnpm seed:dummy-shop && pnpm seed:dummy-vouchers",
+    "seed:purge-vouchers":  "tsx prisma/seeds/purge-vouchers.ts",
+    "seed:hard-clean":      "tsx prisma/seeds/hard-clean.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
