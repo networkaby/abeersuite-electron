@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, FolderTree, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
+import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -50,6 +51,9 @@ export default function GroupDetailPage() {
     const [data, setData] = useState<GroupDetailData | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // Escape goes back to the previous page (the report you came from).
+    useEscapeBack();
+
     const load = useCallback(() => {
         setLoading(true);
         axios.get<GroupDetailData>(`/api/finance/groups/${id}/detail`)
@@ -80,7 +84,7 @@ export default function GroupDetailPage() {
         <div className="max-w-5xl mx-auto space-y-5">
             {/* Header */}
             <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon-sm" onClick={() => router.back()}>
+                <Button variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
                     <ArrowLeft size={16} />
                 </Button>
                 <div className="flex-1">

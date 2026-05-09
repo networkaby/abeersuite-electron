@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
 
 interface SourceDoc {
     kind: "sale" | "purchase" | "estimate" | "invoice";
@@ -65,6 +66,9 @@ export default function AccountLedgerPage() {
     const [data, setData] = useState<LedgerData | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // Escape goes back to the previous page (the report you came from).
+    useEscapeBack();
+
     const load = useCallback(() => {
         setLoading(true);
         axios.get<LedgerData>(`/api/finance/reports/ledger/${id}?from=${from}&to=${to}`)
@@ -80,7 +84,7 @@ export default function AccountLedgerPage() {
         <div className="max-w-6xl mx-auto space-y-5">
             {/* Header */}
             <div className="flex items-center gap-3 print:hidden">
-                <Button variant="ghost" size="icon-sm" onClick={() => router.back()}>
+                <Button variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
                     <ArrowLeft size={16} />
                 </Button>
                 <div className="flex-1">

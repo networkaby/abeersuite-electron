@@ -192,9 +192,11 @@ export default function BalanceSheetPage() {
             )}
 
             {!loading && data && (
-                <div className="grid grid-cols-2 gap-6">
+                // items-stretch → both columns equal height; totals row sticks to the
+                // bottom of each column via mt-auto so they line up horizontally.
+                <div className="grid grid-cols-2 gap-6 items-stretch">
                     {/* Liabilities */}
-                    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <div className="border-b border-border bg-muted/40 px-4 py-2.5 flex items-baseline justify-between">
                             <h2 className="font-bold text-foreground">Liabilities</h2>
                             <span className="text-xs text-muted-foreground">as at {fmtIndianDate(data.asOf)}</span>
@@ -232,19 +234,16 @@ export default function BalanceSheetPage() {
                                     </tr>
                                 )}
                             </tbody>
-                            <tfoot>
-                                <tr className="border-t-2 border-border bg-muted/30">
-                                    <td className="py-2 px-3 font-semibold">Total</td>
-                                    <td className="py-2 pr-3 text-right font-mono font-bold">
-                                        {fmt(liabilitiesTotal)}
-                                    </td>
-                                </tr>
-                            </tfoot>
                         </table>
+                        {/* Total — pushed to bottom so it lines up with the Assets total horizontally. */}
+                        <div className="mt-auto border-t-2 border-border bg-muted/30 px-3 py-2 flex items-center justify-between font-bold text-sm">
+                            <span>Total</span>
+                            <span className="font-mono">{fmt(liabilitiesTotal)}</span>
+                        </div>
                     </div>
 
                     {/* Assets */}
-                    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <div className="border-b border-border bg-muted/40 px-4 py-2.5 flex items-baseline justify-between">
                             <h2 className="font-bold text-foreground">Assets</h2>
                             <span className="text-xs text-muted-foreground">as at {fmtIndianDate(data.asOf)}</span>
@@ -268,15 +267,11 @@ export default function BalanceSheetPage() {
                                     </tr>
                                 )}
                             </tbody>
-                            <tfoot>
-                                <tr className="border-t-2 border-border bg-muted/30">
-                                    <td className="py-2 px-3 font-semibold">Total</td>
-                                    <td className="py-2 pr-3 text-right font-mono font-bold">
-                                        {fmt(assetsTotal)}
-                                    </td>
-                                </tr>
-                            </tfoot>
                         </table>
+                        <div className="mt-auto border-t-2 border-border bg-muted/30 px-3 py-2 flex items-center justify-between font-bold text-sm">
+                            <span>Total</span>
+                            <span className="font-mono">{fmt(assetsTotal)}</span>
+                        </div>
                     </div>
                 </div>
             )}
