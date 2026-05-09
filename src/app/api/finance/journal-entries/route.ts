@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
     try {
         const entry = await prisma.$transaction(async (tx) => {
-            const reference = await nextRefFromSeries(tx, "JOURNAL");
+            const reference = await nextRefFromSeries(tx, "JOURNAL", user!.id);
             return tx.journalEntry.create({
                 data: {
                     date: new Date(body.date),

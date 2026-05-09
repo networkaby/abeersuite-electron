@@ -1,74 +1,58 @@
 import { PrismaClient } from "@/generated/prisma/client";
+import { fyStartYearFor } from "./voucherRef";
 
 const KINDS = [
-    { kind: "CONTRA",      label: "Contra Voucher",   voucherType: "CONTRA" as const },
-    { kind: "PAYMENT",     label: "Payment Voucher",   voucherType: "PAYMENT" as const },
-    { kind: "RECEIPT",     label: "Receipt Voucher",   voucherType: "RECEIPT" as const },
-    { kind: "CREDIT_NOTE", label: "Credit Note",       voucherType: "CREDIT_NOTE" as const },
-    { kind: "DEBIT_NOTE",  label: "Debit Note",        voucherType: "DEBIT_NOTE" as const },
+    { kind: "CONTRA",      label: "Contra Voucher",  typeValue: "CV",  voucherType: "CONTRA" as const },
+    { kind: "PAYMENT",     label: "Payment Voucher", typeValue: "PV",  voucherType: "PAYMENT" as const },
+    { kind: "RECEIPT",     label: "Receipt Voucher", typeValue: "RV",  voucherType: "RECEIPT" as const },
+    { kind: "CREDIT_NOTE", label: "Credit Note",     typeValue: "CRN", voucherType: "CREDIT_NOTE" as const },
+    { kind: "DEBIT_NOTE",  label: "Debit Note",      typeValue: "DRN", voucherType: "DEBIT_NOTE" as const },
 ] as const;
 
-const PREFIX_MAP: Record<string, string> = {
-    CONTRA:      "CV",
-    PAYMENT:     "PV",
-    RECEIPT:     "RV",
-    CREDIT_NOTE: "CRN",
-    DEBIT_NOTE:  "DRN",
-};
-
 export async function seedVoucherSeries(prisma: PrismaClient) {
-    const year = new Date().getFullYear();
+    // Ensure BooksConfig singleton exists (default Apr 1)
+    const config = await prisma.booksConfig.upsert({
+        where: { id: 1 },
+        create: { id: 1, restartMonth: 4, restartDay: 1 },
+        update: {},
+    });
+    const fyStart = fyStartYearFor(config.restartMonth, config.restartDay);
 
-    // Count existing vouchers per type for seamless continuity
+    // Count existing records per kind so the next reference continues from the
+    // correct number (not from 1).
     const voucherCounts = await Promise.all(
         KINDS.map(async ({ kind, voucherType }) => {
-            const prefix = `${PREFIX_MAP[kind]}-${year}-`;
-            const count = await prisma.voucher.count({
-                where: { type: voucherType, reference: { startsWith: prefix } },
-            });
-            return { kind, count, prefix };
+            const count = await prisma.voucher.count({ where: { type: voucherType } });
+            return { kind, count };
         }),
     );
-
-    const jePrefix = `JE-${year}-`;
-    const jeCount = await prisma.journalEntry.count({
-        where: { reference: { startsWith: jePrefix } },
-    });
-
-    const invPrefix = `INV-${year}-`;
-    const invCount = await prisma.invoice.count({
-        where: { number: { startsWith: invPrefix } },
-    });
+    const jeCount = await prisma.journalEntry.count();
+    const invCount = await prisma.invoice.count();
 
     const rows = [
-        ...voucherCounts.map(({ kind, count, prefix }) => ({
+        ...KINDS.map(({ kind, label, typeValue }) => ({
             kind,
-            label: KINDS.find((k) => k.kind === kind)!.label,
-            prefix,
-            suffix: "",
-            startFrom: 1,
-            padWidth: 4,
-            nextSeq: count,
+            label,
+            typeValue,
+            nextSeq: voucherCounts.find((c) => c.kind === kind)?.count ?? 0,
         })),
-        {
-            kind: "JOURNAL",
-            label: "Journal Entry",
-            prefix: jePrefix,
-            suffix: "",
-            startFrom: 1,
-            padWidth: 4,
-            nextSeq: jeCount,
-        },
-        {
-            kind: "INVOICE",
-            label: "Sales Invoice",
-            prefix: invPrefix,
-            suffix: "",
-            startFrom: 1,
-            padWidth: 4,
-            nextSeq: invCount,
-        },
-    ];
+        { kind: "JOURNAL", label: "Journal Entry", typeValue: "JE",  nextSeq: jeCount },
+        { kind: "INVOICE", label: "Sales Invoice", typeValue: "INV", nextSeq: invCount },
+    ].map((r) => ({
+        kind:            r.kind,
+        label:           r.label,
+        fyStartYear:     fyStart,
+        typeEnabled:     true,
+        typeValue:       r.typeValue,
+        userEnabled:     false,
+        userMaxWidth:    3,
+        yearEnabled:     true,
+        yearFormat:      "FY_SHORT",
+        startFrom:       1,
+        padWidth:        4,
+        nextSeq:         r.nextSeq,
+        partOrder:       "type,-,year,-,number",
+    }));
 
     await prisma.voucherSeries.createMany({ data: rows, skipDuplicates: true });
 }
