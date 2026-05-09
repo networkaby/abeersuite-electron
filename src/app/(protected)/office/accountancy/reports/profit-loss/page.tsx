@@ -3,13 +3,15 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Loader2, Printer, ChevronRight, ChevronDown, ArrowLeft } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
 
 interface LedgerNode {
     id: number; name: string; closing: number;
@@ -120,12 +122,21 @@ function StaticRow({ label, amount, italic = false }: { label: string; amount: n
 
 export default function ProfitLossPage() {
     const router = useRouter();
+    const search = useSearchParams();
     const fyStart = indianFiscalYearStart();
-    const [from, setFrom] = useState(formatDateInput(fyStart));
-    const [to, setTo]     = useState(formatDateInput(new Date()));
+    // Date params on the URL come from the BS drilldown (passes ?from=&to=&ref=balance-sheet).
+    const [from, setFrom] = useState(search.get("from") ?? formatDateInput(fyStart));
+    const [to, setTo]     = useState(search.get("to")   ?? formatDateInput(new Date()));
     const [data, setData] = useState<PLData | null>(null);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+    // Escape to go back — works when the user drilled in from BS / dashboard / etc.
+    useEscapeBack();
+    // Breadcrumb continuity — when ?ref=balance-sheet is present, surface a link
+    // back to the Balance Sheet so the user knows where they came from.
+    const cameFromBalanceSheet = search.get("ref") === "balance-sheet";
+    const bsHref = `/office/accountancy/reports/balance-sheet?asOf=${to}`;
 
     const load = useCallback(() => {
         setLoading(true);
@@ -167,11 +178,24 @@ export default function ProfitLossPage() {
         <div className="max-w-7xl mx-auto space-y-5">
             {/* Header */}
             <div className="flex items-end justify-between gap-3 flex-wrap print:hidden">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">Profit &amp; Loss A/c</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        {data ? `${fmtIndianDate(data.from)} to ${fmtIndianDate(data.to)}` : "…"}
-                    </p>
+                <div className="flex items-start gap-2">
+                    {cameFromBalanceSheet && (
+                        <Button variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back to Balance Sheet (Esc)">
+                            <ArrowLeft size={16} />
+                        </Button>
+                    )}
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">Profit &amp; Loss A/c</h1>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                            {cameFromBalanceSheet && (
+                                <>
+                                    <Link href={bsHref} className="hover:underline">Balance Sheet</Link>
+                                    {" › "}
+                                </>
+                            )}
+                            {data ? `${fmtIndianDate(data.from)} to ${fmtIndianDate(data.to)}` : "…"}
+                        </p>
+                    </div>
                 </div>
                 <div className="flex items-end gap-2">
                     <div className="space-y-1">
@@ -182,7 +206,7 @@ export default function ProfitLossPage() {
                         <Label>To</Label>
                         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Run</Button>
+                    <Button onClick={load}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print"><Printer size={14} /></Button>
                 </div>
             </div>

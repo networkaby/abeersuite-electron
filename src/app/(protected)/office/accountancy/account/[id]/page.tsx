@@ -109,7 +109,7 @@ export default function AccountLedgerPage() {
                         <Label>To</Label>
                         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Run</Button>
+                    <Button onClick={load}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()}><Printer size={14} /></Button>
                 </div>
             </div>

@@ -180,7 +180,7 @@ export default function BalanceSheetPage() {
                         <Label>As at</Label>
                         <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Run</Button>
+                    <Button onClick={load}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print">
                         <Printer size={14} />
                     </Button>
@@ -214,7 +214,7 @@ export default function BalanceSheetPage() {
                                 {data.netProfitLoss !== 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart.slice(0,10)}&to=${asOf}`)}
+                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart.slice(0,10)}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1.5 text-muted-foreground italic" style={{ paddingLeft: 16 }}>
                                             <span className="hover:underline hover:text-primary">

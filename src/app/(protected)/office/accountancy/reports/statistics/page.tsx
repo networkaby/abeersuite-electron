@@ -72,7 +72,7 @@ export default function StatisticsPage() {
                         <Label>To</Label>
                         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Run</Button>
+                    <Button onClick={load}>Refresh</Button>
                 </div>
             </div>
 

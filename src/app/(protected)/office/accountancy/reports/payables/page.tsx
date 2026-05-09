@@ -57,7 +57,7 @@ export default function PayablesPage() {
                         <Label>As on</Label>
                         <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-auto" />
                     </div>
-                    <Button onClick={load}>Run</Button>
+                    <Button onClick={load}>Refresh</Button>
                 </div>
             </div>
 

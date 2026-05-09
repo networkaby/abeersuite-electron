@@ -102,7 +102,7 @@ export default function DayBookPage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></div>
                     <div className="space-y-1"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" /></div>
-                    <Button onClick={() => { setPage(1); load(1, search, kind); }}>Run</Button>
+                    <Button onClick={() => { setPage(1); load(1, search, kind); }}>Refresh</Button>
                 </div>
             </div>
 
