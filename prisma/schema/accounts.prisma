@@ -29,7 +29,6 @@ model Account {
   id            Int            @id @default(autoincrement())
   name          String
   code          String?        @unique
-  type          GlAccountType?
   normalBalance NormalBalance?
   description   String?
   isActive      Boolean        @default(true)
@@ -64,7 +63,6 @@ model Account {
   invoices      Invoice[]     @relation("AccountInvoices")
   voucherParty  Voucher[]     @relation("VoucherPartyAccount")
 
-  @@index([type])
   @@index([isActive])
   @@index([personId])
   @@index([companyId])

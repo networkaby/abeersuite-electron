@@ -17,7 +17,8 @@ export async function GET() {
                 select: {
                     id: true, code: true, name: true,
                     openingBalance: true, openingBalanceType: true, openingBalanceDate: true,
-                    type: true, normalBalance: true,
+                    normalBalance: true,
+                    group: { select: { id: true, name: true, type: true } },
                 },
             }),
             prisma.invProduct.findMany({

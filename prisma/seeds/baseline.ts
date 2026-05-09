@@ -1,10 +1,13 @@
-import { PrismaClient } from "./generated/prisma/client";
+// Baseline production seed: roles, permissions, pipelines, statuses,
+// sub-statuses, transitions. No GL accounts (see accounts.ts), no demo
+// users (see dummy-users.ts), no shop catalog (see dummy-shop.ts).
+//
+// Run: pnpm seed:baseline  (alias for `prisma db seed`)
+
+import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
-import { DEMO_SHOP_CATALOG } from "./lib/shop/demo-catalog-seed";
-import { invProductDb } from "./lib/inventory/types";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -373,15 +376,15 @@ const STATUS_TRANSITIONS = [
     { fromStatusId: "S7", toStatusId: "S1" },
     { fromStatusId: "S8", toStatusId: "S1" },
     // P7 — Sales Orders pipeline
-    { fromStatusId: "S42", toStatusId: "S43" }, // New → Under Review
-    { fromStatusId: "S42", toStatusId: "S48" }, // New → Cancelled
-    { fromStatusId: "S43", toStatusId: "S44" }, // Under Review → Confirmed
-    { fromStatusId: "S43", toStatusId: "S48" }, // Under Review → Cancelled
-    { fromStatusId: "S44", toStatusId: "S45" }, // Confirmed → Packing
-    { fromStatusId: "S44", toStatusId: "S48" }, // Confirmed → Cancelled
-    { fromStatusId: "S45", toStatusId: "S46" }, // Packing → Dispatched
-    { fromStatusId: "S46", toStatusId: "S47" }, // Dispatched → Delivered
-    { fromStatusId: "S46", toStatusId: "S49" }, // Dispatched → Returned
+    { fromStatusId: "S42", toStatusId: "S43" },
+    { fromStatusId: "S42", toStatusId: "S48" },
+    { fromStatusId: "S43", toStatusId: "S44" },
+    { fromStatusId: "S43", toStatusId: "S48" },
+    { fromStatusId: "S44", toStatusId: "S45" },
+    { fromStatusId: "S44", toStatusId: "S48" },
+    { fromStatusId: "S45", toStatusId: "S46" },
+    { fromStatusId: "S46", toStatusId: "S47" },
+    { fromStatusId: "S46", toStatusId: "S49" },
 ];
 
 const SUB_STATUSES: SubStatusSeed[] = [
@@ -474,32 +477,6 @@ const SUB_STATUS_TRANSITIONS = [
     { fromSubStatusId: "SS33", toSubStatusId: "SS35" },
 ] as const;
 
-const CHART_OF_ACCOUNTS = [
-    { code: "1000", name: "Cash", type: "ASSET", normalBalance: "DEBIT", description: "Physical cash and petty cash" },
-    { code: "1010", name: "Bank Account", type: "ASSET", normalBalance: "DEBIT", description: "Main business bank account" },
-    { code: "1100", name: "Accounts Receivable", type: "ASSET", normalBalance: "DEBIT", description: "Amounts owed by customers" },
-    { code: "1200", name: "Parts Inventory", type: "ASSET", normalBalance: "DEBIT", description: "Spare parts and components in stock" },
-    { code: "1300", name: "Prepaid Expenses", type: "ASSET", normalBalance: "DEBIT", description: "Prepaid rent, insurance, subscriptions" },
-    { code: "2000", name: "Accounts Payable", type: "LIABILITY", normalBalance: "CREDIT", description: "Amounts owed to suppliers" },
-    { code: "2100", name: "Tax Payable", type: "LIABILITY", normalBalance: "CREDIT", description: "VAT / sales tax collected from customers" },
-    { code: "2200", name: "Accrued Expenses", type: "LIABILITY", normalBalance: "CREDIT", description: "Expenses incurred but not yet paid" },
-    { code: "3000", name: "Owner's Capital", type: "EQUITY", normalBalance: "CREDIT", description: "Owner's investment in the business" },
-    { code: "3100", name: "Retained Earnings", type: "EQUITY", normalBalance: "CREDIT", description: "Accumulated profits carried forward" },
-    { code: "4000", name: "Service Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from repair and service work" },
-    { code: "4100", name: "Parts Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from parts sales" },
-    { code: "4150", name: "Shop Sales Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from ecommerce and walk-in product sales" },
-    { code: "4200", name: "Warranty Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Income from warranty claim work" },
-    { code: "4900", name: "Other Revenue", type: "REVENUE", normalBalance: "CREDIT", description: "Miscellaneous income" },
-    { code: "5000", name: "Cost of Parts Sold", type: "EXPENSE", normalBalance: "DEBIT", description: "Cost of parts used in repairs" },
-    { code: "6000", name: "Rent Expense", type: "EXPENSE", normalBalance: "DEBIT", description: "Shop / office rent" },
-    { code: "6100", name: "Utilities Expense", type: "EXPENSE", normalBalance: "DEBIT", description: "Electricity, water, internet" },
-    { code: "6200", name: "Salaries Expense", type: "EXPENSE", normalBalance: "DEBIT", description: "Staff wages and salaries" },
-    { code: "6300", name: "Tools & Equipment", type: "EXPENSE", normalBalance: "DEBIT", description: "Tools, equipment and small asset purchases" },
-    { code: "6900", name: "Miscellaneous Expense", type: "EXPENSE", normalBalance: "DEBIT", description: "Other business expenses" },
-    // Walk-in cash customer account — used as accountId for in-store cash sales with no registered customer
-    { code: "CASH-WALKIN", name: "Walk-in Cash Customer", type: "ASSET" as const, normalBalance: "DEBIT" as const, description: "Generic account for unregistered walk-in cash sales" },
-] as const;
-
 async function upsertPipelines(pipelines: PipelineSeed[]) {
     for (const pipeline of pipelines) {
         await prisma.pipeline.upsert({
@@ -562,10 +539,7 @@ async function upsertSubStatusGroups() {
     for (const group of GROUPS) {
         await prisma.subStatusGroup.upsert({
             where: { id: group.id },
-            update: {
-                label: group.label,
-                order: group.order,
-            },
+            update: { label: group.label, order: group.order },
             create: group,
         });
     }
@@ -575,16 +549,11 @@ async function upsertRoles() {
     for (const role of ROLES) {
         await prisma.role.upsert({
             where: { id: role.id },
-            update: {
-                label: role.label,
-                color: role.color,
-                isSystem: role.isSystem,
-            },
+            update: { label: role.label, color: role.color, isSystem: role.isSystem },
             create: role,
         });
     }
 }
-
 
 async function upsertPermissions() {
     for (const permission of PERMISSIONS) {
@@ -699,107 +668,11 @@ async function backfillPipelineIds() {
     console.log(`  Backfilled ${statusResult.count} statuses, ${subStatusResult.count} sub-statuses, ${ticketResult.count} tickets to P1`);
 }
 
-async function upsertChartOfAccounts() {
-    for (const account of CHART_OF_ACCOUNTS) {
-        await prisma.account.upsert({
-            where: { code: account.code },
-            update: {
-                name: account.name,
-                type: account.type,
-                normalBalance: account.normalBalance,
-                description: account.description,
-                isActive: true,
-            },
-            create: {
-                code: account.code,
-                name: account.name,
-                type: account.type,
-                normalBalance: account.normalBalance,
-                description: account.description,
-            },
-        });
-    }
-}
-
-/** Idempotent: upsert full demo catalog for the public shop.
- *  Products live on InvProduct — a "PCS" unit is created if absent.
- */
-async function upsertShopDemoCatalog() {
-    // Ensure a default unit
-    const pcsUnit = await prisma.invUnit.upsert({
-        where: { code: "PCS" },
-        update: {},
-        create: { code: "PCS", label: "Piece", decimals: 0, isActive: true },
-    });
-
-    for (const row of DEMO_SHOP_CATALOG) {
-        const galleryJson = row.galleryUrls;
-        const specsJson = row.specs;
-        const sku = row.slug.toUpperCase().replace(/-/g, "_");
-        const data = {
-            name: row.name,
-            unitId: pcsUnit.id,
-            slug: row.slug,
-            shopSubheading: row.subheading,
-            shopDescription: row.description,
-            shopCategory: row.category,
-            pricePaise: row.pricePaise,
-            mrpPaise: row.mrpPaise,
-            shopBadge: row.badge,
-            imageUrl: row.imageUrl,
-            galleryJson,
-            specsJson,
-            isActive: true,
-            isListedInShop: true,
-        };
-        const db = invProductDb(prisma);
-        const existing = await db.findFirst({
-            where: { OR: [{ slug: row.slug }, { sku }] },
-        });
-        if (existing) {
-            await db.update({ where: { id: existing.id }, data });
-        } else {
-            await db.create({ data: { ...data, sku } });
-        }
-    }
-
-    const keepSlugs = DEMO_SHOP_CATALOG.map((r) => r.slug);
-    await invProductDb(prisma).updateMany({
-        where: { slug: { notIn: keepSlugs, not: null }, isListedInShop: true },
-        data: { isListedInShop: false },
-    });
-}
-
-const DEMO_USERS: { email: string; name: string; role: string; password: string }[] = [
-    { email: "admin@networkservice.in", name: "Admin",      role: "R1", password: "admin123" },
-    { email: "tech@networkservice.in",  name: "Technician", role: "R2", password: "tech123"  },
-    { email: "front@networkservice.in", name: "Front Desk", role: "R3", password: "front123" },
-    { email: "des@networkservice.in",   name: "Despatch",   role: "R4", password: "des123"   },
-];
-
-async function ensureDemoUsers() {
-    for (const u of DEMO_USERS) {
-        const password = await bcrypt.hash(u.password, 10);
-        await prisma.user.upsert({
-            where: { email: u.email },
-            update: { role: u.role, name: u.name },
-            create: {
-                name: u.name,
-                email: u.email,
-                password,
-                role: u.role,
-            },
-        });
-    }
-}
-
 async function main() {
-    console.log("Seeding unified baseline data...");
+    console.log("Seeding baseline data (roles, permissions, pipelines, statuses)…");
 
     await upsertRoles();
     console.log(`  Seeded ${ROLES.length} roles`);
-
-    // Priority is now a Prisma enum (LOW/MEDIUM/HIGH/URGENT) — no DB seeding needed
 
     await upsertPermissions();
     await syncRolePermissions();
@@ -815,16 +688,8 @@ async function main() {
     console.log(`  Seeded ${GROUPS.length} sub-status groups, ${SUB_STATUSES.length} sub-statuses, and workflow transitions`);
 
     await backfillPipelineIds();
-    await upsertChartOfAccounts();
-    console.log(`  Seeded ${CHART_OF_ACCOUNTS.length} GL accounts`);
 
-    await ensureDemoUsers();
-    console.log(`  Ensured ${DEMO_USERS.length} demo users exist (admin / tech / front / des @networkservice.in — passwords reset to defaults each seed)`);
-
-    await upsertShopDemoCatalog();
-    console.log("  Upserted demo shop catalog (products + imagery)");
-
-    console.log("Seed complete.");
+    console.log("Baseline seed complete.");
 }
 
 main()

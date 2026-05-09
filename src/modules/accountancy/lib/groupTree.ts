@@ -9,7 +9,6 @@ export type LedgerNode = {
     id: number;
     name: string;
     code: string | null;
-    type: string | null;
     normalBalance: "DEBIT" | "CREDIT" | null;
     personId: number | null;
     companyId:  number | null;
@@ -54,7 +53,7 @@ export async function buildGroupTree(
         prisma.account.findMany({
             where: { isActive: true, groupId: { not: null } },
             select: {
-                id: true, name: true, code: true, type: true,
+                id: true, name: true, code: true,
                 normalBalance: true, groupId: true,
                 personId: true, companyId: true,
             },
@@ -89,7 +88,6 @@ export async function buildGroupTree(
             id: a.id,
             name: a.name,
             code: a.code,
-            type: a.type,
             normalBalance: a.normalBalance,
             personId: a.personId,
             companyId:  a.companyId,

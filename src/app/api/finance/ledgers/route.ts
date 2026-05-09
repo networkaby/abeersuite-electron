@@ -8,7 +8,6 @@ const createSchema = z.object({
     groupId:     z.number().int().positive().nullish(),
     code:        z.string().trim().max(32).nullish(),
     description: z.string().trim().max(1000).nullish(),
-    type:        z.enum(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]).optional(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]).optional(),
     sortOrder:   z.number().int().min(0).max(9999).optional(),
 });
@@ -89,7 +88,6 @@ export async function POST(req: Request) {
                 groupId:       body.groupId ?? null,
                 code:          body.code ?? null,
                 description:   body.description ?? null,
-                type:          body.type ?? null,
                 normalBalance: body.normalBalance ?? null,
             },
         });

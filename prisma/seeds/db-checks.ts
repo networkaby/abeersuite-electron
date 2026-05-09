@@ -3,7 +3,7 @@
 // nor both. Prisma can't express this in the schema DSL, so we apply it
 // after `db push` / migration via raw SQL. Idempotent.
 //
-// Run: npx tsx prisma/add-contact-xor-check.ts
+// Run: pnpm seed:db-checks  (npx tsx prisma/seeds/db-checks.ts)
 
 import { Pool } from "pg";
 import * as dotenv from "dotenv";

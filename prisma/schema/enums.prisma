@@ -46,14 +46,6 @@ enum GroupType {
   EXPENSE
 }
 
-enum GlAccountType {
-  ASSET
-  LIABILITY
-  EQUITY
-  REVENUE
-  EXPENSE
-}
-
 enum NormalBalance {
   DEBIT
   CREDIT

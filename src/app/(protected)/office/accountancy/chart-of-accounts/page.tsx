@@ -11,19 +11,25 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt, GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/utils/constants";
+import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 
 type NormalBalance = "DEBIT" | "CREDIT";
 
+interface AccountGroupLite {
+    id: number;
+    name: string;
+    type: GroupTypeStr;
+}
+
 interface GlAccount {
     id: number;
-    code: string;
+    code: string | null;
     name: string;
-    type: GlAccountType;
     normalBalance: NormalBalance;
     description: string | null;
     isActive: boolean;
     balance: number;
-    group: { id: number; name: string } | null;
+    group: { id: number; name: string; type: GroupTypeStr } | null;
     _count: { lines: number };
 }
 
@@ -31,6 +37,7 @@ const cellClass = "w-full rounded-md border border-input bg-background px-2 py-1
 
 export default function ChartOfAccountsPage() {
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
+    const [groups, setGroups] = useState<AccountGroupLite[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -39,24 +46,31 @@ export default function ChartOfAccountsPage() {
     const [saving, setSaving] = useState(false);
 
     const [newForm, setNewForm] = useState({
-        code: "", name: "", type: "ASSET" as GlAccountType,
+        code: "", name: "", groupId: 0,
         normalBalance: "DEBIT" as NormalBalance, description: "",
     });
 
     const load = () => {
         setLoading(true);
-        axios.get<GlAccount[]>("/api/finance/gl-accounts?activeOnly=false")
-            .then((r) => setAccounts(r.data))
+        Promise.all([
+            axios.get<GlAccount[]>("/api/finance/gl-accounts?activeOnly=false"),
+            axios.get<AccountGroupLite[]>("/api/finance/account-groups"),
+        ])
+            .then(([a, g]) => { setAccounts(a.data); setGroups(g.data); })
             .catch(() => toast.error("Failed to load accounts"))
             .finally(() => setLoading(false));
     };
 
     useEffect(load, []);
 
+    // Group accounts by their parent group's type. Rows with no group fall
+    // into a separate "Ungrouped" bucket so they're visible (post-seed there
+    // shouldn't be any, but it surfaces orphans during data migrations).
     const grouped = GL_TYPE_ORDER.map((type) => ({
         type,
-        rows: accounts.filter((a) => a.type === type),
+        rows: accounts.filter((a) => a.group?.type === type),
     }));
+    const ungrouped = accounts.filter((a) => !a.group);
 
     const startEdit = (a: GlAccount) => {
         setEditingId(a.id);
@@ -96,13 +110,16 @@ export default function ChartOfAccountsPage() {
     };
 
     const addAccount = async () => {
-        if (!newForm.code || !newForm.name) { toast.error("Code and name required"); return; }
+        if (!newForm.code || !newForm.name || !newForm.groupId) {
+            toast.error("Code, name, and group required");
+            return;
+        }
         setSaving(true);
         try {
             await axios.post("/api/finance/gl-accounts", newForm);
             toast.success("Account created");
             setShowAdd(false);
-            setNewForm({ code: "", name: "", type: "ASSET", normalBalance: "DEBIT", description: "" });
+            setNewForm({ code: "", name: "", groupId: 0, normalBalance: "DEBIT", description: "" });
             load();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -152,17 +169,26 @@ export default function ChartOfAccountsPage() {
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Type</Label>
+                            <Label>Group</Label>
                             <Select
-                                value={newForm.type}
-                                onValueChange={(t) => {
-                                    const nb: NormalBalance = ["ASSET", "EXPENSE"].includes(t) ? "DEBIT" : "CREDIT";
-                                    setNewForm((f) => ({ ...f, type: t as GlAccountType, normalBalance: nb }));
+                                value={newForm.groupId ? String(newForm.groupId) : ""}
+                                onValueChange={(v) => {
+                                    const g = groups.find((x) => x.id === Number(v));
+                                    if (!g) return;
+                                    setNewForm((f) => ({
+                                        ...f,
+                                        groupId: g.id,
+                                        normalBalance: defaultNormalBalanceForGroupType(g.type),
+                                    }));
                                 }}
                             >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Pick a group" /></SelectTrigger>
                                 <SelectContent>
-                                    {GL_TYPE_ORDER.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                    {groups.map((g) => (
+                                        <SelectItem key={g.id} value={String(g.id)}>
+                                            {g.name} <span className="text-xs text-muted-foreground ml-1">({g.type})</span>
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -199,126 +225,160 @@ export default function ChartOfAccountsPage() {
 
             {/* Account groups */}
             {grouped.map(({ type, rows }) => rows.length === 0 ? null : (
-                <div key={type} className="overflow-hidden rounded-lg border border-border bg-card shadow">
-                    <div className={`flex items-center justify-between border-b border-border px-5 py-3 ${GL_TYPE_COLORS[type]}`}>
-                        <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 border border-current/20 ${GL_TYPE_COLORS[type]}`}>{type}</span>
-                        <span className="text-xs opacity-70">{rows.length} accounts</span>
-                    </div>
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
-                                <th className="px-5 py-2 text-left font-medium">Code</th>
-                                <th className="px-5 py-2 text-left font-medium">Name</th>
-                                <th className="px-5 py-2 text-left font-medium">Group</th>
-                                <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
-                                <th className="px-5 py-2 text-right font-medium">Current Balance</th>
-                                <th className="px-5 py-2 text-right font-medium">Entries</th>
-                                <th className="px-5 py-2 text-center font-medium">Status</th>
-                                <th className="px-5 py-2" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((a) => (
-                                <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/40 ${!a.isActive ? "opacity-50" : ""}`}>
-                                    <td className="px-5 py-3 font-mono text-foreground">{a.code}</td>
-                                    <td className="px-5 py-3">
-                                        {editingId === a.id ? (
-                                            <input
-                                                value={editName}
-                                                onChange={(e) => setEditName(e.target.value)}
-                                                className={cellClass}
-                                                autoFocus
-                                            />
-                                        ) : (
-                                            <span className="font-medium text-foreground">{a.name}</span>
-                                        )}
-                                        {a.description && editingId !== a.id && (
-                                            <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
-                                        )}
-                                        {editingId === a.id && (
-                                            <input
-                                                value={editDesc}
-                                                onChange={(e) => setEditDesc(e.target.value)}
-                                                className={`${cellClass} mt-1`}
-                                                placeholder="Description"
-                                            />
-                                        )}
-                                    </td>
-                                    <td className="px-5 py-3">
-                                        <span className="text-xs text-muted-foreground">
-                                            {a.group?.name ?? <span className="italic text-muted-foreground/50">—</span>}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3">
-                                        <span className="text-xs text-muted-foreground">{a.normalBalance}</span>
-                                    </td>
-                                    <td className="px-5 py-3 text-right font-mono">
-                                        <span className={a.balance < 0 ? "text-destructive" : "text-foreground"}>
-                                            {a.balance < 0 && <TrendingDown size={12} className="inline mr-1" />}
-                                            {a.balance > 0 && <TrendingUp size={12} className="inline mr-1 text-green-500" />}
-                                            {fmt(a.balance)}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3 text-right text-muted-foreground">{a._count.lines}</td>
-                                    <td className="px-5 py-3 text-center">
-                                        <span className={`text-xs px-2 py-0.5 border font-medium ${a.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground border-border"}`}>
-                                            {a.isActive ? "Active" : "Inactive"}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3 text-right">
-                                        <div className="flex items-center gap-1 justify-end">
-                                            {editingId === a.id ? (
-                                                <>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon-sm"
-                                                        onClick={() => saveEdit(a.id)}
-                                                        className="text-green-600 hover:bg-green-50"
-                                                        disabled={saving}
-                                                    >
-                                                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon-sm"
-                                                        onClick={() => setEditingId(null)}
-                                                        className="text-muted-foreground hover:bg-muted"
-                                                    >
-                                                        <X size={14} />
-                                                    </Button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon-sm"
-                                                        onClick={() => startEdit(a)}
-                                                        className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                                    >
-                                                        <Pencil size={14} />
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon-sm"
-                                                        onClick={() => toggleActive(a)}
-                                                        className={`text-xs ${a.isActive ? "text-destructive hover:bg-destructive/10" : "text-green-600 hover:bg-green-50"}`}
-                                                    >
-                                                        {a.isActive ? <X size={14} /> : <Check size={14} />}
-                                                    </Button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <AccountSection key={type} type={type} rows={rows} editingId={editingId} editName={editName} editDesc={editDesc} saving={saving}
+                    onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
+                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} />
             ))}
+
+            {ungrouped.length > 0 && (
+                <AccountSection type={null} rows={ungrouped} editingId={editingId} editName={editName} editDesc={editDesc} saving={saving}
+                    onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
+                    onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} />
+            )}
+        </div>
+    );
+}
+
+type SectionProps = {
+    type: GlAccountType | null;
+    rows: GlAccount[];
+    editingId: number | null;
+    editName: string;
+    editDesc: string;
+    saving: boolean;
+    onStartEdit: (a: GlAccount) => void;
+    onSetEditName: (s: string) => void;
+    onSetEditDesc: (s: string) => void;
+    onSaveEdit: (id: number) => void;
+    onCancelEdit: () => void;
+    onToggleActive: (a: GlAccount) => void;
+};
+
+function AccountSection({
+    type, rows, editingId, editName, editDesc, saving,
+    onStartEdit, onSetEditName, onSetEditDesc, onSaveEdit, onCancelEdit, onToggleActive,
+}: SectionProps) {
+    const colorClass = type ? GL_TYPE_COLORS[type] : "bg-muted text-muted-foreground";
+    const label = type ?? "UNGROUPED";
+    return (
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+            <div className={`flex items-center justify-between border-b border-border px-5 py-3 ${colorClass}`}>
+                <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 border border-current/20 ${colorClass}`}>{label}</span>
+                <span className="text-xs opacity-70">{rows.length} accounts</span>
+            </div>
+            <table className="w-full text-sm">
+                <thead>
+                    <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
+                        <th className="px-5 py-2 text-left font-medium">Code</th>
+                        <th className="px-5 py-2 text-left font-medium">Name</th>
+                        <th className="px-5 py-2 text-left font-medium">Group</th>
+                        <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
+                        <th className="px-5 py-2 text-right font-medium">Current Balance</th>
+                        <th className="px-5 py-2 text-right font-medium">Entries</th>
+                        <th className="px-5 py-2 text-center font-medium">Status</th>
+                        <th className="px-5 py-2" />
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((a) => (
+                        <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/40 ${!a.isActive ? "opacity-50" : ""}`}>
+                            <td className="px-5 py-3 font-mono text-foreground">{a.code ?? <span className="text-muted-foreground/50">—</span>}</td>
+                            <td className="px-5 py-3">
+                                {editingId === a.id ? (
+                                    <input
+                                        value={editName}
+                                        onChange={(e) => onSetEditName(e.target.value)}
+                                        className={cellClass}
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <span className="font-medium text-foreground">{a.name}</span>
+                                )}
+                                {a.description && editingId !== a.id && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
+                                )}
+                                {editingId === a.id && (
+                                    <input
+                                        value={editDesc}
+                                        onChange={(e) => onSetEditDesc(e.target.value)}
+                                        className={`${cellClass} mt-1`}
+                                        placeholder="Description"
+                                    />
+                                )}
+                            </td>
+                            <td className="px-5 py-3">
+                                <span className="text-xs text-muted-foreground">
+                                    {a.group?.name ?? <span className="italic text-muted-foreground/50">—</span>}
+                                </span>
+                            </td>
+                            <td className="px-5 py-3">
+                                <span className="text-xs text-muted-foreground">{a.normalBalance}</span>
+                            </td>
+                            <td className="px-5 py-3 text-right font-mono">
+                                <span className={a.balance < 0 ? "text-destructive" : "text-foreground"}>
+                                    {a.balance < 0 && <TrendingDown size={12} className="inline mr-1" />}
+                                    {a.balance > 0 && <TrendingUp size={12} className="inline mr-1 text-green-500" />}
+                                    {fmt(a.balance)}
+                                </span>
+                            </td>
+                            <td className="px-5 py-3 text-right text-muted-foreground">{a._count.lines}</td>
+                            <td className="px-5 py-3 text-center">
+                                <span className={`text-xs px-2 py-0.5 border font-medium ${a.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground border-border"}`}>
+                                    {a.isActive ? "Active" : "Inactive"}
+                                </span>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                                <div className="flex items-center gap-1 justify-end">
+                                    {editingId === a.id ? (
+                                        <>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => onSaveEdit(a.id)}
+                                                className="text-green-600 hover:bg-green-50"
+                                                disabled={saving}
+                                            >
+                                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={onCancelEdit}
+                                                className="text-muted-foreground hover:bg-muted"
+                                            >
+                                                <X size={14} />
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => onStartEdit(a)}
+                                                className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                            >
+                                                <Pencil size={14} />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => onToggleActive(a)}
+                                                className={`text-xs ${a.isActive ? "text-destructive hover:bg-destructive/10" : "text-green-600 hover:bg-green-50"}`}
+                                            >
+                                                {a.isActive ? <X size={14} /> : <Check size={14} />}
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }

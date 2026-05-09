@@ -489,15 +489,16 @@ export const JOURNAL_STATUS_COLORS: Record<string, string> = {
     CANCELLED: "bg-muted text-muted-foreground",
 };
 
-export type GlAccountType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
+// GL section types — derived from the parent AccountGroup's `type` (Tally GroupType).
+// US-style EQUITY rolls up under LIABILITY (Capital Account group); REVENUE → INCOME.
+export type GlAccountType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
-export const GL_TYPE_ORDER: GlAccountType[] = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"];
+export const GL_TYPE_ORDER: GlAccountType[] = ["ASSET", "LIABILITY", "INCOME", "EXPENSE"];
 
 export const GL_TYPE_COLORS: Record<GlAccountType, string> = {
     ASSET: "bg-blue-100 text-blue-700",
     LIABILITY: "bg-orange-100 text-orange-700",
-    EQUITY: "bg-purple-100 text-purple-700",
-    REVENUE: "bg-green-100 text-green-700",
+    INCOME: "bg-green-100 text-green-700",
     EXPENSE: "bg-red-100 text-red-700",
 };
 

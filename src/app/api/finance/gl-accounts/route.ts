@@ -6,7 +6,7 @@ import { z } from "zod";
 const createSchema = z.object({
     code: z.string().trim().min(1),
     name: z.string().trim().min(1),
-    type: z.enum(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]),
+    groupId: z.number().int().positive(),
     normalBalance: z.enum(["DEBIT", "CREDIT"]),
     description: z.string().trim().optional(),
     parentId: z.number().int().positive().optional(),
@@ -14,6 +14,8 @@ const createSchema = z.object({
 
 // GET /api/finance/gl-accounts
 // Returns only pure GL accounts (no person/company identity linkage).
+// Optional `type` query param filters by the parent group's type
+// (ASSET | LIABILITY | INCOME | EXPENSE).
 export async function GET(req: Request) {
     const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
@@ -28,7 +30,9 @@ export async function GET(req: Request) {
                 personId: null,
                 companyId: null,
                 ...(activeOnly ? { isActive: true } : {}),
-                ...(type ? { type: type as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE" } : {}),
+                ...(type
+                    ? { group: { type: type as "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" } }
+                    : {}),
             },
             orderBy: [{ code: "asc" }],
             include: {
@@ -45,6 +49,8 @@ export async function GET(req: Request) {
 }
 
 // POST /api/finance/gl-accounts
+// Account `type` is no longer stored on the row — it's derived from the parent
+// group. Caller must pass `groupId`; `normalBalance` is required.
 export async function POST(req: Request) {
     const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
@@ -60,7 +66,7 @@ export async function POST(req: Request) {
             data: {
                 code: body.code,
                 name: body.name,
-                type: body.type,
+                groupId: body.groupId,
                 normalBalance: body.normalBalance,
                 description: body.description ?? null,
                 parentId: body.parentId ?? null,
