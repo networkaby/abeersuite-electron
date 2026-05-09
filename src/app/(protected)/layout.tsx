@@ -6,6 +6,7 @@ import SessionWrapper from "@/modules/shared/components/SessionWrapper";
 import QuickTicketButton from "@/modules/shared/components/QuickTicketButton";
 import ButtonBar from "@/modules/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
+import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
 
 export default async function ProtectedLayout({
     children,
@@ -55,6 +56,7 @@ export default async function ProtectedLayout({
                 }} />
                 <Toaster richColors />
                 <QuickTicketButton />
+                <JournalVoucherDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

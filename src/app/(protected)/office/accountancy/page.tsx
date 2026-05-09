@@ -1,9 +1,13 @@
-import React from 'react'
+"use client";
 
-function AccountancyPage() {
+import { Button } from "@/components/ui/button";
+import { useJournalVoucherStore } from "@/store/journalVoucherStore";
+useJournalVoucherStore.getState().setOpen(true);
+
+export default function AccountancyPage() {
     return (
-        <div>AccountancyPage</div>
-    )
+        <div>
+            <Button onClick={() => useJournalVoucherStore.getState().setOpen(true)}>Open Journal Voucher</Button>
+        </div>
+    );
 }
-
-export default AccountancyPage
