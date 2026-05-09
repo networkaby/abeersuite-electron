@@ -542,6 +542,10 @@ function QuickCreateAccountDialog({
         name: "",
         groupId: "",
         normalBalance: "DEBIT" as "DEBIT" | "CREDIT",
+        // Optional opening balance — written straight to the new Account row.
+        openingAmount: "",
+        openingType:   "DEBIT" as "DEBIT" | "CREDIT",
+        openingDate:   new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
 
@@ -562,11 +566,16 @@ function QuickCreateAccountDialog({
         }).catch(() => toast.error("Failed to load groups"));
     }, [open]);
 
-    const reset = () => setForm({ code: "", name: "", groupId: "", normalBalance: "DEBIT" });
+    const reset = () => setForm({
+        code: "", name: "", groupId: "", normalBalance: "DEBIT",
+        openingAmount: "", openingType: "DEBIT", openingDate: new Date().toISOString().slice(0, 10),
+    });
 
     const save = async () => {
         if (!form.code.trim() || !form.name.trim()) { toast.error("Code and name required"); return; }
         if (!form.groupId)                          { toast.error("Pick a group"); return; }
+        const opening = parseFloat(form.openingAmount);
+        const hasOpening = Number.isFinite(opening) && opening > 0;
         setSaving(true);
         try {
             const { data } = await axios.post<{ id: number }>("/api/finance/gl-accounts", {
@@ -574,6 +583,9 @@ function QuickCreateAccountDialog({
                 name:          form.name.trim(),
                 groupId:       Number(form.groupId),
                 normalBalance: form.normalBalance,
+                openingBalance:     hasOpening ? opening               : null,
+                openingBalanceType: hasOpening ? form.openingType      : null,
+                openingBalanceDate: hasOpening ? form.openingDate      : null,
             });
             toast.success(`Account "${form.name}" created`);
             reset();
@@ -624,6 +636,39 @@ function QuickCreateAccountDialog({
                             </SelectContent>
                         </Select>
                     </div>
+                    {/* Opening balance — written straight to Account columns. */}
+                    <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                        <p className="text-xs font-medium">Opening balance <span className="text-muted-foreground font-normal">(optional)</span></p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Amount (₹)</Label>
+                                <Input
+                                    type="number" min="0" step="0.01"
+                                    value={form.openingAmount}
+                                    onChange={(e) => setForm((f) => ({ ...f, openingAmount: e.target.value }))}
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Dr / Cr</Label>
+                                <Select value={form.openingType} onValueChange={(v) => setForm((f) => ({ ...f, openingType: v as "DEBIT" | "CREDIT" }))}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="DEBIT">Debit</SelectItem>
+                                        <SelectItem value="CREDIT">Credit</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">As of</Label>
+                                <Input
+                                    type="date"
+                                    value={form.openingDate}
+                                    onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                    </div>
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
                         <Button onClick={save} disabled={saving}>
@@ -647,6 +692,7 @@ function QuickCreateProductDialog({
     const [form, setForm] = useState({
         sku: "", name: "", unitId: "",
         costRupees: "", priceRupees: "",
+        openingQty: "", openingRate: "", openingDate: new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
 
@@ -657,7 +703,10 @@ function QuickCreateProductDialog({
             .catch(() => toast.error("Failed to load units"));
     }, [open]);
 
-    const reset = () => setForm({ sku: "", name: "", unitId: "", costRupees: "", priceRupees: "" });
+    const reset = () => setForm({
+        sku: "", name: "", unitId: "", costRupees: "", priceRupees: "",
+        openingQty: "", openingRate: "", openingDate: new Date().toISOString().slice(0, 10),
+    });
 
     const rupeesToPaise = (r: string): number | null => {
         const t = r.trim(); if (t === "") return null;
@@ -668,6 +717,9 @@ function QuickCreateProductDialog({
     const save = async () => {
         if (!form.sku.trim() || !form.name.trim()) { toast.error("SKU and name required"); return; }
         if (!form.unitId)                          { toast.error("Pick a unit"); return; }
+        const openingQty  = parseFloat(form.openingQty);
+        const openingRate = parseFloat(form.openingRate);
+        const hasOpening  = Number.isFinite(openingQty) && openingQty > 0;
         setSaving(true);
         try {
             const { data } = await axios.post<{ id: number }>("/api/inventory/products", {
@@ -676,6 +728,9 @@ function QuickCreateProductDialog({
                 unitId:     Number(form.unitId),
                 costPaise:  rupeesToPaise(form.costRupees),
                 pricePaise: rupeesToPaise(form.priceRupees),
+                openingStock:     hasOpening ? openingQty                                           : null,
+                openingRate:      hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
+                openingStockDate: hasOpening ? form.openingDate                                     : null,
             });
             toast.success(`Product "${form.name}" created`);
             reset();
@@ -728,7 +783,44 @@ function QuickCreateProductDialog({
                                 onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))} placeholder="0.00" />
                         </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Stock starts at 0. Use the form below or a Physical Stock voucher to set opening qty.</p>
+                    {/* Opening stock — written straight to InvProduct columns. */}
+                    <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                        <p className="text-xs font-medium">Opening stock <span className="text-muted-foreground font-normal">(optional)</span></p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Qty</Label>
+                                <Input
+                                    type="number" min="0" step="0.001"
+                                    value={form.openingQty}
+                                    onChange={(e) => setForm((f) => ({ ...f, openingQty: e.target.value }))}
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Rate (₹)</Label>
+                                <Input
+                                    type="number" min="0" step="0.01"
+                                    value={form.openingRate}
+                                    onChange={(e) => setForm((f) => ({ ...f, openingRate: e.target.value }))}
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">As of</Label>
+                                <Input
+                                    type="date"
+                                    value={form.openingDate}
+                                    onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            Value = qty × rate ={" "}
+                            <span className="font-mono">
+                                ₹ {((parseFloat(form.openingQty) || 0) * (parseFloat(form.openingRate) || 0)).toFixed(2)}
+                            </span>
+                        </p>
+                    </div>
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
                         <Button onClick={save} disabled={saving}>

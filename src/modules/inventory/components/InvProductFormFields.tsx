@@ -36,6 +36,12 @@ export type InvProductFormState = {
     costRupees:  string;
     priceRupees: string;
     mrpRupees:   string;
+    // Opening stock — written directly to InvProduct.openingStock /
+    // openingRate / openingValue / openingStockDate. Tally-style: this is
+    // qty held at books-beginning, NOT a transactional movement.
+    openingQty:    string;
+    openingRate:   string;
+    openingDate:   string;
 };
 
 export const emptyInvProductForm: InvProductFormState = {
@@ -61,6 +67,9 @@ export const emptyInvProductForm: InvProductFormState = {
     costRupees:  "",
     priceRupees: "",
     mrpRupees:   "",
+    openingQty:  "",
+    openingRate: "",
+    openingDate: "",
 };
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
@@ -92,6 +101,7 @@ export function InvProductFormFields({
                 <TabsTrigger value="basics">Basics</TabsTrigger>
                 <TabsTrigger value="pricing">Pricing</TabsTrigger>
                 <TabsTrigger value="stock">Stock control</TabsTrigger>
+                <TabsTrigger value="opening">Opening</TabsTrigger>
                 <TabsTrigger value="online">Online listing</TabsTrigger>
             </TabsList>
 
@@ -283,6 +293,52 @@ export function InvProductFormFields({
                         </div>
                     </div>
                 </div>
+            </TabsContent>
+
+            <TabsContent value="opening" className="mt-4">
+                <p className="text-xs text-muted-foreground mb-3">
+                    Books-beginning quantity for migration from another system. Saved directly to{" "}
+                    <code>InvProduct.openingStock / openingRate / openingValue</code>. Reports use this on{" "}
+                    <em>{"as of"}</em> date and after; vouchers add or subtract from there.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                        <Label>Opening qty</Label>
+                        <Input
+                            type="number" min="0" step="0.001" inputMode="decimal"
+                            value={form.openingQty}
+                            onChange={(e) => setForm((f) => ({ ...f, openingQty: e.target.value }))}
+                            placeholder="0"
+                        />
+                        <p className="text-[11px] text-muted-foreground">In product unit.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Opening rate (₹)</Label>
+                        <Input
+                            type="number" min="0" step="0.01" inputMode="decimal"
+                            value={form.openingRate}
+                            onChange={(e) => setForm((f) => ({ ...f, openingRate: e.target.value }))}
+                            placeholder="0.00"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Cost per unit at books-beginning.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>As of</Label>
+                        <Input
+                            type="date"
+                            value={form.openingDate}
+                            onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))}
+                        />
+                        <p className="text-[11px] text-muted-foreground">Books-beginning date.</p>
+                    </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                    <strong>Opening value</strong> = qty × rate ={" "}
+                    <span className="font-mono">
+                        ₹ {((parseFloat(form.openingQty) || 0) * (parseFloat(form.openingRate) || 0)).toFixed(2)}
+                    </span>{" "}
+                    <span className="text-muted-foreground/70">(auto-computed on save)</span>
+                </p>
             </TabsContent>
 
             <TabsContent value="online" className="mt-4">

@@ -101,6 +101,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.costPaise  !== undefined ? { costPaise:  b.costPaise  } : {}),
                 ...(b.pricePaise !== undefined ? { pricePaise: b.pricePaise } : {}),
                 ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
+                // Opening fields are written together so openingValue stays consistent.
+                ...((b.openingStock !== undefined || b.openingRate !== undefined) ? {
+                    openingStock: b.openingStock ?? null,
+                    openingRate:  b.openingRate  ?? null,
+                    openingValue: (b.openingStock != null && b.openingRate != null)
+                        ? b.openingStock * b.openingRate
+                        : null,
+                } : {}),
+                ...(b.openingStockDate !== undefined ? {
+                    openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
+                } : {}),
             },
             include: productInclude,
         });

@@ -77,6 +77,14 @@ const productPricing = {
     mrpPaise:   z.number().int().nonnegative().nullish(),
 };
 
+// Books-beginning opening stock — written directly to the InvProduct row, no
+// voucher in between. openingValue is computed server-side from qty × rate.
+const productOpening = {
+    openingStock:     z.number().nonnegative().nullish(),         // qty (Decimal in DB)
+    openingRate:      z.number().nonnegative().nullish(),         // rupees (Decimal in DB)
+    openingStockDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+};
+
 export const invProductCreateSchema = z.object({
     sku: z.string().trim().min(1).max(64),
     name: z.string().trim().min(1).max(500),
@@ -88,6 +96,7 @@ export const invProductCreateSchema = z.object({
     isActive: z.boolean().optional().default(true),
     ...productIdentifiers,
     ...productPricing,
+    ...productOpening,
 });
 
 export const invProductUpdateSchema = invProductCreateSchema.partial().extend({

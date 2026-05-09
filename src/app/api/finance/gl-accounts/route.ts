@@ -10,6 +10,11 @@ const createSchema = z.object({
     normalBalance: z.enum(["DEBIT", "CREDIT"]),
     description: z.string().trim().optional(),
     parentId: z.number().int().positive().optional(),
+    // Opening balance written straight to the Account row; reports pick it
+    // up via loadMasterOpeningBalances() in aggregateLedger.ts.
+    openingBalance:     z.number().nonnegative().nullish(),
+    openingBalanceType: z.enum(["DEBIT", "CREDIT"]).nullish(),
+    openingBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 });
 
 // GET /api/finance/gl-accounts
@@ -70,6 +75,9 @@ export async function POST(req: Request) {
                 normalBalance: body.normalBalance,
                 description: body.description ?? null,
                 parentId: body.parentId ?? null,
+                openingBalance:     body.openingBalance ?? null,
+                openingBalanceType: body.openingBalanceType ?? null,
+                openingBalanceDate: body.openingBalanceDate ? new Date(body.openingBalanceDate) : null,
             },
         });
         return NextResponse.json(account, { status: 201 });

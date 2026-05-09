@@ -95,6 +95,13 @@ export async function POST(req: Request) {
                 costPaise:  b.costPaise  ?? null,
                 pricePaise: b.pricePaise ?? null,
                 mrpPaise:   b.mrpPaise   ?? null,
+                // Books-beginning opening stock — server computes openingValue.
+                openingStock:     b.openingStock ?? null,
+                openingRate:      b.openingRate  ?? null,
+                openingValue:     (b.openingStock != null && b.openingRate != null)
+                    ? b.openingStock * b.openingRate
+                    : null,
+                openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
                 // Default to tracked-at-zero so future Purchase increments
                 // actually move the cache (NULL + n = NULL in Postgres).
                 stock: 0,
