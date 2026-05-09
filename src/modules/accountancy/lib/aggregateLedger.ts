@@ -3,6 +3,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { balanceDelta } from "./balance";
+import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 
 export type AccountAggregate = {
     accountId: number;
@@ -154,8 +155,15 @@ export async function aggregateRange(
     return result;
 }
 
-/** Net of (income - expense) over a range — this is the Net Profit/Loss for that period.
- *  Positive = profit, negative = loss. */
+/** Net Profit/Loss for a range, trading-account aware.
+ *  Positive = profit, negative = loss.
+ *
+ *  Mirrors the P&L route's calculation by adding the
+ *  (closingStock − openingStock) trading adjustment to the JE-only
+ *  income/expense delta. Without this adjustment the Balance Sheet's
+ *  Equity total would drift away from the P&L's net profit whenever
+ *  inventory levels change during the period.
+ */
 export async function netProfitLoss(from: Date, to: Date): Promise<number> {
     const groups = await prisma.accountGroup.findMany({
         where: { type: { in: ["INCOME", "EXPENSE"] } },
@@ -210,5 +218,6 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
 
     const income  = await sumNetCredit(incomeIds);
     const expense = await sumNetDebit(expenseIds);
-    return income - expense;
+    const stock   = await computeTradingStockAdjustment(from, to);
+    return (income - expense) + stock.adjustment;
 }

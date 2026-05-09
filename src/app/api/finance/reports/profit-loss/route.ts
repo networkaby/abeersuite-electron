@@ -3,8 +3,7 @@ import { requirePermission } from "@/lib/auth-guard";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
-import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
-import { prisma } from "@/lib/prisma";
+import { computeTradingStockAdjustment } from "@/modules/accountancy/lib/tradingStockAdjustment";
 
 // GET /api/finance/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
@@ -33,27 +32,9 @@ export async function GET(req: Request) {
         const indirectIncomes  = findPrimary("Indirect Incomes");
         const indirectExpenses = findPrimary("Indirect Expenses");
 
-        // Closing stock at start = at start of period
-        const openingDate = new Date(from);
-        openingDate.setDate(openingDate.getDate() - 1);
-        // We can't time-travel stock easily — use 0 as a fallback, or compute approximated.
-        // Strategy: opening stock = current stock - net stock movements during the period.
-        const stockNow = await getClosingStockValue();
-
-        // Net stock movements over the period (in/out × rate)
-        const stockMoves = await prisma.invStockLedger.findMany({
-            where: { date: { gte: from, lte: to } },
-            select: { inQty: true, outQty: true, rate: true, product: { select: { costPaise: true } } },
-        });
-        let netInValue  = 0;
-        let netOutValue = 0;
-        for (const m of stockMoves) {
-            const r = Number(m.rate);
-            netInValue  += Number(m.inQty)  * r;
-            netOutValue += Number(m.outQty) * (m.product.costPaise ? m.product.costPaise / 100 : r);
-        }
-        const openingStock = Math.max(0, stockNow.computed - netInValue + netOutValue);
-        const closingStock = stockNow.computed;
+        // Trading-account stock adjustment — shared with netProfitLoss() so
+        // the Balance Sheet's Equity reconciles with the P&L's net profit.
+        const { openingStock, closingStock } = await computeTradingStockAdjustment(from, to);
 
         // ── Row totals from rolled-up tree ──────────────────────────────
         const sumRoot = (n?: { rolledUpClosing: number }) => n ? Math.abs(n.rolledUpClosing) : 0;
