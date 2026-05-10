@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate } from "@/shared/lib/format/formatDate";
+import { formatDate, formatTimeOnly } from "@/shared/lib/format/formatDate";
 import type { OrgNode } from "@/app/api/org-chart/route";
 import OrgTree from "@/modules/admin/components/OrgTree";
 import UserAvatar from "@/shared/components/UserAvatar";
@@ -105,9 +105,6 @@ function timeAgo(iso: string): string {
     const days = Math.floor(hrs / 24);
     if (days < 30) return `${days}d ago`;
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-function formatTime(iso: string): string {
-    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 // ── Cloudinary upload ─────────────────────────────────────────────────────────
@@ -1178,7 +1175,7 @@ function ActivityTimelineTab({
                                             {item.type.replaceAll("_", " ")}
                                         </span>
                                         <span className="ml-auto text-[11px] text-muted-foreground">
-                                            {timeAgo(item.createdAt)} ({formatTime(item.createdAt)})
+                                            {timeAgo(item.createdAt)} ({formatTimeOnly(item.createdAt)})
                                         </span>
                                     </div>
                                     <p className="text-sm text-muted-foreground mt-1">{item.description}</p>

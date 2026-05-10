@@ -8,6 +8,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { formatRupees } from "@/shared/lib/format/moneyInr";
 import CallLogFilters from "./CallLogFilters";
 
 type CallLogItem = {
@@ -43,14 +44,6 @@ function formatDirection(value: CallLogItem["direction"]) {
 
 function formatStatus(value: CallLogItem["status"]) {
     return value.charAt(0) + value.slice(1).toLowerCase();
-}
-
-function formatCurrency(amount: number) {
-    return new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        maximumFractionDigits: 0,
-    }).format(amount);
 }
 
 function formatUpdatedAt(value: string) {
@@ -160,7 +153,7 @@ export default async function CallLogPage({
                                     <TableCell>{formatDirection(log.direction)}</TableCell>
                                     <TableCell>{formatStatus(log.status)}</TableCell>
                                     <TableCell>{formatDuration(log.durationSec)}</TableCell>
-                                    <TableCell>{formatCurrency(log.followUpAmount)}</TableCell>
+                                    <TableCell>{formatRupees(log.followUpAmount)}</TableCell>
                                     <TableCell className="text-muted-foreground">{formatUpdatedAt(log.updatedAt)}</TableCell>
                                 </TableRow>
                             ))

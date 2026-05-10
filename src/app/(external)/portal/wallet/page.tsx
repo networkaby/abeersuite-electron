@@ -3,12 +3,9 @@ import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMockWallet } from "@/shared/lib/portal/mockAdapters";
+import { formatRupees } from "@/shared/lib/format/moneyInr";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { Wallet } from "lucide-react";
-
-function formatInr(value: number) {
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
-}
 
 export default async function PortalWalletPage() {
     const session = await auth();
@@ -31,7 +28,7 @@ export default async function PortalWalletPage() {
                 <Card className="border-border/70">
                     <CardHeader>
                         <CardDescription>Available balance</CardDescription>
-                        <CardTitle className="text-3xl tracking-tight">{formatInr(wallet.balanceInr)}</CardTitle>
+                        <CardTitle className="text-3xl tracking-tight">{formatRupees(wallet.balanceInr)}</CardTitle>
                     </CardHeader>
                 </Card>
 
@@ -48,7 +45,7 @@ export default async function PortalWalletPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className={`text-sm font-semibold ${txn.type === "credit" ? "text-emerald-600" : "text-foreground"}`}>
-                                        {txn.type === "credit" ? "+" : "-"}{formatInr(txn.amountInr)}
+                                        {txn.type === "credit" ? "+" : "-"}{formatRupees(txn.amountInr)}
                                     </p>
                                     <Badge variant="outline" className="text-[10px]">{txn.type}</Badge>
                                 </div>

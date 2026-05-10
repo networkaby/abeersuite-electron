@@ -68,3 +68,32 @@ Add three small formatters to existing shared format utilities, then replace ~20
 ## Out of scope
 
 - The 31 files using inline `toLocaleDateString()` for **dates** (not times). Many use bespoke formats (accountancy reports). Audit case-by-case in a future minor pass — not in this PR.
+
+---
+
+## Post-execution notes (2026-05-10)
+
+Status: **complete** — `tsc --noEmit` clean, `npm run build` clean, dev server compiles call-log + inbox without errors.
+
+What actually got swept (smaller than the plan estimated):
+
+- **Currency** — only 3 inline `Intl.NumberFormat("en-IN", …)` call sites existed, not 7–10:
+  - `src/app/(protected)/office/(core)/call-log/page.tsx` — `formatCurrency` removed, replaced with `formatRupees` (rupee input, no decimals).
+  - `src/app/(external)/portal/wallet/page.tsx` — `formatInr` removed, replaced.
+  - `src/app/(external)/portal/orders/page.tsx` — `formatInr` removed, replaced.
+  - The plan also mentioned `InvProductCombobox.tsx`, `ecommerce/orders/page.tsx`, `ecommerce/coupons/page.tsx`, `(crm)/crm/page.tsx`. Grep confirms those don't have inline `Intl.NumberFormat` — they already use `formatRupeesFromPaise` (paise input).
+- **Time** — both files swept as planned:
+  - `src/modules/message/components/InboxModule.tsx` — inline `formatTime` removed, replaced with `formatInboxTime` (preserves Supabase UTC fix).
+  - `src/app/(protected)/office/(social)/users/[id]/page.tsx` — inline `formatTime` removed, replaced with `formatTimeOnly`.
+
+Helpers added:
+
+- `formatRupees(rupees)` in `src/shared/lib/format/moneyInr.ts` — rupee input, no decimals (companion to existing `formatRupeesFromPaise`).
+- `formatInboxTime(iso)` in `src/shared/lib/format/formatDate.ts` — smart inbox/chat timestamp, today→time, older→short date.
+- `formatTimeOnly(iso)` in `src/shared/lib/format/formatDate.ts` — `10:42 AM` style.
+
+Per AGENTS.md "after every plan" rule:
+
+- **Reusables registry** — `docs/reusables.md` created (a stub keyed off what's currently in `src/shared/`). Segment 16 will expand it as later segments add api/, constants/, schemas/, hooks/, etc. The three new formatters above are listed.
+- **Module docs** — none touched; this segment doesn't add module-specific behavior.
+- **Todo list** — completed throughout.

@@ -4,12 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMockOrders } from "@/shared/lib/portal/mockAdapters";
+import { formatRupees } from "@/shared/lib/format/moneyInr";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { ShoppingBag } from "lucide-react";
-
-function formatInr(value: number) {
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
-}
 
 export default async function PortalOrdersPage() {
     const session = await auth();
@@ -50,7 +47,7 @@ export default async function PortalOrdersPage() {
                                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                                         <div>
                                             <p className="text-xs text-muted-foreground">Amount</p>
-                                            <p className="font-medium">{formatInr(order.amountInr)}</p>
+                                            <p className="font-medium">{formatRupees(order.amountInr)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-muted-foreground">Items</p>

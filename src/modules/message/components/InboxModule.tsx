@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { Send, Users2, Monitor, User, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
+import { formatInboxTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -48,17 +49,6 @@ type TeamUser = {
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function formatTime(dateStr: string): string {
-    // Supabase Realtime may omit the 'Z' suffix — normalise to UTC
-    const utc  = dateStr && !dateStr.endsWith("Z") && !dateStr.includes("+") ? dateStr + "Z" : dateStr;
-    const date = new Date(utc);
-    const now  = new Date();
-    if (date.toDateString() === now.toDateString()) {
-        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    }
-    return date.toLocaleDateString([], { month: "short", day: "numeric" });
-}
 
 function playNotificationSound() {
     try {
@@ -600,7 +590,7 @@ export default function InboxModule({
                                                             </Link>
                                                         )}
                                                         <p className="mt-0.5 text-[10px] text-muted-foreground/60">
-                                                            {formatTime(message.createdAt)}
+                                                            {formatInboxTime(message.createdAt)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -636,7 +626,7 @@ export default function InboxModule({
                                                     ) : (
                                                         /* Timestamp on hover for grouped messages */
                                                         <span className="hidden group-hover:flex h-8 items-center justify-end text-[10px] text-muted-foreground/50 w-full pr-1">
-                                                            {formatTime(message.createdAt)}
+                                                            {formatInboxTime(message.createdAt)}
                                                         </span>
                                                     )}
                                                 </div>
@@ -649,7 +639,7 @@ export default function InboxModule({
                                                                 {isOwn ? (currentUserName ?? "You") : senderName}
                                                             </span>
                                                             <span className="text-[10px] text-muted-foreground/60">
-                                                                {formatTime(message.createdAt)}
+                                                                {formatInboxTime(message.createdAt)}
                                                             </span>
                                                             {message.pending && (
                                                                 <span className="text-[10px] text-muted-foreground/50 italic">sending…</span>
