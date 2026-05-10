@@ -94,18 +94,24 @@ export async function aggregateClosingAsOf(
     return closing;
 }
 
-/** Opening + transactions + closing per account over a date range. */
+/** Opening + transactions + closing per account over a date range.
+ *
+ * Master-page opening balances (Account.openingBalance) are partitioned by
+ * their openingBalanceDate:
+ *   • dated < from         → folded into the opening bucket (bring-forward).
+ *   • dated within [from,to] → counted as period activity (so they appear on
+ *                              P&L for the period, not silently dropped).
+ *   • dated > to            → ignored entirely.
+ */
 export async function aggregateRange(
     from: Date,
     to: Date,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
 ): Promise<Map<number, AccountAggregate>> {
-    // The "opening" portion of the range is everything before `from`. Master-page
-    // opening balances dated on or before `from` get folded into that bucket.
     const beforeFrom = new Date(from);
     beforeFrom.setMilliseconds(beforeFrom.getMilliseconds() - 1);
 
-    const [openingSums, periodSums, masterOpening] = await Promise.all([
+    const [openingSums, periodSums, masterOpening, masterInPeriod] = await Promise.all([
         prisma.journalLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
@@ -117,6 +123,13 @@ export async function aggregateRange(
             where: { journalEntry: { status: "POSTED", deletedAt: null, date: { gte: from, lte: to } } },
         }),
         loadMasterOpeningBalances(beforeFrom, nbMap),
+        prisma.account.findMany({
+            where: {
+                openingBalance: { not: null },
+                openingBalanceDate: { gte: from, lte: to },
+            },
+            select: { id: true, openingBalance: true, openingBalanceType: true },
+        }),
     ]);
 
     const result = new Map<number, AccountAggregate>();
@@ -135,8 +148,7 @@ export async function aggregateRange(
         const v = ensure(r.accountId);
         v.opening += balanceDelta(nb, r.type, Number(r._sum.amount ?? 0));
     }
-    // Master-page opening balances seed the opening bucket too — they represent
-    // the bring-forward from a previous accounting system at books-beginning.
+    // Master openings dated before `from` → opening bucket (bring-forward).
     for (const [accId, openVal] of masterOpening) {
         const v = ensure(accId);
         v.opening += openVal;
@@ -146,6 +158,16 @@ export async function aggregateRange(
         const amt = Number(r._sum.amount ?? 0);
         if (r.type === "DEBIT") v.debits  += amt;
         else                    v.credits += amt;
+    }
+    // Master openings dated within [from, to] → period activity. Without this,
+    // an income/expense ledger whose opening was set inside the report range
+    // would never appear on the P&L.
+    for (const a of masterInPeriod) {
+        if (!a.openingBalanceType) continue;
+        const v = ensure(a.id);
+        const amt = Number(a.openingBalance ?? 0);
+        if (a.openingBalanceType === "DEBIT") v.debits  += amt;
+        else                                  v.credits += amt;
     }
     for (const v of result.values()) {
         const nb = nbMap.get(v.accountId);
@@ -179,6 +201,19 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
     const incomeIds  = incomeAccounts.map((a)  => a.id);
     const expenseIds = expenseAccounts.map((a) => a.id);
 
+    // Master-page openings dated within [from, to] count as period activity
+    // (mirrors the same fix in aggregateRange so this stays in sync with the
+    // P&L route's net-profit figure).
+    const masterInPeriod = await prisma.account.findMany({
+        where: {
+            openingBalance: { not: null },
+            openingBalanceDate: { gte: from, lte: to },
+            groupId: { in: [...incomeGroupIds, ...expenseGroupIds] },
+        },
+        select: { id: true, openingBalance: true, openingBalanceType: true, groupId: true },
+    });
+    const incomeIdSet  = new Set(incomeIds);
+
     const sumNetCredit = async (ids: number[]): Promise<number> => {
         if (ids.length === 0) return 0;
         const sums = await prisma.journalLine.groupBy({
@@ -195,7 +230,14 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
             if (s.type === "DEBIT") dr += amt;
             else                    cr += amt;
         }
-        return cr - dr; // income side (CREDIT normal) → positive when income
+        // Add in-period master openings on income accounts (positive when income).
+        for (const a of masterInPeriod) {
+            if (!incomeIdSet.has(a.id) || !a.openingBalanceType) continue;
+            const amt = Number(a.openingBalance ?? 0);
+            if (a.openingBalanceType === "DEBIT") dr += amt;
+            else                                  cr += amt;
+        }
+        return cr - dr;
     };
     const sumNetDebit = async (ids: number[]): Promise<number> => {
         if (ids.length === 0) return 0;
@@ -213,7 +255,15 @@ export async function netProfitLoss(from: Date, to: Date): Promise<number> {
             if (s.type === "DEBIT") dr += amt;
             else                    cr += amt;
         }
-        return dr - cr; // expense side (DEBIT normal) → positive when expense
+        // Add in-period master openings on expense accounts (positive when expense).
+        const expenseIdSet = new Set(ids);
+        for (const a of masterInPeriod) {
+            if (!expenseIdSet.has(a.id) || !a.openingBalanceType) continue;
+            const amt = Number(a.openingBalance ?? 0);
+            if (a.openingBalanceType === "DEBIT") dr += amt;
+            else                                  cr += amt;
+        }
+        return dr - cr;
     };
 
     const income  = await sumNetCredit(incomeIds);

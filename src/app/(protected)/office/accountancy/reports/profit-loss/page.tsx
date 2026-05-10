@@ -50,6 +50,40 @@ function fmtIndianDate(iso: string): string {
     });
 }
 
+// Three-column amount layout — matches Tally's stepped placement:
+//   • "group"    → top-level group total → OUTER col, bold
+//   • "subGroup" → nested group total    → MIDDLE col, medium
+//   • "ledger"   → individual ledger     → INNER col, italic / muted
+type AmountWeight = "group" | "subGroup" | "ledger";
+
+function AmountCells({ value, weight, abs = true }: {
+    value: number; weight: AmountWeight; abs?: boolean;
+}) {
+    const isLedger  = weight === "ledger";
+    const display   = abs ? Math.abs(value) : value;
+    const weightCls =
+        weight === "group"    ? "font-semibold text-foreground"          :
+        weight === "subGroup" ? "font-medium text-foreground"            :
+                                "font-normal italic text-muted-foreground text-sm";
+    const cell =
+        display !== 0
+            ? <span className={display < 0 ? "text-destructive" : weightCls}>{fmt(Math.abs(display))}</span>
+            : <span className={isLedger ? "text-muted-foreground/30" : "text-muted-foreground/40"}>—</span>;
+    return (
+        <>
+            <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[90px]">
+                {weight === "ledger"   ? cell : null}
+            </td>
+            <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[100px]">
+                {weight === "subGroup" ? cell : null}
+            </td>
+            <td className="py-1 pr-3 text-right font-mono whitespace-nowrap w-[110px]">
+                {weight === "group"    ? cell : null}
+            </td>
+        </>
+    );
+}
+
 function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup, abs = true }: {
     node: GroupNode; depth: number;
     expanded: Set<number>; toggle: (id: number) => void;
@@ -58,14 +92,14 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup, abs = tr
 }) {
     const isOpen = expanded.has(node.id);
     const hasContent = node.children.length > 0 || node.ledgers.length > 0;
-    const balance = abs ? Math.abs(node.rolledUpClosing) : node.rolledUpClosing;
+    const weight: AmountWeight = depth === 0 ? "group" : "subGroup";
     return (
         <Fragment>
             <tr className="hover:bg-muted/40">
-                <td className="py-1" style={{ paddingLeft: 8 + depth * 16 }}>
+                <td className="py-1" style={{ paddingLeft: 8 + depth * 14 }}>
                     <button
                         type="button"
-                        className="flex items-center gap-1 font-medium hover:underline"
+                        className="flex items-center gap-1 text-foreground hover:underline"
                         onClick={() => onGroup(node.id)}
                     >
                         {hasContent && (
@@ -76,12 +110,12 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup, abs = tr
                                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                             </span>
                         )}
-                        <span className={depth === 0 ? "font-semibold" : ""}>{node.name}</span>
+                        <span className={depth === 0 ? "font-semibold text-sm" : "font-medium text-sm"}>
+                            {node.name}
+                        </span>
                     </button>
                 </td>
-                <td className="py-1 pr-3 text-right font-mono text-sm">
-                    {balance !== 0 ? fmt(balance) : <span className="text-muted-foreground/40">—</span>}
-                </td>
+                <AmountCells value={node.rolledUpClosing} weight={weight} abs={abs} />
             </tr>
             {isOpen && (
                 <>
@@ -93,14 +127,11 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup, abs = tr
                     {node.ledgers.map((l) => (
                         <tr key={`l-${l.id}`} className="cursor-pointer hover:bg-primary/5"
                             onClick={() => onLedger(l.id)}>
-                            <td className="py-1 text-muted-foreground" style={{ paddingLeft: 24 + depth * 16 }}>
+                            <td className="py-0.5 italic text-[14px] text-muted-foreground"
+                                style={{ paddingLeft: 24 + depth * 14 }}>
                                 <span className="hover:underline hover:text-primary">{l.name}</span>
                             </td>
-                            <td className="py-1 pr-3 text-right font-mono text-sm text-muted-foreground">
-                                {l.closing !== 0
-                                    ? fmt(abs ? Math.abs(l.closing) : l.closing)
-                                    : <span className="text-muted-foreground/30">—</span>}
-                            </td>
+                            <AmountCells value={l.closing} weight="ledger" abs={abs} />
                         </tr>
                     ))}
                 </>
@@ -109,13 +140,21 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup, abs = tr
     );
 }
 
-function StaticRow({ label, amount, italic = false }: { label: string; amount: number; italic?: boolean }) {
+// Special non-group rows (Opening Stock, Closing Stock, Gross Profit/Loss c/o,
+// Nett Profit/Loss). They sit at the same prominence as a top-level group.
+function StaticRow({ label, amount, weight = "group", className = "" }: {
+    label: string; amount: number;
+    weight?: AmountWeight;
+    className?: string;
+}) {
+    const labelCls =
+        weight === "group"    ? "font-semibold text-sm" :
+        weight === "subGroup" ? "font-medium text-sm"   :
+                                "italic text-[14px] text-muted-foreground";
     return (
-        <tr>
-            <td className={`py-1 px-3 ${italic ? "italic text-muted-foreground" : "font-medium"}`}>{label}</td>
-            <td className="py-1 pr-3 text-right font-mono text-sm">
-                {amount !== 0 ? fmt(amount) : <span className="text-muted-foreground/40">—</span>}
-            </td>
+        <tr className={className}>
+            <td className={`py-1 pl-2 ${labelCls}`}>{label}</td>
+            <AmountCells value={amount} weight={weight} />
         </tr>
     );
 }
@@ -214,153 +253,139 @@ export default function ProfitLossPage() {
             {loading && <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>}
 
             {!loading && data && (
-                <>
-                    {/* Trading Account */}
-                    <div className="grid grid-cols-2 gap-6">
-                        {/* Debit side */}
-                        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                            <div className="border-b bg-muted/40 px-4 py-2.5 font-bold">Particulars (Dr)</div>
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    <StaticRow label="Opening Stock" amount={data.trading.debit.openingStock} italic />
-                                    {data.trees.purchaseAccounts && (
-                                        <GroupBlock node={data.trees.purchaseAccounts} depth={0}
-                                            expanded={expanded} toggle={toggle}
-                                            onLedger={goLedger} onGroup={goGroup} />
-                                    )}
-                                    {data.trees.directExpenses && (
-                                        <GroupBlock node={data.trees.directExpenses} depth={0}
-                                            expanded={expanded} toggle={toggle}
-                                            onLedger={goLedger} onGroup={goGroup} />
-                                    )}
-                                    {data.grossProfit > 0 && (
-                                        <tr className="border-t bg-muted/20">
-                                            <td className="py-1.5 px-3 font-semibold italic">Gross Profit c/o</td>
-                                            <td className="py-1.5 pr-3 text-right font-mono font-semibold">{fmt(data.grossProfit)}</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-border bg-muted/30">
-                                        <td className="py-2 px-3 font-semibold">Total</td>
-                                        <td className="py-2 pr-3 text-right font-mono font-bold">
-                                            {fmt(Math.max(tradingDr + (data.grossProfit > 0 ? data.grossProfit : 0), tradingCr))}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                        {/* Credit side */}
-                        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                            <div className="border-b bg-muted/40 px-4 py-2.5 font-bold">Particulars (Cr)</div>
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    {data.trees.salesAccounts && (
-                                        <GroupBlock node={data.trees.salesAccounts} depth={0}
-                                            expanded={expanded} toggle={toggle}
-                                            onLedger={goLedger} onGroup={goGroup} />
-                                    )}
-                                    {data.trees.directIncomes && (
-                                        <GroupBlock node={data.trees.directIncomes} depth={0}
-                                            expanded={expanded} toggle={toggle}
-                                            onLedger={goLedger} onGroup={goGroup} />
-                                    )}
-                                    <StaticRow label="Closing Stock" amount={data.trading.credit.closingStock} italic />
-                                    {data.grossProfit < 0 && (
-                                        <tr className="border-t bg-muted/20">
-                                            <td className="py-1.5 px-3 font-semibold italic">Gross Loss c/o</td>
-                                            <td className="py-1.5 pr-3 text-right font-mono font-semibold">{fmt(Math.abs(data.grossProfit))}</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-border bg-muted/30">
-                                        <td className="py-2 px-3 font-semibold">Total</td>
-                                        <td className="py-2 pr-3 text-right font-mono font-bold">
-                                            {fmt(Math.max(tradingDr + (data.grossProfit > 0 ? data.grossProfit : 0), tradingCr + (data.grossProfit < 0 ? Math.abs(data.grossProfit) : 0)))}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
+                <div className="space-y-0">
+                    {/* Trading Account — both totals reconcile to the same number, so we
+                        render ONE shared total bar pinned to the bottom of both cards via
+                        flex-col + mt-auto on the table's parent. Gap between Dr/Cr is 1px. */}
+                    {(() => {
+                        const tradingTotal = Math.max(
+                            tradingDr + (data.grossProfit > 0 ? data.grossProfit : 0),
+                            tradingCr + (data.grossProfit < 0 ? Math.abs(data.grossProfit) : 0),
+                        );
+                        return (
+                            <div className="grid grid-cols-2 gap-px items-stretch bg-border rounded-t-lg overflow-hidden border border-border border-b-0 shadow-sm">
+                                {/* Debit side */}
+                                <div className="flex flex-col bg-card">
+                                    <div className="border-b bg-muted/40 px-4 py-2.5 font-bold">Particulars (Dr)</div>
+                                    <table className="w-full text-sm">
+                                        <tbody>
+                                            <StaticRow label="Opening Stock" amount={data.trading.debit.openingStock} />
+                                            {data.trees.purchaseAccounts && (
+                                                <GroupBlock node={data.trees.purchaseAccounts} depth={0}
+                                                    expanded={expanded} toggle={toggle}
+                                                    onLedger={goLedger} onGroup={goGroup} />
+                                            )}
+                                            {data.trees.directExpenses && (
+                                                <GroupBlock node={data.trees.directExpenses} depth={0}
+                                                    expanded={expanded} toggle={toggle}
+                                                    onLedger={goLedger} onGroup={goGroup} />
+                                            )}
+                                            {data.grossProfit > 0 && (
+                                                <StaticRow label="Gross Profit c/o" amount={data.grossProfit} className="border-t bg-muted/20" />
+                                            )}
+                                        </tbody>
+                                    </table>
+                                    <div className="mt-auto border-t-2 border-border bg-muted/30 px-3 py-2 flex items-center justify-between">
+                                        <span className="font-semibold">Total</span>
+                                        <span className="font-mono font-bold">{fmt(tradingTotal)}</span>
+                                    </div>
+                                </div>
+                                {/* Credit side */}
+                                <div className="flex flex-col bg-card">
+                                    <div className="border-b bg-muted/40 px-4 py-2.5 font-bold">Particulars (Cr)</div>
+                                    <table className="w-full text-sm">
+                                        <tbody>
+                                            {data.trees.salesAccounts && (
+                                                <GroupBlock node={data.trees.salesAccounts} depth={0}
+                                                    expanded={expanded} toggle={toggle}
+                                                    onLedger={goLedger} onGroup={goGroup} />
+                                            )}
+                                            {data.trees.directIncomes && (
+                                                <GroupBlock node={data.trees.directIncomes} depth={0}
+                                                    expanded={expanded} toggle={toggle}
+                                                    onLedger={goLedger} onGroup={goGroup} />
+                                            )}
+                                            <StaticRow label="Closing Stock" amount={data.trading.credit.closingStock} />
+                                            {data.grossProfit < 0 && (
+                                                <StaticRow label="Gross Loss c/o" amount={Math.abs(data.grossProfit)} className="border-t bg-muted/20" />
+                                            )}
+                                        </tbody>
+                                    </table>
+                                    <div className="mt-auto border-t-2 border-border bg-muted/30 px-3 py-2 flex items-center justify-between">
+                                        <span className="font-semibold">Total</span>
+                                        <span className="font-mono font-bold">{fmt(tradingTotal)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
-                    {/* Profit & Loss section */}
-                    <div className="grid grid-cols-2 gap-6">
-                        {/* Debit side */}
-                        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                            <div className="border-b bg-muted/40 px-4 py-2.5 font-bold">P&amp;L Particulars (Dr)</div>
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    {data.trees.indirectExpenses && (
-                                        <GroupBlock node={data.trees.indirectExpenses} depth={0}
-                                            expanded={expanded} toggle={toggle}
-                                            onLedger={goLedger} onGroup={goGroup} />
-                                    )}
-                                    {data.pnl.debit.grossLossBrought > 0 && (
-                                        <StaticRow label="Gross Loss b/f" amount={data.pnl.debit.grossLossBrought} italic />
-                                    )}
-                                    {data.netProfit > 0 && (
-                                        <tr className="border-t bg-green-50/30 dark:bg-green-950/20">
-                                            <td className="py-1.5 px-3 font-semibold">Nett Profit</td>
-                                            <td className="py-1.5 pr-3 text-right font-mono font-semibold text-green-700 dark:text-green-400">
-                                                {fmt(data.netProfit)}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-border bg-muted/30">
-                                        <td className="py-2 px-3 font-semibold">Total</td>
-                                        <td className="py-2 pr-3 text-right font-mono font-bold">
-                                            {fmt(Math.max(pnlDr + (data.netProfit > 0 ? data.netProfit : 0), pnlCr))}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                        {/* Credit side */}
-                        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-                            <div className="border-b bg-muted/40 px-4 py-2.5 font-bold">P&amp;L Particulars (Cr)</div>
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    {data.trees.indirectIncomes && (
-                                        <GroupBlock node={data.trees.indirectIncomes} depth={0}
-                                            expanded={expanded} toggle={toggle}
-                                            onLedger={goLedger} onGroup={goGroup} />
-                                    )}
-                                    {data.pnl.credit.grossProfitBrought > 0 && (
-                                        <StaticRow label="Gross Profit b/f" amount={data.pnl.credit.grossProfitBrought} italic />
-                                    )}
-                                    {data.netProfit < 0 && (
-                                        <tr className="border-t bg-destructive/10">
-                                            <td className="py-1.5 px-3 font-semibold">Nett Loss</td>
-                                            <td className="py-1.5 pr-3 text-right font-mono font-semibold text-destructive">
-                                                {fmt(Math.abs(data.netProfit))}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-border bg-muted/30">
-                                        <td className="py-2 px-3 font-semibold">Total</td>
-                                        <td className="py-2 pr-3 text-right font-mono font-bold">
-                                            {fmt(Math.max(pnlDr + (data.netProfit > 0 ? data.netProfit : 0), pnlCr + (data.netProfit < 0 ? Math.abs(data.netProfit) : 0)))}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
+                    {/* Profit & Loss section — same flex/mt-auto trick aligns totals. */}
+                    {(() => {
+                        const pnlTotal = Math.max(
+                            pnlDr + (data.netProfit > 0 ? data.netProfit : 0),
+                            pnlCr + (data.netProfit < 0 ? Math.abs(data.netProfit) : 0),
+                        );
+                        return (
+                            <div className="grid grid-cols-2 gap-px items-stretch bg-border rounded-b-lg overflow-hidden border border-border shadow-sm">
+                                {/* Debit side — header omitted; this block continues from
+                                    the Trading total above and the "Particulars (Dr)" label
+                                    on that block already names the column. */}
+                                <div className="flex flex-col bg-card">
+                                    <table className="w-full text-sm">
+                                        <tbody>
+                                            {data.trees.indirectExpenses && (
+                                                <GroupBlock node={data.trees.indirectExpenses} depth={0}
+                                                    expanded={expanded} toggle={toggle}
+                                                    onLedger={goLedger} onGroup={goGroup} />
+                                            )}
+                                            {data.pnl.debit.grossLossBrought > 0 && (
+                                                <StaticRow label="Gross Loss b/f" amount={data.pnl.debit.grossLossBrought} />
+                                            )}
+                                            {data.netProfit > 0 && (
+                                                <StaticRow label="Nett Profit" amount={data.netProfit} className="border-t bg-green-50/30 dark:bg-green-950/20" />
+                                            )}
+                                        </tbody>
+                                    </table>
+                                    <div className="mt-auto border-t-2 border-border bg-muted/30 px-3 py-2 flex items-center justify-between">
+                                        <span className="font-semibold">Total</span>
+                                        <span className="font-mono font-bold">{fmt(pnlTotal)}</span>
+                                    </div>
+                                </div>
+                                {/* Credit side */}
+                                <div className="flex flex-col bg-card">
+                                    <table className="w-full text-sm">
+                                        <tbody>
+                                            {data.trees.indirectIncomes && (
+                                                <GroupBlock node={data.trees.indirectIncomes} depth={0}
+                                                    expanded={expanded} toggle={toggle}
+                                                    onLedger={goLedger} onGroup={goGroup} />
+                                            )}
+                                            {data.pnl.credit.grossProfitBrought > 0 && (
+                                                <StaticRow label="Gross Profit b/f" amount={data.pnl.credit.grossProfitBrought} />
+                                            )}
+                                            {data.netProfit < 0 && (
+                                                <StaticRow label="Nett Loss" amount={Math.abs(data.netProfit)} className="border-t bg-destructive/10" />
+                                            )}
+                                        </tbody>
+                                    </table>
+                                    <div className="mt-auto border-t-2 border-border bg-muted/30 px-3 py-2 flex items-center justify-between">
+                                        <span className="font-semibold">Total</span>
+                                        <span className="font-mono font-bold">{fmt(pnlTotal)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* Net P&L summary card */}
-                    <div className="text-center text-sm py-4 border-t border-border print:hidden">
+                    <div className="text-center text-sm py-4 mt-4 border-t border-border print:hidden">
                         <span className="text-muted-foreground">Net for period:</span>{" "}
                         <span className={`font-bold font-mono ${data.netProfit < 0 ? "text-destructive" : "text-green-700 dark:text-green-400"}`}>
                             {data.netProfit < 0 ? "Loss" : "Profit"} {fmt(Math.abs(data.netProfit))}
                         </span>
                     </div>
-                </>
+                </div>
             )}
         </div>
     );
