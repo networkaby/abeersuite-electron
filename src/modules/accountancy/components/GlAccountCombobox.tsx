@@ -96,7 +96,10 @@ export function GlAccountCombobox({
     }, [onChange]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (!open) { if (e.key !== "Escape") setOpen(true); return; }
+        if (!open) {
+            if (e.key !== "Escape" && e.key !== "Tab") setOpen(true);
+            return;
+        }
         if (e.key === "ArrowDown") {
             e.preventDefault();
             setHighlighted((h) => Math.min(h + 1, filtered.length - 1));
@@ -106,6 +109,14 @@ export function GlAccountCombobox({
         } else if (e.key === "Enter") {
             e.preventDefault();
             if (filtered[highlighted]) pick(filtered[highlighted]);
+        } else if (e.key === "Tab") {
+            // Commit selection on tab, then let browser move focus naturally.
+            const normalizedQuery = query.trim().toLowerCase();
+            const normalizedSelected = selectedLabel.trim().toLowerCase();
+            const hasTypedInput = normalizedQuery.length > 0;
+            const shouldCommit = hasTypedInput && normalizedQuery !== normalizedSelected;
+            if (shouldCommit && filtered[highlighted]) pick(filtered[highlighted]);
+            else setOpen(false);
         } else if (e.key === "Escape") {
             e.stopPropagation();        // don't bubble to dialog Esc handler
             setOpen(false);

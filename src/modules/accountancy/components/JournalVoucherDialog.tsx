@@ -30,11 +30,12 @@ import {
 import { GlAccountCombobox } from "@/modules/accountancy/components/GlAccountCombobox";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 // Voucher.type stored on the row. The reference number follows the JOURNAL
 // VoucherSeries (Settings → Year Ending), producing "JOURNAL/26-27/0001"-style refs.
 const UNDERLYING_TYPE = "JOURNAL" as const;
-const SERIES_KIND     = "JOURNAL" as const;
+const SERIES_KIND = "JOURNAL" as const;
 
 type Side = "DEBIT" | "CREDIT";
 
@@ -49,19 +50,19 @@ interface GlAccount {
 }
 
 type StockItem = {
-    id:          number;
-    productId:   number | null;
+    id: number;
+    productId: number | null;
     productName: string;
-    unitCode:    string;
-    qty:         string;
-    rate:        string;
+    unitCode: string;
+    qty: string;
+    rate: string;
 };
 
 type Line = {
-    id:         number;
-    side:       Side;
-    accountId:  number;
-    amount:     string;        // typed amount (only when stockItems is empty)
+    id: number;
+    side: Side;
+    accountId: number;
+    amount: string;        // typed amount (only when stockItems is empty)
     stockItems: StockItem[];   // multiple inventory rows under this ledger
 };
 
@@ -155,11 +156,12 @@ export function JournalVoucherDialog() {
     const router = useRouter();
     const { open, setOpen } = useJournalVoucherStore();
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
-    const [saving, setSaving]     = useState(false);
-    const [nextRef, setNextRef]   = useState<string>("");
+    const [saving, setSaving] = useState(false);
+    const [nextRef, setNextRef] = useState<string>("");
 
-    const [date, setDate]               = useState(() => new Date().toISOString().slice(0, 10));
-    const [narration, setNarration]     = useState("");
+    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [narration, setNarration] = useState("");
+    const [autoFocusSideLineId, setAutoFocusSideLineId] = useState<number | null>(null);
     // Single sequential list of lines — Dr/Cr is per-line via dropdown.
     const [lines, setLines] = useState<Line[]>([newLine("DEBIT"), newLine("CREDIT")]);
 
@@ -178,11 +180,12 @@ export function JournalVoucherDialog() {
     const reset = () => {
         setDate(new Date().toISOString().slice(0, 10));
         setNarration("");
+        setAutoFocusSideLineId(null);
         setLines([newLine("DEBIT"), newLine("CREDIT")]);
     };
 
-    const totalDr  = lines.filter((l) => l.side === "DEBIT").reduce((s, l) => s + lineAmount(l), 0);
-    const totalCr  = lines.filter((l) => l.side === "CREDIT").reduce((s, l) => s + lineAmount(l), 0);
+    const totalDr = lines.filter((l) => l.side === "DEBIT").reduce((s, l) => s + lineAmount(l), 0);
+    const totalCr = lines.filter((l) => l.side === "CREDIT").reduce((s, l) => s + lineAmount(l), 0);
     const balanced = Math.abs(totalDr - totalCr) < 0.005 && totalDr > 0;
 
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
@@ -230,12 +233,15 @@ export function JournalVoucherDialog() {
                 const droppedFor = accountById.get(merged.accountId)?.name ?? "this ledger";
                 toast.info(`Inventory items removed — ${droppedFor} doesn't accept inventory`);
                 merged.stockItems = [];
-                merged.amount     = "";
+                merged.amount = "";
             }
             return merged;
         }));
-    const addLine = (side: Side = "DEBIT") =>
-        setLines((ls) => [...ls, newLine(side)]);
+    const addLine = (side: Side = "DEBIT") => {
+        const line = newLine(side);
+        setLines((ls) => [...ls, line]);
+        setAutoFocusSideLineId(line.id);
+    };
     const removeLine = (id: number) =>
         setLines((ls) => ls.filter((l) => l.id !== id));
 
@@ -263,10 +269,10 @@ export function JournalVoucherDialog() {
     ) => {
         const defaultRate = p ? (line.side === "DEBIT" ? p.costPrice : p.salePrice) : null;
         updateStockItem(line.id, itemId, {
-            productId:   p?.id ?? null,
+            productId: p?.id ?? null,
             productName: p?.name ?? "",
-            unitCode:    p?.unitCode ?? "",
-            rate:        defaultRate != null ? String(defaultRate) : "",
+            unitCode: p?.unitCode ?? "",
+            rate: defaultRate != null ? String(defaultRate) : "",
         });
     };
 
@@ -293,14 +299,14 @@ export function JournalVoucherDialog() {
                 const stockItems = l.stockItems.length > 0
                     ? l.stockItems.map((s) => ({
                         productId: s.productId!,
-                        qty:       parseFloat(s.qty)  || 0,
-                        rate:      parseFloat(s.rate) || 0,
+                        qty: parseFloat(s.qty) || 0,
+                        rate: parseFloat(s.rate) || 0,
                     }))
                     : undefined;
                 return {
-                    accountId:   l.accountId,
-                    type:        l.side,
-                    amount:      lineAmount(l),
+                    accountId: l.accountId,
+                    type: l.side,
+                    amount: lineAmount(l),
                     description: desc,
                     stockItems,
                 };
@@ -309,17 +315,17 @@ export function JournalVoucherDialog() {
             const res = await axios.post<{ voucherId: number; reference: string; posted: boolean }>(
                 "/api/finance/journal-vouchers",
                 {
-                    type:            UNDERLYING_TYPE,
+                    type: UNDERLYING_TYPE,
                     date,
-                    narration:       narration.trim() || undefined,
+                    narration: narration.trim() || undefined,
                     postImmediately: postAfterSave,
-                    lines:           payloadLines,
+                    lines: payloadLines,
                 },
             );
 
             const ref = res.data.reference;
             if (postAfterSave) toast.success(`Journal voucher ${ref} saved & posted`);
-            else               toast.success(`Journal voucher ${ref} saved as draft`);
+            else toast.success(`Journal voucher ${ref} saved as draft`);
             reset();
             setOpen(false);
             router.refresh();
@@ -340,199 +346,205 @@ export function JournalVoucherDialog() {
                 <DialogHeader className="border-b border-border px-5 py-4 pr-12">
                     <DialogTitle>New Journal Voucher</DialogTitle>
                 </DialogHeader>
-
-                <div className="max-h-[80vh] overflow-y-auto px-5 py-4 space-y-4">
-                    {/* Header row — voucher number now pre-generated */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label>Date</Label>
-                            <Input
-                                type="date"
-                                autoFocus
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                            />
+                <ScrollArea className="h-[500px]">
+                    <div className="max-h-[80vh]  px-5 py-4 space-y-4">
+                        {/* Header row — voucher number now pre-generated */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Date</Label>
+                                <Input
+                                    type="date"
+                                    autoFocus
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Voucher No</Label>
+                                <Input
+                                    value={nextRef || "Generating…"}
+                                    readOnly
+                                    tabIndex={-1}
+                                    className="text-muted-foreground font-mono"
+                                    title="Pre-generated next reference. Final reference is assigned at save (may shift by ±1 under concurrent saves)."
+                                />
+                            </div>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label>Voucher No</Label>
-                            <Input
-                                value={nextRef || "Generating…"}
-                                readOnly
-                                tabIndex={-1}
-                                className="text-muted-foreground font-mono"
-                                title="Pre-generated next reference. Final reference is assigned at save (may shift by ±1 under concurrent saves)."
-                            />
+
+                        {/* Header row labels — Tally-style two amount columns. */}
+                        <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 px-2 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                            <span>Dr/Cr</span>
+                            <span>Particulars</span>
+                            <span className="text-right">Debit</span>
+                            <span className="text-right">Credit</span>
+                            <span />
                         </div>
-                    </div>
 
-                    {/* Header row labels — Tally-style two amount columns. */}
-                    <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 px-2 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-                        <span>Dr/Cr</span>
-                        <span>Particulars</span>
-                        <span className="text-right">Debit</span>
-                        <span className="text-right">Credit</span>
-                        <span />
-                    </div>
-
-                    {/* Sequential line list */}
-                    <div className="space-y-2">
-                        {lines.map((line) => {
-                            const amt       = lineAmount(line);
-                            const hasStock  = line.stockItems.length > 0;
-                            const acct      = line.accountId ? accountById.get(line.accountId) : undefined;
-                            const eligible  = line.accountId ? (eligibleByAccountId.get(line.accountId) ?? false) : false;
-                            const isParty   = line.accountId ? isPartyAccount(line.accountId) : false;
-                            const isBalancing = !hasStock && line.id === balancingLineId && balancingAmount > 0;
-                            return (
-                                <div key={line.id} className="rounded border border-border/60 bg-muted/20 p-2 space-y-1.5">
-                                    {/* Row 1: Dr/Cr · Account · Debit · Credit · Delete */}
-                                    <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 items-center">
-                                        <Select
-                                            value={line.side}
-                                            onValueChange={(v) => updateLine(line.id, { side: v as Side })}
-                                        >
-                                            <SelectTrigger className={cell} aria-label="Dr or Cr">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="DEBIT">Dr</SelectItem>
-                                                <SelectItem value="CREDIT">Cr</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <GlAccountCombobox
-                                            value={line.accountId || null}
-                                            onChange={(a) => updateLine(line.id, { accountId: a?.id ?? 0 })}
-                                            accounts={accounts}
-                                            placeholder="Select account"
-                                        />
-                                        {/* Debit cell — active when side === DEBIT */}
-                                        <AmountCell
-                                            line={line}
-                                            isOwnSide={line.side === "DEBIT"}
-                                            hasStock={hasStock}
-                                            amt={amt}
-                                            isBalancing={isBalancing}
-                                            balancingAmount={balancingAmount}
-                                            onChange={(v) => updateLine(line.id, { amount: v })}
-                                            onAutoFill={() => updateLine(line.id, { amount: balancingAmount.toFixed(2) })}
-                                        />
-                                        {/* Credit cell — active when side === CREDIT */}
-                                        <AmountCell
-                                            line={line}
-                                            isOwnSide={line.side === "CREDIT"}
-                                            hasStock={hasStock}
-                                            amt={amt}
-                                            isBalancing={isBalancing}
-                                            balancingAmount={balancingAmount}
-                                            onChange={(v) => updateLine(line.id, { amount: v })}
-                                            onAutoFill={() => updateLine(line.id, { amount: balancingAmount.toFixed(2) })}
-                                        />
-                                        <Button
-                                            variant="ghost" size="icon-xs"
-                                            className="text-destructive/60 hover:text-destructive"
-                                            onClick={() => removeLine(line.id)}
-                                            disabled={lines.length <= 2}
-                                            tabIndex={-1}
-                                            title="Remove line"
-                                        >
-                                            <Trash2 size={14} />
-                                        </Button>
-                                    </div>
-
-                                    {/* Row 1.5: Cur Bal hint under the picked account */}
-                                    {acct && (
-                                        <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 text-[11px] text-muted-foreground">
-                                            <span />
-                                            <span className="pl-2 italic">
-                                                Cur Bal: <span className="font-mono">{fmtBalance(acct)}</span>
-                                                {isParty && (
-                                                    <span className="ml-2 text-amber-600 dark:text-amber-400" title="Bill-wise allocation not yet wired in this dialog — see TODO">
-                                                        · party ledger (bill-wise pending)
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <span />
-                                            <span />
-                                            <span />
-                                        </div>
-                                    )}
-
-                                    {/* Inventory items under this ledger — only when ledger is INCOME/EXPENSE */}
-                                    {eligible && line.stockItems.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="grid grid-cols-[60px_minmax(0,1fr)_56px_72px_56px_22px] gap-1.5 items-center pl-2"
-                                        >
-                                            <span className="text-[10px] text-muted-foreground text-right pr-1">item</span>
-                                            <InvProductCombobox
-                                                value={item.productId}
-                                                onChange={(p) => handleProductSelect(line, item.id, p)}
-                                                placeholder="Search item…"
+                        {/* Sequential line list */}
+                        <div className="space-y-2">
+                            {lines.map((line) => {
+                                const amt = lineAmount(line);
+                                const hasStock = line.stockItems.length > 0;
+                                const acct = line.accountId ? accountById.get(line.accountId) : undefined;
+                                const eligible = line.accountId ? (eligibleByAccountId.get(line.accountId) ?? false) : false;
+                                const isParty = line.accountId ? isPartyAccount(line.accountId) : false;
+                                const isBalancing = !hasStock && line.id === balancingLineId && balancingAmount > 0;
+                                return (
+                                    <div key={line.id} className="rounded border border-border/60 bg-muted/20 p-2 space-y-1.5">
+                                        {/* Row 1: Dr/Cr · Account · Debit · Credit · Delete */}
+                                        <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 items-center">
+                                            <Select
+                                                value={line.side}
+                                                onValueChange={(v) => updateLine(line.id, { side: v as Side })}
+                                            >
+                                                <SelectTrigger
+                                                    className={cell}
+                                                    aria-label="Dr or Cr"
+                                                    autoFocus={line.id === autoFocusSideLineId}
+                                                >
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="DEBIT">Dr</SelectItem>
+                                                    <SelectItem value="CREDIT">Cr</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <GlAccountCombobox
+                                                value={line.accountId || null}
+                                                onChange={(a) => updateLine(line.id, { accountId: a?.id ?? 0 })}
+                                                accounts={accounts}
+                                                placeholder="Select account"
                                             />
-                                            <Input
-                                                type="number" min="0" step="0.001"
-                                                value={item.qty}
-                                                onChange={(e) => updateStockItem(line.id, item.id, { qty: e.target.value })}
-                                                className={`${cell} text-right tabular-nums`}
-                                                placeholder="qty"
+                                            {/* Debit cell — active when side === DEBIT */}
+                                            <AmountCell
+                                                line={line}
+                                                isOwnSide={line.side === "DEBIT"}
+                                                hasStock={hasStock}
+                                                amt={amt}
+                                                isBalancing={isBalancing}
+                                                balancingAmount={balancingAmount}
+                                                onChange={(v) => updateLine(line.id, { amount: v })}
+                                                onAutoFill={() => updateLine(line.id, { amount: balancingAmount.toFixed(2) })}
                                             />
-                                            <Input
-                                                type="number" min="0" step="0.01"
-                                                value={item.rate}
-                                                onChange={(e) => updateStockItem(line.id, item.id, { rate: e.target.value })}
-                                                className={`${cell} text-right tabular-nums`}
-                                                placeholder="rate"
+                                            {/* Credit cell — active when side === CREDIT */}
+                                            <AmountCell
+                                                line={line}
+                                                isOwnSide={line.side === "CREDIT"}
+                                                hasStock={hasStock}
+                                                amt={amt}
+                                                isBalancing={isBalancing}
+                                                balancingAmount={balancingAmount}
+                                                onChange={(v) => updateLine(line.id, { amount: v })}
+                                                onAutoFill={() => updateLine(line.id, { amount: balancingAmount.toFixed(2) })}
                                             />
-                                            <span className="text-xs tabular-nums text-right text-muted-foreground pr-1">
-                                                {fmt(stockItemAmount(item))}
-                                            </span>
                                             <Button
                                                 variant="ghost" size="icon-xs"
-                                                className="text-destructive/40 hover:text-destructive"
-                                                onClick={() => removeStockItem(line.id, item.id)}
+                                                className="text-destructive/60 hover:text-destructive"
+                                                onClick={() => removeLine(line.id)}
+                                                disabled={lines.length <= 2}
+                                                title="Remove line"
                                             >
-                                                <X size={11} />
+                                                <Trash2 size={14} />
                                             </Button>
                                         </div>
-                                    ))}
 
-                                    {eligible && (
-                                        <div className="flex items-center justify-between gap-2 pl-14">
-                                            <Button
-                                                variant="ghost" size="sm"
-                                                onClick={() => addStockItem(line.id)}
-                                                className="h-auto py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                                            >
-                                                <Package size={11} className="mr-1" />
-                                                + Inventory item
-                                            </Button>
-                                            {hasStock && (
-                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                                    {line.side === "DEBIT" ? "@cost default" : "@sale default"}
+                                        {/* Row 1.5: Cur Bal hint under the picked account */}
+                                        {acct && (
+                                            <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 text-[11px] text-muted-foreground">
+                                                <span />
+                                                <span className="pl-2 italic">
+                                                    Cur Bal: <span className="font-mono">{fmtBalance(acct)}</span>
+                                                    {isParty && (
+                                                        <span className="ml-2 text-amber-600 dark:text-amber-400" title="Bill-wise allocation not yet wired in this dialog — see TODO">
+                                                            · party ledger (bill-wise pending)
+                                                        </span>
+                                                    )}
                                                 </span>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                        <Button variant="ghost" size="sm" onClick={() => addLine("DEBIT")} className="h-auto py-1 text-xs">
-                            <Plus size={12} className="mr-1" /> Add line
-                        </Button>
+                                                <span />
+                                                <span />
+                                                <span />
+                                            </div>
+                                        )}
+
+                                        {/* Inventory items under this ledger — only when ledger is INCOME/EXPENSE */}
+                                        {eligible && line.stockItems.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className="grid grid-cols-[60px_minmax(0,1fr)_56px_72px_56px_22px] gap-1.5 items-center pl-2"
+                                            >
+                                                <span className="text-[10px] text-muted-foreground text-right pr-1">item</span>
+                                                <InvProductCombobox
+                                                    value={item.productId}
+                                                    onChange={(p) => handleProductSelect(line, item.id, p)}
+                                                    placeholder="Search item…"
+                                                />
+                                                <Input
+                                                    type="number" min="0" step="0.001"
+                                                    value={item.qty}
+                                                    onChange={(e) => updateStockItem(line.id, item.id, { qty: e.target.value })}
+                                                    className={`${cell} text-right tabular-nums`}
+                                                    placeholder="qty"
+                                                />
+                                                <Input
+                                                    type="number" min="0" step="0.01"
+                                                    value={item.rate}
+                                                    onChange={(e) => updateStockItem(line.id, item.id, { rate: e.target.value })}
+                                                    className={`${cell} text-right tabular-nums`}
+                                                    placeholder="rate"
+                                                />
+                                                <span className="text-xs tabular-nums text-right text-muted-foreground pr-1">
+                                                    {fmt(stockItemAmount(item))}
+                                                </span>
+                                                <Button
+                                                    variant="ghost" size="icon-xs"
+                                                    className="text-destructive/40 hover:text-destructive"
+                                                    onClick={() => removeStockItem(line.id, item.id)}
+                                                >
+                                                    <X size={11} />
+                                                </Button>
+                                            </div>
+                                        ))}
+
+                                        {eligible && (
+                                            <div className="flex items-center justify-between gap-2 pl-14">
+                                                <Button
+                                                    variant="ghost" size="sm"
+                                                    onClick={() => addStockItem(line.id)}
+                                                    className="h-auto py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <Package size={11} className="mr-1" />
+                                                    + Inventory item
+                                                </Button>
+                                                {hasStock && (
+                                                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                        {line.side === "DEBIT" ? "@cost default" : "@sale default"}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            <Button variant="ghost" size="sm" onClick={() => addLine("DEBIT")} className="h-auto py-1 text-xs">
+                                <Plus size={12} className="mr-1" /> Add line
+                            </Button>
+                        </div>
+
+                        {/* Narration — no totals/diff bar (the auto-balance handles it). */}
+                        <div className="space-y-1.5">
+                            <Label>Narration</Label>
+                            <Textarea
+                                value={narration}
+                                rows={2}
+                                placeholder="e.g. Damaged goods written off against sales"
+                                onChange={(e) => setNarration(e.target.value)}
+                            />
+                        </div>
                     </div>
 
-                    {/* Narration — no totals/diff bar (the auto-balance handles it). */}
-                    <div className="space-y-1.5">
-                        <Label>Narration</Label>
-                        <Textarea
-                            value={narration}
-                            rows={2}
-                            placeholder="e.g. Damaged goods written off against sales"
-                            onChange={(e) => setNarration(e.target.value)}
-                        />
-                    </div>
-                </div>
 
+                    <ScrollBar orientation="vertical" />
+                </ScrollArea>
                 <div className="flex justify-end gap-2 border-t border-border bg-muted/50 px-5 py-3">
                     <Button variant="outline" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
                     <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
