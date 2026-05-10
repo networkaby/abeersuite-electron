@@ -143,7 +143,7 @@ export function GlAccountCombobox({
                             No accounts match <span className="font-mono">{query}</span>
                         </div>
                     ) : (
-                        <ScrollArea className="max-h-72 h-72">
+                        <ScrollArea className="max-h-72">
                             <ul ref={cb.listRef} className="divide-y divide-border">
                                 {filtered.map((a, i) => (
                                     <li

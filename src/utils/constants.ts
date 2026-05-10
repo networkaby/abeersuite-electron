@@ -88,7 +88,7 @@ export type ModuleCreateAction = {
     icon: LucideIcon;
     variant?: "default" | "outline";
     href?: string;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -180,7 +180,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", href: "/office/accountancy/estimates/new" },
             { label: "Payment +", subtitle: "New payment", icon: Wallet, variant: "outline", href: "/office/accountancy/payments/new", permission: "finance:voucher:create" },
             { label: "Receipt +", subtitle: "New receipt", icon: Wallet, variant: "outline", href: "/office/accountancy/receipts/new", permission: "finance:voucher:create" },
-            { label: "Contra +", subtitle: "New contra", icon: Wallet, variant: "outline", href: "/office/accountancy/contras/new", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
             { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", href: "/office/accountancy/credit-notes/new", permission: "finance:voucher:create" },
             { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
             { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },

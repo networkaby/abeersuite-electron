@@ -15,6 +15,7 @@ import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
 import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
+import { useContraDialogStore } from "@/store/contraDialogStore";
 
 type Props = {
     open: boolean;
@@ -29,6 +30,7 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const { setPersonOpen, setCompanyOpen } = useCreateDialogStore();
     const { setOpen: openJournalVoucher } = useJournalVoucherStore();
     const { setOpen: openDebitNote } = useDebitNoteDialogStore();
+    const { setOpen: openContra } = useContraDialogStore();
 
     const canDo = (permission?: string | null) => {
         if (!permission) return true;
@@ -49,6 +51,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             openJournalVoucher(true);
         } else if (action.action === "new-debit-note") {
             openDebitNote(true);
+        } else if (action.action === "new-contra") {
+            openContra(true);
         }
     };
 

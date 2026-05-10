@@ -8,6 +8,7 @@ import ButtonBar from "@/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
 import { DebitNoteDialog } from "@/modules/accountancy/components/DebitNoteDialog";
+import { ContraDialog } from "@/modules/accountancy/components/ContraDialog";
 
 export default async function ProtectedLayout({
     children,
@@ -59,6 +60,7 @@ export default async function ProtectedLayout({
                 <QuickTicketButton />
                 <JournalVoucherDialog />
                 <DebitNoteDialog />
+                <ContraDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

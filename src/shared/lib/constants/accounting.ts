@@ -8,6 +8,8 @@
 export const ACCOUNT_GROUPS = {
     SUNDRY_DEBTORS:   "Sundry Debtors",
     SUNDRY_CREDITORS: "Sundry Creditors",
+    CASH_IN_HAND:     "Cash-in-Hand",
+    BANK_ACCOUNTS:    "Bank Accounts",
 } as const;
 
 export type AccountGroupName = (typeof ACCOUNT_GROUPS)[keyof typeof ACCOUNT_GROUPS];

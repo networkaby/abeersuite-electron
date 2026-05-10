@@ -13,6 +13,7 @@ import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
 import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
+import { useContraDialogStore } from "@/store/contraDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
@@ -38,6 +39,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { personOpen, companyOpen, setPersonOpen, setCompanyOpen } = useCreateDialogStore();
     const { setOpen: openJournalVoucher } = useJournalVoucherStore();
     const { setOpen: openDebitNote } = useDebitNoteDialogStore();
+    const { setOpen: openContra } = useContraDialogStore();
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
@@ -77,6 +79,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             openJournalVoucher(true);
         } else if (action.action === "new-debit-note") {
             openDebitNote(true);
+        } else if (action.action === "new-contra") {
+            openContra(true);
         }
     };
 
