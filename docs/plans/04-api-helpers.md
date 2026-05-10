@@ -112,3 +112,10 @@ Done in **this same PR** (helpers + sweep together) so the boilerplate doesn't l
 
 - `parseCursor` adoption — only call out in this segment if there's a route with cursor pagination already; otherwise just expose it for future use.
 - Generic CRUD route factory — high risk; deferred indefinitely.
+
+
+---
+
+## Adapting to new findings during execution
+
+If while running this plan you discover that an assumption is stale — file paths drifted, scope counts are wrong, a helper already exists elsewhere, a sweep produces fewer or more hits than estimated — **update the relevant plan files in the same PR before committing**. Do not silently work around the divergence: the next plan in the sequence may rely on the path or symbol you just changed, and the next agent (or human) reads the plan cold. Add a short "Post-execution notes" section recording what actually happened, mirroring the pattern set by [01-layout-sweep.md](01-layout-sweep.md) and [02-utility-quick-wins.md](02-utility-quick-wins.md).

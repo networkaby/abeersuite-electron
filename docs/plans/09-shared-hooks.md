@@ -118,3 +118,10 @@ Run `Grep('useEffect\(\(\) => \{[^}]*axios\.get|fetch\(' src)`. For each `useEff
 
 - Subtle keyboard-nav regressions on Tab handling. Combobox tests should explicitly include Tab → "should commit selection if user typed differently than selected label" (current behaviour in GlAccountCombobox).
 - PosScreen Ctrl+Enter could be lost if `useComboboxNav.handleKeyDown` is wired before the custom branch. Wire **after** custom shortcuts.
+
+
+---
+
+## Adapting to new findings during execution
+
+If while running this plan you discover that an assumption is stale — file paths drifted, scope counts are wrong, a helper already exists elsewhere, a sweep produces fewer or more hits than estimated — **update the relevant plan files in the same PR before committing**. Do not silently work around the divergence: the next plan in the sequence may rely on the path or symbol you just changed, and the next agent (or human) reads the plan cold. Add a short "Post-execution notes" section recording what actually happened, mirroring the pattern set by [01-layout-sweep.md](01-layout-sweep.md) and [02-utility-quick-wins.md](02-utility-quick-wins.md).

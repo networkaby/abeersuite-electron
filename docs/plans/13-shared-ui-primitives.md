@@ -91,3 +91,10 @@ Run `Grep('bg-(green|red|blue|yellow|orange|gray)-100 text-' src/modules src/app
 - A generic `<ResourceCrudPage>` shell — too many bespoke columns/actions for one shell to fit cleanly. Re-evaluate after this segment.
 - A generic `<FilterBar>` — pages diverge too much.
 - A generic `<Modal>` wrapper around shadcn `<Dialog>` — shadcn's API is already terse; another wrapper adds cognitive cost.
+
+
+---
+
+## Adapting to new findings during execution
+
+If while running this plan you discover that an assumption is stale — file paths drifted, scope counts are wrong, a helper already exists elsewhere, a sweep produces fewer or more hits than estimated — **update the relevant plan files in the same PR before committing**. Do not silently work around the divergence: the next plan in the sequence may rely on the path or symbol you just changed, and the next agent (or human) reads the plan cold. Add a short "Post-execution notes" section recording what actually happened, mirroring the pattern set by [01-layout-sweep.md](01-layout-sweep.md) and [02-utility-quick-wins.md](02-utility-quick-wins.md).
