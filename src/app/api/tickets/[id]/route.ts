@@ -9,6 +9,7 @@ import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -128,7 +129,7 @@ export async function PUT(
         const userId = resolvedUser.id;
         const userRoles = resolvedUser.roles ?? [resolvedUser.primaryRole ?? ""];
         const permissions = resolvedUser.permissions ?? [];
-        const isAdmin = permissions.includes("admin:bypass");
+        const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
         const { id } = await params;
         const scopeWhere = buildTicketReadScopeWhere(resolvedUser);

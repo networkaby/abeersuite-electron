@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const serviceCenterSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -27,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("warranty:convert");
+    const { response } = await requirePermission(PERMISSIONS.WARRANTY_CONVERT);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, serviceCenterSchema);

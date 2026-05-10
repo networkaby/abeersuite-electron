@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function DELETE(
     _: Request,
@@ -15,7 +16,7 @@ export async function DELETE(
     const targetUserId = Number(userId);
 
     const isSelfRemoval = user.id === targetUserId;
-    if (!isSelfRemoval && !hasPermission(user, "tickets:manage-participants")) {
+    if (!isSelfRemoval && !hasPermission(user, PERMISSIONS.TICKETS_MANAGE_PARTICIPANTS)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

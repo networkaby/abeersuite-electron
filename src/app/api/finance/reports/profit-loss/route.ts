@@ -5,10 +5,11 @@ import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
 import { computeTradingStockAdjustment } from "@/modules/accountancy/lib/tradingStockAdjustment";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/finance/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -6,13 +6,14 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason required") });
 
 // POST /api/finance/vouchers/[id]/hard-delete
 // Physically removes the voucher and its lines. Snapshot to VoucherAudit.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:voucher:hard-delete");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_HARD_DELETE);
     if (response) return response;
 
     const { id } = await params;

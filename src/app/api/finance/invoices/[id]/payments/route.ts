@@ -5,6 +5,7 @@ import { z } from "zod";
 import { nextRef, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const paymentSchema = z.object({
     amount: z.number().positive(),
@@ -18,7 +19,7 @@ const paymentSchema = z.object({
 
 // POST /api/finance/invoices/[id]/payments
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;
@@ -114,7 +115,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 // GET /api/finance/invoices/[id]/payments
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;

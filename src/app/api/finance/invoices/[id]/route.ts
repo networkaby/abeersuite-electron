@@ -5,6 +5,7 @@ import { z } from "zod";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const updateSchema = z.object({
     notes: z.string().trim().optional().nullable(),
@@ -15,7 +16,7 @@ const updateSchema = z.object({
 
 // GET /api/finance/invoices/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;
@@ -51,7 +52,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 // PATCH /api/finance/invoices/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;

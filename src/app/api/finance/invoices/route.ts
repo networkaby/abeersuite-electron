@@ -6,6 +6,7 @@ import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const lineSchema = z.object({
     description: z.string().trim().min(1),
@@ -41,7 +42,7 @@ const INVOICE_INCLUDE = {
 
 // GET /api/finance/invoices
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/invoices
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

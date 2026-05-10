@@ -4,9 +4,10 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET() {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const rows = await prisma.invCategory.findMany({
@@ -20,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invCategoryCreateSchema);

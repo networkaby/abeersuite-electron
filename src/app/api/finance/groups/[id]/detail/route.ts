@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     effectiveLedgerBalance, EFFECTIVE_BALANCE_SELECT,
 } from "@/modules/accountancy/lib/effectiveBalance";
@@ -9,7 +10,7 @@ import {
 // GET /api/finance/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;

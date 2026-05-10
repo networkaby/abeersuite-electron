@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const TARGET_TYPES = ["INVOICE", "VOUCHER", "JOURNAL_ENTRY"] as const;
 const SOURCE_TYPES = ["VOUCHER", "PAYMENT", "INVOICE", "JOURNAL_ENTRY"] as const;
@@ -22,7 +23,7 @@ const createSchema = z.object({
 // GET /api/finance/allocations?targetType=INVOICE&targetId=42
 // Lists allocations linked to a particular target (or by source if ?sourceType=&sourceId=).
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
 // POST /api/finance/allocations
 // Create a free-form bill-wise link between any two vouchers.
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("finance:allocation:manage");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_ALLOCATION_MANAGE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

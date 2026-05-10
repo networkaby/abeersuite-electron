@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 /**
  * Canonical staff-side resolved-user shape.
@@ -47,7 +48,7 @@ export function hasPermission(user: ResolvedUser, permissionId: string): boolean
 }
 
 export function isAdmin(user: ResolvedUser): boolean {
-    return hasPermission(user, "admin:bypass");
+    return hasPermission(user, PERMISSIONS.ADMIN_BYPASS);
 }
 
 type GuardResult =

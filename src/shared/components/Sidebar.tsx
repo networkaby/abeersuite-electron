@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTheme } from "@/shared/components/ThemeProvider";
 import axios from "axios";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
     ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell,
@@ -44,7 +45,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const { resolvedTheme, setTheme } = useTheme();
     const permissions = user?.permissions ?? [];
-    const isAdmin = permissions.includes("admin:bypass");
+    const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     const [collapsed, setCollapsed] = useState(false);

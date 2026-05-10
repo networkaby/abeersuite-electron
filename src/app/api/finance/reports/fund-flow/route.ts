@@ -4,12 +4,13 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/finance/reports/fund-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Sources & application of funds, plus working-capital movement between
 // the start and end of the period. Mirrors Tally's MIS Fund Flow.
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

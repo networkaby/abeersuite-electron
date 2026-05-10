@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET() {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     try {
         const grouped = await invProductDb(prisma).groupBy({

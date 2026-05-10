@@ -8,6 +8,7 @@ import { prismaUniqueError } from "@/shared/lib/api";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),
@@ -52,7 +53,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { user, response } = await requirePermission("tickets:manage-participants");
+    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_MANAGE_PARTICIPANTS);
     if (response) return response;
 
     const { id } = await params;

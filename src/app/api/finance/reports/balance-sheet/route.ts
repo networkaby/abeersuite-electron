@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,
 } from "@/modules/accountancy/lib/aggregateLedger";
@@ -10,7 +11,7 @@ import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 
 // GET /api/finance/reports/balance-sheet?asOf=YYYY-MM-DD
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

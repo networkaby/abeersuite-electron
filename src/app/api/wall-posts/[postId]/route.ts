@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function DELETE(
     _: Request,
@@ -23,7 +24,7 @@ export async function DELETE(
     const canDelete =
         caller.id === post.authorId ||
         caller.id === post.wallUserId ||
-        caller.permissions.includes("admin:bypass");
+        caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     try {

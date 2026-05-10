@@ -4,12 +4,13 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/finance/reports/cash-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Aggregates cash inflows / outflows by the counter-side ledger of every
 // journal entry that touches a Cash-in-Hand or Bank Accounts ledger.
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

@@ -1,2 +1,3 @@
 import { makePermissionLayout } from "@/shared/lib/auth/makePermissionLayout";
-export default makePermissionLayout("users:manage");
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+export default makePermissionLayout(PERMISSIONS.USERS_MANAGE);

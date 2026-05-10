@@ -115,11 +115,21 @@ Import from the barrel: `import { … } from "@/shared/lib/api"`.
 
 > Boilerplate sweep status: opaque-ID, P2002 (simple cases), and pagination call sites are all swept (segment 04a, 17 sites). `validateRequest` (≈110 routes) and `handleApiError` (≈152 routes) sweeps are deferred to follow-up commits within this segment.
 
+## Constants — `src/shared/lib/constants/`
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `PERMISSIONS` | `permissions.ts` | Typed permission-id object — `PERMISSIONS.SETTINGS_MANAGE` etc. Mirrors `prisma/seeds/bootstrap-seed.ts`. Pass to `requirePermission(id)`, `hasPermission(user, id)`, `makePermissionLayout(id)`, `user.permissions.includes(id)`. |
+| `PermissionId` (type) | `permissions.ts` | Union of all `PERMISSIONS` values — use in helper signatures that accept a permission id. |
+| `ACCOUNT_GROUPS` | `accounting.ts` | `{ SUNDRY_DEBTORS: "Sundry Debtors", SUNDRY_CREDITORS: "Sundry Creditors" }` — the two `AccountGroup.name` literals matched in journal posting, party-ledger creation, and receivables/payables reports. |
+| `AccountGroupName` (type) | `accounting.ts` | Union of `ACCOUNT_GROUPS` values. |
+
+> Use these instead of bare string literals so TypeScript catches typos and renames are a single-file change.
+
 ## Sections coming in later segments
 
 The following sections will appear when their owning segment ships. See [docs/plans/](plans/) for sequencing.
 
-- **Constants** (Segment 05) — `PERMISSIONS`, `ACCOUNT_GROUPS` in `src/shared/lib/constants/`
 - **Prisma fragments** (Segment 06) — `selectPrimaryPhone`, `selectPrimaryEmail`, `selectAccountWithOwner`, `buildSearchWhere` in `src/shared/lib/prisma/fragments.ts`
 - **Common Zod schemas** (Segment 07) — `labelColorSchema`, `nameDescriptionSchema`, `phoneEmailSchema`, `gstSchema`, `nameIsActiveSchema` in `src/shared/lib/schemas/commonSchemas.ts`
 - **Hooks** (Segment 09) — `useComboboxNav`, `usePartySearch`, `useDeleteWithConfirm`, `useApiResource` in `src/shared/hooks/`

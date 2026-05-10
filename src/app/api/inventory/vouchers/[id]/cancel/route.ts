@@ -4,11 +4,12 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/inventory/vouchers/[id]/cancel
 // Reverses stock + GL impact via counter-entry; preserves voucher reference number.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission("inventory:voucher:cancel");
+    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_CANCEL);
     if (response) return response;
 
     const { id } = await params;

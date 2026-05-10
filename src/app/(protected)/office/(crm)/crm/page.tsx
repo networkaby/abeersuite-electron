@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type Search = { q?: string; status?: string };
 
@@ -15,8 +16,8 @@ export default async function CrmLeadsPage({ searchParams }: { searchParams: Pro
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManage =
-        permissions.includes("admin:bypass") || permissions.includes("crm:manage");
-    if (!permissions.includes("admin:bypass") && !permissions.includes("crm:view")) {
+        permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.CRM_MANAGE);
+    if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.CRM_VIEW)) {
         redirect("/office/assignments");
     }
 

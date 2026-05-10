@@ -4,12 +4,14 @@ import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 // GET /api/finance/reports/ratio-analysis?asOf=YYYY-MM-DD
 // Period: Indian fiscal year start (1-Apr) → asOf.
 // Returns Tally's "Principal Groups" and "Principal Ratios" panels.
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -38,8 +40,8 @@ export async function GET(req: Request) {
         const cashInHand         = abs(findGroup(tree, "Cash-in-Hand"));
         const bankAccounts       = abs(findGroup(tree, "Bank Accounts"));
         const bankOd             = abs(findGroup(tree, "Bank OD A/c"));
-        const sundryDebtors      = abs(findGroup(tree, "Sundry Debtors"));
-        const sundryCreditors    = abs(findGroup(tree, "Sundry Creditors"));
+        const sundryDebtors      = abs(findGroup(tree, ACCOUNT_GROUPS.SUNDRY_DEBTORS));
+        const sundryCreditors    = abs(findGroup(tree, ACCOUNT_GROUPS.SUNDRY_CREDITORS));
         const sales              = abs(findGroup(tree, "Sales Accounts"));
         const purchases          = abs(findGroup(tree, "Purchase Accounts"));
         const stockGroupValue    = abs(findGroup(tree, "Stock-in-Hand"));

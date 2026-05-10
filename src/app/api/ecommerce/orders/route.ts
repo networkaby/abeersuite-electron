@@ -8,6 +8,7 @@ import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const ACCOUNT_SELECT = {
     id: true,
@@ -24,7 +25,7 @@ const ACCOUNT_SELECT = {
 } satisfies Prisma.AccountSelect;
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
@@ -113,7 +114,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

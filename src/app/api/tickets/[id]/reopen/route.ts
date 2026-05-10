@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const reopenSchema = z.object({
     priority: z.nativeEnum(Priority).optional(),
@@ -20,7 +21,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { user, response } = await requirePermission("tickets:status:set");
+    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_STATUS_SET);
     if (response) return response;
     try {
         const { id } = await params;

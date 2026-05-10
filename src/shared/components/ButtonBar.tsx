@@ -16,6 +16,7 @@ import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type UserType = {
     name?: string | null;
@@ -37,7 +38,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openJournalVoucher } = useJournalVoucherStore();
 
     const permissions = user?.permissions ?? [];
-    const isAdmin = permissions.includes("admin:bypass");
+    const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const activeModule = getActiveModule(pathname);
     const createActions = activeModule?.createActions ?? null;

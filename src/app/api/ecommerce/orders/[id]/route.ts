@@ -2,9 +2,10 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     const { id } = await ctx.params;
     const oid = parseInt(id, 10);

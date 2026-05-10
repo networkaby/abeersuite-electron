@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 const createSchema = z.object({
     name: z.string().trim().min(1, "Company name is required"),
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
             }
 
             const sundryDebtors = await tx.accountGroup.findFirst({
-                where: { name: "Sundry Debtors" },
+                where: { name: ACCOUNT_GROUPS.SUNDRY_DEBTORS },
                 select: { id: true },
             });
             await tx.account.create({

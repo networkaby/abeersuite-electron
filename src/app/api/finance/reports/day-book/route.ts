@@ -5,6 +5,7 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/refResolver";
 import { parsePagination } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Surfaced kinds in the Day Book — the union of inventory-voucher origins
 // (Sale/Purchase/Estimate), invoices, GL voucher types, and stand-alone JE.
@@ -16,7 +17,7 @@ const KINDS: Kind[] = ["All", "Sale", "Purchase", "Estimate", "Invoice",
 
 // GET /api/finance/reports/day-book?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=50&search=...&kind=Sale
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

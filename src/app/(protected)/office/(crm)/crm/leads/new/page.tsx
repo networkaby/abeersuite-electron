@@ -5,11 +5,12 @@ import { getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import LeadNewForm from "./LeadNewForm";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export default async function NewCrmLeadPage() {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const canManage = permissions.includes("admin:bypass") || permissions.includes("crm:manage");
+    const canManage = permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.CRM_MANAGE);
     if (!canManage) {
         redirect("/office/crm");
     }

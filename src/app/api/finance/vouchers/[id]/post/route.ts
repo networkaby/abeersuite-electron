@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/finance/vouchers/[id]/post
 // DRAFT → POSTED: applies GL impact, creates a mirror JournalEntry for the audit
 // trail, and updates Account.balance per line.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:voucher:post");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_POST);
     if (response) return response;
 
     const { id } = await params;

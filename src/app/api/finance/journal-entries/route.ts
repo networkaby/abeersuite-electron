@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -21,7 +22,7 @@ const createSchema = z.object({
 
 // GET /api/finance/journal-entries
 export async function GET(req: Request) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const includeDeletedParam = searchParams.get("includeDeleted") === "1";
-    const canSeeDeleted = user!.permissions.includes("admin:bypass") || user!.permissions.includes("finance:journal:delete");
+    const canSeeDeleted = user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_JOURNAL_DELETE);
     const includeDeleted = includeDeletedParam && canSeeDeleted;
 
     try {
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/journal-entries
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

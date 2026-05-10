@@ -5,6 +5,7 @@ import { z } from "zod";
 import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createSchema = z.object({
     code: z.string().trim().min(1),
@@ -25,7 +26,7 @@ const createSchema = z.object({
 // Optional `type` query param filters by the parent group's type
 // (ASSET | LIABILITY | INCOME | EXPENSE).
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
 // Account `type` is no longer stored on the row — it's derived from the parent
 // group. Caller must pass `groupId`; `normalBalance` is required.
 export async function POST(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

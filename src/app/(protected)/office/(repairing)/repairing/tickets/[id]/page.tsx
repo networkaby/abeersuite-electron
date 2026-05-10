@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     ArrowLeft, Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,
@@ -91,9 +92,9 @@ export default function TicketDetailPage() {
     const sessionUser = session?.user as { id?: string; roles?: string[]; permissions?: string[] } | undefined;
     const permissions = sessionUser?.permissions ?? [];
     const currentUserId = Number(sessionUser?.id ?? "0");
-    const canConvertWarranty = permissions.includes("warranty:convert") || permissions.includes("admin:bypass");
-    const canManageOwnership = permissions.includes("tickets:manage-participants") || permissions.includes("admin:bypass");
-    const canTransfer = permissions.includes("tickets:transfer") || permissions.includes("admin:bypass");
+    const canConvertWarranty = permissions.includes(PERMISSIONS.WARRANTY_CONVERT) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canManageOwnership = permissions.includes(PERMISSIONS.TICKETS_MANAGE_PARTICIPANTS) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canTransfer = permissions.includes("tickets:transfer") || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const saveRef = async () => {
         if (!ticket) return;

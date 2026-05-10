@@ -6,6 +6,7 @@ import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -13,7 +14,7 @@ const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is req
 // Physically removes the voucher. Snapshot to InvVoucherAudit; reverses live stock + GL
 // only when the voucher is currently posted and not already cancelled or soft-deleted.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission("inventory:voucher:hard-delete");
+    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_HARD_DELETE);
     if (response) return response;
 
     const { id } = await params;

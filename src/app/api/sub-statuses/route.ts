@@ -5,6 +5,7 @@ import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const subStatusSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -62,7 +63,7 @@ export async function GET(req: Request) {
 
 // POST /api/sub-statuses
 export async function POST(req: Request) {
-    const { response } = await requirePermission("settings:statuses");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, subStatusSchema);

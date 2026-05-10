@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,7 +18,7 @@ const warrantySchema = z.object({
 });
 
 export async function POST(req: Request, { params }: Params) {
-    const { user, response } = await requirePermission("warranty:convert");
+    const { user, response } = await requirePermission(PERMISSIONS.WARRANTY_CONVERT);
     if (response) return response;
 
     try {

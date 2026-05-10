@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const lineSchema = z.object({
     accountId:   z.number().int().positive(),
@@ -23,7 +24,7 @@ const createSchema = z.object({
 
 // GET /api/finance/vouchers?type=CONTRA&status=DRAFT&includeDeleted=1
 export async function GET(req: Request) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
     const to = searchParams.get("to");
     const includeDeleted =
         searchParams.get("includeDeleted") === "1" &&
-        (user!.permissions.includes("admin:bypass") || user!.permissions.includes("finance:voucher:delete"));
+        (user!.permissions.includes(PERMISSIONS.ADMIN_BYPASS) || user!.permissions.includes(PERMISSIONS.FINANCE_VOUCHER_DELETE));
 
     try {
         const vouchers = await prisma.voucher.findMany({
@@ -63,7 +64,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/vouchers
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("finance:voucher:create");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

@@ -6,6 +6,7 @@ import { nextRef } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/pos/sale
 // Atomic POS sale — creates the Invoice + InvoiceLines, posts the AR/Revenue
@@ -35,7 +36,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("accountancy:view:org");
+    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

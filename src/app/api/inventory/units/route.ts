@@ -6,6 +6,7 @@ import { prismaUniqueError } from "@/shared/lib/api";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Cache key+tag exported so the [id] route's PATCH/DELETE can revalidate.
 export const INV_UNITS_TAG = "inv-units";
@@ -17,7 +18,7 @@ const getUnitsCached = unstable_cache(
 );
 
 export async function GET() {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const rows = await getUnitsCached();
@@ -28,7 +29,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invUnitCreateSchema);

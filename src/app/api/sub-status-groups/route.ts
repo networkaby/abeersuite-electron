@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -24,7 +25,7 @@ export async function GET() {
 
 // POST /api/sub-status-groups
 export async function POST(req: Request) {
-    const { response } = await requirePermission("settings:statuses");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createSchema);

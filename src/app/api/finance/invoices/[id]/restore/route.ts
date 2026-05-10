@@ -4,11 +4,12 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/finance/invoices/[id]/restore
 // Inverse of delete — re-applies GL impact if the invoice was posted.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("finance:invoice:delete");
+    const { response } = await requirePermission(PERMISSIONS.FINANCE_INVOICE_DELETE);
     if (response) return response;
 
     const { id } = await params;

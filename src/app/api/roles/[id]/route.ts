@@ -4,12 +4,13 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("roles:manage");
+    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -37,7 +38,7 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("roles:manage");
+    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -62,7 +63,7 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("roles:manage");
+    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

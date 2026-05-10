@@ -12,6 +12,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2, Plus, X, Package } from "lucide-react";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,7 +198,7 @@ export function JournalVoucherDialog() {
     // (TODO: wire up BillAllocationDrawer — see docs/modules/accountancy.md).
     const isPartyAccount = (accountId: number): boolean => {
         const g = accountById.get(accountId)?.group?.name ?? "";
-        return g === "Sundry Debtors" || g === "Sundry Creditors";
+        return g === ACCOUNT_GROUPS.SUNDRY_DEBTORS || g === ACCOUNT_GROUPS.SUNDRY_CREDITORS;
     };
 
     // Auto-balance: which empty line should soak up the diff between the two sides?

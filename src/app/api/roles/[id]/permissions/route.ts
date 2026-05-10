@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const rolePermissionsSchema = z.object({
     permissionIds: z.array(z.string().trim()),
@@ -13,7 +14,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("roles:manage");
+    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const { id: roleId } = await params;

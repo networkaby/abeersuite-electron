@@ -5,6 +5,7 @@ import { z } from "zod";
 import { loadGroupRolledUpBalances } from "@/modules/accountancy/lib/effectiveBalance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createSchema = z.object({
     name:      z.string().trim().min(1).max(200),
@@ -43,7 +44,7 @@ function buildTree(flat: FlatGroup[]): GroupNode[] {
 
 // GET /api/finance/account-groups — returns full tree with totalBalance per group
 export async function GET() {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     try {
@@ -69,7 +70,7 @@ export async function GET() {
 
 // POST /api/finance/account-groups — create a group
 export async function POST(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

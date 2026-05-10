@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const overrideSchema = z.object({
     permissionId: z.string().trim().min(1),
@@ -20,7 +21,7 @@ export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("users:manage");
+    const { response } = await requirePermission(PERMISSIONS.USERS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -69,7 +70,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("users:manage");
+    const { response } = await requirePermission(PERMISSIONS.USERS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

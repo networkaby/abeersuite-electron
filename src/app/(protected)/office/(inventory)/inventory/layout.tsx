@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, BookOpen } from "lucide-react";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const links = [
     { href: "/office/inventory", label: "Overview", icon: ChartArea },
@@ -17,7 +18,7 @@ const links = [
 export default async function InventoryLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!permissions.includes("admin:bypass") && !permissions.includes("inventory:manage")) {
+    if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.INVENTORY_MANAGE)) {
         redirect("/office/assignments");
     }
 

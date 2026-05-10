@@ -6,13 +6,14 @@ import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
 // POST /api/inventory/vouchers/[id]/delete
 // Soft-delete: hides from views and reverses stock/GL impact for posted vouchers. Recoverable.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response, user } = await requirePermission("inventory:voucher:delete");
+    const { response, user } = await requirePermission(PERMISSIONS.INVENTORY_VOUCHER_DELETE);
     if (response) return response;
 
     const { id } = await params;

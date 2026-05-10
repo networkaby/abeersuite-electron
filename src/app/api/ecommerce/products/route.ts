@@ -7,6 +7,7 @@ import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const specsSchema = z.record(z.string(), z.string()).optional();
 
@@ -39,7 +40,7 @@ const createSchema = z.object({
 const productInclude = { category: { select: { name: true } } } as const;
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     try {
         const { searchParams } = new URL(req.url);
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createSchema);

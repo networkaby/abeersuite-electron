@@ -6,6 +6,7 @@ import { nextRef, balanceDelta, toNumber } from "@/modules/accountancy/lib/balan
 import { ensureCancelable, cancelInvoiceFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const cancelSchema = z.object({ reason: z.string().trim().min(1) });
 
@@ -13,7 +14,7 @@ const cancelSchema = z.object({ reason: z.string().trim().min(1) });
 // Tally-style: writes a reversing JE (counter-entry) and marks the invoice as VOID.
 // Reference number preserved.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:invoice:cancel");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_INVOICE_CANCEL);
     if (response) return response;
 
     const { id } = await params;

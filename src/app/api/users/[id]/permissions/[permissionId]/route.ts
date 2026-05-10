@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // ── DELETE /api/users/[id]/permissions/[permissionId] ───────────────────────
 // Removes a user-level override, restoring the role's default for that permission.
@@ -9,7 +10,7 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string; permissionId: string }> }
 ) {
-    const { response } = await requirePermission("users:manage");
+    const { response } = await requirePermission(PERMISSIONS.USERS_MANAGE);
     if (response) return response;
     try {
         const { id, permissionId } = await params;

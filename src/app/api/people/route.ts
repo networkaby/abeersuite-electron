@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/shared/lib/format/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -188,7 +189,7 @@ export async function POST(req: Request) {
                 });
             }
 
-            const groupName = body.accountGroup ?? "Sundry Debtors";
+            const groupName = body.accountGroup ?? ACCOUNT_GROUPS.SUNDRY_DEBTORS;
             const group = await tx.accountGroup.findFirst({
                 where: { name: groupName },
                 select: { id: true },

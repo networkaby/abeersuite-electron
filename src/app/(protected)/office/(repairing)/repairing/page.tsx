@@ -5,6 +5,7 @@ import { Phone, Package, AlertCircle, CheckCircle } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import TechnicianDashboard from "@/modules/repairing/components/dashboard/TechnicianDashboard";
 import AdminDashboard from "@/modules/repairing/components/dashboard/AdminDashboard";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type DashboardPageProps = {
     searchParams: Promise<{ pipeline?: string }>;
@@ -502,10 +503,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         ticketsHref: selectedPipeline ? `/office/repairing/tickets?pipeline=${selectedPipeline.id}` : "/office/repairing/tickets",
     };
 
-    if (permissions.includes("admin:bypass")) return <AdminDashboardServer name={name} context={context} />;
-    if (permissions.includes("warranty:convert")) return <TechnicianDashboardServer name={name} userId={userId} context={context} />;
-    if (permissions.includes("tickets:create")) return <FrontDeskDashboard name={name} context={context} />;
-    if (permissions.includes("tickets:substatus:set")) return <DespatchDashboard name={name} context={context} />;
+    if (permissions.includes(PERMISSIONS.ADMIN_BYPASS)) return <AdminDashboardServer name={name} context={context} />;
+    if (permissions.includes(PERMISSIONS.WARRANTY_CONVERT)) return <TechnicianDashboardServer name={name} userId={userId} context={context} />;
+    if (permissions.includes(PERMISSIONS.TICKETS_CREATE)) return <FrontDeskDashboard name={name} context={context} />;
+    if (permissions.includes(PERMISSIONS.TICKETS_SUBSTATUS_SET)) return <DespatchDashboard name={name} context={context} />;
 
     return <AdminDashboardServer name={name} context={context} />;
 }

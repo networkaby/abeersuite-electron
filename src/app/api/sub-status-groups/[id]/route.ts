@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -15,7 +16,7 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("settings:statuses");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
     if (response) return response;
     try {
         const { id } = await params;
@@ -40,7 +41,7 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("settings:statuses");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
     if (response) return response;
     try {
         const { id } = await params;

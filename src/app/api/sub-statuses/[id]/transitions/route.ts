@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const subStatusTransitionsSchema = z.object({
     toIds: z.array(z.string().trim()),
@@ -16,7 +17,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("settings:statuses");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_STATUSES);
     if (response) return response;
     try {
         const { id } = await params;

@@ -5,6 +5,7 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const deleteSchema = z.object({
     reason: z.string().trim().min(1, "Delete reason is required"),
@@ -14,7 +15,7 @@ const deleteSchema = z.object({
 // Soft delete: hides the entry from normal views and reverses any GL impact.
 // Recoverable via restore. (Tally label: "Delete"; for permanent removal use hard-delete.)
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:journal:delete");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_DELETE);
     if (response) return response;
 
     const { id } = await params;

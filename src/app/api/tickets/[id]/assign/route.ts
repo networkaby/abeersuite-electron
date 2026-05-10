@@ -5,6 +5,7 @@ import { z } from "zod";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const assignSchema = z.object({
     action: z.enum(["claim", "pass", "reject"]),
@@ -15,7 +16,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { user, response } = await requirePermission("tickets:assign");
+    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_ASSIGN);
     if (response) return response;
 
     const { id } = await params;

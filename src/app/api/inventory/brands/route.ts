@@ -5,9 +5,10 @@ import { invBrandCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export async function GET() {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const rows = await prisma.invBrand.findMany({ orderBy: { name: "asc" } });
@@ -18,7 +19,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, invBrandCreateSchema);

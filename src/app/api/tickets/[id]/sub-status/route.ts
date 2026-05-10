@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const subStatusUpdateSchema = z.object({
     subStatusId: z.string().trim().min(1, "Sub-status is required"),
@@ -58,7 +59,7 @@ export async function PATCH(
 
         // Auth: Admin bypasses allowedRoles.
         // Primary owner and active secondary owners can also update sub-status.
-        const isAdmin = permissions.includes("admin:bypass");
+        const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
         const isPrimaryOwner = ticket.primaryOwnerId === userId;
 
         if (!isAdmin) {

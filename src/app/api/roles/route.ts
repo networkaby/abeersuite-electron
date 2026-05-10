@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createRoleSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -12,7 +13,7 @@ const createRoleSchema = z.object({
 });
 
 export async function GET() {
-    const { response } = await requirePermission("roles:manage");
+    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const roles = await prisma.role.findMany({
@@ -26,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("roles:manage");
+    const { response } = await requirePermission(PERMISSIONS.ROLES_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createRoleSchema);

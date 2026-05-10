@@ -7,6 +7,7 @@ import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const patchSchema = z.object({
     // inventory fields
@@ -37,7 +38,7 @@ const patchSchema = z.object({
 const productInclude = { category: { select: { name: true } } } as const;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);
@@ -52,7 +53,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);
@@ -107,7 +108,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);

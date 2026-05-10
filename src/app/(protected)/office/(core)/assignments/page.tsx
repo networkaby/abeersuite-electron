@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Wrench, Phone, Package, CheckCircle, AlertCircle,
     UserCheck, Users, User, ShieldAlert, ClipboardCheck,
@@ -127,8 +128,8 @@ export default async function AssignmentsPage({
     const userRoles = sessionUser?.roles ?? (sessionUser?.role ? [sessionUser.role] : []);
     const permissions: string[] = sessionUser?.permissions ?? [];
 
-    const canViewTeam = permissions.includes("assignments:view-team") || permissions.includes("admin:bypass");
-    const canViewOrg = permissions.includes("assignments:view-org") || permissions.includes("admin:bypass");
+    const canViewTeam = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_TEAM) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const canViewOrg = permissions.includes(PERMISSIONS.ASSIGNMENTS_VIEW_ORG_LEGACY) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const scope: "me" | "team" | "org" =
         rawScope === "team" && canViewTeam ? "team" :

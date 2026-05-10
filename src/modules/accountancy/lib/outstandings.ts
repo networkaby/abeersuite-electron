@@ -4,6 +4,7 @@
 // allocations, and buckets the outstanding by age.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
 
@@ -320,7 +321,7 @@ export async function getOutstandings(
         };
     }
 
-    const invType = groupName === "Sundry Debtors" ? "SALE" : "PURCHASE";
+    const invType = groupName === ACCOUNT_GROUPS.SUNDRY_DEBTORS ? "SALE" : "PURCHASE";
     const [accounts, bills] = await Promise.all([
         prisma.account.findMany({
             where: { id: { in: accountIds } },

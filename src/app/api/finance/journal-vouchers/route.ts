@@ -7,6 +7,7 @@ import { invNextRef } from "@/modules/inventory/lib/stock";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/finance/journal-vouchers
 //
@@ -47,7 +48,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("finance:voucher:create");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);

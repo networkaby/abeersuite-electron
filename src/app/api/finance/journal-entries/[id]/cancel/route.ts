@@ -5,6 +5,7 @@ import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balan
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const cancelSchema = z.object({
     reason: z.string().trim().min(1, "Cancel reason is required"),
@@ -14,7 +15,7 @@ const cancelSchema = z.object({
 // Tally-style: reverses GL impact via a counter-entry. Original keeps its
 // reference number and stays visible (struck through) for audit.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:journal:cancel");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_CANCEL);
     if (response) return response;
 
     const { id } = await params;

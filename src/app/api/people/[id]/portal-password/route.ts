@@ -6,6 +6,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({
     tempPassword: z.string().min(6, "Temporary password must be at least 6 characters"),
@@ -15,7 +16,7 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { response } = await requirePermission("users:manage");
+    const { response } = await requirePermission(PERMISSIONS.USERS_MANAGE);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, schema);

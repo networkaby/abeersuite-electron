@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { PartyCombobox, type SelectedParty } from "@/modules/accountancy/components/PartyCombobox";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
 
 type LineState = {
@@ -157,7 +158,7 @@ export default function NewPurchasePage() {
                         value={supplier}
                         onChange={setSupplier}
                         placeholder="Search supplier by name or phone…"
-                        createUnderGroup="Sundry Creditors"
+                        createUnderGroup={ACCOUNT_GROUPS.SUNDRY_CREDITORS}
                     />
                 </div>
                 {supplier?.phone && (

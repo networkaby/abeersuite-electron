@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/finance/vouchers/next-ref?type=JOURNAL
 // Preview the next voucher reference (e.g. JOURNAL/26-27/0042) WITHOUT
@@ -12,7 +13,7 @@ import { assembleReference } from "@/modules/accountancy/lib/voucherRef";
 // concurrently, the live reference may differ by ±1 from this preview.
 
 export async function GET(req: Request) {
-    const { user, response } = await requirePermission("finance:voucher:create");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);

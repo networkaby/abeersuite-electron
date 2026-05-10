@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -17,7 +18,7 @@ const productInclude = {
 } as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const id = Number((await params).id);
@@ -34,7 +35,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const id = Number((await params).id);
@@ -126,7 +127,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("inventory:manage");
+    const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
         const id = Number((await params).id);

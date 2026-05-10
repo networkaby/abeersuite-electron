@@ -6,6 +6,7 @@ import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createUserSchema = z.object({
     name:          z.string().trim().min(1, "Name is required"),
@@ -50,7 +51,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { user: caller, response } = await requirePermission("users:manage");
+    const { user: caller, response } = await requirePermission(PERMISSIONS.USERS_MANAGE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createUserSchema);
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
             primaryRole = firstRole?.id || "R2";
         }
 
-        if (!caller.permissions.includes("admin:bypass")) {
+        if (!caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
             const [targetRole, callerRole] = await Promise.all([
                 prisma.role.findUnique({ where: { id: primaryRole }, select: { rank: true } }),
                 prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),

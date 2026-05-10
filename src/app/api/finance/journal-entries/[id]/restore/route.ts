@@ -3,11 +3,12 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // POST /api/finance/journal-entries/[id]/restore
 // Inverse of soft-delete. Re-applies GL impact if the entry was POSTED.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("finance:journal:delete");
+    const { response } = await requirePermission(PERMISSIONS.FINANCE_JOURNAL_DELETE);
     if (response) return response;
 
     const { id } = await params;

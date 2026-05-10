@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, User, Building2, X, UserPlus, Search } from "lucide-react";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +52,7 @@ export function PartyCombobox({
     placeholder      = "Search party by name or phone…",
     autoFocus        = false,
     className        = "",
-    createUnderGroup = "Sundry Debtors",
+    createUnderGroup = ACCOUNT_GROUPS.SUNDRY_DEBTORS,
 }: Props) {
     // Local typed text — only relevant when no party is selected.
     // When a party IS selected we show value.name and ignore typedQuery, so we
@@ -294,7 +295,7 @@ function CreatePartyDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>New {accountGroup === "Sundry Creditors" ? "Supplier" : "Customer"}</DialogTitle>
+                    <DialogTitle>New {accountGroup === ACCOUNT_GROUPS.SUNDRY_CREDITORS ? "Supplier" : "Customer"}</DialogTitle>
                     <DialogDescription>
                         We&apos;ll auto-create a {accountGroup} ledger so this party can be billed.
                     </DialogDescription>

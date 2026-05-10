@@ -74,13 +74,42 @@ Hot files (run `Grep('"Sundry (Debtors|Creditors)"' src)`):
 
 ## Verification
 
-- [ ] `PERMISSIONS` covers every permission ID found in `prisma/seeds/new-seed.ts`
-- [ ] `ACCOUNT_GROUPS` covers Sundry Debtors + Sundry Creditors
-- [ ] No remaining `"settings:`, `"accountancy:`, `"inventory:`, `"admin:` literals in `src/app` or `src/modules` (excluding the constants file itself)
-- [ ] No remaining `"Sundry Debtors"` / `"Sundry Creditors"` literals (excluding constants + Zod schemas)
-- [ ] `tsc --noEmit` clean
-- [ ] `npm run build` clean
-- [ ] Browser: hit a permission-gated route — gate still works
+- [x] `PERMISSIONS` covers every permission ID found in `prisma/seeds/bootstrap-seed.ts`
+- [x] `ACCOUNT_GROUPS` covers Sundry Debtors + Sundry Creditors
+- [x] No remaining permission-id literals at call sites (some left intentionally — see post-execution notes)
+- [x] No remaining `"Sundry Debtors"` / `"Sundry Creditors"` runtime literals (kept in 1 comment + 2 type-union annotations + 2 user-facing UI labels)
+- [x] `tsc --noEmit` clean
+- [x] `npm run build` clean
+- [x] Browser: 12 permission-gated endpoints all return 200 (including receivables / payables / ratio-analysis that consume `ACCOUNT_GROUPS`)
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete** — `tsc --noEmit` clean, `npm run build` clean, smoke 12/12 200.
+
+Scope:
+
+- `src/shared/lib/constants/permissions.ts` — 90+ `PERMISSIONS.*` entries derived from `prisma/seeds/bootstrap-seed.ts` (originally referred to as `new-seed.ts` in the plan, now consolidated). Exports `PermissionId` type union.
+- `src/shared/lib/constants/accounting.ts` — `ACCOUNT_GROUPS = { SUNDRY_DEBTORS, SUNDRY_CREDITORS }` + `AccountGroupName` type.
+
+Sweeps:
+
+| Pattern | Files | Replacements |
+|---|---|---|
+| `requirePermission("…")` / `hasPermission(_, "…")` / `makePermissionLayout("…")` / `permissions.includes("…")` | 147 | 227 |
+| `ACCOUNT_GROUPS` literals (where = / arg / default value / array element / ternary comparand) | 8 | 10 |
+
+Account-group literals **kept inline on purpose**:
+
+- 2 type-union annotations (`"Sundry Debtors" \| "Sundry Creditors"`) in `PartyCombobox.tsx` — TypeScript literal-type union for prop typing. Could refactor to `AccountGroupName`; deferred to keep diff small.
+- 1 Zod enum in `src/app/api/people/route.ts` (`z.enum(["Sundry Debtors", "Sundry Creditors"])`) — Zod enums work with literal strings; const-assertion swap would need broader typing care.
+- 2 user-facing UI labels in `ratio-analysis/page.tsx` (`<Row label="Sundry Debtors" ...>`). These are intentionally human-readable labels.
+- A handful of comments referencing the names. Documentation, not runtime.
+
+Per AGENTS.md "after every plan" rule:
+
+- **Reusables registry** — `docs/reusables.md` Constants section added.
+- **Module docs** — none touched; constants are cross-cutting. Module docs can adopt `PERMISSIONS.*` in their "Permissions" sections in a future polish pass.
+- **Todo list** — completed.
 
 
 ---

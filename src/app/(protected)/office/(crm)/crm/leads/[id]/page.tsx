@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import LeadEditForm, { type LeadEditInitial } from "./LeadEditForm";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export default async function CrmLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!permissions.includes("admin:bypass") && !permissions.includes("crm:view")) {
+    if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.CRM_VIEW)) {
         redirect("/office/assignments");
     }
-    const canManage = permissions.includes("admin:bypass") || permissions.includes("crm:manage");
+    const canManage = permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.CRM_MANAGE);
 
     const id = Number((await params).id);
     if (!Number.isFinite(id) || id < 1) notFound();

@@ -6,6 +6,7 @@ import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const PROFILE_SELECT = {
     id:          true,
@@ -111,7 +112,7 @@ export async function PUT(
     if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
 
     const isSelf  = caller.id === userId;
-    const isAdmin = caller.permissions.includes("users:manage") || caller.permissions.includes("admin:bypass");
+    const isAdmin = caller.permissions.includes(PERMISSIONS.USERS_MANAGE) || caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     if (!isSelf && !isAdmin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -130,7 +131,7 @@ export async function PUT(
         }
 
         // Rank guard when an admin changes someone's role
-        if (body.role && isAdmin && !caller.permissions.includes("admin:bypass")) {
+        if (body.role && isAdmin && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
             const [targetRole, callerRole] = await Promise.all([
                 prisma.role.findUnique({ where: { id: body.role }, select: { rank: true } }),
                 prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),
@@ -182,7 +183,7 @@ export async function DELETE(
 ) {
     const { user: caller, response } = await requireAuth();
     if (response) return response;
-    if (!caller.permissions.includes("users:manage") && !caller.permissions.includes("admin:bypass")) {
+    if (!caller.permissions.includes(PERMISSIONS.USERS_MANAGE) && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     try {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { assertCrmStatus, getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 import { z } from "zod";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const leadInclude = {
     ticketStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
@@ -51,7 +52,7 @@ function emptyToNull<T extends string | null | undefined>(v: T): string | null |
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
-    const { response } = await requirePermission("crm:view");
+    const { response } = await requirePermission(PERMISSIONS.CRM_VIEW);
     if (response) return response;
 
     const id = Number((await params).id);
@@ -74,7 +75,7 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
-    const { response } = await requirePermission("crm:manage");
+    const { response } = await requirePermission(PERMISSIONS.CRM_MANAGE);
     if (response) return response;
 
     const id = Number((await params).id);
@@ -156,7 +157,7 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
-    const { response } = await requirePermission("crm:manage");
+    const { response } = await requirePermission(PERMISSIONS.CRM_MANAGE);
     if (response) return response;
 
     const id = Number((await params).id);

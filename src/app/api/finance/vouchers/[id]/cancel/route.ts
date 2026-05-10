@@ -6,13 +6,14 @@ import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balan
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Cancel reason required") });
 
 // POST /api/finance/vouchers/[id]/cancel
 // Tally-style: writes a counter-JE and marks the voucher CANCELLED. Reference number preserved.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:voucher:cancel");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CANCEL);
     if (response) return response;
 
     const { id } = await params;

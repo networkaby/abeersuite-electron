@@ -14,6 +14,7 @@
 //             Dr/Cr Round Off    |roundOff|       (if non-zero)
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { balanceDelta, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType } from "./groupNature";
 
@@ -40,8 +41,8 @@ const NAMES = {
     GST_OUTPUT:   ["IGST", "GST Output", "Output GST", "Output Tax"],
     GST_INPUT:    ["IGST", "GST Input", "Input GST", "Input Tax"],
     ROUND_OFF:    ["Round Off", "Rounded Off", "Round-Off"],
-    SUNDRY_DEB:   ["Sundry Debtors"],   // ledger fallback (rare)
-    SUNDRY_CRED:  ["Sundry Creditors"], // ledger fallback (rare)
+    SUNDRY_DEB:   [ACCOUNT_GROUPS.SUNDRY_DEBTORS],   // ledger fallback (rare)
+    SUNDRY_CRED:  [ACCOUNT_GROUPS.SUNDRY_CREDITORS], // ledger fallback (rare)
 } as const;
 
 async function findLedgerByNames(tx: Tx, names: readonly string[]): Promise<LedgerLite | null> {

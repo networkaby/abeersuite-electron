@@ -1,12 +1,13 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type ScopeLevel = "own" | "department" | "branch" | "org";
 
 const SCOPE_ORDER: ScopeLevel[] = ["own", "department", "branch", "org"];
 
 function highestScopeFromPermissions(permissions: string[]): ScopeLevel | null {
-    if (permissions.includes("admin:bypass")) return "org";
+    if (permissions.includes(PERMISSIONS.ADMIN_BYPASS)) return "org";
     if (permissions.includes("tickets:view")) return "org";
 
     const scoped = SCOPE_ORDER.filter((scope) => permissions.includes(`tickets:view:${scope}`));

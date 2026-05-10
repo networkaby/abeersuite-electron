@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -17,7 +18,7 @@ const schema = z.object({
 });
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("finance:opening-balance:manage");
+    const { response } = await requirePermission(PERMISSIONS.FINANCE_OPENING_BALANCE_MANAGE);
     if (response) return response;
 
     const { id } = await params;

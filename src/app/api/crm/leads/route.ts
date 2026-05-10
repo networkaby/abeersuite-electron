@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { assertCrmStatus, getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 import { parseCursor } from "@/shared/lib/api";
 import { z } from "zod";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const leadWriteBase = z.object({
     title: z.string().trim().min(1, "Title is required").max(500),
@@ -50,7 +51,7 @@ function emptyToNull<T extends string | null | undefined>(v: T): string | null |
 }
 
 export async function GET(req: Request) {
-    const { response } = await requirePermission("crm:view");
+    const { response } = await requirePermission(PERMISSIONS.CRM_VIEW);
     if (response) return response;
 
     const pipeline = await getCrmPipeline(prisma);
@@ -101,7 +102,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const auth = await requirePermission("crm:manage");
+    const auth = await requirePermission(PERMISSIONS.CRM_MANAGE);
     if (auth.response) return auth.response;
     const { user } = auth;
 

@@ -5,6 +5,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const bodySchema = z.object({
     deviceType: z.string().trim().min(1).default("Shop return"),
@@ -15,7 +16,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("ecommerce:manage");
+    const { user, response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
 
     const { id } = await ctx.params;

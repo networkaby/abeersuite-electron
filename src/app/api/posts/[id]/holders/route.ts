@@ -4,11 +4,12 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const assignSchema = z.object({ userId: z.number().int().positive() });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id: postId } = await params;

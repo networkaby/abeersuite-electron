@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const updateSchema = z.object({
     title:        z.string().trim().min(1, "Title is required").optional(),
@@ -41,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;
@@ -55,7 +56,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
         const { id } = await params;

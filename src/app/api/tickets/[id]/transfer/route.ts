@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const transferSchema = z.object({
     targetPipelineId: z.string().trim().min(1),
@@ -26,7 +27,7 @@ export async function POST(
         const userId = Number(sessionUser.id);
         const permissions = sessionUser.permissions ?? [];
 
-        if (!permissions.includes("tickets:transfer") && !permissions.includes("admin:bypass")) {
+        if (!permissions.includes("tickets:transfer") && !permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

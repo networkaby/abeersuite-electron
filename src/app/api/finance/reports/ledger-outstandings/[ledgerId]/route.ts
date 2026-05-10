@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/finance/reports/ledger-outstandings/:ledgerId?asOf=YYYY-MM-DD
 // Open bills for a single party ledger, with ageing buckets.
@@ -9,7 +10,7 @@ export async function GET(
     req: Request,
     { params }: { params: Promise<{ ledgerId: string }> },
 ) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { ledgerId } = await params;

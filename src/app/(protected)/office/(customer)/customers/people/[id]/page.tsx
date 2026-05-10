@@ -6,6 +6,7 @@ import { ArrowLeft, User, Building2, Smartphone, Eye } from "lucide-react";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
 import { auth } from "@/auth";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export default async function CustomerDetailPage({
     params,
@@ -15,7 +16,7 @@ export default async function CustomerDetailPage({
     const { id } = await params;
     const session = await auth();
     const permissions = ((session?.user as { permissions?: string[] } | undefined)?.permissions ?? []);
-    const canEmergencyReset = permissions.includes("users:manage") || permissions.includes("admin:bypass");
+    const canEmergencyReset = permissions.includes(PERMISSIONS.USERS_MANAGE) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const person = await prisma.person.findUnique({
         where: { id: Number(id) },

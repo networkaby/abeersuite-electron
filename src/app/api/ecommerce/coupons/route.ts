@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const bodySchema = z.object({
     code: z.string().trim().min(1),
@@ -16,7 +17,7 @@ const bodySchema = z.object({
 });
 
 export async function GET() {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     try {
         const rows = await prisma.shopCoupon.findMany({ orderBy: { createdAt: "desc" } });
@@ -27,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("ecommerce:manage");
+    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
     if (response) return response;
     const { data, error } = await validateRequest(req, bodySchema);
     if (error) return error;

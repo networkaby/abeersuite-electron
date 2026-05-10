@@ -6,13 +6,14 @@ import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const deleteSchema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
 // POST /api/finance/invoices/[id]/delete
 // Soft-delete — hides from views and reverses GL impact for posted invoices. Recoverable.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission("finance:invoice:delete");
+    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_INVOICE_DELETE);
     if (response) return response;
 
     const { id } = await params;

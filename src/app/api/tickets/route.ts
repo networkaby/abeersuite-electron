@@ -6,6 +6,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -107,7 +108,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission("tickets:create");
+    const { user, response } = await requirePermission(PERMISSIONS.TICKETS_CREATE);
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createTicketSchema);

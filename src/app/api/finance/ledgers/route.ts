@@ -5,6 +5,7 @@ import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createSchema = z.object({
     name:        z.string().trim().min(1).max(200),
@@ -19,7 +20,7 @@ const createSchema = z.object({
 // Without groupId → pure GL accounts (no person/company), flat array (existing behaviour)
 // With groupId    → ALL account types in that group, paginated: { items, total }
 export async function GET(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
@@ -73,7 +74,7 @@ export async function GET(req: Request) {
 
 // POST /api/finance/ledgers — create a new ledger account
 export async function POST(req: Request) {
-    const { response } = await requirePermission("accountancy:view:org");
+    const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { data, error } = await validateRequest(req, createSchema);
