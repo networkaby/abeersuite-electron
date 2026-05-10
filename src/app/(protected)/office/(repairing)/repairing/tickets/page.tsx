@@ -5,8 +5,8 @@ import axios from "axios";
 import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { REPAIR_PIPELINE_NAME } from "@/shared/lib/format/repairPipeline";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,12 @@ interface Ticket {
     id: number;
     status: string;
     priority: string;
-    pipelineId: string | null;
     escalated: boolean;
     isWarranty: boolean;
     warrantyStatus: string;
     createdAt: string;
     ticketStatus: { label: string; color: string };
     ticketSubStatus?: { label: string; color: string } | null;
-    pipeline?: { id: string; label: string; color: string } | null;
     device: {
         type: string;
         brand: string;
@@ -44,11 +42,8 @@ type Technician = { id: number; name: string };
 type ServiceCenter = { id: number; name: string };
 type StatusOption = { id: string; label: string };
 type PriorityOption = { id: string; label: string };
-type PipelineOption = { id: string; label: string; color: string };
 
 export default function TicketsPage() {
-    const searchParams = useSearchParams();
-    const requestedPipeline = searchParams.get("pipeline") ?? "";
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [filtered, setFiltered] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
@@ -56,7 +51,7 @@ export default function TicketsPage() {
     const [serviceCenters, setServiceCenters] = useState<ServiceCenter[]>([]);
     const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [priorityOptions, setPriorityOptions] = useState<PriorityOption[]>([]);
-    const [pipelineOptions, setPipelineOptions] = useState<PipelineOption[]>([]);
+    const [repairPipelineId, setRepairPipelineId] = useState<string | null>(null);
 
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
@@ -66,35 +61,36 @@ export default function TicketsPage() {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
     const [warrantyFilter, setWarrantyFilter] = useState("");
-    const [pipelineFilter, setPipelineFilter] = useState("");
 
     useEffect(() => {
-        setLoading(true);
-        const fetchTickets = async () => {
-            try {
-                const res = await axios.get("/api/tickets", {
-                    params: requestedPipeline ? { pipelineId: requestedPipeline } : undefined,
-                });
-                setTickets(res.data);
-            } catch {
-                toast.error("Failed to load tickets");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchTickets();
         axios.get("/api/users").then((r) => setTechnicians(r.data));
         axios.get("/api/service-centers").then((r) => setServiceCenters(r.data));
-        axios.get("/api/ticket-statuses").then((r) =>
-            setStatusOptions(r.data.map((s: { id: string; label: string }) => ({ id: s.id, label: s.label })))
-        );
         axios.get("/api/priorities").then((r) => setPriorityOptions(r.data));
-        axios.get("/api/pipelines").then((r) => setPipelineOptions(r.data));
-    }, [requestedPipeline]);
+        axios.get("/api/pipelines").then((r) => {
+            const repair = r.data.find((p: { name: string }) => p.name === REPAIR_PIPELINE_NAME);
+            setRepairPipelineId(repair?.id ?? null);
+        });
+    }, []);
 
     useEffect(() => {
-        setPipelineFilter(requestedPipeline);
-    }, [requestedPipeline]);
+        if (!repairPipelineId) {
+            setStatusOptions([]);
+            return;
+        }
+        axios.get(`/api/ticket-statuses?pipelineId=${repairPipelineId}`).then((r) =>
+            setStatusOptions(r.data.map((s: { id: string; label: string }) => ({ id: s.id, label: s.label })))
+        );
+    }, [repairPipelineId]);
+
+    useEffect(() => {
+        if (!repairPipelineId) return;
+        setLoading(true);
+        axios
+            .get("/api/tickets", { params: { pipelineId: repairPipelineId } })
+            .then((res) => setTickets(res.data))
+            .catch(() => toast.error("Failed to load tickets"))
+            .finally(() => setLoading(false));
+    }, [repairPipelineId]);
 
     useEffect(() => {
         let result = [...tickets];
@@ -117,21 +113,18 @@ export default function TicketsPage() {
         if (dateTo) result = result.filter((t) => new Date(t.createdAt) <= new Date(dateTo + "T23:59:59"));
         if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
-        if (pipelineFilter) result = result.filter((t) => t.pipelineId === pipelineFilter);
         setFiltered(result);
-    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter, pipelineFilter]);
+    }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
 
     const clearFilters = () => {
         setSearch(""); setStatusFilter(""); setPriorityFilter("");
         setTechnicianFilter(""); setServiceCenterFilter("");
         setDateFrom(""); setDateTo(""); setWarrantyFilter("");
-        setPipelineFilter(requestedPipeline);
     };
 
     const hasFilters = Boolean(
         search || statusFilter || priorityFilter || technicianFilter ||
-        serviceCenterFilter || dateFrom || dateTo || warrantyFilter ||
-        pipelineFilter !== requestedPipeline
+        serviceCenterFilter || dateFrom || dateTo || warrantyFilter
     );
 
     return (
@@ -155,71 +148,38 @@ export default function TicketsPage() {
                     />
                 </div>
 
-                {/* Pipeline tabs */}
-                {pipelineOptions.length > 1 && (
-                    <div className="flex gap-2 flex-wrap pb-1">
-                        <Button
-                            onClick={() => setPipelineFilter("")}
-                            variant="outline"
-                            size="xs"
-                            className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
-                                !pipelineFilter
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-card text-muted-foreground hover:bg-muted"
-                            }`}
-                        >
-                            All Pipelines
-                        </Button>
-                        {pipelineOptions.map((p) => (
-                            <Button
-                                key={p.id}
-                                onClick={() => setPipelineFilter(p.id)}
-                                variant="outline"
-                                size="xs"
-                                className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
-                                    pipelineFilter === p.id
-                                        ? "bg-primary text-primary-foreground"
-                                        : "bg-card text-muted-foreground hover:bg-muted"
-                                }`}
-                            >
-                                {p.label}
-                            </Button>
-                        ))}
-                    </div>
-                )}
-
                 {/* Filter Row */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
+                <div className="flex flex-wrap gap-2 [&>*]:flex-1 [&>*]:min-w-[160px] [&>*]:max-w-[260px]">
                     <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger><SelectValue placeholder="All Status" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="All Status" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Status</SelectItem>
                             {statusOptions.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <Select value={priorityFilter || "all"} onValueChange={(value) => setPriorityFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger><SelectValue placeholder="All Priority" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="All Priority" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Priority</SelectItem>
                             {priorityOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <Select value={technicianFilter || "all"} onValueChange={(value) => setTechnicianFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger><SelectValue placeholder="All Technicians" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="All Technicians" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Technicians</SelectItem>
                             {technicians.map((t) => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <Select value={serviceCenterFilter || "all"} onValueChange={(value) => setServiceCenterFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger><SelectValue placeholder="All Service Centers" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="All Service Centers" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Service Centers</SelectItem>
                             {serviceCenters.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                     <Select value={warrantyFilter || "all"} onValueChange={(value) => setWarrantyFilter(value === "all" ? "" : value)}>
-                        <SelectTrigger><SelectValue placeholder="All Warranty" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="All Warranty" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Warranty</SelectItem>
                             <SelectItem value="warranty">Warranty only</SelectItem>
@@ -262,7 +222,6 @@ export default function TicketsPage() {
                                 <th className="px-6 py-3 text-left">Problem</th>
                                 <th className="px-6 py-3 text-left">Priority</th>
                                 <th className="px-6 py-3 text-left">Status</th>
-                                {pipelineOptions.length > 1 && <th className="px-6 py-3 text-left">Pipeline</th>}
                                 <th className="px-6 py-3 text-left">Technician</th>
                                 <th className="px-6 py-3 text-left">Date</th>
                                 <th className="px-6 py-3 text-left">Actions</th>
@@ -301,17 +260,6 @@ export default function TicketsPage() {
                                             <WarrantyBadge isWarranty={t.isWarranty} warrantyStatus={t.warrantyStatus} />
                                         </div>
                                     </td>
-                                    {pipelineOptions.length > 1 && (
-                                        <td className="px-6 py-4">
-                                            {t.pipeline ? (
-                                                <span className={`px-2 py-0.5 text-xs font-medium ${t.pipeline.color}`}>
-                                                    {t.pipeline.label}
-                                                </span>
-                                            ) : (
-                                                <span className="text-muted-foreground text-xs">—</span>
-                                            )}
-                                        </td>
-                                    )}
                                     <td className="px-6 py-4 text-muted-foreground">{t.primaryOwner?.name || "—"}</td>
                                     <td className="px-6 py-4 text-muted-foreground">{formatDate(t.createdAt)}</td>
                                     <td className="px-6 py-4">

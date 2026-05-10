@@ -76,6 +76,16 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `SessionWrapper` | `SessionWrapper.tsx` | NextAuth session provider |
 | `ThemeProvider` | `ThemeProvider.tsx` | next-themes provider for dark mode |
 
+## Pipeline lookups — `src/shared/lib/format/`
+
+Name-based resolvers for the seeded pipelines. Use these instead of hardcoding pipeline IDs (`P1`, `P6`, `P7`); IDs are opaque seed artifacts that can change.
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `ORDERS_PIPELINE_NAME` / `getOrdersPipeline(prisma)` / `assertOrdersStatus` | `ordersPipeline.ts` | Sales-orders pipeline (`name = "sales-orders"`). |
+| `CRM_PIPELINE_NAME` / helpers | `crmPipeline.ts` | CRM-leads pipeline (`name = "crm-leads"`). |
+| `REPAIR_PIPELINE_NAME` / `getRepairPipeline(prisma)` | `repairPipeline.ts` | Service & Repair pipeline (`name = "service"`). |
+
 ## Other shared lib
 
 | Path | Purpose |

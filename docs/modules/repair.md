@@ -5,7 +5,7 @@
 ## URLs
 
 ### UI pages (`src/app/(protected)/office/(repairing)/repairing/`)
-- `/office/repairing/tickets` — list with pipeline filter
+- `/office/repairing/tickets` — list locked to the Service & Repair pipeline (resolved by `REPAIR_PIPELINE_NAME = "service"` from [src/shared/lib/format/repairPipeline.ts](../../src/shared/lib/format/repairPipeline.ts)); no in-page pipeline switcher
 - `/office/repairing/tickets/[id]` — detail, status changes, notes, ownership, invoices linked
 - `/office/repairing/service-centers` — external repair-centre directory
 
@@ -46,6 +46,7 @@
 
 - **2026-05-07 — Tickets are info-only.** No parts, no money on the ticket. See [data_model_architecture memory](../../memory/data_model_architecture.md). `TicketPart` model removed.
 - **Pipeline / status / sub-status configuration** lives under [admin.md](./admin.md), not here. Reuse the existing `settings:pipelines` / `settings:statuses` permissions.
+- **2026-05-10 — Tickets list is repair-only.** The pipeline switcher buttons and Pipeline column were removed from `/office/repairing/tickets`; the page resolves the "service" pipeline by name and only shows its tickets. Any `?pipeline=` URL param is ignored (the sidebar still passes `?pipeline=P1` — harmless no-op).
 - **Linked tickets** for cross-pipeline escalation is by convention (close + create child); `parentTicketId` self-relation is in design docs but **not yet in schema** — verify before relying on it.
 
 ## Out of scope / deferred
