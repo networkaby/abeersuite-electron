@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invBrandUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -25,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "Brand name already exists");
         if (conflict) return conflict;
-        return NextResponse.json({ error: "Failed to update brand" }, { status: 500 });
+        return handleApiError(e, "Failed to update brand");
     }
 }
 
@@ -41,7 +42,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         }
         await prisma.invBrand.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete brand" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete brand");
     }
 }

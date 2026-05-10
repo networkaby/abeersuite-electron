@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/inventory/stock-ledger/[productId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ productId: string }> }) {
@@ -87,8 +88,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ productI
             closingQty:    runningQty,
             rows,
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to generate stock ledger" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to generate stock ledger");
     }
 }

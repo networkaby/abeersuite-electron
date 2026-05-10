@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name:        z.string().trim().min(1).max(200).optional(),
@@ -43,11 +44,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             include: { group: { select: { id: true, name: true } } },
         });
         return NextResponse.json(account);
-    } catch (err: unknown) {
-        if (err instanceof Error && err.message.includes("Unique constraint")) {
+    } catch (e) {
+        if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }
-        console.error(err);
-        return NextResponse.json({ error: "Failed to update ledger" }, { status: 500 });
+        return handleApiError(e, "Failed to update ledger");
     }
 }

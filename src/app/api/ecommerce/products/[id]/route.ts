@@ -6,6 +6,7 @@ import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const patchSchema = z.object({
     // inventory fields
@@ -45,8 +46,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         const p = await invProductDb(prisma).findUnique({ where: { id: pid }, include: productInclude });
         if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(invProductToAdmin(p));
-    } catch {
-        return NextResponse.json({ error: "Failed to load product" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load product");
     }
 }
 
@@ -101,7 +102,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
         if (conflict) return conflict;
-        return NextResponse.json({ error: "Failed to update product" }, { status: 500 });
+        return handleApiError(e, "Failed to update product");
     }
 }
 
@@ -118,7 +119,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
             include: productInclude,
         });
         return NextResponse.json(invProductToAdmin(p));
-    } catch {
-        return NextResponse.json({ error: "Failed to deactivate product" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to deactivate product");
     }
 }

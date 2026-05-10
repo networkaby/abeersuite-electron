@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 import {
     isLikelyEmail,
     normalizePortalEmail,
@@ -152,7 +153,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json({ ok: true });
-    } catch {
-        return NextResponse.json({ error: "Registration failed" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Registration failed");
     }
 }

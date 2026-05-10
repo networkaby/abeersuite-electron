@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const statusTransitionsSchema = z.object({
     toIds: z.array(z.string().trim()),
@@ -28,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         ]);
 
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to update transitions" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update transitions");
     }
 }

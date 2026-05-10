@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -100,9 +101,8 @@ export async function GET(req: Request) {
         }));
 
         return NextResponse.json(normalised);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch tickets");
     }
 }
 
@@ -159,8 +159,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(ticket);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to create ticket" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create ticket");
     }
 }

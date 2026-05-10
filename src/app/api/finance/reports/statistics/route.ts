@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/statistics?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Counts of every voucher kind in the period plus master-table totals — the
@@ -100,8 +101,7 @@ export async function GET(req: Request) {
                 units:       unitCount,
             },
         });
-    } catch (err) {
-        console.error("[statistics]", err);
-        return NextResponse.json({ error: "Failed to load statistics" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load statistics");
     }
 }

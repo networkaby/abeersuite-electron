@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     name:        z.string().trim().min(1).max(200),
@@ -65,9 +66,8 @@ export async function GET(req: Request) {
             },
         });
         return NextResponse.json(ledgers);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to fetch ledgers" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch ledgers");
     }
 }
 
@@ -92,11 +92,10 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(account, { status: 201 });
-    } catch (err: unknown) {
-        if (err instanceof Error && err.message.includes("Unique constraint")) {
+    } catch (e) {
+        if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create ledger" }, { status: 500 });
+        return handleApiError(e, "Failed to create ledger");
     }
 }

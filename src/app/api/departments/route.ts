@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     id:          z.string().trim().min(1, "ID is required").toUpperCase(),
@@ -23,8 +24,8 @@ export async function GET() {
             },
         });
         return NextResponse.json(departments);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch departments" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch departments");
     }
 }
 
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
             include: { branch: { select: { id: true, name: true } } },
         });
         return NextResponse.json(department, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create department" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create department");
     }
 }

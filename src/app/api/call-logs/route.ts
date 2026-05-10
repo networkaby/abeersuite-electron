@@ -4,6 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import type { Prisma } from "@/generated/prisma/client";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -160,9 +161,8 @@ export async function GET(req: Request) {
                 total,
             },
         });
-    } catch (error) {
-        console.error("[call-logs GET]", error);
-        return NextResponse.json({ error: "Failed to fetch call logs" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch call logs");
     }
 }
 
@@ -215,8 +215,7 @@ export async function POST(req: Request) {
             },
             { status: 201 }
         );
-    } catch (error) {
-        console.error("[call-logs POST]", error);
-        return NextResponse.json({ error: "Failed to create call log" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create call log");
     }
 }

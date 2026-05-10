@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET(
     _: Request,
@@ -92,8 +93,7 @@ export async function GET(
                 subStatus: t.ticketSubStatus,
             })),
         });
-    } catch (error) {
-        console.error("[search-slno/:deviceId GET]", error);
-        return NextResponse.json({ error: "Failed to fetch device tickets" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch device tickets");
     }
 }

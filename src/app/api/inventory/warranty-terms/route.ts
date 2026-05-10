@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invWarrantyTermCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     const { response } = await requirePermission("inventory:manage");
@@ -10,8 +11,8 @@ export async function GET() {
     try {
         const rows = await prisma.invWarrantyTerm.findMany({ orderBy: { name: "asc" } });
         return NextResponse.json(rows);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch warranty terms" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch warranty terms");
     }
 }
 
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(row, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create warranty term" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create warranty term");
     }
 }

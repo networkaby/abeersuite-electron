@@ -3,6 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/ratio-analysis?asOf=YYYY-MM-DD
 // Period: Indian fiscal year start (1-Apr) → asOf.
@@ -95,8 +96,7 @@ export async function GET(req: Request) {
                 recvDays, roiPct, returnOnWcPct,
             },
         });
-    } catch (err) {
-        console.error("[ratio-analysis]", err);
-        return NextResponse.json({ error: "Failed to compute ratio analysis" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to compute ratio analysis");
     }
 }

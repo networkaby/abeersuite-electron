@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/gst-hsn-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&direction=OUTWARD|INWARD
 // HSN-wise rollup of posted inventory voucher lines. Lines whose product has
@@ -108,8 +109,7 @@ export async function GET(req: Request) {
             direction, invType,
             buckets, totals, noHsnCount,
         });
-    } catch (err) {
-        console.error("[gst-hsn-summary]", err);
-        return NextResponse.json({ error: "Failed to compute HSN summary" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to compute HSN summary");
     }
 }

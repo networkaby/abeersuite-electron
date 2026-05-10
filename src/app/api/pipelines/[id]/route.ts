@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -24,8 +25,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: data,
         });
         return NextResponse.json(pipeline);
-    } catch {
-        return NextResponse.json({ error: "Failed to update pipeline" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update pipeline");
     }
 }
 
@@ -45,7 +46,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
         }
         await prisma.pipeline.delete({ where: { id } });
         return NextResponse.json({ ok: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete pipeline" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete pipeline");
     }
 }

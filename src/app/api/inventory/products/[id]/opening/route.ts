@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -42,8 +43,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             },
         });
         return NextResponse.json(product);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to update opening stock" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update opening stock");
     }
 }

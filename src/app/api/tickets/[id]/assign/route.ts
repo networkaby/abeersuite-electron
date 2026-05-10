@@ -4,6 +4,7 @@ import { requirePermission, isAdmin } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const assignSchema = z.object({
     action: z.enum(["claim", "pass", "reject"]),
@@ -111,8 +112,7 @@ export async function POST(
             });
             return NextResponse.json({ ok: true, primaryOwnerId: null });
         }
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to update assignment" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update assignment");
     }
 }

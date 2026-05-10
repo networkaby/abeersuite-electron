@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -87,8 +88,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             });
         });
         return NextResponse.json(updated);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to update journal entry" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update journal entry");
     }
 }

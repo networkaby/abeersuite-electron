@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function DELETE(
     _: Request,
@@ -28,7 +29,7 @@ export async function DELETE(
     try {
         await prisma.wallPost.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete post");
     }
 }

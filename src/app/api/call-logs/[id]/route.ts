@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -93,8 +94,7 @@ export async function PATCH(
             ...nextPayload,
             updatedAt: updated.createdAt.toISOString(),
         });
-    } catch (error) {
-        console.error("[call-logs PATCH]", error);
-        return NextResponse.json({ error: "Failed to update call log" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update call log");
     }
 }

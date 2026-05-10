@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/refResolver";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
@@ -96,8 +97,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             closingBalance: runningBalance,
             rows,
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to generate ledger" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to generate ledger");
     }
 }

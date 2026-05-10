@@ -4,6 +4,7 @@ import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
 import { computeTradingStockAdjustment } from "@/modules/accountancy/lib/tradingStockAdjustment";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request) {
@@ -83,8 +84,7 @@ export async function GET(req: Request) {
             grossProfit,
             netProfit,
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to generate P&L" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to generate P&L");
     }
 }

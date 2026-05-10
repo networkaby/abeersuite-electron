@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const bodySchema = z.object({
     code: z.string().trim().min(1),
@@ -20,8 +21,8 @@ export async function GET() {
     try {
         const rows = await prisma.shopCoupon.findMany({ orderBy: { createdAt: "desc" } });
         return NextResponse.json(rows);
-    } catch {
-        return NextResponse.json({ error: "Failed to list coupons" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to list coupons");
     }
 }
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(row, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create coupon (duplicate code?)" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create coupon (duplicate code?)");
     }
 }

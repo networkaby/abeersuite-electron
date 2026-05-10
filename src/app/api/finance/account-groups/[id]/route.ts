@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name:      z.string().trim().min(1).max(200).optional(),
@@ -74,8 +75,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
         return NextResponse.json(group);
-    } catch {
-        return NextResponse.json({ error: "Failed to update group" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update group");
     }
 }
 

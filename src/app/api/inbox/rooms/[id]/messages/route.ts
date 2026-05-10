@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const messageSchema = z.object({
     body: z.string().trim().min(1, "Message is required"),
@@ -34,9 +35,8 @@ export async function GET(
 
         await markRoomRead(user.id, room.id);
         return NextResponse.json(messages);
-    } catch (error) {
-        console.error("[inbox room messages GET]", error);
-        return NextResponse.json({ error: "Failed to load messages" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load messages");
     }
 }
 
@@ -80,8 +80,7 @@ export async function POST(
 
         await markRoomRead(user.id, room.id, message.createdAt);
         return NextResponse.json(message, { status: 201 });
-    } catch (error) {
-        console.error("[inbox room messages POST]", error);
-        return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to send message");
     }
 }

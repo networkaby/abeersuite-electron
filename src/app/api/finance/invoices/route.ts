@@ -5,6 +5,7 @@ import { z } from "zod";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     description: z.string().trim().min(1),
@@ -61,9 +62,8 @@ export async function GET(req: Request) {
             include: INVOICE_INCLUDE,
         });
         return NextResponse.json(invoices);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to fetch invoices" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch invoices");
     }
 }
 
@@ -127,8 +127,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(invoice, { status: 201 });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create invoice" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create invoice");
     }
 }

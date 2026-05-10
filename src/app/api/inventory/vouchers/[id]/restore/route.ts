@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/inventory/vouchers/[id]/restore
 // Inverse of delete — re-applies stock + GL impact if the voucher was posted.
@@ -77,10 +78,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         const restored = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(restored);
-    } catch (err) {
-        const lifecycle = lifecycleErrorResponse(err);
+    } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
         if (lifecycle) return lifecycle;
-        console.error(err);
-        return NextResponse.json({ error: "Failed to restore voucher" }, { status: 500 });
+        return handleApiError(e, "Failed to restore voucher");
     }
 }

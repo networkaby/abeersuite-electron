@@ -3,6 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/fund-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Sources & application of funds, plus working-capital movement between
@@ -113,8 +114,7 @@ export async function GET(req: Request) {
             totalSources, totalApplications,
             workingCapital: { opening: openingWC, closing: closingWC, change: wcChange },
         });
-    } catch (err) {
-        console.error("[fund-flow]", err);
-        return NextResponse.json({ error: "Failed to compute fund flow" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to compute fund flow");
     }
 }

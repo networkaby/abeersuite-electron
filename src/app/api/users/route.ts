@@ -5,6 +5,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createUserSchema = z.object({
     name:          z.string().trim().min(1, "Name is required"),
@@ -43,8 +44,8 @@ export async function GET() {
             select: USER_SELECT,
         });
         return NextResponse.json(users);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch users");
     }
 }
 
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(user);
-    } catch {
-        return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create user");
     }
 }

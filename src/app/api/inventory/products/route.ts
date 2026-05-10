@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -51,8 +52,8 @@ export async function GET() {
             include: productInclude,
         });
         return NextResponse.json(rows);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch products");
     }
 }
 
@@ -115,6 +116,6 @@ export async function POST(req: Request) {
         if (msg === "Unit not found" || msg.endsWith("not found")) {
             return NextResponse.json({ error: msg }, { status: 400 });
         }
-        return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
+        return handleApiError(e, "Failed to create product");
     }
 }

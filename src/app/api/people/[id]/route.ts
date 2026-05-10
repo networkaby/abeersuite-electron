@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -98,9 +99,8 @@ export async function PUT(
             },
         });
         return NextResponse.json(person);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to update person" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update person");
     }
 }
 

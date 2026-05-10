@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     code: z.string().trim().min(1),
@@ -57,9 +58,8 @@ export async function GET(req: Request) {
             balance: effectiveLedgerBalance(a),
         }));
         return NextResponse.json(accountsWithEffective);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to fetch GL accounts" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch GL accounts");
     }
 }
 
@@ -90,11 +90,10 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(account, { status: 201 });
-    } catch (err: unknown) {
-        if (err instanceof Error && err.message.includes("Unique constraint")) {
+    } catch (e) {
+        if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: `Code "${body.code}" already exists` }, { status: 409 });
         }
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create GL account" }, { status: 500 });
+        return handleApiError(e, "Failed to create GL account");
     }
 }

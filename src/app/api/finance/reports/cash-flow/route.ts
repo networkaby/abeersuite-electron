@@ -3,6 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/cash-flow?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Aggregates cash inflows / outflows by the counter-side ledger of every
@@ -113,8 +114,7 @@ export async function GET(req: Request) {
             netChange: totalIn - totalOut,
             openingCash, closingCash,
         });
-    } catch (err) {
-        console.error("[cash-flow]", err);
-        return NextResponse.json({ error: "Failed to compute cash flow" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to compute cash flow");
     }
 }

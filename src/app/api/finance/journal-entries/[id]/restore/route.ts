@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/finance/journal-entries/[id]/restore
 // Inverse of soft-delete. Re-applies GL impact if the entry was POSTED.
@@ -48,8 +49,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         const restored = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(restored);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to restore journal entry" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to restore journal entry");
     }
 }

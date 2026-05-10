@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const assignSchema = z.object({ userId: z.number().int().positive() });
 
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (existing) return NextResponse.json({ error: "User already holds this post" }, { status: 409 });
         await prisma.userPost.create({ data: { userId, postId } });
         return NextResponse.json({ success: true }, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to assign holder" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to assign holder");
     }
 }

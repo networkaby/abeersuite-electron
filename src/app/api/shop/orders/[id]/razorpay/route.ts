@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError } from "@/shared/lib/api";
 
 const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -65,7 +66,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             currency: "INR",
             shopOrderId: order.id,
         });
-    } catch {
-        return NextResponse.json({ error: "Failed to start payment" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to start payment");
     }
 }

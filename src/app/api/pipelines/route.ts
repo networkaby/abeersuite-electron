@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const pipelineSchema = z.object({
     name: z.string().trim().min(1, "Name is required").regex(/^[a-z0-9_-]+$/, "Name must be lowercase letters, numbers, hyphens or underscores"),
@@ -25,8 +26,8 @@ export async function GET() {
             },
         });
         return NextResponse.json(pipelines);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch pipelines" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch pipelines");
     }
 }
 
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(pipeline, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create pipeline" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create pipeline");
     }
 }

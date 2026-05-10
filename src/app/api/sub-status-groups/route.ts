@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -16,8 +17,8 @@ export async function GET() {
     try {
         const groups = await prisma.subStatusGroup.findMany({ orderBy: { order: "asc" } });
         return NextResponse.json(groups);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch groups" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch groups");
     }
 }
 
@@ -39,8 +40,7 @@ export async function POST(req: Request) {
         const maxOrder = order ?? (await prisma.subStatusGroup.count());
         const group = await prisma.subStatusGroup.create({ data: { id, label, order: maxOrder } });
         return NextResponse.json(group, { status: 201 });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to create group" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create group");
     }
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const userRoleSchema = z.object({
     roleId: z.string().trim().min(1, "Role is required"),
@@ -31,8 +32,8 @@ export async function GET(
             roleId: user.role,
             role: user.userRole,
         });
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch user role" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch user role");
     }
 }
 
@@ -52,7 +53,7 @@ export async function PUT(
         await prisma.user.update({ where: { id: userId }, data: { role: roleId } });
 
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to update user role" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update user role");
     }
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, isAdmin } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/sub-statuses/next?statusId=S3&fromSubStatusId=SS10
 // GET /api/sub-statuses/next?statusId=S3&entryOnly=true  (no current sub-status)
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
             });
 
         return NextResponse.json(result);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch next sub-statuses" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch next sub-statuses");
     }
 }

@@ -138,8 +138,8 @@ What landed in 04a:
 
 Follow-up commits within this segment:
 
-- ~~**04b**: validateRequest sweep~~ — **done** (this commit, 107 of 110 files; 3 legitimately kept inline).
-- **04c**: handleApiError sweep — ≈152 files. Each replaces the trailing `catch { return NextResponse.json({ error: "..." }, { status: 500 }) }` with `catch (e) { return handleApiError(e, "..."); }`. Adds server-side error logging consistently.
+- ~~**04b**: validateRequest sweep~~ — **done** (107 of 110 files; 3 legitimately kept inline).
+- ~~**04c**: handleApiError sweep~~ — **done** (this commit, 162 / 167 catch envelopes; 5 legitimate non-catch 500s kept inline).
 
 ## Post-execution notes — 04b (validateRequest sweep, 2026-05-11)
 
@@ -170,6 +170,34 @@ Two tsc errors surfaced during the sweep and were fixed in the same commit:
 
 - **Reusables registry** — no new symbols added in this commit; existing `validateRequest` entry already documents the API.
 - **Module docs** — none touched; api helpers are cross-cutting.
+- **Todo list** — completed.
+
+## Post-execution notes — 04c (handleApiError sweep, 2026-05-11)
+
+Status: **complete** — `tsc --noEmit` clean, `npm run build` clean, 10 GET endpoints across swept routes all return 200.
+
+Approach: two-pass Node scripts (`scripts/sweep-handle-api-error.mjs` and `pass2.mjs`, both removed after use).
+
+| Pass | Files | Catches rewritten | What it caught |
+|---|---|---|---|
+| Pass 1 | 128 | 174 | Canonical `catch { 500 }` and `catch (X) { console.error?; 500 }`, both single-line and wrapped-line returns |
+| Pass 2 | 34 | ~28 | Catch blocks with guard returns before the 500 — `prismaUniqueError`/`ContactConflictError`/`lifecycleErrorResponse` patterns. Only the final 500 return is rewritten; guards stay. |
+| Hand-edit | 2 | 4 | `companies/route.ts` + `people/route.ts` — pass 2 mangled their complex P2002 catches (the `error` → `e` rename was too aggressive, hitting the `error:` property key in inner conflict responses). Reverted both via `git checkout`, then re-applied just the final 500 return. |
+| **Total** | **162** | **~206** |  |
+
+Five legitimate non-catch 500s **kept inline on purpose**:
+
+- `ecommerce/orders/route.ts` × 2 — "Sales Orders pipeline not seeded" returns inside function logic (pre-flight checks, not catches).
+- `pos/sale/route.ts` — `return NextResponse.json({ error: msg }, { status: 500 })` where `msg` is dynamic.
+- `shop/razorpay/webhook/route.ts` — webhook uses `{ ok: false }` shape, not the standard error envelope.
+- `upload-signature/route.ts` — "Cloudinary not configured" config-error inside try block.
+
+Notable behavior change: `handleApiError` calls `console.error("[api]", e)` internally, so every swept catch now logs consistently — many original catches had no logging at all. This is a regression-safe improvement.
+
+### Per AGENTS.md "after every plan" rule
+
+- **Reusables registry** — no new public symbols; `handleApiError` entry already documents the API.
+- **Module docs** — none touched.
 - **Todo list** — completed.
 
 Per AGENTS.md "after every plan" rule:

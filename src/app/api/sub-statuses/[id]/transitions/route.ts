@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const subStatusTransitionsSchema = z.object({
     toIds: z.array(z.string().trim()),
@@ -32,8 +33,7 @@ export async function PUT(
         ]);
 
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to save transitions" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to save transitions");
     }
 }

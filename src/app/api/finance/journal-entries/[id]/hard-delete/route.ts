@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const hardDeleteSchema = z.object({
     reason: z.string().trim().min(1, "Delete reason is required"),
@@ -69,8 +70,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
 
         return NextResponse.json({ ok: true, auditId: audit.id, reversedLedger: needsLedgerReversal });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to hard-delete journal entry" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to hard-delete journal entry");
     }
 }

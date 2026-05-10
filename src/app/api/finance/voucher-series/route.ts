@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { seedVoucherSeries } from "@/modules/accountancy/lib/seedVoucherSeries";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/voucher-series
 // Returns all 7 VoucherSeries rows. Auto-seeds on first call if the table is empty.
@@ -27,8 +28,7 @@ export async function GET() {
         series.sort((a: { kind: string }, b: { kind: string }) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 
         return NextResponse.json(series);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to fetch voucher series" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch voucher series");
     }
 }

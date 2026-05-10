@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/gst-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&direction=OUTWARD|INWARD
 //   OUTWARD = SALE  (output tax, what you collected from customers)
@@ -90,8 +91,7 @@ export async function GET(req: Request) {
             direction, invType,
             buckets, totals,
         });
-    } catch (err) {
-        console.error("[gst-summary]", err);
-        return NextResponse.json({ error: "Failed to compute GST summary" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to compute GST summary");
     }
 }

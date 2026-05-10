@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/finance/journal-entries/[id]/post
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -53,8 +54,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             include: { lines: { include: { account: { select: { id: true, code: true, name: true } } } } },
         });
         return NextResponse.json(posted);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to post journal entry" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to post journal entry");
     }
 }

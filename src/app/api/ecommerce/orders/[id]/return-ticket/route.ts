@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
+import { handleApiError } from "@/shared/lib/api";
 
 const bodySchema = z.object({
     deviceType: z.string().trim().min(1).default("Shop return"),
@@ -76,7 +77,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
         return NextResponse.json(ticket, { status: 201 });
     } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: "Failed to create return ticket" }, { status: 500 });
+        return handleApiError(e, "Failed to create return ticket");
     }
 }

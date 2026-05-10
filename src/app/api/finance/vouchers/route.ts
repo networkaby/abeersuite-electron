@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     accountId:   z.number().int().positive(),
@@ -55,9 +56,8 @@ export async function GET(req: Request) {
             },
         });
         return NextResponse.json(vouchers);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to fetch vouchers" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch vouchers");
     }
 }
 
@@ -105,8 +105,7 @@ export async function POST(req: Request) {
             });
         });
         return NextResponse.json(voucher, { status: 201 });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create voucher" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create voucher");
     }
 }

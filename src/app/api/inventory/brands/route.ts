@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invBrandCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     const { response } = await requirePermission("inventory:manage");
@@ -11,8 +12,8 @@ export async function GET() {
     try {
         const rows = await prisma.invBrand.findMany({ orderBy: { name: "asc" } });
         return NextResponse.json(rows);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch brands" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch brands");
     }
 }
 
@@ -30,6 +31,6 @@ export async function POST(req: Request) {
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "Brand name already exists");
         if (conflict) return conflict;
-        return NextResponse.json({ error: "Failed to create brand" }, { status: 500 });
+        return handleApiError(e, "Failed to create brand");
     }
 }

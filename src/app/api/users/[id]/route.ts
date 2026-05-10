@@ -5,6 +5,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const PROFILE_SELECT = {
     id:          true,
@@ -45,8 +46,8 @@ export async function GET(
         const user = await prisma.user.findUnique({ where: { id: userId }, select: PROFILE_SELECT });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
         return NextResponse.json(user);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch user");
     }
 }
 
@@ -170,8 +171,8 @@ export async function PUT(
 
         const user = await prisma.user.update({ where: { id: userId }, data: updateData, select: PUT_SELECT });
         return NextResponse.json(user);
-    } catch {
-        return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update user");
     }
 }
 
@@ -203,7 +204,7 @@ export async function DELETE(
 
         await prisma.user.delete({ where: { id: userId } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete user" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete user");
     }
 }

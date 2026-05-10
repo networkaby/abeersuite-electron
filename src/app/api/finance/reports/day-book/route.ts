@@ -4,6 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/refResolver";
 import { parsePagination } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 // Surfaced kinds in the Day Book — the union of inventory-voucher origins
 // (Sale/Purchase/Estimate), invoices, GL voucher types, and stand-alone JE.
@@ -233,8 +234,7 @@ export async function GET(req: Request) {
             page,
             limit,
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to load day book" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load day book");
     }
 }

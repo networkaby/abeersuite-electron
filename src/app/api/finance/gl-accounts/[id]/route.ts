@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -73,8 +74,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
         return NextResponse.json(updated);
-    } catch {
-        return NextResponse.json({ error: "Failed to update" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update");
     }
 }
 

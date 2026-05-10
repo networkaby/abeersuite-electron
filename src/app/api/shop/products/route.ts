@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { invProductToPublic } from "@/shared/lib/shop/productPublic";
 import { invProductDb } from "@/shared/types/inventoryTypes";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     try {
@@ -11,7 +12,7 @@ export async function GET() {
             orderBy: [{ shopCategory: "asc" }, { id: "asc" }],
         });
         return NextResponse.json(products.map(invProductToPublic));
-    } catch {
-        return NextResponse.json({ error: "Failed to load products" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load products");
     }
 }

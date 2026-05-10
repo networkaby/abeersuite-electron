@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     title:        z.string().trim().min(1, "Title is required").optional(),
@@ -34,8 +35,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const post = await prisma.post.findUnique({ where: { id }, include: POST_INCLUDE });
         if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
         return NextResponse.json(post);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch post" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch post");
     }
 }
 
@@ -48,8 +49,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (error) return error;
         const post = await prisma.post.update({ where: { id }, data: data, include: POST_INCLUDE });
         return NextResponse.json(post);
-    } catch {
-        return NextResponse.json({ error: "Failed to update post" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update post");
     }
 }
 
@@ -68,7 +69,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
         }
         await prisma.post.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete post");
     }
 }

@@ -3,6 +3,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ContactConflictError, contactValueSchema, updatePhone } from "@/shared/lib/format/contactWrite";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function PATCH(
     req: Request,
@@ -29,12 +30,11 @@ export async function PATCH(
     try {
         const row = await updatePhone(phoneIdNum, data);
         return NextResponse.json(row);
-    } catch (err) {
-        if (err instanceof ContactConflictError) {
-            return NextResponse.json({ error: err.message, field: err.field }, { status: 409 });
+    } catch (e) {
+        if (e instanceof ContactConflictError) {
+            return NextResponse.json({ error: e.message, field: e.field }, { status: 409 });
         }
-        console.error(err);
-        return NextResponse.json({ error: "Failed to update phone" }, { status: 500 });
+        return handleApiError(e, "Failed to update phone");
     }
 }
 

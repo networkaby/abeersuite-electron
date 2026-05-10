@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 import {
     effectiveLedgerBalance, EFFECTIVE_BALANCE_SELECT,
 } from "@/modules/accountancy/lib/effectiveBalance";
@@ -109,8 +110,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             })),
             totalBalance,
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to load group detail" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load group detail");
     }
 }

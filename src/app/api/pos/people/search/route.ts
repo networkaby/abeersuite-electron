@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/pos/people/search?q=ramesh
 // Quick lookup for the POS top-bar — matches name / phone / email.
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
                 email: r.emails[0]?.email ?? null,
             })),
         );
-    } catch {
-        return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Lookup failed");
     }
 }

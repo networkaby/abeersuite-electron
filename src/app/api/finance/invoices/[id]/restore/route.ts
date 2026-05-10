@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/finance/invoices/[id]/restore
 // Inverse of delete — re-applies GL impact if the invoice was posted.
@@ -46,10 +47,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         const restored = await prisma.invoice.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(restored);
-    } catch (err) {
-        const lifecycle = lifecycleErrorResponse(err);
+    } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
         if (lifecycle) return lifecycle;
-        console.error(err);
-        return NextResponse.json({ error: "Failed to restore invoice" }, { status: 500 });
+        return handleApiError(e, "Failed to restore invoice");
     }
 }

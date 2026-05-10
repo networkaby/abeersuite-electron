@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/receivables?asOf=YYYY-MM-DD
 // Aggregates open bills under "Sundry Debtors" group by party,
@@ -17,8 +18,7 @@ export async function GET(req: Request) {
     try {
         const data = await getOutstandings("Sundry Debtors", asOf);
         return NextResponse.json(data);
-    } catch (err) {
-        console.error("[receivables]", err);
-        return NextResponse.json({ error: "Failed to load receivables" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load receivables");
     }
 }

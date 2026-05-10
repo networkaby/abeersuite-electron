@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // DELETE /api/finance/allocations/[id]
 // Unlink an allocation. The underlying vouchers remain — only the link is removed.
@@ -12,8 +13,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     try {
         await prisma.voucherAllocation.delete({ where: { id: Number(id) } });
         return NextResponse.json({ ok: true });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to remove allocation" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to remove allocation");
     }
 }

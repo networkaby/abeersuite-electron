@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const reopenSchema = z.object({
     priority: z.nativeEnum(Priority).optional(),
@@ -59,8 +60,7 @@ export async function POST(
         });
 
         return NextResponse.json(newTicket);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to reopen ticket" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to reopen ticket");
     }
 }

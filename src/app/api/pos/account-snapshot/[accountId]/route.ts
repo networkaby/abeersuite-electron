@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -186,8 +187,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             })),
             warrantiesEnding: [] as Array<{ productName: string; endsAt: string }>,
         });
-    } catch (err) {
-        console.error("[pos account snapshot]", err);
-        return NextResponse.json({ error: "Snapshot failed" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Snapshot failed");
     }
 }

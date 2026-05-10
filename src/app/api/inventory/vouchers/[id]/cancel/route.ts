@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/inventory/vouchers/[id]/cancel
 // Reverses stock + GL impact via counter-entry; preserves voucher reference number.
@@ -128,10 +129,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             },
         });
         return NextResponse.json(updated);
-    } catch (err) {
-        const lifecycle = lifecycleErrorResponse(err);
+    } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
         if (lifecycle) return lifecycle;
-        console.error(err);
-        return NextResponse.json({ error: "Failed to cancel voucher" }, { status: 500 });
+        return handleApiError(e, "Failed to cancel voucher");
     }
 }

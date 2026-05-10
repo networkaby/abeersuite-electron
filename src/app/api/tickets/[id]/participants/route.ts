@@ -7,6 +7,7 @@ import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),
@@ -42,9 +43,8 @@ export async function GET(
             orderBy: { createdAt: "asc" },
         });
         return NextResponse.json(participants);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to fetch participants" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch participants");
     }
 }
 
@@ -108,10 +108,9 @@ export async function POST(
         });
 
         return NextResponse.json(participant, { status: 201 });
-    } catch (error: unknown) {
-        const conflict = prismaUniqueError(error, "User is already a participant on this ticket");
+    } catch (e) {
+        const conflict = prismaUniqueError(e, "User is already a participant on this ticket");
         if (conflict) return conflict;
-        console.error(error);
-        return NextResponse.json({ error: "Failed to add participant" }, { status: 500 });
+        return handleApiError(e, "Failed to add participant");
     }
 }

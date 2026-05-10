@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/ledger-outstandings/:ledgerId?asOf=YYYY-MM-DD
 // Open bills for a single party ledger, with ageing buckets.
@@ -26,8 +27,7 @@ export async function GET(
         const data = await getLedgerOutstanding(accountId, asOf);
         if (!data) return NextResponse.json({ error: "Ledger not found" }, { status: 404 });
         return NextResponse.json(data);
-    } catch (err) {
-        console.error("[ledger-outstandings]", err);
-        return NextResponse.json({ error: "Failed to load ledger outstandings" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load ledger outstandings");
     }
 }

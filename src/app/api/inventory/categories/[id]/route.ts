@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -32,8 +33,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
         return NextResponse.json(row);
-    } catch {
-        return NextResponse.json({ error: "Failed to update category" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update category");
     }
 }
 
@@ -53,7 +54,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         }
         await prisma.invCategory.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete category" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete category");
     }
 }

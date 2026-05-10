@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { listAccessibleRooms } from "@/modules/message/lib/inbox";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     const { user, response } = await requireAuth();
@@ -9,8 +10,7 @@ export async function GET() {
     try {
         const rooms = await listAccessibleRooms(user);
         return NextResponse.json(rooms);
-    } catch (error) {
-        console.error("[inbox rooms GET]", error);
-        return NextResponse.json({ error: "Failed to load inbox rooms" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load inbox rooms");
     }
 }

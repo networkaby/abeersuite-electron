@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const subStatusPatchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -41,9 +42,8 @@ export async function DELETE(
 
         await prisma.ticketSubStatus.delete({ where: { id } });
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to delete sub-status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete sub-status");
     }
 }
 
@@ -93,8 +93,7 @@ export async function PATCH(
         }
 
         return NextResponse.json(updated);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to update sub-status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update sub-status");
     }
 }

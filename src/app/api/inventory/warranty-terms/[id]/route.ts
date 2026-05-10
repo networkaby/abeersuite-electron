@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invWarrantyTermUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -23,8 +24,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
         return NextResponse.json(row);
-    } catch {
-        return NextResponse.json({ error: "Failed to update warranty term" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update warranty term");
     }
 }
 
@@ -40,7 +41,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         }
         await prisma.invWarrantyTerm.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete warranty term" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete warranty term");
     }
 }

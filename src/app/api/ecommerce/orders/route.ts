@@ -7,6 +7,7 @@ import { getOrdersPipeline } from "@/shared/lib/format/ordersPipeline";
 import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const ACCOUNT_SELECT = {
     id: true,
@@ -90,8 +91,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json(orders);
     } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: "Failed to list orders" }, { status: 500 });
+        return handleApiError(e, "Failed to list orders");
     }
 }
 
@@ -158,7 +158,6 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(order, { status: 201 });
     } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+        return handleApiError(e, "Failed to create order");
     }
 }

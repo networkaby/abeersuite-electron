@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/shared/lib/format/contactWrite";
-import { parsePagination } from "@/shared/lib/api";
-import { validateRequest } from "@/shared/lib/api";
+import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
 
 const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -147,8 +146,7 @@ export async function GET(req: Request) {
         }));
         return NextResponse.json(normalised);
     } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to fetch people" }, { status: 500 });
+        return handleApiError(error, "Failed to fetch people");
     }
 }
 
@@ -231,7 +229,6 @@ export async function POST(req: Request) {
                 );
             }
         }
-        console.error(error);
-        return NextResponse.json({ error: "Failed to create person" }, { status: 500 });
+        return handleApiError(error, "Failed to create person");
     }
 }

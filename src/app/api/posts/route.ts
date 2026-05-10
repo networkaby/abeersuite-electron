@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     id:           z.string().trim().min(1, "ID is required").toUpperCase(),
@@ -36,9 +37,8 @@ export async function GET() {
             include: POST_INCLUDE,
         });
         return NextResponse.json(posts);
-    } catch (error) {
-        console.error("GET /api/posts failed", error);
-        return NextResponse.json({ error: "Failed to fetch posts" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch posts");
     }
 }
 
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
             include: POST_INCLUDE,
         });
         return NextResponse.json(post, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create post" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create post");
     }
 }

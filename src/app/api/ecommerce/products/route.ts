@@ -6,6 +6,7 @@ import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const specsSchema = z.record(z.string(), z.string()).optional();
 
@@ -59,8 +60,8 @@ export async function GET(req: Request) {
             orderBy: [{ shopCategory: "asc" }, { id: "desc" }],
         });
         return NextResponse.json(products.map(invProductToAdmin));
-    } catch {
-        return NextResponse.json({ error: "Failed to list products" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to list products");
     }
 }
 
@@ -108,6 +109,6 @@ export async function POST(req: Request) {
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
         if (conflict) return conflict;
-        return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
+        return handleApiError(e, "Failed to create product");
     }
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const noteSchema = z.object({
     note: z.string().trim().min(1, "Note text is required"),
@@ -43,8 +44,7 @@ export async function POST(
         });
 
         return NextResponse.json(log, { status: 201 });
-    } catch (error) {
-        console.error("[notes POST]", error);
-        return NextResponse.json({ error: "Failed to save note" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to save note");
     }
 }

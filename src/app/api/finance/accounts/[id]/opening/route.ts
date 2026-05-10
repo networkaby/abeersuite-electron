@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 // PUT /api/finance/accounts/[id]/opening
 // Sets opening balance + Dr/Cr type + as-of date on a ledger account.
@@ -33,8 +34,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         });
         await reconcileOpeningSuspense();
         return NextResponse.json(account);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to update opening balance" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update opening balance");
     }
 }

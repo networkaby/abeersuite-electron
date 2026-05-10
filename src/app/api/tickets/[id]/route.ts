@@ -8,6 +8,7 @@ import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -111,9 +112,8 @@ export async function GET(
                 } : null,
             },
         });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to fetch ticket" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch ticket");
     }
 }
 
@@ -218,8 +218,7 @@ export async function PUT(
         }
 
         return NextResponse.json(ticket);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to update ticket" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update ticket");
     }
 }

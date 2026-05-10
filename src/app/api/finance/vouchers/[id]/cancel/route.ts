@@ -5,6 +5,7 @@ import { z } from "zod";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Cancel reason required") });
 
@@ -80,10 +81,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const cancelled = await prisma.voucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(cancelled);
-    } catch (err) {
-        const lifecycle = lifecycleErrorResponse(err);
+    } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
         if (lifecycle) return lifecycle;
-        console.error(err);
-        return NextResponse.json({ error: "Failed to cancel voucher" }, { status: 500 });
+        return handleApiError(e, "Failed to cancel voucher");
     }
 }

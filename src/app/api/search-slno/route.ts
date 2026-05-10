@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/search-slno?q=...
 export async function GET(req: Request) {
@@ -81,8 +82,7 @@ export async function GET(req: Request) {
         const items = Array.from(byDevice.values());
 
         return NextResponse.json(items);
-    } catch (error) {
-        console.error("[search-slno GET]", error);
-        return NextResponse.json({ error: "Failed to fetch SLno search list" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch SLno search list");
     }
 }

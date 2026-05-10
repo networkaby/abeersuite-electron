@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const cancelSchema = z.object({
     reason: z.string().trim().min(1, "Cancel reason is required"),
@@ -94,8 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const cancelled = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(cancelled);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to cancel journal entry" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to cancel journal entry");
     }
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function DELETE(
     _: Request,
@@ -41,8 +42,7 @@ export async function DELETE(
         });
 
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to remove participant" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to remove participant");
     }
 }

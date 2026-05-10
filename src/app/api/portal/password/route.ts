@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const schema = z.object({
     currentPassword: z.string().min(1, "Current password is required"),
@@ -39,8 +40,8 @@ export async function PATCH(req: Request) {
         });
 
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to update password" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update password");
     }
 }
 

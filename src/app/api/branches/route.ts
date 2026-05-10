@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     id:       z.string().trim().min(1, "ID is required").toUpperCase(),
@@ -21,8 +22,8 @@ export async function GET() {
             include: { _count: { select: { users: true, departments: true } } },
         });
         return NextResponse.json(branches);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch branches" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch branches");
     }
 }
 
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
         if (existing) return NextResponse.json({ error: "Branch ID already exists" }, { status: 409 });
         const branch = await prisma.branch.create({ data: { id, name, address: address ?? null, phone: phone ?? null, isActive: isActive ?? true } });
         return NextResponse.json(branch, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create branch" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create branch");
     }
 }

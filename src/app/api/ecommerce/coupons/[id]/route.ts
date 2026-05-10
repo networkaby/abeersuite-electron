@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const patchSchema = z.object({
     code: z.string().trim().min(1).optional(),
@@ -34,8 +35,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
             data,
         });
         return NextResponse.json(row);
-    } catch {
-        return NextResponse.json({ error: "Failed to update coupon" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update coupon");
     }
 }
 
@@ -46,7 +47,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     try {
         await prisma.shopCoupon.delete({ where: { id } });
         return NextResponse.json({ ok: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete coupon (in use?)" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete coupon (in use?)");
     }
 }

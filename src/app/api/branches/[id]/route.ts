@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name:     z.string().trim().min(1).optional(),
@@ -20,8 +21,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (error) return error;
         const branch = await prisma.branch.update({ where: { id }, data: data });
         return NextResponse.json(branch);
-    } catch {
-        return NextResponse.json({ error: "Failed to update branch" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update branch");
     }
 }
 
@@ -40,7 +41,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         }
         await prisma.branch.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete branch" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete branch");
     }
 }

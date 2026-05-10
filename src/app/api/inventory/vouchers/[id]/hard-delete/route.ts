@@ -5,6 +5,7 @@ import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -79,10 +80,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
 
         return NextResponse.json({ ok: true, auditId: audit.id, reversedLedger: needsReversal });
-    } catch (err) {
-        const lifecycle = lifecycleErrorResponse(err);
+    } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
         if (lifecycle) return lifecycle;
-        console.error(err);
-        return NextResponse.json({ error: "Failed to hard-delete voucher" }, { status: 500 });
+        return handleApiError(e, "Failed to hard-delete voucher");
     }
 }

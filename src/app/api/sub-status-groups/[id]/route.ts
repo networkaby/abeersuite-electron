@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -29,9 +30,8 @@ export async function PATCH(
             },
         });
         return NextResponse.json(updated);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to update group" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update group");
     }
 }
 
@@ -53,8 +53,7 @@ export async function DELETE(
         }
         await prisma.subStatusGroup.delete({ where: { id } });
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to delete group" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete group");
     }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 type ActivityType =
     | "ticket_created"
@@ -145,7 +146,7 @@ export async function GET(
             total: sorted.length,
             items: sorted,
         });
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch activity" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch activity");
     }
 }

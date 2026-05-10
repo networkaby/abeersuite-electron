@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name:        z.string().trim().min(1).optional(),
@@ -23,8 +24,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             include: { branch: { select: { id: true, name: true } } },
         });
         return NextResponse.json(department);
-    } catch {
-        return NextResponse.json({ error: "Failed to update department" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update department");
     }
 }
 
@@ -43,7 +44,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         }
         await prisma.department.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete department" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete department");
     }
 }

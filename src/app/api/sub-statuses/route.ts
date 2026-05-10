@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const subStatusSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -54,8 +55,8 @@ export async function GET(req: Request) {
             .map((ss) => ({ ...ss, isEntryPoint: entrySet.has(ss.id) }));
 
         return NextResponse.json(result);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch sub-statuses" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch sub-statuses");
     }
 }
 
@@ -97,8 +98,7 @@ export async function POST(req: Request) {
         }
 
         return NextResponse.json(created, { status: 201 });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to create sub-status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create sub-status");
     }
 }

@@ -6,6 +6,7 @@ import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(order);
-    } catch {
-        return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create order");
     }
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -42,8 +43,8 @@ export async function PATCH(req: Request, { params }: Params) {
             },
         });
         return NextResponse.json(status);
-    } catch {
-        return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update status");
     }
 }
 
@@ -64,7 +65,7 @@ export async function DELETE(_: Request, { params }: Params) {
         // Transitions cascade automatically via ON DELETE CASCADE
         await prisma.ticketStatus.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete status");
     }
 }

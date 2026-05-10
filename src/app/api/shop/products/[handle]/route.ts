@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { invProductToPublic } from "@/shared/lib/shop/productPublic";
 import { invProductDb } from "@/shared/types/inventoryTypes";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ handle: string }> }) {
     try {
@@ -24,7 +25,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ handle: string
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
         return NextResponse.json(invProductToPublic(product));
-    } catch {
-        return NextResponse.json({ error: "Failed to load product" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load product");
     }
 }

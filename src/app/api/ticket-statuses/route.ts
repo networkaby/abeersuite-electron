@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const ticketStatusSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -37,8 +38,8 @@ export async function GET(req: Request) {
             },
         });
         return NextResponse.json(statuses);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch statuses" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch statuses");
     }
 }
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(status, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create status");
     }
 }

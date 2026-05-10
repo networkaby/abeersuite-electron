@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/opening-balance
 // Returns: per-account opening balance rows, per-product opening stock rows,
@@ -57,8 +58,7 @@ export async function GET() {
             suspenseSide:    difference > 0 ? "CREDIT" : difference < 0 ? "DEBIT" : null,
             suspenseAmount:  Math.abs(difference),
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to load opening balance summary" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load opening balance summary");
     }
 }

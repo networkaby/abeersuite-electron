@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     const { response } = await requirePermission("inventory:manage");
@@ -13,8 +14,8 @@ export async function GET() {
             include: { parent: { select: { id: true, name: true } } },
         });
         return NextResponse.json(rows);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch categories");
     }
 }
 
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(row, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create category" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create category");
     }
 }

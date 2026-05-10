@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     notes: z.string().trim().optional().nullable(),
@@ -94,8 +95,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             });
         });
         return NextResponse.json(updated);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to update invoice" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update invoice");
     }
 }

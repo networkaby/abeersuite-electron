@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -25,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "Group name already exists");
         if (conflict) return conflict;
-        return NextResponse.json({ error: "Failed to update product group" }, { status: 500 });
+        return handleApiError(e, "Failed to update product group");
     }
 }
 
@@ -41,7 +42,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         }
         await prisma.invProductGroup.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete product group" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete product group");
     }
 }

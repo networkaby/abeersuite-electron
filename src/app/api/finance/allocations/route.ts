@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const TARGET_TYPES = ["INVOICE", "VOUCHER", "JOURNAL_ENTRY"] as const;
 const SOURCE_TYPES = ["VOUCHER", "PAYMENT", "INVOICE", "JOURNAL_ENTRY"] as const;
@@ -56,8 +57,7 @@ export async function POST(req: Request) {
             data: { ...data, createdById: user!.id },
         });
         return NextResponse.json(allocation, { status: 201 });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create allocation" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create allocation");
     }
 }

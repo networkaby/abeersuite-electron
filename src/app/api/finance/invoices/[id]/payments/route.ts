@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { nextRef, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const paymentSchema = z.object({
     amount: z.number().positive(),
@@ -106,9 +107,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
 
         return NextResponse.json(payment, { status: 201 });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to record payment" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to record payment");
     }
 }
 

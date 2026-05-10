@@ -5,6 +5,7 @@ import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const deleteSchema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -60,10 +61,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const updated = await prisma.invoice.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(updated);
-    } catch (err) {
-        const lifecycle = lifecycleErrorResponse(err);
+    } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
         if (lifecycle) return lifecycle;
-        console.error(err);
-        return NextResponse.json({ error: "Failed to delete invoice" }, { status: 500 });
+        return handleApiError(e, "Failed to delete invoice");
     }
 }

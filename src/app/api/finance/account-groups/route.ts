@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { loadGroupRolledUpBalances } from "@/modules/accountancy/lib/effectiveBalance";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createSchema = z.object({
     name:      z.string().trim().min(1).max(200),
@@ -61,9 +62,8 @@ export async function GET() {
         );
 
         return NextResponse.json(buildTree(flatWithBalance));
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to fetch account groups" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch account groups");
     }
 }
 
@@ -100,8 +100,7 @@ export async function POST(req: Request) {
             },
         });
         return NextResponse.json(group, { status: 201 });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create group" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create group");
     }
 }

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/finance/vouchers/[id]/post
 // DRAFT → POSTED: applies GL impact, creates a mirror JournalEntry for the audit
@@ -66,8 +67,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         });
 
         return NextResponse.json(posted);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to post voucher" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to post voucher");
     }
 }

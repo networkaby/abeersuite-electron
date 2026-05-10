@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -27,8 +28,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         });
         if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(row);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch product" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch product");
     }
 }
 
@@ -119,8 +120,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             include: productInclude,
         });
         return NextResponse.json(row);
-    } catch {
-        return NextResponse.json({ error: "Failed to update product" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update product");
     }
 }
 
@@ -134,7 +135,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         if (orderLineCount > 0) return NextResponse.json({ error: "Cannot delete — referenced in shop orders." }, { status: 400 });
         await prisma.invProduct.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete product" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete product");
     }
 }

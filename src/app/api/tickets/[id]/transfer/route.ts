@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const transferSchema = z.object({
     targetPipelineId: z.string().trim().min(1),
@@ -105,9 +106,8 @@ export async function POST(
         ]);
 
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to transfer ticket" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to transfer ticket");
     }
 }
 
@@ -143,8 +143,7 @@ export async function GET(
         });
 
         return NextResponse.json(pipelines);
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to fetch pipelines" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch pipelines");
     }
 }

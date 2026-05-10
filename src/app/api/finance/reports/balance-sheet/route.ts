@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { handleApiError } from "@/shared/lib/api";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,
 } from "@/modules/accountancy/lib/aggregateLedger";
@@ -100,8 +101,7 @@ export async function GET(req: Request) {
                 productCount:   stockResult.productCount,
             },
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to generate balance sheet" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to generate balance sheet");
     }
 }

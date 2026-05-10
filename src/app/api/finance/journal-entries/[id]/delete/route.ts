@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const deleteSchema = z.object({
     reason: z.string().trim().min(1, "Delete reason is required"),
@@ -60,8 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const updated = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(updated);
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to delete journal entry" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete journal entry");
     }
 }

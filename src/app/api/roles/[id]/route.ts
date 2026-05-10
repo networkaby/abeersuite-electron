@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET(
     _: Request,
@@ -21,8 +22,8 @@ export async function GET(
         });
         if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
         return NextResponse.json(role);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch role" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch role");
     }
 }
 
@@ -52,8 +53,8 @@ export async function PATCH(
             },
         });
         return NextResponse.json(role);
-    } catch {
-        return NextResponse.json({ error: "Failed to update role" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update role");
     }
 }
 
@@ -72,7 +73,7 @@ export async function DELETE(
         }
         await prisma.role.delete({ where: { id } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete role" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete role");
     }
 }

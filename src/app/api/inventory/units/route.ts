@@ -5,6 +5,7 @@ import { invUnitCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 // Cache key+tag exported so the [id] route's PATCH/DELETE can revalidate.
 export const INV_UNITS_TAG = "inv-units";
@@ -21,8 +22,8 @@ export async function GET() {
     try {
         const rows = await getUnitsCached();
         return NextResponse.json(rows);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch units" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch units");
     }
 }
 
@@ -46,6 +47,6 @@ export async function POST(req: Request) {
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "Unit code already exists");
         if (conflict) return conflict;
-        return NextResponse.json({ error: "Failed to create unit" }, { status: 500 });
+        return handleApiError(e, "Failed to create unit");
     }
 }

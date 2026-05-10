@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { ensureDirectMessageRoom } from "@/modules/message/lib/inbox";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function POST(
     _req: Request,
@@ -19,8 +20,7 @@ export async function POST(
     try {
         const room = await ensureDirectMessageRoom(user.id, targetId);
         return NextResponse.json({ id: room.id });
-    } catch (error) {
-        console.error("[inbox direct POST]", error);
-        return NextResponse.json({ error: "Failed to open DM" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to open DM");
     }
 }

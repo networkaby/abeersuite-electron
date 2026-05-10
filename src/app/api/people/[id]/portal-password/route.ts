@@ -5,6 +5,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const schema = z.object({
     tempPassword: z.string().min(6, "Temporary password must be at least 6 characters"),
@@ -76,7 +77,7 @@ export async function PATCH(
             personId,
             personName: person.name,
         });
-    } catch {
-        return NextResponse.json({ error: "Failed to reset person portal password" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to reset person portal password");
     }
 }

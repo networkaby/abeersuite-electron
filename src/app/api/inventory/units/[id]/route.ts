@@ -5,6 +5,7 @@ import { invUnitUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { revalidateTag } from "next/cache";
 import { INV_UNITS_TAG } from "../route";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -31,8 +32,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
         revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json(row);
-    } catch {
-        return NextResponse.json({ error: "Failed to update unit" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update unit");
     }
 }
 
@@ -49,7 +50,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         await prisma.invUnit.delete({ where: { id } });
         revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete unit" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete unit");
     }
 }

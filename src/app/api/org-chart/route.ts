@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 export interface OrgNode {
     id: number;
@@ -67,7 +68,7 @@ export async function GET() {
     try {
         const users = await prisma.user.findMany({ select: USER_SELECT });
         return NextResponse.json(buildTree(users));
-    } catch {
-        return NextResponse.json({ error: "Failed to load org chart" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load org chart");
     }
 }

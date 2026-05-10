@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -83,7 +84,6 @@ export async function POST(req: Request, { params }: Params) {
 
         return NextResponse.json(updated);
     } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: "Failed to convert warranty status" }, { status: 500 });
+        return handleApiError(e, "Failed to convert warranty status");
     }
 }

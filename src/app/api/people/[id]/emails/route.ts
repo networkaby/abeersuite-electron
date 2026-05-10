@@ -3,6 +3,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ContactConflictError, contactValueSchema, createEmail } from "@/shared/lib/format/contactWrite";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/people/[id]/emails — add an email to a person
 export async function POST(
@@ -27,11 +28,10 @@ export async function POST(
     try {
         const row = await createEmail({ personId }, data);
         return NextResponse.json(row, { status: 201 });
-    } catch (err) {
-        if (err instanceof ContactConflictError) {
-            return NextResponse.json({ error: err.message, field: err.field }, { status: 409 });
+    } catch (e) {
+        if (e instanceof ContactConflictError) {
+            return NextResponse.json({ error: e.message, field: e.field }, { status: 409 });
         }
-        console.error(err);
-        return NextResponse.json({ error: "Failed to add email" }, { status: 500 });
+        return handleApiError(e, "Failed to add email");
     }
 }

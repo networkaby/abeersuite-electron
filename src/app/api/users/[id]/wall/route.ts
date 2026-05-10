@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
+import { handleApiError } from "@/shared/lib/api";
 
 const POST_SELECT = {
     id:        true,
@@ -34,8 +35,8 @@ export async function GET(
             orderBy: { createdAt: "desc" },
         });
         return NextResponse.json(posts);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch wall" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch wall");
     }
 }
 
@@ -66,7 +67,7 @@ export async function POST(
             select: POST_SELECT,
         });
         return NextResponse.json(post, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to create post" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create post");
     }
 }

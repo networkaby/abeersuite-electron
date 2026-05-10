@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const overrideSchema = z.object({
     permissionId: z.string().trim().min(1),
@@ -56,8 +57,8 @@ export async function GET(
         });
 
         return NextResponse.json(result);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch permissions" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch permissions");
     }
 }
 
@@ -84,7 +85,7 @@ export async function POST(
         });
 
         return NextResponse.json(override, { status: 201 });
-    } catch {
-        return NextResponse.json({ error: "Failed to save override" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to save override");
     }
 }

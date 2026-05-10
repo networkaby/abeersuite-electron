@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 export interface PostNode {
     id: string;
@@ -53,7 +54,7 @@ export async function GET() {
         sort(roots);
 
         return NextResponse.json(roots);
-    } catch {
-        return NextResponse.json({ error: "Failed to load structure" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load structure");
     }
 }

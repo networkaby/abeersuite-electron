@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("ecommerce:manage");
@@ -56,7 +57,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(order);
     } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: "Failed to load order" }, { status: 500 });
+        return handleApiError(e, "Failed to load order");
     }
 }

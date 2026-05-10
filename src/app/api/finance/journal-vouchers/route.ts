@@ -6,6 +6,7 @@ import { isBalanced, balanceDelta, nextRef, nextRefFromSeries } from "@/modules/
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/finance/journal-vouchers
 //
@@ -247,8 +248,7 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(result, { status: 201 });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to create journal voucher" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create journal voucher");
     }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/pos/person-snapshot/[id]
 // "We know you" panel for the POS — aggregates everything in one call so the UI
@@ -128,8 +129,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             })),
             warrantiesEnding: [] as Array<{ productName: string; endsAt: string }>,
         });
-    } catch (err) {
-        console.error("[pos snapshot]", err);
-        return NextResponse.json({ error: "Snapshot failed" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Snapshot failed");
     }
 }

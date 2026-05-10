@@ -3,6 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { aggregateRange, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree } from "@/modules/accountancy/lib/groupTree";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/trial-balance?from=YYYY-MM-DD&to=YYYY-MM-DD
 //   (asOf is supported for backwards-compat: if no from/to, default range = FY → asOf)
@@ -56,8 +57,7 @@ export async function GET(req: Request) {
                 closing: totalClosing,
             },
         });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to generate trial balance" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to generate trial balance");
     }
 }

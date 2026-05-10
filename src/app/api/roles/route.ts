@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const createRoleSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -19,8 +20,8 @@ export async function GET() {
             include: { permissions: { include: { permission: true } }, _count: { select: { users: true } } },
         });
         return NextResponse.json(roles);
-    } catch {
-        return NextResponse.json({ error: "Failed to fetch roles" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to fetch roles");
     }
 }
 
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
             data: { id: newId, label: body.label, color: body.color, rank: body.rank ?? 0, isSystem: false },
         });
         return NextResponse.json(role);
-    } catch {
-        return NextResponse.json({ error: "Failed to create role" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to create role");
     }
 }

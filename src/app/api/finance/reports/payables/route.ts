@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/finance/reports/payables?asOf=YYYY-MM-DD
 // Aggregates open bills under "Sundry Creditors" group by party,
@@ -17,8 +18,7 @@ export async function GET(req: Request) {
     try {
         const data = await getOutstandings("Sundry Creditors", asOf);
         return NextResponse.json(data);
-    } catch (err) {
-        console.error("[payables]", err);
-        return NextResponse.json({ error: "Failed to load payables" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to load payables");
     }
 }

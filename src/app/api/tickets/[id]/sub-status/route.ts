@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const subStatusUpdateSchema = z.object({
     subStatusId: z.string().trim().min(1, "Sub-status is required"),
@@ -212,8 +213,7 @@ export async function PATCH(
         }
 
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error("[sub-status PATCH]", error);
-        return NextResponse.json({ error: "Failed to update sub-status" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update sub-status");
     }
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { handleApiError } from "@/shared/lib/api";
 
 const serviceCenterSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -32,8 +33,8 @@ export async function PUT(
             },
         });
         return NextResponse.json(serviceCenter);
-    } catch {
-        return NextResponse.json({ error: "Failed to update service center" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to update service center");
     }
 }
 
@@ -51,7 +52,7 @@ export async function DELETE(
         }
         await prisma.serviceCenter.delete({ where: { id: Number(id) } });
         return NextResponse.json({ success: true });
-    } catch {
-        return NextResponse.json({ error: "Failed to delete service center" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete service center");
     }
 }

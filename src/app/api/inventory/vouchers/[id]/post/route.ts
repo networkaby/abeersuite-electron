@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/inventory/vouchers/[id]/post
 //   1. Write InvStockLedger entries + update cached InvProduct.stock
@@ -136,8 +137,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         });
 
         return NextResponse.json({ ...result, _postNotes: notes });
-    } catch (err) {
-        console.error(err);
-        return NextResponse.json({ error: "Failed to post voucher" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to post voucher");
     }
 }

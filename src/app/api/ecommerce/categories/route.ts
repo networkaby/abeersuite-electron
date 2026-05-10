@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductDb } from "@/shared/types/inventoryTypes";
+import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     const { response } = await requirePermission("ecommerce:manage");
@@ -18,7 +19,7 @@ export async function GET() {
             productCount: g._count.id,
         }));
         return NextResponse.json(categories);
-    } catch {
-        return NextResponse.json({ error: "Failed to list categories" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to list categories");
     }
 }

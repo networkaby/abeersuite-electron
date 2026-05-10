@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
+import { handleApiError } from "@/shared/lib/api";
 
 const readSchema = z.object({
     readAt: z.string().datetime().optional(),
@@ -29,8 +30,7 @@ export async function PATCH(
 
         await markRoomRead(user.id, room.id, parsed.data.readAt ? new Date(parsed.data.readAt) : undefined);
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error("[inbox room read PATCH]", error);
-        return NextResponse.json({ error: "Failed to mark room read" }, { status: 500 });
+    } catch (e) {
+        return handleApiError(e, "Failed to mark room read");
     }
 }
