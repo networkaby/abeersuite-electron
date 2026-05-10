@@ -4,6 +4,11 @@
 
 Bring every `src/modules/<m>/` to the same shape so file location is predictable. Adds missing `lib/` and `hooks/` subfolders where modules already have logic mixed into components.
 
+**** new add by user -  
+
+1. src\app\(protected)\office\(admin) change to src\app\(protected)\office\admin and similer to all so that we get real separation in url.  already some modul has route level separetion just need to remove the ()
+2.  new component added new commit happend after you left after last segment done.   *****
+
 ## Target shape
 
 ```
@@ -16,19 +21,21 @@ src/modules/<m>/
 
 ## Per-module work
 
-| Module | Current | Action |
-|---|---|---|
-| `accountancy` | `components/`, `lib/`, `hooks/` | ✅ already correct (received `postInvoiceJe.ts` in Segment 08) |
-| `admin` | `components/` (2 files) | Add `lib/` if logic emerges; otherwise leave |
-| `core` | `components/` (1 file) | Leave; consider `lib/` later |
-| `customer` | `components/` (3 files) | ✅ already received `crmPipeline.ts`, `companyContacts.ts`, `contactWrite.ts` in Segment 08 |
-| `ecommerce` | `components/`, `lib/` | ✅ received `ordersPipeline.ts` in Segment 08 |
-| `external` | `shop/`, `portal/`, `store/` (sub-domains) | Already a special case — leave structure |
-| `inventory` | `components/`, `lib/product-admin.ts` | Rename `product-admin.ts` → `productAdmin.ts`; extract any inline business logic from components into `lib/` |
-| `message` | `components/`, `lib/` | Audit: rename any kebab-case files in `lib/` to camelCase |
-| `pos` | `components/` (1 file: PosScreen) | Single-screen module — leave |
-| `repairing` | `components/` (17 files) | ✅ received `ticketScope.ts` in Segment 08; **also** extract dashboard queries from `RepairingDashboardPage.tsx` (Segment 11) into `lib/dashboardQueries.ts` (done as part of Segment 11) |
-| `shared` | (deleted in Segment 01) | n/a |
+
+| Module        | Current                                    | Action                                                                                                                                                                                   |
+| ------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accountancy` | `components/`, `lib/`, `hooks/`            | ✅ already correct (received `postInvoiceJe.ts` in Segment 08)                                                                                                                            |
+| `admin`       | `components/` (2 files)                    | Add `lib/` if logic emerges; otherwise leave                                                                                                                                             |
+| `core`        | `components/` (1 file)                     | Leave; consider `lib/` later                                                                                                                                                             |
+| `customer`    | `components/` (3 files)                    | ✅ already received `crmPipeline.ts`, `companyContacts.ts`, `contactWrite.ts` in Segment 08                                                                                               |
+| `ecommerce`   | `components/`, `lib/`                      | ✅ received `ordersPipeline.ts` in Segment 08                                                                                                                                             |
+| `external`    | `shop/`, `portal/`, `store/` (sub-domains) | Already a special case — leave structure                                                                                                                                                 |
+| `inventory`   | `components/`, `lib/product-admin.ts`      | Rename `product-admin.ts` → `productAdmin.ts`; extract any inline business logic from components into `lib/`                                                                             |
+| `message`     | `components/`, `lib/`                      | Audit: rename any kebab-case files in `lib/` to camelCase                                                                                                                                |
+| `pos`         | `components/` (1 file: PosScreen)          | Single-screen module — leave                                                                                                                                                             |
+| `repairing`   | `components/` (17 files)                   | ✅ received `ticketScope.ts` in Segment 08; **also** extract dashboard queries from `RepairingDashboardPage.tsx` (Segment 11) into `lib/dashboardQueries.ts` (done as part of Segment 11) |
+| `shared`      | (deleted in Segment 01)                    | n/a                                                                                                                                                                                      |
+
 
 ## Step-by-step
 
@@ -39,18 +46,17 @@ src/modules/<m>/
 
 ## Verification
 
-- [ ] Every module that has pure logic has a `lib/` folder
-- [ ] Every file in `src/modules/<m>/lib/` is camelCase `.ts`
-- [ ] Every component file is PascalCase `.tsx`
-- [ ] `tsc --noEmit` clean
-- [ ] `npm run build` clean
+- Every module that has pure logic has a `lib/` folder
+- Every file in `src/modules/<m>/lib/` is camelCase `.ts`
+- Every component file is PascalCase `.tsx`
+- `tsc --noEmit` clean
+- `npm run build` clean
 
 ## Out of scope
 
 - Page-component extraction → Segments 11 & 12.
 - Adding new hooks → Segment 09.
 - Module-level barrel `index.ts` files — explicitly avoided. Existing convention is no barrels at the module root; keep imports explicit.
-
 
 ---
 
