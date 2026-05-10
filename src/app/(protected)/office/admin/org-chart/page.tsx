@@ -54,7 +54,7 @@ export default function OrgChartPage() {
                     </p>
                 </div>
                 {tab === "structure" && (
-                    <Link href="/office/posts" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
+                    <Link href="/office/admin/posts" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
                         <LinkIcon size={11} /> Manage posts
                     </Link>
                 )}
@@ -107,7 +107,7 @@ export default function OrgChartPage() {
                     <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                         <Briefcase size={36} className="opacity-20" />
                         <p className="text-sm">No posts defined yet.</p>
-                        <Link href="/office/posts" className="text-xs text-primary hover:underline">
+                        <Link href="/office/admin/posts" className="text-xs text-primary hover:underline">
                             Create your first post →
                         </Link>
                     </div>

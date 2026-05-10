@@ -92,7 +92,7 @@ export default function NotificationBell() {
                             notifications.map((n) => (
                                 <Link
                                     key={n.id}
-                                    href={n.link ?? "/office/inbox"}
+                                    href={n.link ?? "/office/message/inbox"}
                                     onClick={() => { markOneRead(n.id); setOpen(false); }}
                                     className={`block px-4 py-3 hover:bg-muted transition-colors ${n.read ? "opacity-60" : ""}`}
                                 >

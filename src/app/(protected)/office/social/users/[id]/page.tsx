@@ -414,12 +414,12 @@ function WallTab({
                     {posts.map(post => (
                         <div key={post.id} className="rounded-lg border border-border bg-card p-4">
                             <div className="flex items-start gap-3">
-                                <Link href={`/office/users/${post.author.id}`} className="shrink-0">
+                                <Link href={`/office/social/users/${post.author.id}`} className="shrink-0">
                                     <UserAvatar avatarUrl={post.author.avatarUrl} name={post.author.name} role={post.author.role} sizePx={40} />
                                 </Link>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Link href={`/office/users/${post.author.id}`}
+                                        <Link href={`/office/social/users/${post.author.id}`}
                                             className="text-sm font-semibold text-foreground hover:text-primary transition-colors">
                                             {post.author.name}
                                         </Link>
@@ -491,7 +491,7 @@ function AboutTab({ profile }: { profile: UserProfile }) {
                     <div className="flex items-center gap-2 text-sm">
                         <Users size={14} className="shrink-0 text-muted-foreground" />
                         <span className="text-muted-foreground">Reports to</span>
-                        <Link href={`/office/users/${profile.manager.id}`}
+                        <Link href={`/office/social/users/${profile.manager.id}`}
                             className="font-medium hover:text-primary transition-colors flex items-center gap-1">
                             <UserAvatar avatarUrl={profile.manager.avatarUrl} name={profile.manager.name} role={profile.manager.role} sizePx={18} />
                             {profile.manager.name} <ExternalLink size={10} />
@@ -1185,7 +1185,7 @@ function ActivityTimelineTab({
                                         </Link>
                                     )}
                                     {item.meta?.wallUserId && item.meta.wallUserId !== profileId && (
-                                        <Link href={`/office/users/${item.meta.wallUserId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                                        <Link href={`/office/social/users/${item.meta.wallUserId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
                                             Open {item.meta.wallUserName ?? "user"} profile
                                         </Link>
                                     )}
@@ -1214,7 +1214,7 @@ function ProfileSidebar({ profile }: { profile: UserProfile }) {
                     {profile.manager && (
                         <div>
                             <p className="text-muted-foreground mb-0.5">Reports to</p>
-                            <Link href={`/office/users/${profile.manager.id}`}
+                            <Link href={`/office/social/users/${profile.manager.id}`}
                                 className="font-medium text-foreground hover:text-primary flex items-center gap-1.5 transition-colors">
                                 <UserAvatar avatarUrl={profile.manager.avatarUrl} name={profile.manager.name} role={profile.manager.role} sizePx={18} />
                                 {profile.manager.name}
@@ -1253,7 +1253,7 @@ function ProfileSidebar({ profile }: { profile: UserProfile }) {
                     </div>
                     <div className="p-3 grid grid-cols-3 gap-2">
                         {profile.reports.slice(0, 9).map(r => (
-                            <Link key={r.id} href={`/office/users/${r.id}`}
+                            <Link key={r.id} href={`/office/social/users/${r.id}`}
                                 className="flex flex-col items-center gap-1 text-center group">
                                 <UserAvatar avatarUrl={r.avatarUrl} name={r.name} role={r.role} sizePx={40}
                                     className="group-hover:ring-2 group-hover:ring-primary transition-all" />
@@ -1379,7 +1379,7 @@ export default function UserProfilePage() {
         <div className="flex flex-col items-center justify-center py-20 gap-3">
             <p className="text-sm text-muted-foreground">User not found.</p>
             <Button asChild variant="outline" size="sm">
-                <Link href="/office/users"><ArrowLeft size={14} /> Back to Users</Link>
+                <Link href="/office/admin/users"><ArrowLeft size={14} /> Back to Users</Link>
             </Button>
         </div>
     );
@@ -1389,7 +1389,7 @@ export default function UserProfilePage() {
             {/* Back nav */}
             <div className="flex items-center gap-2 mb-4 print:hidden">
                 <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
-                    <Link href="/office/users"><ArrowLeft size={14} /> All Users</Link>
+                    <Link href="/office/admin/users"><ArrowLeft size={14} /> All Users</Link>
                 </Button>
             </div>
 
@@ -1410,7 +1410,7 @@ export default function UserProfilePage() {
                                 <Button asChild variant="ghost"
                                     className="h-auto flex items-center gap-1.5 rounded-none px-3 py-3 text-sm font-medium border-b-2 -mb-0.5 border-transparent text-muted-foreground hover:text-foreground hover:border-border whitespace-nowrap shrink-0"
                                     title="My profile">
-                                    <Link href={`/office/users/${sessionUserId}`}>
+                                    <Link href={`/office/social/users/${sessionUserId}`}>
                                         <Home size={13} />
                                         <span className="hidden xs:inline sm:inline">Home</span>
                                     </Link>
@@ -1454,7 +1454,7 @@ export default function UserProfilePage() {
                             <Button asChild variant="ghost"
                                 className="h-auto px-1 py-2.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
                                 title="My profile">
-                                <Link href={`/office/users/${sessionUserId}`}>
+                                <Link href={`/office/social/users/${sessionUserId}`}>
                                     <Home size={14} />
                                     <span className="hidden sm:inline ml-1">Home</span>
                                 </Link>

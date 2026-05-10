@@ -13,7 +13,7 @@ export default async function CrmLeadDetailPage({ params }: { params: Promise<{ 
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.CRM_VIEW)) {
-        redirect("/office/assignments");
+        redirect("/office/core/assignments");
     }
     const canManage = permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.CRM_MANAGE);
 

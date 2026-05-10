@@ -39,9 +39,9 @@ export function roadmapModuleLinks(moduleKey: string): RoadmapNavLink[] {
         .map((c) => ({ href: c.href, label: c.label, icon: c.icon }));
 }
 
-/** Hub landing: every roadmap module’s first nav entry is the overview at `/office/{key}`. */
+/** Hub landing: every roadmap module's overview at `/office/roadmap/{key}`. */
 export function roadmapHubHref(moduleKey: string): string {
-    return `/office/${moduleKey}`;
+    return `/office/roadmap/${moduleKey}`;
 }
 
 /** Cards for the overview grid (everything except the overview URL itself). */
@@ -54,6 +54,6 @@ export function findRoadmapSection(
     moduleKey: string,
     section: string
 ): RoadmapNavLink | undefined {
-    const href = `/office/${moduleKey}/${section}`;
+    const href = `/office/roadmap/${moduleKey}/${section}`;
     return roadmapModuleLinks(moduleKey).find((l) => l.href === href);
 }

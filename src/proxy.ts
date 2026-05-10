@@ -52,11 +52,11 @@ export default auth((req) => {
     }
 
     if (pathname === "/login") {
-        return NextResponse.redirect(new URL("/office/assignments", req.url));
+        return NextResponse.redirect(new URL("/office/core/assignments", req.url));
     }
 
     if (pathname === "/staff/login") {
-        return NextResponse.redirect(new URL("/office/assignments", req.url));
+        return NextResponse.redirect(new URL("/office/core/assignments", req.url));
     }
 
     return NextResponse.next();

@@ -18,7 +18,7 @@ export default async function CrmLeadsPage({ searchParams }: { searchParams: Pro
     const canManage =
         permissions.includes(PERMISSIONS.ADMIN_BYPASS) || permissions.includes(PERMISSIONS.CRM_MANAGE);
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.CRM_VIEW)) {
-        redirect("/office/assignments");
+        redirect("/office/core/assignments");
     }
 
     const sp = await searchParams;

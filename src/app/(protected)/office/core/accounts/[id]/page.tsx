@@ -131,7 +131,7 @@ export default function AccountDetailPage() {
         <div className="max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex items-center gap-4 mb-6">
-                <Link href="/office/accounts" className="text-muted-foreground hover:text-foreground">
+                <Link href="/office/core/accounts" className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
@@ -241,7 +241,7 @@ export default function AccountDetailPage() {
                                         <div key={rel.id} className="flex items-start justify-between gap-2 py-2 border-b border-border last:border-0">
                                             <div>
                                                 <Link
-                                                    href={`/office/accounts/${linked?.id}`}
+                                                    href={`/office/core/accounts/${linked?.id}`}
                                                     className="text-sm font-medium text-primary hover:underline"
                                                 >
                                                     {linked?.name}

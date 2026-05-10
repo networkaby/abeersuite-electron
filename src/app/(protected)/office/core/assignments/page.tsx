@@ -136,8 +136,8 @@ export default async function AssignmentsPage({
         rawScope === "team" && canViewTeam ? "team" :
             rawScope === "org" && canViewOrg ? "org" : "me";
 
-    if (rawScope === "team" && !canViewTeam) redirect("/office/assignments?scope=me");
-    if (rawScope === "org" && !canViewOrg) redirect("/office/assignments?scope=me");
+    if (rawScope === "team" && !canViewTeam) redirect("/office/core/assignments?scope=me");
+    if (rawScope === "org" && !canViewOrg) redirect("/office/core/assignments?scope=me");
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
     const [raw, groups] = await Promise.all([

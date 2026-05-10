@@ -7,7 +7,7 @@ export function makePermissionLayout(permission: string) {
         const session = await auth();
         const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
         if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(permission)) {
-            redirect("/office/assignments");
+            redirect("/office/core/assignments");
         }
         return <>{children}</>;
     };

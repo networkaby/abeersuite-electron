@@ -4,16 +4,19 @@
 
 ## URLs
 
-### UI pages (all inside `(admin)` route group, root-level paths)
-- `/office/users` — `(admin)/users/{layout,page}.tsx`
-- `/office/role` — Roles UI (the **Enterprise Permission Matrix** lives here)
-- `/office/branches`, `/office/departments`, `/office/posts`
-- `/office/org-chart` — visual hierarchy
-- `/office/pipelines` — pipeline master (moved from `/office/repairing/settings/pipelines` Step 2 2026-05-07)
-- `/office/statuses` — ticket statuses
-- `/office/sub-statuses` — ticket sub-statuses (with sub-status groups)
+### UI pages (all inside `office/admin/` — real URL segments, no route groups)
+- `/office/admin/users` — `office/admin/users/{layout,page}.tsx`
+- `/office/admin/role` — Roles UI (the **Enterprise Permission Matrix** lives here)
+- `/office/admin/branches`, `/office/admin/departments`, `/office/admin/posts`
+- `/office/admin/org-chart` — visual hierarchy
+- `/office/admin/pipelines` — pipeline master (moved from `/office/repairing/settings/pipelines` Step 2 2026-05-07)
+- `/office/admin/statuses` — ticket statuses
+- `/office/admin/sub-statuses` — ticket sub-statuses (with sub-status groups)
+- `/office/admin/year-ending` — financial year close + opening balance setup
 
-Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelines/*` and `/office/settings/pipelines` both 307 to `/office/pipelines`. Same for statuses and sub-statuses.
+> 2026-05-11: route groups `(admin)`, `(core)`, `(message)`, `(roadmap)`, `(social)` were promoted to real URL segments. Sub-paths now carry their module prefix (e.g. `/office/branches` → `/office/admin/branches`, `/office/users` → `/office/admin/users`, profile pages `/office/users/[id]` → `/office/social/users/[id]`).
+
+Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelines/*` and `/office/settings/pipelines` both 307 to `/office/admin/pipelines`. Same for statuses and sub-statuses.
 
 ### API routes
 - `/api/users[/[id]]` — user CRUD.
@@ -50,14 +53,14 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 ## Common workflows (wiring)
 
 1. **Add a new permission ID** — edit `PERMISSIONS` array in `src/new-seed.ts` → run `pnpm prisma db seed` → user opens `/office/role` and ticks the new row for relevant roles.
-2. **Create / edit a pipeline** — `/office/pipelines` → calls `/api/pipelines[/[id]]` → ButtonBar reflects new pipeline immediately for users with appropriate role grants.
-3. **Assign role to user** — `/office/users/[id]` → updates user's `role` field (R1 Admin / R2 Tech / R3 Front Desk / R4 Despatch).
+2. **Create / edit a pipeline** — `/office/admin/pipelines` → calls `/api/pipelines[/[id]]` → ButtonBar reflects new pipeline immediately for users with appropriate role grants.
+3. **Assign role to user** — `/office/admin/users/[id]` → updates user's `role` field (R1 Admin / R2 Tech / R3 Front Desk / R4 Despatch).
 
 ## Recent decisions / gotchas
 
 - **2026-05-07 (Step 0)**: 4 demo users seeded with predictable passwords — see [permission_matrix memory](../../memory/permission_matrix.md) for the table.
 - **2026-05-07 (Step 0)**: 10 new `accountancy:*` permission rows added. Admin (R1) gets them via `PERMISSIONS.map(p => p.id)`. Non-admin roles need explicit grant via the matrix.
-- **2026-05-07 (Step 2)**: Pipelines / statuses / sub-statuses moved from Repair settings to Admin. URLs are `/office/pipelines` etc. (not `/office/admin/pipelines`) because the existing admin convention uses route groups, not URL prefixes.
+- **2026-05-07 (Step 2)**: Pipelines / statuses / sub-statuses moved from Repair settings to Admin. URLs are `/office/admin/pipelines` etc. (not `/office/admin/pipelines`) because the existing admin convention uses route groups, not URL prefixes.
 - **Future scope tier `post`** (between `own` and `department`) is planned but **not yet in code**. `permission-scope.ts` order is currently `own → department → branch → org`.
 
 ## Out of scope / deferred

@@ -36,7 +36,7 @@ See `ARCHITECTURE.md` for full details.
 High-level:
 
 - `src/app/(protected)/layout.tsx` — staff shell (auth); child routes under **`office/`** → browser URLs **`/office/*`** (tickets, customers, tally, inbox, admin, …)
-- `src/app/(protected)/office/*` route groups: `(admin)`, `(core)`, `(customer)`, `(message)`, `(repairing)`, `(social)`, `(tally)`, `(e-commerce)`, `(inventory)`
+- `src/app/(protected)/office/*` is fully flattened — each subdirectory is a real URL segment: `admin/`, `core/`, `customers/`, `crm/`, `message/`, `repairing/`, `social/`, `accountancy/`, `ecommerce/`, `inventory/`, `roadmap/`
 - `src/app/(external)/*` route groups: store homepage, shop (`/shop/*`), customer portal (`/portal/*`) — **not** under `/office`
 - Sign-in URLs: customer **`/login`** (`src/app/(external)/login/page.tsx`), staff **`/staff/login`** (`src/app/staff/login/page.tsx`). Legacy **`/portal/login`** redirects to **`/login`** in `src/proxy.ts`.
 - `src/app/api/*` route handlers (staff API + public shop/portal API)
@@ -130,7 +130,7 @@ pnpm dev
 
 - NextAuth config is in `src/auth.ts`.
 - JWT/session include user context such as roles, permissions, rank, scope, branch, and department.
-- Route-level auth redirect logic is in `src/proxy.ts` (guests hitting **`/office/*`** go to **`/staff/login`**; other protected paths go to **`/login`**; staff home after sign-in: **`/office/assignments`**).
+- Route-level auth redirect logic is in `src/proxy.ts` (guests hitting **`/office/*`** go to **`/staff/login`**; other protected paths go to **`/login`**; staff home after sign-in: **`/office/core/assignments`**).
 - API and server-side permission checks are implemented with `requireAuth` / `requirePermission` helpers.
 
 ## Known Operational Gotchas

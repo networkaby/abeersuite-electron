@@ -76,7 +76,7 @@ function PostCard({ node }: { node: PostNode }) {
                         {node.holders.map(h => (
                             <Link
                                 key={h.user.id}
-                                href={`/office/users/${h.user.id}`}
+                                href={`/office/social/users/${h.user.id}`}
                                 className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
                                 title={h.user.name}
                             >

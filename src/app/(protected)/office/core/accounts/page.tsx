@@ -166,7 +166,7 @@ export default function AccountsPage() {
                                 <TableRow key={a.id} className={!a.isActive ? "opacity-50" : ""}>
                                     <TableCell className="text-muted-foreground">{a.id}</TableCell>
                                     <TableCell>
-                                        <Link href={`/office/accounts/${a.id}`} className="font-medium hover:text-primary hover:underline">
+                                        <Link href={`/office/core/accounts/${a.id}`} className="font-medium hover:text-primary hover:underline">
                                             {a.name}
                                         </Link>
                                         {a.companyReg && <p className="text-xs text-muted-foreground">{a.companyReg}</p>}

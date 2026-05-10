@@ -159,7 +159,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **User model**: added `title String?`, `scope UserScope @default(OWN)`, `departmentId`, `branchId`
 - **Auth/JWT**: `rank`, `scope`, `departmentId`, `branchId`, `title` now carried in JWT and session
 - **API**: `/api/branches` + `/api/departments` (full CRUD); `/api/roles` accepts `rank`; `/api/users` includes dept/branch/scope/title in responses
-- **Settings UI**: `/office/branches` page (CRUD + activate/deactivate toggle); `/office/departments` page (CRUD with branch scope selector)
+- **Settings UI**: `/office/admin/branches` page (CRUD + activate/deactivate toggle); `/office/admin/departments` page (CRUD with branch scope selector)
 - **Roles settings**: rank displayed per role with inline click-to-edit; rank field in new role form
 - **UserForm**: expanded with Title, Department, Branch, Scope, and role rank shown in dropdown
 - **Users list**: added Department, Branch, Scope, Title columns; role shows rank badge
@@ -221,7 +221,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - `/api/accounts` + `/api/accounts/[id]` + `/api/accounts/[id]/relationships` endpoints
 
 ### 2026-04-24 — Navigation overhaul: /assignments as default
-- Default post-login redirect: `/office/assignments` (staff app; was `/assignments` then `/dashboard` historically)
+- Default post-login redirect: `/office/core/assignments` (staff app; was `/assignments` then `/dashboard` historically)
 - Dashboard now accepts pipeline context; tickets page filtered by pipeline
 - `proxy.ts` updated with redirect target
 - Files: `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, `src/app/(protected)/office/(repairing)/tickets/page.tsx`, `src/proxy.ts`, `src/shared/components/Sidebar.tsx`
@@ -405,7 +405,7 @@ _(Nothing actively in progress — org RBAC system complete as of 2026-04-29)_
 | API validation | Zod schemas on all write endpoints | Manual checks / no validation | Consistent error messages; type-safe parsed input |
 | Pipeline system | `Pipeline` model scoping statuses/sub-statuses/tickets | Single flat workflow | Repair shop may have Repair + Sales + B2B pipelines with different workflows |
 | Customer/Company split | Separate `Customer` + `Company` + `CustomerCompany` join | Single `Account` with type flag | Cleaner relations; companies have their own full pages + many-to-many with customers |
-| Default post-login redirect | `/office/assignments` | `/dashboard` (historical) | Staff app lives under `/office/*`; assignments remain the primary work surface |
+| Default post-login redirect | `/office/core/assignments` | `/dashboard` (historical) | Staff app lives under `/office/*`; assignments remain the primary work surface |
 | Concurrent claim | `update where { primaryOwnerId: null }` optimistic lock | Application-level check | Database atomicity; throws RecordNotFound on race condition |
 | Codebase structure | `src/modules/<domain>/` + `src/app/(protected)/office/` route groups | Flat `src/components/` + `src/app/(protected)/` | Domain modules + `/office`-prefixed staff URLs; public shop/portal stay at `/`, `/shop`, `/portal` |
 | UI theme | Neo Brutalism (sharp corners, `border-2`, theme vars only) | Default shadcn rounded style | Design decision for shop context; enforced by removing all `rounded-*` classes |
@@ -587,7 +587,7 @@ src/
 ├── utils/
 │   └── constants.ts                 # Centralised: COLOR_OPTIONS, WARRANTY_SCOPE_OPTIONS, GL types, fmt()
 ├── auth.ts / auth.d.ts
-└── proxy.ts                         # Auth middleware: `/portal/login` → `/login`; staff vs customer sign-in routing; staff post-login → `/office/assignments`
+└── proxy.ts                         # Auth middleware: `/portal/login` → `/login`; staff vs customer sign-in routing; staff post-login → `/office/core/assignments`
 prisma/
 ├── schema/                          # Split Prisma schema (*.prisma by domain)
 │   ├── base.prisma                  # Core CRM: Customer, Company, CustomerCompany (+ GST fields)

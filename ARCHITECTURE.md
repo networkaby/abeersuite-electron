@@ -41,26 +41,28 @@ application clarity and long-term extensibility:
 
 ### Staff app — protected (requires staff session)
 
-Staff UI lives under **`src/app/(protected)/office/`** and is served at URLs prefixed with **`/office`** (parentheses folders are still Next.js *route groups* and do not appear in the URL).
+Staff UI lives under **`src/app/(protected)/office/`** and is served at URLs prefixed with **`/office`**. As of 2026-05-11, every directory under `office/` is a real URL segment (no parenthesised route groups remain): URLs mirror the source layout 1:1.
 
 - **`src/app/(protected)/layout.tsx`** — session gate, customer redirect to `/portal`, shared shell (sidebar, etc.)
 - **`src/app/(protected)/office/`** — real path segment **`/office`** in the browser
 
-Route groups under `office/` (each maps under `/office/...`):
+Subdirectories under `office/`:
 
-- `(admin)` — users, roles, role matrix, branches, departments, org chart, posts, staff ecommerce admin
-- `(core)` — assignments, call log, serial number search, accounts
-- `(customer)` — customers, companies, unified “all” view, CRM leads
-- `(message)` — inbox (`/office/inbox`)
-- `(repairing)` — dashboard, tickets, service centers, repair settings (statuses, pipelines, …)
-- `(social)` — staff profile pages with wall (`/office/users/[id]`)
-- `(tally)` — accounting (`/office/accountancy/...`) — was `(tally)/finance/` → renamed `(tally)/tally/` on 2026-05-07
-- `(e-commerce)` — staff shop admin (`/office/ecommerce/...`)
-- `(inventory)` — inventory masters (`/office/inventory/...`): units, categories, groups, brands, warranty terms, products (barcode/EAN/UPC slots, HSN/GST fields). Stock transactions live in `(tally)/tally/inventory/`.
+- `admin/` — users, role (permission matrix), branches, departments, org-chart, pipelines, posts, statuses, sub-statuses, year-ending
+- `core/` — accounts, assignments, call-log, search-slno
+- `customers/` — customers, companies, unified "all" view
+- `crm/` — CRM leads list + detail
+- `message/inbox/` — staff inbox (chat rooms + threads)
+- `repairing/` — dashboard, tickets, service centers
+- `social/users/[id]/` — staff profile pages with wall (distinct from `admin/users` admin list)
+- `accountancy/` — chart of accounts, vouchers (sales/purchase/estimate/contra/payment/receipt/credit-note/debit-note), invoices, journal-entries, ledgers, opening-balance, reports (cash-book, bank-book, bank-reconciliation, cash-flow, fund-flow, ratio-analysis, statistics, receivables, payables, ledger-outstandings, GST hub)
+- `ecommerce/` — staff shop admin (categories, coupons, orders, products)
+- `inventory/` — inventory masters (units, categories, brands, product-groups, warranty-terms, products) + stock transactions (sales, purchases, sales-orders, purchase-orders, challans, GRNs, physical stock, stock journals, rejections-in, rejections-out, stock-ledger)
+- `roadmap/[moduleKey]/` — placeholder hub for future modules (hrm, delivery, field-service, helpdesk, projects, intelligence, administration, retention, pricing-strategy)
 
-Examples: `/office/tickets`, `/office/assignments`, `/office/customers`, `/office/leads`, `/office/accountancy/invoices`, `/office/accountancy/reports/gst`, `/office/inventory/products`.
+Examples: `/office/repairing/tickets`, `/office/core/assignments`, `/office/customers/all`, `/office/crm/leads`, `/office/accountancy/invoices`, `/office/accountancy/reports/gst`, `/office/inventory/products`, `/office/admin/users`, `/office/social/users/42`.
 
-Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/assignments`** (or `callbackUrl` when present).
+Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/core/assignments`** (or `callbackUrl` when present).
 
 ### External surface — public/customer-facing
 
@@ -112,7 +114,7 @@ enforced via guard helpers from `src/lib` (staff: `requirePermission`; portal: `
 ### Staff auth
 
 - NextAuth config lives in `src/auth.ts` (`Credentials` provider + JWT strategy).
-- Staff credentials provider: `credentials-staff`; staff login page: **`/staff/login`** (`src/app/staff/login/page.tsx`). After successful staff login, navigation lands on **`/office/assignments`** (or `callbackUrl`) — see `src/proxy.ts`.
+- Staff credentials provider: `credentials-staff`; staff login page: **`/staff/login`** (`src/app/staff/login/page.tsx`). After successful staff login, navigation lands on **`/office/core/assignments`** (or `callbackUrl`) — see `src/proxy.ts`.
 - Sessions include role and permission context (rank, scope, branch, department) for server/UI decisions.
 - API endpoints use `requireAuth` for authenticated access and `requirePermission` for fine-grained authorization.
 - Current direction is permission-driven authorization rather than role-name checks.

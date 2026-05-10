@@ -7,7 +7,7 @@ export default async function EcommerceModuleLayout({ children }: { children: Re
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.ECOMMERCE_MANAGE)) {
-        redirect("/office/assignments");
+        redirect("/office/core/assignments");
     }
 
     return (

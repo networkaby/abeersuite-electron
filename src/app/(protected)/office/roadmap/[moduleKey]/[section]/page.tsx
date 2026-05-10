@@ -27,10 +27,10 @@ export default async function RoadmapSectionPage({
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                     <Button asChild variant="default">
-                        <Link href="/office/users">Open Users</Link>
+                        <Link href="/office/admin/users">Open Users</Link>
                     </Button>
                     <Button asChild variant="outline">
-                        <Link href="/office/org-chart">Org chart</Link>
+                        <Link href="/office/admin/org-chart">Org chart</Link>
                     </Button>
                 </CardContent>
             </Card>

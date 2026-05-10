@@ -5,8 +5,8 @@
 ## URLs
 
 ### UI pages
-- `/office/inbox` — chat rooms list + unread counts
-- `/office/inbox/[roomId]` — message thread
+- `/office/message/inbox` — chat rooms list + unread counts
+- `/office/message/inbox/[roomId]` — message thread
 - `/office/me` — staff profile / wall view
 - `/(external)/customer/social` — customer-side social feed (privacy circles)
 
@@ -35,7 +35,7 @@
 
 ## Common workflows (wiring)
 
-1. **Send a DM** — `/office/inbox/[roomId]` → POST `/api/inbox/rooms/[id]/messages` → Supabase Realtime broadcasts → recipient's `NotificationBell` increments and `MessageThread` appends in real time.
+1. **Send a DM** — `/office/message/inbox/[roomId]` → POST `/api/inbox/rooms/[id]/messages` → Supabase Realtime broadcasts → recipient's `NotificationBell` increments and `MessageThread` appends in real time.
 2. **System inbox notification** — server emits via `prisma.notification.create` + Supabase channel publish; bell listener picks it up.
 3. **Customer wall post** — privacy circles control who sees: `inner` (close contacts) or `outer` (broader).
 

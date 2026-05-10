@@ -6,7 +6,7 @@ export default async function CrmModuleLayout({ children }: { children: React.Re
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.CRM_VIEW)) {
-        redirect("/office/assignments");
+        redirect("/office/core/assignments");
     }
 
     return <div className="container max-w-5xl py-6 space-y-6">{children}</div>;

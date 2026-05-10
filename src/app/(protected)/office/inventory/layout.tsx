@@ -19,7 +19,7 @@ export default async function InventoryLayout({ children }: { children: React.Re
     const session = await auth();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !permissions.includes(PERMISSIONS.INVENTORY_MANAGE)) {
-        redirect("/office/assignments");
+        redirect("/office/core/assignments");
     }
 
     return (
