@@ -1,7 +1,7 @@
 // Builds a hydrated AccountGroup tree with attached ledger accounts and rolled-up balances.
 // Used by Trial Balance, Balance Sheet and P&L APIs.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { AccountAggregate } from "./aggregateLedger";
 import type { GroupTypeStr } from "./groupNature";
 

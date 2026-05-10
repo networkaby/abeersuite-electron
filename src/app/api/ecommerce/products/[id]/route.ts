@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/product-admin";
-import { invProductDb } from "@/lib/inventory/types";
+import { invProductDb } from "@/shared/types/inventoryTypes";
 import { z } from "zod";
 
 const patchSchema = z.object({

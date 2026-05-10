@@ -10,7 +10,7 @@ import { Loader2, ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
-import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 type VoucherDetail = {
     id: number;

@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
 import { ScrollArea } from "@/components/ui/scroll-area";
 

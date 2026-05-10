@@ -15,7 +15,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
     DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 interface JournalLine {
     id: number;

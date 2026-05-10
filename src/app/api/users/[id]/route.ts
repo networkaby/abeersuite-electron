@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { requireAuth } from "@/lib/auth-guard";
-import { isStaffEmailDomainAllowed } from "@/lib/auth/staff-email-allowlist";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { z } from "zod";
 
 const PROFILE_SELECT = {

@@ -6,7 +6,7 @@ import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";

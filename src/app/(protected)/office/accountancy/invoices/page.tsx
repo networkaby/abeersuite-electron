@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt, INVOICE_STATUS_COLORS } from "@/utils/constants";
-import { PartyPicker } from "@/modules/shared/components/PartyPicker";
+import { PartyPicker } from "@/shared/components/PartyPicker";
 import { OrderSourceBadge } from "@/modules/ecommerce/components/OrderSourceBadge";
 import type { OrderSource } from "@/generated/prisma/enums";
 

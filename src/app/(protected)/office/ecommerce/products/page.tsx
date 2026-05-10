@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import Image from "next/image";
 import Link from "next/link";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/product-admin";
 import ProductForm from "@/modules/ecommerce/components/ProductForm";
 import { Badge } from "@/components/ui/badge";

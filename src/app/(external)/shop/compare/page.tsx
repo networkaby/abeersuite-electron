@@ -13,9 +13,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
-import { productPath } from "@/lib/shop/product-public";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { productPath } from "@/shared/lib/shop/productPublic";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useShopCompareStore } from "@/store/external/shopCompareStore";
 import { SHOP_COMPARE_MAX } from "@/store/external/shopCompareStore";
 import { GitCompare } from "lucide-react";

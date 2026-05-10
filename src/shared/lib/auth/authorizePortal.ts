@@ -4,7 +4,7 @@ import {
     isLikelyEmail,
     normalizePortalEmail,
     normalizePortalPhone,
-} from "@/lib/auth/portal-identifier";
+} from "@/shared/lib/auth/portalIdentifier";
 
 export type PortalAuthUser = {
     id: string;

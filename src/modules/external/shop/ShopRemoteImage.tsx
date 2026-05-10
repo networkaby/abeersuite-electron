@@ -2,7 +2,7 @@
 
 import Image, { type ImageProps } from "next/image";
 import { startTransition, useLayoutEffect, useMemo, useState } from "react";
-import { SHOP_IMAGE_PLACEHOLDER_PATH } from "@/lib/shop/shop-image-placeholder";
+import { SHOP_IMAGE_PLACEHOLDER_PATH } from "@/shared/lib/shop/shopImagePlaceholder";
 
 export type ShopRemoteImageProps = Omit<ImageProps, "src"> & {
     src: string | null | undefined;

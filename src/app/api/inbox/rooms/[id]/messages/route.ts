@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 import { getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 const messageSchema = z.object({
     body: z.string().trim().min(1, "Message is required"),

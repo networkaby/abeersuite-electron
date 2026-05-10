@@ -11,7 +11,7 @@ import {
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
-import { HERO_SLIDES } from "@/lib/shop/store-content";
+import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
 
 type CategoryPill = { name: string; count: number };
 

@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { invProductUpdateSchema } from "@/lib/inventory/schemas";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { invProductUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";

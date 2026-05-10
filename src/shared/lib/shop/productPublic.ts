@@ -1,4 +1,4 @@
-import type { InvProductFull } from "@/lib/inventory/types";
+import type { InvProductFull } from "@/shared/types/inventoryTypes";
 
 /** Serializable storefront shape (SSR → client, APIs). */
 export type ShopProductPublic = {

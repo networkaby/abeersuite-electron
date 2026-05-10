@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getMockOrders } from "@/lib/portal/mock-adapters";
+import { getMockOrders } from "@/shared/lib/portal/mockAdapters";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { ShoppingBag } from "lucide-react";
 

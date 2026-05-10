@@ -5,7 +5,7 @@ import {
     PORTAL_ACTIVE_ACCOUNT_COOKIE,
     resolvePortalAccountContext,
     type PortalAccountContext,
-} from "@/lib/auth/portal-account-context";
+} from "@/shared/lib/auth/portalAccountContext";
 
 export async function requirePortalCustomer(): Promise<
     | { customerId: number; response: null }

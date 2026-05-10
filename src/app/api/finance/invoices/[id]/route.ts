@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
-import { postInvoiceJe } from "@/lib/post-invoice-je";
+import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 
 const updateSchema = z.object({
     notes: z.string().trim().optional().nullable(),

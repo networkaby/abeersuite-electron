@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
-import { ContactConflictError } from "@/lib/contact-write";
+import { ContactConflictError } from "@/shared/lib/format/contactWrite";
 
 const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),

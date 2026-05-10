@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import UserForm from "@/modules/shared/components/UserForm";
-import UserAvatar from "@/modules/shared/components/UserAvatar";
+import UserForm from "@/shared/components/UserForm";
+import UserAvatar from "@/shared/components/UserAvatar";
 import Link from "next/link";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

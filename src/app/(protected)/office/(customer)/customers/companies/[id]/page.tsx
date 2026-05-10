@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import { ArrowLeft, Building2, User, Smartphone, Eye } from "lucide-react";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
-import { getCompanyContacts } from "@/lib/company-contacts";
+import { getCompanyContacts } from "@/shared/lib/format/companyContacts";
 
 export default async function CompanyDetailPage({
     params,

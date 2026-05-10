@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { invCategoryUpdateSchema } from "@/lib/inventory/schemas";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { invCategoryUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");

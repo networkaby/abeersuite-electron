@@ -13,10 +13,10 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductCard from "./ProductCard";
 import { Search, SlidersHorizontal, LayoutGrid, LayoutList, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/format/utils";
 import { Suspense } from "react";
 
 type SortKey = "featured" | "price-asc" | "price-desc" | "name" | "rating";

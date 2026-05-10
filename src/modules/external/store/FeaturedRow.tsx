@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import ProductCard from "@/modules/external/shop/ProductCard";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 
 export default function FeaturedRow({
     id,

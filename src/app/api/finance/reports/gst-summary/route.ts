@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 
 // GET /api/finance/reports/gst-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&direction=OUTWARD|INWARD

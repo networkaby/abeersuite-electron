@@ -1,6 +1,6 @@
 import { Truck, RotateCcw, Headphones, ShieldCheck } from "lucide-react";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 
 export default function TrustStrip() {
     const items = [

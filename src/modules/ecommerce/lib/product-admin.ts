@@ -1,5 +1,5 @@
-import type { InvProductFull } from "@/lib/inventory/types";
-import { invProductToPublic, type ShopProductPublic } from "@/lib/shop/product-public";
+import type { InvProductFull } from "@/shared/types/inventoryTypes";
+import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 
 /** Admin shape — storefront fields + inventory + stock management. */
 export type ShopProductAdmin = ShopProductPublic & {

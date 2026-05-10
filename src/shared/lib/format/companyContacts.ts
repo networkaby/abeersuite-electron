@@ -2,7 +2,7 @@
 // rows owned by linked-active persons. Used by GET /api/companies/[id] and
 // any list endpoint that needs to display a company's full reachable contacts.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export type ContactRow = {
     id: number;

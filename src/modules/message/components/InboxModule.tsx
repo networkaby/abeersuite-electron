@@ -6,7 +6,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Send, Users2, Monitor, User, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
-import { supabase } from "@/lib/supabase-client";
+import { supabase } from "@/shared/lib/supabase/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 

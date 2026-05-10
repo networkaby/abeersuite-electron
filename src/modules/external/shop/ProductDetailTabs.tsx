@@ -1,11 +1,11 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
-import { demoReviewsForProduct } from "@/lib/shop/demo-reviews";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { demoReviewsForProduct } from "@/shared/lib/shop/demoReviews";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/format/utils";
 
 export default function ProductDetailTabs({ product }: { product: ShopProductPublic }) {
     const reviews = demoReviewsForProduct(product.id);

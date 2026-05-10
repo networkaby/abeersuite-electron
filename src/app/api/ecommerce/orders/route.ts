@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 import { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
-import { getOrdersPipeline } from "@/lib/orders-pipeline";
+import { getOrdersPipeline } from "@/shared/lib/format/ordersPipeline";
 import { z } from "zod";
 
 const ACCOUNT_SELECT = {

@@ -17,7 +17,7 @@
 
 import { useEffect, useRef } from "react";
 import axios from "axios";
-import { supabase } from "@/lib/supabase-client";
+import { supabase } from "@/shared/lib/supabase/supabaseClient";
 
 type Room = { id: string };
 

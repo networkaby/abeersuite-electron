@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { requirePortalCustomer } from "@/lib/portal-auth-guard";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 
 const schema = z.object({
     currentPassword: z.string().min(1, "Current password is required"),

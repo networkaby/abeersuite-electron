@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { invProductToPublic } from "@/lib/shop/product-public";
-import { invProductDb } from "@/lib/inventory/types";
+import { invProductToPublic } from "@/shared/lib/shop/productPublic";
+import { invProductDb } from "@/shared/types/inventoryTypes";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ handle: string }> }) {
     try {

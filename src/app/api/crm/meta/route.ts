@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { getCrmPipeline } from "@/lib/crm-pipeline";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 
 export async function GET() {
     const { response } = await requirePermission("crm:view");

@@ -1,8 +1,8 @@
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { PromoBanner } from "@/lib/shop/store-content";
+import { cn } from "@/shared/lib/format/utils";
+import type { PromoBanner } from "@/shared/lib/shop/storeContent";
 
 const HEIGHT_CLASS: Record<NonNullable<PromoBanner["height"]>, string> = {
     sm: "aspect-[5/3] sm:aspect-[16/9]",

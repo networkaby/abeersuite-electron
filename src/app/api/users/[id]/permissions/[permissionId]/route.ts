@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 
 // ── DELETE /api/users/[id]/permissions/[permissionId] ───────────────────────
 // Removes a user-level override, restoring the role's default for that permission.

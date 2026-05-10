@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 

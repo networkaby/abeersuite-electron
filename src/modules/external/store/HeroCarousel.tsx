@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { HeroSlide } from "@/lib/shop/store-content";
+import { cn } from "@/shared/lib/format/utils";
+import type { HeroSlide } from "@/shared/lib/shop/storeContent";
 
 const ROTATE_MS = 6000;
 

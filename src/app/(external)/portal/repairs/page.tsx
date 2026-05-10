@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { Wrench } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { PORTAL_ACTIVE_ACCOUNT_COOKIE, resolvePortalAccountContext } from "@/lib/auth/portal-account-context";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { PORTAL_ACTIVE_ACCOUNT_COOKIE, resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
 
 export default async function PortalRepairsPage() {
     const session = await auth();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 import { PRIORITY_META } from "@/utils/constants";
 
 export async function GET() {

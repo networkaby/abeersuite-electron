@@ -1,6 +1,6 @@
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { ArrowRight } from "lucide-react";
-import { CATEGORY_IMAGES } from "@/lib/shop/store-content";
+import { CATEGORY_IMAGES } from "@/shared/lib/shop/storeContent";
 
 type CategoryEntry = {
     name: string;

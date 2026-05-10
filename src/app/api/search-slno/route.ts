@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth-guard";
-import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 
 // GET /api/search-slno?q=...
 export async function GET(req: Request) {

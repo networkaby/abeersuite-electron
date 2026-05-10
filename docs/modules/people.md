@@ -51,12 +51,12 @@ The `customers:*` umbrella still gates Person and Company UI even though the mod
 ## Key components / library
 
 - `src/modules/customer/components/` — `CustomerLinkPanel` (links a person to companies), `CompanyLinkPanel` (links a company to persons), `CustomerEmergencyPasswordResetCard`.
-- `src/modules/shared/components/CreatePersonDialog.tsx` — small inline create dialog (POSTs to `/api/people`).
-- `src/modules/shared/components/PartyPicker/` — searches `/api/people?phone=`; can create either a person (POST `/api/people`) or company (POST `/api/companies`).
+- `src/shared/components/CreatePersonDialog.tsx` — small inline create dialog (POSTs to `/api/people`).
+- `src/shared/components/PartyPicker/` — searches `/api/people?phone=`; can create either a person (POST `/api/people`) or company (POST `/api/companies`).
 - `src/modules/accountancy/components/PartyCombobox.tsx` — accountancy-side picker; creates persons under "Sundry Debtors" or "Sundry Creditors" by default.
 - `src/lib/account-ledger.ts` — helpers for account-vs-ledger distinction.
-- `src/lib/contact-write.ts` — shared XOR-validating insert/update/delete helpers, translates Prisma `P2002` into a clean 409.
-- `src/lib/company-contacts.ts` — `getCompanyContacts(companyId)` returns `{ phones, emails, derivedPhones, derivedEmails, primaryContactName }`.
+- `src/shared/lib/format/contactWrite.ts` — shared XOR-validating insert/update/delete helpers, translates Prisma `P2002` into a clean 409.
+- `src/shared/lib/format/companyContacts.ts` — `getCompanyContacts(companyId)` returns `{ phones, emails, derivedPhones, derivedEmails, primaryContactName }`.
 
 ## Common workflows (wiring)
 

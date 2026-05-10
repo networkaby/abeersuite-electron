@@ -1,11 +1,11 @@
 import { auth } from "@/auth";
 import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { getCrmPipeline } from "@/lib/crm-pipeline";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import LeadEditForm, { type LeadEditInitial } from "./LeadEditForm";
 
 export default async function CrmLeadDetailPage({ params }: { params: Promise<{ id: string }> }) {

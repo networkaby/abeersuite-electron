@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
-import ReceiptButtons from "@/modules/shared/components/ReceiptButtons";
+import ReceiptButtons from "@/shared/components/ReceiptButtons";
 
 const fmtINR = (n: number) =>
     `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";

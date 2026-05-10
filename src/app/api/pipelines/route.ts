@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
 
 const pipelineSchema = z.object({

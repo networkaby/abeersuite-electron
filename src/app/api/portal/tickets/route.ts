@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePortalAccountContext } from "@/lib/portal-auth-guard";
+import { requirePortalAccountContext } from "@/shared/lib/auth/portalAuthGuard";
 
 export async function GET() {
     const { context, response } = await requirePortalAccountContext();

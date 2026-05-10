@@ -41,7 +41,7 @@ High-level:
 - Sign-in URLs: customer **`/login`** (`src/app/(external)/login/page.tsx`), staff **`/staff/login`** (`src/app/staff/login/page.tsx`). Legacy **`/portal/login`** redirects to **`/login`** in `src/proxy.ts`.
 - `src/app/api/*` route handlers (staff API + public shop/portal API)
 - `src/modules/*` domain modules (`core`, `customer`, `external`, `inventory`, `message`, `repairing`, `shared`, `tally`)
-- `src/lib/*` infrastructure, auth guards, shop helpers
+- `src/shared/*` cross-cutting components, hooks, lib (api, schemas, constants, prisma, auth, format, shop, portal, supabase), types
 - `src/store/*` Zustand stores (staff: quickTicket, reference; external: cart, wishlist, compare)
 - `prisma/schema/*` split Prisma schema files
 

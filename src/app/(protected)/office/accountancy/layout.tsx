@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 export default async function AccountancyLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();

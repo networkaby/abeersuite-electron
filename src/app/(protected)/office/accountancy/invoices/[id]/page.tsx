@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
-import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 interface InvoiceLine {
     id: number;

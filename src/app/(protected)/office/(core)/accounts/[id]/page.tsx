@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, User, Building2, Link2, Unlink, Plus, Pencil } from "lucide-react";
 import { PRIORITY_META } from "@/utils/constants";
 import Link from "next/link";
-import { formatDateTime } from "@/lib/format-date";
+import { formatDateTime } from "@/shared/lib/format/formatDate";
 import AccountForm from "@/modules/core/components/AccountForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

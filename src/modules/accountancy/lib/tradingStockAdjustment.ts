@@ -11,7 +11,7 @@
 // This helper returns both values so anyone needing "trading stock impact
 // on net profit" can do `closingStock - openingStock`.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { getClosingStockValue } from "./closingStock";
 
 export type TradingStockAdjustment = {

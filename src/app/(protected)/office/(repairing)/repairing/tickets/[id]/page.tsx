@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { formatDate, formatDateTime } from "@/lib/format-date";
+import { formatDate, formatDateTime } from "@/shared/lib/format/formatDate";
 import {
     ArrowLeft, Clock, User, Building2, AlertTriangle,
     Printer, Lock, Eye, NotebookPen, ArrowRightLeft,

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { MODULE_SECTIONS } from "@/utils/constants";
-import OfficeModuleHub from "@/modules/shared/components/OfficeModuleHub";
+import OfficeModuleHub from "@/shared/components/OfficeModuleHub";
 import { isRoadmapModuleKey, roadmapHubCards, roadmapHubHref } from "@/utils/roadmap-modules";
 
 export default async function RoadmapHubPage({ params }: { params: Promise<{ moduleKey: string }> }) {

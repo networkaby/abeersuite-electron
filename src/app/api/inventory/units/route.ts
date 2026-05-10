@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { invUnitCreateSchema } from "@/lib/inventory/schemas";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { invUnitCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { unstable_cache, revalidateTag } from "next/cache";
 
 // Cache key+tag exported so the [id] route's PATCH/DELETE can revalidate.

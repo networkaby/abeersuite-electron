@@ -1,11 +1,11 @@
-import { prisma } from "@/lib/prisma";
-import { getCrmPipeline } from "@/lib/crm-pipeline";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 

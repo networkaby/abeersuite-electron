@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 import { transitionShopOrderStatus, transitionOrderPipelineStatus } from "@/modules/ecommerce/lib/order-status";
 import { ShopOrderStatus } from "@/generated/prisma/enums";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { z } from "zod";
 
 const bodySchema = z.union([

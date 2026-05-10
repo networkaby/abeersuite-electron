@@ -6,7 +6,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Phone, Package, CheckCircle, AlertCircle, UserCheck, Users } from "lucide-react";
-import { timeAgo } from "@/lib/time-ago";
+import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { Button } from "@/components/ui/button";
 import PassRejectModal from "./PassRejectModal";
 

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { transitionShopOrderStatus } from "@/modules/ecommerce/lib/order-status";
 import { ShopOrderStatus } from "@/generated/prisma/enums";

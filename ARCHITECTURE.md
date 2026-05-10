@@ -120,8 +120,8 @@ enforced via guard helpers from `src/lib` (staff: `requirePermission`; portal: `
 ### Portal (customer) auth
 
 - Separate credential table: `CustomerPortalCredential` (linked to `Customer`).
-- Customer sign-in page: **`/login`** (`src/app/(external)/login/page.tsx`); NextAuth default `pages.signIn` in `src/auth.ts` is **`/login`**. Portal credentials use `credentials-portal`; validation in `src/lib/auth/authorize-portal.ts`.
-- Portal routes are guarded by `src/lib/portal-auth-guard.ts` (`requirePortalAuth`).
+- Customer sign-in page: **`/login`** (`src/app/(external)/login/page.tsx`); NextAuth default `pages.signIn` in `src/auth.ts` is **`/login`**. Portal credentials use `credentials-portal`; validation in `src/shared/lib/auth/authorizePortal.ts`.
+- Portal routes are guarded by `src/shared/lib/auth/portalAuthGuard.ts` (`requirePortalAuth`).
 - Portal and staff sessions are completely independent — no crossover.
 
 ## 6) Data Model and Prisma Layout
@@ -158,7 +158,7 @@ This supports modular ownership of schema areas while sharing one datasource.
 - Opening-balance mismatches route into a system "Suspense" ledger so trial balance always balances during legacy-book imports.
 - `CrmLead` represents prospects only; conversion promotes a lead into a `Customer` row. Don't dual-write.
 - Composition GST parties (`Customer.gstRegType === 'COMPOSITION'`) skip GST lines on sales vouchers regardless of the product's `gstRate`.
-- Shop prices are stored as integer paise (₹1 = 100 paise) to avoid floating-point errors; use `src/lib/money-inr.ts` for display formatting.
+- Shop prices are stored as integer paise (₹1 = 100 paise) to avoid floating-point errors; use `src/shared/lib/format/moneyInr.ts` for display formatting.
 - Portal and staff auth are fully separate; `CustomerPortalCredential` is not connected to the NextAuth session.
 - Razorpay payment confirmation relies on the signed webhook, not the client-side payment response.
 - Client-side cart/wishlist/compare state is Zustand + localStorage (no DB until checkout).
@@ -173,32 +173,33 @@ It is split into three sub-modules:
 - `portal/` - `PortalHeader`
 - `ExternalRootShell.tsx` - root layout shell wrapping NextAuth `SessionProvider`
 
-All cross-boundary imports (external importing from staff-side `src/lib`, `src/components`, etc.)
+All cross-boundary imports (external importing from staff-side `src/shared/`, `src/components`, etc.)
 are tracked in `docs/customer-site-shared-imports.md` to make future extraction traceable.
 
-## 9) Lib Structure (`src/lib/`)
+## 9) Shared Structure (`src/shared/`)
 
-- `prisma.ts` - Prisma client singleton
-- `auth-guard.ts` - `requirePermission()` for staff API routes
-- `portal-auth-guard.ts` - `requirePortalAuth()` for portal API routes
-- `permissions.ts` - permission name constants
-- `make-permission-layout.tsx` - factory for permission-gated layout wrappers
-- `permission-scope.ts` - scope-aware permission helpers
-- `ticket-scope.ts` - ticket visibility scoping by branch/department/scope
-- `supabase-client.ts` - Supabase singleton for Realtime
-- `money-inr.ts` - ₹ formatting (paise → display string)
-- `format-date.ts` / `time-ago.ts` - date formatting utilities
-- `auth/` - credential validation helpers:
-  - `authorize-staff.ts` - staff email/password validation
-  - `authorize-portal.ts` - portal bcrypt credential check
-  - `portal-identifier.ts` - phone/email normalisation for portal
-  - `staff-email-allowlist.ts` - allowlist for staff login
-- `shop/` - shop-specific helpers:
-  - `store-content.ts` - homepage content config (hero slides, featured rows, brand list)
-  - `product-public.ts` - public product queries (no auth required)
-  - `demo-catalog-seed.ts` - seed data helper for demo products
-  - `demo-reviews.ts` - static review data for product UI
-  - `shop-image-placeholder.ts` - fallback image helper
+Cross-cutting code lives under `src/shared/`. Single-module code lives under `src/modules/<m>/`.
+
+```
+src/shared/
+├─ components/      cross-cutting UI (Sidebar, Topbar, PartyPicker, etc.)
+├─ hooks/           cross-cutting React hooks (added in Segment 09+)
+├─ types/           cross-cutting type defs (e.g., inventoryTypes.ts)
+└─ lib/
+   ├─ api/          (Segment 04+) validateRequest, parsePagination, prismaUniqueError, handleApiError, generateNextOpaqueId
+   ├─ schemas/      Zod schema fragments (inventorySchemas.ts; commonSchemas.ts in Segment 07)
+   ├─ constants/    (Segment 05+) PERMISSIONS, ACCOUNT_GROUPS
+   ├─ prisma/       prismaClient.ts (Prisma singleton); fragments.ts in Segment 06
+   ├─ auth/         permissions.ts, authGuard.ts, portalAuthGuard.ts, permissionScope.ts, makePermissionLayout.tsx, authorizeStaff.ts, authorizePortal.ts, portalIdentifier.ts, portalAccountContext.ts, staffEmailAllowlist.ts
+   ├─ format/       formatDate.ts, timeAgo.ts, moneyInr.ts, utils.ts (cn helper)
+   ├─ shop/         storeContent.ts (homepage content config), productPublic.ts (public product queries), demoReviews.ts (static UI fixtures), shopImagePlaceholder.ts (fallback image)
+   ├─ portal/       mockAdapters.ts (DTO + mock data for portal pages — replace as APIs land)
+   └─ supabase/     supabaseClient.ts (Supabase singleton for Realtime)
+```
+
+**Boundary rule:** code goes in `src/shared/` only if imported by two or more modules (or from `src/app/`). Single-module code lives in `src/modules/<m>/{lib,hooks,components}/`. Promote later, don't speculate.
+
+**Naming rule:** components are `PascalCase.tsx`; hooks are `useFooBar.ts` (camelCase); utilities/schemas/constants are `camelCase.ts`; directories are `kebab-case`. See [AGENTS.md](AGENTS.md) and [docs/plans/00-segments-overview.md](docs/plans/00-segments-overview.md).
 
 ## 10) Operational Notes
 

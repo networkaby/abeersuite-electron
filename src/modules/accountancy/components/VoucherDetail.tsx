@@ -17,7 +17,7 @@ import {
     DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { fmt } from "@/utils/constants";
-import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
 
 import type { VoucherFormType } from "./VoucherForm";

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/modules/shared/components/ThemeProvider";
+import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 
 const fontSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });

@@ -2,7 +2,7 @@
 // (sales / purchase / estimate voucher, or invoice).  Returns null for
 // stand-alone journal entries.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export type SourceDoc =
     | { kind: "sale";     id: number; reference: string; url: string }

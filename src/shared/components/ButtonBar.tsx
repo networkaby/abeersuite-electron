@@ -12,9 +12,9 @@ import { getActiveModule } from "@/utils/active-module";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
-import CreatePersonDialog from "@/modules/shared/components/CreatePersonDialog";
-import CreateCompanyDialog from "@/modules/shared/components/CreateCompanyDialog";
-import AllCreateActionsDialog from "@/modules/shared/components/AllCreateActionsDialog";
+import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
+import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
+import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type UserType = {

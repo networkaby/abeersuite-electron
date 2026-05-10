@@ -18,15 +18,15 @@ const eslintConfig = defineConfig([
         {
           paths: [
             {
-              name: "@/modules/shared/components/Sidebar",
+              name: "@/shared/components/Sidebar",
               message: "External surface must not import staff Sidebar; keep split-ready boundaries.",
             },
             {
-              name: "@/modules/shared/components/ButtonBar",
+              name: "@/shared/components/ButtonBar",
               message: "External surface must not import staff ButtonBar.",
             },
             {
-              name: "@/modules/shared/components/QuickTicketButton",
+              name: "@/shared/components/QuickTicketButton",
               message: "External surface must not import staff QuickTicketButton.",
             },
           ],

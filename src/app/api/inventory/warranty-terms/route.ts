@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { invWarrantyTermCreateSchema } from "@/lib/inventory/schemas";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { invWarrantyTermCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 
 export async function GET() {
     const { response } = await requirePermission("inventory:manage");

@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
-import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/lib/shop/product-public";
-import { invProductDb } from "@/lib/inventory/types";
-import { HERO_SLIDES, PROMO_BANNERS_TOP, PROMO_BANNERS_BOTTOM } from "@/lib/shop/store-content";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { invProductDb } from "@/shared/types/inventoryTypes";
+import { HERO_SLIDES, PROMO_BANNERS_TOP, PROMO_BANNERS_BOTTOM } from "@/shared/lib/shop/storeContent";
 import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";

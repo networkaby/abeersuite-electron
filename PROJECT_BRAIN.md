@@ -146,9 +146,9 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **Razorpay**: integrated for checkout; Razorpay order created server-side, payment verified via signed webhook
 - **Cloudinary upload**: `POST /api/upload-signature` — generates signed upload params for direct browser-to-Cloudinary uploads (used in product image management)
 - **Zustand external stores** (`src/store/external/`): `shopCartStore.ts` (cart items + quantity), `shopWishlistStore.ts` (wishlisted product IDs), `shopCompareStore.ts` (up to 3 products for side-by-side compare); all client-side, localStorage-persisted
-- **Shop lib** (`src/lib/shop/`): `store-content.ts` (homepage content config — hero slides, featured rows, brand list, trust points), `product-public.ts` (public product queries), `demo-catalog-seed.ts` (seed data helper), `demo-reviews.ts` (static review data for UI), `shop-image-placeholder.ts` (fallback image helper)
-- **Portal auth lib** (`src/lib/auth/`): `authorize-portal.ts` (portal credential check + bcrypt), `portal-identifier.ts` (phone/email normalisation), `staff-email-allowlist.ts`, `authorize-staff.ts`; `src/lib/portal-auth-guard.ts` (portal-side `requirePortalAuth` guard); `src/lib/make-permission-layout.tsx` (factory for permission-gated layout wrappers); `src/lib/permission-scope.ts` + `src/lib/ticket-scope.ts`
-- Files: `src/app/(external)/`, `src/modules/external/`, `prisma/schema/shop.prisma`, `prisma/schema/portal.prisma`, `src/store/external/`, `src/lib/shop/`, `src/lib/auth/`, `src/lib/portal-auth-guard.ts`, `src/app/api/shop/`, `src/app/api/portal/`, `src/app/api/upload-signature/`
+- **Shop lib** (`src/shared/lib/shop/`): `storeContent.ts` (homepage content config — hero slides, featured rows, brand list, trust points), `productPublic.ts` (public product queries), `demoReviews.ts` (static review data for UI), `shopImagePlaceholder.ts` (fallback image helper). Demo product catalog seed lives at `prisma/seeds/data/demoCatalogSeed.ts` (consumed by `prisma/seeds/dummy-shop.ts`).
+- **Portal auth lib** (`src/shared/lib/auth/`): `authorizePortal.ts` (portal credential check + bcrypt), `portalIdentifier.ts` (phone/email normalisation), `staffEmailAllowlist.ts`, `authorizeStaff.ts`, `portalAuthGuard.ts` (portal-side `requirePortalAuth` guard), `makePermissionLayout.tsx` (factory for permission-gated layout wrappers), `permissionScope.ts`. Ticket scoping: `src/shared/lib/format/ticketScope.ts` (moves to `src/modules/repairing/lib/` in Segment 08).
+- Files: `src/app/(external)/`, `src/modules/external/`, `prisma/schema/shop.prisma`, `prisma/schema/portal.prisma`, `src/store/external/`, `src/shared/lib/shop/`, `src/shared/lib/auth/`, `src/shared/lib/portal/`, `src/app/api/shop/`, `src/app/api/portal/`, `src/app/api/upload-signature/`
 
 ### 2026-04-29 — Enterprise RBAC — Rank, Scope, Department, Branch
 
@@ -165,12 +165,12 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **Users list**: added Department, Branch, Scope, Title columns; role shows rank badge
 - **Sidebar**: Branches + Departments added under Settings nav (require `settings:manage` permission)
 - **Seed**: `prisma/seed-org.ts` + SQL seed via `prisma db execute`
-- Files: `prisma/schema/org.prisma`, `prisma/schema/enums.prisma`, `prisma/schema/rbac.prisma`, `prisma/schema/users.prisma`, `src/auth.ts`, `src/auth.d.ts`, `src/lib/permissions.ts`, `src/app/api/branches/`, `src/app/api/departments/`, `src/app/api/roles/`, `src/app/api/users/`, `src/app/(protected)/office/(admin)/branches/page.tsx`, `src/app/(protected)/office/(admin)/departments/page.tsx`, `src/modules/shared/components/UserForm.tsx`, `src/app/(protected)/office/(admin)/users/page.tsx`, `src/utils/constants.ts`
+- Files: `prisma/schema/org.prisma`, `prisma/schema/enums.prisma`, `prisma/schema/rbac.prisma`, `prisma/schema/users.prisma`, `src/auth.ts`, `src/auth.d.ts`, `src/shared/lib/auth/permissions.ts`, `src/app/api/branches/`, `src/app/api/departments/`, `src/app/api/roles/`, `src/app/api/users/`, `src/app/(protected)/office/(admin)/branches/page.tsx`, `src/app/(protected)/office/(admin)/departments/page.tsx`, `src/shared/components/UserForm.tsx`, `src/app/(protected)/office/(admin)/users/page.tsx`, `src/utils/constants.ts`
 
 ### 2026-04-28 — Message creation optimisation + Sentry setup
 - **Messaging**: Replaced `createRoomMessage` helper with direct `prisma.chatMessage.create`; concurrent `updatedAt` write to `ChatRoom` in same operation for consistency; removed redundant `ensureCoreRooms` call on `getAccessibleRoom`
 - **Sentry**: `@sentry/nextjs` version pinned to `10`; `next.config.ts` updated with org/project details, Vercel Cron Monitor auto-instrumentation, improved source-map handling; `sentry.server.config.ts` + `sentry.edge.config.ts` created; `.env.sentry-build-plugin` added to `.gitignore`
-- Files: `src/app/api/inbox/rooms/[id]/messages/route.ts`, `src/lib/prisma.ts`, `src/modules/message/lib/inbox.ts`, `next.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`
+- Files: `src/app/api/inbox/rooms/[id]/messages/route.ts`, `src/shared/lib/prisma/prismaClient.ts`, `src/modules/message/lib/inbox.ts`, `next.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`
 
 ### 2026-04-27 — Domain module restructure + route groups
 - **`src/modules/`** introduced: `core`, `customer`, `message`, `repairing`, `tally`, `shared` — domain-specific components and lib files moved into respective modules
@@ -190,7 +190,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - Files: virtually all page and component files, `src/components/ui/*`
 
 ### 2026-04-27 — Supabase Realtime + Slack layout + build fix
-- **Supabase Realtime**: `@supabase/supabase-js` installed via pnpm; `src/lib/supabase-client.ts` singleton; `InboxModule` subscribes to `ChatMessage INSERT` per active room — messages appear instantly across all users with no polling
+- **Supabase Realtime**: `@supabase/supabase-js` installed via pnpm; `src/shared/lib/supabase/supabaseClient.ts` singleton; `InboxModule` subscribes to `ChatMessage INSERT` per active room — messages appear instantly across all users with no polling
 - **Optimistic send**: message appears immediately with "sending…" label; Realtime replaces it with the confirmed DB record on success, rolls back on failure
 - **Slack-style layout**: full-width messages, avatar + bold name + timestamp per group, consecutive messages from same sender grouped, own messages have `bg-primary/5` row tint
 - **Notifications**: Web Notifications API (browser permission requested on mount) + Web Audio API "ding" sound for incoming messages from other users
@@ -198,13 +198,13 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - **Timestamp fix**: Supabase Realtime omits UTC 'Z' suffix — normalised before `new Date()` parse
 - **Personal Inbox removed**: `PERSONAL_INBOX` rooms no longer created; filtered from all queries
 - **Build fix**: `QuickTicketButton.tsx` line 669 — `technician.id` wrapped in `String()` for `SelectItem.value`
-- Files: `src/modules/message/components/InboxModule.tsx`, `src/lib/supabase-client.ts`, `src/modules/message/lib/inbox.ts`, `src/app/(protected)/office/(message)/inbox/page.tsx`, `src/modules/shared/components/QuickTicketButton.tsx`, `.env`
+- Files: `src/modules/message/components/InboxModule.tsx`, `src/shared/lib/supabase/supabaseClient.ts`, `src/modules/message/lib/inbox.ts`, `src/app/(protected)/office/(message)/inbox/page.tsx`, `src/shared/components/QuickTicketButton.tsx`, `.env`
 
 ### 2026-04-26 — Inbox UI overhaul + expandable sidebar nav
 - **InboxModule rewrite**: rooms now grouped by type (System / Personal / Groups / Others) with collapsible sections; proper chat bubble layout (own messages right, others left, system centered); auto-scroll to bottom; Enter to send / Shift+Enter for newline; relative timestamps ("2m ago")
 - **Sidebar Inbox section**: Inbox moved from flat WORKSPACE_NAV link to an expandable accordion — shows System / Personal / Groups sub-sections each with live unread counts fetched from `/api/inbox/rooms`; total unread badge on the Inbox header
 - **Inbox page**: now passes `currentUserId` (from session) to InboxModule so own messages are aligned right; wrapped in Suspense for `useSearchParams` compatibility
-- Files: `src/modules/message/components/InboxModule.tsx`, `src/modules/shared/components/Sidebar.tsx`, `src/utils/constants.ts`, `src/app/(protected)/office/(message)/inbox/page.tsx`
+- Files: `src/modules/message/components/InboxModule.tsx`, `src/shared/components/Sidebar.tsx`, `src/utils/constants.ts`, `src/app/(protected)/office/(message)/inbox/page.tsx`
 
 ### 2026-04-24 — Customer + Company model split (Milestone 11 finale)
 - **Separated Account → Customer + Company**: `Customer` model (individuals) + `Company` model (businesses) + `CustomerCompany` join table for many-to-many links; `Account` model retained as legacy bridge
@@ -224,12 +224,12 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - Default post-login redirect: `/office/assignments` (staff app; was `/assignments` then `/dashboard` historically)
 - Dashboard now accepts pipeline context; tickets page filtered by pipeline
 - `proxy.ts` updated with redirect target
-- Files: `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, `src/app/(protected)/office/(repairing)/tickets/page.tsx`, `src/proxy.ts`, `src/modules/shared/components/Sidebar.tsx`
+- Files: `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, `src/app/(protected)/office/(repairing)/tickets/page.tsx`, `src/proxy.ts`, `src/shared/components/Sidebar.tsx`
 
 ### 2026-04-24 — UniversalCreateMenu + layout
 - `UniversalCreateMenu.tsx` — floating "+" menu in `ProtectedLayout` for quick access to create actions
 - Sidebar dynamically fetches and displays active pipelines (server-side); pipeline switching navigation
-- Files: `src/modules/shared/components/UniversalCreateMenu.tsx`, `src/app/(protected)/layout.tsx`, `src/modules/shared/components/Sidebar.tsx`
+- Files: `src/shared/components/UniversalCreateMenu.tsx`, `src/app/(protected)/layout.tsx`, `src/shared/components/Sidebar.tsx`
 
 ### 2026-04-24 — Pipeline System (Milestone 11 core)
 - `Pipeline` model: `id`, `name`, `label`, `description`, `color`, `isDefault`, `isActive`, `order`
@@ -243,7 +243,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 ### 2026-04-23 — Auth type cleanup + role selection fixes
 - `auth.d.ts` import changed to type-only; role selection logic in `RolesSettingsPage` and `UserForm` refactored
 - `UserForm` enforces at least one role selected; uses role IDs from DB properly
-- Files: `src/auth.d.ts`, `src/modules/shared/components/UserForm.tsx`, `src/app/(protected)/office/(admin)/roles/page.tsx`
+- Files: `src/auth.d.ts`, `src/shared/components/UserForm.tsx`, `src/app/(protected)/office/(admin)/roles/page.tsx`
 
 ### 2026-04-23 — Zod validation across all API endpoints (Milestone 10)
 - Zod schemas added to: roles, sub-statuses, ticket-statuses, users, tasks (assign, notes, participants, sub-status, warranty, permissions)
@@ -256,7 +256,7 @@ Replace paper/spreadsheet job tracking at the repair shop with a real internal t
 - User creation assigns default role from DB (not hardcoded "R2")
 - `ProtectedLayout` passes structured `{ id, roles, permissions }` user object downstream
 - Warranty notifications updated to include all front-desk users regardless of role assignment method
-- Files: `src/app/(protected)/layout.tsx`, `src/modules/shared/components/Sidebar.tsx`, `src/app/(protected)/office/(core)/assignments/page.tsx`, `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, multiple API routes
+- Files: `src/app/(protected)/layout.tsx`, `src/shared/components/Sidebar.tsx`, `src/app/(protected)/office/(core)/assignments/page.tsx`, `src/app/(protected)/office/(repairing)/dashboard/page.tsx`, multiple API routes
 
 ### 2026-04-21 — Tasks feature removed
 - Entire Tasks system deleted (was Milestone 6; historical paths): `src/app/(protected)/tasks/`, `src/app/api/tasks/`, `src/components/tasks/` — removed before `/office` migration

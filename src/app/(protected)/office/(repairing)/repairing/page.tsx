@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
 import Link from "next/link";
 import { Phone, Package, AlertCircle, CheckCircle } from "lucide-react";
-import { timeAgo } from "@/lib/time-ago";
+import { timeAgo } from "@/shared/lib/format/timeAgo";
 import TechnicianDashboard from "@/modules/repairing/components/dashboard/TechnicianDashboard";
 import AdminDashboard from "@/modules/repairing/components/dashboard/AdminDashboard";
 

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { invProductToPublic as shopProductToPublic, productPath } from "@/lib/shop/product-public";
-import { invProductDb } from "@/lib/inventory/types";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { invProductToPublic as shopProductToPublic, productPath } from "@/shared/lib/shop/productPublic";
+import { invProductDb } from "@/shared/types/inventoryTypes";
 import ProductGallery from "@/modules/external/shop/ProductGallery";
 import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
 import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";

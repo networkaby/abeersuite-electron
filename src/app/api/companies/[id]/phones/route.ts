@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { prisma } from "@/lib/prisma";
-import { ContactConflictError, contactValueSchema, createPhone } from "@/lib/contact-write";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { ContactConflictError, contactValueSchema, createPhone } from "@/shared/lib/format/contactWrite";
 
 // POST /api/companies/[id]/phones — add a phone to a company
 export async function POST(

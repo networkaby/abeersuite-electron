@@ -3,7 +3,7 @@
 // and translates Prisma P2002 unique-violation errors into a clean 409 payload.
 
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export type ContactOwner =
     | { personId: number; companyId?: never }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth-guard";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account

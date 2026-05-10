@@ -26,7 +26,7 @@ Read the module doc relevant to the work you're doing **before** grepping. Each 
 - `<Component>` (file: `src/modules/<module>/...`) — what it renders / when used
 
 ## Library / helpers
-- `<helper>` (file: `src/lib/...`) — short purpose
+- `<helper>` (file: `src/modules/<module>/lib/<helper>.ts` for module-scoped, or `src/shared/lib/<bucket>/<helper>.ts` for cross-cutting) — short purpose
 
 ## Common workflows (wiring)
 1. <e.g. "Creating an invoice from a ticket"> — clickable trail of files involved.

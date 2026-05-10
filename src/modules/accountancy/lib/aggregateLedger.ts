@@ -1,7 +1,7 @@
 // Single-pass aggregation of POSTED JournalLines per account.
 // Returns opening / debits / credits / closing — given a date range (or just an asOf for closing-only).
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { balanceDelta } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 

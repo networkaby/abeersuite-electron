@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 import { auth } from "@/auth";
 import { z } from "zod";
-import { resolvedUserFromSession } from "@/lib/permissions";
-import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
+import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),

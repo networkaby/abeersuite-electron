@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 import { listAccessibleRooms } from "@/modules/message/lib/inbox";
 
 export async function GET() {

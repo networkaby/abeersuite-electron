@@ -2,7 +2,7 @@
 
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/format/utils";
 
 export default function ProductGallery({ urls, alt }: { urls: string[]; alt: string }) {
     const safe = urls.filter(Boolean);

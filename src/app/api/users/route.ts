@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { requireAuth, requirePermission } from "@/lib/auth-guard";
-import { isStaffEmailDomainAllowed } from "@/lib/auth/staff-email-allowlist";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/authGuard";
+import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { z } from "zod";
 
 const createUserSchema = z.object({

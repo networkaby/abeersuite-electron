@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/auth-guard";
-import { normalizePortalEmail, normalizePortalPhone } from "@/lib/auth/portal-identifier";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 
 const schema = z.object({
     tempPassword: z.string().min(6, "Temporary password must be at least 6 characters"),

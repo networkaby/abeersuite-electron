@@ -73,7 +73,7 @@ async function main() {
     await prisma.personCompany.create({ data: { personId: p1.id, companyId: company.id, role: "Director" } });
     console.log(`  ✓ Created company #${company.id}, linked person #${p1.id}`);
 
-    const { getCompanyContacts } = await import("../src/lib/company-contacts");
+    const { getCompanyContacts } = await import("../src/shared/lib/format/companyContacts");
     const contacts = await getCompanyContacts(company.id);
     if (contacts.phones.length !== 1) throw new Error("FAIL: company own phones");
     if (contacts.derivedPhones.length !== 2) throw new Error(`FAIL: derived phones (got ${contacts.derivedPhones.length}, expected 2)`);

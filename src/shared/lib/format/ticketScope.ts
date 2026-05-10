@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { ResolvedUser } from "@/lib/auth-guard";
+import type { ResolvedUser } from "@/shared/lib/auth/authGuard";
 
 type ScopeLevel = "own" | "department" | "branch" | "org";
 

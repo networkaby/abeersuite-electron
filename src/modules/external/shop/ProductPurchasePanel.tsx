@@ -5,15 +5,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
-import { demoRating } from "@/lib/shop/product-public";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { demoRating } from "@/shared/lib/shop/productPublic";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { useShopCompareStore, SHOP_COMPARE_MAX } from "@/store/external/shopCompareStore";
 import { toast } from "sonner";
 import { Heart, GitCompare, Minus, Plus, Share2, Star } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/format/utils";
 
 export default function ProductPurchasePanel({ product }: { product: ShopProductPublic }) {
     const add = useShopCartStore((s) => s.add);

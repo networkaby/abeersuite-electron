@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 
 const ALLOWED_FOLDERS = ["avatars", "shop/products"] as const;
 

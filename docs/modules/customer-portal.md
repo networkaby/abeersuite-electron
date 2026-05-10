@@ -55,7 +55,7 @@ Customers don't have permission keys — gates are hard-coded by the `kind` disc
 
 ## Recent decisions / gotchas
 
-- **Two NextAuth providers, one session shape** — staff vs customer is by `kind` field, not separate auth domains. `requireAuth()` in `src/lib/auth-guard.ts` rejects customer sessions to keep staff endpoints safe.
+- **Two NextAuth providers, one session shape** — staff vs customer is by `kind` field, not separate auth domains. `requireAuth()` in `src/shared/lib/auth/authGuard.ts` rejects customer sessions to keep staff endpoints safe.
 - **Cart in localStorage** — survives reload. On sign-in, the merge logic POSTs the cart to the server.
 - **Razorpay client config** — public key in env, secret server-side only.
 

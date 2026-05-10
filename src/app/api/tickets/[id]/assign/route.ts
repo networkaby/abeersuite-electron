@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission, isAdmin } from "@/lib/auth-guard";
+import { requirePermission, isAdmin } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
-import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
+import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 
 const assignSchema = z.object({
     action: z.enum(["claim", "pass", "reject"]),

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Star, Flame, ArrowRight } from "lucide-react";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
-import { demoRating, productPath, type ShopProductPublic } from "@/lib/shop/product-public";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { demoRating, productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 
 export default function DealOfTheDay({ product }: { product: ShopProductPublic | null }) {
     if (!product) return null;

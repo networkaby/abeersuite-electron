@@ -1,10 +1,10 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
-import { resolvePortalAccountContext } from "@/lib/auth/portal-account-context";
-import { invProductDb } from "@/lib/inventory/types";
+import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
+import { invProductDb } from "@/shared/types/inventoryTypes";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),

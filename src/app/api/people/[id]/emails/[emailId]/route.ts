@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
-import { prisma } from "@/lib/prisma";
-import { ContactConflictError, contactValueSchema, updateEmail } from "@/lib/contact-write";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { ContactConflictError, contactValueSchema, updateEmail } from "@/shared/lib/format/contactWrite";
 
 // PATCH /api/people/[id]/emails/[emailId]
 export async function PATCH(

@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
-import { invProductToPublic as shopProductToPublic } from "@/lib/shop/product-public";
-import { invProductDb } from "@/lib/inventory/types";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { invProductToPublic as shopProductToPublic } from "@/shared/lib/shop/productPublic";
+import { invProductDb } from "@/shared/types/inventoryTypes";
 import ShopPageBanner from "@/modules/external/shop/ShopPageBanner";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import BrandStrip from "@/modules/external/store/BrandStrip";

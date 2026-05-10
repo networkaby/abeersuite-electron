@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
-import { normalizePortalEmail, normalizePortalPhone } from "@/lib/auth/portal-identifier";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 
 type ReconcileResult = {
     scanned: number;

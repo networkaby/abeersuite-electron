@@ -41,10 +41,10 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 
 ## Key components / library
 
-- `src/lib/auth-guard.ts` — `requireAuth`, `requirePermission`, `requireRole`, `hasPermission`.
-- `src/lib/permission-scope.ts` — `hasPermissionWithScope` (handles `area:op:scope` lookup with widening).
-- `src/lib/make-permission-layout.tsx` — `makePermissionLayout(permission)` — used by every `(admin)/<page>/layout.tsx`.
-- `src/lib/permissions.ts` — UI helpers.
+- `src/shared/lib/auth/authGuard.ts` — `requireAuth`, `requirePermission`, `requireRole`, `hasPermission`.
+- `src/shared/lib/auth/permissionScope.ts` — `hasPermissionWithScope` (handles `area:op:scope` lookup with widening).
+- `src/shared/lib/auth/makePermissionLayout.tsx` — `makePermissionLayout(permission)` — used by every `(admin)/<page>/layout.tsx`.
+- `src/shared/lib/auth/permissions.ts` — UI helpers.
 - `src/new-seed.ts` — single source of truth for permission IDs + role grants. Reseed (`pnpm prisma db seed`) is required to add new permissions.
 
 ## Common workflows (wiring)

@@ -1,8 +1,8 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma } from "@/lib/prisma";
-import { authorizeStaffCredentials } from "@/lib/auth/authorize-staff";
-import { authorizePortalCredentials } from "@/lib/auth/authorize-portal";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
+import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,

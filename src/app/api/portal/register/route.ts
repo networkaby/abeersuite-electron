@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -6,7 +6,7 @@ import {
     isLikelyEmail,
     normalizePortalEmail,
     normalizePortalPhone,
-} from "@/lib/auth/portal-identifier";
+} from "@/shared/lib/auth/portalIdentifier";
 
 const bodySchema = z.object({
     mode: z.enum(["mobile", "email"]),

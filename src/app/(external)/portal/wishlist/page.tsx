@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";

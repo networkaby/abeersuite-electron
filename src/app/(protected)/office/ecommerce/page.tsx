@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import SalesDashboard from "@/modules/ecommerce/components/SalesDashboard";
 
 export default async function EcommerceDashboardPage() {

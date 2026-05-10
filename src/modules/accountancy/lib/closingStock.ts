@@ -2,7 +2,7 @@
 // Tally-style "Closing Stock" line for the Balance Sheet and P&L Trading
 // account. Per-product math lives in `src/modules/inventory/lib/stockValue.ts`.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { productClosingValue } from "@/modules/inventory/lib/stockValue";
 
 export type ClosingStockResult = {

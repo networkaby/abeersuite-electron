@@ -1,12 +1,12 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
-import { resolvedUserFromSession } from "@/lib/permissions";
-import { hasPermissionWithScope } from "@/lib/permission-scope";
+import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),

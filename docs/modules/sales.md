@@ -36,7 +36,7 @@
 
 - `src/modules/external/shop/` — customer-facing storefront components (`ProductDetailTabs`, etc.).
 - `src/modules/sales/components/` — staff-side order management UI.
-- `src/lib/shop/demo-catalog-seed.ts` — seed data for demo products.
+- `prisma/seeds/data/demoCatalogSeed.ts` — seed data for demo products.
 - `src/store/shopCartStore.ts`, `wishlistStore.ts`, `compareStore.ts` — Zustand client stores for cart / wishlist / compare with localStorage persistence.
 
 ## Common workflows (wiring)

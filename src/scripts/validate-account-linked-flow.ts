@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 async function main() {
     const [missingAccountLink, missingPersonForAccountLinked, missingPersonalAccounts] = await Promise.all([

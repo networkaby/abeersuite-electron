@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getMockSocial } from "@/lib/portal/mock-adapters";
+import { getMockSocial } from "@/shared/lib/portal/mockAdapters";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { usePortalSocialStore } from "@/store/external/portalSocialStore";
 import { Globe2, Users } from "lucide-react";

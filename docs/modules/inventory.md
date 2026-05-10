@@ -35,8 +35,8 @@
 - `src/modules/inventory/components/InvProductFormFields.tsx` — **tabbed product form**: Basics / Pricing / Stock control / Opening / Online listing. Pricing + Opening tabs are wired (cost / price / mrp + opening qty / rate / date). Online listing remains a placeholder.
 - `src/modules/inventory/components/InvProductPicker.tsx`, `InvProductCombobox.tsx` — autocomplete pickers used in voucher / journal-voucher forms.
 - `src/modules/inventory/components/InvVoucherForm.tsx`, `InvVoucherDetail.tsx` — generic voucher form/detail.
-- `src/lib/inventory/types.ts` — `invProductDb(prisma)` typed accessor + shared types.
-- `src/lib/inventory/schemas.ts` — Zod input schemas.
+- `src/shared/types/inventoryTypes.ts` — `invProductDb(prisma)` typed accessor + shared types.
+- `src/shared/lib/schemas/inventorySchemas.ts` — Zod input schemas.
 
 ## Reusable helpers — DO NOT duplicate ⚠️
 

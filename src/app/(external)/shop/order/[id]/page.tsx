@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Button } from "@/components/ui/button";
 
 export default async function ShopOrderConfirmationPage({

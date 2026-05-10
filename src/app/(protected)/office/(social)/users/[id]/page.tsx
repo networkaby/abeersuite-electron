@@ -21,10 +21,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import type { OrgNode } from "@/app/api/org-chart/route";
 import OrgTree from "@/modules/admin/components/OrgTree";
-import UserAvatar from "@/modules/shared/components/UserAvatar";
+import UserAvatar from "@/shared/components/UserAvatar";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

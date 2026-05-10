@@ -6,8 +6,8 @@ import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
-import { DEMO_SHOP_CATALOG } from "../../src/lib/shop/demo-catalog-seed";
-import { invProductDb } from "../../src/lib/inventory/types";
+import { DEMO_SHOP_CATALOG } from "../../src/shared/lib/shop/demoCatalogSeed";
+import { invProductDb } from "../../src/shared/types/inventoryTypes";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });

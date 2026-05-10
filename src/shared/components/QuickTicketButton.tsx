@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuickTicketStore, type Step, type BasicIdentity } from "@/store/quickTicketStore";
 import { useReferenceStore } from "@/store/referenceStore";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/format/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export const PORTAL_ACTIVE_ACCOUNT_COOKIE = "portal_active_account_id";
 

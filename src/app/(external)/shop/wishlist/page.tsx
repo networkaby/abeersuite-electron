@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { Heart } from "lucide-react";

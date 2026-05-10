@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ShopOrderStatus } from "@/generated/prisma/enums";
 import { balanceDelta, nextRef } from "@/modules/accountancy/lib/balance";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status-transitions";
-import { CONFIRMED_STATUS_LABEL } from "@/lib/orders-pipeline";
+import { CONFIRMED_STATUS_LABEL } from "@/shared/lib/format/ordersPipeline";
 
 export { canTransition, ORDER_STATUS_TRANSITIONS };
 

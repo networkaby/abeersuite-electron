@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import { ArrowLeft, User, Building2, Smartphone, Eye } from "lucide-react";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";

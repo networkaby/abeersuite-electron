@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { invProductDb } from "@/lib/inventory/types";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { invProductDb } from "@/shared/types/inventoryTypes";
 
 export async function GET() {
     const { response } = await requirePermission("ecommerce:manage");

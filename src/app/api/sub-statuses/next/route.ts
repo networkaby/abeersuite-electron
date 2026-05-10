@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, isAdmin } from "@/lib/auth-guard";
+import { requireAuth, isAdmin } from "@/shared/lib/auth/authGuard";
 
 // GET /api/sub-statuses/next?statusId=S3&fromSubStatusId=SS10
 // GET /api/sub-statuses/next?statusId=S3&entryOnly=true  (no current sub-status)

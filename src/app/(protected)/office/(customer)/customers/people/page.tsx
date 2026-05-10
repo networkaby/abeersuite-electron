@@ -8,7 +8,7 @@ import {
     Smartphone, ExternalLink, Pencil, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDate } from "@/lib/format-date";
+import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

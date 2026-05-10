@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import axios from "axios";
 import Link from "next/link";
-import { formatDateTime } from "@/lib/format-date";
+import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
 
 interface Notification {

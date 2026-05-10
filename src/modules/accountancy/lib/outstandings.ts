@@ -3,7 +3,7 @@
 // or "Sundry Creditors", collects open Invoice and Voucher rows, subtracts
 // allocations, and buckets the outstanding by age.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
 

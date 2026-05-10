@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
-import { postInvoiceJe } from "@/lib/post-invoice-je";
+import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 
 const lineSchema = z.object({
     description: z.string().trim().min(1),

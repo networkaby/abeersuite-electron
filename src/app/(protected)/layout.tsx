@@ -1,10 +1,10 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import Sidebar from "@/modules/shared/components/Sidebar";
+import Sidebar from "@/shared/components/Sidebar";
 import { Toaster } from "sonner";
-import SessionWrapper from "@/modules/shared/components/SessionWrapper";
-import QuickTicketButton from "@/modules/shared/components/QuickTicketButton";
-import ButtonBar from "@/modules/shared/components/ButtonBar";
+import SessionWrapper from "@/shared/components/SessionWrapper";
+import QuickTicketButton from "@/shared/components/QuickTicketButton";
+import ButtonBar from "@/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
 

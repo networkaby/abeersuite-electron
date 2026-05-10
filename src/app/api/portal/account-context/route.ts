@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 import {
     PORTAL_ACTIVE_ACCOUNT_COOKIE,
     resolvePortalAccountContext,
-} from "@/lib/auth/portal-account-context";
-import { requirePortalCustomer } from "@/lib/portal-auth-guard";
+} from "@/shared/lib/auth/portalAccountContext";
+import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 
 const switchSchema = z.object({
     accountId: z.coerce.number().int().positive(),

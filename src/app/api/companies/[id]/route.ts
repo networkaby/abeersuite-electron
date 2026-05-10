@@ -1,8 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireAuth } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
-import { getCompanyContacts } from "@/lib/company-contacts";
+import { getCompanyContacts } from "@/shared/lib/format/companyContacts";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),

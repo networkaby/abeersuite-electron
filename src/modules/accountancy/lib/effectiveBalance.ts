@@ -10,7 +10,7 @@
 // These helpers fold in opening using the same `balanceDelta()` formula the
 // Balance Sheet uses, so drilldowns reconcile with reports.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { balanceDelta, toNumber } from "./balance";
 
 export type AccountForBalance = {

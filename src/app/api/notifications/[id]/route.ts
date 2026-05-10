@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { markRoomRead } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 

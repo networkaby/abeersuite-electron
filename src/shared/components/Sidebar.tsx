@@ -4,7 +4,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useTheme } from "@/modules/shared/components/ThemeProvider";
+import { useTheme } from "@/shared/components/ThemeProvider";
 import axios from "axios";
 import {
     Settings, ChevronDown, LogOut,
@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/modules/message/components/NotificationBell";
-import UserAvatar from "@/modules/shared/components/UserAvatar";
+import UserAvatar from "@/shared/components/UserAvatar";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import {
     WORKSPACE_NAV,

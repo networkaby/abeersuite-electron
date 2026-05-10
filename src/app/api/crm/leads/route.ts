@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth-guard";
-import { assertCrmStatus, getCrmPipeline } from "@/lib/crm-pipeline";
+import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { assertCrmStatus, getCrmPipeline } from "@/shared/lib/format/crmPipeline";
 import { z } from "zod";
 
 const leadWriteBase = z.object({

@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/lib/auth-guard";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/authGuard";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { buildTicketReadScopeWhere } from "@/lib/ticket-scope";
+import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),

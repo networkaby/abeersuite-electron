@@ -1,5 +1,5 @@
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
-import { BRAND_LOGOS } from "@/lib/shop/store-content";
+import { BRAND_LOGOS } from "@/shared/lib/shop/storeContent";
 
 export default function BrandStrip() {
     if (BRAND_LOGOS.length === 0) return null;

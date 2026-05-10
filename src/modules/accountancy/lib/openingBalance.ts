@@ -4,7 +4,7 @@
 // suspense account just needs its own openingBalance kept current and reports
 // will fall in line.
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 const SUSPENSE_NAME = "Difference in Opening Balances";
 

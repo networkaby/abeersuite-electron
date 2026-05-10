@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
-import { isStaffEmailDomainAllowed } from "@/lib/auth/staff-email-allowlist";
+import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 
 export type StaffAuthUser = {
     id: string;

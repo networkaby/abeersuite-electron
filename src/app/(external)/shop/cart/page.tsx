@@ -5,11 +5,11 @@ import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShopCartStore } from "@/store/external/shopCartStore";
-import { formatRupeesFromPaise } from "@/lib/money-inr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import type { ShopProductPublic } from "@/lib/shop/product-public";
-import { productPath } from "@/lib/shop/product-public";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { productPath } from "@/shared/lib/shop/productPublic";
 import { Input } from "@/components/ui/input";
 import { Truck, Shield, CreditCard } from "lucide-react";
 

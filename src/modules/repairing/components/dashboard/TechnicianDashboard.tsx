@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wrench, ChevronRight, ArrowRight } from "lucide-react";
-import { timeAgo } from "@/lib/time-ago";
+import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { Button } from "@/components/ui/button";
 
 interface PipelineStage {

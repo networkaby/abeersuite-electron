@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMockCoupons } from "@/lib/portal/mock-adapters";
+import { getMockCoupons } from "@/shared/lib/portal/mockAdapters";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { Percent } from "lucide-react";
 
