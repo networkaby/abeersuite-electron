@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const TARGET_TYPES = ["INVOICE", "VOUCHER", "JOURNAL_ENTRY"] as const;
 const SOURCE_TYPES = ["VOUCHER", "PAYMENT", "INVOICE", "JOURNAL_ENTRY"] as const;
@@ -46,12 +47,13 @@ export async function POST(req: Request) {
     const { user, response } = await requirePermission("finance:allocation:manage");
     if (response) return response;
 
-    const parsed = createSchema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    const { data, error } = await validateRequest(req, createSchema);
+
+    if (error) return error;
 
     try {
         const allocation = await prisma.voucherAllocation.create({
-            data: { ...parsed.data, createdById: user!.id },
+            data: { ...data, createdById: user!.id },
         });
         return NextResponse.json(allocation, { status: 201 });
     } catch (err) {

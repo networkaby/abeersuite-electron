@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const PROFILE_SELECT = {
     id:          true,
@@ -116,11 +117,9 @@ export async function PUT(
     }
 
     try {
-        const parsed = userUpdateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, userUpdateSchema);
+        if (error) return error;
+        const body = data;
 
         if (body.email !== undefined && !isStaffEmailDomainAllowed(body.email)) {
             return NextResponse.json(
@@ -143,7 +142,7 @@ export async function PUT(
             }
         }
 
-        const data: Parameters<typeof prisma.user.update>[0]["data"] = {
+        const updateData: Parameters<typeof prisma.user.update>[0]["data"] = {
             name:      body.name,
             email:     body.email,
             title:     body.title     ?? null,
@@ -158,18 +157,18 @@ export async function PUT(
             birthday:  body.birthday  ? new Date(body.birthday) : null,
         };
 
-        if (body.password) data.password = await bcrypt.hash(body.password, 10);
+        if (body.password) updateData.password = await bcrypt.hash(body.password, 10);
 
         // Admin-only fields
         if (isAdmin) {
-            if (body.role      !== undefined) data.role      = body.role;
-            if (body.scope     !== undefined) data.scope     = body.scope;
-            if (body.managerId !== undefined) data.managerId = body.managerId ? Number(body.managerId) : null;
-            if (body.departmentIds !== undefined) data.departments = { set: body.departmentIds.map(id => ({ id })) };
-            if (body.branchIds    !== undefined) data.branches    = { set: body.branchIds.map(id => ({ id })) };
+            if (body.role      !== undefined) updateData.role      = body.role;
+            if (body.scope     !== undefined) updateData.scope     = body.scope;
+            if (body.managerId !== undefined) updateData.managerId = body.managerId ? Number(body.managerId) : null;
+            if (body.departmentIds !== undefined) updateData.departments = { set: body.departmentIds.map(id => ({ id })) };
+            if (body.branchIds    !== undefined) updateData.branches    = { set: body.branchIds.map(id => ({ id })) };
         }
 
-        const user = await prisma.user.update({ where: { id: userId }, data, select: PUT_SELECT });
+        const user = await prisma.user.update({ where: { id: userId }, data: updateData, select: PUT_SELECT });
         return NextResponse.json(user);
     } catch {
         return NextResponse.json({ error: "Failed to update user" }, { status: 500 });

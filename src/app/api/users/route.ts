@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const createUserSchema = z.object({
     name:          z.string().trim().min(1, "Name is required"),
@@ -51,11 +52,9 @@ export async function POST(req: Request) {
     const { user: caller, response } = await requirePermission("users:manage");
     if (response) return response;
     try {
-        const parsed = createUserSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, createUserSchema);
+        if (error) return error;
+        const body = data;
 
         if (!isStaffEmailDomainAllowed(body.email)) {
             return NextResponse.json(

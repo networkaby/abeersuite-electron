@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
+import { validateRequest } from "@/shared/lib/api";
 
 const schema = z.object({
     currentPassword: z.string().min(1, "Current password is required"),
@@ -13,10 +14,9 @@ export async function PATCH(req: Request) {
     const authResult = await requirePortalCustomer();
     if (authResult.response) return authResult.response;
 
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, schema);
+
+    if (error) return error;
 
     try {
         const credential = await prisma.personPortalCredential.findUnique({
@@ -27,12 +27,12 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: "No portal credential found for this account" }, { status: 404 });
         }
 
-        const isValid = await bcrypt.compare(parsed.data.currentPassword, credential.passwordHash);
+        const isValid = await bcrypt.compare(data.currentPassword, credential.passwordHash);
         if (!isValid) {
             return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
         }
 
-        const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+        const passwordHash = await bcrypt.hash(data.newPassword, 10);
         await prisma.personPortalCredential.update({
             where: { personId: authResult.customerId! },
             data: { passwordHash },

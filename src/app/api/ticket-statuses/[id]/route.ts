@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,11 +23,9 @@ export async function PATCH(req: Request, { params }: Params) {
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = ticketStatusPatchSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid status payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, ticketStatusPatchSchema);
+        if (error) return error;
+        const body = data;
 
         const status = await prisma.ticketStatus.update({
             where: { id },

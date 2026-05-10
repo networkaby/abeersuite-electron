@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { Priority } from "@/generated/prisma/enums";
+import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -22,11 +23,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
 
-    const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, bodySchema);
+    if (error) return error;
+    const body = data;
 
     try {
         const order = await prisma.shopOrder.findUnique({

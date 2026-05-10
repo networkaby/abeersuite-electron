@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const serviceCenterSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -28,11 +29,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("warranty:convert");
     if (response) return response;
     try {
-        const parsed = serviceCenterSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid service center payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, serviceCenterSchema);
+        if (error) return error;
+        const body = data;
         const serviceCenter = await prisma.serviceCenter.create({
             data: {
                 name: body.name,

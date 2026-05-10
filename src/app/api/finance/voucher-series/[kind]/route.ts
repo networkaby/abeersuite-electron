@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     label:           z.string().trim().min(1).max(50).optional(),
@@ -29,15 +30,14 @@ export async function PATCH(
 
     const { kind } = await params;
 
-    const parsed = updateSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, updateSchema);
+
+    if (error) return error;
 
     try {
         const series = await prisma.voucherSeries.update({
             where: { kind },
-            data: parsed.data,
+            data: data,
         });
         return NextResponse.json(series);
     } catch {

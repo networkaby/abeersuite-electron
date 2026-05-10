@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { validateRequest } from "@/shared/lib/api";
 
 const deleteSchema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -14,10 +15,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = deleteSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Reason required" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, deleteSchema);
+    if (error) return error;
 
     const invoice = await prisma.invoice.findUnique({ where: { id: Number(id) } });
     if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -47,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         data: {
                             deletedAt: new Date(),
                             deletedById: user!.id,
-                            deleteReason: `Invoice ${invoice.number} deleted: ${parsed.data.reason}`,
+                            deleteReason: `Invoice ${invoice.number} deleted: ${data.reason}`,
                         },
                     });
                 }
@@ -55,7 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             await tx.invoice.update({
                 where: { id: Number(id) },
-                data: deleteFields(user!.id, parsed.data.reason),
+                data: deleteFields(user!.id, data.reason),
             });
         });
 

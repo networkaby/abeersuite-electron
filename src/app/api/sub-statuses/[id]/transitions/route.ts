@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const subStatusTransitionsSchema = z.object({
     toIds: z.array(z.string().trim()),
@@ -18,11 +19,9 @@ export async function PUT(
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = subStatusTransitionsSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid transitions payload" }, { status: 400 });
-        }
-        const { toIds } = parsed.data;
+        const { data, error } = await validateRequest(req, subStatusTransitionsSchema);
+        if (error) return error;
+        const { toIds } = data;
 
         await prisma.$transaction([
             prisma.subStatusTransition.deleteMany({ where: { fromSubStatusId: id } }),

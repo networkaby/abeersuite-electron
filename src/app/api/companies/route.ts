@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const createSchema = z.object({
     name: z.string().trim().min(1, "Company name is required"),
@@ -64,11 +65,10 @@ export async function POST(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
-    const parsed = createSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, createSchema);
+
+    if (error) return error;
+    const body = data;
     const phones = body.phones.filter(p => p.trim().length > 0);
     const emails = body.emails.filter(e => e.trim().length > 0);
 

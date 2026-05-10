@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const pipelineSchema = z.object({
     name: z.string().trim().min(1, "Name is required").regex(/^[a-z0-9_-]+$/, "Name must be lowercase letters, numbers, hyphens or underscores"),
@@ -33,11 +34,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
-        const parsed = pipelineSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid pipeline payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, pipelineSchema);
+        if (error) return error;
+        const body = data;
 
         // Check name uniqueness
         const existing = await prisma.pipeline.findUnique({ where: { name: body.name } });

@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { validateRequest } from "@/shared/lib/api";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -14,10 +15,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Reason required" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, schema);
+    if (error) return error;
 
     const voucher = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
@@ -74,7 +73,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                             data: {
                                 deletedAt: new Date(),
                                 deletedById: user!.id,
-                                deleteReason: `Voucher ${voucher.reference} deleted: ${parsed.data.reason}`,
+                                deleteReason: `Voucher ${voucher.reference} deleted: ${data.reason}`,
                             },
                         });
                     }
@@ -83,7 +82,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             await tx.invVoucher.update({
                 where: { id: Number(id) },
-                data: deleteFields(user!.id, parsed.data.reason),
+                data: deleteFields(user!.id, data.reason),
             });
         });
 

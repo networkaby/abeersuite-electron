@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name:     z.string().trim().min(1).optional(),
@@ -15,11 +16,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = updateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const branch = await prisma.branch.update({ where: { id }, data: parsed.data });
+        const { data, error } = await validateRequest(req, updateSchema);
+        if (error) return error;
+        const branch = await prisma.branch.update({ where: { id }, data: data });
         return NextResponse.json(branch);
     } catch {
         return NextResponse.json({ error: "Failed to update branch" }, { status: 500 });

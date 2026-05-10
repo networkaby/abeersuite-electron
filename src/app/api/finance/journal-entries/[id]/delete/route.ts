@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const deleteSchema = z.object({
     reason: z.string().trim().min(1, "Delete reason is required"),
@@ -16,10 +17,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = deleteSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, deleteSchema);
+    if (error) return error;
 
     const entry = await prisma.journalEntry.findUnique({
         where: { id: Number(id) },
@@ -54,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: {
                     deletedAt: new Date(),
                     deletedById: user!.id,
-                    deleteReason: parsed.data.reason,
+                    deleteReason: data.reason,
                 },
             });
         });

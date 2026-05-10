@@ -7,6 +7,7 @@ import { Priority } from "@/generated/prisma/enums";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { validateRequest } from "@/shared/lib/api";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -140,11 +141,10 @@ export async function PUT(
         });
         if (!scopedTicket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 
-        const parsed = ticketUpdateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid ticket update payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, ticketUpdateSchema);
+
+        if (error) return error;
+        const body = data;
 
         if (body.status !== undefined && !isAdmin && !hasPermissionWithScope(permissions, "tickets:status:set")) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });

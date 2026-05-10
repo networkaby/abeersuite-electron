@@ -3,6 +3,7 @@ import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const subStatusUpdateSchema = z.object({
     subStatusId: z.string().trim().min(1, "Sub-status is required"),
@@ -35,11 +36,9 @@ export async function PATCH(
 
         const { id } = await params;
         const ticketId = Number(id);
-        const parsed = subStatusUpdateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid sub-status payload" }, { status: 400 });
-        }
-        const { subStatusId, note, visibility } = parsed.data;
+        const { data, error } = await validateRequest(req, subStatusUpdateSchema);
+        if (error) return error;
+        const { subStatusId, note, visibility } = data;
 
         const subStatus = await prisma.ticketSubStatus.findUnique({
             where: { id: subStatusId },

@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { nextRef, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelInvoiceFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { validateRequest } from "@/shared/lib/api";
 
 const cancelSchema = z.object({ reason: z.string().trim().min(1) });
 
@@ -15,10 +16,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = cancelSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Reason required" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, cancelSchema);
+    if (error) return error;
 
     const invoice = await prisma.invoice.findUnique({ where: { id: Number(id) } });
     if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -50,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     data: {
                         date: new Date(),
                         reference: reversalRef,
-                        description: `CANCEL reversal of Invoice ${invoice.number}: ${parsed.data.reason}`,
+                        description: `CANCEL reversal of Invoice ${invoice.number}: ${data.reason}`,
                         status: "POSTED",
                         postedAt: new Date(),
                         createdById: user!.id,
@@ -69,7 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     data: {
                         status: "CANCELLED",
                         cancelledAt: new Date(),
-                        cancelReason: parsed.data.reason,
+                        cancelReason: data.reason,
                         cancelledById: user!.id,
                     },
                 });
@@ -78,7 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             await tx.invoice.update({
                 where: { id: Number(id) },
                 // Invoices keep their VOID enum value; the cancel-tier metadata uses the unified fields.
-                data: cancelInvoiceFields(user!.id, parsed.data.reason),
+                data: cancelInvoiceFields(user!.id, data.reason),
             });
         });
 

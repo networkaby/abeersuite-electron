@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const rolePermissionsSchema = z.object({
     permissionIds: z.array(z.string().trim()),
@@ -15,11 +16,9 @@ export async function PUT(
     if (response) return response;
     try {
         const { id: roleId } = await params;
-        const parsed = rolePermissionsSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid role permissions payload" }, { status: 400 });
-        }
-        const { permissionIds } = parsed.data;
+        const { data, error } = await validateRequest(req, rolePermissionsSchema);
+        if (error) return error;
+        const { permissionIds } = data;
 
         // Replace full permission set for this role
         await prisma.rolePermission.deleteMany({ where: { roleId } });

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -21,11 +22,9 @@ export async function POST(req: Request, { params }: Params) {
     try {
         const { id } = await params;
         const ticketId = Number(id);
-        const parsed = warrantySchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid warranty payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, warrantySchema);
+        if (error) return error;
+        const body = data;
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },

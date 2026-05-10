@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const createRoleSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -27,11 +28,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("roles:manage");
     if (response) return response;
     try {
-        const parsed = createRoleSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid role payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, createRoleSchema);
+        if (error) return error;
+        const body = data;
         // Auto-generate next role ID (R5, R6, ...)
         const existing = await prisma.role.findMany({ orderBy: { id: "asc" } });
         const maxNum = existing.reduce((max, r) => {

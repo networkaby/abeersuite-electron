@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
+import { validateRequest } from "@/shared/lib/api";
 
 const schema = z.object({
     tempPassword: z.string().min(6, "Temporary password must be at least 6 characters"),
@@ -16,10 +17,9 @@ export async function PATCH(
     const { response } = await requirePermission("users:manage");
     if (response) return response;
 
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, schema);
+
+    if (error) return error;
 
     const { id } = await params;
     const personId = Number(id);
@@ -55,7 +55,7 @@ export async function PATCH(
     }
 
     try {
-        const passwordHash = await bcrypt.hash(parsed.data.tempPassword, 10);
+        const passwordHash = await bcrypt.hash(data.tempPassword, 10);
         await prisma.personPortalCredential.upsert({
             where: { personId },
             update: {

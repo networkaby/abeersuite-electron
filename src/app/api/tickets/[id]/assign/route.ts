@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission, isAdmin } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { validateRequest } from "@/shared/lib/api";
 
 const assignSchema = z.object({
     action: z.enum(["claim", "pass", "reject"]),
@@ -18,11 +19,9 @@ export async function POST(
 
     const { id } = await params;
     const ticketId = Number(id);
-    const parsed = assignSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid assignment payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, assignSchema);
+    if (error) return error;
+    const body = data;
 
     const { action, toUserId } = body;
 

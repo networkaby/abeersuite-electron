@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name:      z.string().trim().min(1).max(200).optional(),
@@ -35,11 +36,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const id = Number((await params).id);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const parsed = updateSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, updateSchema);
+
+    if (error) return error;
+    const body = data;
 
     // Resolve type: sub-groups inherit from parent, primary groups may set directly
     let inheritedType: string | undefined;

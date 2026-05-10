@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -53,13 +54,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (response) return response;
 
     const { id } = await params;
-    const parsed = updateSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, updateSchema);
+    if (error) return error;
 
     try {
-        const b = parsed.data;
+        const b = data;
         const updated = await prisma.account.update({
             where: { id: Number(id) },
             data: {

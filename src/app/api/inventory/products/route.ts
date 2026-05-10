@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { validateRequest } from "@/shared/lib/api";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -59,11 +60,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("inventory:manage");
     if (response) return response;
     try {
-        const parsed = invProductCreateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const b = parsed.data;
+        const { data, error } = await validateRequest(req, invProductCreateSchema);
+        if (error) return error;
+        const b = data;
         const sku = b.sku.trim().toUpperCase();
         const existing = await prisma.invProduct.findUnique({ where: { sku } });
         if (existing) return NextResponse.json({ error: "SKU already exists" }, { status: 409 });

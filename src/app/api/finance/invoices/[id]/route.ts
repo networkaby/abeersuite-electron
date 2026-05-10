@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     notes: z.string().trim().optional().nullable(),
@@ -59,11 +60,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Cannot update a voided invoice" }, { status: 409 });
     }
 
-    const parsed = updateSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, updateSchema);
+
+    if (error) return error;
+    const body = data;
 
     try {
         const updated = await prisma.$transaction(async (tx) => {

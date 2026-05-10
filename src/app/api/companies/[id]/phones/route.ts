@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ContactConflictError, contactValueSchema, createPhone } from "@/shared/lib/format/contactWrite";
+import { validateRequest } from "@/shared/lib/api";
 
 // POST /api/companies/[id]/phones — add a phone to a company
 export async function POST(
@@ -19,13 +20,12 @@ export async function POST(
     const exists = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
     if (!exists) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
-    const parsed = contactValueSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, contactValueSchema);
+
+    if (error) return error;
 
     try {
-        const row = await createPhone({ companyId }, parsed.data);
+        const row = await createPhone({ companyId }, data);
         return NextResponse.json(row, { status: 201 });
     } catch (err) {
         if (err instanceof ContactConflictError) {

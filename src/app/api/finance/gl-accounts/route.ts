@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
+import { validateRequest } from "@/shared/lib/api";
 
 const createSchema = z.object({
     code: z.string().trim().min(1),
@@ -69,11 +70,10 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
-    const parsed = createSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, createSchema);
+
+    if (error) return error;
+    const body = data;
 
     try {
         const account = await prisma.account.create({

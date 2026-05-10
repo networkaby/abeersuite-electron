@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/shared/lib/format/contactWrite";
 import { parsePagination } from "@/shared/lib/api";
+import { validateRequest } from "@/shared/lib/api";
 
 const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -156,11 +157,10 @@ export async function POST(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
-    const parsed = createPersonSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, createPersonSchema);
+
+    if (error) return error;
+    const body = data;
     const phones = body.phones.filter(p => p.trim().length > 0);
     const emails = body.emails.filter(e => e.trim().length > 0);
 

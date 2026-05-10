@@ -5,6 +5,7 @@ import { invProductToAdmin } from "@/modules/ecommerce/lib/product-admin";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const patchSchema = z.object({
     // inventory fields
@@ -55,11 +56,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-    const parsed = patchSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const b = parsed.data;
+    const { data, error } = await validateRequest(req, patchSchema);
+    if (error) return error;
+    const b = data;
     try {
         const galleryJson =
             b.galleryUrls !== undefined

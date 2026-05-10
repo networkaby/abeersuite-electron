@@ -6,6 +6,7 @@ import { z } from "zod";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { validateRequest } from "@/shared/lib/api";
 
 const participantSchema = z.object({
     userId: z.coerce.number().int().positive("userId required"),
@@ -56,11 +57,9 @@ export async function POST(
 
     const { id } = await params;
     const ticketId = Number(id);
-    const parsed = participantSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid participant payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, participantSchema);
+    if (error) return error;
+    const body = data;
 
     try {
         const scopeWhere = buildTicketReadScopeWhere(user);

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const cancelSchema = z.object({
     reason: z.string().trim().min(1, "Cancel reason is required"),
@@ -16,10 +17,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = cancelSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, cancelSchema);
+    if (error) return error;
 
     const entry = await prisma.journalEntry.findUnique({
         where: { id: Number(id) },
@@ -54,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: {
                     date: new Date(),
                     reference: reversalRef,
-                    description: `REVERSAL of ${entry.reference}: ${parsed.data.reason}`,
+                    description: `REVERSAL of ${entry.reference}: ${data.reason}`,
                     status: "POSTED",
                     postedAt: new Date(),
                     createdById: user!.id,
@@ -87,7 +86,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: {
                     status: "CANCELLED",
                     cancelledAt: new Date(),
-                    cancelReason: parsed.data.reason,
+                    cancelReason: data.reason,
                     cancelledById: user!.id,
                 },
             });

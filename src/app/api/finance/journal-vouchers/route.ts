@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isBalanced, balanceDelta, nextRef, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
+import { validateRequest } from "@/shared/lib/api";
 
 // POST /api/finance/journal-vouchers
 //
@@ -48,11 +49,10 @@ export async function POST(req: Request) {
     const { user, response } = await requirePermission("finance:voucher:create");
     if (response) return response;
 
-    const parsed = createSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, createSchema);
+
+    if (error) return error;
+    const body = data;
 
     if (!isBalanced(body.lines)) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });

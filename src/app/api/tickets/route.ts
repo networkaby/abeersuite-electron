@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { validateRequest } from "@/shared/lib/api";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -109,11 +110,9 @@ export async function POST(req: Request) {
     const { user, response } = await requirePermission("tickets:create");
     if (response) return response;
     try {
-        const parsed = createTicketSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid ticket payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, createTicketSchema);
+        if (error) return error;
+        const body = data;
 
         // Create device — linked to the billing account
         const device = await prisma.device.create({

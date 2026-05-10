@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const noteSchema = z.object({
     note: z.string().trim().min(1, "Note text is required"),
@@ -21,11 +22,9 @@ export async function POST(
 
         const { id } = await params;
         const ticketId = Number(id);
-        const parsed = noteSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid note payload" }, { status: 400 });
-        }
-        const { note, visibility = "INTERNAL" } = parsed.data;
+        const { data, error } = await validateRequest(req, noteSchema);
+        if (error) return error;
+        const { note, visibility = "INTERNAL" } = data;
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: ticketId },

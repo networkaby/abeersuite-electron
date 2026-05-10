@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     title:        z.string().trim().min(1, "Title is required").optional(),
@@ -43,11 +44,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = updateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const post = await prisma.post.update({ where: { id }, data: parsed.data, include: POST_INCLUDE });
+        const { data, error } = await validateRequest(req, updateSchema);
+        if (error) return error;
+        const post = await prisma.post.update({ where: { id }, data: data, include: POST_INCLUDE });
         return NextResponse.json(post);
     } catch {
         return NextResponse.json({ error: "Failed to update post" }, { status: 500 });

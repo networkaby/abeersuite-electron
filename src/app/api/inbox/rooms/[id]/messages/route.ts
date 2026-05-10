@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { getAccessibleRoom, markRoomRead } from "@/modules/message/lib/inbox";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { validateRequest } from "@/shared/lib/api";
 
 const messageSchema = z.object({
     body: z.string().trim().min(1, "Message is required"),
@@ -56,10 +57,9 @@ export async function POST(
             return NextResponse.json({ error: "Cannot post to system inbox" }, { status: 403 });
         }
 
-        const parsed = messageSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid message payload" }, { status: 400 });
-        }
+        const { data, error } = await validateRequest(req, messageSchema);
+
+        if (error) return error;
 
         const [message] = await Promise.all([
             prisma.chatMessage.create({
@@ -67,8 +67,8 @@ export async function POST(
                     roomId: room.id,
                     senderUserId: user.id,
                     messageType: "USER",
-                    title: parsed.data.title || null,
-                    body: parsed.data.body,
+                    title: data.title || null,
+                    body: data.body,
                 },
                 include: { senderUser: { select: { id: true, name: true, role: true } } },
             }),

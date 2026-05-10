@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const createSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -25,11 +26,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
-        const parsed = createSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const { label, order } = parsed.data;
+        const { data, error } = await validateRequest(req, createSchema);
+        if (error) return error;
+        const { label, order } = data;
         const id = label.toLowerCase().trim().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
 
         const existing = await prisma.subStatusGroup.findUnique({ where: { id } });

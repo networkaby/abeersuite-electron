@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
+import { validateRequest } from "@/shared/lib/api";
 
 // PUT /api/finance/accounts/[id]/opening
 // Sets opening balance + Dr/Cr type + as-of date on a ledger account.
@@ -18,16 +19,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (response) return response;
 
     const { id } = await params;
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    const { data, error } = await validateRequest(req, schema);
+    if (error) return error;
 
     try {
         const account = await prisma.account.update({
             where: { id: Number(id) },
             data: {
-                openingBalance:     parsed.data.amount,
-                openingBalanceType: parsed.data.type,
-                openingBalanceDate: parsed.data.asOfDate ? new Date(parsed.data.asOfDate) : null,
+                openingBalance:     data.amount,
+                openingBalanceType: data.type,
+                openingBalanceDate: data.asOfDate ? new Date(data.asOfDate) : null,
             },
         });
         await reconcileOpeningSuspense();

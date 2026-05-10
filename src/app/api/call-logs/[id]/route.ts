@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { validateRequest } from "@/shared/lib/api";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -58,10 +59,9 @@ export async function PATCH(
             return NextResponse.json({ error: "Invalid call log id" }, { status: 400 });
         }
 
-        const parsedBody = patchCallLogSchema.safeParse(await req.json());
-        if (!parsedBody.success) {
-            return NextResponse.json({ error: parsedBody.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
+        const { data, error } = await validateRequest(req, patchCallLogSchema);
+
+        if (error) return error;
 
         const existing = await prisma.ticketLog.findUnique({
             where: { id: logId },
@@ -76,7 +76,7 @@ export async function PATCH(
 
         const nextPayload: PersistedCallLogPayload = {
             ...currentPayload,
-            ...parsedBody.data,
+            ...data,
         };
 
         const updated = await prisma.ticketLog.update({

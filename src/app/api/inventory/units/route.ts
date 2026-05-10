@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invUnitCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { unstable_cache, revalidateTag } from "next/cache";
+import { validateRequest } from "@/shared/lib/api";
 
 // Cache key+tag exported so the [id] route's PATCH/DELETE can revalidate.
 export const INV_UNITS_TAG = "inv-units";
@@ -29,11 +30,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("inventory:manage");
     if (response) return response;
     try {
-        const parsed = invUnitCreateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const b = parsed.data;
+        const { data, error } = await validateRequest(req, invUnitCreateSchema);
+        if (error) return error;
+        const b = data;
         const row = await prisma.invUnit.create({
             data: {
                 code: b.code.toUpperCase(),

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 import {
     isLikelyEmail,
     normalizePortalEmail,
@@ -17,14 +18,9 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
     try {
-        const parsed = bodySchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: parsed.error.issues[0]?.message ?? "Invalid payload" },
-                { status: 400 }
-            );
-        }
-        const { mode, identifier, password, name } = parsed.data;
+        const { data, error } = await validateRequest(req, bodySchema);
+        if (error) return error;
+        const { mode, identifier, password, name } = data;
 
         let phoneRaw: string | null = null;
         let emailRaw: string | null = null;

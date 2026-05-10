@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { validateRequest } from "@/shared/lib/api";
 
 const hardDeleteSchema = z.object({ reason: z.string().trim().min(1, "Delete reason is required") });
 
@@ -14,10 +15,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = hardDeleteSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Reason required" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, hardDeleteSchema);
+    if (error) return error;
 
     const invoice = await prisma.invoice.findUnique({
         where: { id: Number(id) },
@@ -47,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: auditSnapshot({
                     originalId: invoice.id,
                     originalRef: invoice.number,
-                    reason: parsed.data.reason,
+                    reason: data.reason,
                     snapshot: invoice,
                     actorId: user!.id,
                 }),

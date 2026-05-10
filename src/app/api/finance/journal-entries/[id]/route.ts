@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
+import { validateRequest } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -49,11 +50,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Only DRAFT entries can be edited" }, { status: 409 });
     }
 
-    const parsed = updateSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, updateSchema);
+
+    if (error) return error;
+    const body = data;
 
     if (body.lines && !isBalanced(body.lines)) {
         return NextResponse.json({ error: "Journal entry is not balanced — debits must equal credits" }, { status: 422 });

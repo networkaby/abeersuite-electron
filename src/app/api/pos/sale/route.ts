@@ -5,6 +5,7 @@ import { z } from "zod";
 import { nextRef } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
+import { validateRequest } from "@/shared/lib/api";
 
 // POST /api/pos/sale
 // Atomic POS sale — creates the Invoice + InvoiceLines, posts the AR/Revenue
@@ -37,11 +38,10 @@ export async function POST(req: Request) {
     const { user, response } = await requirePermission("accountancy:view:org");
     if (response) return response;
 
-    const parsed = createSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, createSchema);
+
+    if (error) return error;
+    const body = data;
 
     const computedLines = body.lines.map((l) => {
         const lineSubtotal = l.quantity * l.unitPrice;

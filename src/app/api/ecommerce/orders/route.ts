@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { getOrdersPipeline } from "@/shared/lib/format/ordersPipeline";
 import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const ACCOUNT_SELECT = {
     id: true,
@@ -115,11 +116,10 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("ecommerce:manage");
     if (response) return response;
 
-    const parsed = createSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const body = parsed.data;
+    const { data, error } = await validateRequest(req, createSchema);
+
+    if (error) return error;
+    const body = data;
 
     // Look up the P7 "Sales Orders" pipeline and its entry-point status
     const pipeline = await getOrdersPipeline(prisma);

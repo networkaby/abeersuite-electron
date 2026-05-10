@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const userRoleSchema = z.object({
     roleId: z.string().trim().min(1, "Role is required"),
@@ -44,11 +45,9 @@ export async function PUT(
     try {
         const { id } = await params;
         const userId = Number(id);
-        const parsed = userRoleSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid user role payload" }, { status: 400 });
-        }
-        const { roleId } = parsed.data;
+        const { data, error } = await validateRequest(req, userRoleSchema);
+        if (error) return error;
+        const { roleId } = data;
 
         await prisma.user.update({ where: { id: userId }, data: { role: roleId } });
 

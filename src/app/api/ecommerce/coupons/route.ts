@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const bodySchema = z.object({
     code: z.string().trim().min(1),
@@ -27,11 +28,9 @@ export async function GET() {
 export async function POST(req: Request) {
     const { response } = await requirePermission("ecommerce:manage");
     if (response) return response;
-    const parsed = bodySchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const b = parsed.data;
+    const { data, error } = await validateRequest(req, bodySchema);
+    if (error) return error;
+    const b = data;
     try {
         const row = await prisma.shopCoupon.create({
             data: {

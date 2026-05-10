@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const subStatusSchema = z.object({
     label: z.string().trim().min(1, "Label is required"),
@@ -63,11 +64,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("settings:statuses");
     if (response) return response;
     try {
-        const parsed = subStatusSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid sub-status payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, subStatusSchema);
+        if (error) return error;
+        const body = data;
 
         const { id: newId, n: nextOrder } = await generateNextOpaqueId(prisma.ticketSubStatus, "SS");
 

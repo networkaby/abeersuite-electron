@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invUnitUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { revalidateTag } from "next/cache";
 import { INV_UNITS_TAG } from "../route";
+import { validateRequest } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -11,11 +12,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const id = Number((await params).id);
         if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-        const parsed = invUnitUpdateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const b = parsed.data;
+        const { data, error } = await validateRequest(req, invUnitUpdateSchema);
+        if (error) return error;
+        const b = data;
         if (b.code !== undefined) {
             const code = b.code.toUpperCase();
             const clash = await prisma.invUnit.findFirst({ where: { code, NOT: { id } } });

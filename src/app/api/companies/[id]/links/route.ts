@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 // GET /api/companies/[id]/links — list linked persons
 export async function GET(
@@ -54,11 +55,9 @@ export async function POST(
     if (response) return response;
 
     const { id } = await params;
-    const parsed = linkSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
-    const { personId, role } = parsed.data;
+    const { data, error } = await validateRequest(req, linkSchema);
+    if (error) return error;
+    const { personId, role } = data;
     const companyId = Number(id);
 
     const existing = await prisma.personCompany.findFirst({

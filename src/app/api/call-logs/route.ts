@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import type { Prisma } from "@/generated/prisma/client";
+import { validateRequest } from "@/shared/lib/api";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -170,12 +171,9 @@ export async function POST(req: Request) {
     if (response) return response;
 
     try {
-        const parsed = createCallLogSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
+        const { data, error } = await validateRequest(req, createCallLogSchema);
+        if (error) return error;
 
-        const data = parsed.data;
         const ticket = await prisma.ticket.findUnique({
             where: { id: data.ticketId },
             select: { id: true, status: true },

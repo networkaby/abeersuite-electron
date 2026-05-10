@@ -4,6 +4,7 @@ import { transitionShopOrderStatus, transitionOrderPipelineStatus } from "@/modu
 import { ShopOrderStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const bodySchema = z.union([
     // Pipeline-based transition (new)
@@ -29,15 +30,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
 
-    const parsed = bodySchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, bodySchema);
+
+    if (error) return error;
 
     try {
-        if ("toStatusId" in parsed.data) {
+        if ("toStatusId" in data) {
             // Pipeline-based transition
-            const { toStatusId, courier, trackingNumber } = parsed.data;
+            const { toStatusId, courier, trackingNumber } = data;
 
             const status = await prisma.ticketStatus.findUnique({
                 where: { id: toStatusId },
@@ -59,7 +59,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             });
         } else {
             // Legacy enum transition (Razorpay / online checkout)
-            const { to, courier, trackingNumber } = parsed.data;
+            const { to, courier, trackingNumber } = data;
             const result = await transitionShopOrderStatus({
                 orderId: oid,
                 to: to as ShopOrderStatus,

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
@@ -17,11 +18,9 @@ export async function PATCH(
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = patchSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, patchSchema);
+        if (error) return error;
+        const body = data;
         const updated = await prisma.subStatusGroup.update({
             where: { id },
             data: {

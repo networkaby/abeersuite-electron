@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const assignSchema = z.object({ userId: z.number().int().positive() });
 
@@ -10,11 +11,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
     try {
         const { id: postId } = await params;
-        const parsed = assignSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const { userId } = parsed.data;
+        const { data, error } = await validateRequest(req, assignSchema);
+        if (error) return error;
+        const { userId } = data;
         const existing = await prisma.userPost.findUnique({ where: { userId_postId: { userId, postId } } });
         if (existing) return NextResponse.json({ error: "User already holds this post" }, { status: 409 });
         await prisma.userPost.create({ data: { userId, postId } });

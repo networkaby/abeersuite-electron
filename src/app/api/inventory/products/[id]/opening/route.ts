@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
@@ -19,21 +20,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (response) return response;
 
     const { id } = await params;
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
+    const { data, error } = await validateRequest(req, schema);
+    if (error) return error;
 
     // Map { qty, rate } → shared { openingStock, openingRate } shape so the
     // helpers in stockValue.ts can be reused.
-    const opening = { openingStock: parsed.data.qty, openingRate: parsed.data.rate };
+    const opening = { openingStock: data.qty, openingRate: data.rate };
 
     try {
         const product = await prisma.invProduct.update({
             where: { id: Number(id) },
             data: {
-                openingStock:     parsed.data.qty,
-                openingRate:      parsed.data.rate,
+                openingStock:     data.qty,
+                openingRate:      data.rate,
                 openingValue:     productOpeningValue(opening),
-                openingStockDate: parsed.data.asOfDate ? new Date(parsed.data.asOfDate) : null,
+                openingStockDate: data.asOfDate ? new Date(data.asOfDate) : null,
                 // Sync running caches via shared helper. Clearing opening
                 // (qty = null) resets stock=0 and costPaise=null so the
                 // closingStock helper doesn't keep stale valuation.

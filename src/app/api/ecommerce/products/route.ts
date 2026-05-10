@@ -5,6 +5,7 @@ import { invProductToAdmin } from "@/modules/ecommerce/lib/product-admin";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const specsSchema = z.record(z.string(), z.string()).optional();
 
@@ -67,14 +68,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("ecommerce:manage");
     if (response) return response;
     try {
-        const parsed = createSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: parsed.error.issues[0]?.message ?? "Invalid payload" },
-                { status: 400 }
-            );
-        }
-        const b = parsed.data;
+        const { data, error } = await validateRequest(req, createSchema);
+        if (error) return error;
+        const b = data;
         const sku = b.sku.trim().toUpperCase();
         const existing = await prisma.invProduct.findUnique({ where: { sku } });
         if (existing) return NextResponse.json({ error: "SKU already exists" }, { status: 409 });

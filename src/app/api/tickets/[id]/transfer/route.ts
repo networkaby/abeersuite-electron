@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const transferSchema = z.object({
     targetPipelineId: z.string().trim().min(1),
@@ -29,11 +30,9 @@ export async function POST(
         }
 
         const { id } = await params;
-        const parsed = transferSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const { targetPipelineId, targetStatusId, note } = parsed.data;
+        const { data, error } = await validateRequest(req, transferSchema);
+        if (error) return error;
+        const { targetPipelineId, targetStatusId, note } = data;
 
         const ticket = await prisma.ticket.findUnique({
             where: { id: Number(id) },

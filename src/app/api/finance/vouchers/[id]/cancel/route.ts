@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { validateRequest } from "@/shared/lib/api";
 
 const schema = z.object({ reason: z.string().trim().min(1, "Cancel reason required") });
 
@@ -14,8 +15,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
 
     const { id } = await params;
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Reason required" }, { status: 400 });
+    const { data, error } = await validateRequest(req, schema);
+    if (error) return error;
 
     const voucher = await prisma.voucher.findUnique({
         where: { id: Number(id) },
@@ -45,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: {
                     date:        new Date(),
                     reference:   reversalRef,
-                    description: `CANCEL of ${voucher.type} ${voucher.reference}: ${parsed.data.reason}`,
+                    description: `CANCEL of ${voucher.type} ${voucher.reference}: ${data.reason}`,
                     status:      "POSTED",
                     postedAt:    new Date(),
                     createdById: user!.id,
@@ -73,7 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
             await tx.voucher.update({
                 where: { id: voucher.id },
-                data:  cancelFields(user!.id, parsed.data.reason),
+                data:  cancelFields(user!.id, data.reason),
             });
         });
 

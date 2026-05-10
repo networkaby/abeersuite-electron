@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const updateSchema = z.object({
     restartMonth: z.number().int().min(1).max(12).optional(),
@@ -26,15 +27,14 @@ export async function PATCH(req: Request) {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;
 
-    const parsed = updateSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, updateSchema);
+
+    if (error) return error;
 
     const config = await prisma.booksConfig.upsert({
         where: { id: 1 },
-        create: { id: 1, ...parsed.data },
-        update: parsed.data,
+        create: { id: 1, ...data },
+        update: data,
     });
     return NextResponse.json(config);
 }

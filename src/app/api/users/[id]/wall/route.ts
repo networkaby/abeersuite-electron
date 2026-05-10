@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 
 const POST_SELECT = {
@@ -56,12 +57,12 @@ export async function POST(
     const wallUser = await prisma.user.findUnique({ where: { id: wallUserId }, select: { id: true } });
     if (!wallUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    const parsed = postSchema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
+    const { data, error } = await validateRequest(req, postSchema);
+    if (error) return error;
 
     try {
         const post = await prisma.wallPost.create({
-            data:   { wallUserId, authorId: caller.id, body: parsed.data.body },
+            data:   { wallUserId, authorId: caller.id, body: data.body },
             select: POST_SELECT,
         });
         return NextResponse.json(post, { status: 201 });

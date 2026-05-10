@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ContactConflictError, contactValueSchema, updatePhone } from "@/shared/lib/format/contactWrite";
+import { validateRequest } from "@/shared/lib/api";
 
 // PATCH /api/people/[id]/phones/[phoneId] — update a phone row
 export async function PATCH(
@@ -23,13 +24,11 @@ export async function PATCH(
         return NextResponse.json({ error: "Phone not found for this person" }, { status: 404 });
     }
 
-    const parsed = contactValueSchema.partial().safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, contactValueSchema.partial());
+    if (error) return error;
 
     try {
-        const row = await updatePhone(phoneIdNum, parsed.data);
+        const row = await updatePhone(phoneIdNum, data);
         return NextResponse.json(row);
     } catch (err) {
         if (err instanceof ContactConflictError) {

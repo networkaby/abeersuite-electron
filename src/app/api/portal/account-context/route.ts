@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
+import { validateRequest } from "@/shared/lib/api";
 import {
     PORTAL_ACTIVE_ACCOUNT_COOKIE,
     resolvePortalAccountContext,
@@ -33,17 +34,13 @@ export async function PATCH(req: Request) {
     const authResult = await requirePortalCustomer();
     if (authResult.response) return authResult.response;
 
-    const parsed = switchSchema.safeParse(await req.json());
-    if (!parsed.success) {
-        return NextResponse.json(
-            { error: parsed.error.issues[0]?.message ?? "Invalid payload" },
-            { status: 400 }
-        );
-    }
+    const { data, error } = await validateRequest(req, switchSchema);
+
+    if (error) return error;
 
     try {
-        const context = await resolvePortalAccountContext(authResult.customerId!, parsed.data.accountId);
-        if (context.active.accountId !== parsed.data.accountId) {
+        const context = await resolvePortalAccountContext(authResult.customerId!, data.accountId);
+        if (context.active.accountId !== data.accountId) {
             return NextResponse.json({ error: "Selected account is not linked to this profile" }, { status: 403 });
         }
 

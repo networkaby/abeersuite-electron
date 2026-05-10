@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
+import { validateRequest } from "@/shared/lib/api";
 
 const reopenSchema = z.object({
     priority: z.nativeEnum(Priority).optional(),
@@ -22,11 +23,9 @@ export async function POST(
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = reopenSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid reopen payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, reopenSchema);
+        if (error) return error;
+        const body = data;
 
         const original = await prisma.ticket.findUnique({
             where: { id: Number(id) },

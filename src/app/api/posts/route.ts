@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const createSchema = z.object({
     id:           z.string().trim().min(1, "ID is required").toUpperCase(),
@@ -45,11 +46,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;
     try {
-        const parsed = createSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const { id, title, branchId, departmentId, parentPostId, roleTemplateId } = parsed.data;
+        const { data, error } = await validateRequest(req, createSchema);
+        if (error) return error;
+        const { id, title, branchId, departmentId, parentPostId, roleTemplateId } = data;
         const existing = await prisma.post.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Post ID already exists" }, { status: 409 });
         const post = await prisma.post.create({

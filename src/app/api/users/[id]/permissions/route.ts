@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 const overrideSchema = z.object({
     permissionId: z.string().trim().min(1),
@@ -72,11 +73,9 @@ export async function POST(
     try {
         const { id } = await params;
         const userId = Number(id);
-        const parsed = overrideSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const { permissionId, type, reason, expiresAt } = parsed.data;
+        const { data, error } = await validateRequest(req, overrideSchema);
+        if (error) return error;
+        const { permissionId, type, reason, expiresAt } = data;
 
         const override = await prisma.userPermission.upsert({
             where:  { userId_permissionId: { userId, permissionId } },

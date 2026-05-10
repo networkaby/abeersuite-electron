@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { validateRequest } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -9,11 +10,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const id = Number((await params).id);
         if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-        const parsed = invCategoryUpdateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const b = parsed.data;
+        const { data, error } = await validateRequest(req, invCategoryUpdateSchema);
+        if (error) return error;
+        const b = data;
         if (b.parentId !== undefined && b.parentId !== null) {
             if (b.parentId === id) return NextResponse.json({ error: "Category cannot be its own parent" }, { status: 400 });
             const p = await prisma.invCategory.findUnique({ where: { id: b.parentId } });

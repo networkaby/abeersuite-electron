@@ -138,8 +138,39 @@ What landed in 04a:
 
 Follow-up commits within this segment:
 
-- **04b**: validateRequest sweep — ≈110 files. Each replaces the `await req.json() + safeParse + NextResponse({ error: issues[0]?.message })` block with `const { data, error } = await validateRequest(req, schema); if (error) return error;`. Mechanical but each file requires careful editing because variable names downstream of `parsed.data` vary.
+- ~~**04b**: validateRequest sweep~~ — **done** (this commit, 107 of 110 files; 3 legitimately kept inline).
 - **04c**: handleApiError sweep — ≈152 files. Each replaces the trailing `catch { return NextResponse.json({ error: "..." }, { status: 500 }) }` with `catch (e) { return handleApiError(e, "..."); }`. Adds server-side error logging consistently.
+
+## Post-execution notes — 04b (validateRequest sweep, 2026-05-11)
+
+Status: **complete** — `tsc --noEmit` clean, `npm run build` clean, 15 GET endpoints across the swept routes return 200.
+
+Approach: a one-shot Node script (`scripts/sweep-validate-request.mjs`, removed after use) handled the canonical patterns in two passes; the residual edge cases were hand-edited.
+
+| Pass | Files | What it caught |
+|---|---|---|
+| Script pass 1 (canonical) | 89 | `const parsed = SCHEMA.safeParse(await req.json()); if (!parsed.success) { return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "..." }, { status: 400 }); }` (single-line return inside braces) |
+| Script pass 2 (extended) | 11 | Three more shapes: multi-line `NextResponse.json(\n  …,\n  …\n)`, single-line `if … return`, and different `const`-variable names (e.g., `parsedBody`) |
+| Hand-edited | 7 | `schema.partial().safeParse(...)` for 4 contact `[paramId]` routes; missing fallback message for wall + password; `.catch(() => ({}))` for return-ticket |
+| **Total swept** | **107 / 110** |  |
+
+Three files **kept inline on purpose**, recorded for future reference:
+
+1. `src/app/api/crm/leads/route.ts` and `src/app/api/crm/leads/[id]/route.ts` — both return `{ error, issues: parsed.error.flatten() }` (richer error shape that the frontend depends on). The helper only surfaces `issues[0]?.message`.
+2. `src/app/api/inbox/rooms/[id]/read/route.ts` — uses `req.json().catch(() => ({}))` to treat empty/invalid bodies as a valid empty payload (the schema's fields are all optional). The helper rejects invalid JSON with a 400.
+
+If we extend `validateRequest` later to support these (e.g., an `acceptEmptyBody` option or a `flatten: true` mode), revisit and consolidate.
+
+Two tsc errors surfaced during the sweep and were fixed in the same commit:
+
+- `src/app/api/call-logs/route.ts` line 177 — original code had `const data = parsed.data;` after the safeParse block; the script's `parsed.data → data` rewrite produced `const data = data;` (self-assign). Removed the redundant alias line.
+- `src/app/api/users/[id]/route.ts` lines 145-171 — original code declared `const data: Prisma.UserUpdateInput = {…}` for the prisma payload, now shadowed by the destructured `data` from `validateRequest`. Renamed the local to `updateData`.
+
+### Per AGENTS.md "after every plan" rule
+
+- **Reusables registry** — no new symbols added in this commit; existing `validateRequest` entry already documents the API.
+- **Module docs** — none touched; api helpers are cross-cutting.
+- **Todo list** — completed.
 
 Per AGENTS.md "after every plan" rule:
 

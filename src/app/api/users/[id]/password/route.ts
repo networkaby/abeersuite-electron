@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 
 const schema = z.object({
@@ -23,11 +24,11 @@ export async function PATCH(
     const isAdmin = caller.permissions.includes("users:manage") || caller.permissions.includes("admin:bypass");
     if (!isSelf && !isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
+    const { data, error } = await validateRequest(req, schema);
+    if (error) return error;
 
     try {
-        const hashed = await bcrypt.hash(parsed.data.password, 10);
+        const hashed = await bcrypt.hash(data.password, 10);
         await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
         return NextResponse.json({ success: true });
     } catch {

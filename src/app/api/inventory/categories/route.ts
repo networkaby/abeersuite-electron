@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { validateRequest } from "@/shared/lib/api";
 
 export async function GET() {
     const { response } = await requirePermission("inventory:manage");
@@ -21,11 +22,9 @@ export async function POST(req: Request) {
     const { response } = await requirePermission("inventory:manage");
     if (response) return response;
     try {
-        const parsed = invCategoryCreateSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload" }, { status: 400 });
-        }
-        const b = parsed.data;
+        const { data, error } = await validateRequest(req, invCategoryCreateSchema);
+        if (error) return error;
+        const b = data;
         if (b.parentId) {
             const p = await prisma.invCategory.findUnique({ where: { id: b.parentId } });
             if (!p) return NextResponse.json({ error: "Parent category not found" }, { status: 400 });

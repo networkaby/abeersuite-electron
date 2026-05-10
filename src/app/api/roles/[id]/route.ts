@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { validateRequest } from "@/shared/lib/api";
 
 export async function GET(
     _: Request,
@@ -39,11 +40,9 @@ export async function PATCH(
     if (response) return response;
     try {
         const { id } = await params;
-        const parsed = rolePatchSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid role payload" }, { status: 400 });
-        }
-        const body = parsed.data;
+        const { data, error } = await validateRequest(req, rolePatchSchema);
+        if (error) return error;
+        const body = data;
         const role = await prisma.role.update({
             where: { id },
             data: {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
 import { invProductDb } from "@/shared/types/inventoryTypes";
+import { validateRequest } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -18,14 +19,9 @@ const createOrderSchema = z.object({
 
 export async function POST(req: Request) {
     try {
-        const parsed = createOrderSchema.safeParse(await req.json());
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: parsed.error.issues[0]?.message ?? "Invalid order" },
-                { status: 400 }
-            );
-        }
-        const { lines, accountId } = parsed.data;
+        const { data, error } = await validateRequest(req, createOrderSchema);
+        if (error) return error;
+        const { lines, accountId } = data;
 
         const session = await auth();
         const kind = (session?.user as { kind?: string } | undefined)?.kind;
