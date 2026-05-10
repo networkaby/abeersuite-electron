@@ -7,8 +7,9 @@
  * No dialog — everything is inline for fast entry.
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import { useComboboxNav } from "@/shared/hooks";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type ProductOption = {
@@ -53,33 +54,23 @@ const formatINR = (paise: number | null) =>
         ? `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         : "—";
 
+function toSelected(p: ProductOption): SelectedProduct {
+    return {
+        id:        p.id,
+        sku:       p.sku,
+        name:      p.name,
+        unitCode:  p.unit.code,
+        stock:     p.stock,
+        salePrice: p.pricePaise != null ? p.pricePaise / 100 : null,
+        costPrice: p.costPaise  != null ? p.costPaise  / 100 : null,
+        mrp:       p.mrpPaise   != null ? p.mrpPaise   / 100 : null,
+    };
+}
+
 export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false }: Props) {
     const [products, setProducts]   = useState<ProductOption[]>([]);
     const [query, setQuery]         = useState("");
-    const [open, setOpen]           = useState(false);
     const [loading, setLoading]     = useState(true);
-    const [highlighted, setHighlighted] = useState(0);
-    const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
-    const wrapperRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
-    const listRef  = useRef<HTMLUListElement>(null);
-
-    // Match dropdown width to the parent voucher table so it spans the row
-    useEffect(() => {
-        if (!open) return;
-        const wrapper = wrapperRef.current;
-        if (!wrapper) return;
-        const table = wrapper.closest("table");
-        if (!table) return;
-        const measure = () => {
-            const tableRect   = table.getBoundingClientRect();
-            const wrapperRect = wrapper.getBoundingClientRect();
-            setDropdownWidth(Math.max(360, tableRect.right - wrapperRect.left));
-        };
-        measure();
-        window.addEventListener("resize", measure);
-        return () => window.removeEventListener("resize", measure);
-    }, [open]);
 
     // Load all products once (cached in memory for fast typing)
     useEffect(() => {
@@ -111,65 +102,59 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
           )
         : products;
 
-    const pick = useCallback((p: ProductOption) => {
-        setQuery(p.name);
-        setOpen(false);
-        onChange({
-            id:        p.id,
-            sku:       p.sku,
-            name:      p.name,
-            unitCode:  p.unit.code,
-            stock:     p.stock,
-            salePrice: p.pricePaise != null ? p.pricePaise / 100 : null,
-            costPrice: p.costPaise  != null ? p.costPaise  / 100 : null,
-            mrp:       p.mrpPaise   != null ? p.mrpPaise   / 100 : null,
-        });
-    }, [onChange]);
+    const cb = useComboboxNav({
+        count: filtered.length,
+        onSelect: (i) => {
+            const p = filtered[i];
+            if (!p) return;
+            setQuery(p.name);
+            cb.setOpen(false);
+            onChange(toSelected(p));
+        },
+        onClear: () => { setQuery(""); onChange(null); },
+    });
 
-    const clear = useCallback(() => {
-        setQuery("");
-        setOpen(false);
-        onChange(null);
-        inputRef.current?.focus();
-    }, [onChange]);
+    // Match dropdown width to the parent voucher table so it spans the row
+    useEffect(() => {
+        if (!cb.open) return;
+        const wrapper = cb.wrapperRef.current;
+        if (!wrapper) return;
+        const table = wrapper.closest("table");
+        if (!table) return;
+        const measure = () => {
+            const tableRect   = table.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
+            cb.setDropdownWidth(Math.max(360, tableRect.right - wrapperRect.left));
+        };
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, cb]);
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (!open) {
-            if (e.key !== "Escape" && e.key !== "Tab") setOpen(true);
-            return;
-        }
-        if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlighted((h) => Math.min(h + 1, filtered.length - 1));
-        } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlighted((h) => Math.max(h - 1, 0));
-        } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (filtered[highlighted]) pick(filtered[highlighted]);
-        } else if (e.key === "Tab") {
-            // Commit selection on tab, then let browser move focus naturally.
+    // Wrap handleKeyDown to add Tab commit-on-exit (consumer-specific).
+    const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (cb.open && e.key === "Tab") {
             const normalizedQuery = query.trim().toLowerCase();
             const normalizedSelected = (selectedProduct?.name ?? "").trim().toLowerCase();
             const hasTypedInput = normalizedQuery.length > 0;
             const shouldCommit = hasTypedInput && normalizedQuery !== normalizedSelected;
-            if (shouldCommit && filtered[highlighted]) pick(filtered[highlighted]);
-            else setOpen(false);
-        } else if (e.key === "Escape") {
-            setOpen(false);
+            if (shouldCommit && filtered[cb.highlighted]) {
+                const p = filtered[cb.highlighted];
+                setQuery(p.name);
+                cb.setOpen(false);
+                onChange(toSelected(p));
+            } else {
+                cb.setOpen(false);
+            }
+            return;
         }
+        cb.handleKeyDown(e);
     };
 
-    // Scroll highlighted item into view
-    useEffect(() => {
-        const item = listRef.current?.children[highlighted] as HTMLElement | undefined;
-        item?.scrollIntoView({ block: "nearest" });
-    }, [highlighted]);
-
     return (
-        <div ref={wrapperRef} className={`relative ${className}`}>
+        <div ref={cb.wrapperRef} className={`relative ${className}`}>
             <input
-                ref={inputRef}
+                ref={cb.inputRef}
                 type="text"
                 value={query}
                 autoFocus={autoFocus}
@@ -177,19 +162,19 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                 className="w-full bg-transparent border-0 outline-none text-sm placeholder:text-muted-foreground"
                 onChange={(e) => {
                     setQuery(e.target.value);
-                    setHighlighted(0);
-                    setOpen(true);
+                    cb.setHighlighted(0);
+                    cb.setOpen(true);
                     if (!e.target.value) onChange(null);
                 }}
-                onFocus={() => setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                onKeyDown={handleKeyDown}
+                onFocus={() => cb.setOpen(true)}
+                onBlur={cb.handleBlur}
+                onKeyDown={onKeyDown}
             />
 
-            {open && (
+            {cb.open && (
                 <div
                     className="absolute left-0 top-full z-50 mt-0.5 rounded-lg border border-border bg-popover shadow-xl text-sm"
-                    style={{ width: dropdownWidth ?? 720 }}
+                    style={{ width: cb.dropdownWidth ?? 720 }}
                 >
                     {/* Header row */}
                     <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 border-b border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -208,17 +193,21 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                         </div>
                     ) : (
                         <ScrollArea className="max-h-72 h-72">
-                            <ul ref={listRef} className="divide-y divide-border">
+                            <ul ref={cb.listRef} className="divide-y divide-border">
                                 {filtered.map((p, i) => {
                                     const isLow     = p.stock != null && p.stock <= p.lowStockThreshold;
                                     const stockZero = p.stock === 0;
                                     return (
                                         <li
                                             key={p.id}
-                                            onMouseDown={() => pick(p)}
-                                            onMouseEnter={() => setHighlighted(i)}
+                                            onMouseDown={() => {
+                                                setQuery(p.name);
+                                                cb.setOpen(false);
+                                                onChange(toSelected(p));
+                                            }}
+                                            onMouseEnter={() => cb.setHighlighted(i)}
                                             className={`grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 cursor-pointer px-3 py-2 transition-colors ${
-                                                i === highlighted ? "bg-accent" : "hover:bg-accent/60"
+                                                i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
                                             }`}
                                         >
                                             {/* Name + SKU + brand + barcode */}
@@ -261,7 +250,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             {value && (
                 <button
                     type="button"
-                    onMouseDown={clear}
+                    onMouseDown={cb.clear}
                     className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground text-base leading-none pr-1"
                     tabIndex={-1}
                 >

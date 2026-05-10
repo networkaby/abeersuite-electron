@@ -119,6 +119,50 @@ Run `Grep('useEffect\(\(\) => \{[^}]*axios\.get|fetch\(' src)`. For each `useEff
 - Subtle keyboard-nav regressions on Tab handling. Combobox tests should explicitly include Tab → "should commit selection if user typed differently than selected label" (current behaviour in GlAccountCombobox).
 - PosScreen Ctrl+Enter could be lost if `useComboboxNav.handleKeyDown` is wired before the custom branch. Wire **after** custom shortcuts.
 
+---
+
+## Post-execution notes (2026-05-11) — Segment 09a
+
+Status: **partial complete** — 4 hooks built + 2 comboboxes refactored. PartyCombobox refactor, PosScreen refactor, and the two bulk sweeps are split into follow-up commits within this segment.
+
+### What landed (09a):
+
+- `src/shared/hooks/{useComboboxNav,usePartySearch,useDeleteWithConfirm,useApiResource}.ts` + `index.ts` barrel.
+- `GlAccountCombobox` refactored to use `useComboboxNav` (state, refs, keydown, blur, clear, scroll-into-view all delegated; Tab commit-on-exit kept inline as designed).
+- `InvProductCombobox` refactored similarly.
+
+### Hook design decisions during execution:
+
+- **Tab is consumer-owned.** The hook's `handleKeyDown` covers ArrowUp/Down/Enter/Escape only. Consumers wrap it and inspect `e.key === "Tab"` before delegating. GlAccount and InvProduct both commit selection if the typed input differs from the selected label; PartyCombobox + PosScreen will have their own behaviours.
+- **`highlighted` auto-resets on `count` change** (was a manual reset in each combobox).
+- **`clear` doesn't reset `query`** — callers do that themselves via `onClear` callback, because the query state lives in the consumer (not the hook).
+
+### Reality vs plan — sweep counts:
+
+| Pattern | Plan estimate | Actual |
+|---|---|---|
+| `confirm()` delete patterns | 60+ | **16** |
+| `useEffect + axios.get` | 30+ | **138** total `axios.get` calls; only a fraction follow the `useEffect+setState+setLoading` pattern that fits `useApiResource` cleanly |
+
+### Deferred to follow-up commits within this segment:
+
+- **PartyCombobox refactor** — has extra API/debounce machinery and an inline create-party dialog. Will adopt `useComboboxNav` + `usePartySearch` in a separate commit so the diff stays small and reviewable.
+- **PosScreen party-search refactor** — UX-critical. Snapshot panel, "New customer" dialog, cart, payment splits, and Ctrl+Enter checkout must all keep current behaviour. Separate commit, verified manually in the browser end-to-end before merging.
+- **useDeleteWithConfirm sweep** — 16 sites. Mechanical but each callsite has its own confirm message / reload callback / error-message style. Worth doing; separate commit.
+- **useApiResource sweep** — too varied. Of 138 `axios.get` calls, many are inside event handlers (not `useEffect`-pattern), and many have richer state than `data + loading + error`. Adopt incrementally as files are touched for other reasons, not as a sweep.
+
+### Verification
+
+- `tsc --noEmit` clean
+- `npm run build` clean
+- Smoke: `/api/finance/gl-accounts` returns 200 with 73 accounts (the GlAccountCombobox consumer endpoint).
+
+### Per AGENTS.md "after every plan" rule
+
+- **Reusables registry** — `docs/reusables.md` gains a Hooks section.
+- **Module docs** — none touched.
+- **Todo list** — completed.
+
 
 ---
 

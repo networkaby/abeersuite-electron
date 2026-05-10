@@ -98,6 +98,18 @@ The following used to live in `src/shared/lib/format/` but have been promoted to
 | `buildTicketReadScopeWhere` | `src/modules/repairing/lib/ticketScope.ts` | repairing |
 | `postInvoiceJe` | `src/modules/accountancy/lib/postInvoiceJe.ts` | accountancy |
 
+## Hooks — `src/shared/hooks/`
+
+Import from the barrel: `import { … } from "@/shared/hooks"`.
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `useComboboxNav({ count, onSelect, onClear?, blurDelayMs? })` | `useComboboxNav.ts` | Generic dropdown keyboard nav — owns `open`, `highlighted`, `dropdownWidth`, wrapper/list/input refs, plus `handleKeyDown` (ArrowUp/Down/Enter/Escape), `handleBlur` (150 ms close delay), and `clear`. Consumers handle their own Tab behaviour. Auto-resets `highlighted` to 0 when `count` changes. |
+| `usePartySearch(query, opts?)` | `usePartySearch.ts` | Debounced lookup against `/api/people?lookup=…`. Returns `{ hits: PartyHit[], loading }`. Empty/whitespace queries short-circuit; aborts and clears on unmount. Default debounce 200 ms. |
+| `useDeleteWithConfirm({ url, message?, successMessage?, errorMessage?, onSuccess? })` | `useDeleteWithConfirm.ts` | Replaces the inline `confirm() + axios.delete + toast` boilerplate. Returns `{ remove(id, item?), deleting }`. |
+| `useApiResource<T>(url, opts?)` | `useApiResource.ts` | One-shot GET hook for `useEffect(() => fetch().then(setState))`. Returns `{ data, loading, error, reload }`. Pass `null` to disable. |
+| `PartyHit` (type) | `usePartySearch.ts` | The result-row shape returned by `/api/people?lookup=`. |
+
 ## Other shared lib
 
 | Path | Purpose |

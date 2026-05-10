@@ -9,7 +9,8 @@
  * clear button, dropdown widens to fit row).
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useComboboxNav } from "@/shared/hooks";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export interface GlAccount {
@@ -40,26 +41,6 @@ export function GlAccountCombobox({
     autoFocus = false,
 }: Props) {
     const [query, setQuery] = useState("");
-    const [open, setOpen] = useState(false);
-    const [highlighted, setHighlighted] = useState(0);
-    const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
-    const wrapperRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
-    const listRef = useRef<HTMLUListElement>(null);
-
-    // Match dropdown width to the wrapper (or expand a bit so two-line items fit)
-    useEffect(() => {
-        if (!open) return;
-        const wrapper = wrapperRef.current;
-        if (!wrapper) return;
-        const measure = () => {
-            const rect = wrapper.getBoundingClientRect();
-            setDropdownWidth(Math.max(360, rect.width));
-        };
-        measure();
-        window.addEventListener("resize", measure);
-        return () => window.removeEventListener("resize", measure);
-    }, [open]);
 
     // Sync display text when external value changes
     const selectedAccount = accounts.find((a) => a.id === value);
@@ -82,57 +63,57 @@ export function GlAccountCombobox({
         )
         : accounts;
 
-    const pick = useCallback((a: GlAccount) => {
-        setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
-        setOpen(false);
-        onChange(a);
-    }, [onChange]);
+    const cb = useComboboxNav({
+        count: filtered.length,
+        onSelect: (i) => {
+            const a = filtered[i];
+            if (!a) return;
+            setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
+            cb.setOpen(false);
+            onChange(a);
+        },
+        onClear: () => { setQuery(""); onChange(null); },
+    });
 
-    const clear = useCallback(() => {
-        setQuery("");
-        setOpen(false);
-        onChange(null);
-        inputRef.current?.focus();
-    }, [onChange]);
+    // Match dropdown width to the wrapper (or expand a bit so two-line items fit)
+    useEffect(() => {
+        if (!cb.open) return;
+        const wrapper = cb.wrapperRef.current;
+        if (!wrapper) return;
+        const measure = () => {
+            const rect = wrapper.getBoundingClientRect();
+            cb.setDropdownWidth(Math.max(360, rect.width));
+        };
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, cb]);
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (!open) {
-            if (e.key !== "Escape" && e.key !== "Tab") setOpen(true);
-            return;
-        }
-        if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlighted((h) => Math.min(h + 1, filtered.length - 1));
-        } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlighted((h) => Math.max(h - 1, 0));
-        } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (filtered[highlighted]) pick(filtered[highlighted]);
-        } else if (e.key === "Tab") {
-            // Commit selection on tab, then let browser move focus naturally.
+    // Wrap handleKeyDown to add Tab commit-on-exit (the generic hook intentionally
+    // leaves Tab to consumers since the behaviour varies).
+    const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (cb.open && e.key === "Tab") {
             const normalizedQuery = query.trim().toLowerCase();
             const normalizedSelected = selectedLabel.trim().toLowerCase();
             const hasTypedInput = normalizedQuery.length > 0;
             const shouldCommit = hasTypedInput && normalizedQuery !== normalizedSelected;
-            if (shouldCommit && filtered[highlighted]) pick(filtered[highlighted]);
-            else setOpen(false);
-        } else if (e.key === "Escape") {
-            e.stopPropagation();        // don't bubble to dialog Esc handler
-            setOpen(false);
+            if (shouldCommit && filtered[cb.highlighted]) {
+                const a = filtered[cb.highlighted];
+                setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
+                cb.setOpen(false);
+                onChange(a);
+            } else {
+                cb.setOpen(false);
+            }
+            return;
         }
+        cb.handleKeyDown(e);
     };
 
-    // Scroll highlighted item into view
-    useEffect(() => {
-        const item = listRef.current?.children[highlighted] as HTMLElement | undefined;
-        item?.scrollIntoView({ block: "nearest" });
-    }, [highlighted]);
-
     return (
-        <div ref={wrapperRef} className={`relative ${className}`}>
+        <div ref={cb.wrapperRef} className={`relative ${className}`}>
             <input
-                ref={inputRef}
+                ref={cb.inputRef}
                 type="text"
                 value={query}
                 autoFocus={autoFocus}
@@ -140,22 +121,22 @@ export function GlAccountCombobox({
                 className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 placeholder:text-muted-foreground"
                 onChange={(e) => {
                     setQuery(e.target.value);
-                    setHighlighted(0);
-                    setOpen(true);
+                    cb.setHighlighted(0);
+                    cb.setOpen(true);
                     if (!e.target.value) onChange(null);
                 }}
                 onFocus={(e) => {
-                    setOpen(true);
+                    cb.setOpen(true);
                     e.target.select();    // immediate typing replaces the label
                 }}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                onKeyDown={handleKeyDown}
+                onBlur={cb.handleBlur}
+                onKeyDown={onKeyDown}
             />
 
-            {open && (
+            {cb.open && (
                 <div
                     className="absolute left-0 top-full z-50 mt-0.5 rounded-lg border border-border bg-popover shadow-xl text-sm"
-                    style={{ width: dropdownWidth ?? 360 }}
+                    style={{ width: cb.dropdownWidth ?? 360 }}
                 >
                     {filtered.length === 0 ? (
                         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
@@ -163,14 +144,18 @@ export function GlAccountCombobox({
                         </div>
                     ) : (
                         <ScrollArea className="max-h-72 h-72">
-                            <ul ref={listRef} className="divide-y divide-border">
+                            <ul ref={cb.listRef} className="divide-y divide-border">
                                 {filtered.map((a, i) => (
                                     <li
                                         key={a.id}
-                                        onMouseDown={() => pick(a)}
-                                        onMouseEnter={() => setHighlighted(i)}
+                                        onMouseDown={() => {
+                                            setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
+                                            cb.setOpen(false);
+                                            onChange(a);
+                                        }}
+                                        onMouseEnter={() => cb.setHighlighted(i)}
                                         className={`cursor-pointer px-3 py-1.5 transition-colors ${
-                                            i === highlighted ? "bg-accent" : "hover:bg-accent/60"
+                                            i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
                                         }`}
                                     >
                                         <div className="flex items-baseline gap-2 min-w-0">
@@ -193,7 +178,7 @@ export function GlAccountCombobox({
             {value != null && (
                 <button
                     type="button"
-                    onMouseDown={clear}
+                    onMouseDown={cb.clear}
                     className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground text-sm leading-none"
                     tabIndex={-1}
                     aria-label="Clear account"
