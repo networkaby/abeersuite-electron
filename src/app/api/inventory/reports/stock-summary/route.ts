@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 
 // GET /api/inventory/reports/stock-summary
 export async function GET() {

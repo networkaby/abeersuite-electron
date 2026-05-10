@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/product-admin";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { z } from "zod";

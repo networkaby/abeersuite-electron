@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 
 // GET /api/finance/vouchers/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

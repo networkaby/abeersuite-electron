@@ -57,6 +57,30 @@ ResolvedUser  (the 7-field superset shape)
 
 `git revert`. No DB or env changes. Login flow is the only acceptance test.
 
+---
+
+## Post-execution notes (2026-05-10)
+
+Status: **complete** — `tsc --noEmit` clean, `npm run build` clean, browser smoke confirms 200 on all 4 permission-gated endpoints (`/api/notifications`, `/api/branches`, `/api/roles`, `/api/ticket-statuses`) for the admin session.
+
+Reality check vs the plan:
+
+- **Imports:** 163 files were importing from `@/shared/lib/auth/authGuard`, only **2** from `@/shared/lib/auth/permissions` (both for `resolvedUserFromSession`: `tickets/[id]/route.ts` and `tickets/[id]/participants/route.ts`). So permissions.ts was barely used; authGuard was the dominant pattern. Sweep covered all 163 files in one sed pass.
+- **ResolvedUser merge:** authGuard's was 6 fields; permissions.ts had 7 (with `rank`, `scope`). Final canonical shape has all 8 fields (`id, primaryRole, roles, permissions, rank, scope, departmentIds, branchIds`). The plan said "7-field superset" — that count was off by one because `id` wasn't being counted; the field list is correct.
+- **Customer rejection:** authGuard's `requireAuth` rejected `kind === "customer"`; permissions.ts's standalone `requirePermission` did not. Final canonical `requirePermission` chains through `requireAuth`, so it now also rejects portal customers. This is a behavior tightening for the 2 ticket files but a regression-safe one (customers shouldn't be hitting staff routes).
+
+What landed:
+
+- `src/shared/lib/auth/permissions.ts` — canonical, exports `ResolvedUser`, `hasPermission`, `isAdmin`, `requireAuth`, `requireRole`, `requirePermission`, `resolvedUserFromSession`. Single internal `resolveFromSession` helper (no longer duplicated).
+- `src/shared/lib/auth/authGuard.ts` — used as a re-export shim for ~30 seconds while the sweep ran, then deleted (`git rm -f`).
+- 163 files swept (`@/shared/lib/auth/authGuard` → `@/shared/lib/auth/permissions`).
+
+Per AGENTS.md "after every plan" rule:
+
+- **Reusables registry** — `docs/reusables.md` Auth section rewritten to reflect the consolidated module + 8-field `ResolvedUser`.
+- **Module docs** — none touched; auth is cross-cutting.
+- **Todo list** — completed throughout.
+
 
 ---
 

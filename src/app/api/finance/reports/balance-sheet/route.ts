@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { parseAsOf, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import {
     aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss,

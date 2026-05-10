@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invUnitCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { unstable_cache, revalidateTag } from "next/cache";
 

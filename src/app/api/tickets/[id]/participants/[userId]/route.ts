@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, hasPermission } from "@/shared/lib/auth/authGuard";
+import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 
 export async function DELETE(
     _: Request,

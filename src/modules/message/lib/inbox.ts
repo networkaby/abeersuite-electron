@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import type { ResolvedUser } from "@/shared/lib/auth/authGuard";
+import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 
 const ROOM_KEY = {
     system:  (userId: number)              => `system:${userId}`,

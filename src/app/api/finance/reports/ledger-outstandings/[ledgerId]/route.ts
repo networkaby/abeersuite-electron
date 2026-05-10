@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/finance/reports/ledger-outstandings/:ledgerId?asOf=YYYY-MM-DD

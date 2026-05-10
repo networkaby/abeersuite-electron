@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 
 // GET /api/pos/person-snapshot/[id]
 // "We know you" panel for the POS — aggregates everything in one call so the UI

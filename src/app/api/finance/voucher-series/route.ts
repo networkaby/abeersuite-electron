@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { seedVoucherSeries } from "@/modules/accountancy/lib/seedVoucherSeries";
 
 // GET /api/finance/voucher-series

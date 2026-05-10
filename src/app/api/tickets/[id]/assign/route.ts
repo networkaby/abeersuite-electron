@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission, isAdmin } from "@/shared/lib/auth/authGuard";
+import { requirePermission, isAdmin } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 

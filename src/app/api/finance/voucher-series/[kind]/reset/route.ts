@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 
 // POST /api/finance/voucher-series/[kind]/reset
 // Resets nextSeq to 0. Used at year-end to restart numbering from startFrom.

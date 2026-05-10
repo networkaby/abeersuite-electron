@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
 
 // POST /api/finance/vouchers/[id]/post

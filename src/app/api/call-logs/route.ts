@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth } from "@/shared/lib/auth/authGuard";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import type { Prisma } from "@/generated/prisma/client";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";

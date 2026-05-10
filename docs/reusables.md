@@ -30,12 +30,15 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 
 | Symbol | File | Purpose |
 |---|---|---|
-| `requireAuth()` / `requireRole(...)` / `requirePermission(id)` | `authGuard.ts` | Staff API route guards (Segment 03 will consolidate into `permissions.ts`) |
-| `requirePortalAuth()` | `portalAuthGuard.ts` | Customer portal API route guard |
-| `hasPermission(user, id)` / `isAdmin(user)` | `permissions.ts` | Predicates over a `ResolvedUser` |
-| `resolvedUserFromSession(session)` | `permissions.ts` | Extract a `ResolvedUser` from a NextAuth session |
-| `authorizeStaffCredentials` / `authorizePortalCredentials` | `authorizeStaff.ts` / `authorizePortal.ts` | NextAuth Credentials provider validators |
-| `makePermissionLayout(permissionId)` | `makePermissionLayout.tsx` | Factory for permission-gated Next.js layout wrappers |
+| `requireAuth()` | `permissions.ts` | Staff API guard — 401 if no session, 403 if portal customer; otherwise returns the resolved user. |
+| `requireRole(...roles)` | `permissions.ts` | Chains through `requireAuth` + restricts by `primaryRole` label. |
+| `requirePermission(id)` | `permissions.ts` | Chains through `requireAuth` + checks the permission id (scope-aware). |
+| `hasPermission(user, id)` / `isAdmin(user)` | `permissions.ts` | Predicates over a `ResolvedUser`. |
+| `resolvedUserFromSession(session)` | `permissions.ts` | Build a `ResolvedUser` from a session object without enforcing any guard. Used where you've already resolved the session and just need the typed shape. |
+| `ResolvedUser` (type) | `permissions.ts` | 8-field staff identity: `id, primaryRole, roles, permissions, rank, scope, departmentIds, branchIds`. |
+| `requirePortalAuth()` | `portalAuthGuard.ts` | Customer portal API route guard (parallel to `requireAuth` but for portal customers). |
+| `authorizeStaffCredentials` / `authorizePortalCredentials` | `authorizeStaff.ts` / `authorizePortal.ts` | NextAuth Credentials provider validators. |
+| `makePermissionLayout(permissionId)` | `makePermissionLayout.tsx` | Factory for permission-gated Next.js layout wrappers. |
 
 ## Prisma — `src/shared/lib/prisma/`
 

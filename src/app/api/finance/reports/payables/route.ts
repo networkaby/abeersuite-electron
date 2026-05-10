@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/authGuard";
+import { requirePermission } from "@/shared/lib/auth/permissions";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/finance/reports/payables?asOf=YYYY-MM-DD

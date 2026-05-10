@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/shared/lib/auth/authGuard";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 
 const createSchema = z.object({
