@@ -6,19 +6,15 @@ import { ContactConflictError } from "@/shared/lib/format/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 
-const createPersonSchema = z.object({
+// Multi-value `phones` / `emails` arrays default to []; the first entry is
+// primary unless an entry explicitly carries `isPrimary: true` at the write site.
+const createPersonSchema = phoneEmailSchema.merge(gstSchema).extend({
     name: z.string().trim().min(1, "Name is required"),
-    // Multi-value contacts. The first entry is treated as primary unless an
-    // entry explicitly carries `isPrimary: true`.
-    phones: z.array(z.string().trim().min(1)).optional().default([]),
-    emails: z.array(z.string().email()).optional().default([]),
     address: z.string().trim().optional().or(z.literal("")),
     agreedToTerms: z.boolean().optional(),
     accountGroup: z.enum(["Sundry Debtors", "Sundry Creditors"]).optional(),
-    gstin:        z.string().trim().optional().or(z.literal("")),
-    gstStateCode: z.string().trim().optional().or(z.literal("")),
-    gstRegType:   z.enum(["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"]).optional(),
 });
 
 type LookupResult = {

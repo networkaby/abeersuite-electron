@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nameIsActiveSchema } from "./commonSchemas";
 
 /** Empty / whitespace-only → null */
 export const zOptStr = (maxLen: number) =>
@@ -24,34 +25,24 @@ export const invUnitCreateSchema = z.object({
 
 export const invUnitUpdateSchema = invUnitCreateSchema.partial();
 
-export const invCategoryCreateSchema = z.object({
-    name: z.string().trim().min(1).max(200),
+export const invCategoryCreateSchema = nameIsActiveSchema.extend({
     slug: zOptStr(120),
     parentId: z.number().int().positive().nullish(),
-    isActive: z.boolean().optional().default(true),
 });
 
 export const invCategoryUpdateSchema = invCategoryCreateSchema.partial();
 
-export const invProductGroupCreateSchema = z.object({
-    name: z.string().trim().min(1).max(200),
-    isActive: z.boolean().optional().default(true),
-});
+export const invProductGroupCreateSchema = nameIsActiveSchema;
 
 export const invProductGroupUpdateSchema = invProductGroupCreateSchema.partial();
 
-export const invBrandCreateSchema = z.object({
-    name: z.string().trim().min(1).max(200),
-    isActive: z.boolean().optional().default(true),
-});
+export const invBrandCreateSchema = nameIsActiveSchema;
 
 export const invBrandUpdateSchema = invBrandCreateSchema.partial();
 
-export const invWarrantyTermCreateSchema = z.object({
-    name: z.string().trim().min(1).max(200),
+export const invWarrantyTermCreateSchema = nameIsActiveSchema.extend({
     description: zOptStr(2000),
     durationMonths: z.number().int().min(0).max(1200).nullish(),
-    isActive: z.boolean().optional().default(true),
 });
 
 export const invWarrantyTermUpdateSchema = invWarrantyTermCreateSchema.partial();

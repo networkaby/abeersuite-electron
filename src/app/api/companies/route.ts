@@ -4,11 +4,10 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { phoneEmailSchema } from "@/shared/lib/schemas/commonSchemas";
 
-const createSchema = z.object({
+const createSchema = phoneEmailSchema.extend({
     name: z.string().trim().min(1, "Company name is required"),
-    phones: z.array(z.string().trim().min(1)).optional().default([]),
-    emails: z.array(z.string().email()).optional().default([]),
     address: z.string().trim().optional().or(z.literal("")),
     companyReg: z.string().trim().optional().or(z.literal("")),
     taxId: z.string().trim().optional().or(z.literal("")),

@@ -52,7 +52,13 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 
 | Symbol | File | Purpose |
 |---|---|---|
-| (inventory CRUD schemas) | `inventorySchemas.ts` | Brand / category / unit / product create + update Zod schemas. Segment 07 will add common fragments here too. |
+| `labelColorSchema` | `commonSchemas.ts` | `{ label: required, color: optional }` — ticket-statuses, sub-statuses, and other settings rows that carry a Tailwind color-class string. Routes whose `color` is required (e.g. roles) keep their inline schema. |
+| `phoneEmailSchema` | `commonSchemas.ts` | `{ phones: string[], emails: string[] }` defaulting to `[]`. Multi-value contact arrays for people / companies / service rows. |
+| `gstSchema` | `commonSchemas.ts` | `{ gstin, gstStateCode, gstRegType }` — Indian GSTIN trio. All three optional with empty-string tolerance. |
+| `nameIsActiveSchema` | `commonSchemas.ts` | `{ name: required (≤ 200), isActive: optional default true }` — simple inventory master entities (brands, categories, product groups, warranty terms). |
+| (inventory CRUD schemas) | `inventorySchemas.ts` | Brand / category / unit / product / warranty-term schemas. `invCategory*`, `invBrand*`, `invProductGroup*`, `invWarrantyTerm*` now `extend()` `nameIsActiveSchema`. |
+
+> Compose with `.extend({...})` or `.partial()` rather than re-declaring the base fields. Routes whose constraints differ (custom max length, regex, required-vs-optional) keep their inline schema — DRY doesn't justify a wider base that everyone has to override.
 
 ## Types — `src/shared/types/`
 

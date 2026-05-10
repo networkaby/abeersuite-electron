@@ -6,10 +6,9 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { labelColorSchema } from "@/shared/lib/schemas/commonSchemas";
 
-const subStatusSchema = z.object({
-    label: z.string().trim().min(1, "Label is required"),
-    color: z.string().trim().min(1).optional(),
+const subStatusSchema = labelColorSchema.extend({
     group: z.string().trim().optional().nullable(),
     groupId: z.string().trim().optional().nullable(),
     order: z.coerce.number().int().nonnegative().optional(),

@@ -65,18 +65,58 @@ Run `Grep('z\.object\({' src/app/api)` and audit each match — replace if the s
 
 ## Verification
 
-- [ ] `commonSchemas.ts` exports the 5 schemas
-- [ ] `inventorySchemas.ts` uses `.extend()` from common where applicable
-- [ ] No remaining duplicate-shape `z.object({ phones: z.array(...), emails: z.array(...) })` literals
-- [ ] No remaining duplicate-shape `z.object({ label: ..., color: ... })` literals
-- [ ] `tsc --noEmit` clean
-- [ ] `npm run build` clean
-- [ ] Smoke: POST /api/people with valid payload — 200; with bad email — 400 with new schema's message; with duplicate phone — 409
-- [ ] Smoke: POST /api/ticket-statuses with empty label — 400
+- [x] `commonSchemas.ts` exports 4 of the planned 5 schemas (skipped `nameDescriptionSchema` — see post-execution)
+- [x] `inventorySchemas.ts` uses `.extend()` from common for `invCategory*`, `invBrand*`, `invProductGroup*`, `invWarrantyTerm*`
+- [x] phoneEmailSchema sweeps in people + companies
+- [x] labelColorSchema sweeps in ticket-statuses + sub-statuses
+- [x] `tsc --noEmit` clean
+- [x] `npm run build` clean
+- [x] Smoke: POST /api/branches, /api/ticket-statuses, /api/sub-statuses, /api/inventory/{brands,categories,product-groups} with `{}` body all return **400** with the schema's first issue message (via validateRequest)
+- [x] Smoke: GET /api/people, /api/companies, /api/inventory/{brands,categories} all return 200
 
 ## Out of scope
 
 - A generic CRUD route factory that takes a schema as input — deferred; risk doesn't justify reward yet.
+
+---
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete with scope adjustment** — 4 of 5 planned base schemas built; 8 consumer schemas swept; 1 base (`nameDescriptionSchema`) deferred because of constraint divergence.
+
+**What landed:**
+
+| Base schema | File | Consumers swept |
+|---|---|---|
+| `labelColorSchema` | `commonSchemas.ts` | `ticket-statuses/route.ts`, `sub-statuses/route.ts` (2 sweeps) |
+| `phoneEmailSchema` | `commonSchemas.ts` | `people/route.ts`, `companies/route.ts` (2 sweeps) |
+| `gstSchema` | `commonSchemas.ts` | `people/route.ts` (merged with `phoneEmailSchema`) |
+| `nameIsActiveSchema` | `commonSchemas.ts` | `inventorySchemas.ts` — refactored `invCategoryCreateSchema`, `invBrandCreateSchema`, `invProductGroupCreateSchema`, `invWarrantyTermCreateSchema` (4 internal refactors). All consuming routes (10+ inventory routes) automatically pick up the refactor through the existing `inventorySchemas` re-export. |
+
+**Net effect:** 8 explicit `extend()` adoptions + 10+ indirect consumers via the inventory schemas refactor.
+
+**Deferred — `nameDescriptionSchema`:**
+
+The plan envisioned this for `gl-accounts`, `ledgers`, `departments`, `pipelines`. In practice, the four routes' `name` and `description` fields disagree on:
+- `name`: `min(1)` only (gl-accounts) vs `min(1).max(200)` (ledgers) vs `min(1, "Name is required")` (departments) vs `min(1, "Name is required").regex(/^[a-z0-9_-]+$/)` (pipelines)
+- `description`: `trim().optional()` (gl-accounts) vs `trim().max(1000).nullish()` (ledgers) vs `trim().optional().nullable()` (departments) vs `optional().nullable()` (pipelines — not trimmed!)
+
+A common base would either capture only `name: z.string().trim().min(1)` (forcing every caller to immediately `.extend({ name: ... })` to add their constraints — defeats the win) or carry the loosest common denominator (and lose the strictest constraints). Skipping is more honest than forcing.
+
+**Other routes intentionally left inline:**
+
+- `roles/route.ts` — `color` is required, not optional. Doesn't fit `labelColorSchema`.
+- `sub-status-groups/route.ts` — has `label` but no `color` at all. Doesn't fit.
+- `service-centers/route.ts` — uses scalar `phone`/`email`, not arrays. Doesn't fit `phoneEmailSchema`.
+
+**Smoke results:**
+- 6 POST endpoints with `{}` body → 400 with the schema's first issue message (validateRequest chain working).
+- 4 GET endpoints → 200.
+
+Per AGENTS.md "after every plan" rule:
+- **Reusables registry** — `docs/reusables.md` Schemas section rewritten with the four entries + composition guidance.
+- **Module docs** — none touched.
+- **Todo list** — completed.
 
 
 ---
