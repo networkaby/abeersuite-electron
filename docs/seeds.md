@@ -1,83 +1,130 @@
-# Seed Files
+# Seeds
 
-All seed scripts live in `prisma/seeds/`. To bootstrap a fresh database:
+All seed scripts and their fixture data live under `prisma/seeds/`.
 
-```bash
-pnpm prisma db push       # 1. create schema
-pnpm seed:all             # 2. baseline → org → accounts → db-checks
-# dev-only, run manually if you want demo data:
-pnpm seed:dummy-users     # demo logins (admin/tech/front/des @networkservice.in)
-pnpm seed:dummy-shop      # demo product catalog
+```
+prisma/seeds/
+├─ bootstrap-seed.ts     PRODUCTION — single source of truth for setup
+├─ hard-clean.ts         CLEANER — wipes everything bootstrap doesn't seed
+├─ purge-vouchers.ts     OPS — wipes only vouchers/JEs/invoices/payments
+├─ dummy-users.ts        DEV — 3 demo non-admin staff logins
+├─ dummy-customers.ts    DEV — demo customers + companies
+├─ dummy-shop.ts         DEV — demo product catalog (consumes data/demoCatalogSeed.ts)
+├─ dummy-vouchers.ts     DEV — demo vouchers + journal entries
+└─ data/
+   └─ demoCatalogSeed.ts FIXTURE — hardcoded product list used by dummy-shop
 ```
 
-Each seed is idempotent — safe to re-run.
-**Production:** run only `seed:all`. Skip the `dummy-*` files (or delete them after dev).
+## Production seed
 
----
+The official Prisma seed is wired in [`prisma.config.ts`](../prisma.config.ts):
 
-## Production seeds (run as `seed:all`)
+```ts
+migrations: { seed: "pnpm exec tsx prisma/seeds/bootstrap-seed.ts" }
+```
 
-### 1. `prisma/seeds/baseline.ts` — `pnpm seed:baseline`
+Run on a fresh database:
 
-Wired as the official Prisma seed (`prisma.config.ts → migrations.seed`).
-Seeds:
-- 4 roles (R1 Admin, R2 Technician, R3 Front Desk, R4 Despatch)
-- ~80 permissions + role-permission grants
-- 7 pipelines (P1–P7) with statuses (S1–S49)
-- Sub-status groups + 37 sub-statuses + transitions
+```bash
+pnpm prisma db push       # 1. apply schema
+pnpm prisma db seed       # 2. runs bootstrap-seed.ts (auto-runs after `prisma migrate reset`)
+```
 
-### 2. `prisma/seeds/org.ts` — `pnpm seed:org`
+`bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
 
-Depends on roles existing. Seeds:
-- Role ranks (R1=100, R2=70, R3=20, R4=20)
-- 4 branches (BR-HQ, BR-MIR, BR-CTG, BR-ONL)
-- 7 cross-branch departments
+- **RBAC** — 4 roles, 80+ permissions, RolePermission grants
+- **Workflow** — 6 pipelines, 49 ticket statuses, 7 sub-status groups, 38 sub-statuses, transitions
+- **Org structure** — 2 branches (HQ + Online), 7 cross-branch departments, role ranks
+- **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; legacy US-style codes preserved on merged accounts
+- **DB constraints** — `Phone_owner_xor`, `Email_owner_xor` CHECK constraints (Prisma can't express XOR; applied via raw SQL inside the seed)
 
-### 3. `prisma/seeds/accounts.ts` — `pnpm seed:accounts`
+> Production deployments run **only** `pnpm prisma db seed`. Do not run any `dummy-*` script in production.
 
-Single source of truth for the chart of accounts. Seeds:
-- 28 standard Tally account groups (15 primary + 13 sub-groups)
-- ~75 GL ledger accounts, every one mapped to a group
-- Legacy US-style codes preserved on the merged Tally accounts (`1000` Cash, `1010` Bank Account, `1100` Accounts Receivable, `2100` Tax Payable, `4000` Service Charges Income, `4150` Shop Sales Revenue, `CASH-WALKIN` Walk-in Cash Customer, etc.) so existing code paths keep resolving
-- Step 0 migrates legacy US-style names → Tally names (Owner's Capital → Capital, Service Revenue → Service Charges Income, Rent Expense → Rent, Salaries Expense → Salary & Wages) and moves any journal/voucher lines along
-- Step 1 dedupes orphan GL accounts by name (case-insensitive)
-- Step 3 backfills any customer/company `Account` with `groupId = NULL` → Sundry Debtors
+## Dummy seeds (dev only)
 
-### 4. `prisma/seeds/db-checks.ts` — `pnpm seed:db-checks`
+Manual, idempotent, **never** auto-run by Prisma. Use for demos, screenshots, local testing.
 
-Adds `Phone_owner_xor` + `Email_owner_xor` CHECK constraints (each Phone/Email row owned by exactly one of `personId`/`companyId`). Prisma can't express XOR in the schema DSL, so we apply via raw SQL.
+| Script | Purpose |
+|---|---|
+| `pnpm seed:dummy-users` | 3 demo logins (`tech@`, `front@`, `des@networkservice.in`) with predictable passwords |
+| `pnpm seed:dummy-customers` | Demo persons + companies with phones/emails + party-linked Account ledgers |
+| `pnpm seed:dummy-shop` | Demo product catalog (laptops, desktops, etc.) — reads from `data/demoCatalogSeed.ts` |
+| `pnpm seed:dummy-vouchers` | Demo invoices, payments, journal entries |
+| `pnpm seed:dummy-all` | Runs all four in dependency order: customers → users → shop → vouchers |
 
----
+## Cleaner — return to bootstrap state
 
-## Dummy seeds (dev only, NOT in `seed:all`)
+```bash
+pnpm seed:hard-clean
+```
 
-### 5. `prisma/seeds/dummy-users.ts` — `pnpm seed:dummy-users`
+`hard-clean.ts` wipes **everything `bootstrap-seed.ts` does NOT seed**:
 
-4 demo logins with predictable passwords (admin123, tech123, front123, des123). Prints a "DUMMY DATA" banner.
+- All transactions: vouchers, journal entries, invoices, payments, allocations, audits
+- All inventory data: stock-ledger, vouchers, products, units, categories, brands, warranty terms
+- All shop orders, repair tickets, CRM leads, social posts, chat messages
+- All non-admin Users (only `admin@networkservice.in` survives)
+- All Persons / Companies / Phones / Emails
+- All party-linked Account rows
+- ServiceCenter, ShopCoupon, PortalCredentials
 
-### 6. `prisma/seeds/dummy-shop.ts` — `pnpm seed:dummy-shop`
+Preserves everything bootstrap-seed wrote, plus user-set config (opening balances, CompanySettings).
 
-Full demo shop catalog (products, imagery, descriptions). Source data lives in `src/lib/shop/demo-catalog-seed.ts`.
+> **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.
 
----
+After cleaning, repopulate demo data with `pnpm seed:dummy-all`.
 
-## Schema invariants
+## Narrower cleaner
 
-`Account.type` was **removed** as of this rework. Account section type now derives from the parent `AccountGroup.type` (`ASSET | LIABILITY | INCOME | EXPENSE`). UI consumers:
-- [src/app/(protected)/office/accountancy/chart-of-accounts/page.tsx](src/app/(protected)/office/accountancy/chart-of-accounts/page.tsx) groups rows by `a.group?.type`
-- [src/utils/constants.ts](src/utils/constants.ts) exports the 4-element `GL_TYPE_ORDER`
-- [src/modules/accountancy/lib/groupNature.ts](src/modules/accountancy/lib/groupNature.ts) — `defaultNormalBalanceForGroupType(type)` derives DEBIT/CREDIT from group type
+```bash
+pnpm seed:purge-vouchers
+```
 
-Legacy code paths still using numeric codes (resolve via the merged accounts):
-- [src/lib/post-invoice-je.ts](src/lib/post-invoice-je.ts) — codes 1100, 4000, 2100
-- [src/modules/ecommerce/lib/order-status.ts](src/modules/ecommerce/lib/order-status.ts) — codes 1010, 4150
-- [src/modules/shared/components/PartyPicker/index.tsx](src/modules/shared/components/PartyPicker/index.tsx) — code CASH-WALKIN
+Wipes only voucher/journal/invoice/payment tables — useful when you want to re-test posting flows without nuking customers and inventory.
 
-These will get rewritten to Tally name lookup + customer-account-direct + CGST/SGST split when the ticket↔invoice link and shop-order JE rework lands.
+## Fixture data (`prisma/seeds/data/`)
 
----
+Pure data — TS objects exported as constants, no DB or runtime logic. Each file is consumed by exactly one dummy seed script.
 
-## Other scripts in `prisma/` (not seeds)
+| File | Consumed by |
+|---|---|
+| `data/demoCatalogSeed.ts` | `dummy-shop.ts` |
 
-- `prisma/migrate-accounts.ts` — one-time historical backfill (creates `Account` for `Person` rows missing one). Likely already run.
-- `prisma/smoke-test-people.ts` — Person/Phone/Email rename smoke test, not a seed.
+Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rather than being inlined into the dummy-* script.
+
+## Update rules — when to touch what
+
+| Change | Update |
+|---|---|
+| Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` AND any `dummy-*.ts` that writes to the table — same commit as the schema change |
+| Add a new permission / role / pipeline / status / sub-status | `bootstrap-seed.ts` |
+| Add a new account group or default GL ledger | `bootstrap-seed.ts` |
+| Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |
+| Add a new demo user / customer / product type | the relevant `dummy-*.ts` |
+| Add a new fixture data file | `prisma/seeds/data/<name>.ts`; document the consumer here |
+| Add a new dummy script | wire into `package.json` `scripts` and into `seed:dummy-all` |
+| Hard-clean must remove a new dummy table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
+
+> **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` (production) and the matching `dummy-*.ts` (dev) in the same commit. The dummy scripts are the canonical demo for that schema; if they break after a schema change, future agents have no working reference.
+
+## Demo logins (after `seed:dummy-users`)
+
+| Email | Role | Password |
+|---|---|---|
+| `admin@networkservice.in` | R1 Admin (seeded by **bootstrap**, not dummy) | `admin123` |
+| `tech@networkservice.in` | R2 Technician | `tech123` |
+| `front@networkservice.in` | R3 Front Desk | `front123` |
+| `des@networkservice.in` | R4 Despatch | `des123` |
+
+## Schema invariants enforced by seeds
+
+- `Account.type` is **removed** — section type derives from `AccountGroup.type` (`ASSET | LIABILITY | INCOME | EXPENSE`). UI groups by `a.group?.type`.
+- Stock-in-Hand `AccountGroup` is intentionally empty in bootstrap — closing-stock is computed dynamically, not stored.
+- Phone/Email rows are owned by exactly one of `personId` / `companyId` (XOR CHECK constraint applied by bootstrap).
+
+## Other scripts in `prisma/` (NOT seeds)
+
+These live at the prisma root, not under `seeds/`:
+
+- [`prisma/migrate-accounts.ts`](../prisma/migrate-accounts.ts) — one-time historical backfill (creates `Account` for `Person` rows missing one). Likely already run on existing databases.
+- [`prisma/smoke-test-people.ts`](../prisma/smoke-test-people.ts) — Person/Phone/Email smoke test, not a seed.
