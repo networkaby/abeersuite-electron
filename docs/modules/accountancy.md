@@ -42,7 +42,7 @@ API folder is still `/api/finance/*` — rename deferred to Step 5 (route restru
 
 ## Key components / library
 
-- `src/modules/accountancy/components/` — `VoucherForm`, `VoucherList`, `VoucherDetail`, `LifecycleActions`, `BookPage`, `DrillRow`, `PartyCombobox`, `GstSummaryView`, `JournalVoucherDialog` (Tally-style adjustment voucher with Dr/Cr columns + optional inventory items per line — opens via `useJournalVoucherStore` from anywhere).
+- `src/modules/accountancy/components/` — `VoucherForm`, `VoucherList`, `VoucherDetail`, `LifecycleActions`, `BookPage`, `DrillRow`, `PartyCombobox`, `GstSummaryView`, `JournalVoucherDialog` (Tally-style adjustment voucher with Dr/Cr columns + optional inventory items per line — opens via `useJournalVoucherStore` from anywhere), `DebitNoteDialog` (modal debit note creator that posts to `/api/finance/vouchers` and opens via `useDebitNoteDialogStore` from ButtonBar / More actions).
 - `src/modules/accountancy/lib/` — see helpers registry below.
 
 ## Reusable helpers — DO NOT duplicate ⚠️
@@ -83,6 +83,7 @@ These are the **single source of truth** for every balance/value calculation in 
 4. **Drill-down on ledger** — `/office/accountancy/ledgers/[id]` → reads from `/api/finance/reports/ledger/[accountId]`.
 5. **Tally-style journal voucher (with optional inventory)** — `useJournalVoucherStore.setOpen(true)` from any page → `JournalVoucherDialog` → POST `/api/finance/journal-vouchers` (atomic: Voucher + JE + Account.balance + optional STOCK_JOURNAL InvVoucher carrier + InvStockLedger). Inventory items are gated to INCOME/EXPENSE ledgers via `isStockEligibleAccount`.
 6. **Set opening balance on master save** — POST/PATCH `/api/finance/gl-accounts` (writes `openingBalance/openingBalanceType/openingBalanceDate` directly) and POST/PATCH `/api/inventory/products` (also syncs `stock`/`costPaise` cache via `syncProductCacheFromOpening`). The `/office/accountancy/opening-balance` page exposes both inline + dedicated quick-create dialogs.
+7. **Create debit note via dialog** — `ButtonBar` / `AllCreateActionsDialog` action `new-debit-note` → `useDebitNoteDialogStore.setOpen(true)` → `DebitNoteDialog` → POST `/api/finance/vouchers` with `type=DEBIT_NOTE` (+ optional allocations via `/api/finance/allocations`) and optional post via `/api/finance/vouchers/[id]/post`.
 
 ## Recent decisions / gotchas
 
@@ -103,4 +104,4 @@ These are the **single source of truth** for every balance/value calculation in 
 - Cost centres / budgets / multi-currency — cut.
 - Renaming `/api/finance/*` to `/api/accountancy/*` — deferred to Step 5.
 
-_Last updated: 2026-05-09 — added centralized helpers (effectiveBalance, tradingStockAdjustment, journal-vouchers atomic endpoint, JournalVoucherDialog), opening-balance write paths, BS Stock-in-Hand injection, P&L↔BS reconciliation._
+_Last updated: 2026-05-11 — added DebitNoteDialog (global modal + Zustand trigger), switched Debit Note create entrypoints to dialog flow, retained `/debit-notes/new` as a thin opener route._

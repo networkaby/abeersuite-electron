@@ -12,6 +12,7 @@ import { getActiveModule } from "@/utils/active-module";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
+import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
@@ -36,6 +37,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { personOpen, companyOpen, setPersonOpen, setCompanyOpen } = useCreateDialogStore();
     const { setOpen: openJournalVoucher } = useJournalVoucherStore();
+    const { setOpen: openDebitNote } = useDebitNoteDialogStore();
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
@@ -73,6 +75,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             setCompanyOpen(true);
         } else if (action.action === "new-journal-voucher") {
             openJournalVoucher(true);
+        } else if (action.action === "new-debit-note") {
+            openDebitNote(true);
         }
     };
 

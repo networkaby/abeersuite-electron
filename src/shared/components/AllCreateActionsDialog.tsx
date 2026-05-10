@@ -13,6 +13,8 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
+import { useJournalVoucherStore } from "@/store/journalVoucherStore";
+import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
 
 type Props = {
     open: boolean;
@@ -25,6 +27,8 @@ type Props = {
 export default function AllCreateActionsDialog({ open, onOpenChange, permissions, isAdmin, defaultPipeline }: Props) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { setPersonOpen, setCompanyOpen } = useCreateDialogStore();
+    const { setOpen: openJournalVoucher } = useJournalVoucherStore();
+    const { setOpen: openDebitNote } = useDebitNoteDialogStore();
 
     const canDo = (permission?: string | null) => {
         if (!permission) return true;
@@ -41,6 +45,10 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             setPersonOpen(true);
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
+        } else if (action.action === "new-journal-voucher") {
+            openJournalVoucher(true);
+        } else if (action.action === "new-debit-note") {
+            openDebitNote(true);
         }
     };
 
