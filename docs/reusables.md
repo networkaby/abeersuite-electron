@@ -89,11 +89,26 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 
 ---
 
+## API helpers — `src/shared/lib/api/`
+
+Import from the barrel: `import { … } from "@/shared/lib/api"`.
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `validateRequest(req, schema)` | `validateRequest.ts` | Parse JSON body with a Zod schema; returns `{ data, error: null }` or `{ data: null, error: NextResponse }` (400). Replaces inline `safeParse + NextResponse({ error })` boilerplate. |
+| `parsePagination(searchParams, opts?)` | `parsePagination.ts` | Returns `{ take, skip, page }` from `?limit=&page=`. Bounded by `DEFAULT_PAGE_SIZE` (50) / `MAX_PAGE_SIZE` (200) unless overridden via `opts`. |
+| `parseCursor(searchParams, opts?)` | `parsePagination.ts` | Returns `{ cursor, take }` from `?cursor=&limit=`. Same bounds as `parsePagination`. |
+| `DEFAULT_PAGE_SIZE` / `MAX_PAGE_SIZE` | `parsePagination.ts` | Constants — use these instead of hardcoding 50 / 200 in route options. |
+| `prismaUniqueError(e, message)` | `prismaUniqueError.ts` | Maps Prisma `P2002` to a 409 NextResponse. Pass a string for single-message routes, or a `Record<field, message>` to map specific columns. Returns `null` on non-P2002 errors so callers can fall through. |
+| `handleApiError(e, fallback?)` | `handleApiError.ts` | Logs + returns a 500 NextResponse with the fallback message. Trailing `catch { 500 }` envelope. |
+| `generateNextOpaqueId(model, prefix)` | `generateNextOpaqueId.ts` | Returns `{ id: \`${prefix}${n}\`, n }` where `n = max numeric suffix among existing IDs + 1`. Use for opaque IDs like `S50`, `SS37`, `R5`, `P1` instead of bare integers. |
+
+> Boilerplate sweep status: opaque-ID, P2002 (simple cases), and pagination call sites are all swept (segment 04a, 17 sites). `validateRequest` (≈110 routes) and `handleApiError` (≈152 routes) sweeps are deferred to follow-up commits within this segment.
+
 ## Sections coming in later segments
 
 The following sections will appear when their owning segment ships. See [docs/plans/](plans/) for sequencing.
 
-- **API helpers** (Segment 04) — `validateRequest`, `parsePagination`, `parseCursor`, `prismaUniqueError`, `handleApiError`, `generateNextOpaqueId` in `src/shared/lib/api/`
 - **Constants** (Segment 05) — `PERMISSIONS`, `ACCOUNT_GROUPS` in `src/shared/lib/constants/`
 - **Prisma fragments** (Segment 06) — `selectPrimaryPhone`, `selectPrimaryEmail`, `selectAccountWithOwner`, `buildSearchWhere` in `src/shared/lib/prisma/fragments.ts`
 - **Common Zod schemas** (Segment 07) — `labelColorSchema`, `nameDescriptionSchema`, `phoneEmailSchema`, `gstSchema`, `nameIsActiveSchema` in `src/shared/lib/schemas/commonSchemas.ts`

@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { prismaUniqueError } from "@/shared/lib/api";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission("inventory:manage");
@@ -23,8 +24,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
         return NextResponse.json(row);
     } catch (e: unknown) {
-        const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";
-        if (code === "P2002") return NextResponse.json({ error: "Group name already exists" }, { status: 409 });
+        const conflict = prismaUniqueError(e, "Group name already exists");
+        if (conflict) return conflict;
         return NextResponse.json({ error: "Failed to update product group" }, { status: 500 });
     }
 }

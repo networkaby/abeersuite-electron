@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 
 const pipelineSchema = z.object({
@@ -44,13 +45,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: `A pipeline with name "${body.name}" already exists` }, { status: 409 });
         }
 
-        // Generate next opaque ID
-        const all = await prisma.pipeline.findMany({ select: { id: true } });
-        const maxN = all.reduce((max, p) => {
-            const n = parseInt(p.id.replace(/\D/g, ""), 10);
-            return isNaN(n) ? max : Math.max(max, n);
-        }, 0);
-        const newId = `P${maxN + 1}`;
+        const { id: newId, n: nextOrder } = await generateNextOpaqueId(prisma.pipeline, "P");
 
         const pipeline = await prisma.pipeline.create({
             data: {
@@ -61,7 +56,7 @@ export async function POST(req: Request) {
                 color: body.color ?? "bg-gray-100 text-gray-600",
                 isDefault: false,
                 isActive: body.isActive ?? true,
-                order: body.order ?? maxN + 1,
+                order: body.order ?? nextOrder,
             },
         });
         return NextResponse.json(pipeline, { status: 201 });

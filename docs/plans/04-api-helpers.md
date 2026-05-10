@@ -113,6 +113,40 @@ Done in **this same PR** (helpers + sweep together) so the boilerplate doesn't l
 - `parseCursor` adoption — only call out in this segment if there's a route with cursor pagination already; otherwise just expose it for future use.
 - Generic CRUD route factory — high risk; deferred indefinitely.
 
+---
+
+## Post-execution notes (2026-05-10)
+
+Status: **04a complete (helpers + 3 small sweeps)**. validateRequest + handleApiError sweeps are split into follow-up commits within this segment because the actual scope is much larger than the plan estimated and one PR shouldn't carry both.
+
+Reality vs plan:
+
+| Pattern | Plan estimate | Actual count | Disposition |
+|---|---|---|---|
+| `safeParse` (validateRequest) | 89 sites | **110 files / 114 occurrences** | **Deferred to 04b** — too large for a single PR with the other sweeps |
+| `Math.min/Math.max(searchParams)` (parsePagination) | 30+ sites | **8 files** | 6 swept here; 2 left inline (`call-logs` uses `pageSize` not `limit`; `users/[id]/activity` has min-10 lower bound) |
+| `P2002` (prismaUniqueError) | 10+ sites | **10 files** | 8 swept here; 2 left inline (`companies` and `people` return a `field` discriminator the helper doesn't surface) |
+| `status: 500` envelope (handleApiError) | 80+ sites | **152 files** | **Deferred to 04c** — bigger than plan estimated; mechanical but pervasive |
+| Opaque-ID `findMany→reduce` | 4 sites | **3 files** | All 3 swept |
+
+What landed in 04a:
+
+- `src/shared/lib/api/{validateRequest,parsePagination,prismaUniqueError,handleApiError,generateNextOpaqueId}.ts` + `index.ts` barrel.
+- `generateNextOpaqueId` evolved during the sweep — original signature returned `string`, but call sites needed `maxN + 1` for default `order` field. Final shape returns `{ id, n }`.
+- `prismaUniqueError` evolved to accept either a `string` (any P2002 here = same conflict) or `Record<field, msg>` (multi-field map). The `tickets/[id]/participants` route uses the string form (composite unique constraint).
+- 17 file sweeps total in this commit (3 opaque-ID, 8 P2002 simple, 6 pagination).
+
+Follow-up commits within this segment:
+
+- **04b**: validateRequest sweep — ≈110 files. Each replaces the `await req.json() + safeParse + NextResponse({ error: issues[0]?.message })` block with `const { data, error } = await validateRequest(req, schema); if (error) return error;`. Mechanical but each file requires careful editing because variable names downstream of `parsed.data` vary.
+- **04c**: handleApiError sweep — ≈152 files. Each replaces the trailing `catch { return NextResponse.json({ error: "..." }, { status: 500 }) }` with `catch (e) { return handleApiError(e, "..."); }`. Adds server-side error logging consistently.
+
+Per AGENTS.md "after every plan" rule:
+
+- **Reusables registry** — `docs/reusables.md` API helpers section added.
+- **Module docs** — none touched; api helpers are cross-cutting.
+- **Todo list** — completed.
+
 
 ---
 

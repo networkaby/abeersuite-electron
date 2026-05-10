@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/product-admin";
 import { invProductDb } from "@/shared/types/inventoryTypes";
+import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 
 const specsSchema = z.record(z.string(), z.string()).optional();
@@ -109,8 +110,8 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(invProductToAdmin(p), { status: 201 });
     } catch (e: unknown) {
-        const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";
-        if (code === "P2002") return NextResponse.json({ error: "SKU or slug already exists" }, { status: 409 });
+        const conflict = prismaUniqueError(e, "SKU or slug already exists");
+        if (conflict) return conflict;
         return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
     }
 }

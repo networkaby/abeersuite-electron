@@ -3,6 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/refResolver";
+import { parsePagination } from "@/shared/lib/api";
 
 // Surfaced kinds in the Day Book — the union of inventory-voucher origins
 // (Sale/Purchase/Estimate), invoices, GL voucher types, and stand-alone JE.
@@ -20,8 +21,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const { from, to } = parseRange(searchParams);
     const search = searchParams.get("search")?.trim() ?? "";
-    const page = Math.max(1, Number(searchParams.get("page") ?? 1));
-    const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? 50)));
+    const { take: limit, page } = parsePagination(searchParams);
     const kindParam = (searchParams.get("kind") ?? "All") as Kind;
     const kind: Kind = (KINDS as string[]).includes(kindParam) ? kindParam : "All";
 

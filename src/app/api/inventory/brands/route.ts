@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invBrandCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { prismaUniqueError } from "@/shared/lib/api";
 
 export async function GET() {
     const { response } = await requirePermission("inventory:manage");
@@ -28,8 +29,8 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(row, { status: 201 });
     } catch (e: unknown) {
-        const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";
-        if (code === "P2002") return NextResponse.json({ error: "Brand name already exists" }, { status: 409 });
+        const conflict = prismaUniqueError(e, "Brand name already exists");
+        if (conflict) return conflict;
         return NextResponse.json({ error: "Failed to create brand" }, { status: 500 });
     }
 }

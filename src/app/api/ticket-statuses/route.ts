@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 
 const ticketStatusSchema = z.object({
@@ -50,20 +51,14 @@ export async function POST(req: Request) {
         }
         const body = parsed.data;
 
-        // Generate next opaque ID: find highest numeric suffix among existing S* IDs
-        const existing = await prisma.ticketStatus.findMany({ select: { id: true } });
-        const maxN = existing.reduce((max, s) => {
-            const n = parseInt(s.id.replace(/\D/g, ""), 10);
-            return isNaN(n) ? max : Math.max(max, n);
-        }, 0);
-        const newId = `S${maxN + 1}`;
+        const { id: newId, n: nextOrder } = await generateNextOpaqueId(prisma.ticketStatus, "S");
 
         const status = await prisma.ticketStatus.create({
             data: {
                 id:           newId,
                 label:        body.label,
                 color:        body.color       ?? "bg-gray-100 text-gray-600",
-                order:        body.order       ?? maxN + 1,
+                order:        body.order       ?? nextOrder,
                 isTerminal:   body.isTerminal  ?? false,
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles:  body.notifyRoles  ?? [],

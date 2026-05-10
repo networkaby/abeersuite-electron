@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
+import { generateNextOpaqueId } from "@/shared/lib/api";
 import { z } from "zod";
 
 const subStatusSchema = z.object({
@@ -68,12 +69,7 @@ export async function POST(req: Request) {
         }
         const body = parsed.data;
 
-        const existing = await prisma.ticketSubStatus.findMany({ select: { id: true } });
-        const maxN = existing.reduce((max, s) => {
-            const n = parseInt(s.id.replace(/\D/g, ""), 10);
-            return isNaN(n) ? max : Math.max(max, n);
-        }, 0);
-        const newId = `SS${maxN + 1}`;
+        const { id: newId, n: nextOrder } = await generateNextOpaqueId(prisma.ticketSubStatus, "SS");
 
         const created = await prisma.ticketSubStatus.create({
             data: {
@@ -82,7 +78,7 @@ export async function POST(req: Request) {
                 color: body.color ?? "bg-gray-100 text-gray-600",
                 group: body.group ?? body.groupId ?? "",
                 groupId: body.groupId ?? body.group ?? null,
-                order: body.order ?? maxN + 1,
+                order: body.order ?? nextOrder,
                 applicableStatusIds: body.applicableStatusIds ?? [],
                 allowedRoles: body.allowedRoles ?? [],
                 notifyRoles: body.notifyRoles ?? [],

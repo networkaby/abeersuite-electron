@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { getOrdersPipeline } from "@/shared/lib/format/ordersPipeline";
+import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 
 const ACCOUNT_SELECT = {
@@ -31,8 +32,7 @@ export async function GET(req: Request) {
         const q = searchParams.get("q")?.trim();
         const from = searchParams.get("from");
         const to = searchParams.get("to");
-        const take = Math.min(200, Math.max(1, Number(searchParams.get("limit")) || 50));
-        const page = Math.max(1, Number(searchParams.get("page")) || 1);
+        const { take, page } = parsePagination(searchParams);
 
         const legacyStatusFilter =
             statusParam && Object.values(ShopOrderStatus).includes(statusParam as ShopOrderStatus)

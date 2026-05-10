@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { prismaUniqueError } from "@/shared/lib/api";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 
 const participantSchema = z.object({
@@ -109,9 +110,8 @@ export async function POST(
 
         return NextResponse.json(participant, { status: 201 });
     } catch (error: unknown) {
-        if ((error as { code?: string }).code === "P2002") {
-            return NextResponse.json({ error: "User is already a participant on this ticket" }, { status: 409 });
-        }
+        const conflict = prismaUniqueError(error, "User is already a participant on this ticket");
+        if (conflict) return conflict;
         console.error(error);
         return NextResponse.json({ error: "Failed to add participant" }, { status: 500 });
     }

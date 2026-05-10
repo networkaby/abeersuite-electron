@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invUnitCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
+import { prismaUniqueError } from "@/shared/lib/api";
 import { unstable_cache, revalidateTag } from "next/cache";
 
 // Cache key+tag exported so the [id] route's PATCH/DELETE can revalidate.
@@ -44,8 +45,8 @@ export async function POST(req: Request) {
         revalidateTag(INV_UNITS_TAG, { expire: 0 });
         return NextResponse.json(row, { status: 201 });
     } catch (e: unknown) {
-        const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";
-        if (code === "P2002") return NextResponse.json({ error: "Unit code already exists" }, { status: 409 });
+        const conflict = prismaUniqueError(e, "Unit code already exists");
+        if (conflict) return conflict;
         return NextResponse.json({ error: "Failed to create unit" }, { status: 500 });
     }
 }

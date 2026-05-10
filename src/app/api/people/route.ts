@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/shared/lib/format/contactWrite";
+import { parsePagination } from "@/shared/lib/api";
 
 const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -104,8 +105,7 @@ export async function GET(req: Request) {
     const phone = searchParams.get("phone")?.trim();
     const q = searchParams.get("q")?.trim();
     const lookup = searchParams.get("lookup")?.trim();
-    const take = Math.min(200, Math.max(1, Number(searchParams.get("limit")) || 50));
-    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const { take, page } = parsePagination(searchParams);
 
     try {
         if (phone) return NextResponse.json(await lookupAccounts(phone));

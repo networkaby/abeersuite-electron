@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { parsePagination } from "@/shared/lib/api";
 
 // GET /api/accounts — internal ledger accounts list
 export async function GET(req: Request) {
@@ -12,8 +13,7 @@ export async function GET(req: Request) {
     const personId = searchParams.get("personId") ?? searchParams.get("customerId");
     const companyId = searchParams.get("companyId");
     const filtered = Boolean(personId || companyId);
-    const take = Math.min(500, Math.max(1, Number(searchParams.get("limit")) || (filtered ? 50 : 50)));
-    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const { take, page } = parsePagination(searchParams, { defaultLimit: 50, maxLimit: 500 });
 
     const accounts = await prisma.account.findMany({
         where: {

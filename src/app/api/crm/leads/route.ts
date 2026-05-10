@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { assertCrmStatus, getCrmPipeline } from "@/shared/lib/format/crmPipeline";
+import { parseCursor } from "@/shared/lib/api";
 import { z } from "zod";
 
 const leadWriteBase = z.object({
@@ -61,8 +62,7 @@ export async function GET(req: Request) {
     const q = searchParams.get("q")?.trim();
     const status = searchParams.get("status")?.trim();
     const ownerUserId = searchParams.get("ownerUserId");
-    const cursor = searchParams.get("cursor");
-    const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 20));
+    const { cursor, take: limit } = parseCursor(searchParams, { defaultLimit: 20, maxLimit: 50 });
 
     const where = {
         pipelineId: pipeline.id,
