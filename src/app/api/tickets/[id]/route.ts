@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
-import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { validateRequest } from "@/shared/lib/api";

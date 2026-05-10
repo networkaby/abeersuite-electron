@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { assertCrmStatus, getCrmPipeline } from "@/shared/lib/format/crmPipeline";
+import { assertCrmStatus, getCrmPipeline } from "@/modules/customer/lib/crmPipeline";
 import { parseCursor } from "@/shared/lib/api";
 import { z } from "zod";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";

@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { prismaUniqueError } from "@/shared/lib/api";
-import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";

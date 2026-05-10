@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
+import { buildTicketReadScopeWhere } from "@/modules/repairing/lib/ticketScope";
 import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/search-slno?q=...

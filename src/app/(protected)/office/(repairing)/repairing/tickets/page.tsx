@@ -6,7 +6,7 @@ import { Eye, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
-import { REPAIR_PIPELINE_NAME } from "@/shared/lib/format/repairPipeline";
+import { REPAIR_PIPELINE_NAME } from "@/modules/repairing/lib/repairPipeline";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";

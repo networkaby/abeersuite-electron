@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
-import { getOrdersPipeline } from "@/shared/lib/format/ordersPipeline";
+import { getOrdersPipeline } from "@/modules/ecommerce/lib/ordersPipeline";
 import { parsePagination } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";

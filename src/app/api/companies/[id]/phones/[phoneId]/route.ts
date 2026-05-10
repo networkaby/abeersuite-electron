@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { ContactConflictError, contactValueSchema, updatePhone } from "@/shared/lib/format/contactWrite";
+import { ContactConflictError, contactValueSchema, updatePhone } from "@/modules/customer/lib/contactWrite";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 

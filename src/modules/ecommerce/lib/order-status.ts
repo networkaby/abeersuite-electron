@@ -3,7 +3,7 @@ import { ShopOrderStatus } from "@/generated/prisma/enums";
 import { balanceDelta, nextRef } from "@/modules/accountancy/lib/balance";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status-transitions";
-import { CONFIRMED_STATUS_LABEL } from "@/shared/lib/format/ordersPipeline";
+import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
 import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 export { canTransition, ORDER_STATUS_TRANSITIONS };

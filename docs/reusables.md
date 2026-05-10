@@ -84,15 +84,19 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `SessionWrapper` | `SessionWrapper.tsx` | NextAuth session provider |
 | `ThemeProvider` | `ThemeProvider.tsx` | next-themes provider for dark mode |
 
-## Pipeline lookups — `src/shared/lib/format/`
+## Module-scoped helpers (NOT in `src/shared/`)
 
-Name-based resolvers for the seeded pipelines. Use these instead of hardcoding pipeline IDs (`P1`, `P6`, `P7`); IDs are opaque seed artifacts that can change.
+The following used to live in `src/shared/lib/format/` but have been promoted to their owning modules (Segment 08). Each is consumed by routes + components within a single module domain — don't import them across module boundaries; talk to the module via its API instead.
 
-| Symbol | File | Purpose |
+| Symbol | File | Domain |
 |---|---|---|
-| `ORDERS_PIPELINE_NAME` / `getOrdersPipeline(prisma)` / `assertOrdersStatus` | `ordersPipeline.ts` | Sales-orders pipeline (`name = "sales-orders"`). |
-| `CRM_PIPELINE_NAME` / helpers | `crmPipeline.ts` | CRM-leads pipeline (`name = "crm-leads"`). |
-| `REPAIR_PIPELINE_NAME` / `getRepairPipeline(prisma)` | `repairPipeline.ts` | Service & Repair pipeline (`name = "service"`). |
+| `getOrdersPipeline`, `ORDERS_PIPELINE_NAME`, `assertOrdersStatus` | `src/modules/ecommerce/lib/ordersPipeline.ts` | ecommerce |
+| `getCrmPipeline`, `CRM_PIPELINE_NAME`, `assertCrmStatus` | `src/modules/customer/lib/crmPipeline.ts` | customer |
+| `getRepairPipeline`, `REPAIR_PIPELINE_NAME` | `src/modules/repairing/lib/repairPipeline.ts` | repairing |
+| `getCompanyContacts` | `src/modules/customer/lib/companyContacts.ts` | customer |
+| `ContactConflictError`, `contactValueSchema`, `updatePhone`, `updateEmail`, etc. | `src/modules/customer/lib/contactWrite.ts` | customer |
+| `buildTicketReadScopeWhere` | `src/modules/repairing/lib/ticketScope.ts` | repairing |
+| `postInvoiceJe` | `src/modules/accountancy/lib/postInvoiceJe.ts` | accountancy |
 
 ## Other shared lib
 

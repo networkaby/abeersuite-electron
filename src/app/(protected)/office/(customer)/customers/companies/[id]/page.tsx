@@ -4,7 +4,7 @@ import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { ArrowLeft, Building2, User, Smartphone, Eye } from "lucide-react";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
-import { getCompanyContacts } from "@/shared/lib/format/companyContacts";
+import { getCompanyContacts } from "@/modules/customer/lib/companyContacts";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export default async function CompanyDetailPage({

@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { getCrmPipeline } from "@/shared/lib/format/crmPipeline";
+import { getCrmPipeline } from "@/modules/customer/lib/crmPipeline";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import LeadNewForm from "./LeadNewForm";

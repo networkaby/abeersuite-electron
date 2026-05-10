@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { nextRef } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
-import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
+import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 

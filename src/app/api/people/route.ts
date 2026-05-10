@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { ContactConflictError } from "@/shared/lib/format/contactWrite";
+import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";

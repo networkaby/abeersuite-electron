@@ -46,6 +46,33 @@ These six are the only `src/lib/` files whose importers come from a single modul
 
 This rule will be added to `AGENTS.md` in Segment 16.
 
+---
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete** — `tsc --noEmit` clean, `npm run build` clean, 8 GET endpoints across the moved helpers all return 200.
+
+Scope adjustment: **7 files moved, not 6.** Between segments 01 and 08, an unrelated commit (`2137994 refactor(repair): implement repair pipeline integration`) added `src/shared/lib/format/repairPipeline.ts`. It fits the same boundary rule as the original six (single-module ownership: `repairing`), so it moved with them.
+
+| From | To | Importers verified |
+|---|---|---|
+| `src/shared/lib/format/crmPipeline.ts` | `src/modules/customer/lib/crmPipeline.ts` | `/api/crm/*` + 3 office/crm pages |
+| `src/shared/lib/format/companyContacts.ts` | `src/modules/customer/lib/companyContacts.ts` | `/api/companies/[id]` + customers/companies/[id] page |
+| `src/shared/lib/format/contactWrite.ts` | `src/modules/customer/lib/contactWrite.ts` | 9 phone/email routes under `/api/people/[id]` + `/api/companies/[id]` + `/api/people` |
+| `src/shared/lib/format/ticketScope.ts` | `src/modules/repairing/lib/ticketScope.ts` | `/api/tickets/*` + `/api/search-slno/*` |
+| `src/shared/lib/format/ordersPipeline.ts` | `src/modules/ecommerce/lib/ordersPipeline.ts` | `/api/ecommerce/orders` + ecommerce/lib/order-status |
+| `src/shared/lib/format/postInvoiceJe.ts` | `src/modules/accountancy/lib/postInvoiceJe.ts` | `/api/finance/invoices/*` + `/api/pos/sale` |
+| `src/shared/lib/format/repairPipeline.ts` | `src/modules/repairing/lib/repairPipeline.ts` | `office/(repairing)/repairing/tickets/page.tsx` |
+
+**Sweep:** one mechanical sed pass across `src/` and `prisma/` rewrote `@/shared/lib/format/<file>` → `@/modules/<m>/lib/<file>` for the seven names. Caught everything in `src/`; one residual in `prisma/smoke-test-people.ts` used a relative dynamic `import("../src/shared/lib/format/companyContacts")` which sed missed (different prefix); fixed manually in the same commit.
+
+**`src/shared/lib/format/` now contains** only the genuinely cross-cutting formatters: `formatDate.ts`, `moneyInr.ts`, `timeAgo.ts`, `utils.ts`. The folder name still says "format" but at this point it could be renamed to `format-and-misc` — that's a Segment 10 (module standardisation) consideration, not this one.
+
+Per AGENTS.md "after every plan" rule:
+- **Reusables registry** — `docs/reusables.md` "Pipeline lookups" section rewritten as "Module-scoped helpers (NOT in `src/shared/`)" with the seven entries.
+- **Module docs** — not touched in this commit; each module's `docs/modules/<m>.md` will document its own `lib/` entries when the per-module reusables tables are filled out in Segment 16.
+- **Todo list** — completed.
+
 
 ---
 
