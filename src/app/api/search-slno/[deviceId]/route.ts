@@ -3,6 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export async function GET(
     _: Request,
@@ -48,12 +49,12 @@ export async function GET(
                                 name: true,
                                 person: {
                                     select: {
-                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                        phones: selectPrimaryPhone,
                                     },
                                 },
                                 company: {
                                     select: {
-                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                        phones: selectPrimaryPhone,
                                     },
                                 },
                             },

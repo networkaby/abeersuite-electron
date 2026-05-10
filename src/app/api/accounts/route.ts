@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parsePagination } from "@/shared/lib/api";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 // GET /api/accounts — internal ledger accounts list
 export async function GET(req: Request) {
@@ -25,14 +26,14 @@ export async function GET(req: Request) {
                 select: {
                     id: true,
                     name: true,
-                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    phones: selectPrimaryPhone,
                 },
             },
             company: {
                 select: {
                     id: true,
                     name: true,
-                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    phones: selectPrimaryPhone,
                 },
             },
         },

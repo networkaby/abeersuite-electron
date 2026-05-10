@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -40,8 +41,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         name: true,
                         gstin: true,
                         address: true,
-                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        phones: selectPrimaryPhone,
+                        emails: selectPrimaryEmail,
                     },
                 },
                 company: {
@@ -50,8 +51,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         name: true,
                         gstin: true,
                         address: true,
-                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        phones: selectPrimaryPhone,
+                        emails: selectPrimaryEmail,
                     },
                 },
             },

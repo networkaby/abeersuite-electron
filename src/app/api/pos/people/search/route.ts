@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/pos/people/search?q=ramesh
 // Quick lookup for the POS top-bar — matches name / phone / email.
@@ -26,8 +27,8 @@ export async function GET(req: Request) {
             select: {
                 id: true,
                 name: true,
-                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                phones: selectPrimaryPhone,
+                emails: selectPrimaryEmail,
             },
             take: 12,
             orderBy: { name: "asc" },

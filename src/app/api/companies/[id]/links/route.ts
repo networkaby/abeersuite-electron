@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/companies/[id]/links — list linked persons
 export async function GET(
@@ -20,8 +21,8 @@ export async function GET(
                 select: {
                     id: true,
                     name: true,
-                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                    emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                    phones: selectPrimaryPhone,
+                    emails: selectPrimaryEmail,
                 },
             },
         },

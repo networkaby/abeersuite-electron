@@ -7,6 +7,7 @@ import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export default async function CustomerDetailPage({
     params,
@@ -45,7 +46,7 @@ export default async function CustomerDetailPage({
                         select: {
                             id: true,
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                         },
                     },
                 },

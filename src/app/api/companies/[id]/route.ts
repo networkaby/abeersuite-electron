@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getCompanyContacts } from "@/shared/lib/format/companyContacts";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -46,7 +47,7 @@ export async function GET(
                         select: {
                             id: true,
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                         },
                     },
                 },

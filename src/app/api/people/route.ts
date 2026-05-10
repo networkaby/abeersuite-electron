@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ContactConflictError } from "@/shared/lib/format/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const createPersonSchema = z.object({
     name: z.string().trim().min(1, "Name is required"),
@@ -43,7 +44,7 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
             },
             include: {
                 account: { select: { id: true } },
-                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                phones: selectPrimaryPhone,
                 companies: {
                     where: { unlinkedAt: null },
                     include: {
@@ -66,7 +67,7 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
             },
             include: {
                 account: { select: { id: true } },
-                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                phones: selectPrimaryPhone,
             },
             take: 8,
             orderBy: { createdAt: "desc" },

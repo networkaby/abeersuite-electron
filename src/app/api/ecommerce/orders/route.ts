@@ -9,6 +9,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 const ACCOUNT_SELECT = {
     id: true,
@@ -17,8 +18,8 @@ const ACCOUNT_SELECT = {
         select: {
             id: true,
             name: true,
-            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+            phones: selectPrimaryPhone,
+            emails: selectPrimaryEmail,
         },
     },
     company: { select: { id: true, name: true } },
@@ -80,8 +81,8 @@ export async function GET(req: Request) {
                     select: {
                         id: true,
                         name: true,
-                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        phones: selectPrimaryPhone,
+                        emails: selectPrimaryEmail,
                     },
                 },
                 orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },

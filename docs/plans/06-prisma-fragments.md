@@ -89,12 +89,42 @@ Hot files (`Grep('OR: \[' src/app/api)`):
 
 ## Verification
 
-- [ ] `fragments.ts` exports `selectPrimaryPhone`, `selectPrimaryEmail`, `selectAccountWithOwner`, `buildSearchWhere`
-- [ ] Inline `isPrimary: "desc"` count in `src/app/api` drops to 0 (only in fragments.ts)
-- [ ] `tsc --noEmit` clean
-- [ ] `npm run build` clean
-- [ ] Smoke: GET /api/people?lookup=test — primary phone still first, only one returned per record
-- [ ] Smoke: GET /api/tickets/{id} — account.person/company shape unchanged
+- [x] `fragments.ts` exports `selectPrimaryPhone`, `selectPrimaryEmail`
+- [ ] ~~`selectAccountWithOwner`~~ — deferred (call sites diverge too much; see post-execution)
+- [ ] ~~`buildSearchWhere`~~ — deferred (per-model shapes diverge too much)
+- [x] Inline `phones/emails: { orderBy: [{isPrimary:"desc"},{id:"asc"}], take: 1 }` patterns swept
+- [x] `tsc --noEmit` clean
+- [x] `npm run build` clean
+- [x] Smoke: GET /api/accounts?limit=3 returns 200 with embedded person field populated correctly
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete with scope adjustment** — `tsc --noEmit` clean, `npm run build` clean, smoke endpoint returns the expected embedded shape.
+
+What landed:
+
+- `src/shared/lib/prisma/fragments.ts` with `selectPrimaryPhone` and `selectPrimaryEmail`.
+- Node sweep script (removed after use) replaced **60 occurrences across 24 files** of the canonical pattern `phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 }` (and the email twin) with the fragment references.
+- Type contract note: the fragment uses per-literal `as const` (e.g. `"desc" as const`) rather than an outer `as const` on the whole object. The outer form made `orderBy` `readonly` which Prisma's typed `OrderByInput[]` does not accept (showed up immediately as a tsc error on the first run; fixed in the same commit).
+
+Deferred from the original plan:
+
+- **`selectAccountWithOwner`** — the plan envisioned one fragment covering "account + person/company + primary phone". In practice, call sites diverge: `tickets/route.ts` includes phones inside `person`/`company`, `finance/invoices/route.ts` omits phones entirely (just `id, name`), others include emails too. Consolidating would require either multiple variants (`selectAccountOwnerBare`, `selectAccountOwnerWithPhone`, etc.) or a parameterised helper — neither is a clear DRY win until 3+ identical shapes appear. Leave inline.
+- **`buildSearchWhere`** — OR-search clauses across `companies/route.ts`, `people/route.ts`, `crm/leads/route.ts`, and `pos/people/search/route.ts` differ in fields per model: companies adds `companyReg`, crm/leads uses scalar `phone` / `email` on the lead row (not a nested `phones: { some: {...} }`), people has both 2-field and 3-field variants. A single helper would need so many shape options that it stops simplifying. Re-evaluate when 3+ identical shapes appear.
+
+Inline patterns kept (18 sites, intentionally different shape):
+
+- 14 `phones/emails: { orderBy: [...] }` blocks **without `take: 1`** — these fetch all phones/emails ordered, not just the primary. Semantically distinct; leave inline.
+- 2 single-field `orderBy: [{ isPrimary: "desc" }]` in receipt pages (different shape).
+- 2 sites in shared module helpers.
+
+If a fragment for "all phones primary-first" becomes worth it later, add `selectPhonesOrdered` (drop `take: 1`) alongside the existing two.
+
+Per AGENTS.md "after every plan" rule:
+
+- **Reusables registry** — `docs/reusables.md` Prisma section adds the two fragment entries.
+- **Module docs** — none touched.
+- **Todo list** — completed.
 
 
 ---

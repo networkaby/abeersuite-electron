@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/pos/person-snapshot/[id]
 // "We know you" panel for the POS — aggregates everything in one call so the UI
@@ -29,8 +30,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             where: { id },
             select: {
                 id: true, name: true, gstin: true,
-                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                phones: selectPrimaryPhone,
+                emails: selectPrimaryEmail,
                 account: { select: { id: true, balance: true, openingBalance: true } },
             },
         });

@@ -5,6 +5,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import type { Prisma } from "@/generated/prisma/client";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const CALL_LOG_NOTE_PREFIX = "CALL_LOG::";
 
@@ -106,13 +107,13 @@ export async function GET(req: Request) {
                                             person: {
                                                 select: {
                                                     name: true,
-                                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                                    phones: selectPrimaryPhone,
                                                 },
                                             },
                                             company: {
                                                 select: {
                                                     name: true,
-                                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                                    phones: selectPrimaryPhone,
                                                 },
                                             },
                                         },

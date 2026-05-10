@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_MANAGE);
@@ -34,7 +35,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                             select: {
                                 id: true,
                                 name: true,
-                                phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                phones: selectPrimaryPhone,
                             },
                         },
                     },

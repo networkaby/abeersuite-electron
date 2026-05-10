@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import {
     Wrench, Phone, Package, CheckCircle, AlertCircle,
     UserCheck, Users, User, ShieldAlert, ClipboardCheck,
@@ -29,13 +30,13 @@ const TICKET_INCLUDE = {
                     person: {
                         select: {
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                         },
                     },
                     company: {
                         select: {
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                         },
                     },
                 },

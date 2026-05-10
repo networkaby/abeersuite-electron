@@ -5,6 +5,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { ArrowLeft, Building2, User, Smartphone, Eye } from "lucide-react";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import { getCompanyContacts } from "@/shared/lib/format/companyContacts";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 export default async function CompanyDetailPage({
     params,
@@ -40,7 +41,7 @@ export default async function CompanyDetailPage({
                         select: {
                             id: true,
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                         },
                     },
                 },

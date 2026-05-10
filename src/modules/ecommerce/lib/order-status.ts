@@ -4,6 +4,7 @@ import { balanceDelta, nextRef } from "@/modules/accountancy/lib/balance";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status-transitions";
 import { CONFIRMED_STATUS_LABEL } from "@/shared/lib/format/ordersPipeline";
+import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 export { canTransition, ORDER_STATUS_TRANSITIONS };
 
@@ -249,7 +250,7 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
                     select: {
                         id: true,
                         name: true,
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        emails: selectPrimaryEmail,
                     },
                 },
             },
@@ -321,7 +322,7 @@ export async function transitionShopOrderStatus(input: TransitionShopOrderInput)
                     select: {
                         id: true,
                         name: true,
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        emails: selectPrimaryEmail,
                     },
                 },
             },

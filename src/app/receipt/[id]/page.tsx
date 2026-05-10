@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import ReceiptButtons from "@/shared/components/ReceiptButtons";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 export default async function ReceiptPage({
     params,
@@ -19,14 +20,14 @@ export default async function ReceiptPage({
                         include: {
                             person: {
                                 include: {
-                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                                    emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    phones: selectPrimaryPhone,
+                                    emails: selectPrimaryEmail,
                                 },
                             },
                             company: {
                                 include: {
-                                    phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-                                    emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                    phones: selectPrimaryPhone,
+                                    emails: selectPrimaryEmail,
                                 },
                             },
                         },

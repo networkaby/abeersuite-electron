@@ -45,6 +45,8 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | Symbol | File | Purpose |
 |---|---|---|
 | `prisma` | `prismaClient.ts` | Singleton `PrismaClient` instance |
+| `selectPrimaryPhone` | `fragments.ts` | `{ orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 }` — drop into `include.phones` / `select.phones` blocks. |
+| `selectPrimaryEmail` | `fragments.ts` | Same shape for the `Email` model. Use in `include.emails` / `select.emails`. |
 
 ## Schemas — `src/shared/lib/schemas/`
 

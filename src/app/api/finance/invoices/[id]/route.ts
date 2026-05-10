@@ -6,6 +6,7 @@ import { postInvoiceJe } from "@/shared/lib/format/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const updateSchema = z.object({
     notes: z.string().trim().optional().nullable(),
@@ -32,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                         select: {
                             id: true,
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                         },
                     },
                     company: { select: { id: true, name: true } },

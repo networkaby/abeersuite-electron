@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
+import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import {
     isLikelyEmail,
     normalizePortalEmail,
@@ -37,7 +38,7 @@ export async function authorizePortalCredentials(
             include: {
                 person: {
                     include: {
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        emails: selectPrimaryEmail,
                     },
                 },
             },
@@ -50,7 +51,7 @@ export async function authorizePortalCredentials(
             include: {
                 person: {
                     include: {
-                        emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                        emails: selectPrimaryEmail,
                     },
                 },
             },

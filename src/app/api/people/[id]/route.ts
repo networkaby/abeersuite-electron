@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const updateSchema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -45,7 +46,7 @@ export async function GET(
                         select: {
                             id: true,
                             name: true,
-                            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                            phones: selectPrimaryPhone,
                             account: { select: { id: true } },
                         },
                     },

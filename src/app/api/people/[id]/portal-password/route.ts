@@ -7,6 +7,7 @@ import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/po
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 const schema = z.object({
     tempPassword: z.string().min(6, "Temporary password must be at least 6 characters"),
@@ -35,8 +36,8 @@ export async function PATCH(
             id: true,
             isActive: true,
             name: true,
-            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
-            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+            phones: selectPrimaryPhone,
+            emails: selectPrimaryEmail,
         },
     });
     if (!person || !person.isActive) {

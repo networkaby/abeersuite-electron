@@ -7,6 +7,7 @@ import { buildTicketReadScopeWhere } from "@/shared/lib/format/ticketScope";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -66,12 +67,12 @@ export async function GET(req: Request) {
                                 id: true, name: true,
                                 person: {
                                     select: {
-                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                        phones: selectPrimaryPhone,
                                     },
                                 },
                                 company: {
                                     select: {
-                                        phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 },
+                                        phones: selectPrimaryPhone,
                                     },
                                 },
                             },

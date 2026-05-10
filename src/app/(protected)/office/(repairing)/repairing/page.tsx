@@ -6,6 +6,7 @@ import { timeAgo } from "@/shared/lib/format/timeAgo";
 import TechnicianDashboard from "@/modules/repairing/components/dashboard/TechnicianDashboard";
 import AdminDashboard from "@/modules/repairing/components/dashboard/AdminDashboard";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 
 type DashboardPageProps = {
     searchParams: Promise<{ pipeline?: string }>;
@@ -64,7 +65,7 @@ async function AdminDashboardServer({ name, context }: { name: string; context: 
             orderBy: { updatedAt: "desc" },
             take: 100,
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
@@ -109,7 +110,7 @@ async function TechnicianDashboardServer({ name, userId, context }: { name: stri
             where: { ...ticketWhere(context), ticketStatus: { isTerminal: false } },
             orderBy: { updatedAt: "desc" },
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 primaryOwner: { select: { id: true, name: true } },
                 ticketStatus: { select: { id: true, label: true, color: true, notifyRoles: true } },
                 ticketSubStatus: { select: { label: true, color: true, notifyRoles: true } },
@@ -124,7 +125,7 @@ async function TechnicianDashboardServer({ name, userId, context }: { name: stri
             orderBy: { createdAt: "asc" },
             take: 10,
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
             },
         }),
@@ -187,7 +188,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 primaryOwner: { select: { name: true } },
@@ -197,7 +198,7 @@ async function FrontDeskDashboard({ name, context }: { name: string; context: Da
             where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R3" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
                 ticketSubStatus: { select: { label: true, color: true } },
             },
@@ -344,7 +345,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             where: { ...ticketWhere(context), subStatusId: { not: null }, ticketSubStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 ticketStatus: { select: { label: true, color: true } },
                 ticketSubStatus: { select: { id: true, label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
@@ -355,7 +356,7 @@ async function DespatchDashboard({ name, context }: { name: string; context: Das
             where: { ...ticketWhere(context), ticketStatus: { notifyRoles: { has: "R4" } } },
             orderBy: { updatedAt: "asc" },
             include: {
-                device: { include: { account: { include: { person: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } }, company: { select: { name: true, phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }], take: 1 } } } } } } },
+                device: { include: { account: { include: { person: { select: { name: true, phones: selectPrimaryPhone } }, company: { select: { name: true, phones: selectPrimaryPhone } } } } } },
                 ticketStatus: { select: { label: true, color: true, actionLabel: true } },
                 serviceCenter: { select: { name: true } },
             },
