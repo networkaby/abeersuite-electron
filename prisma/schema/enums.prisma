@@ -79,7 +79,9 @@ enum PaymentMethod {
   OTHER
 }
 
-// ── Tally accounting voucher types (CONTRA/PAYMENT/RECEIPT/CREDIT_NOTE/DEBIT_NOTE) ─
+// ── Accounting voucher types ────────────────────────────────────────────────
+// JOURNAL is the catch-all "any GL adjustment" voucher used by the Tally-style
+// JournalVoucherDialog. The other five mirror Tally's classical kinds.
 
 enum VoucherType {
   CONTRA
@@ -87,6 +89,7 @@ enum VoucherType {
   RECEIPT
   CREDIT_NOTE
   DEBIT_NOTE
+  JOURNAL
 }
 
 // ── Bill-wise allocation (free-form linking between any two vouchers) ────────

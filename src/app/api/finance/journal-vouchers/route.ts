@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth-guard";
 import { z } from "zod";
-import { isBalanced, balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
+import { isBalanced, balanceDelta, nextRef, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 
@@ -22,14 +22,6 @@ import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleA
 //
 // All in a single prisma.$transaction so partial state can never leak.
 
-const PREFIX: Record<string, string> = {
-    CONTRA:      "CV",
-    PAYMENT:     "PV",
-    RECEIPT:     "RV",
-    CREDIT_NOTE: "CRN",
-    DEBIT_NOTE:  "DRN",
-};
-
 const stockItemSchema = z.object({
     productId: z.number().int().positive(),
     qty:       z.number().positive(),
@@ -45,7 +37,7 @@ const lineSchema = z.object({
 });
 
 const createSchema = z.object({
-    type:            z.enum(["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"]),
+    type:            z.enum(["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"]),
     date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     narration:       z.string().trim().optional(),
     postImmediately: z.boolean().default(false),
@@ -95,11 +87,10 @@ export async function POST(req: Request) {
     try {
         const result = await prisma.$transaction(async (tx) => {
             // ── 1. Voucher header + lines ──────────────────────────────────
-            const year = new Date().getFullYear();
-            const prefix = PREFIX[body.type];
-            const startsWith = `${prefix}-${year}-`;
-            const cnt = await tx.voucher.count({ where: { reference: { startsWith } } });
-            const reference = `${startsWith}${String(cnt + 1).padStart(4, "0")}`;
+            // Reference assembly is delegated to the JOURNAL VoucherSeries
+            // configured in Settings → Year Ending. This is the same series
+            // the dialog previews via /api/finance/vouchers/next-ref?type=JOURNAL.
+            const reference = await nextRefFromSeries(tx, "JOURNAL", user!.id);
 
             const voucher = await tx.voucher.create({
                 data: {

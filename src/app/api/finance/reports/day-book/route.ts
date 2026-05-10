@@ -53,9 +53,14 @@ export async function GET(req: Request) {
             });
             kindIdsFilter = { id: { in: rows.map((r) => r.id) } };
         } else if (kind === "Journal") {
-            // Stand-alone JEs: not linked to any source. Compute the union of
-            // JE ids that ARE linked, then exclude.
-            const [invs, vchs] = await Promise.all([
+            // "Journal" covers two things:
+            //   1. JEs linked to a Voucher of type=JOURNAL (the dialog's path).
+            //   2. Stand-alone JEs not linked to any source (legacy / direct posts).
+            const [journalVchs, invs, vchs] = await Promise.all([
+                prisma.voucher.findMany({
+                    where: { type: "JOURNAL", journalEntryId: { not: null } },
+                    select: { journalEntryId: true },
+                }),
                 prisma.invVoucher.findMany({
                     where: { journalEntryId: { not: null } },
                     select: { journalEntryId: true },
@@ -74,9 +79,15 @@ export async function GET(req: Request) {
                 select: { id: true },
             });
             for (const r of invJEs) linkedSet.add(r.id);
-            kindIdsFilter = { id: { notIn: [...linkedSet] } };
+            const journalIds = new Set<number>();
+            for (const r of journalVchs) if (r.journalEntryId != null) journalIds.add(r.journalEntryId);
+            // We want JEs that are EITHER unlinked OR linked to a JOURNAL voucher.
+            // Equivalent: exclude JEs linked to any non-JOURNAL source.
+            const linkedNonJournal = [...linkedSet].filter((id) => !journalIds.has(id));
+            kindIdsFilter = { id: { notIn: linkedNonJournal } };
         } else {
-            // GL voucher types: CONTRA / PAYMENT / RECEIPT / CREDIT_NOTE / DEBIT_NOTE
+            // GL voucher types: CONTRA / PAYMENT / RECEIPT / CREDIT_NOTE / DEBIT_NOTE.
+            // (JOURNAL is handled by the dedicated branch above.)
             const dbType =
                 kind === "Contra"      ? "CONTRA"      :
                 kind === "Payment"     ? "PAYMENT"     :
@@ -141,20 +152,24 @@ export async function GET(req: Request) {
             if (v.journalEntryId == null) continue;
             glMap.set(v.journalEntryId, { type: v.type, id: v.id, reference: v.reference });
         }
-        const VOUCHER_KIND_LABEL: Record<string, "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note"> = {
+        const VOUCHER_KIND_LABEL: Record<string, "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note" | "Journal"> = {
             CONTRA:      "Contra",
             PAYMENT:     "Payment",
             RECEIPT:     "Receipt",
             CREDIT_NOTE: "Credit Note",
             DEBIT_NOTE:  "Debit Note",
+            JOURNAL:     "Journal",
         };
         // Per-type drilldown URL — each voucher kind has its own list page.
+        // JOURNAL has no dedicated list page (entry is via dialog); fall back
+        // to the legacy journal-entries detail.
         const VOUCHER_URL_SEG: Record<string, string> = {
             CONTRA:      "contras",
             PAYMENT:     "payments",
             RECEIPT:     "receipts",
             CREDIT_NOTE: "credit-notes",
             DEBIT_NOTE:  "debit-notes",
+            JOURNAL:     "journal-entries",
         };
 
         const rows = entries.map((e) => {
