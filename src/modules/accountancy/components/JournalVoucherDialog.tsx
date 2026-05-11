@@ -158,7 +158,9 @@ export function JournalVoucherDialog() {
 
     useEffect(() => {
         if (!open) return;
-        axios.get<GlAccount[]>("/api/accountancy/gl-accounts")
+        // includeParties=true → Sundry Debtors / Creditors ledgers appear in
+        // the line account picker, so a JV can debit / credit a party directly.
+        axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
         // Preview the voucher number — see /api/accountancy/vouchers/next-ref.

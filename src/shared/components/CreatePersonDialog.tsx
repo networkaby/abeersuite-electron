@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,11 +37,24 @@ const INITIAL_FORM: PersonForm = {
 export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogProps) {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<PersonForm>(INITIAL_FORM);
+    const [serverError, setServerError] = useState<string | null>(null);
+
+    const hasContact = !!(form.phone.trim() || form.email.trim());
+
+    // Clear stale error the moment the user edits a field.
+    useEffect(() => { if (serverError) setServerError(null); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [form]);
+    // Clear when the dialog re-opens.
+    useEffect(() => { if (open) setServerError(null); }, [open]);
 
     const handleCreatePerson = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setServerError(null);
         if (!form.name.trim()) {
             toast.error("Name is required");
+            return;
+        }
+        if (!hasContact) {
+            toast.error("Add at least a phone or email");
             return;
         }
 
@@ -56,8 +69,13 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
             toast.success("Person created");
             onOpenChange(false);
             setForm(INITIAL_FORM);
-        } catch {
-            toast.error("Failed to create person");
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err)
+                ? (err.response?.data as { error?: string })?.error
+                : undefined;
+            const finalMsg = msg ?? "Failed to create person";
+            setServerError(finalMsg);
+            toast.error(finalMsg);
         } finally {
             setSaving(false);
         }
@@ -71,6 +89,14 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
                     <DialogDescription>Add a new customer person record.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreatePerson} className="space-y-3">
+                    {serverError && (
+                        <div
+                            role="alert"
+                            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                        >
+                            {serverError}
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label>Name</Label>
                         <Input
@@ -80,10 +106,13 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label>Phone</Label>
+                        <Label>
+                            Phone <span className="text-[10px] text-muted-foreground">— phone or email required</span>
+                        </Label>
                         <Input
                             value={form.phone}
                             onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                            aria-invalid={!hasContact}
                         />
                     </div>
                     <div className="space-y-2">
@@ -92,8 +121,14 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
                             type="email"
                             value={form.email}
                             onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                            aria-invalid={!hasContact}
                         />
                     </div>
+                    {!hasContact && (
+                        <p className="text-[11px] text-destructive">
+                            Provide at least a phone number or an email.
+                        </p>
+                    )}
                     <div className="space-y-2">
                         <Label>Address</Label>
                         <Input
@@ -105,7 +140,7 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={saving}>
+                        <Button type="submit" disabled={saving || !form.name.trim() || !hasContact}>
                             {saving ? "Creating..." : "Create"}
                         </Button>
                     </DialogFooter>

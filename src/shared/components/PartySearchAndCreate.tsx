@@ -146,6 +146,10 @@ export const PartySearchAndCreate = forwardRef<
     const [newParty, setNewParty] = useState(EMPTY_NEW_PARTY);
     const [companyAddressTouched, setCompanyAddressTouched] = useState(false);
     const [creating, setCreating] = useState(false);
+    // Surface server-side errors (e.g. "phone already used") inline so the user
+    // can fix the offending field without scanning toasts that may have already
+    // disappeared. `field` highlights the input that triggered the error.
+    const [serverError, setServerError] = useState<{ message: string; field?: string } | null>(null);
 
     const nameRef = useRef<HTMLInputElement>(null);
     const phoneRef = useRef<HTMLInputElement>(null);
@@ -167,14 +171,25 @@ export const PartySearchAndCreate = forwardRef<
         openNew: () => openNewPartyRef.current(),
     }), []);
 
-    // Smart focus on dialog open
+    // Smart focus on dialog open + reset any stale banner from a prior attempt.
     useEffect(() => {
         if (!openDialog) return;
+        setServerError(null);
         const t = setTimeout(() => {
             (openedAsPhoneQuery ? nameRef.current : phoneRef.current)?.focus();
         }, 50);
         return () => clearTimeout(t);
     }, [openDialog, openedAsPhoneQuery]);
+
+    // Clear the banner the moment the user touches any field — they're
+    // fixing the input, the error is no longer current.
+    useEffect(() => {
+        if (!serverError) return;
+        setServerError(null);
+    // intentionally NOT depending on serverError to avoid a clear-loop;
+    // any newParty mutation clears the banner.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [newParty]);
 
     // Mirror person address → company address until user edits it
     useEffect(() => {
@@ -185,7 +200,14 @@ export const PartySearchAndCreate = forwardRef<
     }, [newParty.address, newParty.companyName, newParty.companyAddress, companyAddressTouched]);
 
     const showCompanySection = newParty.companyName.trim().length > 0;
-    const canSubmitCreate = newParty.name.trim().length > 0 || newParty.companyName.trim().length > 0;
+    // A person needs name + at least one contact (phone or email). A company
+    // can be created without contact info. The rule mirrors the "person without
+    // a phone or email is unreachable" policy enforced UI-side.
+    const wantsPerson = newParty.name.trim().length > 0;
+    const wantsCompany = newParty.companyName.trim().length > 0;
+    const personHasContact = !!(newParty.phone.trim() || newParty.email.trim());
+    const personValid = !wantsPerson || personHasContact;
+    const canSubmitCreate = (wantsPerson || wantsCompany) && personValid;
 
     // ── Pick handlers ───────────────────────────────────────────────────────
 
@@ -268,11 +290,19 @@ export const PartySearchAndCreate = forwardRef<
     };
 
     const submitCreate = async () => {
+        setServerError(null);                       // clear any prior banner
         const hasPerson = newParty.name.trim().length > 0;
         const hasCompany = newParty.companyName.trim().length > 0;
         if (!hasPerson && !hasCompany) {
             toast.error("Need at least a name or a company");
             nameRef.current?.focus();
+            return;
+        }
+        // A person row is unreachable without a contact channel — UI gate
+        // mirrors the customer-care policy: "no phone, no email → don't book".
+        if (hasPerson && !(newParty.phone.trim() || newParty.email.trim())) {
+            toast.error("Add a phone or email for the person");
+            phoneRef.current?.focus();
             return;
         }
         const checks: Array<[string | null, string, () => void]> = [
@@ -377,10 +407,24 @@ export const PartySearchAndCreate = forwardRef<
             }
             setOpenDialog(false);
         } catch (e: unknown) {
-            const msg = axios.isAxiosError(e)
-                ? (e.response?.data as { error?: string })?.error
-                : undefined;
-            toast.error(msg ?? "Could not create");
+            // Server-side errors carry { error, field? } — e.g. 409 with
+            // field: "phone" when the value is already used. Surface inline
+            // so the user can fix the offending input, and still toast so a
+            // closed dialog is noticed.
+            let message: string | undefined;
+            let field: string | undefined;
+            if (axios.isAxiosError(e)) {
+                const payload = e.response?.data as { error?: string; field?: string } | undefined;
+                message = payload?.error;
+                field = payload?.field;
+            }
+            const finalMessage = message ?? "Could not create";
+            setServerError({ message: finalMessage, field });
+            toast.error(finalMessage);
+            // Move focus to the offending input when we know which one
+            if (field === "phone") phoneRef.current?.focus();
+            else if (field === "companyPhone") companyPhoneRef.current?.focus();
+            else if (field === "companyName") companyNameRef.current?.focus();
         } finally {
             setCreating(false);
         }
@@ -463,6 +507,15 @@ export const PartySearchAndCreate = forwardRef<
                         <DialogTitle>New customer · ↵ to save</DialogTitle>
                     </DialogHeader>
 
+                    {serverError && (
+                        <div
+                            role="alert"
+                            className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                        >
+                            {serverError.message}
+                        </div>
+                    )}
+
                     <div className={`grid gap-4 ${showCompanySection ? "sm:grid-cols-2" : ""}`}>
                         {/* Person section */}
                         <div className="space-y-3">
@@ -473,7 +526,7 @@ export const PartySearchAndCreate = forwardRef<
                             {openedAsPhoneQuery && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <Label>Phone</Label>
+                                        <Label>Phone <span className="text-[10px] text-muted-foreground">— phone or email required</span></Label>
                                         <Input
                                             ref={phoneRef}
                                             value={newParty.phone}
@@ -515,7 +568,7 @@ export const PartySearchAndCreate = forwardRef<
                             {!openedAsPhoneQuery && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <Label>Phone</Label>
+                                        <Label>Phone <span className="text-[10px] text-muted-foreground">— phone or email required</span></Label>
                                         <Input
                                             ref={phoneRef}
                                             value={newParty.phone}
