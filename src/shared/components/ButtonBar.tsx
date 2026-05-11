@@ -92,6 +92,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         subtitle: a.subtitle,
         icon: a.icon,
         variant: a.variant,
+        href: a.href,
+        newTab: a.newTab,
         action: a.action,
         pipelineRef: a.pipelineRef,
         disabled: a.disabled,
@@ -192,6 +194,9 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                         href={action.href}
                                         className={rowClass}
                                         title={titleAttr}
+                                        {...(action.newTab
+                                            ? { target: "_blank", rel: "noopener noreferrer" }
+                                            : {})}
                                     >
                                         {inner}
                                     </Link>

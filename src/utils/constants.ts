@@ -88,6 +88,8 @@ export type ModuleCreateAction = {
     icon: LucideIcon;
     variant?: "default" | "outline";
     href?: string;
+    /** Open the href in a new browser tab. */
+    newTab?: boolean;
     action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra";
     pipelineRef?: "default";
     permission?: string | null;
@@ -121,6 +123,8 @@ export type ButtonBarAction = {
     variant: "default" | "outline";
     /** Direct navigation target. Mutually exclusive with `action`. */
     href?: string;
+    /** Open the href in a new browser tab. */
+    newTab?: boolean;
     /** Dialog-opening action discriminator. Mutually exclusive with `href`. */
     action?: "new-ticket";
     pipelineRef?: "default";
@@ -541,10 +545,11 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
     },
     {
         label: "POS",
-        subtitle: "Open point-of-sale screen",
+        subtitle: "Open point-of-sale screen (new tab)",
         icon: ShoppingCart,
         variant: "outline",
-        href: "/office/pos",
+        href: "/pos",
+        newTab: true,
     },
     {
         label: "Dummy Create +",
