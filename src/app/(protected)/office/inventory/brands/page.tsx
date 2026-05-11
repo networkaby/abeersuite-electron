@@ -16,6 +16,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 
 type Row = { id: number; name: string; isActive: boolean };
 const empty = { name: "", isActive: true };
@@ -127,17 +128,9 @@ export default function InventoryBrandsPage() {
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={2} className="text-muted-foreground">
-                                    Loading…
-                                </TableCell>
-                            </TableRow>
+                            <TableLoadingRow colSpan={2} />
                         ) : rows.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={2} className="text-muted-foreground">
-                                    No brands yet.
-                                </TableCell>
-                            </TableRow>
+                            <TableEmptyRow colSpan={2} message="No brands yet." />
                         ) : (
                             rows.map((r) => (
                                 <TableRow key={r.id}>

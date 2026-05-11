@@ -7,7 +7,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, Loader2, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
+import { fmt } from "@/utils/constants";
+import { StatusBadge } from "@/shared/components/StatusBadge";
 
 import type { VoucherFormType } from "./VoucherForm";
 
@@ -24,8 +25,6 @@ export type VoucherRow = {
     partyAccount: { id: number; code: string; name: string } | null;
     _count:       { lines: number };
 };
-
-const STATUS_COLORS = JOURNAL_STATUS_COLORS;
 
 export function VoucherList({
     type, title, subtitle, basePath, newPath,
@@ -107,7 +106,7 @@ export function VoucherList({
                                     <td className="px-5 py-3 text-muted-foreground max-w-[200px] truncate">{r.narration ?? "—"}</td>
                                     <td className="px-5 py-3 text-right font-mono">₹ {fmt(Number(r.totalAmount))}</td>
                                     <td className="px-5 py-3 text-center">
-                                        <span className={`text-xs px-2 py-0.5 font-medium ${STATUS_COLORS[r.status]}`}>{r.status}</span>
+                                        <StatusBadge kind="journal" value={r.status} />
                                         {r.deletedAt && (
                                             <span className="ml-2 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-destructive">
                                                 <Trash2 size={10} /> deleted

@@ -92,6 +92,33 @@ Run `Grep('bg-(green|red|blue|yellow|orange|gray)-100 text-' src/modules src/app
 - A generic `<FilterBar>` — pages diverge too much.
 - A generic `<Modal>` wrapper around shadcn `<Dialog>` — shadcn's API is already terse; another wrapper adds cognitive cost.
 
+---
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete — primitives shipped + 2 reference sweeps**. Bulk sweep across the remaining ~60 sites is deferred to incremental adoption (each page picks them up the next time it's touched for other reasons).
+
+What landed:
+
+- `src/shared/components/DataPageHeader.tsx` — `{ title, subtitle?, icon?, actions? }`. Replaces the title-block pattern across list/detail pages.
+- `src/shared/components/DataTableStates.tsx` — exports `TableLoadingRow`, `TableEmptyRow`, `TableErrorRow`. Each takes `colSpan` + optional `message`. Drops into `<TableBody>`.
+- `src/shared/components/StatusBadge.tsx` — `{ kind: "invoice" | "journal" | "glType", value }`. Resolves Tailwind classes from the existing maps in `src/utils/constants.ts` (`INVOICE_STATUS_COLORS`, `JOURNAL_STATUS_COLORS`, `GL_TYPE_COLORS`). Falls back to `bg-muted text-muted-foreground` on unknown values.
+
+Reference sweeps (2 consumers, to validate the APIs end-to-end):
+
+- `office/inventory/brands/page.tsx` — inline `<TableRow><TableCell colSpan>Loading…</TableCell></TableRow>` + "No brands yet." blocks → `<TableLoadingRow colSpan={2} />` + `<TableEmptyRow colSpan={2} message="No brands yet." />`.
+- `modules/accountancy/components/VoucherList.tsx` — local `STATUS_COLORS` alias + inline `<span className={...}>{r.status}</span>` → `<StatusBadge kind="journal" value={r.status} />`.
+
+Verified: tsc clean, build clean, `/office/inventory/brands`, `/office/accountancy/contras`, `/office/accountancy/payments` all return 200.
+
+Deferred to incremental adoption (per-page basis, when the page is touched for other reasons):
+
+- ~13 other inventory master pages (categories, units, product-groups, warranty-terms) with the same TableLoadingRow + TableEmptyRow pattern.
+- ~15 voucher / invoice / receipt / payment list pages with `<StatusBadge>` candidates.
+- ~15 page headers across the office area with the `<DataPageHeader>` pattern.
+
+Doing the sweep here would touch 40+ files for no behavioural change. Better to adopt incrementally — a page that gets touched in Segments 11/12 (heavy page extraction) naturally picks up the primitives. The `Reusables registry` (`docs/reusables.md`) flags them so contributors know to use them in new code.
+
 
 ---
 
