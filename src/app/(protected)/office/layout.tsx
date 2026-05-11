@@ -14,12 +14,10 @@ import {
     CreditNoteDialog,
     DebitNoteDialog,
 } from "@/modules/accountancy/components/MoneyFlowDialog";
-// Sale is now its own full-page route at /sale — no dialog mount here.
-// Purchase + Estimate keep the dialog flow for now.
-import {
-    PurchaseDialog,
-    EstimateDialog,
-} from "@/modules/accountancy/components/TradingVoucherForm";
+// Sale + Purchase moved to full-page routes (/sale, /purchase). Sale Return
+// + Purchase Return are full-page at /sale-return + /purchase-return.
+// Only Estimate keeps the dialog flow for now.
+import { EstimateDialog } from "@/modules/accountancy/components/TradingVoucherForm";
 
 export default async function ProtectedLayout({
     children,
@@ -75,7 +73,6 @@ export default async function ProtectedLayout({
                 <ReceiptDialog />
                 <CreditNoteDialog />
                 <DebitNoteDialog />
-                <PurchaseDialog />
                 <EstimateDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>

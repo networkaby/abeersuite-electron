@@ -20,7 +20,7 @@ import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 // Sale uses the full-page /sale route now — no dialog store.
-import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
+// Purchase uses the full-page /purchase route now — no dialog store.
 import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 
 type Props = {
@@ -40,7 +40,6 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const { setOpen: openPurchase } = usePurchaseDialogStore();
     const { setOpen: openEstimate } = useEstimateDialogStore();
 
     const canDo = (permission?: string | null) => {
@@ -77,7 +76,14 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             window.open("/sale", "_blank", "noopener");
             onOpenChange(false);
         } else if (action.action === "new-purchase") {
-            openPurchase(true);
+            window.open("/purchase", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-sale-return") {
+            window.open("/sale-return", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-purchase-return") {
+            window.open("/purchase-return", "_blank", "noopener");
+            onOpenChange(false);
         } else if (action.action === "new-estimate") {
             openEstimate(true);
         }

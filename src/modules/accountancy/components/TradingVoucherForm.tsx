@@ -38,11 +38,13 @@ import {
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
 // SALE was moved to the full-page /sale route — SaleDialog export is gone.
-import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
+// Purchase uses the full-page /purchase route now — no dialog store.
 import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 
-// SALE moved to the full-page /sale route — dialog covers Purchase + Estimate only.
-type Kind = "PURCHASE" | "ESTIMATE";
+// SALE + PURCHASE moved to full-page routes (/sale, /purchase) — dialog
+// covers Estimate only now. The Kind union stays as a single-member union
+// to keep the existing PER_KIND lookup shape; collapse if more kinds drop.
+type Kind = "ESTIMATE";
 
 type LineState = {
     id: number;
@@ -89,18 +91,6 @@ const PER_KIND: Record<Kind, {
     listPath: string;
     detailPath: (id: number) => string;
 }> = {
-    PURCHASE: {
-        title: "Purchase Voucher",
-        partyPlaceholder: "Search supplier by name or phone…",
-        partyDefaultGroup: ACCOUNT_GROUPS.SUNDRY_CREDITORS,
-        narrationFallback: (p) => p ? `Purchase from ${p.name}` : "Cash purchase",
-        narrationPlaceholderEmpty: "Narration (optional — bill ref auto-generated)",
-        rateFromProduct: (p) => p.costPrice,
-        successPostedMsg: "Purchase posted — stock & GL updated",
-        successDraftMsg: "Purchase saved as draft",
-        listPath: "/office/accountancy/purchases",
-        detailPath: (id) => `/office/accountancy/purchases/${id}`,
-    },
     ESTIMATE: {
         title: "Estimate / Quotation",
         partyPlaceholder: "Search customer by name or phone…",
@@ -117,9 +107,8 @@ const PER_KIND: Record<Kind, {
 export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const router = useRouter();
     const copy = PER_KIND[kind];
-    const purchaseStore = usePurchaseDialogStore();
     const estimateStore = useEstimateDialogStore();
-    const { open, setOpen } = kind === "PURCHASE" ? purchaseStore : estimateStore;
+    const { open, setOpen } = estimateStore;
     // Per-kind feature flags
     const isEstimate = kind === "ESTIMATE";
     const showCashCreditToggle = false; // SALE-only path lives at /sale now
@@ -312,13 +301,9 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                             locked={!!party}
                             placeholder={copy.partyPlaceholder}
                             // SALE / ESTIMATE → Sundry Debtors (customer).
-                            // PURCHASE → Sundry Creditors (supplier).
-                            // SALE + PURCHASE allow widening to the other side for the rare
-                            // supplier-is-also-customer case. ESTIMATE is customer-only —
-                            // quotes go out to prospective buyers only.
-                            partyGroup={kind === "PURCHASE"
-                                ? ACCOUNT_GROUPS.SUNDRY_CREDITORS
-                                : ACCOUNT_GROUPS.SUNDRY_DEBTORS}
+                            // ESTIMATE — customer-only (Sundry Debtors); quotes
+                            // go out to prospective buyers only.
+                            partyGroup={ACCOUNT_GROUPS.SUNDRY_DEBTORS}
                             allowIncludeOther={!isEstimate}
                         />
                         {party?.phone && (
@@ -559,5 +544,5 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
 
 /** Thin wrappers for layout mounting + module sidebar actions. */
 // SaleDialog removed — the full-page /sale route replaces it.
-export function PurchaseDialog() { return <TradingVoucherForm kind="PURCHASE" />; }
+// PurchaseDialog removed — the full-page /purchase route replaces it.
 export function EstimateDialog() { return <TradingVoucherForm kind="ESTIMATE" />; }

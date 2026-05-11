@@ -18,7 +18,7 @@ import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 // Sale uses the full-page /sale route now — no dialog store.
-import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
+// Purchase uses the full-page /purchase route now — no dialog store.
 import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
@@ -49,7 +49,6 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const { setOpen: openPurchase } = usePurchaseDialogStore();
     const { setOpen: openEstimate } = useEstimateDialogStore();
 
     const permissions = user?.permissions ?? [];
@@ -99,12 +98,16 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-credit-note") {
             openCreditNote(true);
         } else if (action.action === "new-sale") {
-            // Open Sale Invoice in its own browser window so it sits in front
-            // of whatever the user was doing (Vyapar / Marg pattern). Each
-            // click spawns an independent tab, supporting parallel entry.
+            // Open trading vouchers in their own browser window so they sit
+            // in front of whatever the user was doing (Vyapar / Marg pattern).
+            // Each click spawns an independent tab, supporting parallel entry.
             window.open("/sale", "_blank", "noopener");
         } else if (action.action === "new-purchase") {
-            openPurchase(true);
+            window.open("/purchase", "_blank", "noopener");
+        } else if (action.action === "new-sale-return") {
+            window.open("/sale-return", "_blank", "noopener");
+        } else if (action.action === "new-purchase-return") {
+            window.open("/purchase-return", "_blank", "noopener");
         } else if (action.action === "new-estimate") {
             openEstimate(true);
         }
