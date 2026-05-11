@@ -37,12 +37,28 @@ function fmtIndianDate(iso: string): string {
 }
 
 /**
+ * Visual hierarchy for the Particulars column — mirrors Tally's reading order:
+ *   • depth 0 group     → bold, larger, underlined  (e.g. "Current Assets")
+ *   • depth 1+ subgroup → semibold, normal size     (e.g. "Cash-in-Hand")
+ *   • ledger            → italic, muted, smaller    (e.g. "Cash")
+ *
+ * The numeric columns inherit the same weight so the row reads as one unit.
+ */
+type RowStyle = "groupTop" | "groupSub" | "ledger";
+
+function cellWeight(s: RowStyle): string {
+    if (s === "groupTop") return "font-bold text-[15px]";
+    if (s === "groupSub") return "font-semibold text-sm";
+    return "italic text-sm text-muted-foreground";
+}
+
+/**
  * Render a signed-by-normal-balance amount with a Dr/Cr suffix (Tally-style).
  * - value > 0 → on the normal side
  * - value < 0 → on the opposite side
  * - value ≈ 0 → "—"
  */
-function SidedCell({ value, normalSide, bold }: { value: number; normalSide: Side; bold?: boolean }) {
+function SidedCell({ value, normalSide, style, underline }: { value: number; normalSide: Side; style: RowStyle; underline?: boolean }) {
     if (Math.abs(value) < 0.005) {
         return <td className="px-3 py-1 text-right font-mono text-sm text-muted-foreground/40">—</td>;
     }
@@ -50,19 +66,22 @@ function SidedCell({ value, normalSide, bold }: { value: number; normalSide: Sid
     const side = onNormal ? normalSide : (normalSide === "DEBIT" ? "CREDIT" : "DEBIT");
     const label = side === "DEBIT" ? "Dr" : "Cr";
     return (
-        <td className={`px-3 py-1 text-right font-mono text-sm ${bold ? "font-semibold" : ""}`}>
-            {fmt(Math.abs(value))} <span className="text-muted-foreground">{label}</span>
+        <td className={`px-3 py-1 text-right font-mono ${cellWeight(style)}`}>
+            <span className={underline ? "underline decoration-foreground/40 underline-offset-4" : ""}>
+                {fmt(Math.abs(value))}
+            </span>{" "}
+            <span className="text-muted-foreground not-italic font-normal">{label}</span>
         </td>
     );
 }
 
 /** Raw (unsigned) amount for the Transactions Dr / Transactions Cr columns. */
-function PlainCell({ value, bold }: { value: number; bold?: boolean }) {
+function PlainCell({ value, style }: { value: number; style: RowStyle }) {
     if (Math.abs(value) < 0.005) {
         return <td className="px-3 py-1 text-right font-mono text-sm text-muted-foreground/40">—</td>;
     }
     return (
-        <td className={`px-3 py-1 text-right font-mono text-sm ${bold ? "font-semibold" : ""}`}>
+        <td className={`px-3 py-1 text-right font-mono ${cellWeight(style)}`}>
             {fmt(value)}
         </td>
     );
@@ -98,10 +117,12 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
     const isOpen = expanded.has(node.id);
     const hasContent = node.children.length > 0 || node.ledgers.length > 0;
     const groupNormalSide = defaultNormalBalanceForGroupType(node.type);
+    const rowStyle: RowStyle = depth === 0 ? "groupTop" : "groupSub";
+    const rowBg = depth === 0 ? "bg-muted/30 border-t" : "";
     return (
         <Fragment>
-            <tr className="hover:bg-muted/40 cursor-pointer" onClick={() => onGroup(node.id)}>
-                <td className="py-1.5" style={{ paddingLeft: 8 + depth * 16 }}>
+            <tr className={`hover:bg-muted/50 cursor-pointer ${rowBg}`} onClick={() => onGroup(node.id)}>
+                <td className={`py-1.5 ${cellWeight(rowStyle)}`} style={{ paddingLeft: 8 + depth * 16 }}>
                     <span className="flex items-center gap-1">
                         {hasContent && (
                             <span
@@ -111,13 +132,13 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                             </span>
                         )}
-                        <span className={`hover:underline ${depth === 0 ? "font-semibold" : "font-medium"}`}>{node.name}</span>
+                        <span className="hover:underline">{node.name}</span>
                     </span>
                 </td>
-                <SidedCell value={node.rolledUpOpening} normalSide={groupNormalSide} bold={depth === 0} />
-                <PlainCell value={node.rolledUpDebits} bold={depth === 0} />
-                <PlainCell value={node.rolledUpCredits} bold={depth === 0} />
-                <SidedCell value={node.rolledUpClosing} normalSide={groupNormalSide} bold={depth === 0} />
+                <SidedCell value={node.rolledUpOpening} normalSide={groupNormalSide} style={rowStyle} />
+                <PlainCell value={node.rolledUpDebits} style={rowStyle} />
+                <PlainCell value={node.rolledUpCredits} style={rowStyle} />
+                <SidedCell value={node.rolledUpClosing} normalSide={groupNormalSide} style={rowStyle} underline={depth === 0} />
             </tr>
             {isOpen && (
                 <>
@@ -134,13 +155,13 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                                 className="hover:bg-primary/5 cursor-pointer"
                                 onClick={() => onLedger(l.id)}
                             >
-                                <td className="py-1 text-muted-foreground italic" style={{ paddingLeft: 24 + depth * 16 }}>
+                                <td className={`py-1 ${cellWeight("ledger")}`} style={{ paddingLeft: 24 + depth * 16 }}>
                                     <span className="hover:underline hover:text-primary">{l.name}</span>
                                 </td>
-                                <SidedCell value={l.opening} normalSide={ledgerSide} />
-                                <PlainCell value={l.debits} />
-                                <PlainCell value={l.credits} />
-                                <SidedCell value={l.closing} normalSide={ledgerSide} />
+                                <SidedCell value={l.opening} normalSide={ledgerSide} style="ledger" />
+                                <PlainCell value={l.debits} style="ledger" />
+                                <PlainCell value={l.credits} style="ledger" />
+                                <SidedCell value={l.closing} normalSide={ledgerSide} style="ledger" />
                             </tr>
                         );
                     })}
@@ -200,7 +221,12 @@ export default function TrialBalancePage() {
                 setData(r.data);
                 setExpanded((prev) => {
                     if (prev.size > 0) return prev;
-                    return new Set(r.data.tree.map((g) => g.id));
+                    // Expand every group + sub-group by default (Tally-style "all collapsed
+                    // = useless; all expanded = readable") — caller can collapse manually.
+                    const ids = new Set<number>();
+                    const visit = (n: GroupNode) => { ids.add(n.id); n.children.forEach(visit); };
+                    r.data.tree.forEach(visit);
+                    return ids;
                 });
             })
             .catch(() => toast.error("Failed to load trial balance"))
@@ -294,12 +320,12 @@ export default function TrialBalancePage() {
                                     className="text-amber-700 dark:text-amber-400 border-t"
                                     title="Master-page opening balances are one-sided — this is the plug that balances Σ opening Dr against Σ opening Cr."
                                 >
-                                    <td className="px-3 py-1.5 italic">Difference in opening balances</td>
+                                    <td className={`px-3 py-1.5 ${cellWeight("ledger")}`}>Difference in opening balances</td>
                                     {/* If openings Dr > Cr (openingDiff > 0), plug sits on the Cr side, and vice-versa. */}
-                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" />
-                                    <PlainCell value={0} />
-                                    <PlainCell value={0} />
-                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" />
+                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" style="ledger" />
+                                    <PlainCell value={0} style="ledger" />
+                                    <PlainCell value={0} style="ledger" />
+                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" style="ledger" />
                                 </tr>
                             )}
                         </tbody>
