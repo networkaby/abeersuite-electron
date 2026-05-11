@@ -22,9 +22,12 @@ const createSchema = z.object({
 });
 
 // GET /api/accountancy/gl-accounts
-// Returns only pure GL accounts (no person/company identity linkage).
+// Returns only pure GL accounts (no person/company identity linkage) by default.
 // Optional `type` query param filters by the parent group's type
 // (ASSET | LIABILITY | INCOME | EXPENSE).
+// `includeParties=true` also returns party ledgers (person/company-linked
+// accounts) — used by Receipt / Payment voucher dialogs that need to credit /
+// debit a party balance directly.
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
@@ -32,12 +35,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
     const activeOnly = searchParams.get("activeOnly") !== "false";
+    const includeParties = searchParams.get("includeParties") === "true";
 
     try {
         const accounts = await prisma.account.findMany({
             where: {
-                personId: null,
-                companyId: null,
+                ...(includeParties ? {} : { personId: null, companyId: null }),
                 ...(activeOnly ? { isActive: true } : {}),
                 ...(type
                     ? { group: { type: type as "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" } }

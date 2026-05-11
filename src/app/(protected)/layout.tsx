@@ -9,6 +9,7 @@ import GlobalInboxListener from "@/modules/message/components/GlobalInboxListene
 import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
 import { DebitNoteDialog } from "@/modules/accountancy/components/DebitNoteDialog";
 import { ContraDialog } from "@/modules/accountancy/components/ContraDialog";
+import { PaymentDialog, ReceiptDialog } from "@/modules/accountancy/components/MoneyFlowDialog";
 
 export default async function ProtectedLayout({
     children,
@@ -61,6 +62,8 @@ export default async function ProtectedLayout({
                 <JournalVoucherDialog />
                 <DebitNoteDialog />
                 <ContraDialog />
+                <PaymentDialog />
+                <ReceiptDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>
