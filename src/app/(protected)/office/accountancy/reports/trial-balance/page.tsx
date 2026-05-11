@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment } from "react";
+import { useEffect, useState, useCallback, Fragment, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -10,10 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
+type Side = "DEBIT" | "CREDIT";
+
 interface LedgerNode {
     id: number; name: string; code: string | null;
+    normalBalance: Side | null;
     opening: number; debits: number; credits: number; closing: number;
 }
 interface GroupNode {
@@ -32,9 +36,58 @@ function fmtIndianDate(iso: string): string {
     return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function NumCell({ value }: { value: number }) {
-    if (Math.abs(value) < 0.005) return <td className="px-3 py-1 text-right font-mono text-sm text-muted-foreground/40">—</td>;
-    return <td className={`px-3 py-1 text-right font-mono text-sm ${value < 0 ? "text-destructive" : ""}`}>{fmt(value)}</td>;
+/**
+ * Render a signed-by-normal-balance amount with a Dr/Cr suffix (Tally-style).
+ * - value > 0 → on the normal side
+ * - value < 0 → on the opposite side
+ * - value ≈ 0 → "—"
+ */
+function SidedCell({ value, normalSide, bold }: { value: number; normalSide: Side; bold?: boolean }) {
+    if (Math.abs(value) < 0.005) {
+        return <td className="px-3 py-1 text-right font-mono text-sm text-muted-foreground/40">—</td>;
+    }
+    const onNormal = value > 0;
+    const side = onNormal ? normalSide : (normalSide === "DEBIT" ? "CREDIT" : "DEBIT");
+    const label = side === "DEBIT" ? "Dr" : "Cr";
+    return (
+        <td className={`px-3 py-1 text-right font-mono text-sm ${bold ? "font-semibold" : ""}`}>
+            {fmt(Math.abs(value))} <span className="text-muted-foreground">{label}</span>
+        </td>
+    );
+}
+
+/** Raw (unsigned) amount for the Transactions Dr / Transactions Cr columns. */
+function PlainCell({ value, bold }: { value: number; bold?: boolean }) {
+    if (Math.abs(value) < 0.005) {
+        return <td className="px-3 py-1 text-right font-mono text-sm text-muted-foreground/40">—</td>;
+    }
+    return (
+        <td className={`px-3 py-1 text-right font-mono text-sm ${bold ? "font-semibold" : ""}`}>
+            {fmt(value)}
+        </td>
+    );
+}
+
+/** Remove groups + ledgers that have no activity in any column. */
+function pruneEmpty(nodes: GroupNode[]): GroupNode[] {
+    const out: GroupNode[] = [];
+    for (const n of nodes) {
+        const keptKids = pruneEmpty(n.children);
+        const keptLedgers = n.ledgers.filter((l) =>
+            Math.abs(l.opening) >= 0.005 ||
+            Math.abs(l.debits) >= 0.005 ||
+            Math.abs(l.credits) >= 0.005 ||
+            Math.abs(l.closing) >= 0.005,
+        );
+        const groupHasActivity =
+            Math.abs(n.rolledUpOpening) >= 0.005 ||
+            Math.abs(n.rolledUpDebits) >= 0.005 ||
+            Math.abs(n.rolledUpCredits) >= 0.005 ||
+            Math.abs(n.rolledUpClosing) >= 0.005;
+        if (keptKids.length === 0 && keptLedgers.length === 0 && !groupHasActivity) continue;
+        out.push({ ...n, children: keptKids, ledgers: keptLedgers });
+    }
+    return out;
 }
 
 function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
@@ -44,6 +97,7 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
 }) {
     const isOpen = expanded.has(node.id);
     const hasContent = node.children.length > 0 || node.ledgers.length > 0;
+    const groupNormalSide = defaultNormalBalanceForGroupType(node.type);
     return (
         <Fragment>
             <tr className="hover:bg-muted/40 cursor-pointer" onClick={() => onGroup(node.id)}>
@@ -60,10 +114,10 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                         <span className={`hover:underline ${depth === 0 ? "font-semibold" : "font-medium"}`}>{node.name}</span>
                     </span>
                 </td>
-                <NumCell value={node.rolledUpOpening} />
-                <NumCell value={node.rolledUpDebits} />
-                <NumCell value={node.rolledUpCredits} />
-                <NumCell value={node.rolledUpClosing} />
+                <SidedCell value={node.rolledUpOpening} normalSide={groupNormalSide} bold={depth === 0} />
+                <PlainCell value={node.rolledUpDebits} bold={depth === 0} />
+                <PlainCell value={node.rolledUpCredits} bold={depth === 0} />
+                <SidedCell value={node.rolledUpClosing} normalSide={groupNormalSide} bold={depth === 0} />
             </tr>
             {isOpen && (
                 <>
@@ -72,25 +126,61 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                                   expanded={expanded} toggle={toggle}
                                   onLedger={onLedger} onGroup={onGroup} />
                     ))}
-                    {node.ledgers.map((l) => (
-                        <tr
-                            key={`l-${l.id}`}
-                            className="hover:bg-primary/5 cursor-pointer"
-                            onClick={() => onLedger(l.id)}
-                        >
-                            <td className="py-1 text-muted-foreground" style={{ paddingLeft: 24 + depth * 16 }}>
-                                <span className="hover:underline hover:text-primary">{l.name}</span>
-                            </td>
-                            <NumCell value={l.opening} />
-                            <NumCell value={l.debits} />
-                            <NumCell value={l.credits} />
-                            <NumCell value={l.closing} />
-                        </tr>
-                    ))}
+                    {node.ledgers.map((l) => {
+                        const ledgerSide: Side = l.normalBalance ?? groupNormalSide;
+                        return (
+                            <tr
+                                key={`l-${l.id}`}
+                                className="hover:bg-primary/5 cursor-pointer"
+                                onClick={() => onLedger(l.id)}
+                            >
+                                <td className="py-1 text-muted-foreground italic" style={{ paddingLeft: 24 + depth * 16 }}>
+                                    <span className="hover:underline hover:text-primary">{l.name}</span>
+                                </td>
+                                <SidedCell value={l.opening} normalSide={ledgerSide} />
+                                <PlainCell value={l.debits} />
+                                <PlainCell value={l.credits} />
+                                <SidedCell value={l.closing} normalSide={ledgerSide} />
+                            </tr>
+                        );
+                    })}
                 </>
             )}
         </Fragment>
     );
+}
+
+/**
+ * Compute Dr / Cr totals on each column from the source tree.
+ *
+ * Convention: aggregates are signed-by-normal-balance — Asset's `opening` is
+ * positive when it sits on the Dr side. By walking the tree we split each
+ * column into Dr-side vs Cr-side totals.
+ *
+ * `openingDiff = openDr − openCr` is the one-sided slack left by master-page
+ * opening balances (since they have no balanced JE counterpart). The Trial
+ * Balance reconciles it with a synthetic "Difference in opening balances"
+ * row applied to BOTH Opening and Closing columns — every JE balances, so
+ * the slack carries forward unchanged into Closing.
+ */
+function deriveSummary(tree: GroupNode[]) {
+    let openDr = 0, openCr = 0, closeDr = 0, closeCr = 0, debits = 0, credits = 0;
+    const visit = (n: GroupNode): void => {
+        const groupSide = defaultNormalBalanceForGroupType(n.type);
+        for (const l of n.ledgers) {
+            // Use the ledger's own normalBalance when present (handles
+            // contra accounts like Drawings sitting inside a CR-side group).
+            const ledgerOnDr = (l.normalBalance ?? groupSide) === "DEBIT";
+            if (ledgerOnDr) { openDr += l.opening; closeDr += l.closing; }
+            else            { openCr += l.opening; closeCr += l.closing; }
+            debits  += l.debits;
+            credits += l.credits;
+        }
+        n.children.forEach(visit);
+    };
+    tree.forEach(visit);
+    const openingDiff = openDr - openCr;
+    return { openDr, openCr, closeDr, closeCr, debits, credits, openingDiff };
 }
 
 export default function TrialBalancePage() {
@@ -101,6 +191,7 @@ export default function TrialBalancePage() {
     const [data, setData] = useState<TBData | null>(null);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
+    const [showEmpty, setShowEmpty] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -119,6 +210,13 @@ export default function TrialBalancePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
 
+    const viewTree = useMemo(() => {
+        if (!data) return [];
+        return showEmpty ? data.tree : pruneEmpty(data.tree);
+    }, [data, showEmpty]);
+
+    const summary = useMemo(() => data ? deriveSummary(data.tree) : null, [data]);
+
     const toggle = (id: number) => setExpanded((prev) => {
         const next = new Set(prev);
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
@@ -126,6 +224,17 @@ export default function TrialBalancePage() {
     });
     const goLedger = (id: number) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`);
     const goGroup  = (id: number) => router.push(`/office/accountancy/groups/${id}?from=${from}&to=${to}`);
+
+    // Grand-total columns — balanced after folding the opening-difference plug
+    // into both Opening and Closing on the deficient side.
+    const totalsDisplay = summary ? (() => {
+        const plug = summary.openingDiff;            // > 0 ⇒ Dr excess (plug goes on Cr); < 0 ⇒ Cr excess
+        const openDr  = summary.openDr  + (plug < 0 ? -plug : 0);
+        const openCr  = summary.openCr  + (plug > 0 ?  plug : 0);
+        const closeDr = summary.closeDr + (plug < 0 ? -plug : 0);
+        const closeCr = summary.closeCr + (plug > 0 ?  plug : 0);
+        return { openDr, openCr, closeDr, closeCr, debits: summary.debits, credits: summary.credits };
+    })() : null;
 
     return (
         <div className="max-w-7xl mx-auto space-y-5">
@@ -139,6 +248,9 @@ export default function TrialBalancePage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></div>
                     <div className="space-y-1"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" /></div>
+                    <Button variant="outline" onClick={() => setShowEmpty((v) => !v)} title="Toggle visibility of groups / ledgers with no activity">
+                        {showEmpty ? "Hide empty" : "Show all"}
+                    </Button>
                     <Button onClick={load}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()}><Printer size={14} /></Button>
                 </div>
@@ -146,7 +258,7 @@ export default function TrialBalancePage() {
 
             {loading && <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>}
 
-            {!loading && data && (
+            {!loading && data && summary && totalsDisplay && (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
                         <thead className="border-b bg-muted text-xs text-muted-foreground">
@@ -159,29 +271,53 @@ export default function TrialBalancePage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.tree.map((g) => (
+                            {viewTree.map((g) => (
                                 <GroupRow key={g.id} node={g} depth={0}
                                           expanded={expanded} toggle={toggle}
                                           onLedger={goLedger} onGroup={goGroup} />
                             ))}
+                            {viewTree.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                        No activity in the selected period.
+                                    </td>
+                                </tr>
+                            )}
+
+                            {/* Difference in opening balances — synthetic plug that reconciles
+                                the one-sided master-page openings so the Trial Balance balances
+                                Dr against Cr in both the Opening and Closing columns (mirrors
+                                Tally's behaviour). Every JE balances, so the same plug carries
+                                forward into Closing unchanged. */}
+                            {Math.abs(summary.openingDiff) >= 0.005 && (
+                                <tr
+                                    className="text-amber-700 dark:text-amber-400 border-t"
+                                    title="Master-page opening balances are one-sided — this is the plug that balances Σ opening Dr against Σ opening Cr."
+                                >
+                                    <td className="px-3 py-1.5 italic">Difference in opening balances</td>
+                                    {/* If openings Dr > Cr (openingDiff > 0), plug sits on the Cr side, and vice-versa. */}
+                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" />
+                                    <PlainCell value={0} />
+                                    <PlainCell value={0} />
+                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" />
+                                </tr>
+                            )}
                         </tbody>
                         <tfoot className="border-t-2 bg-muted/30 font-bold">
                             <tr>
                                 <td className="px-3 py-2">Grand Total</td>
-                                <NumCell value={data.totals.opening} />
-                                <NumCell value={data.totals.debits} />
-                                <NumCell value={data.totals.credits} />
-                                <NumCell value={data.totals.closing} />
+                                <td className="px-3 py-2 text-right font-mono text-sm">
+                                    {fmt(Math.max(totalsDisplay.openDr, totalsDisplay.openCr))}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-sm">{fmt(totalsDisplay.debits)}</td>
+                                <td className="px-3 py-2 text-right font-mono text-sm">{fmt(totalsDisplay.credits)}</td>
+                                <td className="px-3 py-2 text-right font-mono text-sm">
+                                    {fmt(Math.max(totalsDisplay.closeDr, totalsDisplay.closeCr))}
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
-            )}
-
-            {!loading && data && Math.abs(data.totals.debits - data.totals.credits) > 0.005 && (
-                <p className="text-center text-sm text-amber-700 dark:text-amber-400 print:hidden">
-                    ⚠ Trial Balance is unbalanced — Dr/Cr difference: {fmt(Math.abs(data.totals.debits - data.totals.credits))}
-                </p>
             )}
         </div>
     );
