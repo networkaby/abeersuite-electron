@@ -11,6 +11,15 @@ use shadcn, zustand
 
 For module-specific URLs, permissions, models, and wiring, read `docs/modules/<module>.md` first. Each doc follows the same template — URLs (UI + API), Permissions, Prisma models, Key components, Common workflows, Gotchas. Cuts the "what does this module touch" question from N file globs to one file read. Index: [docs/modules/README.md](docs/modules/README.md).
 
+# Completed + protected surfaces (no-regression rule)
+
+Before editing critical completed flows, read `docs/completed-and-protected.md`.
+
+- Treat listed items (POS, Balance Sheet, Profit & Loss, Day Book, etc.) as **preserve-first**.
+- Refactors/styling are fine, but behavior/output changes require explicit user approval.
+- Do not alter accounting math paths (`effectiveLedgerBalance`, `aggregateClosingAsOf`, `aggregateRange`, `netProfitLoss`) unless the task explicitly asks for accounting logic changes.
+- If a protected surface is intentionally changed, update `docs/completed-and-protected.md` in the same commit.
+
 # Seeds — keep production + dummy in sync with the schema
 
 All seed scripts live in `prisma/seeds/`. Read [docs/seeds.md](docs/seeds.md) before changing any of them.
