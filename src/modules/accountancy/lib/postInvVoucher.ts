@@ -35,14 +35,16 @@ type JeLine = {
 };
 
 const NAMES = {
-    SALES:        ["Sales A/c", "Sales", "Sales Account"],
-    PURCHASE:     ["Purchase A/c", "Purchase", "Purchase Account"],
-    CASH:         ["Cash", "Cash-in-Hand", "Cash A/c"],
-    GST_OUTPUT:   ["IGST", "GST Output", "Output GST", "Output Tax"],
-    GST_INPUT:    ["IGST", "GST Input", "Input GST", "Input Tax"],
-    ROUND_OFF:    ["Round Off", "Rounded Off", "Round-Off"],
-    SUNDRY_DEB:   [ACCOUNT_GROUPS.SUNDRY_DEBTORS],   // ledger fallback (rare)
-    SUNDRY_CRED:  [ACCOUNT_GROUPS.SUNDRY_CREDITORS], // ledger fallback (rare)
+    SALES:            ["Sales A/c", "Sales", "Sales Account"],
+    PURCHASE:         ["Purchase A/c", "Purchase", "Purchase Account"],
+    SALES_RETURNS:    ["Sales Return A/c", "Sales Returns", "Returns Inward", "Sales Return"],
+    PURCHASE_RETURNS: ["Purchase Return A/c", "Purchase Returns", "Returns Outward", "Purchase Return"],
+    CASH:             ["Cash", "Cash-in-Hand", "Cash A/c"],
+    GST_OUTPUT:       ["IGST", "GST Output", "Output GST", "Output Tax"],
+    GST_INPUT:        ["IGST", "GST Input", "Input GST", "Input Tax"],
+    ROUND_OFF:        ["Round Off", "Rounded Off", "Round-Off"],
+    SUNDRY_DEB:       [ACCOUNT_GROUPS.SUNDRY_DEBTORS],   // ledger fallback (rare)
+    SUNDRY_CRED:      [ACCOUNT_GROUPS.SUNDRY_CREDITORS], // ledger fallback (rare)
 } as const;
 
 async function findLedgerByNames(tx: Tx, names: readonly string[]): Promise<LedgerLite | null> {
@@ -140,11 +142,28 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const { voucher, userId } = input;
     const notes: string[] = [];
 
-    const isSale     = voucher.type === "SALE";
-    const isPurchase = voucher.type === "PURCHASE";
-    if (!isSale && !isPurchase) {
+    // Four GL-posting kinds, in two direction-shapes:
+    //   "sale shape"     — counter (party/cash) Dr, body Cr, tax Cr
+    //                      → SALE (body=Sales, tax=Output GST)
+    //                      → PURCHASE_RETURN (body=Purchase Returns, tax=Input GST reversal)
+    //   "purchase shape" — counter (party/cash) Cr, body Dr, tax Dr
+    //                      → PURCHASE (body=Purchase, tax=Input GST)
+    //                      → SALE_RETURN (body=Sales Returns, tax=Output GST reversal)
+    const isPositiveSale     = voucher.type === "SALE";
+    const isPositivePurchase = voucher.type === "PURCHASE";
+    const isSaleReturn       = voucher.type === "SALE_RETURN";
+    const isPurchaseReturn   = voucher.type === "PURCHASE_RETURN";
+    if (!isPositiveSale && !isPositivePurchase && !isSaleReturn && !isPurchaseReturn) {
         return { journalEntryId: null, notes: ["voucher type does not post to GL"] };
     }
+    // `isSale` (legacy name) reused below as a shorthand for the "sale shape"
+    // direction — counter Dr, body Cr. SALE and PURCHASE_RETURN both share it.
+    const isSale     = isPositiveSale || isPurchaseReturn;
+    const isPurchase = isPositivePurchase || isSaleReturn;
+    // `isDebtorParty` drives the no-party-linked fallback chain: SALE +
+    // SALE_RETURN go against Sundry Debtors; PURCHASE + PURCHASE_RETURN
+    // against Sundry Creditors.
+    const isDebtorParty = isPositiveSale || isSaleReturn;
 
     const subtotal     = toNumber(voucher.subtotal);
     const taxAmount    = toNumber(voucher.taxAmount);
@@ -179,14 +198,25 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     }
     const partyLedger   = !isCash ? await findPartyAccount(tx, voucher.partyType, voucher.partyId) : null;
 
-    // Body ledger (Sales for sale, Purchase for purchase)
-    const bodyLedger = isSale
-        ? await findLedgerByNames(tx, NAMES.SALES)
-        : await findLedgerByNames(tx, NAMES.PURCHASE);
+    // Body ledger — Sales / Purchase / Sales Returns / Purchase Returns per kind.
+    // Returns fall back to the parent ledger (Sales / Purchase) when the
+    // dedicated returns ledger isn't seeded, so old installs keep working.
+    let bodyNames: readonly string[];
+    let bodyFallbackNames: readonly string[] | null = null;
+    let bodyKindLabel: string;
+    if (isPositiveSale)            { bodyNames = NAMES.SALES;            bodyKindLabel = "Sales"; }
+    else if (isPositivePurchase)   { bodyNames = NAMES.PURCHASE;         bodyKindLabel = "Purchase"; }
+    else if (isSaleReturn)         { bodyNames = NAMES.SALES_RETURNS;    bodyFallbackNames = NAMES.SALES;    bodyKindLabel = "Sales Returns"; }
+    else /* isPurchaseReturn */    { bodyNames = NAMES.PURCHASE_RETURNS; bodyFallbackNames = NAMES.PURCHASE; bodyKindLabel = "Purchase Returns"; }
 
+    let bodyLedger = await findLedgerByNames(tx, bodyNames);
+    if (!bodyLedger && bodyFallbackNames) {
+        bodyLedger = await findLedgerByNames(tx, bodyFallbackNames);
+        if (bodyLedger) notes.push(`no dedicated ${bodyKindLabel} ledger — folded into ${bodyLedger.name}`);
+    }
     if (!bodyLedger) {
         return { journalEntryId: null, notes: [
-            `no ledger found for ${isSale ? "Sales" : "Purchase"} — skipping GL post`,
+            `no ledger found for ${bodyKindLabel} — skipping GL post`,
         ] };
     }
 
@@ -195,8 +225,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
 
     // Fallback chain for credit side when no party linked
     if (!counterLedger && !isCash) {
-        if (isSale)     counterLedger = await findLedgerByNames(tx, NAMES.SUNDRY_DEB);
-        else            counterLedger = await findLedgerByNames(tx, NAMES.SUNDRY_CRED);
+        counterLedger = await findLedgerByNames(tx, isDebtorParty ? NAMES.SUNDRY_DEB : NAMES.SUNDRY_CRED);
         if (!counterLedger) counterLedger = await findLedgerByNames(tx, NAMES.CASH);
         if (counterLedger) notes.push(
             `no party account linked — posted ${isSale ? "Dr" : "Cr"} to ${counterLedger.name}`,
@@ -209,10 +238,13 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         ] };
     }
 
-    // Tax ledger (optional)
+    // Tax ledger (optional) — Output GST for sale-side (SALE + SALE_RETURN),
+    // Input GST for purchase-side (PURCHASE + PURCHASE_RETURN). Returns
+    // reverse the tax leg (Dr Output / Cr Input) via bodyType below.
+    const isOutputTax = isPositiveSale || isSaleReturn;
     let taxLedger: LedgerLite | null = null;
     if (taxAmount > 0) {
-        taxLedger = await findLedgerByNames(tx, isSale ? NAMES.GST_OUTPUT : NAMES.GST_INPUT);
+        taxLedger = await findLedgerByNames(tx, isOutputTax ? NAMES.GST_OUTPUT : NAMES.GST_INPUT);
         if (!taxLedger) {
             notes.push(`no GST ledger found — tax of ${taxAmount.toFixed(2)} folded into ${bodyLedger.name}`);
         }
@@ -260,7 +292,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
             accountId:   taxLedger.id,
             type:        bodyType, // for SALE: credit GST; for PURCHASE: debit GST
             amount:      taxLineAmt,
-            description: `${isSale ? "Output" : "Input"} tax`,
+            description: `${isOutputTax ? "Output" : "Input"} tax`,
         });
     }
     if (roundOffLedger && rndLineAmt !== 0) {

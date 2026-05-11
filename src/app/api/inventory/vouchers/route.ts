@@ -47,6 +47,9 @@ export async function POST(req: Request) {
         paymentAccountId,
         paymentTerms,
         dueDate,
+        refNumber,
+        refDate,
+        refVoucherId,
         shippingAmt    = 0,
         roundOff       = 0,
         amountReceived = 0,
@@ -71,6 +74,13 @@ export async function POST(req: Request) {
         paymentTerms?:   string;
         /// Computed due date for the credit voucher (ISO yyyy-mm-dd)
         dueDate?:        string;
+        /// Supplier-issued bill number on PURCHASE; original invoice / bill
+        /// number on SALE_RETURN / PURCHASE_RETURN.
+        refNumber?:      string;
+        /// Date of the referenced source bill / invoice (ISO yyyy-mm-dd).
+        refDate?:        string;
+        /// Optional FK to the source InvVoucher being returned against.
+        refVoucherId?:   number;
         shippingAmt?:    number;
         roundOff?:       number;
         amountReceived?: number;
@@ -152,6 +162,9 @@ export async function POST(req: Request) {
                 paymentAccountId: paymentAccountId ?? null,
                 paymentTerms:    paymentTerms || null,
                 dueDate:         dueDate ? new Date(dueDate) : null,
+                refNumber:       refNumber || null,
+                refDate:         refDate ? new Date(refDate) : null,
+                refVoucherId:    refVoucherId ?? null,
                 shippingAmt,
                 roundOff,
                 amountReceived,

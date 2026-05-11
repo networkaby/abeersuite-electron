@@ -169,6 +169,17 @@ model InvVoucher {
   /// postInvVoucher.ts's legacy name-based lookup ("Cash-in-Hand").
   paymentAccountId Int?
   paymentAccount   Account?       @relation("InvVoucherPaymentAccount", fields: [paymentAccountId], references: [id])
+  /// Supplier-issued bill number on a PURCHASE (we don't generate it — the
+  /// supplier does). Also reused as the "original invoice / bill number"
+  /// on SALE_RETURN / PURCHASE_RETURN to back-reference the source voucher.
+  refNumber        String?
+  refDate          DateTime?      @db.Date
+  /// Optional FK back to the source InvVoucher being returned against —
+  /// lets a SALE_RETURN link to the original SALE (and PURCHASE_RETURN to
+  /// the original PURCHASE) so the detail page can show the relationship.
+  refVoucherId     Int?
+  refVoucher       InvVoucher?    @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
+  refReturns       InvVoucher[]   @relation("InvVoucherRef")
   /// Credit-sale payment terms (free-form label, e.g. "Net 30", "Due on Receipt").
   /// Only meaningful when paymentMode = "CREDIT".
   paymentTerms     String?

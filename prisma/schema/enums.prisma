@@ -120,6 +120,8 @@ enum InvVoucherType {
   PURCHASE
   SALE
   ESTIMATE
+  SALE_RETURN // stock IN — reverses a SALE (customer returns goods, "Credit Note" in accounting)
+  PURCHASE_RETURN // stock OUT — reverses a PURCHASE (we return to supplier, "Debit Note" in accounting)
   RECEIPT
   ISSUE
   ADJUSTMENT

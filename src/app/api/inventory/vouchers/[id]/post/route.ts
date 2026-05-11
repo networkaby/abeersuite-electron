@@ -42,14 +42,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
 
     // Stock-direction classification per voucher type:
-    //   incoming stock: PURCHASE, RECEIPT, GRN, REJECTION_IN
-    //   outgoing stock: SALE, ISSUE, CHALLAN, REJECTION_OUT
+    //   incoming stock: PURCHASE, RECEIPT, GRN, REJECTION_IN, SALE_RETURN
+    //                   (sale return: customer returns goods → stock back in)
+    //   outgoing stock: SALE, ISSUE, CHALLAN, REJECTION_OUT, PURCHASE_RETURN
+    //                   (purchase return: we return to supplier → stock back out)
     //   no stock:      ESTIMATE, ADJUSTMENT, STOCK_JOURNAL, PHYSICAL_STOCK, SALES_ORDER, PURCHASE_ORDER
     //                  (Stock Journal and Physical Stock have explicit per-line in/out quantities;
     //                   handled separately below)
     //   commitments:   SALES_ORDER, PURCHASE_ORDER — no stock movement at all on POST.
-    const isPurchase = ["PURCHASE", "RECEIPT", "GRN", "REJECTION_IN"].includes(voucher.type);
-    const isSale     = ["SALE", "ISSUE", "CHALLAN", "REJECTION_OUT"].includes(voucher.type);
+    const isPurchase = ["PURCHASE", "RECEIPT", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(voucher.type);
+    const isSale     = ["SALE", "ISSUE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
     const isCommitment = voucher.type === "SALES_ORDER" || voucher.type === "PURCHASE_ORDER";
     const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
     const isStockJournal = voucher.type === "STOCK_JOURNAL";
@@ -125,7 +127,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // (or stay non-accounting per Tally convention).
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
-            if (voucher.type === "SALE" || voucher.type === "PURCHASE") {
+            if (["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type)) {
                 const out = await postInvVoucherToGl(tx, {
                     voucherId: voucher.id,
                     voucher,
