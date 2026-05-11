@@ -119,7 +119,10 @@ export type ButtonBarAction = {
     subtitle: string;
     icon: LucideIcon;
     variant: "default" | "outline";
-    action: "new-ticket";
+    /** Direct navigation target. Mutually exclusive with `action`. */
+    href?: string;
+    /** Dialog-opening action discriminator. Mutually exclusive with `href`. */
+    action?: "new-ticket";
     pipelineRef?: "default";
     disabled?: boolean;
 };
@@ -537,15 +540,14 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         pipelineRef: "default",
     },
     {
-        label: "Dummy Create +",
-        subtitle: "Coming soon",
-        icon: Plus,
+        label: "POS",
+        subtitle: "Open point-of-sale screen",
+        icon: ShoppingCart,
         variant: "outline",
-        action: "new-ticket",
-        disabled: true,
+        href: "/office/pos",
     },
     {
-        label: "Dummy Create2 +",
+        label: "Dummy Create +",
         subtitle: "Coming soon",
         icon: Plus,
         variant: "outline",
