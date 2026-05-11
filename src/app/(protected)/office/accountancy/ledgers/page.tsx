@@ -86,7 +86,7 @@ export default function LedgersPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<GroupNode[]>("/api/finance/account-groups")
+        axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => {
                 setTree(r.data);
                 setExpanded((prev) => {
@@ -114,7 +114,7 @@ export default function LedgersPage() {
         if (!newForm.name.trim()) { toast.error("Name is required"); return; }
         setSaving(true);
         try {
-            await axios.post("/api/finance/ledgers", {
+            await axios.post("/api/accountancy/ledgers", {
                 name:          newForm.name.trim(),
                 groupId:       newForm.groupId !== NONE ? Number(newForm.groupId) : null,
                 code:          newForm.code.trim() || null,

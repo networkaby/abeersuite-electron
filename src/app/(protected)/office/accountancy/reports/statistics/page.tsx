@@ -45,7 +45,7 @@ export default function StatisticsPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<StatsData>(`/api/finance/reports/statistics?from=${from}&to=${to}`)
+        axios.get<StatsData>(`/api/accountancy/reports/statistics?from=${from}&to=${to}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load statistics"))
             .finally(() => setLoading(false));

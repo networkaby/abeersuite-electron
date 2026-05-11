@@ -149,7 +149,7 @@ export default function BalanceSheetPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<BalanceSheetData>(`/api/finance/reports/balance-sheet?asOf=${asOf}`)
+        axios.get<BalanceSheetData>(`/api/accountancy/reports/balance-sheet?asOf=${asOf}`)
             .then((r) => {
                 setData(r.data);
                 // auto-expand top-level groups on first load

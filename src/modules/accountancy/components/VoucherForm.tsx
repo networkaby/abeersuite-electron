@@ -1,6 +1,6 @@
 "use client";
 // Shared form for the unified accounting Voucher (Contra / Payment / Receipt /
-// Credit Note / Debit Note). Posts to /api/finance/vouchers and routes back to
+// Credit Note / Debit Note). Posts to /api/accountancy/vouchers and routes back to
 // the type-specific list page on success.
 
 import { useEffect, useState } from "react";
@@ -115,7 +115,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
     }, [party, partySide]);
 
     useEffect(() => {
-        axios.get<GlAccount[]>("/api/finance/gl-accounts")
+        axios.get<GlAccount[]>("/api/accountancy/gl-accounts")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
     }, []);
@@ -144,7 +144,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
 
         setSaving(true);
         try {
-            const created = await axios.post<{ id: number }>("/api/finance/vouchers", {
+            const created = await axios.post<{ id: number }>("/api/accountancy/vouchers", {
                 type,
                 date:           form.date,
                 narration:      form.narration || undefined,
@@ -159,7 +159,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
 
             // Persist any bill-wise allocations the user added
             for (const a of allocations) {
-                await axios.post("/api/finance/allocations", {
+                await axios.post("/api/accountancy/allocations", {
                     targetType: a.targetType,
                     targetId:   a.targetId,
                     sourceType: "VOUCHER",
@@ -171,7 +171,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
             }
 
             if (postAfterSave) {
-                await axios.post(`/api/finance/vouchers/${created.data.id}/post`);
+                await axios.post(`/api/accountancy/vouchers/${created.data.id}/post`);
                 toast.success(`${TITLES[type]} saved & posted`);
             } else {
                 toast.success(`${TITLES[type]} saved as draft`);

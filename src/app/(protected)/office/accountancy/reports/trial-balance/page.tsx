@@ -104,7 +104,7 @@ export default function TrialBalancePage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<TBData>(`/api/finance/reports/trial-balance?from=${from}&to=${to}`)
+        axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
             .then((r) => {
                 setData(r.data);
                 setExpanded((prev) => {

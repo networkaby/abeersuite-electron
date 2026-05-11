@@ -20,7 +20,7 @@ export default function TicketInvoicesPanel({ ticketId }: { ticketId: number }) 
     useEffect(() => {
         let cancelled = false;
         axios
-            .get(`/api/finance/invoices?ticketId=${ticketId}`)
+            .get(`/api/accountancy/invoices?ticketId=${ticketId}`)
             .then((res) => { if (!cancelled) setInvoices(res.data ?? []); })
             .catch(() => { if (!cancelled) setInvoices([]); })
             .finally(() => { if (!cancelled) setLoading(false); });

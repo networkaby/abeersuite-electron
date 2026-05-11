@@ -56,14 +56,14 @@ export default function OpeningBalancePage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<Summary>("/api/finance/opening-balance")
+        axios.get<Summary>("/api/accountancy/opening-balance")
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load summary"))
             .finally(() => setLoading(false));
     }, []);
 
     const loadAccounts = useCallback(() => {
-        return axios.get<AllAccount[]>("/api/finance/gl-accounts")
+        return axios.get<AllAccount[]>("/api/accountancy/gl-accounts")
             .then((r) => setAllAccounts(r.data))
             .catch(() => { /* page still useful without picker */ });
     }, []);
@@ -213,7 +213,7 @@ function AccountOpeningSection({
         if (!Number.isFinite(amount) || amount < 0) { toast.error("Enter a valid amount"); return; }
         setSaving(true);
         try {
-            await axios.put(`/api/finance/accounts/${form.accountId}/opening`, {
+            await axios.put(`/api/accountancy/accounts/${form.accountId}/opening`, {
                 amount:   amount === 0 ? null : amount,
                 type:     amount === 0 ? null : form.type,
                 asOfDate: amount === 0 ? null : form.asOfDate,
@@ -553,7 +553,7 @@ function QuickCreateAccountDialog({
         if (!open) return;
         // Flatten the group tree so the user picks a leaf-or-anywhere group easily.
         type Node = AccountGroupOpt & { children?: Node[] };
-        axios.get<Node[]>("/api/finance/account-groups").then((r) => {
+        axios.get<Node[]>("/api/accountancy/account-groups").then((r) => {
             const flat: AccountGroupOpt[] = [];
             const walk = (nodes: Node[]) => {
                 for (const n of nodes) {
@@ -578,7 +578,7 @@ function QuickCreateAccountDialog({
         const hasOpening = Number.isFinite(opening) && opening > 0;
         setSaving(true);
         try {
-            const { data } = await axios.post<{ id: number }>("/api/finance/gl-accounts", {
+            const { data } = await axios.post<{ id: number }>("/api/accountancy/gl-accounts", {
                 code:          form.code.trim(),
                 name:          form.name.trim(),
                 groupId:       Number(form.groupId),

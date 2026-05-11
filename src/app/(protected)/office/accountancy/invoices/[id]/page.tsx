@@ -94,7 +94,7 @@ export default function InvoiceDetailPage() {
 
     const load = () => {
         setLoading(true);
-        axios.get<Invoice>(`/api/finance/invoices/${id}`)
+        axios.get<Invoice>(`/api/accountancy/invoices/${id}`)
             .then((r) => setInvoice(r.data))
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
@@ -105,7 +105,7 @@ export default function InvoiceDetailPage() {
     const sendInvoice = async () => {
         setSending(true);
         try {
-            await axios.patch(`/api/finance/invoices/${id}`, { status: "SENT" });
+            await axios.patch(`/api/accountancy/invoices/${id}`, { status: "SENT" });
             toast.success("Invoice sent — AR/Revenue JE posted");
             load();
         } catch (err: unknown) {
@@ -118,7 +118,7 @@ export default function InvoiceDetailPage() {
         if (!payForm.amount || parseFloat(payForm.amount) <= 0) { toast.error("Amount required"); return; }
         setPaying(true);
         try {
-            await axios.post(`/api/finance/invoices/${id}/payments`, {
+            await axios.post(`/api/accountancy/invoices/${id}/payments`, {
                 amount: parseFloat(payForm.amount),
                 method: payForm.method,
                 date: payForm.date,
@@ -179,7 +179,7 @@ export default function InvoiceDetailPage() {
                     )}
                     <LifecycleActions
                         voucher={invoice}
-                        apiBasePath={`/api/finance/invoices/${id}`}
+                        apiBasePath={`/api/accountancy/invoices/${id}`}
                         listPath="/office/accountancy/invoices"
                         label="Invoice"
                         canCancel={canCancel}

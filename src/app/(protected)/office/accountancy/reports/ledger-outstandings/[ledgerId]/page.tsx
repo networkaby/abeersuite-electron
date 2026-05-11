@@ -42,7 +42,7 @@ export default function LedgerOutstandingsPage({
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<LedgerOutstanding>(`/api/finance/reports/ledger-outstandings/${ledgerId}?asOf=${asOf}`)
+        axios.get<LedgerOutstanding>(`/api/accountancy/reports/ledger-outstandings/${ledgerId}?asOf=${asOf}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load ledger outstandings"))
             .finally(() => setLoading(false));

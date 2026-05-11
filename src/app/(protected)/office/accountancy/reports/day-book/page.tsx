@@ -105,7 +105,7 @@ export default function DayBookPage() {
 
     const load = useCallback((p: number, q: string, k: KindFilter) => {
         setLoading(true);
-        const url = `/api/finance/reports/day-book?from=${from}&to=${to}&page=${p}&limit=50`
+        const url = `/api/accountancy/reports/day-book?from=${from}&to=${to}&page=${p}&limit=50`
             + (q ? `&search=${encodeURIComponent(q)}` : "")
             + (k !== "All" ? `&kind=${encodeURIComponent(k)}` : "");
         axios.get<DayBookData>(url)

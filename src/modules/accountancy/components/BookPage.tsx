@@ -72,7 +72,7 @@ export function BookPage({
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<TBData>(`/api/finance/reports/trial-balance?from=${from}&to=${to}`)
+        axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
             .then((r) => {
                 const group = findGroup(r.data.tree, groupName);
                 const list = group ? flattenLedgers(group) : [];

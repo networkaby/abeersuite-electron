@@ -73,7 +73,7 @@ export default function JournalEntryDetailPage() {
 
     const load = () => {
         setLoading(true);
-        axios.get<JournalEntry>(`/api/finance/journal-entries/${id}`)
+        axios.get<JournalEntry>(`/api/accountancy/journal-entries/${id}`)
             .then((r) => setEntry(r.data))
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
@@ -84,7 +84,7 @@ export default function JournalEntryDetailPage() {
     const post = async () => {
         setPosting(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/post`);
+            await axios.post(`/api/accountancy/journal-entries/${id}/post`);
             toast.success("Entry posted — GL balances updated");
             load();
         } catch (err: unknown) {
@@ -99,7 +99,7 @@ export default function JournalEntryDetailPage() {
         if (!cancelReason.trim()) { toast.error("Reason required"); return; }
         setCancelling(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/cancel`, { reason: cancelReason });
+            await axios.post(`/api/accountancy/journal-entries/${id}/cancel`, { reason: cancelReason });
             toast.success("Entry cancelled — reversal entry created");
             setShowCancel(false);
             load();
@@ -115,7 +115,7 @@ export default function JournalEntryDetailPage() {
         if (!deleteReason.trim()) { toast.error("Reason required"); return; }
         setDeleting(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/delete`, { reason: deleteReason });
+            await axios.post(`/api/accountancy/journal-entries/${id}/delete`, { reason: deleteReason });
             toast.success("Entry deleted — hidden from views and excluded from balances");
             setShowDelete(false);
             setDeleteReason("");
@@ -131,7 +131,7 @@ export default function JournalEntryDetailPage() {
     const restore = async () => {
         setRestoring(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/restore`);
+            await axios.post(`/api/accountancy/journal-entries/${id}/restore`);
             toast.success("Entry restored");
             load();
         } catch (err: unknown) {
@@ -146,7 +146,7 @@ export default function JournalEntryDetailPage() {
         if (!hardDeleteReason.trim()) { toast.error("Reason required"); return; }
         setHardDeleting(true);
         try {
-            await axios.post(`/api/finance/journal-entries/${id}/hard-delete`, { reason: hardDeleteReason });
+            await axios.post(`/api/accountancy/journal-entries/${id}/hard-delete`, { reason: hardDeleteReason });
             toast.success("Entry permanently deleted (snapshot kept in audit log)");
             setShowHardDelete(false);
             router.push("/office/accountancy/journal-entries");

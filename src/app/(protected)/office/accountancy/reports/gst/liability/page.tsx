@@ -24,8 +24,8 @@ export default function GstLiabilityPage() {
     const load = useCallback(() => {
         setLoading(true);
         Promise.all([
-            axios.get<Summary>(`/api/finance/reports/gst-summary?from=${from}&to=${to}&direction=OUTWARD`).then((r) => r.data),
-            axios.get<Summary>(`/api/finance/reports/gst-summary?from=${from}&to=${to}&direction=INWARD`).then((r) => r.data),
+            axios.get<Summary>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=OUTWARD`).then((r) => r.data),
+            axios.get<Summary>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=INWARD`).then((r) => r.data),
         ])
             .then(([o, i]) => { setOutward(o); setInward(i); })
             .catch(() => toast.error("Failed to load GST liability"))

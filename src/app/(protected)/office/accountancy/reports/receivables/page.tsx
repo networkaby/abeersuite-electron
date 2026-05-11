@@ -34,7 +34,7 @@ export default function ReceivablesPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<OutstandingsReport>(`/api/finance/reports/receivables?asOf=${asOf}`)
+        axios.get<OutstandingsReport>(`/api/accountancy/reports/receivables?asOf=${asOf}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load receivables"))
             .finally(() => setLoading(false));

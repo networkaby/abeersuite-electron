@@ -71,7 +71,7 @@ export default function AccountLedgerPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<LedgerData>(`/api/finance/reports/ledger/${id}?from=${from}&to=${to}`)
+        axios.get<LedgerData>(`/api/accountancy/reports/ledger/${id}?from=${from}&to=${to}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load ledger"))
             .finally(() => setLoading(false));

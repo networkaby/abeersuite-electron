@@ -25,7 +25,7 @@ export type TradingStockAdjustment = {
  * Approximate opening stock by walking back from the live closing-stock
  * valuation: opening = current - net stock IN during the period + net stock
  * OUT during the period. This is the same formula the P&L route uses
- * inline at `src/app/api/finance/reports/profit-loss/route.ts`.
+ * inline at `src/app/api/accountancy/reports/profit-loss/route.ts`.
  *
  * Returns 0 if the math goes negative (defensive — happens when the
  * InvStockLedger has historical entries we can't reverse-engineer).

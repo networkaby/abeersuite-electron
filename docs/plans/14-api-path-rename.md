@@ -72,6 +72,31 @@ Run `Grep('"/api/finance/' src)`. Hot files include:
 
 Phase A is fully additive. Revert the call-site sweep + delete `src/app/api/accountancy/`. No data, no schema changes.
 
+---
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete** — hard rename, not the shim approach the plan originally described.
+
+Scope adjustment: the plan called for a re-export shim (`/api/accountancy/*` re-exports `/api/finance/*` handlers) followed by a deprecation period and later removal. In practice:
+
+1. This is an internal staff API — no external bookmarks or third-party clients to preserve.
+2. The office routing change (commit `30800af`) already established the precedent of hard URL renames with no backward-compat redirects.
+3. The shim approach adds complexity (53 re-export files + deprecation log) for zero real benefit here.
+
+So this commit just renames the directory and sweeps callers.
+
+What landed:
+
+- `git mv src/app/api/finance src/app/api/accountancy` — 53 route handlers across all sub-paths (account-groups, accounts, allocations, books-config, gl-accounts, groups, invoices, journal-entries, journal-vouchers, ledgers, opening-balance, reports/{balance-sheet, cash-flow, day-book, fund-flow, gst-summary, gst-hsn-summary, ledger, ledger-outstandings, payables, profit-loss, ratio-analysis, receivables, statistics, trial-balance}, voucher-series, vouchers).
+- Sweep: 29 caller references across 11 files (sed `"/api/finance/` → `"/api/accountancy/` + same for backtick templates).
+- Internal doc-comments in route handlers + module lib files also swept (5 more refs).
+- Dev server stopped temporarily because the running process held open file handles on `src/app/api/finance/` (Windows ENOFILE on `git mv` while server is up). Restarted after rename.
+
+Verified: tsc clean, build prints all `/api/accountancy/*` routes correctly, dev server returns 200 on `/api/accountancy/gl-accounts` (73 accounts).
+
+No new public symbols added; `docs/reusables.md` unchanged. Module doc updates (accountancy.md API section) follow in Segment 16.
+
 
 ---
 

@@ -53,8 +53,8 @@ export default function ChartOfAccountsPage() {
     const load = () => {
         setLoading(true);
         Promise.all([
-            axios.get<GlAccount[]>("/api/finance/gl-accounts?activeOnly=false"),
-            axios.get<AccountGroupLite[]>("/api/finance/account-groups"),
+            axios.get<GlAccount[]>("/api/accountancy/gl-accounts?activeOnly=false"),
+            axios.get<AccountGroupLite[]>("/api/accountancy/account-groups"),
         ])
             .then(([a, g]) => { setAccounts(a.data); setGroups(g.data); })
             .catch(() => toast.error("Failed to load accounts"))
@@ -81,7 +81,7 @@ export default function ChartOfAccountsPage() {
     const saveEdit = async (id: number) => {
         setSaving(true);
         try {
-            await axios.patch(`/api/finance/gl-accounts/${id}`, { name: editName, description: editDesc });
+            await axios.patch(`/api/accountancy/gl-accounts/${id}`, { name: editName, description: editDesc });
             toast.success("Updated");
             setEditingId(null);
             load();
@@ -95,7 +95,7 @@ export default function ChartOfAccountsPage() {
     const toggleActive = async (a: GlAccount) => {
         if (a.isActive) {
             try {
-                await axios.delete(`/api/finance/gl-accounts/${a.id}`);
+                await axios.delete(`/api/accountancy/gl-accounts/${a.id}`);
                 toast.success("Deactivated");
                 load();
             } catch (err: unknown) {
@@ -103,7 +103,7 @@ export default function ChartOfAccountsPage() {
                 toast.error(msg ?? "Failed");
             }
         } else {
-            await axios.patch(`/api/finance/gl-accounts/${a.id}`, { isActive: true });
+            await axios.patch(`/api/accountancy/gl-accounts/${a.id}`, { isActive: true });
             toast.success("Activated");
             load();
         }
@@ -116,7 +116,7 @@ export default function ChartOfAccountsPage() {
         }
         setSaving(true);
         try {
-            await axios.post("/api/finance/gl-accounts", newForm);
+            await axios.post("/api/accountancy/gl-accounts", newForm);
             toast.success("Account created");
             setShowAdd(false);
             setNewForm({ code: "", name: "", groupId: 0, normalBalance: "DEBIT", description: "" });

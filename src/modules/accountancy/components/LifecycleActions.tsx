@@ -4,7 +4,7 @@
 // JournalEntry) so the lifecycle UX is uniform across voucher types.
 //
 // The caller supplies the API base path (e.g. /api/inventory/vouchers/42 or
-// /api/finance/invoices/13) and the resource label for dialog copy. The
+// /api/accountancy/invoices/13) and the resource label for dialog copy. The
 // component handles state, requests, and toasts.
 
 import { useState } from "react";

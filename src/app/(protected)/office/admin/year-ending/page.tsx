@@ -98,8 +98,8 @@ export default function YearEndingPage() {
 
     useEffect(() => {
         Promise.all([
-            axios.get<SeriesRow[]>("/api/finance/voucher-series"),
-            axios.get<BooksConfig>("/api/finance/books-config"),
+            axios.get<SeriesRow[]>("/api/accountancy/voucher-series"),
+            axios.get<BooksConfig>("/api/accountancy/books-config"),
         ])
             .then(([s, c]) => {
                 setSeries(s.data);
@@ -118,7 +118,7 @@ export default function YearEndingPage() {
         if (!configDraft) return;
         setSavingConfig(true);
         try {
-            const { data } = await axios.patch<BooksConfig>("/api/finance/books-config", configDraft);
+            const { data } = await axios.patch<BooksConfig>("/api/accountancy/books-config", configDraft);
             setConfig(data);
             toast.success("Books restart updated");
         } catch (err) {
@@ -150,7 +150,7 @@ export default function YearEndingPage() {
                 padWidth:     draft.padWidth,
                 partOrder:    draft.partOrder,
             };
-            const { data } = await axios.patch<SeriesRow>(`/api/finance/voucher-series/${editKind}`, payload);
+            const { data } = await axios.patch<SeriesRow>(`/api/accountancy/voucher-series/${editKind}`, payload);
             setSeries((prev) => prev.map((r) => (r.kind === editKind ? data : r)));
             setEditKind(null);
             setDraft(null);
@@ -166,7 +166,7 @@ export default function YearEndingPage() {
     async function handleReset(kind: string) {
         setResetting(true);
         try {
-            const { data } = await axios.post<SeriesRow>(`/api/finance/voucher-series/${kind}/reset`);
+            const { data } = await axios.post<SeriesRow>(`/api/accountancy/voucher-series/${kind}/reset`);
             setSeries((prev) => prev.map((r) => (r.kind === kind ? data : r)));
             setResetKind(null);
             toast.success("Counter reset to 0");

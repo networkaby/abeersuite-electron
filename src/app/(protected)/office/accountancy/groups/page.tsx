@@ -86,7 +86,7 @@ export default function AccountGroupsPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<GroupNode[]>("/api/finance/account-groups")
+        axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => {
                 setTree(r.data);
                 // Auto-expand primary groups on first load
@@ -115,7 +115,7 @@ export default function AccountGroupsPage() {
         if (!newName.trim()) { toast.error("Name is required"); return; }
         setSaving(true);
         try {
-            await axios.post("/api/finance/account-groups", {
+            await axios.post("/api/accountancy/account-groups", {
                 name:      newName.trim(),
                 type:      newType,
                 parentId:  newParent !== "none" ? Number(newParent) : null,
@@ -143,7 +143,7 @@ export default function AccountGroupsPage() {
     const saveEdit = async (id: number) => {
         setSaving(true);
         try {
-            await axios.patch(`/api/finance/account-groups/${id}`, {
+            await axios.patch(`/api/accountancy/account-groups/${id}`, {
                 name:      editName.trim(),
                 parentId:  editParent !== "none" ? Number(editParent) : null,
                 sortOrder: Number(editSort) || 0,
@@ -162,7 +162,7 @@ export default function AccountGroupsPage() {
     const deleteGroup = async (id: number, name: string) => {
         if (!confirm(`Delete group "${name}"?`)) return;
         try {
-            await axios.delete(`/api/finance/account-groups/${id}`);
+            await axios.delete(`/api/accountancy/account-groups/${id}`);
             toast.success("Deleted");
             load();
         } catch (err: unknown) {

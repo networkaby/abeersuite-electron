@@ -43,7 +43,7 @@ export function VoucherList({
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const q = new URLSearchParams({ type, ...(statusFilter && { status: statusFilter }) });
-        axios.get<VoucherRow[]>(`/api/finance/vouchers?${q}`)
+        axios.get<VoucherRow[]>(`/api/accountancy/vouchers?${q}`)
             .then((r) => setRows(r.data))
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));

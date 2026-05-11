@@ -29,7 +29,7 @@ export default function FundFlowPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<FundFlowData>(`/api/finance/reports/fund-flow?from=${from}&to=${to}`)
+        axios.get<FundFlowData>(`/api/accountancy/reports/fund-flow?from=${from}&to=${to}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load fund flow"))
             .finally(() => setLoading(false));

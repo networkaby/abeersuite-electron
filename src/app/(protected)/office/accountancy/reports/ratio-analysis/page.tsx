@@ -47,7 +47,7 @@ export default function RatioAnalysisPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<RatioData>(`/api/finance/reports/ratio-analysis?asOf=${asOf}`)
+        axios.get<RatioData>(`/api/accountancy/reports/ratio-analysis?asOf=${asOf}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load ratio analysis"))
             .finally(() => setLoading(false));

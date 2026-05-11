@@ -179,7 +179,7 @@ export default function ProfitLossPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<PLData>(`/api/finance/reports/profit-loss?from=${from}&to=${to}`)
+        axios.get<PLData>(`/api/accountancy/reports/profit-loss?from=${from}&to=${to}`)
             .then((r) => {
                 setData(r.data);
                 setExpanded((prev) => {

@@ -34,7 +34,7 @@ export default function PayablesPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<OutstandingsReport>(`/api/finance/reports/payables?asOf=${asOf}`)
+        axios.get<OutstandingsReport>(`/api/accountancy/reports/payables?asOf=${asOf}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load payables"))
             .finally(() => setLoading(false));

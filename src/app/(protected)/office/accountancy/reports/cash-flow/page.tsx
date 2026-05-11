@@ -29,7 +29,7 @@ export default function CashFlowPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<CashFlowData>(`/api/finance/reports/cash-flow?from=${from}&to=${to}`)
+        axios.get<CashFlowData>(`/api/accountancy/reports/cash-flow?from=${from}&to=${to}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load cash flow"))
             .finally(() => setLoading(false));

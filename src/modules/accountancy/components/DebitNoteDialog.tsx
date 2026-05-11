@@ -103,10 +103,10 @@ export function DebitNoteDialog() {
 
     useEffect(() => {
         if (!open) return;
-        axios.get<GlAccount[]>("/api/finance/gl-accounts")
+        axios.get<GlAccount[]>("/api/accountancy/gl-accounts")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
-        axios.get<{ reference: string }>("/api/finance/vouchers/next-ref?type=DEBIT_NOTE")
+        axios.get<{ reference: string }>("/api/accountancy/vouchers/next-ref?type=DEBIT_NOTE")
             .then((r) => setNextRef(r.data.reference))
             .catch(() => setNextRef(""));
     }, [open]);
@@ -144,7 +144,7 @@ export function DebitNoteDialog() {
 
         setSaving(true);
         try {
-            const created = await axios.post<{ id: number; reference: string }>("/api/finance/vouchers", {
+            const created = await axios.post<{ id: number; reference: string }>("/api/accountancy/vouchers", {
                 type: "DEBIT_NOTE",
                 date,
                 narration: narration || undefined,
@@ -157,7 +157,7 @@ export function DebitNoteDialog() {
             });
 
             for (const a of allocations) {
-                await axios.post("/api/finance/allocations", {
+                await axios.post("/api/accountancy/allocations", {
                     targetType: a.targetType,
                     targetId: a.targetId,
                     sourceType: "VOUCHER",
@@ -169,7 +169,7 @@ export function DebitNoteDialog() {
             }
 
             if (postAfterSave) {
-                await axios.post(`/api/finance/vouchers/${created.data.id}/post`);
+                await axios.post(`/api/accountancy/vouchers/${created.data.id}/post`);
                 toast.success(`Debit note ${created.data.reference} saved & posted`);
             } else {
                 toast.success(`Debit note ${created.data.reference} saved as draft`);

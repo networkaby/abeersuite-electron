@@ -168,12 +168,12 @@ export function JournalVoucherDialog() {
 
     useEffect(() => {
         if (!open) return;
-        axios.get<GlAccount[]>("/api/finance/gl-accounts")
+        axios.get<GlAccount[]>("/api/accountancy/gl-accounts")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
-        // Preview the voucher number — see /api/finance/vouchers/next-ref.
+        // Preview the voucher number — see /api/accountancy/vouchers/next-ref.
         // Uses the JOURNAL VoucherSeries so the format matches Year Ending settings.
-        axios.get<{ reference: string }>(`/api/finance/vouchers/next-ref?type=${SERIES_KIND}`)
+        axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=${SERIES_KIND}`)
             .then((r) => setNextRef(r.data.reference))
             .catch(() => setNextRef(""));
     }, [open]);
@@ -314,7 +314,7 @@ export function JournalVoucherDialog() {
             });
 
             const res = await axios.post<{ voucherId: number; reference: string; posted: boolean }>(
-                "/api/finance/journal-vouchers",
+                "/api/accountancy/journal-vouchers",
                 {
                     type: UNDERLYING_TYPE,
                     date,

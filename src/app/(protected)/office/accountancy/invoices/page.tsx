@@ -77,7 +77,7 @@ export default function InvoicesPage() {
         const params = new URLSearchParams();
         if (statusFilter) params.set("status", statusFilter);
         if (orderSourceFilter) params.set("orderSource", orderSourceFilter);
-        axios.get<Invoice[]>(`/api/finance/invoices?${params}`)
+        axios.get<Invoice[]>(`/api/accountancy/invoices?${params}`)
             .then((r) => setInvoices(r.data))
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
@@ -110,7 +110,7 @@ export default function InvoicesPage() {
         }));
         setSaving(true);
         try {
-            await axios.post("/api/finance/invoices", {
+            await axios.post("/api/accountancy/invoices", {
                 accountId: selectedAccountId,
                 issueDate: form.issueDate,
                 dueDate: form.dueDate,

@@ -43,7 +43,7 @@ export function GstSummaryView({
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<GstSummaryData>(`/api/finance/reports/gst-summary?from=${from}&to=${to}&direction=${direction}`)
+        axios.get<GstSummaryData>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=${direction}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error(`Failed to load ${title}`))
             .finally(() => setLoading(false));

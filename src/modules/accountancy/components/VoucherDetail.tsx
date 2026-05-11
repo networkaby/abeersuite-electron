@@ -78,7 +78,7 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
 
     const load = () => {
         setLoading(true);
-        axios.get<Voucher>(`/api/finance/vouchers/${id}`)
+        axios.get<Voucher>(`/api/accountancy/vouchers/${id}`)
             .then((r) => setVoucher(r.data))
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
@@ -88,7 +88,7 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
     const action = async (path: string, body?: object, successMsg = "Done") => {
         setBusy(path);
         try {
-            await axios.post(`/api/finance/vouchers/${id}/${path}`, body);
+            await axios.post(`/api/accountancy/vouchers/${id}/${path}`, body);
             toast.success(successMsg);
             load();
         } catch (err: unknown) {
@@ -303,7 +303,7 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowHardDelete(false)}>Back</Button>
                         <Button variant="destructive" disabled={!hardDeleteReason.trim() || busy === "hard-delete"} onClick={async () => {
-                            await axios.post(`/api/finance/vouchers/${id}/hard-delete`, { reason: hardDeleteReason })
+                            await axios.post(`/api/accountancy/vouchers/${id}/hard-delete`, { reason: hardDeleteReason })
                                 .then(() => {
                                     toast.success("Voucher permanently deleted (snapshot kept in audit log)");
                                     router.push(basePath);

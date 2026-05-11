@@ -72,7 +72,7 @@ export function BillAllocationDrawer({
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (!accountId) { setOpenBills([]); return; }
         setLoading(true);
-        axios.get<OpenResponse>(`/api/finance/allocations/open?accountId=${accountId}`)
+        axios.get<OpenResponse>(`/api/accountancy/allocations/open?accountId=${accountId}`)
             .then((r) => setOpenBills([...r.data.openInvoices, ...r.data.openVouchers]))
             .catch(() => toast.error("Failed to load open bills"))
             .finally(() => setLoading(false));

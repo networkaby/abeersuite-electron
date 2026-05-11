@@ -83,7 +83,7 @@ export default function GroupLedgersPage() {
 
     // Load all groups for the edit dropdown (once)
     useEffect(() => {
-        axios.get<GroupNode[]>("/api/finance/account-groups")
+        axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => setGroups(flatGroups(r.data)))
             .catch(() => { /* silent */ });
     }, []);
@@ -97,7 +97,7 @@ export default function GroupLedgersPage() {
             activeOnly: "false",
             ...(q ? { search: q } : {}),
         });
-        axios.get<{ items: LedgerItem[]; total: number }>(`/api/finance/ledgers?${params}`)
+        axios.get<{ items: LedgerItem[]; total: number }>(`/api/accountancy/ledgers?${params}`)
             .then((r) => {
                 setItems(r.data.items);
                 setTotal(r.data.total);
@@ -108,7 +108,7 @@ export default function GroupLedgersPage() {
 
     // Load group name from the groups list
     useEffect(() => {
-        axios.get<GroupNode[]>("/api/finance/account-groups")
+        axios.get<GroupNode[]>("/api/accountancy/account-groups")
             .then((r) => {
                 const all = flatGroups(r.data);
                 const g = all.find((x) => x.id === Number(id));
@@ -136,7 +136,7 @@ export default function GroupLedgersPage() {
     const saveGroup = async (itemId: number) => {
         setSaving(true);
         try {
-            await axios.patch(`/api/finance/ledgers/${itemId}`, {
+            await axios.patch(`/api/accountancy/ledgers/${itemId}`, {
                 groupId: editGroupId !== NONE ? Number(editGroupId) : null,
             });
             toast.success("Group updated");

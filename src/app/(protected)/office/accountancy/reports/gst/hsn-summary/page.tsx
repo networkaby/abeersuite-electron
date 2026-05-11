@@ -38,7 +38,7 @@ export default function HsnSummaryPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<HsnData>(`/api/finance/reports/gst-hsn-summary?from=${from}&to=${to}&direction=${direction}`)
+        axios.get<HsnData>(`/api/accountancy/reports/gst-hsn-summary?from=${from}&to=${to}&direction=${direction}`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load HSN summary"))
             .finally(() => setLoading(false));

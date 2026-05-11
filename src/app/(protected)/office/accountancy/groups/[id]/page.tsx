@@ -56,7 +56,7 @@ export default function GroupDetailPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<GroupDetailData>(`/api/finance/groups/${id}/detail`)
+        axios.get<GroupDetailData>(`/api/accountancy/groups/${id}/detail`)
             .then((r) => setData(r.data))
             .catch(() => toast.error("Failed to load group"))
             .finally(() => setLoading(false));
