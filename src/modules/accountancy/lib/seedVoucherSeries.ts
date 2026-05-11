@@ -33,6 +33,8 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     const saleCount     = await prisma.invVoucher.count({ where: { type: "SALE" } });
     const purchaseCount = await prisma.invVoucher.count({ where: { type: "PURCHASE" } });
     const estimateCount = await prisma.invVoucher.count({ where: { type: "ESTIMATE" } });
+    const saleReturnCount     = await prisma.invVoucher.count({ where: { type: "SALE_RETURN" } });
+    const purchaseReturnCount = await prisma.invVoucher.count({ where: { type: "PURCHASE_RETURN" } });
 
     const rows = [
         ...KINDS.map(({ kind, label, typeValue }) => ({
@@ -47,8 +49,10 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         // /office/admin/year-ending. invNextRef() routes through nextRefFromSeries
         // to read these rows on every save.
         { kind: "SALE",     label: "Sale Invoice",     typeValue: "SV", nextSeq: saleCount },
-        { kind: "PURCHASE", label: "Purchase Voucher", typeValue: "PV", nextSeq: purchaseCount },
+        { kind: "PURCHASE", label: "Purchase Invoice", typeValue: "PV", nextSeq: purchaseCount },
         { kind: "ESTIMATE", label: "Estimate",         typeValue: "EV", nextSeq: estimateCount },
+        { kind: "SALE_RETURN",     label: "Sale Return",     typeValue: "SR", nextSeq: saleReturnCount },
+        { kind: "PURCHASE_RETURN", label: "Purchase Return", typeValue: "PR", nextSeq: purchaseReturnCount },
     ].map((r) => ({
         kind:            r.kind,
         label:           r.label,

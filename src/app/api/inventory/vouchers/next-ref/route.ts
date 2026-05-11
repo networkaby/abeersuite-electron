@@ -16,9 +16,11 @@ import { InvVoucherType } from "@/generated/prisma/client";
 // voucher kinds still fall back to the legacy calendar-year scheme — for
 // those the dialog doesn't show a preview (returns "").
 const SERIES_KIND: Partial<Record<InvVoucherType, string>> = {
-    SALE:     "SALE",
-    PURCHASE: "PURCHASE",
-    ESTIMATE: "ESTIMATE",
+    SALE:             "SALE",
+    PURCHASE:         "PURCHASE",
+    ESTIMATE:         "ESTIMATE",
+    SALE_RETURN:      "SALE_RETURN",
+    PURCHASE_RETURN:  "PURCHASE_RETURN",
 };
 
 export async function GET(req: Request) {

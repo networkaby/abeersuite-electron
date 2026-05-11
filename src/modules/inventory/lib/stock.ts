@@ -7,29 +7,33 @@ import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 // from /office/admin/year-ending (FY rollover, padding, separators, type code).
 // Anything not listed here falls through to the legacy calendar-year scheme.
 const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
-    SALE:     "SALE",
-    PURCHASE: "PURCHASE",
-    ESTIMATE: "ESTIMATE",
+    SALE:             "SALE",
+    PURCHASE:         "PURCHASE",
+    ESTIMATE:         "ESTIMATE",
+    SALE_RETURN:      "SALE_RETURN",
+    PURCHASE_RETURN:  "PURCHASE_RETURN",
 };
 
 // Legacy prefixes for the fallback path — kept so older voucher types
 // (RECEIPT/ISSUE/etc.) still get a sane default reference until / unless
 // they're promoted to the configurable VoucherSeries system.
 const PREFIX: Record<InvVoucherType, string> = {
-    PURCHASE:       "PV",
-    SALE:           "SV",
-    ESTIMATE:       "EV",
-    RECEIPT:        "RV",
-    ISSUE:          "IV",
-    ADJUSTMENT:     "AV",
-    STOCK_JOURNAL:  "SJ",
-    PHYSICAL_STOCK: "PS",
-    GRN:            "GRN",
-    CHALLAN:        "DC",
-    REJECTION_IN:   "RIN",
-    REJECTION_OUT:  "ROUT",
-    SALES_ORDER:    "SO",
-    PURCHASE_ORDER: "PO",
+    PURCHASE:         "PV",
+    SALE:             "SV",
+    ESTIMATE:         "EV",
+    SALE_RETURN:      "SR",
+    PURCHASE_RETURN:  "PR",
+    RECEIPT:          "RV",
+    ISSUE:            "IV",
+    ADJUSTMENT:       "AV",
+    STOCK_JOURNAL:    "SJ",
+    PHYSICAL_STOCK:   "PS",
+    GRN:              "GRN",
+    CHALLAN:          "DC",
+    REJECTION_IN:     "RIN",
+    REJECTION_OUT:    "ROUT",
+    SALES_ORDER:      "SO",
+    PURCHASE_ORDER:   "PO",
 };
 
 /**
