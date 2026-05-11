@@ -154,7 +154,6 @@ export function BookPage({
                                     onClick={() => router.push(`/office/accountancy/account/${l.id}?from=${from}&to=${to}`)}
                                 >
                                     <td className="px-3 py-2.5 font-medium text-foreground">
-                                        {l.code ? <span className="font-mono text-muted-foreground mr-2">{l.code}</span> : null}
                                         {l.name}
                                     </td>
                                     <td className="px-3 py-2.5 text-right font-mono">

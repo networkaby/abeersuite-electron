@@ -242,7 +242,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
                                                 <SelectItem value="0">Select account</SelectItem>
                                                 {lineAccountOptions.map((a) => (
                                                     <SelectItem key={a.id} value={String(a.id)}>
-                                                        {a.type === "PARTY" ? `★ ${a.name}` : `${a.code} — ${a.name}`}
+                                                        {a.type === "PARTY" ? `★ ${a.name}` : a.name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>

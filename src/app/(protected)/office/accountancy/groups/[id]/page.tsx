@@ -166,7 +166,6 @@ export default function GroupDetailPage() {
                         <thead className="text-xs text-muted-foreground bg-muted">
                             <tr>
                                 <th className="px-4 py-2 text-left font-medium">Name</th>
-                                <th className="px-4 py-2 text-left font-medium">Code</th>
                                 <th className="px-4 py-2 text-right font-medium">Balance</th>
                             </tr>
                         </thead>
@@ -185,7 +184,6 @@ export default function GroupDetailPage() {
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-2.5 text-muted-foreground text-xs font-mono">{l.code ?? "—"}</td>
                                     <td className="px-4 py-2.5 text-right font-mono">
                                         {l.balance !== 0 ? fmt(l.balance) : <span className="text-muted-foreground/30">—</span>}
                                     </td>

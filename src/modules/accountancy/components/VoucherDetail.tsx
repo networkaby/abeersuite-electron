@@ -185,7 +185,7 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
                 {voucher.partyAccount && (
                     <div className="col-span-2">
                         <p className="text-xs text-muted-foreground mb-1">Party</p>
-                        <p className="font-medium">{voucher.partyAccount.code} — {voucher.partyAccount.name}</p>
+                        <p className="font-medium">{voucher.partyAccount.name}</p>
                     </div>
                 )}
                 {voucher.journalEntryId && (
@@ -216,7 +216,6 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
                         {voucher.lines.map((l) => (
                             <tr key={l.id} className="border-b last:border-0 hover:bg-muted/40">
                                 <td className="px-5 py-3">
-                                    <span className="font-mono text-muted-foreground mr-2">{l.account.code}</span>
                                     <span className="font-medium">{l.account.name}</span>
                                 </td>
                                 <td className="px-5 py-3 text-muted-foreground text-xs">{l.description ?? "—"}</td>

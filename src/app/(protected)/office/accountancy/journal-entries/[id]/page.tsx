@@ -293,7 +293,6 @@ export default function JournalEntryDetailPage() {
                         {entry.lines.map((l) => (
                             <tr key={l.id} className="border-b last:border-0 hover:bg-muted/40">
                                 <td className="px-5 py-3">
-                                    <span className="font-mono text-muted-foreground mr-2">{l.account.code}</span>
                                     <span className="font-medium text-foreground">{l.account.name}</span>
                                 </td>
                                 <td className="px-5 py-3 text-muted-foreground text-xs">{l.description ?? "—"}</td>

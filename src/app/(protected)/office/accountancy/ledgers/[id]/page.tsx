@@ -215,7 +215,6 @@ export default function GroupLedgersPage() {
                         <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
                             <th className="px-4 py-2.5 text-left font-medium w-12">S.No.</th>
                             <th className="px-4 py-2.5 text-left font-medium">Name</th>
-                            <th className="px-4 py-2.5 text-left font-medium w-28">Code</th>
                             <th className="px-4 py-2.5 text-right font-medium w-36">Balance</th>
                             <th className="px-4 py-2.5 text-center font-medium w-20">Status</th>
                             <th className="px-4 py-2.5 w-20" />
@@ -271,10 +270,6 @@ export default function GroupLedgersPage() {
                                                 </Select>
                                             </div>
                                         )}
-                                    </td>
-
-                                    <td className="px-4 py-2.5 text-muted-foreground text-xs font-mono">
-                                        {item.code ?? "—"}
                                     </td>
 
                                     <td className="px-4 py-2.5 text-right font-mono text-sm">

@@ -269,7 +269,6 @@ function AccountSection({
             <table className="w-full text-sm">
                 <thead>
                     <tr className="border-b border-border bg-muted text-xs text-muted-foreground">
-                        <th className="px-5 py-2 text-left font-medium">Code</th>
                         <th className="px-5 py-2 text-left font-medium">Name</th>
                         <th className="px-5 py-2 text-left font-medium">Group</th>
                         <th className="px-5 py-2 text-left font-medium">Normal Balance</th>
@@ -282,7 +281,6 @@ function AccountSection({
                 <tbody>
                     {rows.map((a) => (
                         <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/40 ${!a.isActive ? "opacity-50" : ""}`}>
-                            <td className="px-5 py-3 font-mono text-foreground">{a.code ?? <span className="text-muted-foreground/50">—</span>}</td>
                             <td className="px-5 py-3">
                                 {editingId === a.id ? (
                                     <input

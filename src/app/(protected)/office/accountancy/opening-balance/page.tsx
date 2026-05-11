@@ -265,7 +265,7 @@ function AccountOpeningSection({
                             <SelectContent>
                                 <SelectItem value="0">Select account</SelectItem>
                                 {allAccounts.map((a) => (
-                                    <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                                    <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -318,7 +318,6 @@ function AccountOpeningSection({
                             <tr key={a.id} className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                 onClick={() => { setShowAdd(true); setForm((f) => ({ ...f, accountId: a.id })); }}>
                                 <td className="px-5 py-2">
-                                    <span className="font-mono text-muted-foreground mr-2">{a.code}</span>
                                     <span className="font-medium">{a.name}</span>
                                 </td>
                                 <td className="px-5 py-2 text-muted-foreground text-xs">
