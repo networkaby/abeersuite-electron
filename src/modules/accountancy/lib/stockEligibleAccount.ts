@@ -4,15 +4,28 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 /**
  * Inventory rule
  * --------------
- * Inventory items only attach to lines posted against a **Sales Accounts** or
- * **Purchase Accounts** ledger. In any other voucher the value flows through
- * ledgers, not stock. Concretely:
+ * Inventory items only attach to lines posted against a ledger under the
+ * **Sales Accounts** or **Purchase Accounts** group — *any* ledger under
+ * either group qualifies (Sales A/c, Parts Revenue, Shop Sales Revenue,
+ * Sales Returns, Purchase A/c, Purchase Returns, …). All other vouchers
+ * move money / liability only, not stock.
  *
- *   • Sales Accounts group  → Sales A/c, Parts Revenue, Shop Sales Revenue,
- *                             Sales Returns — Sale decreases inventory;
- *                             Sales Return increases it.
- *   • Purchase Accounts grp → Purchase A/c, Purchase Returns — Purchase
- *                             increases inventory; Purchase Return decreases.
+ * Stock direction follows the **posting side** of the inventory line, not
+ * the ledger's identity. That is what makes reversals natural — the same
+ * ledger can move stock either way depending on whether it's posted on
+ * Dr or Cr:
+ *
+ *   • Inventory line posted on **DEBIT** → stock IN  (qty / value rises)
+ *   • Inventory line posted on **CREDIT** → stock OUT (qty / value falls)
+ *
+ * So a Sales A/c on Cr is a sale (stock OUT); a Sales A/c on Dr reverses
+ * it (stock IN). A Purchase A/c on Dr is a purchase (stock IN); on Cr it
+ * reverses (stock OUT). Sales Returns / Purchase Returns ledgers behave
+ * the same way — the side is the source of truth.
+ *
+ * Posting code: `journal-vouchers/route.ts` and `postInvVoucher.ts` both
+ * read `line.type` (DEBIT / CREDIT) and set `inQty` / `outQty` on the
+ * stock ledger accordingly.
  *
  * Exceptions (vouchers that move stock without a sales / purchase ledger):
  *   • Stock Journal — internal stock transfers / consumption / production.
