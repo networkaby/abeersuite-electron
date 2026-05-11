@@ -90,7 +90,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -182,8 +182,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         // pathPrefixes: ["/office/accountancy/account-groups", "/office/accountancy/ledgers", "/office/accountancy/sales", "/office/accountancy/purchases", "/office/accountancy/estimates", "/office/accountancy/payments", "/office/accountancy/receipts", "/office/accountancy/contras", "/office/accountancy/credit-notes", "/office/accountancy/debit-notes", "/office/accountancy/journal-entries", "/office/accountancy/invoices", "/office/accountancy/opening-balance", "/office/accountancy/reports"],
         pathPrefixes: ["/office/accountancy"],
         createActions: [
-            { label: "Sale +", subtitle: "New sale voucher", icon: Receipt, variant: "default", href: "/office/accountancy/sales/new" },
-            { label: "Purchase +", subtitle: "New purchase voucher", icon: ShoppingCart, variant: "outline", href: "/office/accountancy/purchases/new" },
+            { label: "Sale +", subtitle: "New sale voucher (dialog)", icon: Receipt, variant: "default", action: "new-sale" },
+            { label: "Purchase +", subtitle: "New purchase voucher (dialog)", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", href: "/office/accountancy/estimates/new" },
             { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
             { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },

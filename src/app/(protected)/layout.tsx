@@ -14,6 +14,10 @@ import {
     CreditNoteDialog,
     DebitNoteDialog,
 } from "@/modules/accountancy/components/MoneyFlowDialog";
+import {
+    SaleDialog,
+    PurchaseDialog,
+} from "@/modules/accountancy/components/TradingVoucherForm";
 
 export default async function ProtectedLayout({
     children,
@@ -69,6 +73,8 @@ export default async function ProtectedLayout({
                 <ReceiptDialog />
                 <CreditNoteDialog />
                 <DebitNoteDialog />
+                <SaleDialog />
+                <PurchaseDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

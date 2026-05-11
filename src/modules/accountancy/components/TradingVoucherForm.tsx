@@ -19,18 +19,26 @@
  *     (PURCHASE).
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
-import { PartyCombobox, type SelectedParty } from "@/modules/accountancy/components/PartyCombobox";
+import {
+    PartySearchAndCreate,
+    type PartySearchAndCreateHandle,
+    type PickedParty,
+} from "@/shared/components/PartySearchAndCreate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
-
+import { useSaleDialogStore } from "@/store/saleDialogStore";
+import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
 type Kind = "SALE" | "PURCHASE";
 
 type LineState = {
@@ -70,7 +78,7 @@ const PER_KIND: Record<Kind, {
     title: string;
     partyPlaceholder: string;
     partyDefaultGroup?: PartyGroup;          // PartyCombobox createUnderGroup
-    narrationFallback: (party: SelectedParty | null) => string;
+    narrationFallback: (party: { name: string } | null) => string;
     narrationPlaceholderEmpty: string;
     rateFromProduct: (p: SelectedProduct) => number | null | undefined;
     successPostedMsg: string;
@@ -106,13 +114,17 @@ const PER_KIND: Record<Kind, {
 export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const router = useRouter();
     const copy = PER_KIND[kind];
+    const saleStore = useSaleDialogStore();
+    const purchaseStore = usePurchaseDialogStore();
+    const { open, setOpen } = kind === "SALE" ? saleStore : purchaseStore;
 
     const [saving, setSaving] = useState(false);
     const [lines, setLines] = useState<LineState[]>([newLine()]);
     // CASH / CREDIT toggle — SALE only. PURCHASE infers from supplier presence.
     const [payMode, setPayMode] = useState<"CREDIT" | "CASH">("CASH");
     const today = new Date().toISOString().slice(0, 10);
-    const [party, setParty] = useState<SelectedParty | null>(null);
+    const [party, setParty] = useState<PickedParty | null>(null);
+    const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
     const [header, setHeader] = useState({
         date: today,
         description: "",
@@ -120,6 +132,14 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
         roundOff: "",
         received: "",          // SALE only
     });
+
+    const reset = () => {
+        setLines([newLine()]);
+        setPayMode("CASH");
+        setParty(null);
+        partyPickerRef.current?.clear();
+        setHeader({ date: new Date().toISOString().slice(0, 10), description: "", shippingAmt: "", roundOff: "", received: "" });
+    };
 
     const updateLine = (id: number, patch: Partial<LineState>) =>
         setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -171,8 +191,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                 description,
                 partyName: party?.name || undefined,
                 partyPhone: party?.phone || undefined,
-                partyType: party?.partyType,
-                partyId: party?.partyId,
+                partyType: party?.kind,
+                partyId: party?.id,
                 paymentMode: inferredPayMode,
                 shippingAmt: shipping,
                 roundOff,
@@ -192,7 +212,9 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
             } else {
                 toast.success(copy.successDraftMsg);
             }
-            router.push(copy.detailPath(res.data.id));
+            reset();
+            setOpen(false);
+            router.refresh();
         } catch (err: unknown) {
             toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Save failed");
         } finally {
@@ -203,67 +225,87 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const cell = "bg-transparent border-0 outline-none text-sm text-right w-full focus:bg-accent/40 rounded px-1 tabular-nums";
 
     return (
-        <div className="flex flex-col h-[calc(100vh-4rem)] -m-8 bg-background">
-            {/* ── Top bar ──────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between border-b border-border bg-card px-6 py-3 shrink-0">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-lg font-bold tracking-tight">{copy.title}</h1>
-                    {/* Credit / Cash toggle — SALE only */}
-                    {kind === "SALE" && (
-                        <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
-                            {(["CASH", "CREDIT"] as const).map((m) => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => setPayMode(m)}
-                                    className={`px-3 py-1.5 transition-colors ${
-                                        payMode === m
-                                            ? "bg-primary text-primary-foreground"
-                                            : "bg-card text-muted-foreground hover:bg-muted"
-                                    }`}
-                                >
-                                    {m}
-                                </button>
-                            ))}
+        <Dialog
+            open={open}
+            onOpenChange={(isOpen) => { if (!isOpen) { reset(); setOpen(false); } }}
+        >
+            <DialogContent className="h-[90vh] max-w-5xl gap-0 p-0 sm:max-w-5xl flex flex-col">
+                <DialogHeader className="border-b border-border px-6 py-3 pr-12 shrink-0">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <DialogTitle className="text-lg">{copy.title}</DialogTitle>
+                            {/* Credit / Cash toggle — SALE only */}
+                            {kind === "SALE" && (
+                                <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
+                                    {(["CASH", "CREDIT"] as const).map((m) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => setPayMode(m)}
+                                            className={`px-3 py-1.5 transition-colors ${
+                                                payMode === m
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "bg-card text-muted-foreground hover:bg-muted"
+                                            }`}
+                                        >
+                                            {m}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                        <span>Date</span>
-                        <Input
-                            type="date"
-                            value={header.date}
-                            onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
-                            className="h-7 w-36 text-xs"
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <span>Date</span>
+                                <Input
+                                    type="date"
+                                    value={header.date}
+                                    onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
+                                    className="h-7 w-36 text-xs"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                {/* ── Party row ─────────────────────────────────────────────── */}
+                <div className="relative z-30 flex items-center gap-4 border-b border-border bg-card/60 px-6 py-3 shrink-0">
+                    <div className="w-80">
+                        <PartySearchAndCreate
+                            ref={partyPickerRef}
+                            onPicked={setParty}
+                            locked={!!party}
+                            placeholder={copy.partyPlaceholder}
+                            // SALE → Sundry Debtors (customer). PURCHASE → Sundry Creditors
+                            // (supplier). Both allow widening since a supplier may also be a
+                            // walk-in customer and vice-versa.
+                            partyGroup={kind === "SALE" ? ACCOUNT_GROUPS.SUNDRY_DEBTORS : ACCOUNT_GROUPS.SUNDRY_CREDITORS}
+                            allowIncludeOther
                         />
                     </div>
-                </div>
-            </div>
-
-            {/* ── Party row ─────────────────────────────────────────────── */}
-            <div className="flex items-center gap-4 border-b border-border bg-card/60 px-6 py-3 shrink-0">
-                <div className="w-80">
-                    <PartyCombobox
-                        value={party}
-                        onChange={setParty}
-                        placeholder={copy.partyPlaceholder}
-                        createUnderGroup={copy.partyDefaultGroup}
+                    {party && (
+                        <button
+                            type="button"
+                            onClick={() => { setParty(null); partyPickerRef.current?.clear(); }}
+                            className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                            title="Clear party"
+                        >
+                            Clear &times;
+                        </button>
+                    )}
+                    {party?.phone && (
+                        <span className="text-xs text-muted-foreground tabular-nums">{party.phone}</span>
+                    )}
+                    <Input
+                        value={header.description}
+                        onChange={(e) => setHeader((h) => ({ ...h, description: e.target.value }))}
+                        placeholder={party ? `Narration (default: ${copy.narrationFallback(party)})` : copy.narrationPlaceholderEmpty}
+                        className="h-8 flex-1"
                     />
                 </div>
-                {party?.phone && (
-                    <span className="text-xs text-muted-foreground tabular-nums">{party.phone}</span>
-                )}
-                <Input
-                    value={header.description}
-                    onChange={(e) => setHeader((h) => ({ ...h, description: e.target.value }))}
-                    placeholder={party ? `Narration (default: ${copy.narrationFallback(party)})` : copy.narrationPlaceholderEmpty}
-                    className="h-8 flex-1"
-                />
-            </div>
 
-            {/* ── Item table ───────────────────────────────────────────────── */}
-            <div className="flex-1 overflow-auto">
+                {/* ── Item table ───────────────────────────────────────────────── */}
+                <div className="flex-1 overflow-auto">
                 <table className="w-full text-sm border-collapse">
                     <thead className="sticky top-0 z-10 bg-muted border-b border-border text-xs text-muted-foreground">
                         <tr>
@@ -447,7 +489,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                         </div>
 
                         <div className="flex gap-2 shrink-0">
-                            <Button variant="outline" onClick={() => router.push(copy.listPath)}>
+                            <Button variant="outline" onClick={() => { reset(); setOpen(false); }}>
                                 Cancel
                             </Button>
                             <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
@@ -460,6 +502,11 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                     </div>
                 </div>
             </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }
+
+/** Thin wrappers for layout mounting + module sidebar actions. */
+export function SaleDialog() { return <TradingVoucherForm kind="SALE" />; }
+export function PurchaseDialog() { return <TradingVoucherForm kind="PURCHASE" />; }
