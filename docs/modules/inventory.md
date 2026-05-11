@@ -10,6 +10,7 @@
 - `/office/inventory/units`, `/categories`, `/groups`, `/brands`, `/warranty-terms` — masters
 - `/office/inventory/grn`, `/purchase-orders`, `/challans`, `/sales-orders`, `/rejections`, `/stock-journal` — vouchers
 - `/office/inventory/stock-ledger` — per-SKU stock movement history
+- `/office/inventory/stock-summary` — live per-product stock valuation (stock × cost/unit); grand total matches Balance Sheet Stock-in-Hand
 - `/office/inventory/{purchases,sales}/[id]` — voucher detail (cross-references Accountancy invoices)
 
 ### API routes (`src/app/api/inventory/`)

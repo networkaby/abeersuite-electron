@@ -173,7 +173,11 @@ export default function BalanceSheetPage() {
     });
 
     const goLedger = (id: number) => {
-        if (id <= 0) return;  // synthetic ledger (e.g. injected Closing Stock) — no drill-in
+        if (id === -1) {
+            router.push(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`);
+            return;
+        }
+        if (id <= 0) return;
         router.push(`/office/accountancy/account/${id}?asOf=${asOf}`);
     };
     const goGroup = (id: number) =>
@@ -344,6 +348,13 @@ export default function BalanceSheetPage() {
                     {data.closingStock.diff !== 0 && (
                         <span> · GL posted: <span className="font-mono">{fmt(data.closingStock.postedToGl)}</span></span>
                     )}
+                    <button
+                        type="button"
+                        className="ml-2 underline hover:text-foreground"
+                        onClick={() => router.push(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`)}
+                    >
+                        View stock summary →
+                    </button>
                 </p>
             )}
 
