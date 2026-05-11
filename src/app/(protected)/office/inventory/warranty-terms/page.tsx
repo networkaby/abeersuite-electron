@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { useDeleteWithConfirm } from "@/shared/hooks";
 import {
     Table,
     TableBody,
@@ -89,16 +90,12 @@ export default function InventoryWarrantyTermsPage() {
         }
     };
 
-    const del = async (id: number) => {
-        if (!confirm("Delete this warranty term?")) return;
-        try {
-            await axios.delete(`/api/inventory/warranty-terms/${id}`);
-            toast.success("Deleted");
-            load();
-        } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Delete failed");
-        }
-    };
+    const { remove: del } = useDeleteWithConfirm({
+        url: (id) => `/api/inventory/warranty-terms/${id}`,
+        message: () => "Delete this warranty term?",
+        errorMessage: "Delete failed",
+        onSuccess: () => load(),
+    });
 
     return (
         <div className="space-y-6">

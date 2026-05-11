@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useDeleteWithConfirm } from "@/shared/hooks";
 import {
     Table,
     TableBody,
@@ -69,16 +70,12 @@ export default function InventoryProductGroupsPage() {
         }
     };
 
-    const del = async (id: number) => {
-        if (!confirm("Delete this group?")) return;
-        try {
-            await axios.delete(`/api/inventory/product-groups/${id}`);
-            toast.success("Deleted");
-            load();
-        } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Delete failed");
-        }
-    };
+    const { remove: del } = useDeleteWithConfirm({
+        url: (id) => `/api/inventory/product-groups/${id}`,
+        message: () => "Delete this group?",
+        errorMessage: "Delete failed",
+        onSuccess: () => load(),
+    });
 
     return (
         <div className="space-y-6">

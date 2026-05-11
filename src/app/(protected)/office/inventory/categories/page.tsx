@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useDeleteWithConfirm } from "@/shared/hooks";
 import {
     Select,
     SelectContent,
@@ -92,16 +93,12 @@ export default function InventoryCategoriesPage() {
         }
     };
 
-    const del = async (id: number) => {
-        if (!confirm("Delete this category?")) return;
-        try {
-            await axios.delete(`/api/inventory/categories/${id}`);
-            toast.success("Deleted");
-            load();
-        } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Delete failed");
-        }
-    };
+    const { remove: del } = useDeleteWithConfirm({
+        url: (id) => `/api/inventory/categories/${id}`,
+        message: () => "Delete this category?",
+        errorMessage: "Delete failed",
+        onSuccess: () => load(),
+    });
 
     const parentOptions = rows.filter((c) => c.id !== editId);
 

@@ -5,6 +5,7 @@ import axios from "axios";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ServiceCenterForm from "@/modules/repairing/components/ServiceCenterForm";
+import { useDeleteWithConfirm } from "@/shared/hooks";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -43,16 +44,13 @@ export default function ServiceCentersPage() {
 
     useEffect(() => { fetchServiceCenters(); }, []);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Delete this service center?")) return;
-        try {
-            await axios.delete(`/api/service-centers/${id}`);
-            toast.success("Deleted successfully");
-            fetchServiceCenters();
-        } catch {
-            toast.error("Failed to delete");
-        }
-    };
+    const { remove: handleDelete } = useDeleteWithConfirm({
+        url: (id) => `/api/service-centers/${id}`,
+        message: () => "Delete this service center?",
+        successMessage: "Deleted successfully",
+        errorMessage: "Failed to delete",
+        onSuccess: () => fetchServiceCenters(),
+    });
 
     return (
         <div className="space-y-6">

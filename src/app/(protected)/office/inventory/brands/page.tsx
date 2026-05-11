@@ -17,6 +17,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
+import { useDeleteWithConfirm } from "@/shared/hooks";
 
 type Row = { id: number; name: string; isActive: boolean };
 const empty = { name: "", isActive: true };
@@ -70,16 +71,12 @@ export default function InventoryBrandsPage() {
         }
     };
 
-    const del = async (id: number) => {
-        if (!confirm("Delete this brand?")) return;
-        try {
-            await axios.delete(`/api/inventory/brands/${id}`);
-            toast.success("Deleted");
-            load();
-        } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Delete failed");
-        }
-    };
+    const { remove: del } = useDeleteWithConfirm({
+        url: (id) => `/api/inventory/brands/${id}`,
+        message: () => "Delete this brand?",
+        errorMessage: "Delete failed",
+        onSuccess: () => load(),
+    });
 
     return (
         <div className="space-y-6">
