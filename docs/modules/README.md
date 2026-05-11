@@ -91,4 +91,6 @@ Each module doc has a **"Reusable helpers — DO NOT duplicate"** table listing 
 - [people.md](./people.md) — Person (was Customer) / Company / shared Phone & Email tables / Account (GL ledger), CRM leads
 - [admin.md](./admin.md) — Roles, users, branches, departments, posts, pipelines, statuses
 - [messaging.md](./messaging.md) — Internal chat, notifications, social wall
+- [core.md](./core.md) — Cross-module workspace (assignments, call log, accounts, search-slno)
+- [pos.md](./pos.md) — Point of Sale counter screen
 - [customer-portal.md](./customer-portal.md) — External `/shop` + customer self-service
