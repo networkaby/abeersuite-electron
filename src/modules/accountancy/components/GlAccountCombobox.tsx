@@ -42,11 +42,10 @@ export function GlAccountCombobox({
 }: Props) {
     const [query, setQuery] = useState("");
 
-    // Sync display text when external value changes
+    // Sync display text when external value changes. The GL code stays in the
+    // model (search filter still matches it) but is hidden from the UI.
     const selectedAccount = accounts.find((a) => a.id === value);
-    const selectedLabel = selectedAccount
-        ? (selectedAccount.code ? `${selectedAccount.code} — ${selectedAccount.name}` : selectedAccount.name)
-        : "";
+    const selectedLabel = selectedAccount ? selectedAccount.name : "";
 
     const syncQuery = useCallback(() => {
         if (selectedAccount) setQuery(selectedLabel);
@@ -68,7 +67,7 @@ export function GlAccountCombobox({
         onSelect: (i) => {
             const a = filtered[i];
             if (!a) return;
-            setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
+            setQuery(a.name);
             cb.setOpen(false);
             onChange(a);
         },
@@ -146,7 +145,7 @@ export function GlAccountCombobox({
             const shouldCommit = hasTypedInput && normalizedQuery !== normalizedSelected;
             if (shouldCommit && filtered[cb.highlighted]) {
                 const a = filtered[cb.highlighted];
-                setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
+                setQuery(a.name);
                 cb.setOpen(false);
                 onChange(a);
             } else {
@@ -216,7 +215,7 @@ export function GlAccountCombobox({
                                     <li
                                         key={a.id}
                                         onMouseDown={() => {
-                                            setQuery(a.code ? `${a.code} — ${a.name}` : a.name);
+                                            setQuery(a.name);
                                             cb.setOpen(false);
                                             onChange(a);
                                         }}
@@ -229,7 +228,6 @@ export function GlAccountCombobox({
                                         }`}
                                     >
                                         <div className="flex items-baseline gap-2 min-w-0">
-                                            {a.code && <span className="font-mono text-[11px] text-muted-foreground shrink-0">{a.code}</span>}
                                             <span className="font-medium truncate">{a.name}</span>
                                         </div>
                                         {a.group?.name && (
