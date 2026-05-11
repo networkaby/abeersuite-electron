@@ -7,9 +7,13 @@ import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import ButtonBar from "@/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
-import { DebitNoteDialog } from "@/modules/accountancy/components/DebitNoteDialog";
 import { ContraDialog } from "@/modules/accountancy/components/ContraDialog";
-import { PaymentDialog, ReceiptDialog } from "@/modules/accountancy/components/MoneyFlowDialog";
+import {
+    PaymentDialog,
+    ReceiptDialog,
+    CreditNoteDialog,
+    DebitNoteDialog,
+} from "@/modules/accountancy/components/MoneyFlowDialog";
 
 export default async function ProtectedLayout({
     children,
@@ -60,10 +64,11 @@ export default async function ProtectedLayout({
                 <Toaster richColors />
                 <QuickTicketButton />
                 <JournalVoucherDialog />
-                <DebitNoteDialog />
                 <ContraDialog />
                 <PaymentDialog />
                 <ReceiptDialog />
+                <CreditNoteDialog />
+                <DebitNoteDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

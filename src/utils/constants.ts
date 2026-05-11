@@ -90,7 +90,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -188,7 +188,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
             { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
             { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
-            { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", href: "/office/accountancy/credit-notes/new", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note (dialog)", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
             { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
             { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
         ],
@@ -235,8 +235,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create",
                 children: [
                     // { label: "Contras", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
-                    { label: "Payment", icon: ClipboardList, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
-                    { label: "Receipt", icon: ClipboardList, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
+                    // { label: "Payment", icon: ClipboardList, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
+                    // { label: "Receipt", icon: ClipboardList, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
                     { label: "Credit Note", icon: ClipboardList, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
                     { label: "Debit Note", icon: ClipboardList, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
                     // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },

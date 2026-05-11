@@ -18,6 +18,7 @@ import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
 import { useContraDialogStore } from "@/store/contraDialogStore";
 import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
+import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 
 type Props = {
     open: boolean;
@@ -35,6 +36,7 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const { setOpen: openContra } = useContraDialogStore();
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
+    const { setOpen: openCreditNote } = useCreditNoteDialogStore();
 
     const canDo = (permission?: string | null) => {
         if (!permission) return true;
@@ -61,6 +63,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             openPayment(true);
         } else if (action.action === "new-receipt") {
             openReceipt(true);
+        } else if (action.action === "new-credit-note") {
+            openCreditNote(true);
         }
     };
 

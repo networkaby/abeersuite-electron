@@ -16,6 +16,7 @@ import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
 import { useContraDialogStore } from "@/store/contraDialogStore";
 import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
+import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
@@ -44,6 +45,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openContra } = useContraDialogStore();
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
+    const { setOpen: openCreditNote } = useCreditNoteDialogStore();
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
@@ -89,6 +91,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             openPayment(true);
         } else if (action.action === "new-receipt") {
             openReceipt(true);
+        } else if (action.action === "new-credit-note") {
+            openCreditNote(true);
         }
     };
 
