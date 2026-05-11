@@ -11,10 +11,10 @@ export async function GET() {
     if (response) return response;
 
     try {
-        const count = await prisma.voucherSeries.count();
-        if (count === 0) {
-            await seedVoucherSeries(prisma);
-        }
+        // Always-run seed: uses skipDuplicates so existing rows aren't touched,
+        // but newly-added kinds (e.g. SALE / PURCHASE / ESTIMATE for inventory
+        // vouchers) get auto-inserted on first visit after the seed expands.
+        await seedVoucherSeries(prisma);
 
         const series = await prisma.voucherSeries.findMany({
             orderBy: [
@@ -23,8 +23,13 @@ export async function GET() {
             ],
         });
 
-        // Sort in logical order rather than alphabetical
-        const ORDER = ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "INVOICE", "JOURNAL"];
+        // Sort in logical order rather than alphabetical. Inventory voucher
+        // kinds appear after the GL kinds since they roll up into stock + GL.
+        const ORDER = [
+            "CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE",
+            "INVOICE", "JOURNAL",
+            "SALE", "PURCHASE", "ESTIMATE",
+        ];
         series.sort((a: { kind: string }, b: { kind: string }) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 
         return NextResponse.json(series);

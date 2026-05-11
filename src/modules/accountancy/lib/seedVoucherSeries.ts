@@ -28,6 +28,11 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     );
     const jeCount = await prisma.journalEntry.count();
     const invCount = await prisma.invoice.count();
+    // Inventory voucher counts — needed for new-install continuity so the next
+    // SV / PV / EV reference picks up where the legacy invNextRef left off.
+    const saleCount     = await prisma.invVoucher.count({ where: { type: "SALE" } });
+    const purchaseCount = await prisma.invVoucher.count({ where: { type: "PURCHASE" } });
+    const estimateCount = await prisma.invVoucher.count({ where: { type: "ESTIMATE" } });
 
     const rows = [
         ...KINDS.map(({ kind, label, typeValue }) => ({
@@ -38,6 +43,12 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         })),
         { kind: "JOURNAL", label: "Journal Entry", typeValue: "JE",  nextSeq: jeCount },
         { kind: "INVOICE", label: "Sales Invoice", typeValue: "INV", nextSeq: invCount },
+        // Inventory vouchers — same FY-aware convention managed from
+        // /office/admin/year-ending. invNextRef() routes through nextRefFromSeries
+        // to read these rows on every save.
+        { kind: "SALE",     label: "Sale Invoice",     typeValue: "SV", nextSeq: saleCount },
+        { kind: "PURCHASE", label: "Purchase Voucher", typeValue: "PV", nextSeq: purchaseCount },
+        { kind: "ESTIMATE", label: "Estimate",         typeValue: "EV", nextSeq: estimateCount },
     ].map((r) => ({
         kind:            r.kind,
         label:           r.label,
@@ -55,4 +66,14 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     }));
 
     await prisma.voucherSeries.createMany({ data: rows, skipDuplicates: true });
+
+    // Keep labels in sync — `skipDuplicates` above means existing rows don't
+    // pick up label tweaks (e.g. "Sale Voucher" → "Sale Invoice"). Update
+    // labels idempotently so renames propagate without a manual migration.
+    await Promise.all(rows.map((r) =>
+        prisma.voucherSeries.update({
+            where: { kind: r.kind },
+            data:  { label: r.label },
+        }).catch(() => { /* ignore if row doesn't exist yet */ })
+    ));
 }

@@ -1,7 +1,20 @@
-import { InvVoucherType } from "@/generated/prisma/client";
+import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
+import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 
 // ── Reference number generation ───────────────────────────────────────────────
 
+// Inventory-voucher types that have a configurable VoucherSeries row managed
+// from /office/admin/year-ending (FY rollover, padding, separators, type code).
+// Anything not listed here falls through to the legacy calendar-year scheme.
+const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
+    SALE:     "SALE",
+    PURCHASE: "PURCHASE",
+    ESTIMATE: "ESTIMATE",
+};
+
+// Legacy prefixes for the fallback path — kept so older voucher types
+// (RECEIPT/ISSUE/etc.) still get a sane default reference until / unless
+// they're promoted to the configurable VoucherSeries system.
 const PREFIX: Record<InvVoucherType, string> = {
     PURCHASE:       "PV",
     SALE:           "SV",
@@ -21,13 +34,26 @@ const PREFIX: Record<InvVoucherType, string> = {
 
 /**
  * Generate sequential inventory voucher references.
- * e.g. PV-2026-0001, SV-2026-0002
+ *
+ * SALE / PURCHASE / ESTIMATE route through `nextRefFromSeries` so they pick
+ * up the FY-aware convention managed at /office/admin/year-ending — same
+ * formatting (FY_SHORT, padding, separators) the GL vouchers use.
+ *
+ * Other inventory voucher types (RECEIPT, ISSUE, GRN, etc.) keep the legacy
+ * calendar-year `${prefix}-YYYY-####` scheme until they're promoted.
+ *
  * Must be called inside a prisma.$transaction to be safe against races.
  */
 export async function invNextRef(
-    tx: { invVoucher: { count: (a: object) => Promise<number> } },
+    tx: Prisma.TransactionClient,
     type: InvVoucherType,
+    userId?: number | null,
 ): Promise<string> {
+    const seriesKind = SERIES_KINDS[type];
+    if (seriesKind) {
+        return nextRefFromSeries(tx, seriesKind, userId ?? undefined);
+    }
+    // Legacy fallback — calendar-year prefix scheme.
     const year = new Date().getFullYear();
     const prefix = PREFIX[type];
     const startsWith = `${prefix}-${year}-`;
