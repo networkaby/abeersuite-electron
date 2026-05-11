@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         partyPhone,
         partyAddress,
         paymentMode,
+        paymentAccountId,
         paymentTerms,
         dueDate,
         shippingAmt    = 0,
@@ -63,6 +64,9 @@ export async function POST(req: Request) {
         partyPhone?:  string;
         partyAddress?: string;
         paymentMode?:    string;
+        /// Cash / bank Account that received the money — drives postInvVoucher's
+        /// cash-leg ledger selection. Null falls back to the name-based lookup.
+        paymentAccountId?: number;
         /// Credit-sale payment terms label (e.g. "Net 30")
         paymentTerms?:   string;
         /// Computed due date for the credit voucher (ISO yyyy-mm-dd)
@@ -145,6 +149,7 @@ export async function POST(req: Request) {
                 partyPhone:   partyPhone || null,
                 partyAddress: partyAddress || null,
                 paymentMode:     paymentMode || null,
+                paymentAccountId: paymentAccountId ?? null,
                 paymentTerms:    paymentTerms || null,
                 dueDate:         dueDate ? new Date(dueDate) : null,
                 shippingAmt,

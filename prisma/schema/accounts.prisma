@@ -50,18 +50,19 @@ model Account {
   openingBalanceType EntryType?
   openingBalanceDate DateTime?  @db.Date
 
-  parent        Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children      Account[]     @relation("AccountHierarchy")
-  group         AccountGroup? @relation(fields: [groupId], references: [id])
-  person        Person?       @relation(fields: [personId], references: [id])
-  company       Company?      @relation(fields: [companyId], references: [id])
-  lines         JournalLine[]
-  voucherLines  VoucherLine[]
-  billedTickets Ticket[]      @relation("TicketBillingAccount")
-  devices       Device[]
-  shopOrders    ShopOrder[]
-  invoices      Invoice[]     @relation("AccountInvoices")
-  voucherParty  Voucher[]     @relation("VoucherPartyAccount")
+  parent               Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children             Account[]     @relation("AccountHierarchy")
+  group                AccountGroup? @relation(fields: [groupId], references: [id])
+  person               Person?       @relation(fields: [personId], references: [id])
+  company              Company?      @relation(fields: [companyId], references: [id])
+  lines                JournalLine[]
+  voucherLines         VoucherLine[]
+  billedTickets        Ticket[]      @relation("TicketBillingAccount")
+  devices              Device[]
+  shopOrders           ShopOrder[]
+  invoices             Invoice[]     @relation("AccountInvoices")
+  voucherParty         Voucher[]     @relation("VoucherPartyAccount")
+  invVouchersAsPayment InvVoucher[]  @relation("InvVoucherPaymentAccount")
 
   @@index([isActive])
   @@index([personId])

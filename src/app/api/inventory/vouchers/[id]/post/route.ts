@@ -24,6 +24,17 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     product: { select: { id: true, costPaise: true, stock: true } },
                 },
             },
+            // Resolved cash/bank Account picked at save time — postInvVoucher
+            // uses this in preference to the legacy name-based lookup so the
+            // GL JE lands on the ledger the cashier actually chose.
+            paymentAccount: {
+                select: {
+                    id: true,
+                    name: true,
+                    normalBalance: true,
+                    group: { select: { type: true } },
+                },
+            },
         },
     });
 

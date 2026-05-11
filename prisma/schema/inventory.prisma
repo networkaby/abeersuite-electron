@@ -149,42 +149,47 @@ model InvProduct {
 // ── Stock Vouchers (Purchase / Sale) ─────────────────────────────────────────
 
 model InvVoucher {
-  id             Int            @id @default(autoincrement())
-  type           InvVoucherType
+  id               Int            @id @default(autoincrement())
+  type             InvVoucherType
   /// Auto-generated: PV-2026-0001 for PURCHASE, SV-2026-0001 for SALE
-  reference      String         @unique
-  date           DateTime       @db.Date
-  description    String
+  reference        String         @unique
+  date             DateTime       @db.Date
+  description      String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
-  status         VoucherStatus  @default(DRAFT)
-  partyName      String?
-  partyType      String? // "supplier" | "customer" | "account"
-  partyId        Int?
-  partyPhone     String?
-  partyAddress   String?
+  status           VoucherStatus  @default(DRAFT)
+  partyName        String?
+  partyType        String? // "supplier" | "customer" | "account"
+  partyId          Int?
+  partyPhone       String?
+  partyAddress     String?
   /// "CASH" or "CREDIT" — affects GL auto-post account selection
-  paymentMode    String?
+  paymentMode      String?
+  /// Cash / bank ledger that received the payment (CASH sale or upfront
+  /// received-amount on a CREDIT sale). FK to Account; null falls back to
+  /// postInvVoucher.ts's legacy name-based lookup ("Cash-in-Hand").
+  paymentAccountId Int?
+  paymentAccount   Account?       @relation("InvVoucherPaymentAccount", fields: [paymentAccountId], references: [id])
   /// Credit-sale payment terms (free-form label, e.g. "Net 30", "Due on Receipt").
   /// Only meaningful when paymentMode = "CREDIT".
-  paymentTerms   String?
+  paymentTerms     String?
   /// Computed due date for credit sales — date + payment-term days. User-overridable.
-  dueDate        DateTime?      @db.Date
+  dueDate          DateTime?      @db.Date
   /// State code where the supply happens — drives intra/inter-state GST split.
   /// Defaults to the company's state code when unset.
-  placeOfSupply  String?
-  discountPct    Decimal?       @db.Decimal(5, 2)
-  discountAmt    Decimal?       @db.Decimal(14, 2)
-  shippingAmt    Decimal        @default(0) @db.Decimal(14, 2)
-  roundOff       Decimal        @default(0) @db.Decimal(14, 2)
-  subtotal       Decimal        @db.Decimal(14, 2)
-  taxAmount      Decimal        @default(0) @db.Decimal(14, 2)
-  totalAmount    Decimal        @db.Decimal(14, 2)
-  amountReceived Decimal        @default(0) @db.Decimal(14, 2)
+  placeOfSupply    String?
+  discountPct      Decimal?       @db.Decimal(5, 2)
+  discountAmt      Decimal?       @db.Decimal(14, 2)
+  shippingAmt      Decimal        @default(0) @db.Decimal(14, 2)
+  roundOff         Decimal        @default(0) @db.Decimal(14, 2)
+  subtotal         Decimal        @db.Decimal(14, 2)
+  taxAmount        Decimal        @default(0) @db.Decimal(14, 2)
+  totalAmount      Decimal        @db.Decimal(14, 2)
+  amountReceived   Decimal        @default(0) @db.Decimal(14, 2)
   /// Linked GL journal entry — auto-created on post
-  journalEntryId Int?
-  postedAt       DateTime?
+  journalEntryId   Int?
+  postedAt         DateTime?
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
-  showPrices     Boolean        @default(true)
+  showPrices       Boolean        @default(true)
 
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?

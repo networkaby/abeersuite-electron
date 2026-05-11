@@ -117,6 +117,15 @@ export type PostVoucherInput = {
         shippingAmt: Prisma.Decimal | number;
         roundOff:    Prisma.Decimal | number;
         totalAmount: Prisma.Decimal | number;
+        /// User-picked cash/bank ledger (Cash-in-Hand, HDFC, SBI, …).
+        /// When present, overrides the legacy name-based lookup so the
+        /// GL JE lands on the explicit choice. Null = fall back to NAMES.CASH.
+        paymentAccount?: {
+            id: number;
+            name: string;
+            normalBalance: "DEBIT" | "CREDIT" | null;
+            group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
+        } | null;
     };
     userId: number;
 };
@@ -151,7 +160,23 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     // ── Resolve ledgers ────────────────────────────────────────────────
     const isCash = voucher.paymentMode === "CASH";
 
-    const cashLedger    = isCash ? await findLedgerByNames(tx, NAMES.CASH) : null;
+    // Prefer the explicit paymentAccount the cashier picked at save time —
+    // this is how multi-bank-ledger users route receipts to the right bank
+    // (HDFC vs SBI vs Cash-in-Hand). Fall back to the legacy name-based
+    // lookup for older vouchers / API callers that don't pass it.
+    let cashLedger: LedgerLite | null = null;
+    if (isCash) {
+        if (voucher.paymentAccount) {
+            cashLedger = {
+                id:            voucher.paymentAccount.id,
+                name:          voucher.paymentAccount.name,
+                normalBalance: voucher.paymentAccount.normalBalance,
+                groupType:     voucher.paymentAccount.group?.type ?? null,
+            };
+        } else {
+            cashLedger = await findLedgerByNames(tx, NAMES.CASH);
+        }
+    }
     const partyLedger   = !isCash ? await findPartyAccount(tx, voucher.partyType, voucher.partyId) : null;
 
     // Body ledger (Sales for sale, Purchase for purchase)
