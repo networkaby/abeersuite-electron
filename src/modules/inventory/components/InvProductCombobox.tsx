@@ -2,15 +2,25 @@
 
 /**
  * InvProductCombobox — Tally-style inline product search.
- * Renders a plain text input; as the user types, a dropdown appears
- * directly below showing matching products with stock/price columns.
- * No dialog — everything is inline for fast entry.
+ *
+ * Renders a plain text input; as the user types, a dropdown opens in a
+ * portal (position: fixed) so it escapes the parent <ScrollArea> /
+ * <table> overflow and never gets clipped or covered by the totals footer
+ * / action bar below. Mirrors GlAccountCombobox's portal+fixed pattern.
+ *
+ * Layout of the dropdown (top → bottom):
+ *   1. "+ New product" CTA (top — closest to the cursor; Enter on no-match
+ *      also triggers this)
+ *   2. Column headers (Item / Sale / Cost / MRP / Stock)
+ *   3. Scrollable hit list (maxHeight clamped to viewport)
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
+import { Plus } from "lucide-react";
 import { useComboboxNav } from "@/shared/hooks";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { NewProductDialog, type CreatedProductOption } from "./NewProductDialog";
 
 type ProductOption = {
     id:         number;
@@ -47,6 +57,13 @@ type Props = {
     className?: string;
     /** Auto-focus the input on mount */
     autoFocus?: boolean;
+    /**
+     * When true (default), shows a "+ New product" CTA at the top of the
+     * dropdown that opens an inline quick-create dialog. Pass `false` from
+     * call sites where creating a product mid-flow doesn't make sense
+     * (e.g. a Journal Voucher dialog that only looks up existing inventory).
+     */
+    allowCreate?: boolean;
 };
 
 const formatINR = (paise: number | null) =>
@@ -67,10 +84,11 @@ function toSelected(p: ProductOption): SelectedProduct {
     };
 }
 
-export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false }: Props) {
+export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true }: Props) {
     const [products, setProducts]   = useState<ProductOption[]>([]);
     const [query, setQuery]         = useState("");
     const [loading, setLoading]     = useState(true);
+    const [createOpen, setCreateOpen] = useState(false);
 
     // Load all products once (cached in memory for fast typing)
     useEffect(() => {
@@ -114,24 +132,65 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
         onClear: () => { setQuery(""); onChange(null); },
     });
 
-    // Match dropdown width to the parent voucher table so it spans the row
+    // ── Portal target — body by default, or the surrounding dialog content so
+    // that Radix Dialog's react-remove-scroll allow-list keeps wheel scrolling
+    // working inside the dropdown. (Same trick as GlAccountCombobox.) ────────
+    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
     useEffect(() => {
-        if (!cb.open) return;
+        const w = cb.wrapperRef.current;
+        if (!w) return;
+        const inDialog = w.closest('[data-slot="dialog-content"]') as HTMLElement | null;
+        setPortalTarget(inDialog ?? document.body);
+    }, [cb.wrapperRef]);
+
+    // ── Position the dropdown via fixed + computed top/left/width. ───────────
+    // Width tracks the surrounding <table>'s right edge so it spans the row
+    // (Tally / Vyapar style). MaxHeight is clamped to actually-available
+    // space so long product lists never spill past the viewport. Flip up
+    // when bottom space is cramped.
+    const DROPDOWN_MAX_H = 360;
+    const VIEWPORT_MARGIN = 12;
+    const [pos, setPos] = useState<{
+        top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
+    } | null>(null);
+    useLayoutEffect(() => {
+        if (!cb.open || !portalTarget) { setPos(null); return; }
         const wrapper = cb.wrapperRef.current;
         if (!wrapper) return;
-        const table = wrapper.closest("table");
-        if (!table) return;
         const measure = () => {
-            const tableRect   = table.getBoundingClientRect();
-            const wrapperRect = wrapper.getBoundingClientRect();
-            cb.setDropdownWidth(Math.max(360, tableRect.right - wrapperRect.left));
+            const rect = wrapper.getBoundingClientRect();
+            const target = portalTarget.getBoundingClientRect();
+            const table = wrapper.closest("table");
+            const tableRect = table?.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
+            const spaceAbove = rect.top - VIEWPORT_MARGIN;
+            const flipUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+            const available = Math.max(120, flipUp ? spaceAbove : spaceBelow);
+            const maxHeight = Math.min(DROPDOWN_MAX_H, available);
+            const width = Math.max(
+                420,
+                tableRect ? tableRect.right - rect.left : rect.width,
+            );
+            const anchorY = flipUp ? rect.top : rect.bottom;
+            setPos({
+                top:  anchorY - target.top,
+                left: rect.left - target.left,
+                width,
+                maxHeight,
+                flipUp,
+            });
+            cb.setDropdownWidth(width);
         };
         measure();
         window.addEventListener("resize", measure);
-        return () => window.removeEventListener("resize", measure);
-    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, cb]);
+        window.addEventListener("scroll", measure, true);
+        return () => {
+            window.removeEventListener("resize", measure);
+            window.removeEventListener("scroll", measure, true);
+        };
+    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
-    // Wrap handleKeyDown to add Tab commit-on-exit (consumer-specific).
+    // Wrap handleKeyDown to add Tab commit-on-exit + Enter-creates-when-empty.
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (cb.open && e.key === "Tab") {
             const normalizedQuery = query.trim().toLowerCase();
@@ -148,8 +207,23 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             }
             return;
         }
+        // No matches + a typed query + create allowed → Enter opens the
+        // quick-create dialog. Mirrors PartySearchAndCreate's "Enter on
+        // no-result to create" affordance so cashiers can finish a sale
+        // without leaving the table.
+        if (cb.open && e.key === "Enter" && allowCreate && filtered.length === 0 && query.trim().length > 0) {
+            e.preventDefault();
+            cb.setOpen(false);
+            setCreateOpen(true);
+            return;
+        }
         cb.handleKeyDown(e);
     };
+
+    // Keep the list ref pointing at the scrollable inner div so keyboard
+    // navigation auto-scrolls the highlighted item into view.
+    const listRef = useRef<HTMLUListElement>(null);
+    useEffect(() => { cb.listRef.current = listRef.current; });
 
     return (
         <div ref={cb.wrapperRef} className={`relative ${className}`}>
@@ -171,12 +245,38 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                 onKeyDown={onKeyDown}
             />
 
-            {cb.open && (
+            {cb.open && portalTarget && pos && createPortal(
                 <div
-                    className="absolute left-0 top-full z-50 mt-0.5 rounded-lg border border-border bg-popover shadow-xl text-sm"
-                    style={{ width: cb.dropdownWidth ?? 720 }}
+                    // z-[60] sits above shadcn Dialog's z-50 backdrop + the
+                    // SaleVoucherPage action bar (no explicit z but rendered
+                    // later in DOM). overflow-hidden clips inner list to
+                    // maxHeight so the dropdown never spills past viewport.
+                    className="fixed z-[60] mt-0.5 overflow-hidden rounded-lg border border-border bg-popover shadow-xl text-sm"
+                    style={{
+                        top:   pos.top,
+                        left:  pos.left,
+                        width: pos.width,
+                        maxHeight: pos.maxHeight,
+                        transform: pos.flipUp ? "translateY(calc(-100% - 0.25rem))" : undefined,
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
                 >
-                    {/* Header row */}
+                    {/* + New product CTA at the TOP — closest to the cursor.
+                        onMouseDown (not onClick) so we beat the input's blur
+                        which would otherwise close the dropdown before the
+                        click registers. */}
+                    {allowCreate && (
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); setCreateOpen(true); cb.setOpen(false); }}
+                            className="w-full border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium text-primary hover:bg-muted text-left flex items-center gap-1.5"
+                        >
+                            <Plus size={12} />
+                            New product{query.trim() ? `: ${query.trim()}` : ""}
+                        </button>
+                    )}
+
+                    {/* Column headers */}
                     <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 border-b border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         <span>Item</span>
                         <span className="text-right">Sale Price</span>
@@ -192,8 +292,15 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                             No items match <span className="font-mono">{query}</span>
                         </div>
                     ) : (
-                        <ScrollArea className="max-h-72 h-72">
-                            <ul ref={cb.listRef} className="divide-y divide-border">
+                        // Native overflow-y on a sized container — shadcn
+                        // ScrollArea's viewport doesn't honour a max-height
+                        // parent reliably, so its scrollbar wouldn't appear
+                        // with long lists.
+                        <div
+                            className="overflow-y-auto"
+                            style={{ maxHeight: pos.maxHeight - 90 /* CTA + header + chrome */ }}
+                        >
+                            <ul ref={listRef} className="divide-y divide-border">
                                 {filtered.map((p, i) => {
                                     const isLow     = p.stock != null && p.stock <= p.lowStockThreshold;
                                     const stockZero = p.stock === 0;
@@ -241,9 +348,25 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                     );
                                 })}
                             </ul>
-                        </ScrollArea>
+                        </div>
                     )}
-                </div>
+                </div>,
+                portalTarget,
+            )}
+
+            {/* Quick-create dialog — pre-fills name from the current query.
+                On success, append to the in-memory products list and auto-select. */}
+            {allowCreate && (
+                <NewProductDialog
+                    open={createOpen}
+                    onOpenChange={setCreateOpen}
+                    initialName={query.trim()}
+                    onCreated={(np: CreatedProductOption) => {
+                        setProducts((ps) => [...ps, np]);
+                        setQuery(np.name);
+                        onChange(toSelected(np));
+                    }}
+                />
             )}
 
             {/* Clear button when a product is selected */}
