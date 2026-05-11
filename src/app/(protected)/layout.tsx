@@ -19,6 +19,7 @@ import {
     PurchaseDialog,
     EstimateDialog,
 } from "@/modules/accountancy/components/TradingVoucherForm";
+import { SaleFullScreenDialog } from "@/modules/accountancy/components/TradingVoucherFullScreenForm";
 
 export default async function ProtectedLayout({
     children,
@@ -77,6 +78,8 @@ export default async function ProtectedLayout({
                 <SaleDialog />
                 <PurchaseDialog />
                 <EstimateDialog />
+                {/* Exploratory full-screen Sale variant — accessed via /office/accountancy/sales/new-full */}
+                <SaleFullScreenDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>
