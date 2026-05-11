@@ -8,34 +8,26 @@ import {
     Search, X, User, Phone, Mail, Award, TrendingUp, Clock,
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
-    ChevronDown, MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
+    MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
     ReceiptIndianRupee,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+    PartySearchAndCreate,
+    type PartySearchAndCreateHandle,
+    type PickedParty,
+} from "@/shared/components/PartySearchAndCreate";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-type PartyKind = "customer" | "company";
-
-// Mixed-type lookup row from /api/people?lookup=...
-type PartyHit = {
-    id: number;
-    name: string;
-    phone: string | null;
-    type: PartyKind;
-    accountId: number | null;
-    linkedCompanies?: { id: number; name: string; accountId: number | null }[];
-};
 
 type Snapshot = {
     party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
@@ -98,56 +90,14 @@ const since = (iso: string | null) => {
     return `${Math.floor(days / 365)} yr ago`;
 };
 
-// "9876543210" or "+91 98765 43210" → phone-like.
-// "Ramesh", "Ramesh 9876" → name-like.
-function isPhoneLike(q: string): boolean {
-    const trimmed = q.trim();
-    if (trimmed.length < 4) return false;
-    const digits = trimmed.replace(/\D/g, "").length;
-    const letters = trimmed.replace(/[^a-zA-Z]/g, "").length;
-    return digits >= 4 && letters === 0;
-}
-
-// Phone validators — Indian numbers must be 10 digits starting 6-9 (no country
-// code). International numbers must start with `+` and a 1-3 digit country code,
-// then 6-14 more digits (E.164-ish, allowing optional spaces/dashes between).
-const RE_INDIAN_PHONE = /^[6-9]\d{9}$/;
-const RE_INTL_PHONE = /^\+\d{1,3}[\s-]?\d{6,14}$/;
-function phoneError(raw: string): string | null {
-    const v = raw.trim().replace(/\s+/g, " ");
-    if (!v) return null;                                  // empty is allowed (field is optional)
-    if (RE_INDIAN_PHONE.test(v.replace(/\s|-/g, ""))) return null;
-    if (RE_INTL_PHONE.test(v)) return null;
-    return "10-digit Indian (6/7/8/9 first) or +CC…";
-}
-
-const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-function emailError(raw: string): string | null {
-    const v = raw.trim();
-    if (!v) return null;
-    if (RE_EMAIL.test(v)) return null;
-    return "Looks invalid";
-}
-
-// Indian PIN code — 6 digits, can't start with 0.
-const RE_PIN = /^[1-9]\d{5}$/;
-function pinError(raw: string): string | null {
-    const v = raw.trim();
-    if (!v) return null;
-    if (RE_PIN.test(v)) return null;
-    return "6 digits";
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function PosScreen() {
-    // ── Customer search omnibox ─────────────────────────────────────────────
-    const [custQuery, setCustQuery] = useState("");
-    const [custHits, setCustHits] = useState<PartyHit[]>([]);
-    const [highlightedHit, setHighlightedHit] = useState(0);
+    // ── Customer search omnibox (delegated to shared component) ─────────────
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
     const [loadingSnapshot, setLoadingSnapshot] = useState(false);
-    const custSearchRef = useRef<HTMLInputElement>(null);
+    const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const partySearchRef = useRef<PartySearchAndCreateHandle>(null);
 
     // ── Product search + cart ───────────────────────────────────────────────
     const productSearchRef = useRef<HTMLInputElement>(null);
@@ -166,47 +116,7 @@ export default function PosScreen() {
     const cashTenderedRef = useRef<HTMLInputElement>(null);
     const upiAmountRef = useRef<HTMLInputElement>(null);
 
-    // ── Smart create-party dialog ───────────────────────────────────────────
-    const [newPartyOpen, setNewPartyOpen] = useState(false);
-    const [newParty, setNewParty] = useState({
-        name: "", phone: "", email: "", address: "",
-        companyName: "", companyPhone: "", companyEmail: "", companyAddress: "",
-        companyState: "", companyPinCode: "", companyGstin: "",
-    });
-    // Captured at open time — drives form layout (phone-query swaps Phone/Email
-    // row above Name so Tab forward from Name skips the pre-filled Phone).
-    const [openedAsPhoneQuery, setOpenedAsPhoneQuery] = useState(false);
-    // Track whether the user has manually edited the company address —
-    // until they do, we mirror person.address into companyAddress.
-    const [companyAddressTouched, setCompanyAddressTouched] = useState(false);
-    const [creatingParty, setCreatingParty] = useState(false);
-
-    const nameRef = useRef<HTMLInputElement>(null);
-    const phoneRef = useRef<HTMLInputElement>(null);
-    const addressRef = useRef<HTMLTextAreaElement>(null);
-    const companyNameRef = useRef<HTMLInputElement>(null);
-    const companyPhoneRef = useRef<HTMLInputElement>(null);
-    const companyAddressRef = useRef<HTMLTextAreaElement>(null);
-
     // ── Effects ─────────────────────────────────────────────────────────────
-
-    // Search persons + companies (debounced) via the polymorphic /api/people endpoint.
-    // Skip entirely when a party is already picked — pickByAccountId() sets
-    // custQuery to the picked name, which would otherwise re-fetch hits and reopen
-    // the dropdown right after pick.
-    useEffect(() => {
-        if (snapshot) { setCustHits([]); return; }
-        if (custQuery.trim().length < 2) { setCustHits([]); return; }
-        const t = setTimeout(() => {
-            axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(custQuery)}`)
-                .then((r) => {
-                    setCustHits(r.data);
-                    setHighlightedHit(0);
-                })
-                .catch(() => setCustHits([]));
-        }, 200);
-        return () => clearTimeout(t);
-    }, [custQuery, snapshot]);
 
     // Load all products once for fast typing
     useEffect(() => {
@@ -215,21 +125,12 @@ export default function PosScreen() {
             .catch(() => { /* page is still useful without it */ });
     }, []);
 
-    // Auto-focus on dialog open: phone-like query → name field, otherwise phone field
-    useEffect(() => {
-        if (!newPartyOpen) return;
-        const t = setTimeout(() => {
-            (openedAsPhoneQuery ? nameRef.current : phoneRef.current)?.focus();
-        }, 50);
-        return () => clearTimeout(t);
-    }, [newPartyOpen, openedAsPhoneQuery]);
-
     // Ctrl/Cmd+Enter from anywhere → open checkout dialog (skip when modals are already open)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "Enter") return;
             if (!(e.ctrlKey || e.metaKey)) return;
-            if (newPartyOpen || checkoutOpen) return;
+            if (createDialogOpen || checkoutOpen) return;
             if (cart.length === 0 || !snapshot?.account) return;
             e.preventDefault();
             openCheckout();
@@ -238,15 +139,7 @@ export default function PosScreen() {
         return () => window.removeEventListener("keydown", handler);
         // openCheckout closes over current state; safe to depend on the listed values
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cart.length, snapshot?.account, newPartyOpen, checkoutOpen]);
-
-    // Mirror person address → company address until user touches the company-address field
-    useEffect(() => {
-        if (companyAddressTouched) return;
-        if (!newParty.companyName.trim()) return;
-        if (newParty.companyAddress === newParty.address) return;
-        setNewParty((s) => ({ ...s, companyAddress: s.address }));
-    }, [newParty.address, newParty.companyName, newParty.companyAddress, companyAddressTouched]);
+    }, [cart.length, snapshot?.account, createDialogOpen, checkoutOpen]);
 
     // ── Computed ────────────────────────────────────────────────────────────
 
@@ -264,19 +157,12 @@ export default function PosScreen() {
     const tax = 0; // placeholder — wire to GST engine later
     const total = subtotal - discountAmount + tax;
 
-    const showCompanySection = newParty.companyName.trim().length > 0;
-    // Allow submit when EITHER a person (name) OR a company (companyName) is given.
-    // User can clear the auto-filled Name to create only a company.
-    const canSubmitCreate = newParty.name.trim().length > 0 || newParty.companyName.trim().length > 0;
-
     // ── Actions ─────────────────────────────────────────────────────────────
 
-    const pickByAccountId = async (accountId: number, displayName: string) => {
-        setCustQuery(displayName);
-        setCustHits([]);
+    const fetchSnapshot = async (accountId: number) => {
         setLoadingSnapshot(true);
-        // Once a party is picked the search becomes readOnly until Clear; focus
-        // shifts to the product search so cashier can scan/type immediately.
+        // Once a party is picked the search is locked; shift focus to the product
+        // search so the cashier can scan/type immediately.
         setTimeout(() => productSearchRef.current?.focus(), 50);
         try {
             const { data } = await axios.get<Snapshot>(`/api/pos/account-snapshot/${accountId}`);
@@ -289,182 +175,18 @@ export default function PosScreen() {
         }
     };
 
-    const pickHit = async (hit: PartyHit) => {
-        if (hit.accountId == null) {
-            toast.error(`${hit.name} has no ledger account yet`);
+    const onPartyPicked = (p: PickedParty) => {
+        if (p.accountId == null) {
+            toast.error(`${p.name} has no ledger account yet`);
             return;
         }
-        await pickByAccountId(hit.accountId, hit.name);
+        void fetchSnapshot(p.accountId);
     };
 
-    const clearCustomer = () => { setSnapshot(null); setCustQuery(""); custSearchRef.current?.focus(); };
-
-    const openNewParty = async () => {
-        const q = custQuery.trim();
-        // Defensive re-check before opening the create dialog: an exact-match may
-        // exist that the debounce missed.
-        if (q.length >= 2) {
-            try {
-                const { data } = await axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(q)}`);
-                if (data.length > 0) {
-                    setCustHits(data);
-                    setHighlightedHit(0);
-                    void pickHit(data[0]);
-                    return;
-                }
-            } catch { /* fall through to create */ }
-        }
-        const phoneLike = isPhoneLike(q);
-        setOpenedAsPhoneQuery(phoneLike);
-        setNewParty({
-            name: phoneLike ? "" : q,
-            phone: phoneLike ? q : "",
-            email: "",
-            address: "",
-            companyName: "",
-            companyPhone: "",
-            companyEmail: "",
-            companyAddress: "",
-            companyState: "",
-            companyPinCode: "",
-            companyGstin: "",
-        });
-        setCompanyAddressTouched(false);
-        setCustHits([]);
-        setNewPartyOpen(true);
-    };
-
-    // ── Search box keyboard handler ─────────────────────────────────────────
-    const onSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "ArrowDown") {
-            if (custHits.length === 0) return;
-            e.preventDefault();
-            setHighlightedHit((i) => Math.min(i + 1, custHits.length - 1));
-        } else if (e.key === "ArrowUp") {
-            if (custHits.length === 0) return;
-            e.preventDefault();
-            setHighlightedHit((i) => Math.max(i - 1, 0));
-        } else if (e.key === "Enter") {
-            if (custQuery.trim().length < 2) return;
-            e.preventDefault();
-            if (custHits.length > 0) {
-                const hit = custHits[highlightedHit] ?? custHits[0];
-                if (hit) void pickHit(hit);
-                return;
-            }
-            // Defensive re-check — debounce may not have fired yet for the current
-            // query, so an exact-match record might still exist in the DB.
-            try {
-                const { data } = await axios.get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(custQuery)}`);
-                if (data.length > 0) {
-                    setCustHits(data);
-                    setHighlightedHit(0);
-                    void pickHit(data[0]);
-                    return;
-                }
-            } catch { /* fall through to create dialog */ }
-            openNewParty();
-        } else if (e.key === "Escape") {
-            setCustHits([]);
-        }
-    };
-
-    // ── Create dialog: Enter / Tab handlers ─────────────────────────────────
-    const onAddressKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        // Enter (without shift) on address → submit. Tab → company name (default).
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (canSubmitCreate) void submitCreate();
-        }
-    };
-
-    const onAnyEnterToSubmit = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (canSubmitCreate) void submitCreate();
-        }
-    };
-
-    const submitCreate = async () => {
-        const hasPerson = newParty.name.trim().length > 0;
-        const hasCompany = newParty.companyName.trim().length > 0;
-        if (!hasPerson && !hasCompany) {
-            toast.error("Need at least a name or a company");
-            nameRef.current?.focus();
-            return;
-        }
-        // Validation gate — phone / email / PIN must be valid (or empty)
-        const checks: Array<[string | null, string, () => void]> = [
-            [phoneError(newParty.phone), "Phone", () => phoneRef.current?.focus()],
-            [emailError(newParty.email), "Email", () => { /* tab-skipped */ }],
-            [phoneError(newParty.companyPhone), "Company phone", () => companyPhoneRef.current?.focus()],
-            [emailError(newParty.companyEmail), "Company email", () => { /* tab-skipped */ }],
-            [pinError(newParty.companyPinCode), "PIN code", () => { /* no ref */ }],
-        ];
-        for (const [err, label, focus] of checks) {
-            if (err) { toast.error(`${label}: ${err}`); focus(); return; }
-        }
-        setCreatingParty(true);
-        try {
-            let personAccountId: number | null = null;
-            if (hasPerson) {
-                const personRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
-                    "/api/people",
-                    {
-                        name: newParty.name.trim(),
-                        phones: newParty.phone.trim() ? [newParty.phone.trim()] : [],
-                        emails: newParty.email.trim() ? [newParty.email.trim()] : [],
-                        address: newParty.address.trim(),
-                    },
-                );
-                personAccountId = personRes.data.account?.id ?? null;
-            }
-
-            let companyAccountId: number | null = null;
-            let companyName = "";
-            if (hasCompany) {
-                const companyRes = await axios.post<{ id: number; name: string; account?: { id: number } | null }>(
-                    "/api/companies",
-                    {
-                        name: newParty.companyName.trim(),
-                        phones: newParty.companyPhone.trim() ? [newParty.companyPhone.trim()] : [],
-                        emails: newParty.companyEmail.trim() ? [newParty.companyEmail.trim()] : [],
-                        // State + PIN code are appended to the address line until the
-                        // Company schema gains dedicated columns. Renders cleanly on
-                        // invoices and is one block-search away when the columns land.
-                        address: [
-                            newParty.companyAddress.trim(),
-                            [newParty.companyState.trim(), newParty.companyPinCode.trim()].filter(Boolean).join(" - "),
-                        ].filter(Boolean).join("\n"),
-                        taxId: newParty.companyGstin.trim(),
-                    },
-                );
-                companyAccountId = companyRes.data.account?.id ?? null;
-                companyName = companyRes.data.name;
-            }
-
-            // Bill to the company if one was created, else to the person
-            const billingAccountId = companyAccountId ?? personAccountId;
-            const billingName = companyAccountId ? companyName : newParty.name.trim();
-
-            if (!billingAccountId) {
-                toast.error("Created, but no ledger account was returned — try again");
-                return;
-            }
-
-            toast.success(
-                hasPerson && hasCompany ? `Added · ${newParty.name.trim()} @ ${companyName} — billing to company`
-                    : hasCompany ? `Added · ${companyName}`
-                        : `Added · ${newParty.name.trim()}`
-            );
-            setNewPartyOpen(false);
-            await pickByAccountId(billingAccountId, billingName);
-        } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;
-            toast.error(msg ?? "Could not create");
-        } finally {
-            setCreatingParty(false);
-        }
+    const clearCustomer = () => {
+        setSnapshot(null);
+        partySearchRef.current?.clear();
+        partySearchRef.current?.focus();
     };
 
     // ── Cart actions ────────────────────────────────────────────────────────
@@ -609,59 +331,25 @@ export default function PosScreen() {
                     <ArrowLeft size={16} />
                 </Link>
                 <div className="text-sm font-semibold">POS</div>
-                <div className="relative flex-1 max-w-2xl">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <Input
-                        ref={custSearchRef}
-                        value={custQuery}
-                        onChange={(e) => { setCustQuery(e.target.value); if (snapshot) setSnapshot(null); }}
-                        onKeyDown={onSearchKeyDown}
-                        placeholder="Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"
-                        className={`pl-9 ${snapshot ? "bg-muted/50 cursor-default" : ""}`}
-                        readOnly={!!snapshot}
-                        title={snapshot ? "Locked — press Clear to search again" : undefined}
+                <div className="flex-1 max-w-2xl">
+                    <PartySearchAndCreate
+                        ref={partySearchRef}
+                        onPicked={onPartyPicked}
+                        locked={!!snapshot}
+                        onDialogOpenChange={setCreateDialogOpen}
                     />
-                    {!snapshot && (custHits.length > 0 || custQuery.trim().length >= 2) && (
-                        <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                            {custHits.map((c, i) => (
-                                <li key={`${c.type}-${c.id}`}>
-                                    <button
-                                        type="button"
-                                        onClick={() => pickHit(c)}
-                                        onMouseEnter={() => setHighlightedHit(i)}
-                                        className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
-                                    >
-                                        {c.type === "company" ? <Building2 size={14} className="shrink-0 text-muted-foreground" /> : <User size={14} className="shrink-0 text-muted-foreground" />}
-                                        <span className="flex-1 truncate">{c.name}</span>
-                                        <Badge variant="secondary" className="text-[10px]">
-                                            {c.type === "company" ? "Company" : "Person"}
-                                        </Badge>
-                                        <span className="w-32 truncate text-right text-xs text-muted-foreground">{c.phone ?? ""}</span>
-                                    </button>
-                                </li>
-                            ))}
-                            {custQuery.trim().length >= 2 && (
-                                <li className="border-t border-border">
-                                    <button
-                                        type="button"
-                                        onClick={openNewParty}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
-                                    >
-                                        <UserPlus size={14} />
-                                        New customer{custHits.length === 0 ? `: "${custQuery.trim()}"` : ""}
-                                        <span className="ml-auto text-[10px] text-muted-foreground">↵</span>
-                                    </button>
-                                </li>
-                            )}
-                        </ul>
-                    )}
                 </div>
                 {snapshot && (
                     <Button variant="ghost" size="sm" onClick={clearCustomer} className="text-muted-foreground">
                         <X size={14} /> Clear
                     </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={openNewParty} title="Walk-in customer not in the system yet — create on the fly">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => partySearchRef.current?.openNew()}
+                    title="Walk-in customer not in the system yet — create on the fly"
+                >
                     <UserPlus size={14} /> New customer
                 </Button>
                 <Button
@@ -1026,235 +714,11 @@ export default function PosScreen() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── New person/company dialog (smart focus + progressive company section) ── */}
-            <Dialog open={newPartyOpen} onOpenChange={setNewPartyOpen}>
-                <DialogContent className={showCompanySection ? "sm:max-w-2xl" : "sm:max-w-md"}>
-                    <DialogHeader>
-                        <DialogTitle>New customer · ↵ to save</DialogTitle>
-                    </DialogHeader>
-
-                    <div className={`grid gap-4 ${showCompanySection ? "sm:grid-cols-2" : ""}`}>
-                        {/* Person section */}
-                        <div className="space-y-3">
-                            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Person {newParty.name.trim() === "" && newParty.companyName.trim() !== "" && <span className="ml-1 text-[10px] normal-case">· skipped</span>}
-                            </div>
-
-                            {/* When the search query was a phone, show Phone+Email row FIRST so
-                                Tab forward from the focused Name skips the pre-filled Phone. */}
-                            {openedAsPhoneQuery && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <Label>Phone</Label>
-                                        <Input
-                                            ref={phoneRef}
-                                            value={newParty.phone}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="10-digit"
-                                            inputMode="tel"
-                                            aria-invalid={!!phoneError(newParty.phone)}
-                                        />
-                                        <FieldError msg={phoneError(newParty.phone)} />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
-                                        <Input
-                                            value={newParty.email}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="optional"
-                                            inputMode="email"
-                                            tabIndex={-1}
-                                            aria-invalid={!!emailError(newParty.email)}
-                                        />
-                                        <FieldError msg={emailError(newParty.email)} />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-1.5">
-                                <Label>Name {showCompanySection ? <span className="text-[10px] text-muted-foreground">— blank for company-only</span> : "*"}</Label>
-                                <Input
-                                    ref={nameRef}
-                                    value={newParty.name}
-                                    onChange={(e) => setNewParty((s) => ({ ...s, name: e.target.value }))}
-                                    onKeyDown={onAnyEnterToSubmit}
-                                    placeholder="Customer name"
-                                />
-                            </div>
-
-                            {/* Default layout: Phone+Email AFTER Name. */}
-                            {!openedAsPhoneQuery && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <Label>Phone</Label>
-                                        <Input
-                                            ref={phoneRef}
-                                            value={newParty.phone}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, phone: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="10-digit"
-                                            inputMode="tel"
-                                            aria-invalid={!!phoneError(newParty.phone)}
-                                        />
-                                        <FieldError msg={phoneError(newParty.phone)} />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Email <span className="text-[10px] text-muted-foreground">— click to add, Tab skips</span></Label>
-                                        <Input
-                                            value={newParty.email}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, email: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="optional"
-                                            inputMode="email"
-                                            tabIndex={-1}
-                                            aria-invalid={!!emailError(newParty.email)}
-                                        />
-                                        <FieldError msg={emailError(newParty.email)} />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-1.5">
-                                <Label>Address</Label>
-                                <Textarea
-                                    ref={addressRef}
-                                    value={newParty.address}
-                                    onChange={(e) => setNewParty((s) => ({ ...s, address: e.target.value }))}
-                                    onKeyDown={onAddressKeyDown}
-                                    placeholder="optional · ↵ to save · Tab → company"
-                                    rows={2}
-                                />
-                            </div>
-
-                            <div className="space-y-1.5 pt-1">
-                                <Label className="flex items-center gap-1.5 text-muted-foreground">
-                                    <ChevronDown size={12} className={showCompanySection ? "rotate-180" : ""} />
-                                    Company (optional)
-                                </Label>
-                                <Input
-                                    ref={companyNameRef}
-                                    value={newParty.companyName}
-                                    onChange={(e) => setNewParty((s) => ({ ...s, companyName: e.target.value }))}
-                                    onKeyDown={onAnyEnterToSubmit}
-                                    placeholder="Company name (leave empty to bill the person)"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Company section — only visible when companyName is non-empty */}
-                        {showCompanySection && (
-                            <div className="space-y-3 sm:border-l sm:border-border sm:pl-4">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Company · billing here
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <Label>Company phone</Label>
-                                        <Input
-                                            ref={companyPhoneRef}
-                                            value={newParty.companyPhone}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, companyPhone: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="own number — no duplicates"
-                                            inputMode="tel"
-                                            aria-invalid={!!phoneError(newParty.companyPhone)}
-                                        />
-                                        <FieldError msg={phoneError(newParty.companyPhone)} />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Company email</Label>
-                                        <Input
-                                            value={newParty.companyEmail}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, companyEmail: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="optional"
-                                            inputMode="email"
-                                            tabIndex={-1}
-                                            aria-invalid={!!emailError(newParty.companyEmail)}
-                                        />
-                                        <FieldError msg={emailError(newParty.companyEmail)} />
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Company address</Label>
-                                    <Textarea
-                                        ref={companyAddressRef}
-                                        value={newParty.companyAddress}
-                                        onChange={(e) => {
-                                            setCompanyAddressTouched(true);
-                                            setNewParty((s) => ({ ...s, companyAddress: e.target.value }));
-                                        }}
-                                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (canSubmitCreate) void submitCreate(); } }}
-                                        placeholder={`autofilled from person address${companyAddressTouched ? " (edited)" : ""}`}
-                                        rows={2}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-[1fr_140px] gap-3">
-                                    <div className="space-y-1.5">
-                                        <Label>State</Label>
-                                        <Input
-                                            value={newParty.companyState}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, companyState: e.target.value }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="e.g. Assam"
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>PIN code</Label>
-                                        <Input
-                                            value={newParty.companyPinCode}
-                                            onChange={(e) => setNewParty((s) => ({ ...s, companyPinCode: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
-                                            onKeyDown={onAnyEnterToSubmit}
-                                            placeholder="6 digits"
-                                            inputMode="numeric"
-                                            aria-invalid={!!pinError(newParty.companyPinCode)}
-                                        />
-                                        <FieldError msg={pinError(newParty.companyPinCode)} />
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Company GSTIN</Label>
-                                    <Input
-                                        value={newParty.companyGstin}
-                                        onChange={(e) => setNewParty((s) => ({ ...s, companyGstin: e.target.value.toUpperCase() }))}
-                                        onKeyDown={onAnyEnterToSubmit}
-                                        placeholder="optional · 15 chars"
-                                        className="font-mono"
-                                    />
-                                </div>
-                                <div className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
-                                    The bill goes to the company&apos;s ledger. The person stays as a contact.
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setNewPartyOpen(false)} disabled={creatingParty}>
-                            Cancel
-                        </Button>
-                        <Button onClick={submitCreate} disabled={creatingParty || !canSubmitCreate}>
-                            <UserPlus size={16} /> {creatingParty
-                                ? "Creating…"
-                                : newParty.name.trim() && showCompanySection ? "Create person + company & bill"
-                                    : showCompanySection ? "Create company & bill"
-                                        : "Create & bill"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
-
-function FieldError({ msg }: { msg: string | null }) {
-    if (!msg) return null;
-    return <p className="text-[11px] text-destructive">{msg}</p>;
-}
 
 function Row({ label, value, muted, highlight }: { label: string; value: string; muted?: boolean; highlight?: boolean }) {
     return (

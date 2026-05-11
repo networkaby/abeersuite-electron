@@ -83,6 +83,7 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `ButtonBar` | `ButtonBar.tsx` | Right-rail action bar shown on staff pages |
 | `PartyPicker` | `PartyPicker/index.tsx` | Searchable customer/company picker with inline create |
 | `QuickTicketButton` | `QuickTicketButton.tsx` | Quick ticket creation entry |
+| `PartySearchAndCreate`, `PickedParty`, `PartySearchAndCreateHandle` | `PartySearchAndCreate.tsx` | Shared "search party or create party" surface used by POS + Quick Ticket. Includes keyboard-first lookup (`/api/people?lookup=`), inline Person/Company create dialog, and imperative helpers (`focus`, `clear`, `openNew`). |
 | `UniversalCreateMenu` | `UniversalCreateMenu.tsx` | Cross-module "Create new …" menu |
 | `AllCreateActionsDialog` | `AllCreateActionsDialog.tsx` | Full create-actions dialog opened from `UniversalCreateMenu` |
 | `OfficeModuleHub` | `OfficeModuleHub.tsx` | Module hub page shell |

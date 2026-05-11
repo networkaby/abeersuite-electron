@@ -37,7 +37,7 @@
 
 ## Common workflows (wiring)
 
-1. **Create ticket** — `QuickTicketButton` (3-step modal) → POST `/api/tickets` → ticket starts at the pipeline's entry-point status.
+1. **Create ticket** — `QuickTicketButton` (2-step modal: Party -> Ticket) uses shared `PartySearchAndCreate` to search/create person/company, then POST `/api/tickets` → ticket starts at the pipeline's entry-point status.
 2. **Status change** — UI `StatusUpdateCombined` → POST `/api/tickets/[id]` (or `/sub-status` for sub-status) → validates against `StatusTransition` / `SubStatusTransition` whitelist → writes `TicketLog`.
 3. **Bill parts/service** — open Invoice via Accountancy → set `ticketId` on the invoice → ticket detail's `TicketInvoicesPanel` queries `/api/finance/invoices?ticketId=N` and lists them. **Pending DB migration** for `ticketId` to actually exist on Invoice.
 4. **Pipeline transfer** — escalate to a different pipeline (e.g. failed repair → sales lead) via `PipelineTransferModal` → linked-tickets pattern (close origin with note, create child in target pipeline).
@@ -47,6 +47,7 @@
 - **2026-05-07 — Tickets are info-only.** No parts, no money on the ticket. See [data_model_architecture memory](../../memory/data_model_architecture.md). `TicketPart` model removed.
 - **Pipeline / status / sub-status configuration** lives under [admin.md](./admin.md), not here. Reuse the existing `settings:pipelines` / `settings:statuses` permissions.
 - **2026-05-10 — Tickets list is repair-only.** The pipeline switcher buttons and Pipeline column were removed from `/office/repairing/tickets`; the page resolves the "service" pipeline by name and only shows its tickets. Any `?pipeline=` URL param is ignored (the sidebar still passes `?pipeline=P1` — harmless no-op).
+- **2026-05-11 — Quick Ticket party step is shared.** The "select/create customer" UI moved into `src/shared/components/PartySearchAndCreate.tsx` and supports person/company creation inline. When a person has linked companies, the ticket form exposes a "Bill To" chooser to set `billingAccountId`.
 - **Linked tickets** for cross-pipeline escalation is by convention (close + create child); `parentTicketId` self-relation is in design docs but **not yet in schema** — verify before relying on it.
 
 ## Out of scope / deferred

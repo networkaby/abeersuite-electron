@@ -5,10 +5,10 @@
 ## URLs
 
 ### UI pages
-- `/office/pos` — the single-page POS register. Full-screen, keyboard-driven (Ctrl+Enter checkout). File: `src/app/(protected)/office/pos/page.tsx` (thin wrapper) + `src/modules/pos/components/PosScreen.tsx` (1411-line client component).
+- `/office/pos` — the single-page POS register. Full-screen, keyboard-driven (Ctrl+Enter checkout). File: `src/app/(protected)/office/pos/page.tsx` (thin wrapper) + `src/modules/pos/components/PosScreen.tsx` (client component).
 
 ### API routes
-- `GET /api/people?lookup=…` — debounced party search shared with `PartyCombobox` (the party-picker hook `usePartySearch` from `@/shared/hooks`).
+- `GET /api/people?lookup=…` — debounced party search consumed by shared `PartySearchAndCreate` (`src/shared/components/PartySearchAndCreate.tsx`).
 - `GET /api/pos/account-snapshot/[accountId]` — full customer profile (balance, credit limit, turnover, loyalty, recent tickets, warranty alerts, personalised offers).
 - `GET /api/pos/person-snapshot/[id]` — same as above but keyed on `personId` (for company-linked persons).
 - `GET /api/pos/people/search?q=…` — alternate search endpoint (kept for back-compat with older POS calls).
@@ -25,19 +25,19 @@
 - `Person` / `Company` — selected via party picker; linked to the voucher via `accountId`.
 
 ## Key components
-- `PosScreen` (file: `src/modules/pos/components/PosScreen.tsx`) — the entire POS UI. Sections: party search + snapshot panel, cart, totals + tax, payment splits, "New customer" inline-create dialog, recent-tickets sidebar.
-- `PartyPicker` (`src/shared/components/PartyPicker/index.tsx`) — used by POS for the party search box (same picker used elsewhere).
+- `PosScreen` (file: `src/modules/pos/components/PosScreen.tsx`) — the entire POS UI. Sections: party search + snapshot panel, cart, totals + tax, payment splits, and recent-tickets sidebar.
+- `PartySearchAndCreate` (`src/shared/components/PartySearchAndCreate.tsx`) — shared party omnibox used by POS. Handles search, keyboard navigation, and inline Person/Company creation.
 
 ## Library / helpers
 - POS itself has no `lib/` — single-screen module per Segment 10 audit.
-- Consumes: `postInvoiceJe` (`src/modules/accountancy/lib/postInvoiceJe.ts`), `usePartySearch` (`src/shared/hooks/usePartySearch.ts`), `useComboboxNav` (planned in Segment 09c).
+- Consumes: `postInvoiceJe` (`src/modules/accountancy/lib/postInvoiceJe.ts`) and shared `PartySearchAndCreate` (`src/shared/components/PartySearchAndCreate.tsx`), which internally uses `usePartySearch`.
 
 ## Common workflows (wiring)
-1. **Take a sale**: type customer name/phone → pick from dropdown → snapshot panel loads (balance, credit limit, alerts) → add items (`InvProductCombobox`) → pick payment method → **Ctrl+Enter** opens checkout → `POST /api/pos/sale` → voucher + GL post + stock decrement → success toast + print receipt.
-2. **New customer on the fly**: type a name with no matches → "New customer" button → inline dialog → creates `Person` + `Account` under Sundry Debtors → returns to cart with the new party selected.
+1. **Take a sale**: search person/company by name/phone/email → pick from dropdown → snapshot panel loads (balance, credit limit, alerts) → add items (`InvProductCombobox`) → pick payment method → **Ctrl+Enter** opens checkout → `POST /api/pos/sale` → voucher + GL post + stock decrement → success toast + print receipt.
+2. **New customer on the fly**: type a party with no matches (or click "New customer") → inline dialog in `PartySearchAndCreate` → creates Person and optionally Company (+ link when both are created) → POS locks the picked party and focuses product search.
 
 ## Recent decisions / gotchas
-- **PosScreen is UX-critical** — Segment 09c will refactor party search to use `useComboboxNav` + `usePartySearch`, but the snapshot panel, "New customer" dialog, cart, payment splits, and Ctrl+Enter shortcut must stay byte-identical. Manual end-to-end browser verification before each related commit.
+- **PosScreen is UX-critical** — party search/create logic is now centralized in shared `PartySearchAndCreate`. Any future changes must preserve current keyboard flow (pick party, lock search, focus product input) and checkout shortcuts.
 - `POST /api/pos/sale` posts to the GL synchronously — long-running for big carts. No queue yet.
 
 ## Out of scope / deferred
@@ -46,4 +46,4 @@
 - Cash-drawer / printer hardware control.
 - Per-cashier discount permissions.
 
-_Last updated: 2026-05-11 — covers state after Segment 14 (API path rename) and the route-group promotion. Awaiting Segment 09c PosScreen refactor._
+_Last updated: 2026-05-11 — includes the shared `PartySearchAndCreate` integration in POS._
