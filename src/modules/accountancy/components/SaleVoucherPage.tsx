@@ -37,7 +37,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     Loader2, Trash2, Plus, StickyNote, Settings2, X,
-    Image as ImageIcon, FileText, ScanLine, Link2,
+    Image as ImageIcon, FileText, ScanLine, Link2, ExternalLink,
+    CopyPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -509,9 +510,17 @@ export function SaleVoucherPage() {
             if (andPrint) {
                 window.open(`/receipt/invoice/${res.data.id}?autoprint=1`, "_blank", "noopener");
             }
+            // Reset for the next transaction instead of navigating away —
+            // the cashier can punch in the next sale without leaving /sale.
+            // Cancel / Close X are the explicit exits to the list page.
             reset();
+            // Re-fetch the invoice-number preview so the next sale shows
+            // the freshly-incremented reference (otherwise nextRef would
+            // stay stale until the next page mount).
+            axios.get<{ reference: string }>("/api/inventory/vouchers/next-ref?type=SALE")
+                .then((r) => setNextRef(r.data.reference))
+                .catch(() => { /* keep last value */ });
             router.refresh();
-            router.push("/office/accountancy/sales");
         } catch (err: unknown) {
             toast.error(axios.isAxiosError(err) ? err.response?.data?.error : "Save failed");
         } finally {
@@ -543,15 +552,45 @@ export function SaleVoucherPage() {
                             </button>
                         ))}
                     </div>
+                    {/* Spawn another Sale Invoice in a fresh window — lets the
+                        cashier work on parallel transactions without losing
+                        the current draft. window.open uses noopener so the
+                        new tab is independent. */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open("/sale", "_blank", "noopener")}
+                        title="Open another Sale Invoice in a new tab"
+                        className="gap-1.5 text-muted-foreground hover:text-foreground"
+                    >
+                        {/* <ExternalLink size={14} /> */}
+                        <CopyPlus size={14} /> New Sale
+                    </Button>
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => router.push("/office/accountancy/sales")}
-                    title="Close"
-                >
-                    <X size={18} />
-                </Button>
+                <div className="flex items-center gap-1">
+                    {/* Spawn another Sale Invoice in a fresh window — lets the
+                        cashier work on parallel transactions without losing
+                        the current draft. window.open uses noopener so the
+                        new tab is independent. */}
+                    {/* <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open("/sale", "_blank", "noopener")}
+                        title="Open another Sale Invoice in a new tab"
+                        className="gap-1.5 text-muted-foreground hover:text-foreground"
+                    >
+                        <ExternalLink size={14} />
+                        New Tab
+                    </Button> */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => router.push("/office/accountancy/sales")}
+                        title="Close"
+                    >
+                        <X size={18} />
+                    </Button>
+                </div>
             </header>
 
             {/* One page-wide ScrollArea wraps the form header, the item table
@@ -1174,21 +1213,21 @@ export function SaleVoucherPage() {
                     <Link2 size={14} /> Link Payment
                 </Button>
                 <div className="ml-auto flex items-center gap-2">
-                <Button variant="ghost" onClick={() => router.push("/office/accountancy/sales")}>
-                    Cancel
-                </Button>
-                <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
-                    {showProfit ? "Hide" : "Show"} Profit
-                </Button>
-                <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
-                </Button>
-                <Button variant="outline" onClick={() => submit(true, true)} disabled={saving}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Print
-                </Button>
-                <Button onClick={() => submit(true)} disabled={saving}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save
-                </Button>
+                    <Button variant="ghost" onClick={() => router.push("/office/accountancy/sales")}>
+                        Cancel
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
+                        {showProfit ? "Hide" : "Show"} Profit
+                    </Button>
+                    <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
+                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
+                    </Button>
+                    <Button variant="outline" onClick={() => submit(true, true)} disabled={saving}>
+                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Print
+                    </Button>
+                    <Button onClick={() => submit(true)} disabled={saving}>
+                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save
+                    </Button>
                 </div>
             </div>
         </div>

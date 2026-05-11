@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import axios from "axios";
 import { ChevronLeft, ChevronRight, Zap, Grid2x2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +49,6 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const router = useRouter();
     const { setOpen: openPurchase } = usePurchaseDialogStore();
     const { setOpen: openEstimate } = useEstimateDialogStore();
 
@@ -100,8 +99,10 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-credit-note") {
             openCreditNote(true);
         } else if (action.action === "new-sale") {
-            // Sale is a full-page route now (the old dialog was dropped).
-            router.push("/sale");
+            // Open Sale Invoice in its own browser window so it sits in front
+            // of whatever the user was doing (Vyapar / Marg pattern). Each
+            // click spawns an independent tab, supporting parallel entry.
+            window.open("/sale", "_blank", "noopener");
         } else if (action.action === "new-purchase") {
             openPurchase(true);
         } else if (action.action === "new-estimate") {

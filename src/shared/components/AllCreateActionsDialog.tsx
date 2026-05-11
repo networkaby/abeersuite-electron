@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Grid2x2 } from "lucide-react";
 import {
     Dialog,
@@ -41,7 +40,6 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const router = useRouter();
     const { setOpen: openPurchase } = usePurchaseDialogStore();
     const { setOpen: openEstimate } = useEstimateDialogStore();
 
@@ -73,8 +71,10 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
         } else if (action.action === "new-credit-note") {
             openCreditNote(true);
         } else if (action.action === "new-sale") {
-            // Sale is a full-page route now.
-            router.push("/sale");
+            // Open Sale Invoice in a new window so it surfaces in front
+            // and the user can keep this dialog's parent tab on whatever
+            // they were doing.
+            window.open("/sale", "_blank", "noopener");
             onOpenChange(false);
         } else if (action.action === "new-purchase") {
             openPurchase(true);
