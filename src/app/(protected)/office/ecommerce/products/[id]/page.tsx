@@ -5,7 +5,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import ProductForm from "@/modules/ecommerce/components/ProductForm";
-import type { ShopProductAdmin } from "@/modules/ecommerce/lib/product-admin";
+import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { ShopProductAdmin } from "@/modules/ecommerce/lib/product-admin";
+import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductCard from "@/modules/external/shop/ProductCard";

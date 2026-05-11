@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status-transitions";
+import { ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/orderStatusTransitions";
 import type { ShopOrderStatus } from "@/generated/prisma/enums";
 
 type NextPipelineStatus = {

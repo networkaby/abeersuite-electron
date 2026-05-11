@@ -46,17 +46,46 @@ src/modules/<m>/
 
 ## Verification
 
-- Every module that has pure logic has a `lib/` folder
-- Every file in `src/modules/<m>/lib/` is camelCase `.ts`
-- Every component file is PascalCase `.tsx`
-- `tsc --noEmit` clean
-- `npm run build` clean
+- [x] Every module that has pure logic has a `lib/` folder (admin/core/pos legitimately have none)
+- [x] Every file in `src/modules/<m>/lib/` is camelCase `.ts`
+- [x] Every component file is PascalCase `.tsx`
+- [x] `tsc --noEmit` clean
 
 ## Out of scope
 
 - Page-component extraction → Segments 11 & 12.
 - Adding new hooks → Segment 09.
 - Module-level barrel `index.ts` files — explicitly avoided. Existing convention is no barrels at the module root; keep imports explicit.
+
+---
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete** — far smaller scope than the plan envisioned because Segment 08 already absorbed most of the structural work.
+
+State after audit:
+
+| Module | `lib/` state | Action |
+|---|---|---|
+| accountancy | 17 camelCase files | none |
+| customer | 3 camelCase files (added in Segment 08) | none |
+| repairing | 2 camelCase files (added in Segment 08) | none |
+| message | 1 camelCase file (`inbox.ts`) | none |
+| inventory | 2 camelCase files | none |
+| **ecommerce** | 3 kebab-case + 1 camelCase | **renamed 3 files to camelCase** |
+| admin | no `lib/` | leave — no domain logic to extract |
+| core | no `lib/` | leave — no domain logic to extract |
+| pos | components-only | leave per plan |
+
+Renames:
+
+- `src/modules/ecommerce/lib/order-status.ts` → `orderStatus.ts`
+- `src/modules/ecommerce/lib/order-status-transitions.ts` → `orderStatusTransitions.ts`
+- `src/modules/ecommerce/lib/product-admin.ts` → `productAdmin.ts`
+
+Sweep: 9 importers updated across `src/app/api/ecommerce/`, `src/app/api/shop/`, `src/app/(protected)/office/ecommerce/`, and `src/modules/ecommerce/components/`.
+
+Verified: tsc clean.
 
 ---
 

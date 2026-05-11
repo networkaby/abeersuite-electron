@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { transitionShopOrderStatus, transitionOrderPipelineStatus } from "@/modules/ecommerce/lib/order-status";
+import { transitionShopOrderStatus, transitionOrderPipelineStatus } from "@/modules/ecommerce/lib/orderStatus";
 import { ShopOrderStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { z } from "zod";

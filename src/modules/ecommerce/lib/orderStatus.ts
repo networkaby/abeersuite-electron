@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ShopOrderStatus } from "@/generated/prisma/enums";
 import { balanceDelta, nextRef } from "@/modules/accountancy/lib/balance";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
-import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/order-status-transitions";
+import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/orderStatusTransitions";
 import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
 import { selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 

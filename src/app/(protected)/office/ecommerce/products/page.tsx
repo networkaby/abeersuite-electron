@@ -5,7 +5,7 @@ import axios from "axios";
 import Image from "next/image";
 import Link from "next/link";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import type { ShopProductAdmin } from "@/modules/ecommerce/lib/product-admin";
+import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import ProductForm from "@/modules/ecommerce/components/ProductForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

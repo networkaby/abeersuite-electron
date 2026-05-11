@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { invProductToAdmin } from "@/modules/ecommerce/lib/product-admin";
+import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
