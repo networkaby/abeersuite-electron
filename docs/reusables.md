@@ -21,6 +21,7 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `formatInboxTime(iso)` | `formatDate.ts` | Smart inbox/chat timestamp — same day → `10:42 AM`, older → `Mar 5`. Tolerates Supabase Realtime payloads missing the `Z` suffix. |
 | `formatTimeOnly(iso)` | `formatDate.ts` | `10:42 AM` (en-US, time only) |
 | `timeAgo(d)` | `timeAgo.ts` | `5m ago`, `2h ago`, `3d ago` |
+| `cn(...inputs)` | `utils.ts` | shadcn's `clsx + tailwind-merge` className combiner — use everywhere conditional Tailwind class lists appear. |
 
 > Avoid inline `new Intl.NumberFormat("en-IN", ...)` and inline `toLocaleTimeString(...)` for these cases — use the helpers above.
 
@@ -39,6 +40,10 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `requirePortalAuth()` | `portalAuthGuard.ts` | Customer portal API route guard (parallel to `requireAuth` but for portal customers). |
 | `authorizeStaffCredentials` / `authorizePortalCredentials` | `authorizeStaff.ts` / `authorizePortal.ts` | NextAuth Credentials provider validators. |
 | `makePermissionLayout(permissionId)` | `makePermissionLayout.tsx` | Factory for permission-gated Next.js layout wrappers. |
+| `hasPermissionWithScope(perms, id)` | `permissionScope.ts` | Scope-aware predicate used internally by `hasPermission`. Rarely needed at call sites. |
+| `isStaffEmailDomainAllowed(email)` | `staffEmailAllowlist.ts` | Validate that an email belongs to one of the staff-allowed domains. |
+| `getPortalAccountContext()` | `portalAccountContext.ts` | Resolve the active portal customer's account context inside portal routes. |
+| `normalizePortalIdentifier(input)` | `portalIdentifier.ts` | Phone/email normalisation for portal credential lookup. |
 
 ## Prisma — `src/shared/lib/prisma/`
 
@@ -140,7 +145,7 @@ Import from the barrel: `import { … } from "@/shared/lib/api"`.
 | `handleApiError(e, fallback?)` | `handleApiError.ts` | Logs + returns a 500 NextResponse with the fallback message. Trailing `catch { 500 }` envelope. |
 | `generateNextOpaqueId(model, prefix)` | `generateNextOpaqueId.ts` | Returns `{ id: \`${prefix}${n}\`, n }` where `n = max numeric suffix among existing IDs + 1`. Use for opaque IDs like `S50`, `SS37`, `R5`, `P1` instead of bare integers. |
 
-> Boilerplate sweep status: opaque-ID, P2002 (simple cases), and pagination call sites are all swept (segment 04a, 17 sites). `validateRequest` (≈110 routes) and `handleApiError` (≈152 routes) sweeps are deferred to follow-up commits within this segment.
+> Boilerplate sweep status (post-Segment 04): opaque-ID (3), P2002 simple cases (8), pagination (6), validateRequest (107 of 110), and handleApiError (162 of ~167) all swept. Residuals are deliberate inline cases (richer error shapes, non-catch 500s, etc.) — see segment 04 post-execution notes.
 
 ## Constants — `src/shared/lib/constants/`
 
@@ -153,13 +158,15 @@ Import from the barrel: `import { … } from "@/shared/lib/api"`.
 
 > Use these instead of bare string literals so TypeScript catches typos and renames are a single-file change.
 
-## Sections coming in later segments
+## Module-scoped reusables — see each module's doc
 
-The following sections will appear when their owning segment ships. See [docs/plans/](plans/) for sequencing.
+Helpers used by only **one** module live inside that module and are documented in its `docs/modules/<m>.md` "Reusable helpers — DO NOT duplicate" table. Check there before adding new helpers to a module:
 
-- **Prisma fragments** (Segment 06) — `selectPrimaryPhone`, `selectPrimaryEmail`, `selectAccountWithOwner`, `buildSearchWhere` in `src/shared/lib/prisma/fragments.ts`
-- **Common Zod schemas** (Segment 07) — `labelColorSchema`, `nameDescriptionSchema`, `phoneEmailSchema`, `gstSchema`, `nameIsActiveSchema` in `src/shared/lib/schemas/commonSchemas.ts`
-- **Hooks** (Segment 09) — `useComboboxNav`, `usePartySearch`, `useDeleteWithConfirm`, `useApiResource` in `src/shared/hooks/`
-- **Shared UI primitives** (Segment 13) — `DataPageHeader`, `DataTableStates`, `StatusBadge` in `src/shared/components/`
+- [accountancy.md](modules/accountancy.md) — `aggregateLedger`, `effectiveBalance`, `loadGroupRolledUpBalances`, `closingStock`, `netProfitLoss`, `voucherLifecycle`, `postInvVoucher`, `postInvoiceJe`, `refResolver`, `seedVoucherSeries`, …
+- [inventory.md](modules/inventory.md) — `stock` / `stockValue` helpers (`productOpeningValue`, `productClosingValue`, `calcLineTotals`, `calcVoucherTotals`, …)
+- [people.md](modules/people.md) — `crmPipeline`, `companyContacts`, `contactWrite`
+- [repair.md](modules/repair.md) — `ticketScope`, `repairPipeline`
+- [sales.md](modules/sales.md) — `ordersPipeline`, `orderStatus`, `orderStatusTransitions`, `productAdmin`
+- [messaging.md](modules/messaging.md) — `inbox` (room/membership/unread helpers)
 
-Segment 16 ([16-reusables-registry.md](plans/16-reusables-registry.md)) does the final pass to ensure every symbol and importer is correctly listed and every module doc has its own "Reusable helpers — DO NOT duplicate" table.
+Module-scoped means: **import only from inside that module**. Cross-module callers should use the API surface (route handlers), not reach into another module's `lib/`.

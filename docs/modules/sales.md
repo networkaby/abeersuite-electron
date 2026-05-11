@@ -59,4 +59,13 @@
 - Loyalty program integration beyond coupons.
 - Walk-in POS terminal UI.
 
-_Last updated: 2026-05-07._
+## Reusable helpers — DO NOT duplicate
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `getOrdersPipeline(prisma)`, `assertOrdersStatus(prisma, pipelineId, status)`, `ORDERS_PIPELINE_NAME` | `src/modules/ecommerce/lib/ordersPipeline.ts` | Name-based resolver for the seeded sales-orders pipeline + status validator. |
+| `ORDER_STATUS_TRANSITIONS`, `canTransition(from, to)` | `src/modules/ecommerce/lib/orderStatusTransitions.ts` | Allowed `ShopOrderStatus` transition graph. |
+| `transitionShopOrderStatus`, `transitionOrderPipelineStatus` | `src/modules/ecommerce/lib/orderStatus.ts` | Write-side helpers that move a shop order between statuses (both the enum on the row and the pipeline state). Used by the webhook + manual status changes. |
+| `invProductToAdmin(invProduct)`, `ShopProductAdmin` (type) | `src/modules/ecommerce/lib/productAdmin.ts` | Reshape an `InvProduct` row into the admin-side shape used by the ecommerce products UI. |
+
+_Last updated: 2026-05-11._

@@ -178,6 +178,40 @@ For each module doc, add a section like:
 
 All previous 15 segments produce a clean state. This segment is the **enforcement layer** — the rule that keeps it clean. Without it, the duplication grows back. With it, future contributors (human or agent) check the registry first, find the helper, use it. Adding a new one means registering it. No registry entry → reviewers reject.
 
+---
+
+## Post-execution notes (2026-05-11)
+
+Status: **complete**.
+
+What landed:
+
+- `docs/reusables.md` — registry now lists every public export under `src/shared/`:
+  - Added `cn` to Formatters.
+  - Added 4 more Auth entries (`hasPermissionWithScope`, `isStaffEmailDomainAllowed`, `getPortalAccountContext`, `normalizePortalIdentifier`).
+  - Replaced the stale "Sections coming in later segments" with a "Module-scoped reusables — see each module's doc" section that cross-links every per-module table.
+  - Updated the boilerplate-sweep status line to reflect Segments 04a/04b/04c all shipped.
+- `docs/modules/people.md`, `docs/modules/repair.md`, `docs/modules/sales.md`, `docs/modules/messaging.md` — each gains a "Reusable helpers — DO NOT duplicate" table covering the module's `lib/` exports (added/restored in Segments 08 + 10).
+  - `accountancy.md` and `inventory.md` already had the table from earlier passes — left as-is.
+  - `admin.md` has no `lib/` exports today — no table added (would be empty).
+  - `core.md` and `pos.md` (added in Segment 15) already note their dependency surface.
+
+The registry-check rule and boundary rule are **already in `AGENTS.md`** from Segment 01's follow-up and the seed-cleanup commit. The "Reusables registry" item in the "After every plan / segment completes" section enforces:
+
+> if the change added or removed a helper / hook / schema / formatter / shared component, register or unregister it in `docs/reusables.md` (cross-cutting) or the relevant `docs/modules/<m>.md` "Reusable helpers" table (module-scoped).
+
+Boundary rule appears in two places:
+
+- `docs/reusables.md` § Boundary rule (top of file).
+- `docs/plans/08-domain-helpers-into-modules.md` ("Boundary rule (going forward)").
+
+Both convey the same constraint: `src/shared/` is for code with ≥2 module importers (or `src/app/`). Single-module code lives in `src/modules/<m>/`.
+
+Per AGENTS.md "after every plan" rule:
+- **Reusables registry** — this segment IS the registry update.
+- **Module docs** — 4 module docs gained their "Reusable helpers" table.
+- **Todo list** — completed.
+
 
 ---
 

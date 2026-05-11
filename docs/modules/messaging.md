@@ -50,4 +50,10 @@
 - Email / SMS / WhatsApp notification fan-out.
 - Reactions, threading, file uploads in messages.
 
-_Last updated: 2026-05-07._
+## Reusable helpers — DO NOT duplicate
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `listAccessibleRooms(user)`, `getAccessibleRoom(user, id)`, `markRoomRead(userId, roomId, at?)`, plus room/membership helpers | `src/modules/message/lib/inbox.ts` | Everything room-scoped: filtering by membership, computing unread counts, marking read. Use these from any route that reads or mutates inbox rooms — don't reach into the Prisma `ChatRoom` / `ChatRoomMember` / `ChatMessage` tables directly. |
+
+_Last updated: 2026-05-11._

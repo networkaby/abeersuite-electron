@@ -55,4 +55,11 @@
 - Pipeline / status / sub-status master config — see [admin.md](./admin.md).
 - Repair-specific financial reporting (margin per ticket, etc.) — not built; would query Invoices by `ticketId`.
 
-_Last updated: 2026-05-07 — covers state after Step 4 schema edits (DB migration pending)._
+## Reusable helpers — DO NOT duplicate
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `buildTicketReadScopeWhere(user)` | `src/modules/repairing/lib/ticketScope.ts` | Build a Prisma `where` fragment that constrains tickets to what the caller's `scope` (own / branch / department / org) allows. Use in every list endpoint that returns tickets so the radius is consistent. |
+| `getRepairPipeline(prisma)`, `REPAIR_PIPELINE_NAME` | `src/modules/repairing/lib/repairPipeline.ts` | Name-based resolver for the seeded Service & Repair pipeline. Use instead of hardcoding `P1`. |
+
+_Last updated: 2026-05-11._

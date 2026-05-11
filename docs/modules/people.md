@@ -93,4 +93,14 @@ Same rules apply to emails.
 - Per-customer pricing tiers — see [inventory.md](./inventory.md) (no schema fields yet).
 - Per-customer credit limit enforcement — schema field exists (`Account.creditLimit`) but no checks at write time yet.
 
-_Last updated: 2026-05-08._
+## Reusable helpers — DO NOT duplicate
+
+These are module-scoped (consumed only by `customer/` routes + components). Don't import them across module boundaries; talk to the customer module via its API instead.
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `getCrmPipeline(prisma)`, `assertCrmStatus(prisma, pipelineId, status)`, `CRM_PIPELINE_NAME` | `src/modules/customer/lib/crmPipeline.ts` | Name-based resolver for the seeded CRM-leads pipeline + status validator. Use these instead of hardcoding pipeline IDs (`P6` etc.). |
+| `getCompanyContacts(companyId)` | `src/modules/customer/lib/companyContacts.ts` | Returns the company's own phones/emails + derived contacts from linked persons. |
+| `ContactConflictError`, `contactValueSchema`, `createPhone`, `updatePhone`, `deletePhone`, `createEmail`, `updateEmail`, `deleteEmail` | `src/modules/customer/lib/contactWrite.ts` | All write paths for the `Phone` / `Email` polymorphic-owner rows. Centralises uniqueness checking, isPrimary toggling, and the `ContactConflictError` shape that routes catch + map to a 409 with `{ error, field }`. |
+
+_Last updated: 2026-05-11._
