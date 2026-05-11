@@ -1,18 +1,40 @@
 import type { GroupType } from "@/generated/prisma/client";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
-// Tally convention: only INCOME (Sales) and EXPENSE (Purchase, COGS, Goods
-// Damaged, Direct/Indirect Expenses) ledgers can carry inventory items in a
-// journal voucher.
-//
-// ASSET (Cash, Bank, AR, Stock-in-Hand) and LIABILITY (AP, Loans, Capital)
-// ledgers are pure money/liability ledgers — they hold value, not stock.
-// Direct stock-value adjustments use Stock Journal / Physical Stock vouchers
-// in the inventory module, not journal vouchers.
+/**
+ * Inventory rule
+ * --------------
+ * Inventory items only attach to lines posted against a **Sales Accounts** or
+ * **Purchase Accounts** ledger. In any other voucher the value flows through
+ * ledgers, not stock. Concretely:
+ *
+ *   • Sales Accounts group  → Sales A/c, Parts Revenue, Shop Sales Revenue,
+ *                             Sales Returns — Sale decreases inventory;
+ *                             Sales Return increases it.
+ *   • Purchase Accounts grp → Purchase A/c, Purchase Returns — Purchase
+ *                             increases inventory; Purchase Return decreases.
+ *
+ * Exceptions (vouchers that move stock without a sales / purchase ledger):
+ *   • Stock Journal — internal stock transfers / consumption / production.
+ *   • Physical Stock — periodic count adjustments.
+ *
+ * The voucher's stock side balances against the Stock-in-Hand asset ledger
+ * via the trading-account stock adjustment computed in
+ * `tradingStockAdjustment.ts`. See docs/modules/accountancy.md
+ * "Inventory–ledger coupling" for the full policy.
+ */
+const STOCK_ELIGIBLE_GROUP_NAMES: string[] = [
+    ACCOUNT_GROUPS.SALES_ACCOUNTS,
+    ACCOUNT_GROUPS.PURCHASE_ACCOUNTS,
+];
+
+/** Kept for any consumer that still wants the broad income/expense check.
+ *  New code should prefer `isStockEligibleAccount` (group-name match). */
 export const STOCK_ELIGIBLE_GROUP_TYPES: GroupType[] = ["INCOME", "EXPENSE"];
 
 export function isStockEligibleAccount(
-    a: { group?: { type?: GroupType | null } | null } | null | undefined,
+    a: { group?: { name?: string | null; type?: GroupType | null } | null } | null | undefined,
 ): boolean {
-    const t = a?.group?.type;
-    return t === "INCOME" || t === "EXPENSE";
+    const name = a?.group?.name ?? null;
+    return name != null && STOCK_ELIGIBLE_GROUP_NAMES.includes(name);
 }
