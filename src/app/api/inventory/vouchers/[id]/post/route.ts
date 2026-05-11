@@ -53,9 +53,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             if (!isCommitment) {
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
+                    // Free / complimentary qty moves out of stock the same way
+                    // as the billed qty — it just doesn't show up in revenue.
+                    const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
+                    const totalQty = qty + freeQty;
                     let inQty = 0, outQty = 0;
-                    if (isPurchase)         inQty = qty;
-                    else if (isSale)        outQty = qty;
+                    if (isPurchase)         inQty = totalQty;
+                    else if (isSale)        outQty = totalQty;
                     else if (isPhysicalStock) {
                         // Quantity here is interpreted as the new on-hand value.
                         // The delta (qty - product.stock) is what we ledger.

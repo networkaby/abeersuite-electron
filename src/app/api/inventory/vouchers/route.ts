@@ -44,9 +44,13 @@ export async function POST(req: Request) {
         partyPhone,
         partyAddress,
         paymentMode,
+        paymentTerms,
+        dueDate,
         shippingAmt    = 0,
         roundOff       = 0,
         amountReceived = 0,
+        discountPct,
+        discountAmt,
         showPrices,
         lines = [],
     } = body as {
@@ -59,15 +63,24 @@ export async function POST(req: Request) {
         partyPhone?:  string;
         partyAddress?: string;
         paymentMode?:    string;
+        /// Credit-sale payment terms label (e.g. "Net 30")
+        paymentTerms?:   string;
+        /// Computed due date for the credit voucher (ISO yyyy-mm-dd)
+        dueDate?:        string;
         shippingAmt?:    number;
         roundOff?:       number;
         amountReceived?: number;
+        /// Voucher-level discount (mutually-convertible with discountAmt)
+        discountPct?:    number;
+        discountAmt?:    number;
         // Challan-only: when false the printed challan hides rate/amount columns.
         showPrices?:     boolean;
         lines: {
             productId:   number;
             description?: string;
             quantity:    number;
+            /// Free / complimentary qty — flows out of stock, ₹0 revenue
+            freeQty?:    number;
             rate:        number;
             discountPct?: number;
             discountAmt?: number;
@@ -99,10 +112,20 @@ export async function POST(req: Request) {
         return { ...l, discountAmt, taxAmount, amount };
     });
 
+    // Resolve voucher-level discount. Either pct or amt may be supplied; the
+    // amount wins when both are present (UI keeps them in sync).
+    const lineSubtotal = computedLines.reduce((s, l) => s + l.amount, 0);
+    const overallDiscount =
+        discountAmt != null && Number(discountAmt) > 0
+            ? Number(discountAmt)
+            : discountPct != null && Number(discountPct) > 0
+                ? (lineSubtotal * Number(discountPct)) / 100
+                : 0;
+
     const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(
         computedLines,
         Number(shippingAmt),
-        0,
+        overallDiscount,
         Number(roundOff),
     );
 
@@ -122,9 +145,13 @@ export async function POST(req: Request) {
                 partyPhone:   partyPhone || null,
                 partyAddress: partyAddress || null,
                 paymentMode:     paymentMode || null,
+                paymentTerms:    paymentTerms || null,
+                dueDate:         dueDate ? new Date(dueDate) : null,
                 shippingAmt,
                 roundOff,
                 amountReceived,
+                discountPct: discountPct != null ? Number(discountPct) : null,
+                discountAmt: overallDiscount > 0 ? overallDiscount : null,
                 ...(typeof showPrices === "boolean" ? { showPrices } : {}),
                 subtotal,
                 taxAmount,
@@ -135,6 +162,7 @@ export async function POST(req: Request) {
                         productId:   l.productId,
                         description: l.description || null,
                         quantity:    l.quantity,
+                        freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
                         rate:        l.rate,
                         discountPct: l.discountPct ?? 0,
                         discountAmt: l.discountAmt,

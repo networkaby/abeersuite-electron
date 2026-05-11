@@ -164,6 +164,11 @@ model InvVoucher {
   partyAddress   String?
   /// "CASH" or "CREDIT" — affects GL auto-post account selection
   paymentMode    String?
+  /// Credit-sale payment terms (free-form label, e.g. "Net 30", "Due on Receipt").
+  /// Only meaningful when paymentMode = "CREDIT".
+  paymentTerms   String?
+  /// Computed due date for credit sales — date + payment-term days. User-overridable.
+  dueDate        DateTime?      @db.Date
   /// State code where the supply happens — drives intra/inter-state GST split.
   /// Defaults to the company's state code when unset.
   placeOfSupply  String?
@@ -228,6 +233,10 @@ model InvVoucherLine {
   product     InvProduct @relation(fields: [productId], references: [id])
   description String?
   quantity    Decimal    @db.Decimal(10, 3)
+  /// Free / complimentary quantity — flows out of stock alongside `quantity`
+  /// but contributes ₹ 0 to revenue (line.amount). Used for "buy 2 get 1 free"
+  /// style schemes. Optional; defaults to 0 at the application layer.
+  freeQty     Decimal?   @db.Decimal(10, 3)
   rate        Decimal    @db.Decimal(14, 2)
   discountPct Decimal    @default(0) @db.Decimal(5, 2)
   discountAmt Decimal    @default(0) @db.Decimal(14, 2)

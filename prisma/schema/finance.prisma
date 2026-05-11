@@ -311,31 +311,31 @@ model BooksConfig {
 
 model VoucherSeries {
   // Values: CONTRA | PAYMENT | RECEIPT | CREDIT_NOTE | DEBIT_NOTE | INVOICE | JOURNAL
-  kind            String    @id
-  label           String
+  kind  String @id
+  label String
 
   // Per-series fiscal year tracker. The closing date is derived from
   // BooksConfig.restartMonth/restartDay + this year. Rollover happens
   // automatically when today >= next restart date.
-  fyStartYear     Int? // e.g. 2026 = FY Apr-2026 → Mar-2027
+  fyStartYear Int? // e.g. 2026 = FY Apr-2026 → Mar-2027
 
   // Type part (voucher type code, used as-is — keep it short)
-  typeEnabled     Boolean   @default(true)
-  typeValue       String    @default("")
+  typeEnabled Boolean @default(true)
+  typeValue   String  @default("")
 
   // User part (creator's user ID)
-  userEnabled     Boolean   @default(false)
-  userMaxWidth    Int       @default(3)
+  userEnabled  Boolean @default(false)
+  userMaxWidth Int     @default(3)
 
   // Year part
-  yearEnabled     Boolean   @default(true)
+  yearEnabled Boolean @default(true)
   // CALENDAR (2026) | CALENDAR_SHORT (26) | FY_SHORT (26-27) | FY_LONG (2026-27)
-  yearFormat      String    @default("FY_SHORT")
+  yearFormat  String  @default("FY_SHORT")
 
   // Number part (always part of the reference — it's the actual counter)
-  startFrom       Int       @default(1)
-  padWidth        Int       @default(4)
-  nextSeq         Int       @default(0)
+  startFrom Int @default(1)
+  padWidth  Int @default(4)
+  nextSeq   Int @default(0)
 
   // Assembly: comma-separated list of parts. Reserved tokens — type, user,
   // year, number — expand to their values. Anything else is a literal,
@@ -343,7 +343,7 @@ model VoucherSeries {
   //   "type,/,year,-,number"     →  INV/26-27-0001
   //   "type,number,-,user"       →  INV0001-007
   //   "type,/,year,/,user,number"→  INV/26-27/0070001
-  partOrder       String    @default("type,-,year,-,number")
+  partOrder String @default("type,-,year,-,number")
 
-  updatedAt       DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
 }
