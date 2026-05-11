@@ -13,6 +13,10 @@ Purpose: keep critical completed features stable. Any agent/human touching these
 - [] Accountancy Bank Book (`/office/accountancy/reports/bank-book`)
 - [] Accountancy Receivables (`/office/accountancy/reports/receivables`)
 - [] Accountancy Payables (`/office/accountancy/reports/payables`)
+- [x] Accountancy Journal Voucher flow (`/office/accountancy/journal-entries` + `JournalVoucherDialog`)
+- [x] Accountancy Payment Voucher flow (`/office/accountancy/payments` + `VoucherForm`)
+- [x] Accountancy Receipt Voucher flow (`/office/accountancy/receipts` + `VoucherForm`)
+- [x] Accountancy Contra Voucher flow (`/office/accountancy/contras` + `ContraDialog`)
 
 ## Guardrails before changing any protected surface
 
