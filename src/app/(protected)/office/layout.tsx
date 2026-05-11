@@ -14,12 +14,12 @@ import {
     CreditNoteDialog,
     DebitNoteDialog,
 } from "@/modules/accountancy/components/MoneyFlowDialog";
+// Sale is now its own full-page route at /sale — no dialog mount here.
+// Purchase + Estimate keep the dialog flow for now.
 import {
-    SaleDialog,
     PurchaseDialog,
     EstimateDialog,
 } from "@/modules/accountancy/components/TradingVoucherForm";
-import { SaleFullScreenDialog } from "@/modules/accountancy/components/TradingVoucherFullScreenForm";
 
 export default async function ProtectedLayout({
     children,
@@ -75,11 +75,8 @@ export default async function ProtectedLayout({
                 <ReceiptDialog />
                 <CreditNoteDialog />
                 <DebitNoteDialog />
-                <SaleDialog />
                 <PurchaseDialog />
                 <EstimateDialog />
-                {/* Exploratory full-screen Sale variant — accessed via /office/accountancy/sales/new-full */}
-                <SaleFullScreenDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import axios from "axios";
 import { ChevronLeft, ChevronRight, Zap, Grid2x2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import { useContraDialogStore } from "@/store/contraDialogStore";
 import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
-import { useSaleDialogStore } from "@/store/saleDialogStore";
+// Sale uses the full-page /sale route now — no dialog store.
 import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
 import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
@@ -49,7 +49,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openPayment } = usePaymentDialogStore();
     const { setOpen: openReceipt } = useReceiptDialogStore();
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const { setOpen: openSale } = useSaleDialogStore();
+    const router = useRouter();
     const { setOpen: openPurchase } = usePurchaseDialogStore();
     const { setOpen: openEstimate } = useEstimateDialogStore();
 
@@ -100,7 +100,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-credit-note") {
             openCreditNote(true);
         } else if (action.action === "new-sale") {
-            openSale(true);
+            // Sale is a full-page route now (the old dialog was dropped).
+            router.push("/sale");
         } else if (action.action === "new-purchase") {
             openPurchase(true);
         } else if (action.action === "new-estimate") {

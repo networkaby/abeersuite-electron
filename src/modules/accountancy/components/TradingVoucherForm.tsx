@@ -37,11 +37,12 @@ import {
 } from "@/shared/components/PartySearchAndCreate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
-import { useSaleDialogStore } from "@/store/saleDialogStore";
+// SALE was moved to the full-page /sale route — SaleDialog export is gone.
 import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
 import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 
-type Kind = "SALE" | "PURCHASE" | "ESTIMATE";
+// SALE moved to the full-page /sale route — dialog covers Purchase + Estimate only.
+type Kind = "PURCHASE" | "ESTIMATE";
 
 type LineState = {
     id: number;
@@ -88,17 +89,6 @@ const PER_KIND: Record<Kind, {
     listPath: string;
     detailPath: (id: number) => string;
 }> = {
-    SALE: {
-        title: "Sale Voucher",
-        partyPlaceholder: "Search party by name or phone…",
-        narrationFallback: (p) => p ? `Sale to ${p.name}` : "Cash sale",
-        narrationPlaceholderEmpty: "Narration (optional — invoice no auto-generated)",
-        rateFromProduct: (p) => p.salePrice,
-        successPostedMsg: "Sale posted — stock & GL updated",
-        successDraftMsg: "Sale saved as draft",
-        listPath: "/office/accountancy/sales",
-        detailPath: (id) => `/office/accountancy/sales/${id}`,
-    },
     PURCHASE: {
         title: "Purchase Voucher",
         partyPlaceholder: "Search supplier by name or phone…",
@@ -127,17 +117,13 @@ const PER_KIND: Record<Kind, {
 export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const router = useRouter();
     const copy = PER_KIND[kind];
-    const saleStore = useSaleDialogStore();
     const purchaseStore = usePurchaseDialogStore();
     const estimateStore = useEstimateDialogStore();
-    const { open, setOpen } =
-        kind === "SALE" ? saleStore :
-        kind === "PURCHASE" ? purchaseStore :
-        estimateStore;
+    const { open, setOpen } = kind === "PURCHASE" ? purchaseStore : estimateStore;
     // Per-kind feature flags
     const isEstimate = kind === "ESTIMATE";
-    const showCashCreditToggle = kind === "SALE";
-    const showReceivedBalance = kind === "SALE";
+    const showCashCreditToggle = false; // SALE-only path lives at /sale now
+    const showReceivedBalance = false; // SALE-only path lives at /sale now
     const showSaveAndPost = !isEstimate;
     const showValidDays = isEstimate;
     const showNoStockBadge = isEstimate;
@@ -194,11 +180,6 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const balance = grandTotal - received;
 
     const submit = async (andPost = false) => {
-        // Sale-specific: credit sales require a party (so we know who owes us).
-        if (kind === "SALE" && payMode === "CREDIT" && !party) {
-            toast.error("Pick or create a party for a credit sale");
-            return;
-        }
         const validLines = lines.filter((l) => l.product && parseFloat(l.quantity) > 0);
         if (!validLines.length) {
             toast.error("Add at least one item with a product and quantity");
@@ -206,7 +187,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
         }
 
         const description = header.description.trim() || copy.narrationFallback(party);
-        const inferredPayMode = kind === "SALE" ? payMode : (party ? "CREDIT" : "CASH");
+        // Purchase + Estimate infer payMode from whether a party is linked.
+        const inferredPayMode = party ? "CREDIT" : "CASH";
 
         setSaving(true);
         try {
@@ -221,7 +203,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                 paymentMode: inferredPayMode,
                 shippingAmt: shipping,
                 roundOff,
-                ...(kind === "SALE" ? { amountReceived: received } : {}),
+                // amountReceived was SALE-only and SALE is now on /sale.
                 ...(isEstimate ? { validDays: parseInt(header.validDays, 10) || 15 } : {}),
                 lines: validLines.map((l) => ({
                     productId: l.product!.id,
@@ -576,6 +558,6 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
 }
 
 /** Thin wrappers for layout mounting + module sidebar actions. */
-export function SaleDialog() { return <TradingVoucherForm kind="SALE" />; }
+// SaleDialog removed — the full-page /sale route replaces it.
 export function PurchaseDialog() { return <TradingVoucherForm kind="PURCHASE" />; }
 export function EstimateDialog() { return <TradingVoucherForm kind="ESTIMATE" />; }
