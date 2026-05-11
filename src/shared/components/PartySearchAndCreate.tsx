@@ -486,18 +486,24 @@ export const PartySearchAndCreate = forwardRef<
 
     return (
         <div className={`relative ${className ?? ""}`}>
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-            <Input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={onSearchKeyDown}
-                placeholder={placeholder ?? "Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"}
-                className={`pl-9 ${locked ? "bg-muted/50 cursor-default" : ""}`}
-                readOnly={locked}
-                autoFocus={autoFocus}
-                title={locked ? "Locked — clear to search again" : undefined}
-            />
+            {/* Inner relative container so the magnifying-glass icon is centered
+                ON THE INPUT only — not on the whole wrapper, which also holds
+                the "Include … too" checkbox below and would push the icon
+                down to the midpoint between input and checkbox. */}
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                <Input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={onSearchKeyDown}
+                    placeholder={placeholder ?? "Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"}
+                    className={`pl-9 ${locked ? "bg-muted/50 cursor-default" : ""}`}
+                    readOnly={locked}
+                    autoFocus={autoFocus}
+                    title={locked ? "Locked — clear to search again" : undefined}
+                />
+            </div>
             {allowIncludeOther && otherGroup && !locked && (
                 <label className="mt-1 flex items-center gap-1.5 pl-1 text-[11px] text-muted-foreground select-none cursor-pointer">
                     <input
@@ -510,7 +516,7 @@ export const PartySearchAndCreate = forwardRef<
                 </label>
             )}
             {showDropdown && (
-                <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                     {hits.map((c, i) => (
                         <li key={`${c.type}-${c.id}`}>
                             <button
