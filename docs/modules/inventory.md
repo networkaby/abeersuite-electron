@@ -16,8 +16,9 @@
 ### API routes (`src/app/api/inventory/`)
 - `units`, `categories`, `groups`, `brands`, `warranty-terms` — CRUD masters.
 - `products` — `InvProduct` CRUD (search, list, create, edit, photo upload).
-- `vouchers` — `InvVoucher` (GRN / PO / Challan / Sales / Rejection) with three-tier lifecycle (cancel/delete/hard-delete).
+- `vouchers` — `InvVoucher` (GRN / PO / Challan / Sales / Rejection / Sale Return / Purchase Return) with three-tier lifecycle (cancel/delete/hard-delete).
 - `stock-journal`, `stock-ledger`, `physical-stock` — stock movement tracking.
+- `reports/stock-summary` — GET returns `StockSummaryRow[]` (id, sku, name, stock, lowStockThreshold, costPaise, unit, brand, category, isLow); UI at `/office/inventory/stock-summary` accepts `?ref=balance-sheet` (back button) and `?asOf=YYYY-MM-DD` (display date).
 
 ## Permissions (gate keys)
 
@@ -28,7 +29,7 @@
 
 - `InvProduct` — single SKU master. Used by store, online, wholesale, repair-centre. Has fields for identifiers (sku, barcode1-3, ean1-3, upc1-3, modelNo), categorisation (unitId, categoryId, groupId, brandId, warrantyTermId), shop-listing flags (isListedInShop, slug, shopBadge, shopDescription, galleryJson, specsJson, shopCategory), GST fields (gstRate, hsnCode, taxability — added via `db push` — see Step 4 gotcha).
 - `InvUnit`, `InvCategory` (tree), `InvProductGroup`, `InvBrand`, `InvWarrantyTerm` — masters.
-- `InvVoucher` + `InvVoucherLine` — GRN / PO / Challan / Sales / Rejection / Stock Journal. Cross-references Accountancy via `JournalEntry`.
+- `InvVoucher` + `InvVoucherLine` — GRN / PO / Challan / Sales / Rejection / Stock Journal / **Sale Return** / **Purchase Return**. Cross-references Accountancy via `JournalEntry`. `InvVoucherType` enum includes `SALE_RETURN` and `PURCHASE_RETURN` (added 2026-05-12). Return vouchers carry three extra fields: `refNumber` (original voucher ref), `refDate` (date of original), `refVoucherId` (FK back to the source `InvVoucher`).
 - `InvStockLedger` — append-only stock movement log (qty deltas keyed to `InvProduct`).
 
 ## Key components / library
@@ -76,6 +77,7 @@ For per-product stock-value display, **always use `productClosingValue(p)`** —
 - **GST/HSN drift**: `gstRate`, `hsnCode`, `taxability` columns were added to `InvProduct` via `prisma db push` rather than a migration file. Any future `migrate reset` will lose these columns — they need a proper migration. The schema file already has them.
 - **Channels are opt-out, not opt-in**: a product is sellable everywhere unless a flag explicitly restricts.
 - **2026-05-09 — All inventory masters are dummy data**: `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` are seeded **only** by `dummy-shop.ts`. `bootstrap-seed.ts` doesn't touch any of them. `pnpm seed:hard-clean` wipes them all. Real production users create masters via the UI; dummy-shop is for demo only.
+- **2026-05-12 — Return vouchers carry a ref back to their source**: `refVoucherId` links a Sale Return / Purchase Return `InvVoucher` to the original Sale / Purchase voucher. `refNumber` + `refDate` carry the human-readable ref and date of the original for display. `refResolver.ts` (accountancy module) uses its `VOUCHER_SEG` map to build drill-down URLs for all four trading kinds so GL → source-voucher links work correctly.
 
 ## Out of scope / deferred
 
@@ -83,4 +85,4 @@ For per-product stock-value display, **always use `productClosingValue(p)`** —
 - Multi-warehouse / location-aware stock — single-location only for now.
 - Reorder automation — `lowStockThreshold` exists but no consumer.
 
-_Last updated: 2026-05-09 — added stockValue helper module, Pricing + Opening tabs wired with direct DB writes, stock-cache sync rule, journal-voucher inventory consumption flow._
+_Last updated: 2026-05-12 — added SALE_RETURN/PURCHASE_RETURN enum values + refNumber/refDate/refVoucherId fields to InvVoucher, stock-summary API route, and return-voucher ref gotcha._

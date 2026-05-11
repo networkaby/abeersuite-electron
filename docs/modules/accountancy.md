@@ -15,6 +15,17 @@
 
 Legacy `/office/tally/*` URLs 307-redirect to `/office/accountancy/*` via `next.config.ts`.
 
+### Trading voucher creation pages (outside accountancy layout gate)
+
+These four routes are **not** under `office/accountancy/layout.tsx` — each has its own lightweight layout. All share `SaleVoucherPage` parameterised by `kind`:
+
+| Route | Kind | Notes |
+|---|---|---|
+| `/sale` | `SALE` | Sale Invoice — stock OUT, GL Cr Sales / Dr party |
+| `/purchase` | `PURCHASE` | Purchase Invoice — stock IN, GL Dr Purchase / Cr party. Replaces the old `PurchaseDialog`. `/office/accountancy/purchases/new` redirects here. |
+| `/sale-return` | `SALE_RETURN` | Customer returns goods — stock IN, GL Dr Sales Returns / Cr party |
+| `/purchase-return` | `PURCHASE_RETURN` | Return goods to supplier — stock OUT, GL Dr party / Cr Purchase Returns |
+
 ### API routes (all under `src/app/api/finance/`)
 - List/read endpoints (~30 files) gated by `requirePermission("accountancy:view:org")` — invoices, journal-entries, vouchers, ledgers, gl-accounts, account-groups, opening-balance, allocations, all `reports/*`.
 - Operation endpoints (cancel/delete/post/restore) keep their fine-grained `finance:*:*` keys (e.g. `finance:invoice:cancel`, `finance:voucher:post`).
@@ -43,6 +54,7 @@ API folder is still `/api/finance/*` — rename deferred to Step 5 (route restru
 ## Key components / library
 
 - `src/modules/accountancy/components/` — `VoucherForm`, `VoucherList`, `VoucherDetail`, `LifecycleActions`, `BookPage`, `DrillRow`, `PartyCombobox`, `GstSummaryView`, `JournalVoucherDialog` (Tally-style adjustment voucher with Dr/Cr columns + optional inventory items per line — opens via `useJournalVoucherStore` from anywhere), `DebitNoteDialog` (modal debit note creator that posts to `/api/finance/vouchers` and opens via `useDebitNoteDialogStore` from ButtonBar / More actions), `ContraDialog` (Tally-style contra entry: destination account at top, multi-source particulars table, only Cash-in-Hand/Bank Accounts ledgers allowed, opens via `useContraDialogStore`).
+- **`SaleVoucherPage`** (`src/app/(protected)/office/accountancy/components/SaleVoucherPage.tsx`) — single parameterised full-page form for all four `TradingKind` values (`"SALE" | "PURCHASE" | "SALE_RETURN" | "PURCHASE_RETURN"`). Driven by a `PER_KIND` config map (`KindConfig`: title, partyGroup, ratePick, refLabel, listPath, narrationFallback, success messages, column-visibility flags). Features: CASH / CREDIT mode toggle, line-item table (qty / rate / line discount / tax), overall discount, round-off, payment terms (Net 15/30/45/60), cash/bank ledger picker, and estimated-profit panel. Column prefs persisted to `localStorage`.
 - `src/modules/accountancy/lib/` — see helpers registry below.
 
 ## Reusable helpers — DO NOT duplicate ⚠️
@@ -67,7 +79,7 @@ These are the **single source of truth** for every balance/value calculation in 
 | **`getClosingStockValue()`** | `src/modules/accountancy/lib/closingStock.ts` | Live org-wide stock total (delegates per-row to `productClosingValue`) | Balance Sheet's Stock-in-Hand line; trading adjustment |
 | `defaultNormalBalanceForGroupType(type)` | `src/modules/accountancy/lib/groupNature.ts` | Fallback DEBIT/CREDIT inferred from `AccountGroup.type` | When `Account.normalBalance` is null |
 | `voucherLifecycle.ts` helpers | `src/modules/accountancy/lib/voucherLifecycle.ts` | Shared cancel/delete/restore/hard-delete across Invoice/Payment/Voucher/InvVoucher | Lifecycle endpoints |
-| `postInvVoucherToGl(tx, input)` | `src/modules/accountancy/lib/postInvVoucher.ts` | Auto-create JE for SALE/PURCHASE InvVouchers (Sales/Purchase A/c + party + GST + round-off) | Inside `/api/inventory/vouchers/[id]/post/route.ts` only |
+| `postInvVoucherToGl(tx, input)` | `src/modules/accountancy/lib/postInvVoucher.ts` | Auto-create JE for all four `TradingKind` InvVouchers — SALE/PURCHASE/SALE_RETURN/PURCHASE_RETURN (Sales/Purchase A/c + party + GST + round-off; stock direction follows Dr/Cr side) | Inside `/api/inventory/vouchers/[id]/post/route.ts` only |
 | `period.ts` (`indianFiscalYearStart`, `parseAsOf`, `parseRange`, `formatDateInput`) | `src/modules/accountancy/lib/period.ts` | Indian FY math + URL-param parsing for reports | Any report API/page |
 | `isStockEligibleAccount(a)` | `src/modules/accountancy/lib/stockEligibleAccount.ts` | True iff `account.group.type` ∈ {INCOME, EXPENSE} | Gating "+ Inventory item" affordances on journal vouchers; rejecting bad payloads on the API |
 
@@ -85,6 +97,7 @@ These are the **single source of truth** for every balance/value calculation in 
 6. **Set opening balance on master save** — POST/PATCH `/api/finance/gl-accounts` (writes `openingBalance/openingBalanceType/openingBalanceDate` directly) and POST/PATCH `/api/inventory/products` (also syncs `stock`/`costPaise` cache via `syncProductCacheFromOpening`). The `/office/accountancy/opening-balance` page exposes both inline + dedicated quick-create dialogs.
 7. **Create debit note via dialog** — `ButtonBar` / `AllCreateActionsDialog` action `new-debit-note` → `useDebitNoteDialogStore.setOpen(true)` → `DebitNoteDialog` → POST `/api/finance/vouchers` with `type=DEBIT_NOTE` (+ optional allocations via `/api/finance/allocations`) and optional post via `/api/finance/vouchers/[id]/post`.
 8. **Create contra via dialog** — `ButtonBar` / `AllCreateActionsDialog` action `new-contra` (or `/office/accountancy/contras/new` thin opener route) → `useContraDialogStore.setOpen(true)` → `ContraDialog` → POST `/api/finance/vouchers` with `type=CONTRA` (top Account = DEBIT destination; Particulars rows = CREDIT sources). Picker options are restricted to `ACCOUNT_GROUPS.CASH_IN_HAND` + `ACCOUNT_GROUPS.BANK_ACCOUNTS`.
+9. **Trading voucher flow (all four kinds)** — Navigate to `/sale`, `/purchase`, `/sale-return`, or `/purchase-return`. Toggle CASH (free-text walk-in) / CREDIT (party via `PartySearchAndCreate`). Add items with qty, rate, line discount (% + ₹), tax (auto-computed). Optionally set payment terms (Net 15/30/45/60) or pick a cash/bank ledger. Save → POST `/api/inventory/vouchers`. Post GL + stock → POST `/api/inventory/vouchers/{id}/post` (calls `postInvVoucherToGl` + updates `InvProduct.stock` cache atomically). Optional auto-print redirects to `/receipt/invoice/{id}?autoprint=1`.
 
 ## Recent decisions / gotchas
 
@@ -99,6 +112,7 @@ These are the **single source of truth** for every balance/value calculation in 
 - **2026-05-09 — `Difference in Opening Balances` is synthetic**: there is no GL ledger by this name in the chart of accounts. The Balance Sheet auto-computes `assetsTotal − liabilitiesTotal` and shows the absolute value as a standalone "Difference in opening balances" row on whichever side is short (Liabilities when assets exceed; Assets when liabilities exceed). Once the user enters a balancing Capital / Loan opening, the row disappears. Don't add a real ledger by this name — `hard-clean.ts` deletes it from legacy DBs anyway.
 - **2026-05-10 — TODO: bill-wise allocation in JournalVoucherDialog**: the dialog at `src/modules/accountancy/components/JournalVoucherDialog.tsx` shows a "party ledger (bill-wise pending)" hint when the picked account is in `Sundry Debtors` / `Sundry Creditors`, but the actual `BillAllocationDrawer` integration (used by `VoucherForm.tsx` for Payment / Receipt) is not yet wired in. Wiring is straightforward — detect the party group, mount `<BillAllocationDrawer accountId={...} voucherAmount={...}>` under the line, persist allocations on submit by POSTing to `/api/finance/allocations` after the voucher creation succeeds.
 - **2026-05-11 — Inventory–ledger coupling rule**: inventory items (qty × rate) only attach to lines whose ledger sits under the **Sales Accounts** or **Purchase Accounts** group — *any* ledger under either group qualifies (Sales A/c, Parts Revenue, Sales Returns, Purchase A/c, Purchase Returns, …). The line total = Σ(qty × rate) and posts as the ledger amount. **Stock direction follows the line's Dr / Cr posting side, not the ledger identity:** an inventory line on Dr → stock IN, on Cr → stock OUT. That is what makes reversals natural — the same Sales A/c moves stock OUT on Cr (sale) and IN on Dr (sales reversal); a Purchase A/c moves stock IN on Dr (purchase) and OUT on Cr (purchase reversal). Returns ledgers behave the same way — the side is the source of truth. All other vouchers post pure money / liability flows. **Exceptions:** Stock Journal and Physical Stock vouchers — they move stock without a sales / purchase ledger. Enforced both client-side (`isStockEligibleAccount` gates the "+ Inventory item" button) and server-side (`/api/accountancy/journal-vouchers` rejects with 422 if a stock line lands on any other ledger).
+- **2026-05-12 — PurchaseDialog removed**: `src/store/purchaseDialogStore.ts` and its modal mount in `office/layout.tsx` were deleted. `/purchase` is now a standalone full-page route (same pattern as `/sale`). Any deep-link or "shortcut" that previously opened the dialog must point to `/purchase` instead. `/office/accountancy/purchases/new` redirects to `/purchase`.
 
 ## Out of scope / deferred
 
@@ -106,4 +120,4 @@ These are the **single source of truth** for every balance/value calculation in 
 - Cost centres / budgets / multi-currency — cut.
 - Renaming `/api/finance/*` to `/api/accountancy/*` — deferred to Step 5.
 
-_Last updated: 2026-05-11 — added ContraDialog (global modal + Zustand trigger), switched Contra create entrypoints to dialog flow, and kept debit/journal dialog workflows._
+_Last updated: 2026-05-12 — added full-page trading voucher routes (/purchase, /sale-return, /purchase-return), SaleVoucherPage component, trading voucher workflow (item 9), extended postInvVoucherToGl to all four TradingKind values, removed PurchaseDialog gotcha._

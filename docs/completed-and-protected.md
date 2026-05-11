@@ -17,6 +17,9 @@ Purpose: keep critical completed features stable. Any agent/human touching these
 - [x] Accountancy Payment Voucher flow (`/office/accountancy/payments` + `VoucherForm`)
 - [x] Accountancy Receipt Voucher flow (`/office/accountancy/receipts` + `VoucherForm`)
 - [x] Accountancy Contra Voucher flow (`/office/accountancy/contras` + `ContraDialog`)
+- [x] Full-page Purchase Invoice route (`/purchase`) — replaces PurchaseDialog; do not revert to dialog flow
+- [x] Sale Return voucher flow (`/sale-return`) — inventory IN, GL Dr Sales Returns / Cr party
+- [x] Purchase Return voucher flow (`/purchase-return`) — inventory OUT, GL Dr party / Cr Purchase Returns
 
 ## Guardrails before changing any protected surface
 
@@ -32,4 +35,4 @@ Purpose: keep critical completed features stable. Any agent/human touching these
    - Reports: page loads, totals render, drilldown links still work.
 5. If a protected surface must change by request, update this file and note what changed and why in the same PR.
 
-_Last updated: 2026-05-11._
+_Last updated: 2026-05-12._

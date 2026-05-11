@@ -86,6 +86,8 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `PartySearchAndCreate`, `PickedParty`, `PartySearchAndCreateHandle` | `PartySearchAndCreate.tsx` | Shared "search party or create party" surface used by POS + Quick Ticket. Includes keyboard-first lookup (`/api/people?lookup=`), inline Person/Company create dialog, and imperative helpers (`focus`, `clear`, `openNew`). |
 | `UniversalCreateMenu` | `UniversalCreateMenu.tsx` | Cross-module "Create new …" menu |
 | `AllCreateActionsDialog` | `AllCreateActionsDialog.tsx` | Full create-actions dialog opened from `UniversalCreateMenu` |
+| `SaleVoucherPage` | `src/app/(protected)/office/accountancy/components/SaleVoucherPage.tsx` | Full-page trading voucher form parameterised by `kind: TradingKind`; used by `/sale`, `/purchase`, `/sale-return`, `/purchase-return` routes |
+| `TradingKind` (type) | same | `"SALE" \| "PURCHASE" \| "SALE_RETURN" \| "PURCHASE_RETURN"` |
 | `OfficeModuleHub` | `OfficeModuleHub.tsx` | Module hub page shell |
 | `CreatePersonDialog` / `CreateCompanyDialog` | `CreatePersonDialog.tsx` / `CreateCompanyDialog.tsx` | Modal forms for creating a person / company from anywhere |
 | `UserAvatar` / `UserForm` | `UserAvatar.tsx` / `UserForm.tsx` | Avatar circle + user create/edit form |
