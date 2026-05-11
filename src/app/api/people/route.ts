@@ -28,11 +28,18 @@ type LookupResult = {
     linkedCompanies: { id: number; name: string; accountId: number | null }[];
 };
 
-async function lookupAccounts(term: string): Promise<LookupResult[]> {
+async function lookupAccounts(term: string, group?: string): Promise<LookupResult[]> {
+    // When `group` is set (e.g. "Sundry Debtors" / "Sundry Creditors") we
+    // restrict the hits to parties whose ledger sits under that group. Lets
+    // CN / Sale pick only customers, DN / Purchase pick only suppliers.
+    const accountGroupFilter = group
+        ? { account: { is: { group: { is: { name: group } } } } }
+        : {};
     const [persons, companies] = await Promise.all([
         prisma.person.findMany({
             where: {
                 isActive: true,
+                ...accountGroupFilter,
                 OR: [
                     { name: { contains: term, mode: "insensitive" } },
                     { phones: { some: { phone: { contains: term } } } },
@@ -56,6 +63,7 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
         prisma.company.findMany({
             where: {
                 isActive: true,
+                ...accountGroupFilter,
                 OR: [
                     { name: { contains: term, mode: "insensitive" } },
                     { phones: { some: { phone: { contains: term } } } },
@@ -94,7 +102,7 @@ async function lookupAccounts(term: string): Promise<LookupResult[]> {
     ].slice(0, 8);
 }
 
-// GET /api/people?phone=...&q=...&lookup=...
+// GET /api/people?phone=...&q=...&lookup=...&group=Sundry+Debtors|Sundry+Creditors
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -103,11 +111,12 @@ export async function GET(req: Request) {
     const phone = searchParams.get("phone")?.trim();
     const q = searchParams.get("q")?.trim();
     const lookup = searchParams.get("lookup")?.trim();
+    const group = searchParams.get("group")?.trim() || undefined;
     const { take, page } = parsePagination(searchParams);
 
     try {
-        if (phone) return NextResponse.json(await lookupAccounts(phone));
-        if (lookup) return NextResponse.json(await lookupAccounts(lookup));
+        if (phone) return NextResponse.json(await lookupAccounts(phone, group));
+        if (lookup) return NextResponse.json(await lookupAccounts(lookup, group));
 
         const persons = await prisma.person.findMany({
             where: {

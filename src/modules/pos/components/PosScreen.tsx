@@ -337,6 +337,10 @@ export default function PosScreen() {
                         onPicked={onPartyPicked}
                         locked={!!snapshot}
                         onDialogOpenChange={setCreateDialogOpen}
+                        // POS is strictly customer-facing. The walk-in fall-back
+                        // ("Walk-in Cash Customer" ledger) handles the empty-party
+                        // case at checkout; here we only show / create debtors.
+                        partyGroup="Sundry Debtors"
                     />
                 </div>
                 {snapshot && (

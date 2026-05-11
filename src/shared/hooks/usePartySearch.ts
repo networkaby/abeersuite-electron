@@ -28,9 +28,18 @@ export type PartyHit = {
  */
 export function usePartySearch(
     query: string,
-    opts: { enabled?: boolean; debounceMs?: number } = {},
+    opts: {
+        enabled?: boolean;
+        debounceMs?: number;
+        /**
+         * Restrict hits to parties whose ledger sits under this AccountGroup
+         * name (e.g. "Sundry Debtors" for customers, "Sundry Creditors" for
+         * suppliers). Defaults to no filter — returns both sides.
+         */
+        group?: "Sundry Debtors" | "Sundry Creditors";
+    } = {},
 ): { hits: PartyHit[]; loading: boolean } {
-    const { enabled = true, debounceMs = 200 } = opts;
+    const { enabled = true, debounceMs = 200, group } = opts;
     const [hits, setHits] = useState<PartyHit[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -44,8 +53,10 @@ export function usePartySearch(
         let cancelled = false;
         const timer = setTimeout(() => {
             setLoading(true);
+            const url = `/api/people?lookup=${encodeURIComponent(trimmed)}`
+                + (group ? `&group=${encodeURIComponent(group)}` : "");
             axios
-                .get<PartyHit[]>(`/api/people?lookup=${encodeURIComponent(trimmed)}`)
+                .get<PartyHit[]>(url)
                 .then((res) => {
                     if (cancelled) return;
                     setHits(res.data);
@@ -63,7 +74,7 @@ export function usePartySearch(
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [query, enabled, debounceMs]);
+    }, [query, enabled, debounceMs, group]);
 
     return { hits, loading };
 }

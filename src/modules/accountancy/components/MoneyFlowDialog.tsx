@@ -22,7 +22,7 @@
  * the COPY table below; the rest of the component is shape-shared.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -39,6 +39,11 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { GlAccountCombobox, type GlAccount } from "./GlAccountCombobox";
 import { BalanceHint } from "./BalanceHint";
 import { VoucherDialogFooter } from "./VoucherDialogFooter";
+import {
+    PartySearchAndCreate,
+    type PartySearchAndCreateHandle,
+    type PickedParty,
+} from "@/shared/components/PartySearchAndCreate";
 import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
@@ -166,8 +171,17 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
     const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [narration, setNarration] = useState("");
 
-    // Single-mode state — one money account, many particulars rows.
+    // Single-mode state — one top-side account, many particulars rows.
+    // PAY/REC: pick a Cash / Bank ledger via GlAccountCombobox (account id only).
+    // CN/DN: pick a customer / supplier via PartySearchAndCreate — the same
+    //        shared component POS + new-ticket use, so users can inline-create
+    //        a brand-new party (with the "phone or email required" gate +
+    //        inline server errors) from inside the voucher dialog.
     const [singleMoneyId, setSingleMoneyId] = useState<number | null>(null);
+    const [singleParty, setSingleParty] = useState<PickedParty | null>(null);
+    const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
+    const isNoteKind = kind === "CREDIT_NOTE" || kind === "DEBIT_NOTE";
+    const effectiveSingleId: number | null = isNoteKind ? (singleParty?.accountId ?? null) : singleMoneyId;
     const [partyRows, setPartyRows] = useState<Row[]>([newRow()]);
 
     // Multi-mode state — many money rows, many particulars rows.
@@ -176,7 +190,7 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const topAccounts = accounts.filter(copy.topFilter);
     const rowAccounts = accounts.filter(copy.rowFilter);
-    const singleMoneyAccount = singleMoneyId ? accountById.get(singleMoneyId) : undefined;
+    const singleMoneyAccount = effectiveSingleId ? accountById.get(effectiveSingleId) : undefined;
 
     // Totals
     const partyTotal = partyRows.reduce((s, r) => s + parseAmount(r.amount), 0);
@@ -191,12 +205,14 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
         balanced &&
         partyRows.every((r) => r.accountId && parseAmount(r.amount) > 0) &&
         (activeMode === "single"
-            ? !!singleMoneyId && partyRows.every((r) => r.accountId !== singleMoneyId)
+            ? !!effectiveSingleId && partyRows.every((r) => r.accountId !== effectiveSingleId)
             : multiMoneyRows.every((r) => r.accountId && parseAmount(r.amount) > 0));
 
     const reset = () => {
         setMode("single");
         setSingleMoneyId(null);
+        setSingleParty(null);
+        partyPickerRef.current?.clear();
         setPartyRows([newRow()]);
         setMultiMoneyRows([newRow()]);
         setNarration("");
@@ -232,7 +248,7 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
         setSaving(true);
         try {
             const topLines = activeMode === "single"
-                ? [{ accountId: singleMoneyId!, type: copy.topSide, amount: partyTotal }]
+                ? [{ accountId: effectiveSingleId!, type: copy.topSide, amount: partyTotal }]
                 : multiMoneyRows.map((r) => ({
                     accountId: r.accountId!,
                     type: copy.topSide,
@@ -323,12 +339,43 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
                         <div className="flex items-start gap-3">
                             <Label className="w-16 shrink-0 pt-1.5 text-xs">{copy.topLabel}</Label>
                             <div className="flex-1">
-                                <GlAccountCombobox
-                                    value={singleMoneyId}
-                                    onChange={(a) => setSingleMoneyId(a?.id ?? null)}
-                                    accounts={topAccounts}
-                                    placeholder={copy.topPlaceholder}
-                                />
+                                {isNoteKind ? (
+                                    // CN / DN — pick a customer / supplier via the shared
+                                    // search-and-create flow. Same UX users see in POS +
+                                    // new-ticket: keyboard nav, "phone or email required"
+                                    // gate, inline server errors. createUnderGroup pins
+                                    // the auto-created ledger to the right party group.
+                                    <PartySearchAndCreate
+                                        ref={partyPickerRef}
+                                        onPicked={setSingleParty}
+                                        locked={!!singleParty}
+                                        placeholder={copy.topPlaceholder}
+                                        // CN → Sundry Debtors (customers); DN → Sundry Creditors
+                                        // (suppliers). Both allow widening: a supplier who also
+                                        // buys from us may need a CN, vice-versa for DN.
+                                        partyGroup={kind === "CREDIT_NOTE"
+                                            ? ACCOUNT_GROUPS.SUNDRY_DEBTORS
+                                            : ACCOUNT_GROUPS.SUNDRY_CREDITORS}
+                                        allowIncludeOther
+                                    />
+                                ) : (
+                                    // PAY / REC — pick a Cash / Bank ledger.
+                                    <GlAccountCombobox
+                                        value={singleMoneyId}
+                                        onChange={(a) => setSingleMoneyId(a?.id ?? null)}
+                                        accounts={topAccounts}
+                                        placeholder={copy.topPlaceholder}
+                                    />
+                                )}
+                                {isNoteKind && singleParty && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setSingleParty(null); partyPickerRef.current?.clear(); }}
+                                        className="mt-1 text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                                    >
+                                        Clear &times;
+                                    </button>
+                                )}
                                 <BalanceHint account={singleMoneyAccount} />
                             </div>
                         </div>
@@ -427,7 +474,7 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
                                 <tbody>
                                     {partyRows.map((row) => {
                                         const acct = row.accountId ? accountById.get(row.accountId) : undefined;
-                                        const sameAsSingleMoney = activeMode === "single" && !!row.accountId && row.accountId === singleMoneyId;
+                                        const sameAsSingleMoney = activeMode === "single" && !!row.accountId && row.accountId === effectiveSingleId;
                                         return (
                                             <tr key={row.id} className="border-t border-border/60 align-top">
                                                 <td className="relative px-4 py-2" style={{ zIndex: 30 }}>

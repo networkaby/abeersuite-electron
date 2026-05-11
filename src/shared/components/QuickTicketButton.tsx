@@ -228,7 +228,12 @@ export default function QuickTicketButton() {
                             <p className="text-sm text-muted-foreground">
                                 Search a person or company by name / phone / email. If none matches, ↵ to create.
                             </p>
-                            <PartySearchAndCreate onPicked={handlePartyPicked} autoFocus />
+                            <PartySearchAndCreate
+                                onPicked={handlePartyPicked}
+                                autoFocus
+                                // A repair ticket always bills to a customer.
+                                partyGroup="Sundry Debtors"
+                            />
                         </div>
                     </div>
                 ) : (

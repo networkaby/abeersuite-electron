@@ -73,6 +73,27 @@ export type PartySearchAndCreateProps = {
     className?: string;
     /** Notified when the internal create dialog opens / closes. */
     onDialogOpenChange?: (open: boolean) => void;
+    /**
+     * The party group this picker represents — drives BOTH the default search
+     * filter AND where the auto-created ledger lands. Pass `null` for an
+     * "all parties" picker that creates under Sundry Debtors (legacy default).
+     *
+     *   POS / Sale / CN  → "Sundry Debtors"   (customers)
+     *   Purchase / DN     → "Sundry Creditors" (suppliers)
+     */
+    partyGroup?: "Sundry Debtors" | "Sundry Creditors" | null;
+    /**
+     * Render a small "Include Sundry <other> too" checkbox under the search
+     * input so the user can temporarily widen the search across the aisle.
+     * Useful in Sale (a long-time customer may also be a supplier) and
+     * Purchase (vice versa). Defaults to false — POS / CN / DN stay strict.
+     */
+    allowIncludeOther?: boolean;
+    /**
+     * Hide the optional Company section in the inline create dialog when only
+     * a Person row makes sense. Defaults to true.
+     */
+    allowCompanyCreate?: boolean;
 };
 
 // ── Validators ──────────────────────────────────────────────────────────────
@@ -128,13 +149,27 @@ export const PartySearchAndCreate = forwardRef<
     PartySearchAndCreateHandle,
     PartySearchAndCreateProps
 >(function PartySearchAndCreate(
-    { onPicked, locked = false, autoFocus = false, placeholder, footerSlot, className, onDialogOpenChange },
+    {
+        onPicked, locked = false, autoFocus = false, placeholder, footerSlot, className,
+        onDialogOpenChange, partyGroup = null, allowIncludeOther = false, allowCompanyCreate = true,
+    },
     ref,
 ) {
     const [query, setQuery] = useState("");
     const [highlightedHit, setHighlightedHit] = useState(0);
+    const [includeOther, setIncludeOther] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
-    const { hits, loading } = usePartySearch(query, { enabled: !locked });
+
+    // Effective group filter — strict to `partyGroup` unless the user opted to
+    // widen the search via the "Include Sundry <other> too" checkbox.
+    const effectiveGroup = partyGroup && !includeOther ? partyGroup : undefined;
+    const { hits, loading } = usePartySearch(query, { enabled: !locked, group: effectiveGroup });
+    // Auto-create lands in the picker's `partyGroup` (or default Sundry Debtors).
+    const createUnderGroup = partyGroup ?? undefined;
+    const otherGroup: "Sundry Debtors" | "Sundry Creditors" | null =
+        partyGroup === "Sundry Debtors" ? "Sundry Creditors"
+        : partyGroup === "Sundry Creditors" ? "Sundry Debtors"
+        : null;
 
     // Reset highlight when hits change
     useEffect(() => { setHighlightedHit(0); }, [hits]);
@@ -236,8 +271,9 @@ export const PartySearchAndCreate = forwardRef<
         // Defensive re-check before opening: an exact match may exist
         if (q.length >= 2) {
             try {
+                const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
                 const { data } = await axios.get<PartyHit[]>(
-                    `/api/people?lookup=${encodeURIComponent(q)}`,
+                    `/api/people?lookup=${encodeURIComponent(q)}${groupSuffix}`,
                 );
                 if (data.length > 0) {
                     pickHit(data[0]);
@@ -275,8 +311,9 @@ export const PartySearchAndCreate = forwardRef<
             }
             // Defensive re-check — debounce may not have fired
             try {
+                const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
                 const { data } = await axios.get<PartyHit[]>(
-                    `/api/people?lookup=${encodeURIComponent(query)}`,
+                    `/api/people?lookup=${encodeURIComponent(query)}${groupSuffix}`,
                 );
                 if (data.length > 0) {
                     pickHit(data[0]);
@@ -332,6 +369,7 @@ export const PartySearchAndCreate = forwardRef<
                     phones: newParty.phone.trim() ? [newParty.phone.trim()] : [],
                     emails: newParty.email.trim() ? [newParty.email.trim()] : [],
                     address: newParty.address.trim(),
+                    ...(createUnderGroup ? { accountGroup: createUnderGroup } : {}),
                 });
                 personId = personRes.data.id;
                 personName = personRes.data.name;
@@ -460,6 +498,17 @@ export const PartySearchAndCreate = forwardRef<
                 autoFocus={autoFocus}
                 title={locked ? "Locked — clear to search again" : undefined}
             />
+            {allowIncludeOther && otherGroup && !locked && (
+                <label className="mt-1 flex items-center gap-1.5 pl-1 text-[11px] text-muted-foreground select-none cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={includeOther}
+                        onChange={(e) => setIncludeOther(e.target.checked)}
+                        className="h-3 w-3 accent-primary cursor-pointer"
+                    />
+                    Include {otherGroup} too
+                </label>
+            )}
             {showDropdown && (
                 <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
                     {hits.map((c, i) => (
@@ -608,22 +657,24 @@ export const PartySearchAndCreate = forwardRef<
                                 />
                             </div>
 
-                            <div className="space-y-1.5 pt-1">
-                                <Label className="flex items-center gap-1.5 text-muted-foreground">
-                                    <ChevronDown size={12} className={showCompanySection ? "rotate-180" : ""} />
-                                    Company (optional)
-                                </Label>
-                                <Input
-                                    ref={companyNameRef}
-                                    value={newParty.companyName}
-                                    onChange={(e) => setNewParty((s) => ({ ...s, companyName: e.target.value }))}
-                                    onKeyDown={onAnyEnterToSubmit}
-                                    placeholder="Company name (leave empty to bill the person)"
-                                />
-                            </div>
+                            {allowCompanyCreate && (
+                                <div className="space-y-1.5 pt-1">
+                                    <Label className="flex items-center gap-1.5 text-muted-foreground">
+                                        <ChevronDown size={12} className={showCompanySection ? "rotate-180" : ""} />
+                                        Company (optional)
+                                    </Label>
+                                    <Input
+                                        ref={companyNameRef}
+                                        value={newParty.companyName}
+                                        onChange={(e) => setNewParty((s) => ({ ...s, companyName: e.target.value }))}
+                                        onKeyDown={onAnyEnterToSubmit}
+                                        placeholder="Company name (leave empty to bill the person)"
+                                    />
+                                </div>
+                            )}
                         </div>
 
-                        {showCompanySection && (
+                        {allowCompanyCreate && showCompanySection && (
                             <div className="space-y-3 sm:border-l sm:border-border sm:pl-4">
                                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     Company · billing here

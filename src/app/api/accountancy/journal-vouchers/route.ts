@@ -67,20 +67,22 @@ export async function POST(req: Request) {
     const hasStock = body.lines.some((l) => (l.stockItems?.length ?? 0) > 0);
 
     // Defense in depth — even if a future client bypasses the dialog, only
-    // INCOME (Sales) and EXPENSE (Purchase / COGS / Goods Damaged) ledgers
-    // may carry inventory.
+    // ledgers under the Sales Accounts or Purchase Accounts groups may carry
+    // inventory. Every other voucher posts pure money / liability movements.
+    // See modules/accountancy/lib/stockEligibleAccount.ts for the rule + the
+    // Stock Journal / Physical Stock exceptions.
     if (hasStock) {
         const stockLineAccountIds = body.lines
             .filter((l) => (l.stockItems?.length ?? 0) > 0)
             .map((l) => l.accountId);
         const accs = await prisma.account.findMany({
             where:  { id: { in: stockLineAccountIds } },
-            select: { id: true, name: true, group: { select: { type: true } } },
+            select: { id: true, name: true, group: { select: { name: true, type: true } } },
         });
         const bad = accs.find((a) => !isStockEligibleAccount(a));
         if (bad) {
             return NextResponse.json(
-                { error: `${bad.name} is not an Income or Expense ledger — only Sales / Purchase / COGS / Goods Damaged accept inventory` },
+                { error: `${bad.name} is not a Sales / Purchase ledger — inventory items only attach to Sales Accounts or Purchase Accounts (use Stock Journal or Physical Stock for other stock moves)` },
                 { status: 422 },
             );
         }

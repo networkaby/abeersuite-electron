@@ -249,15 +249,33 @@ function CreatePartyDialog({
         gstin: "",
     });
     const [saving, setSaving] = useState(false);
+    // Inline server-error banner (e.g. "phone already used by another contact").
+    // Same pattern as PartySearchAndCreate so the four voucher dialogs handle
+    // errors consistently.
+    const [serverError, setServerError] = useState<string | null>(null);
 
     useEffect(() => {
         if (open) {
             setForm({ name: seed.name, phone: seed.phone, email: "", address: "", gstin: "" });
+            setServerError(null);
         }
     }, [open, seed.name, seed.phone]);
 
+    // Clear the banner the moment the user touches any field.
+    useEffect(() => { if (serverError) setServerError(null); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [form]);
+
+    const hasContact = !!(form.phone.trim() || form.email.trim());
+    const canSubmit = form.name.trim().length > 0 && hasContact;
+
     const submit = async () => {
+        setServerError(null);
         if (!form.name.trim()) { toast.error("Name is required"); return; }
+        // UI gate: a person row needs at least one contact channel — same rule
+        // CreatePersonDialog + PartySearchAndCreate enforce.
+        if (!hasContact) {
+            toast.error("Add a phone or email for the party");
+            return;
+        }
         setSaving(true);
         try {
             const res = await axios.post<{
@@ -274,7 +292,9 @@ function CreatePartyDialog({
                 accountGroup,
             });
             if (!res.data.account?.id) {
-                toast.error(`Created but no ledger account — check that "${accountGroup}" group exists`);
+                const msg = `Created but no ledger account — check that "${accountGroup}" group exists`;
+                setServerError(msg);
+                toast.error(msg);
                 return;
             }
             onCreated({
@@ -285,7 +305,12 @@ function CreatePartyDialog({
                 phone:     res.data.phone,
             });
         } catch (err: unknown) {
-            toast.error(axios.isAxiosError(err) ? (err.response?.data?.error ?? "Failed to create") : "Failed to create");
+            const msg = axios.isAxiosError(err)
+                ? (err.response?.data as { error?: string } | undefined)?.error
+                : undefined;
+            const finalMsg = msg ?? "Failed to create";
+            setServerError(finalMsg);
+            toast.error(finalMsg);
         } finally {
             setSaving(false);
         }
@@ -300,6 +325,14 @@ function CreatePartyDialog({
                         We&apos;ll auto-create a {accountGroup} ledger so this party can be billed.
                     </DialogDescription>
                 </DialogHeader>
+                {serverError && (
+                    <div
+                        role="alert"
+                        className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                    >
+                        {serverError}
+                    </div>
+                )}
                 <div className="space-y-3 py-2">
                     <div className="space-y-1">
                         <Label htmlFor="party-name">Name *</Label>
@@ -312,12 +345,15 @@ function CreatePartyDialog({
                         />
                     </div>
                     <div className="space-y-1">
-                        <Label htmlFor="party-phone">Phone</Label>
+                        <Label htmlFor="party-phone">
+                            Phone <span className="text-[10px] text-muted-foreground">— phone or email required</span>
+                        </Label>
                         <Input
                             id="party-phone"
                             value={form.phone}
                             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                             placeholder="Mobile / phone"
+                            aria-invalid={!hasContact}
                         />
                     </div>
                     <div className="space-y-1">
@@ -328,6 +364,7 @@ function CreatePartyDialog({
                             value={form.email}
                             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                             placeholder="optional"
+                            aria-invalid={!hasContact}
                         />
                     </div>
                     <div className="space-y-1">
@@ -358,7 +395,7 @@ function CreatePartyDialog({
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                         Cancel
                     </Button>
-                    <Button onClick={submit} disabled={saving}>
+                    <Button onClick={submit} disabled={saving || !canSubmit}>
                         {saving && <Loader2 size={13} className="animate-spin mr-1" />}
                         Create &amp; Select
                     </Button>
