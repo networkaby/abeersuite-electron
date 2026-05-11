@@ -9,9 +9,9 @@
  * clear button, dropdown widens to fit row).
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useComboboxNav } from "@/shared/hooks";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export interface GlAccount {
     id: number;
@@ -75,19 +75,66 @@ export function GlAccountCombobox({
         onClear: () => { setQuery(""); onChange(null); },
     });
 
-    // Match dropdown width to the wrapper (or expand a bit so two-line items fit)
+    // Prefer an ancestor dialog content (if any) over document.body so the
+    // dropdown lives inside Radix Dialog's react-remove-scroll allow-list;
+    // otherwise wheel / touch scrolling on the dropdown is silently blocked.
+    // The dialog content has a transform (translate -50%, -50%) which makes
+    // it the containing block for any `position: fixed` descendant, so coords
+    // below are stored *relative to the portal target* — viewport when body,
+    // or transformed-origin when dialog content.
+    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
     useEffect(() => {
-        if (!cb.open) return;
+        const w = cb.wrapperRef.current;
+        if (!w) return;
+        const inDialog = w.closest('[data-slot="dialog-content"]') as HTMLElement | null;
+        setPortalTarget(inDialog ?? document.body);
+    }, [cb.wrapperRef]);
+
+    // Portal positioning: anchor to wrapper's viewport rect. Flips up when
+    // there's no room below. `maxHeight` is computed from actually-available
+    // space, capped at DROPDOWN_MAX_H — few options shrinks, many options
+    // scroll inside the cap and never spill past the viewport.
+    const DROPDOWN_MAX_H = 288;        // hard cap (~9 rows of two-line items)
+    const VIEWPORT_MARGIN = 12;        // breathing room from viewport edges
+    const [pos, setPos] = useState<{
+        top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
+    } | null>(null);
+    useLayoutEffect(() => {
+        if (!cb.open || !portalTarget) { setPos(null); return; }
         const wrapper = cb.wrapperRef.current;
         if (!wrapper) return;
         const measure = () => {
             const rect = wrapper.getBoundingClientRect();
-            cb.setDropdownWidth(Math.max(360, rect.width));
+            // Offset of the portal target in viewport coords. body's rect is
+            // typically (0, 0) but can drift on RTL/scrolled layouts; the dialog
+            // content's rect tracks its transformed top-left so we always
+            // express coords relative to its origin.
+            const target = portalTarget.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
+            const spaceAbove = rect.top - VIEWPORT_MARGIN;
+            // Flip up only when below is genuinely cramped AND above has more room.
+            const flipUp = spaceBelow < 140 && spaceAbove > spaceBelow;
+            const available = Math.max(80, flipUp ? spaceAbove : spaceBelow);
+            const maxHeight = Math.min(DROPDOWN_MAX_H, available);
+            const width = Math.max(360, rect.width);
+            const anchorY = flipUp ? rect.top : rect.bottom;
+            setPos({
+                top: anchorY - target.top,
+                left: rect.left - target.left,
+                width,
+                maxHeight,
+                flipUp,
+            });
+            cb.setDropdownWidth(width);
         };
         measure();
         window.addEventListener("resize", measure);
-        return () => window.removeEventListener("resize", measure);
-    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, cb]);
+        window.addEventListener("scroll", measure, true);  // capture: catch scroll on any ancestor
+        return () => {
+            window.removeEventListener("resize", measure);
+            window.removeEventListener("scroll", measure, true);
+        };
+    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
     // Wrap handleKeyDown to add Tab commit-on-exit (the generic hook intentionally
     // leaves Tab to consumers since the behaviour varies).
@@ -133,17 +180,37 @@ export function GlAccountCombobox({
                 onKeyDown={onKeyDown}
             />
 
-            {cb.open && (
+            {cb.open && portalTarget && pos && createPortal(
                 <div
-                    className="absolute left-0 top-full z-50 mt-0.5 rounded-lg border border-border bg-popover shadow-xl text-sm"
-                    style={{ width: cb.dropdownWidth ?? 360 }}
+                    // z-[60] sits above shadcn Dialog's z-50 backdrop + footer.
+                    // `overflow-hidden` clips the inner list to the wrapper's
+                    // computed maxHeight, so the dropdown never spills past the
+                    // viewport even with hundreds of accounts.
+                    // `position: fixed` inside Radix Dialog's transformed
+                    // content becomes "absolute" relative to the dialog — the
+                    // top/left we feed are already in that coordinate space.
+                    // For flip-up we anchor top to the input's top edge and
+                    // shift up by the dropdown's own height via translateY.
+                    className="fixed z-[60] mt-0.5 overflow-hidden rounded-lg border border-border bg-popover shadow-xl text-sm"
+                    style={{
+                        top:   pos.top,
+                        left:  pos.left,
+                        width: pos.width,
+                        maxHeight: pos.maxHeight,
+                        transform: pos.flipUp ? "translateY(calc(-100% - 0.25rem))" : undefined,
+                    }}
+                    // Prevent the click landing on the underlying dialog backdrop
+                    onMouseDown={(e) => e.stopPropagation()}
                 >
                     {filtered.length === 0 ? (
                         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
                             No accounts match <span className="font-mono">{query}</span>
                         </div>
                     ) : (
-                        <ScrollArea className="max-h-72">
+                        // Native overflow on a sized div — shadcn ScrollArea's
+                        // viewport doesn't honour a max-height parent reliably,
+                        // so its scrollbar wouldn't appear with long lists.
+                        <div className="overflow-y-auto" style={{ maxHeight: pos.maxHeight }}>
                             <ul ref={cb.listRef} className="divide-y divide-border">
                                 {filtered.map((a, i) => (
                                     <li
@@ -153,7 +220,10 @@ export function GlAccountCombobox({
                                             cb.setOpen(false);
                                             onChange(a);
                                         }}
-                                        onMouseEnter={() => cb.setHighlighted(i)}
+                                        // No onMouseEnter setHighlighted — it would trigger the
+                                        // hook's scrollIntoView during wheel scrolling, snapping
+                                        // the list back to whichever row the cursor was over.
+                                        // Mouse users still get a :hover style from `hover:bg-accent/60`.
                                         className={`cursor-pointer px-3 py-1.5 transition-colors ${
                                             i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
                                         }`}
@@ -170,9 +240,10 @@ export function GlAccountCombobox({
                                     </li>
                                 ))}
                             </ul>
-                        </ScrollArea>
+                        </div>
                     )}
-                </div>
+                </div>,
+                portalTarget,
             )}
 
             {value != null && (

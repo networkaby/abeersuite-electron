@@ -8,7 +8,7 @@ Purpose: keep critical completed features stable. Any agent/human touching these
 - [x] Accountancy Balance Sheet (`/office/accountancy/reports/balance-sheet`)
 - [x] Accountancy Profit & Loss (`/office/accountancy/reports/profit-loss`)
 - [x] Accountancy Day Book (`/office/accountancy/reports/day-book`)
-- [] Accountancy Trial Balance (`/office/accountancy/reports/trial-balance`)
+- [x] Accountancy Trial Balance (`/office/accountancy/reports/trial-balance`)
 - [] Accountancy Cash Book (`/office/accountancy/reports/cash-book`)
 - [] Accountancy Bank Book (`/office/accountancy/reports/bank-book`)
 - [] Accountancy Receivables (`/office/accountancy/reports/receivables`)
