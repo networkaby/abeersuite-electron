@@ -319,7 +319,10 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                 </DialogHeader>
 
                 {/* ── Party row ─────────────────────────────────────────────── */}
-                <div className="relative z-30 flex items-center gap-4 border-b border-border bg-card/60 px-6 py-3 shrink-0">
+                {/* `items-start` so the search input and narration input start on the
+                    same baseline; the "Include Sundry … too" checkbox can drop below
+                    the search field without dragging the narration down with it. */}
+                <div className="relative z-30 flex items-start gap-4 border-b border-border bg-card/60 px-6 py-3 shrink-0">
                     <div className="w-80">
                         <PartySearchAndCreate
                             ref={partyPickerRef}
@@ -336,25 +339,25 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                 : ACCOUNT_GROUPS.SUNDRY_DEBTORS}
                             allowIncludeOther={!isEstimate}
                         />
+                        {party?.phone && (
+                            <span className="mt-1 inline-block pl-1 text-xs text-muted-foreground tabular-nums">{party.phone}</span>
+                        )}
                     </div>
                     {party && (
                         <button
                             type="button"
                             onClick={() => { setParty(null); partyPickerRef.current?.clear(); }}
-                            className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                            className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline shrink-0"
                             title="Clear party"
                         >
                             Clear &times;
                         </button>
                     )}
-                    {party?.phone && (
-                        <span className="text-xs text-muted-foreground tabular-nums">{party.phone}</span>
-                    )}
                     <Input
                         value={header.description}
                         onChange={(e) => setHeader((h) => ({ ...h, description: e.target.value }))}
                         placeholder={party ? `Narration (default: ${copy.narrationFallback(party)})` : copy.narrationPlaceholderEmpty}
-                        className="h-8 flex-1"
+                        className="h-9 flex-1"
                     />
                 </div>
 
@@ -471,7 +474,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
             <div className="border-t border-border bg-card shrink-0">
                 <div className="flex items-end justify-between px-6 py-4 gap-8">
                     {/* Left: shipping + round off */}
-                    <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-end gap-4 text-sm">
                         <div className="space-y-1">
                             <label className="text-xs text-muted-foreground">Shipping (₹)</label>
                             <Input
@@ -497,9 +500,12 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                         </div>
                     </div>
 
-                    {/* Centre: received + balance — SALE only */}
+                    {/* Centre: received + balance — SALE only.
+                        Same `space-y-1 + h-7` shape as Shipping / Round Off so
+                        all four columns line up exactly. Balance is a read-only
+                        box (not an Input) but matches the Input's height + border. */}
                     {showReceivedBalance && (
-                        <div className="flex items-center gap-6 text-sm">
+                        <div className="flex items-end gap-6 text-sm">
                             <div className="space-y-1">
                                 <label className="text-xs text-muted-foreground">Received (₹)</label>
                                 <Input
@@ -513,10 +519,10 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                 />
                             </div>
                             <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">Balance</p>
-                                <p className={`font-mono font-semibold text-sm ${balance > 0 ? "text-destructive" : "text-green-600"}`}>
-                                    ₹ {fmt(balance)}
-                                </p>
+                                <label className="text-xs text-muted-foreground">Balance (₹)</label>
+                                <div className={`h-7 w-28 rounded-md border border-input bg-muted/40 px-2 py-1 text-right font-mono text-xs tabular-nums leading-5 ${balance > 0 ? "text-destructive" : "text-green-600 font-semibold"}`}>
+                                    {fmt(balance)}
+                                </div>
                             </div>
                         </div>
                     )}
