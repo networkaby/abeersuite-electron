@@ -90,7 +90,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-estimate";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -184,7 +184,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         createActions: [
             { label: "Sale +", subtitle: "New sale voucher (dialog)", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New purchase voucher (dialog)", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
-            { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", href: "/office/accountancy/estimates/new" },
+            { label: "Estimate +", subtitle: "New estimate (dialog)", icon: ScrollText, variant: "outline", action: "new-estimate" },
             { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
             { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
             { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
@@ -195,8 +195,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
 
-            { label: "Sales Register", icon: Receipt, href: "/office/accountancy/sales" },
-            { label: "Purchases Register", icon: ShoppingCart, href: "/office/accountancy/purchases" },
+            // { label: "Sales Register", icon: Receipt, href: "/office/accountancy/sales" },
+            // { label: "Purchases Register", icon: ShoppingCart, href: "/office/accountancy/purchases" },
             { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
             // { label: "Payments", icon: Wallet, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
             // { label: "Receipts", icon: Wallet, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
@@ -241,8 +241,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Debit Note", icon: ClipboardList, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
                     // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
                     // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
-                    // { label: "Sales", icon: Receipt, href: "/office/accountancy/sales" },
-                    // { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/purchases" },
+                    { label: "Sales", icon: Receipt, href: "/office/accountancy/sales" },
+                    { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/purchases" },
                     // { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
                 ]
 

@@ -21,6 +21,7 @@ import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 import { useSaleDialogStore } from "@/store/saleDialogStore";
 import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
+import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 
 type Props = {
     open: boolean;
@@ -41,6 +42,7 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
     const { setOpen: openSale } = useSaleDialogStore();
     const { setOpen: openPurchase } = usePurchaseDialogStore();
+    const { setOpen: openEstimate } = useEstimateDialogStore();
 
     const canDo = (permission?: string | null) => {
         if (!permission) return true;
@@ -73,6 +75,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             openSale(true);
         } else if (action.action === "new-purchase") {
             openPurchase(true);
+        } else if (action.action === "new-estimate") {
+            openEstimate(true);
         }
     };
 

@@ -19,6 +19,7 @@ import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 import { useSaleDialogStore } from "@/store/saleDialogStore";
 import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
+import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
@@ -50,6 +51,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const { setOpen: openCreditNote } = useCreditNoteDialogStore();
     const { setOpen: openSale } = useSaleDialogStore();
     const { setOpen: openPurchase } = usePurchaseDialogStore();
+    const { setOpen: openEstimate } = useEstimateDialogStore();
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
@@ -101,6 +103,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             openSale(true);
         } else if (action.action === "new-purchase") {
             openPurchase(true);
+        } else if (action.action === "new-estimate") {
+            openEstimate(true);
         }
     };
 

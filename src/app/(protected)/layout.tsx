@@ -17,6 +17,7 @@ import {
 import {
     SaleDialog,
     PurchaseDialog,
+    EstimateDialog,
 } from "@/modules/accountancy/components/TradingVoucherForm";
 
 export default async function ProtectedLayout({
@@ -75,6 +76,7 @@ export default async function ProtectedLayout({
                 <DebitNoteDialog />
                 <SaleDialog />
                 <PurchaseDialog />
+                <EstimateDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

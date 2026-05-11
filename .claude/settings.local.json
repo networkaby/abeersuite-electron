@@ -109,7 +109,8 @@
       "Bash(grep -nB1 -A2 \"TableCell colSpan\" \"src/app/\\(protected\\)/office/inventory/brands/page.tsx\")",
       "Bash(grep -nB1 -A10 \"confirm.*[Dd]elete\" \"src/app/\\(protected\\)/office/inventory/brands/page.tsx\")",
       "Bash(grep -nB1 -A8 'const del = async\\\\|confirm.*[Dd]elete' 'src/app/\\(protected\\)/office/inventory/__TRACKED_VAR__/page.tsx')",
-      "Bash(xargs -0 sed -i -e 's|\"/api/finance/|\"/api/accountancy/|g' -e 's|`/api/finance/|`/api/accountancy/|g')"
+      "Bash(xargs -0 sed -i -e 's|\"/api/finance/|\"/api/accountancy/|g' -e 's|`/api/finance/|`/api/accountancy/|g')",
+      "Bash(git checkout *)"
     ]
   }
 }

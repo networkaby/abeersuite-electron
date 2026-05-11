@@ -39,7 +39,9 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
 import { useSaleDialogStore } from "@/store/saleDialogStore";
 import { usePurchaseDialogStore } from "@/store/purchaseDialogStore";
-type Kind = "SALE" | "PURCHASE";
+import { useEstimateDialogStore } from "@/store/estimateDialogStore";
+
+type Kind = "SALE" | "PURCHASE" | "ESTIMATE";
 
 type LineState = {
     id: number;
@@ -109,6 +111,17 @@ const PER_KIND: Record<Kind, {
         listPath: "/office/accountancy/purchases",
         detailPath: (id) => `/office/accountancy/purchases/${id}`,
     },
+    ESTIMATE: {
+        title: "Estimate / Quotation",
+        partyPlaceholder: "Search customer by name or phone…",
+        narrationFallback: (p) => p ? `Estimate for ${p.name}` : "Estimate",
+        narrationPlaceholderEmpty: "Narration (optional — estimate no auto-generated)",
+        rateFromProduct: (p) => p.salePrice,
+        successPostedMsg: "Estimate saved",
+        successDraftMsg: "Estimate saved",
+        listPath: "/office/accountancy/estimates",
+        detailPath: (id) => `/office/accountancy/estimates/${id}`,
+    },
 };
 
 export function TradingVoucherForm({ kind }: { kind: Kind }) {
@@ -116,7 +129,18 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const copy = PER_KIND[kind];
     const saleStore = useSaleDialogStore();
     const purchaseStore = usePurchaseDialogStore();
-    const { open, setOpen } = kind === "SALE" ? saleStore : purchaseStore;
+    const estimateStore = useEstimateDialogStore();
+    const { open, setOpen } =
+        kind === "SALE" ? saleStore :
+        kind === "PURCHASE" ? purchaseStore :
+        estimateStore;
+    // Per-kind feature flags
+    const isEstimate = kind === "ESTIMATE";
+    const showCashCreditToggle = kind === "SALE";
+    const showReceivedBalance = kind === "SALE";
+    const showSaveAndPost = !isEstimate;
+    const showValidDays = isEstimate;
+    const showNoStockBadge = isEstimate;
 
     const [saving, setSaving] = useState(false);
     const [lines, setLines] = useState<LineState[]>([newLine()]);
@@ -131,6 +155,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
         shippingAmt: "",
         roundOff: "",
         received: "",          // SALE only
+        validDays: "15",       // ESTIMATE only
     });
 
     const reset = () => {
@@ -138,7 +163,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
         setPayMode("CASH");
         setParty(null);
         partyPickerRef.current?.clear();
-        setHeader({ date: new Date().toISOString().slice(0, 10), description: "", shippingAmt: "", roundOff: "", received: "" });
+        setHeader({ date: new Date().toISOString().slice(0, 10), description: "", shippingAmt: "", roundOff: "", received: "", validDays: "15" });
     };
 
     const updateLine = (id: number, patch: Partial<LineState>) =>
@@ -197,6 +222,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                 shippingAmt: shipping,
                 roundOff,
                 ...(kind === "SALE" ? { amountReceived: received } : {}),
+                ...(isEstimate ? { validDays: parseInt(header.validDays, 10) || 15 } : {}),
                 lines: validLines.map((l) => ({
                     productId: l.product!.id,
                     quantity: parseFloat(l.quantity) || 1,
@@ -229,13 +255,24 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
             open={open}
             onOpenChange={(isOpen) => { if (!isOpen) { reset(); setOpen(false); } }}
         >
-            <DialogContent className="h-[90vh] max-w-5xl gap-0 p-0 sm:max-w-5xl flex flex-col">
+            <DialogContent
+                className="h-[90vh] max-w-5xl gap-0 p-0 sm:max-w-5xl flex flex-col"
+                // Don't dismiss on click-outside — voucher entry is too easy to
+                // lose to a stray click. User must explicitly hit Cancel / Close.
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+            >
                 <DialogHeader className="border-b border-border px-6 py-3 pr-12 shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <DialogTitle className="text-lg">{copy.title}</DialogTitle>
+                            {showNoStockBadge && (
+                                <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                    No stock impact
+                                </span>
+                            )}
                             {/* Credit / Cash toggle — SALE only */}
-                            {kind === "SALE" && (
+                            {showCashCreditToggle && (
                                 <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
                                     {(["CASH", "CREDIT"] as const).map((m) => (
                                         <button
@@ -255,6 +292,19 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                             )}
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            {showValidDays && (
+                                <div className="flex items-center gap-2">
+                                    <span>Valid</span>
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        value={header.validDays}
+                                        onChange={(e) => setHeader((h) => ({ ...h, validDays: e.target.value }))}
+                                        className="h-7 w-16 text-xs text-right"
+                                    />
+                                    <span>days</span>
+                                </div>
+                            )}
                             <div className="flex items-center gap-2">
                                 <span>Date</span>
                                 <Input
@@ -276,11 +326,15 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                             onPicked={setParty}
                             locked={!!party}
                             placeholder={copy.partyPlaceholder}
-                            // SALE → Sundry Debtors (customer). PURCHASE → Sundry Creditors
-                            // (supplier). Both allow widening since a supplier may also be a
-                            // walk-in customer and vice-versa.
-                            partyGroup={kind === "SALE" ? ACCOUNT_GROUPS.SUNDRY_DEBTORS : ACCOUNT_GROUPS.SUNDRY_CREDITORS}
-                            allowIncludeOther
+                            // SALE / ESTIMATE → Sundry Debtors (customer).
+                            // PURCHASE → Sundry Creditors (supplier).
+                            // SALE + PURCHASE allow widening to the other side for the rare
+                            // supplier-is-also-customer case. ESTIMATE is customer-only —
+                            // quotes go out to prospective buyers only.
+                            partyGroup={kind === "PURCHASE"
+                                ? ACCOUNT_GROUPS.SUNDRY_CREDITORS
+                                : ACCOUNT_GROUPS.SUNDRY_DEBTORS}
+                            allowIncludeOther={!isEstimate}
                         />
                     </div>
                     {party && (
@@ -444,7 +498,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                     </div>
 
                     {/* Centre: received + balance — SALE only */}
-                    {kind === "SALE" && (
+                    {showReceivedBalance && (
                         <div className="flex items-center gap-6 text-sm">
                             <div className="space-y-1">
                                 <label className="text-xs text-muted-foreground">Received (₹)</label>
@@ -492,12 +546,20 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                             <Button variant="outline" onClick={() => { reset(); setOpen(false); }}>
                                 Cancel
                             </Button>
-                            <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
-                                {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
-                            </Button>
-                            <Button onClick={() => submit(true)} disabled={saving}>
-                                {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Post
-                            </Button>
+                            {showSaveAndPost ? (
+                                <>
+                                    <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
+                                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
+                                    </Button>
+                                    <Button onClick={() => submit(true)} disabled={saving}>
+                                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Post
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button onClick={() => submit(false)} disabled={saving}>
+                                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Estimate
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -510,3 +572,4 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
 /** Thin wrappers for layout mounting + module sidebar actions. */
 export function SaleDialog() { return <TradingVoucherForm kind="SALE" />; }
 export function PurchaseDialog() { return <TradingVoucherForm kind="PURCHASE" />; }
+export function EstimateDialog() { return <TradingVoucherForm kind="ESTIMATE" />; }

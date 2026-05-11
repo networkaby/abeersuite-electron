@@ -290,7 +290,13 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
             open={open}
             onOpenChange={(isOpen) => { if (!isOpen) { reset(); setOpen(false); } }}
         >
-            <DialogContent className="max-w-2xl gap-0 p-0 sm:max-w-2xl">
+            <DialogContent
+                className="max-w-2xl gap-0 p-0 sm:max-w-2xl"
+                // Don't dismiss on click-outside — voucher entry is too easy to
+                // lose to a stray click. User must explicitly hit Cancel / Close.
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+            >
                 <DialogHeader className="border-b border-border px-5 py-3 pr-12">
                     <div className="flex items-center justify-between">
                         <DialogTitle>{copy.title}</DialogTitle>

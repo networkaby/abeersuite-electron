@@ -335,7 +335,13 @@ export function JournalVoucherDialog() {
             open={open}
             onOpenChange={(isOpen) => { if (!isOpen) { reset(); setOpen(false); } }}
         >
-            <DialogContent className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
+            <DialogContent
+                className="max-w-3xl gap-0 p-0 sm:max-w-3xl"
+                // Don't dismiss on click-outside — voucher entry is too easy to
+                // lose to a stray click. User must explicitly hit Cancel / Close.
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+            >
                 <DialogHeader className="border-b border-border px-5 py-4 pr-12">
                     <DialogTitle>New Journal Voucher</DialogTitle>
                 </DialogHeader>
