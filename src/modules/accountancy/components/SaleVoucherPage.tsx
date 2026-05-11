@@ -134,9 +134,141 @@ function numSigned(s: string): string {
     return sign + num(s);
 }
 
+// ── Per-kind config — UI labels + behaviour swaps ──────────────────────────
+// All four trading-voucher kinds share the same form shape (party + item
+// table + totals + cash/bank picker). Only labels, party group, rate
+// auto-fill source, ref field, and a few visibility flags differ.
+
+export type TradingKind = "SALE" | "PURCHASE" | "SALE_RETURN" | "PURCHASE_RETURN";
+
+type KindConfig = {
+    title:            string;
+    party:            "Sundry Debtors" | "Sundry Creditors";
+    partyPlaceholder: string;
+    ratePick:         (p: SelectedProduct) => number | null | undefined;
+    /// null → no Bill/Original-Invoice field on the form
+    refLabel:         string | null;
+    refDateLabel:     string;
+    listPath:         string;
+    nextRefType:      TradingKind;
+    showProfit:       boolean;
+    showPrint:        boolean;
+    cashLedgerLabel:  string;
+    /// Plain narration to fall back on when user leaves it blank
+    narrationFallback: (partyName: string | undefined) => string;
+    successPostedMsg: string;
+    successDraftMsg:  string;
+    newButtonLabel:   string;
+    closeRouteLabel:  string;
+    /// Label shown above the auto-generated reference preview (varies per
+    /// kind: "Invoice Number" / "Voucher No" / "CN Number"). Reference
+    /// itself is always system-generated via VoucherSeries.
+    voucherRefLabel:  string;
+    voucherDateLabel: string;
+    /// Purchase hides the Invoice Number from UI (PV-… is still saved in
+    /// DB) — the supplier's bill number is what users care about.
+    showVoucherRef:   boolean;
+    /// Purchase hides the Invoice Date — Bill Date replaces it, and at
+    /// submit time the voucher's `date` is sourced from refDate.
+    showVoucherDate:  boolean;
+    /// Returns (SR / PR) don't carry credit-term semantics so the
+    /// Payment Terms + Due Date pair is hidden entirely.
+    showPaymentTerms: boolean;
+};
+
+const PER_KIND: Record<TradingKind, KindConfig> = {
+    SALE: {
+        title: "Sale Invoice",
+        party: "Sundry Debtors",
+        partyPlaceholder: "Search customer by name or phone…",
+        ratePick: (p) => p.salePrice,
+        refLabel: null, refDateLabel: "",
+        listPath: "/office/accountancy/sales",
+        nextRefType: "SALE",
+        showProfit: true, showPrint: true,
+        cashLedgerLabel: "Received in",
+        narrationFallback: (n) => n ? `Sale to ${n}` : "Cash sale",
+        successPostedMsg: "Sale posted — stock & GL updated",
+        successDraftMsg:  "Sale saved as draft",
+        newButtonLabel: "New Sale",
+        closeRouteLabel: "Open another Sale Invoice in a new tab",
+        voucherRefLabel: "Invoice Number",
+        voucherDateLabel: "Invoice Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: true,
+    },
+    PURCHASE: {
+        title: "Purchase Invoice",
+        party: "Sundry Creditors",
+        partyPlaceholder: "Search supplier by name or phone…",
+        ratePick: (p) => p.costPrice,
+        refLabel: "Bill Number", refDateLabel: "Bill Date",
+        listPath: "/office/accountancy/purchases",
+        nextRefType: "PURCHASE",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "Paid from",
+        narrationFallback: (n) => n ? `Purchase from ${n}` : "Cash purchase",
+        successPostedMsg: "Purchase posted — stock & GL updated",
+        successDraftMsg:  "Purchase saved as draft",
+        newButtonLabel: "New Purchase",
+        closeRouteLabel: "Open another Purchase Invoice in a new tab",
+        // Invoice number (PV-…) still generated server-side + saved to DB,
+        // just hidden from UI — users care about the supplier's Bill Number.
+        voucherRefLabel: "Invoice Number",
+        voucherDateLabel: "Invoice Date",
+        showVoucherRef: false,
+        showVoucherDate: false,   // Bill Date drives the voucher date on submit
+        showPaymentTerms: true,   // credit purchases still need terms / due date
+    },
+    SALE_RETURN: {
+        title: "Sale Return",
+        party: "Sundry Debtors",
+        partyPlaceholder: "Search customer by name or phone…",
+        ratePick: (p) => p.salePrice,
+        refLabel: "Original Invoice", refDateLabel: "Original Invoice Date",
+        listPath: "/office/accountancy/sale-returns",
+        nextRefType: "SALE_RETURN",
+        showProfit: false, showPrint: true,
+        cashLedgerLabel: "Refunded from",
+        narrationFallback: (n) => n ? `Sale return from ${n}` : "Sale return",
+        successPostedMsg: "Sale Return posted — stock & GL updated",
+        successDraftMsg:  "Sale Return saved as draft",
+        newButtonLabel: "New Return",
+        closeRouteLabel: "Open another Sale Return in a new tab",
+        voucherRefLabel: "CN Number",
+        voucherDateLabel: "CN Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,  // returns don't carry credit-term semantics
+    },
+    PURCHASE_RETURN: {
+        title: "Purchase Return",
+        party: "Sundry Creditors",
+        partyPlaceholder: "Search supplier by name or phone…",
+        ratePick: (p) => p.costPrice,
+        refLabel: "Original Bill", refDateLabel: "Original Bill Date",
+        listPath: "/office/accountancy/purchase-returns",
+        nextRefType: "PURCHASE_RETURN",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "Recovered into",
+        narrationFallback: (n) => n ? `Purchase return to ${n}` : "Purchase return",
+        successPostedMsg: "Purchase Return posted — stock & GL updated",
+        successDraftMsg:  "Purchase Return saved as draft",
+        newButtonLabel: "New Return",
+        closeRouteLabel: "Open another Purchase Return in a new tab",
+        voucherRefLabel: "Voucher No",
+        voucherDateLabel: "Voucher Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+    },
+};
+
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function SaleVoucherPage() {
+export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) {
+    const copy = PER_KIND[kind];
     const router = useRouter();
     const today = new Date().toISOString().slice(0, 10);
 
@@ -170,12 +302,16 @@ export function SaleVoucherPage() {
         // the user picks a term preset, the due date auto-fills from date+days.
         paymentTerms: "",
         dueDate: "",
+        // Bill / original-invoice reference — used by PURCHASE, SALE_RETURN,
+        // PURCHASE_RETURN. SALE doesn't render the field, leaves these blank.
+        refNumber: "",
+        refDate: "",
     });
 
     // Invoice number preview (race-safe ±1 at concurrent save).
     const [nextRef, setNextRef] = useState("");
     useEffect(() => {
-        axios.get<{ reference: string }>("/api/inventory/vouchers/next-ref?type=SALE")
+        axios.get<{ reference: string }>(`/api/inventory/vouchers/next-ref?type=${copy.nextRefType}`)
             .then((r) => setNextRef(r.data.reference))
             .catch(() => setNextRef(""));
     }, []);
@@ -329,7 +465,7 @@ export function SaleVoucherPage() {
     const handleProductSelect = useCallback((lineId_: number, product: SelectedProduct | null) => {
         setLines((ls) => ls.map((l) => {
             if (l.id !== lineId_) return l;
-            const fillRate = product?.salePrice;
+            const fillRate = product ? copy.ratePick(product) : null;
             const nextRate = fillRate != null ? String(fillRate) : l.rate;
             const gross = (parseFloat(l.quantity) || 0) * (parseFloat(nextRate) || 0);
             const dPct = parseFloat(l.discountPct) || 0;
@@ -429,6 +565,7 @@ export function SaleVoucherPage() {
             date: t, description: "", shippingAmt: "", roundOff: "", received: "",
             discountPct: "", discountAmt: "",
             paymentTerms: "", dueDate: "",
+            refNumber: "", refDate: "",
         });
         setShowProfit(false);
         setShowDescription(false);
@@ -450,8 +587,7 @@ export function SaleVoucherPage() {
             return;
         }
         const displayName = payMode === "CREDIT" ? party?.name : (walkInName.trim() || undefined);
-        const description = header.description.trim()
-            || (displayName ? `Sale to ${displayName}` : "Cash sale");
+        const description = header.description.trim() || copy.narrationFallback(displayName);
 
         // CASH mode auto-pays in full (received = grand total). User can still
         // override via the Received field — but the default mirrors counter sales.
@@ -461,9 +597,15 @@ export function SaleVoucherPage() {
 
         setSaving(true);
         try {
+            // Purchase hides the Invoice Date input; the Bill Date (refDate)
+                // is the user-facing date and drives voucher.date on save.
+                // Falls back to today's date if neither is set.
+            const voucherDate = copy.showVoucherDate
+                ? header.date
+                : (header.refDate || header.date);
             const res = await axios.post<{ id: number }>("/api/inventory/vouchers", {
-                type: "SALE",
-                date: header.date,
+                type: kind,
+                date: voucherDate,
                 description,
                 partyName: payMode === "CREDIT" ? (party?.name || undefined)
                     : (walkInName.trim() || undefined),
@@ -480,9 +622,15 @@ export function SaleVoucherPage() {
                 paymentAccountId: (payMode === "CASH" || receivedForPayload > 0)
                     ? paymentAccount?.id
                     : undefined,
-                ...(payMode === "CREDIT" ? {
+                ...(copy.showPaymentTerms && payMode === "CREDIT" ? {
                     paymentTerms: header.paymentTerms || undefined,
                     dueDate: header.dueDate || undefined,
+                } : {}),
+                // Bill / original-invoice ref (only rendered for kinds with refLabel
+                // — Purchase, Sale Return, Purchase Return).
+                ...(copy.refLabel ? {
+                    refNumber: header.refNumber.trim() || undefined,
+                    refDate:   header.refDate || undefined,
                 } : {}),
                 shippingAmt: shipping,
                 roundOff,
@@ -503,9 +651,9 @@ export function SaleVoucherPage() {
 
             if (andPost) {
                 await axios.post(`/api/inventory/vouchers/${res.data.id}/post`);
-                toast.success("Sale posted — stock & GL updated");
+                toast.success(copy.successPostedMsg);
             } else {
-                toast.success("Sale saved as draft");
+                toast.success(copy.successDraftMsg);
             }
             if (andPrint) {
                 window.open(`/receipt/invoice/${res.data.id}?autoprint=1`, "_blank", "noopener");
@@ -517,7 +665,7 @@ export function SaleVoucherPage() {
             // Re-fetch the invoice-number preview so the next sale shows
             // the freshly-incremented reference (otherwise nextRef would
             // stay stale until the next page mount).
-            axios.get<{ reference: string }>("/api/inventory/vouchers/next-ref?type=SALE")
+            axios.get<{ reference: string }>(`/api/inventory/vouchers/next-ref?type=${copy.nextRefType}`)
                 .then((r) => setNextRef(r.data.reference))
                 .catch(() => { /* keep last value */ });
             router.refresh();
@@ -535,7 +683,7 @@ export function SaleVoucherPage() {
             {/* ── Title bar ─────────────────────────────────────────────── */}
             <header className="border-b border-border bg-card px-6 py-2.5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-base font-semibold">Sale Invoice</h1>
+                    <h1 className="text-base font-semibold">{copy.title}</h1>
                     {/* CASH / CREDIT pill — same shape as the dialog */}
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
                         {(["CASH", "CREDIT"] as const).map((m) => (
@@ -559,12 +707,12 @@ export function SaleVoucherPage() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open("/sale", "_blank", "noopener")}
-                        title="Open another Sale Invoice in a new tab"
+                        onClick={() => window.open(window.location.pathname, "_blank", "noopener")}
+                        title={copy.closeRouteLabel}
                         className="gap-1.5 text-muted-foreground hover:text-foreground"
                     >
                         {/* <ExternalLink size={14} /> */}
-                        <CopyPlus size={14} /> New Sale
+                        <CopyPlus size={14} /> {copy.newButtonLabel}
                     </Button>
                 </div>
                 <div className="flex items-center gap-1">
@@ -575,8 +723,8 @@ export function SaleVoucherPage() {
                     {/* <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => window.open("/sale", "_blank", "noopener")}
-                        title="Open another Sale Invoice in a new tab"
+                        onClick={() => window.open(window.location.pathname, "_blank", "noopener")}
+                        title={copy.closeRouteLabel}
                         className="gap-1.5 text-muted-foreground hover:text-foreground"
                     >
                         <ExternalLink size={14} />
@@ -585,7 +733,7 @@ export function SaleVoucherPage() {
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => router.push("/office/accountancy/sales")}
+                        onClick={() => router.push(copy.listPath)}
                         title="Close"
                     >
                         <X size={18} />
@@ -616,8 +764,8 @@ export function SaleVoucherPage() {
                                         ref={partyPickerRef}
                                         onPicked={setParty}
                                         locked={!!party}
-                                        placeholder="Search by name or phone…"
-                                        partyGroup={ACCOUNT_GROUPS.SUNDRY_DEBTORS}
+                                        placeholder={copy.partyPlaceholder}
+                                        partyGroup={copy.party}
                                         allowIncludeOther
                                     />
                                 </div>
@@ -681,20 +829,51 @@ export function SaleVoucherPage() {
 
                     {/* Right: invoice meta — label / value grid */}
                     <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm min-w-[340px] items-center">
-                        <label className="text-xs text-muted-foreground text-right">Invoice Number</label>
-                        <div className="font-mono text-xs tabular-nums px-2 py-1.5 rounded-md bg-muted/40 border border-border min-h-9 flex items-center">
-                            {nextRef || "Generating…"}
-                        </div>
+                        {copy.showVoucherRef && (
+                            <>
+                                <label className="text-xs text-muted-foreground text-right">{copy.voucherRefLabel}</label>
+                                <div className="font-mono text-xs tabular-nums px-2 py-1.5 rounded-md bg-muted/40 border border-border min-h-9 flex items-center">
+                                    {nextRef || "Generating…"}
+                                </div>
+                            </>
+                        )}
 
-                        <label className="text-xs text-muted-foreground text-right">Invoice Date</label>
-                        <Input
-                            type="date"
-                            value={header.date}
-                            onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
-                            className="h-9 text-xs"
-                        />
+                        {copy.showVoucherDate && (
+                            <>
+                                <label className="text-xs text-muted-foreground text-right">{copy.voucherDateLabel}</label>
+                                <Input
+                                    type="date"
+                                    value={header.date}
+                                    onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
+                                    className="h-9 text-xs"
+                                />
+                            </>
+                        )}
 
-                        {payMode === "CREDIT" && (
+                        {/* Bill / Original-Invoice reference — Purchase has the
+                            supplier's bill number; Sale Return / Purchase Return
+                            point back to the original invoice / bill being
+                            returned against. SALE skips this field entirely. */}
+                        {copy.refLabel && (
+                            <>
+                                <label className="text-xs text-muted-foreground text-right">{copy.refLabel}</label>
+                                <Input
+                                    value={header.refNumber}
+                                    onChange={(e) => setHeader((h) => ({ ...h, refNumber: e.target.value }))}
+                                    placeholder="—"
+                                    className="h-9 text-xs"
+                                />
+                                <label className="text-xs text-muted-foreground text-right">{copy.refDateLabel}</label>
+                                <Input
+                                    type="date"
+                                    value={header.refDate}
+                                    onChange={(e) => setHeader((h) => ({ ...h, refDate: e.target.value }))}
+                                    className="h-9 text-xs"
+                                />
+                            </>
+                        )}
+
+                        {copy.showPaymentTerms && payMode === "CREDIT" && (
                             <>
                                 <label className="text-xs text-muted-foreground text-right">Payment Terms</label>
                                 <Select value={header.paymentTerms || undefined} onValueChange={handlePaymentTermsChange}>
@@ -1040,7 +1219,7 @@ export function SaleVoucherPage() {
                             {(payMode === "CASH" || received > 0) && cashBankAccounts.length > 0 && (
                                 <div className="space-y-1">
                                     <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-                                        Received in
+                                        {copy.cashLedgerLabel}
                                     </label>
                                     <GlAccountCombobox
                                         value={paymentAccount?.id ?? null}
@@ -1065,7 +1244,7 @@ export function SaleVoucherPage() {
                                     <Input
                                         value={header.description}
                                         onChange={(e) => setHeader((h) => ({ ...h, description: e.target.value }))}
-                                        placeholder={party ? `Narration (default: Sale to ${party.name})` : "Narration (optional — invoice no auto-generated)"}
+                                        placeholder={party ? `Narration (default: ${copy.narrationFallback(party.name)})` : "Narration (optional — invoice no auto-generated)"}
                                         className="mt-2 h-9"
                                     />
                                 )}
@@ -1213,18 +1392,22 @@ export function SaleVoucherPage() {
                     <Link2 size={14} /> Link Payment
                 </Button>
                 <div className="ml-auto flex items-center gap-2">
-                    <Button variant="ghost" onClick={() => router.push("/office/accountancy/sales")}>
+                    <Button variant="ghost" onClick={() => router.push(copy.listPath)}>
                         Cancel
                     </Button>
-                    <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
-                        {showProfit ? "Hide" : "Show"} Profit
-                    </Button>
+                    {copy.showProfit && (
+                        <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
+                            {showProfit ? "Hide" : "Show"} Profit
+                        </Button>
+                    )}
                     <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
                         {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
                     </Button>
-                    <Button variant="outline" onClick={() => submit(true, true)} disabled={saving}>
-                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Print
-                    </Button>
+                    {copy.showPrint && (
+                        <Button variant="outline" onClick={() => submit(true, true)} disabled={saving}>
+                            {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Print
+                        </Button>
+                    )}
                     <Button onClick={() => submit(true)} disabled={saving}>
                         {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save
                     </Button>
