@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, Plus, X, Package } from "lucide-react";
+import { Trash2, Plus, X, Package } from "lucide-react";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,8 @@ import {
     InvProductCombobox, type SelectedProduct,
 } from "@/modules/inventory/components/InvProductCombobox";
 import { GlAccountCombobox } from "@/modules/accountancy/components/GlAccountCombobox";
+import { VoucherDialogFooter } from "@/modules/accountancy/components/VoucherDialogFooter";
+import { formatBalanceWithSide } from "@/modules/accountancy/lib/balanceFormat";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -85,18 +87,6 @@ const lineAmount = (l: Line) =>
         : parseAmount(l.amount);
 
 const cell = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-
-// Format a balance with Dr/Cr suffix relative to the account's normal side.
-function fmtBalance(a: GlAccount | undefined): string {
-    if (!a) return "";
-    const v = a.balance ?? 0;
-    if (v === 0) return "Nil";
-    const onNormalSide = v > 0;
-    const side = onNormalSide
-        ? (a.normalBalance === "CREDIT" ? "Cr" : "Dr")
-        : (a.normalBalance === "CREDIT" ? "Dr" : "Cr");
-    return `${fmt(Math.abs(v))} ${side}`;
-}
 
 // One amount cell — Debit OR Credit. Active when isOwnSide === true; otherwise
 // shows a dim "—" and is readonly. Stock-driven amounts (qty × rate) display
@@ -454,7 +444,7 @@ export function JournalVoucherDialog() {
                                             <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 text-[11px] text-muted-foreground">
                                                 <span />
                                                 <span className="pl-2 italic">
-                                                    Cur Bal: <span className="font-mono">{fmtBalance(acct)}</span>
+                                                    Cur Bal: <span className="font-mono">{formatBalanceWithSide(acct)}</span>
                                                     {isParty && (
                                                         <span className="ml-2 text-amber-600 dark:text-amber-400" title="Bill-wise allocation not yet wired in this dialog — see TODO">
                                                             · party ledger (bill-wise pending)
@@ -546,15 +536,12 @@ export function JournalVoucherDialog() {
 
                     <ScrollBar orientation="vertical" />
                 </ScrollArea>
-                <div className="flex justify-end gap-2 border-t border-border bg-muted/50 px-5 py-3">
-                    <Button variant="outline" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
-                    <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
-                        {saving && <Loader2 size={14} className="animate-spin mr-1" />} Save Draft
-                    </Button>
-                    <Button onClick={() => submit(true)} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white border-green-600">
-                        {saving && <Loader2 size={14} className="animate-spin mr-1" />} Save & Post
-                    </Button>
-                </div>
+                <VoucherDialogFooter
+                    saving={saving}
+                    onCancel={() => { reset(); setOpen(false); }}
+                    onSaveDraft={() => submit(false)}
+                    onSavePost={() => submit(true)}
+                />
             </DialogContent>
         </Dialog>
     );

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, Plus } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,8 @@ import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { BillAllocationDrawer, type AllocationDraft } from "./BillAllocationDrawer";
 import { PartyCombobox, type SelectedParty } from "./PartyCombobox";
 import { GlAccountCombobox, type GlAccount } from "./GlAccountCombobox";
+import { VoucherDialogFooter } from "./VoucherDialogFooter";
+import { formatBalanceWithSide } from "@/modules/accountancy/lib/balanceFormat";
 import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
 
 type LineInput = {
@@ -36,17 +38,6 @@ const newLine = (side: "DEBIT" | "CREDIT"): LineInput => ({
     side,
     amount: "",
 });
-
-function fmtBalance(a: GlAccount | undefined): string {
-    if (!a || a.balance == null || a.normalBalance == null) return "";
-    const v = a.balance;
-    if (v === 0) return "Nil";
-    const onNormalSide = v > 0;
-    const side = onNormalSide
-        ? (a.normalBalance === "CREDIT" ? "Cr" : "Dr")
-        : (a.normalBalance === "CREDIT" ? "Dr" : "Cr");
-    return `${fmt(Math.abs(v))} ${side}`;
-}
 
 export function DebitNoteDialog() {
     const router = useRouter();
@@ -327,7 +318,7 @@ export function DebitNoteDialog() {
                                             <div className="grid grid-cols-[60px_minmax(0,1fr)_120px_120px_28px] gap-2 text-[11px] text-muted-foreground">
                                                 <span />
                                                 <span className="pl-2 italic">
-                                                    Cur Bal: <span className="font-mono">{fmtBalance(account)}</span>
+                                                    Cur Bal: <span className="font-mono">{formatBalanceWithSide(account)}</span>
                                                 </span>
                                                 <span className="text-right font-mono">{line.side === "DEBIT" ? fmt(amount) : ""}</span>
                                                 <span className="text-right font-mono">{line.side === "CREDIT" ? fmt(amount) : ""}</span>
@@ -364,19 +355,13 @@ export function DebitNoteDialog() {
                     <ScrollBar orientation="vertical" />
                 </ScrollArea>
 
-                <div className="flex justify-end gap-2 border-t border-border bg-muted/50 px-5 py-3">
-                    <Button variant="outline" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
-                    <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
-                        {saving && <Loader2 size={14} className="mr-1 animate-spin" />} Save Draft
-                    </Button>
-                    <Button
-                        onClick={() => submit(true)}
-                        disabled={saving || !balanced}
-                        className="border-green-600 bg-green-600 text-white hover:bg-green-700"
-                    >
-                        {saving && <Loader2 size={14} className="mr-1 animate-spin" />} Save & Post
-                    </Button>
-                </div>
+                <VoucherDialogFooter
+                    saving={saving}
+                    canSubmit={balanced}
+                    onCancel={() => { reset(); setOpen(false); }}
+                    onSaveDraft={() => submit(false)}
+                    onSavePost={() => submit(true)}
+                />
             </DialogContent>
         </Dialog>
     );

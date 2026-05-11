@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, Plus } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,8 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { GlAccountCombobox, type GlAccount } from "./GlAccountCombobox";
+import { BalanceHint } from "./BalanceHint";
+import { VoucherDialogFooter } from "./VoucherDialogFooter";
 import { useContraDialogStore } from "@/store/contraDialogStore";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
@@ -36,25 +38,6 @@ type ParticularsRow = {
 
 let rowSeq = 0;
 const newRow = (): ParticularsRow => ({ id: ++rowSeq, accountId: null, amount: "" });
-
-function BalHint({ account }: { account: GlAccount | undefined }) {
-    if (!account) return null;
-    const v = account.balance ?? 0;
-    const nb = account.normalBalance;
-    let label = "Nil";
-    if (v !== 0 && nb) {
-        const onNormal = v > 0;
-        const side = onNormal
-            ? (nb === "CREDIT" ? "Cr" : "Dr")
-            : (nb === "CREDIT" ? "Dr" : "Cr");
-        label = `${fmt(Math.abs(v))} ${side}`;
-    }
-    return (
-        <p className="mt-0.5 pl-1 text-[11px] italic text-muted-foreground">
-            Cur Bal: <span className="font-mono not-italic">{label}</span>
-        </p>
-    );
-}
 
 export function ContraDialog() {
     const router = useRouter();
@@ -180,7 +163,7 @@ export function ContraDialog() {
                                 accounts={cashBankAccounts}
                                 placeholder="Bank Accounts / Cash-in-Hand…"
                             />
-                            {sourceAccount && <BalHint account={sourceAccount} />}
+                            {sourceAccount && <BalanceHint account={sourceAccount} />}
                         </div>
                     </div>
                 </div>
@@ -217,7 +200,7 @@ export function ContraDialog() {
                                                             Same as source account
                                                         </p>
                                                     )}
-                                                    {acct && !sameAsSource && <BalHint account={acct} />}
+                                                    {acct && !sameAsSource && <BalanceHint account={acct} />}
                                                 </td>
                                                 <td className="px-4 py-2 text-right">
                                                     <Input
@@ -283,19 +266,13 @@ export function ContraDialog() {
                     <ScrollBar orientation="vertical" />
                 </ScrollArea>
 
-                <div className="relative z-10 flex justify-end gap-2 border-t border-border bg-muted/50 px-5 py-3">
-                    <Button variant="outline" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
-                    <Button variant="outline" onClick={() => submit(false)} disabled={saving || !canSubmit}>
-                        {saving && <Loader2 size={14} className="mr-1 animate-spin" />} Save Draft
-                    </Button>
-                    <Button
-                        onClick={() => submit(true)}
-                        disabled={saving || !canSubmit}
-                        className="border-green-600 bg-green-600 text-white hover:bg-green-700"
-                    >
-                        {saving && <Loader2 size={14} className="mr-1 animate-spin" />} Save & Post
-                    </Button>
-                </div>
+                <VoucherDialogFooter
+                    saving={saving}
+                    canSubmit={canSubmit}
+                    onCancel={() => { reset(); setOpen(false); }}
+                    onSaveDraft={() => submit(false)}
+                    onSavePost={() => submit(true)}
+                />
             </DialogContent>
         </Dialog>
     );
