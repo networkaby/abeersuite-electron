@@ -307,26 +307,26 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 label: "Masters",
                 icon: ChartArea,
                 href: "/office/inventory/masters",
-                permission: "finance:voucher:create",
+                permission: "inventory:manage",
                 children: [
                     { label: "Brands", icon: Tag, href: "/office/inventory/masters/brands", permission: "inventory:manage" },
                     { label: "Units", icon: Ruler, href: "/office/inventory/masters/units", permission: "inventory:manage" },
                     { label: "Categories", icon: Layers, href: "/office/inventory/masters/categories", permission: "inventory:manage" },
-                    { label: "Groups", icon: LayoutGrid, href: "/office/inventory/masters/groups", permission: "inventory:manage" },
+                    { label: "Groups", icon: LayoutGrid, href: "/office/inventory/masters/product-groups", permission: "inventory:manage" },
                     { label: "Warranty Terms", icon: ShieldCheck, href: "/office/inventory/masters/warranty-terms", permission: "inventory:manage" },
                     { label: "Attribute Masters", icon: ListChecks, href: "/office/inventory/masters/attribute-masters", permission: "inventory:manage" },
 
                 ]
             },
-            {
-                label: "Configure",
-                icon: ChartArea,
-                href: "/office/inventory/configuration",
-                permission: "finance:voucher:create",
-                children: [
+            // {
+            //     label: "Configure",
+            //     icon: ChartArea,
+            //     href: "/office/inventory/configuration",
+            //     permission: "finance:voucher:create",
+            //     children: [
 
-                ],
-            },
+            //     ],
+            // },
 
         ],
     },

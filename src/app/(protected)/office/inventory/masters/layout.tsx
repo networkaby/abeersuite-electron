@@ -5,17 +5,17 @@ import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, ListChecks
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const masterLinks = [
-    { href: "/office/inventory/configure/units",            label: "Units",             icon: Ruler },
-    { href: "/office/inventory/configure/categories",       label: "Categories",        icon: Layers },
-    { href: "/office/inventory/configure/product-groups",   label: "Groups",            icon: LayoutGrid },
-    { href: "/office/inventory/configure/brands",           label: "Brands",            icon: Tag },
-    { href: "/office/inventory/configure/warranty-terms",   label: "Warranty terms",    icon: ShieldCheck },
-    { href: "/office/inventory/configure/products",         label: "Products",          icon: Box },
-    { href: "/office/inventory/configure/attribute-masters", label: "Attribute masters", icon: ListChecks },
+    { href: "/office/inventory/masters/units",             label: "Units",             icon: Ruler },
+    { href: "/office/inventory/masters/categories",        label: "Categories",        icon: Layers },
+    { href: "/office/inventory/masters/product-groups",    label: "Groups",            icon: LayoutGrid },
+    { href: "/office/inventory/masters/brands",            label: "Brands",            icon: Tag },
+    { href: "/office/inventory/masters/warranty-terms",    label: "Warranty terms",    icon: ShieldCheck },
+    { href: "/office/inventory/products",                  label: "Products",          icon: Box },
+    { href: "/office/inventory/masters/attribute-masters", label: "Attribute masters", icon: ListChecks },
 ] as const;
 
 const configLinks = [
-    { href: "/office/inventory/configure/naming-convention", label: "Naming convention", icon: Wand2 },
+    { href: "/office/admin/naming-convention", label: "Naming convention", icon: Wand2 },
 ] as const;
 
 export default async function InventoryLayout({ children }: { children: React.ReactNode }) {

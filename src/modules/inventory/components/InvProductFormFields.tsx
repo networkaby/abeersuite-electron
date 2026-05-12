@@ -398,7 +398,7 @@ export function InvProductFormFields({
                                     ) : (
                                         <p className="text-xs text-muted-foreground">
                                             No attributes defined for this category.{" "}
-                                            <a href="/office/inventory/configure/attribute-masters" className="underline" target="_blank" rel="noreferrer">
+                                            <a href="/office/inventory/masters/attribute-masters" className="underline" target="_blank" rel="noreferrer">
                                                 Manage attribute masters
                                             </a>
                                         </p>

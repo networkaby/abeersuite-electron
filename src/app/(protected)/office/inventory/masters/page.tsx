@@ -2,17 +2,17 @@ import Link from "next/link";
 import { Box, Layers, LayoutGrid, ListChecks, Ruler, ShieldCheck, Tag, Wand2 } from "lucide-react";
 
 const masterCards = [
-    { title: "Units",             href: "/office/inventory/configure/units",             description: "Measurement units (PCS, KG, …).",                                icon: Ruler },
-    { title: "Categories",        href: "/office/inventory/configure/categories",        description: "Product categories (optional hierarchy).",                        icon: Layers },
-    { title: "Groups",            href: "/office/inventory/configure/product-groups",    description: "Classification groups for items.",                                icon: LayoutGrid },
-    { title: "Brands",            href: "/office/inventory/configure/brands",            description: "Brand names.",                                                    icon: Tag },
-    { title: "Warranty terms",    href: "/office/inventory/configure/warranty-terms",    description: "Shelf warranty policies for masters.",                            icon: ShieldCheck },
-    { title: "Products",          href: "/office/inventory/configure/products",          description: "SKU master: model no., barcodes, EAN, UPC.",                     icon: Box },
-    { title: "Attribute masters", href: "/office/inventory/configure/attribute-masters", description: "Define custom attribute keys (RAM, Storage, OS…) per category.", icon: ListChecks },
+    { title: "Units",             href: "/office/inventory/masters/units",             description: "Measurement units (PCS, KG, …).",                                icon: Ruler },
+    { title: "Categories",        href: "/office/inventory/masters/categories",        description: "Product categories (optional hierarchy).",                        icon: Layers },
+    { title: "Groups",            href: "/office/inventory/masters/product-groups",    description: "Classification groups for items.",                                icon: LayoutGrid },
+    { title: "Brands",            href: "/office/inventory/masters/brands",            description: "Brand names.",                                                    icon: Tag },
+    { title: "Warranty terms",    href: "/office/inventory/masters/warranty-terms",    description: "Shelf warranty policies for masters.",                            icon: ShieldCheck },
+    { title: "Products",          href: "/office/inventory/products",                  description: "SKU master: model no., barcodes, EAN, UPC.",                     icon: Box },
+    { title: "Attribute masters", href: "/office/inventory/masters/attribute-masters", description: "Define custom attribute keys (RAM, Storage, OS…) per category.", icon: ListChecks },
 ] as const;
 
 const configCards = [
-    { title: "Naming convention", href: "/office/inventory/configure/naming-convention", description: "Auto-generate product name + online slug from masters.", icon: Wand2 },
+    { title: "Naming convention", href: "/office/admin/naming-convention", description: "Auto-generate product name + online slug from masters.", icon: Wand2 },
 ] as const;
 
 function CardGrid({ cards }: { cards: readonly { title: string; href: string; description: string; icon: React.ElementType }[] }) {
