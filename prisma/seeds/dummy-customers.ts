@@ -48,8 +48,8 @@ async function main() {
             continue;
         }
         const ins = await pool.query<{ id: number }>(
-            `INSERT INTO "Person" (name, "createdAt", "updatedAt")
-             VALUES ($1, NOW(), NOW()) RETURNING id`,
+            `INSERT INTO "Person" (name, "createdAt")
+             VALUES ($1, NOW()) RETURNING id`,
             [p.name],
         );
         const personId = ins.rows[0].id;
@@ -78,8 +78,8 @@ async function main() {
             continue;
         }
         const ins = await pool.query<{ id: number }>(
-            `INSERT INTO "Company" (name, gstin, "createdAt", "updatedAt")
-             VALUES ($1, $2, NOW(), NOW()) RETURNING id`,
+            `INSERT INTO "Company" (name, gstin, "createdAt")
+             VALUES ($1, $2, NOW()) RETURNING id`,
             [c.name, c.gstin],
         );
         const companyId = ins.rows[0].id;
