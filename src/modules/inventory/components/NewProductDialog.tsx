@@ -21,6 +21,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { generateSku } from "@/modules/inventory/lib/sku";
 import { Loader2 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -49,14 +50,6 @@ export type CreatedProductOption = {
 };
 
 type Unit = { id: number; code: string; label: string };
-
-// Naive SKU generator — first 6 alnum chars of the name + 4-char random tail.
-// Server returns 409 on duplicate; we display the conflict so the user can edit.
-function generateSku(name: string): string {
-    const base = name.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 6) || "ITEM";
-    const tail = Math.random().toString(36).slice(-4).toUpperCase();
-    return `${base}-${tail}`;
-}
 
 // ₹ → paise; empty / non-numeric → null so optional fields stay unset.
 function rupeesToPaise(s: string): number | null {
@@ -88,7 +81,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
     useEffect(() => {
         if (!open) return;
         setName(initialName);
-        setSku(generateSku(initialName || "ITEM"));
+        setSku(generateSku());
         setSalePrice("");
         setCostPrice("");
     }, [open, initialName]);
@@ -114,20 +107,8 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    // Re-derive SKU when the user types a new name — but only while they
-    // haven't manually edited the SKU field. The flag is implicit: if the
-    // current SKU still matches what generateSku(prevName) would produce
-    // for the prefix, we treat it as auto. Simpler heuristic: always
-    // regenerate while the SKU field hasn't been touched after dialog open.
-    // For now, regenerate on every name change unless the user has typed
-    // something custom — leave that polish for later.
     const handleNameChange = (v: string) => {
         setName(v);
-        // Regenerate SKU if the current SKU was auto (starts with derived prefix).
-        const autoPrefix = (name.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 6) || "ITEM") + "-";
-        if (sku.startsWith(autoPrefix) || !sku) {
-            setSku(generateSku(v || "ITEM"));
-        }
     };
 
     const submit = async () => {
@@ -210,7 +191,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                                 id="np-sku"
                                 value={sku}
                                 onChange={(e) => setSku(e.target.value.toUpperCase())}
-                                placeholder="AUTO-1234"
+                                placeholder="123456"
                                 className="font-mono"
                             />
                         </div>
