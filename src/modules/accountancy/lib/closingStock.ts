@@ -1,9 +1,12 @@
-// Live closing-stock valuation: SUM of every product's `productClosingValue`.
-// Tally-style "Closing Stock" line for the Balance Sheet and P&L Trading
-// account. Per-product math lives in `src/modules/inventory/lib/stockValue.ts`.
+// Live closing-stock valuation: SUM of every product's live value. Tally-style
+// "Closing Stock" line for the Balance Sheet and P&L Trading account.
+//
+// Implementation lives in `src/modules/inventory/lib/valuation.ts`; this file
+// kept as a back-compat surface so existing callers (Balance Sheet, P&L) don't
+// need to know about valuation methods. New callers should use
+// `valueStockOrgTotal(method)` directly.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { productClosingValue } from "@/modules/inventory/lib/stockValue";
+import { valueStockOrgTotal } from "@/modules/inventory/lib/valuation";
 
 export type ClosingStockResult = {
     /** Computed valuation in rupees (live). */
@@ -13,17 +16,6 @@ export type ClosingStockResult = {
 };
 
 export async function getClosingStockValue(): Promise<ClosingStockResult> {
-    const products = await prisma.invProduct.findMany({
-        where: { stock: { not: null }, costPaise: { not: null } },
-        select: { stock: true, costPaise: true },
-    });
-    let total = 0;
-    let count = 0;
-    for (const p of products) {
-        const v = productClosingValue(p);
-        if (v === 0) continue;
-        total += v;
-        count += 1;
-    }
-    return { computed: total, productCount: count };
+    const r = await valueStockOrgTotal("LAST_COST");
+    return { computed: r.computed, productCount: r.productCount };
 }

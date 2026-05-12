@@ -65,6 +65,17 @@ export default function GroupDetailPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
 
+    // Stock-in-Hand has no real GL children (Closing Stock is synthesised at
+    // report time). Bounce any visit to the live stock summary instead of
+    // showing the empty group page.
+    useEffect(() => {
+        if (data?.group.name === "Stock-in-Hand") {
+            const asOf = search.get("asOf");
+            const qs = asOf ? `?ref=balance-sheet&asOf=${asOf}` : "?ref=balance-sheet";
+            router.replace(`/office/inventory/stock-summary${qs}`);
+        }
+    }, [data, search, router]);
+
     if (loading) return (
         <div className="flex items-center justify-center h-64">
             <Loader2 className="animate-spin text-muted-foreground" size={32} />

@@ -10,7 +10,7 @@
 - `/office/inventory/units`, `/categories`, `/groups`, `/brands`, `/warranty-terms` — masters
 - `/office/inventory/grn`, `/purchase-orders`, `/challans`, `/sales-orders`, `/rejections`, `/stock-journal` — vouchers
 - `/office/inventory/stock-ledger` — per-SKU stock movement history
-- `/office/inventory/stock-summary` — live per-product stock valuation (stock × cost/unit); grand total matches Balance Sheet Stock-in-Hand
+- `/office/inventory/stock-summary` — Tally-style stock valuation. Params: `view=group|category|brand` (default `group`), `method=LAST_COST|WEIGHTED_AVG|FIFO|LIFO` (default `LAST_COST`), `profit=1` (show Sale/Profit/Margin columns), `ref=balance-sheet&asOf=YYYY-MM-DD` (back button). Grand total matches Balance Sheet Stock-in-Hand when `method=LAST_COST`.
 - `/office/inventory/inventory-details` — three-column product browser: left sidebar product list (with stock badges), right panel shows product summary card (sale price, cost, stock qty, stock value) + full transaction history table (TYPE | INVOICE/REF | PARTY | DATE | QTY | RATE | STATUS); supports optional date-range filter
 - `/office/inventory/{purchases,sales}/[id]` — voucher detail (cross-references Accountancy invoices)
 
@@ -19,7 +19,7 @@
 - `products` — `InvProduct` CRUD (search, list, create, edit, photo upload).
 - `vouchers` — `InvVoucher` (GRN / PO / Challan / Sales / Rejection / Sale Return / Purchase Return) with three-tier lifecycle (cancel/delete/hard-delete).
 - `stock-journal`, `stock-ledger`, `physical-stock` — stock movement tracking.
-- `reports/stock-summary` — GET returns `StockSummaryRow[]` (id, sku, name, stock, lowStockThreshold, costPaise, unit, brand, category, isLow); UI at `/office/inventory/stock-summary` accepts `?ref=balance-sheet` (back button) and `?asOf=YYYY-MM-DD` (display date).
+- `reports/stock-summary` — GET returns `{ method, rows }`. Accepts `?method=LAST_COST|WEIGHTED_AVG|FIFO|LIFO` (default `LAST_COST`). Each row carries master fields (id, sku, name, stock, lowStockThreshold, costPaise, pricePaise), grouping (`unit`, `group`, `brand`, `category`), a `valuation` block (unitCost, value, method, optional `fallback`), and `isLow`. UI at `/office/inventory/stock-summary` (Tally-style report) + `/office/inventory/inventory-details` (per-SKU drill).
 - `products/[id]/transactions` — GET returns `{ product, transactions[] }` for a single SKU; transactions are POSTED `InvVoucherLine` rows joined to `InvVoucher` with computed `paymentStatus` (PAID/PARTIAL/UNPAID); accepts optional `?from` / `?to` date params.
 
 ## Permissions (gate keys)
@@ -49,7 +49,8 @@
 | **`productOpeningValue(p)`** | `src/modules/inventory/lib/stockValue.ts` | `qty × rate` (returns null if either field missing) | Writing `InvProduct.openingValue` on master save |
 | **`syncProductCacheFromOpening(p)`** | same | Returns `{ stock, costPaise }` patch for Prisma — opening qty seeds running stock, opening rate seeds cost basis | Inside any product-write Prisma `data: { ... }` block — spread it: `data: { ...syncProductCacheFromOpening(b), ... }`. Used by POST `/api/inventory/products`, PATCH `/api/inventory/products/[id]`, PUT `/api/inventory/products/[id]/opening` |
 | **`productClosingValue(p)`** | same | Per-product live valuation = `stock × costPaise / 100` (0 when stock ≤ 0 or cost null) | Per-row stock value display in any product list / report |
-| `getClosingStockValue()` | `src/modules/accountancy/lib/closingStock.ts` | Org-wide stock total — sums `productClosingValue` over all products | Balance Sheet's Stock-in-Hand line; trading adjustment |
+| `getClosingStockValue()` | `src/modules/accountancy/lib/closingStock.ts` | Org-wide stock total at LAST_COST — thin wrapper around `valueStockOrgTotal("LAST_COST")` kept for back-compat | Balance Sheet's Stock-in-Hand line; trading adjustment |
+| **`valueStockBatch(products, method)`** / **`valueStockOrgTotal(method)`** | `src/modules/inventory/lib/valuation.ts` | Pluggable stock valuation — `LAST_COST` (cached), `WEIGHTED_AVG` (∑qty·rate / ∑qty over inward ledger), `FIFO` (newest surviving lots), `LIFO` (oldest surviving lots, scaffold). Falls back to LAST_COST when no receipt history. | Any per-product or org-wide stock valuation that needs a method choice (Stock Summary, future P&L recalcs). Single source of truth — do NOT roll your own. |
 | `invNextRef(tx, type)` | `src/modules/inventory/lib/stock.ts` | Sequential reference per InvVoucherType (`SV-2026-0001`, `PV-2026-0001`…) | Inside an inventory voucher transaction |
 | `calcLineTotals(line)` / `calcVoucherTotals(lines)` | same | Per-line discount/tax/amount math; voucher subtotal/tax/total | InvVoucher save handlers |
 
@@ -86,5 +87,6 @@ For per-product stock-value display, **always use `productClosingValue(p)`** —
 - Pricing tier fields (`retailPrice`, `wholesalePrice`, `repairCentrePrice`) — schema additions not done. The current `costPaise` / `pricePaise` / `mrpPaise` cover the basics.
 - Multi-warehouse / location-aware stock — single-location only for now.
 - Reorder automation — `lowStockThreshold` exists but no consumer.
+- **Stock Summary → Stock Item Monthly Summary drill-down** (Tally-style F4: Item): clicking a product row in Stock Summary should open a 12-month breakdown showing per-month Inwards (qty + value), Outwards (qty + value + consumption + gross profit + %), and Closing Balance (qty + value), plus an inline bar chart. Drilling into a month should open the Stock Vouchers list for that period; clicking a voucher should jump to the voucher edit page. Decision (2026-05-12): row click in Stock Summary is **deliberately a no-op for now** — was originally wired to `inventory-details` but reverted, because the Tally-style monthly drill is the better destination. Build that page when needed.
 
-_Last updated: 2026-05-12 — added SALE_RETURN/PURCHASE_RETURN enum values + refNumber/refDate/refVoucherId fields to InvVoucher, stock-summary API route, and return-voucher ref gotcha._
+_Last updated: 2026-05-12 — added SALE_RETURN/PURCHASE_RETURN enum values + refNumber/refDate/refVoucherId fields to InvVoucher, stock-summary API route, and return-voucher ref gotcha. Tally-style Stock Summary rebuild: view modes (Group/Category/Brand), pluggable valuation (LAST_COST/WA/FIFO/LIFO via `valuation.ts`), Show Profit toggle. `getClosingStockValue` is now a thin wrapper around `valueStockOrgTotal("LAST_COST")`._

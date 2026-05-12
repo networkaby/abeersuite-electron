@@ -126,8 +126,8 @@ export default function InventoryDetailsPage() {
 
     useEffect(() => {
         axios
-            .get<ProductListItem[]>("/api/inventory/reports/stock-summary")
-            .then((r) => setProducts(r.data))
+            .get<{ rows: ProductListItem[] }>("/api/inventory/reports/stock-summary")
+            .then((r) => setProducts(r.data.rows))
             .catch(() => toast.error("Failed to load products"));
     }, []);
 
