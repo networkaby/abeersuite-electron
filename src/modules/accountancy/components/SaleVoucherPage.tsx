@@ -32,7 +32,7 @@
 /* dont use number input type use text input type and validate to allow only numbers */
 
 import { Fragment, useState, useCallback, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -270,7 +270,24 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
 export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const copy = PER_KIND[kind];
     const router = useRouter();
+    const searchParams = useSearchParams();
     const today = new Date().toISOString().slice(0, 10);
+
+    // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
+    // PATCH on save. Set once on mount and locked in; subsequent param
+    // changes do not retrigger the fetch (would discard user edits).
+    const voucherIdParam = searchParams.get("voucherId");
+    const editVoucherId = voucherIdParam ? Number(voucherIdParam) : null;
+    const isEditing = editVoucherId != null && Number.isFinite(editVoucherId);
+    const [editLoading, setEditLoading] = useState(isEditing);
+    const [editingRef, setEditingRef] = useState<string | null>(null);
+    // Whether the voucher being edited is already POSTED — drives the
+    // "saving will reverse + re-post" warning and skips the explicit POST
+    // /post step on Save (server's PATCH already re-posts atomically).
+    const [editingWasPosted, setEditingWasPosted] = useState(false);
+    // Voucher's saved paymentAccountId — paired with cashBankAccounts via a
+    // dedicated effect so the picker resolves once both have loaded.
+    const [pendingPaymentAccountId, setPendingPaymentAccountId] = useState<number | null>(null);
 
     const [saving, setSaving] = useState(false);
     const [lines, setLines] = useState<LineState[]>([newLine()]);
@@ -308,17 +325,162 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
         refDate: "",
     });
 
-    // Invoice number preview (race-safe ±1 at concurrent save).
+    // Invoice number preview (race-safe ±1 at concurrent save). In edit
+    // mode the voucher's own reference is shown instead — see editingRef.
     const [nextRef, setNextRef] = useState("");
     useEffect(() => {
+        if (isEditing) return;
         axios.get<{ reference: string }>(`/api/inventory/vouchers/next-ref?type=${copy.nextRefType}`)
             .then((r) => setNextRef(r.data.reference))
             .catch(() => setNextRef(""));
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditing]);
+
+    // ── Edit mode: fetch the voucher and prefill all form state ──────────
+    // Run once on mount when `?voucherId=` is set. The fetch payload is the
+    // standard GET /api/inventory/vouchers/[id] response (header + lines +
+    // product info). Anything we can't fully reconstruct (party-table
+    // snapshot, product cost / sale prices for line rate auto-fill) is
+    // stubbed with null — the user can still hand-edit any cell.
+    useEffect(() => {
+        if (!isEditing || editVoucherId == null) return;
+        let cancelled = false;
+        axios.get<{
+            id: number;
+            reference: string;
+            date: string;
+            status: string;
+            description: string;
+            partyName: string | null;
+            partyType: string | null;
+            partyId: number | null;
+            partyPhone: string | null;
+            partyAddress: string | null;
+            paymentMode: string | null;
+            paymentAccountId: number | null;
+            paymentTerms: string | null;
+            dueDate: string | null;
+            refNumber: string | null;
+            refDate: string | null;
+            refVoucherId: number | null;
+            refVoucher?: { reference: string } | null;
+            shippingAmt: string | number;
+            roundOff: string | number;
+            discountPct: string | number | null;
+            discountAmt: string | number | null;
+            amountReceived: string | number;
+            lines: {
+                id: number;
+                productId: number;
+                description: string | null;
+                quantity: string | number;
+                freeQty: string | number | null;
+                rate: string | number;
+                discountPct: string | number;
+                discountAmt: string | number;
+                taxRate: string | number;
+                taxAmount: string | number;
+                amount: string | number;
+                product: { id: number; sku: string; name: string; unit: { code: string; label: string } };
+            }[];
+        }>(`/api/inventory/vouchers/${editVoucherId}`)
+            .then((r) => {
+                if (cancelled) return;
+                const v = r.data;
+                if (v.status === "CANCELLED") {
+                    toast.error("This voucher is cancelled. Use Duplicate to create a fresh copy.");
+                    router.push("/office/inventory/inventory-details");
+                    return;
+                }
+                setEditingRef(v.reference);
+                setEditingWasPosted(v.status === "POSTED");
+
+                // Lines → LineState mapping. Stub salePrice / costPrice as
+                // null on the SelectedProduct stub; rate auto-fill only
+                // triggers on fresh product selects, so this is safe.
+                const fmtNum = (x: string | number | null | undefined): string => {
+                    if (x == null) return "";
+                    const n = typeof x === "string" ? parseFloat(x) : x;
+                    if (!Number.isFinite(n) || n === 0) return "";
+                    return String(n);
+                };
+                setLines(v.lines.length === 0 ? [newLine()] : v.lines.map((l) => ({
+                    id: ++lineSeq,
+                    product: {
+                        id: l.product.id,
+                        sku: l.product.sku,
+                        name: l.product.name,
+                        unitCode: l.product.unit.code,
+                        stock: null,
+                        salePrice: null,
+                        costPrice: null,
+                        mrp: null,
+                    },
+                    quantity: String(typeof l.quantity === "string" ? parseFloat(l.quantity) : l.quantity),
+                    freeQty: fmtNum(l.freeQty),
+                    rate: String(typeof l.rate === "string" ? parseFloat(l.rate) : l.rate),
+                    discountPct: fmtNum(l.discountPct),
+                    discountAmt: fmtNum(l.discountAmt),
+                    taxRate: fmtNum(l.taxRate),
+                    taxAmount: fmtNum(l.taxAmount),
+                    description: l.description ?? "",
+                    showDescription: !!l.description,
+                })));
+
+                setPayMode(v.paymentMode === "CASH" ? "CASH" : "CREDIT");
+                if (v.paymentAccountId != null) setPendingPaymentAccountId(v.paymentAccountId);
+
+                // Party prefill — for CREDIT we set the picker via its handle;
+                // for CASH the walk-in fields take it. We populate both sides
+                // so the form re-renders without a re-fetch.
+                if (v.paymentMode === "CASH") {
+                    setWalkInName(v.partyName ?? "");
+                    setWalkInPhone(v.partyPhone ?? "");
+                } else if (v.partyId != null && v.partyType) {
+                    setParty({
+                        id: v.partyId,
+                        kind: (v.partyType === "customer" || v.partyType === "supplier" || v.partyType === "company")
+                            ? v.partyType
+                            : "customer",
+                        name: v.partyName ?? "",
+                        phone: v.partyPhone ?? null,
+                    } as PickedParty);
+                }
+
+                const overallDiscAmt = v.discountAmt != null ? Number(v.discountAmt) : 0;
+                const overallDiscPct = v.discountPct != null ? Number(v.discountPct) : 0;
+                const roundOff = Number(v.roundOff ?? 0);
+                setEnableRoundOff(Math.abs(roundOff) > 0.005);
+                setRoundOffManuallyEdited(Math.abs(roundOff) > 0.005);
+                setHeader({
+                    date: v.date ? v.date.slice(0, 10) : today,
+                    description: v.description ?? "",
+                    shippingAmt: Number(v.shippingAmt ?? 0) > 0 ? String(Number(v.shippingAmt)) : "",
+                    roundOff: Math.abs(roundOff) > 0.005 ? roundOff.toFixed(2) : "",
+                    received: Number(v.amountReceived ?? 0) > 0 ? String(Number(v.amountReceived)) : "",
+                    discountPct: overallDiscPct > 0 ? String(overallDiscPct) : "",
+                    discountAmt: overallDiscAmt > 0 ? String(overallDiscAmt) : "",
+                    paymentTerms: v.paymentTerms ?? "",
+                    dueDate: v.dueDate ? v.dueDate.slice(0, 10) : "",
+                    refNumber: v.refNumber ?? "",
+                    refDate: v.refDate ? v.refDate.slice(0, 10) : "",
+                });
+            })
+            .catch(() => {
+                if (cancelled) return;
+                toast.error("Failed to load voucher for editing");
+                router.push("/office/inventory/inventory-details");
+            })
+            .finally(() => { if (!cancelled) setEditLoading(false); });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editVoucherId, isEditing]);
 
     // Load cash + bank ledgers once and pre-select "Cash-in-Hand" if present.
     // Same fetch as MoneyFlowDialog — Account rows enriched with their group
     // so we can filter by ACCOUNT_GROUPS.CASH_IN_HAND / BANK_ACCOUNTS.
+    // In edit mode the default is skipped — a separate effect matches the
+    // voucher's saved paymentAccountId once both fetches resolve.
     useEffect(() => {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
             .then((r) => {
@@ -327,6 +489,7 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                     a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS,
                 );
                 setCashBankAccounts(cb);
+                if (isEditing) return;
                 // Default to "Cash-in-Hand" if available, else first hit.
                 if (!paymentAccount) {
                     const cash = cb.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND);
@@ -336,6 +499,16 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
             .catch(() => setCashBankAccounts([]));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Edit-mode payment-account resolver: when both the loaded voucher's
+    // paymentAccountId and the cash/bank list are available, pick the match.
+    useEffect(() => {
+        if (!isEditing) return;
+        if (pendingPaymentAccountId == null) return;
+        if (cashBankAccounts.length === 0) return;
+        const match = cashBankAccounts.find((a) => a.id === pendingPaymentAccountId);
+        if (match) setPaymentAccount(match);
+    }, [isEditing, pendingPaymentAccountId, cashBankAccounts]);
 
     // Fetch the picked party's outstanding balance + address so we can show
     // them in the compact info card. accountId / id come straight off
@@ -603,7 +776,7 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
             const voucherDate = copy.showVoucherDate
                 ? header.date
                 : (header.refDate || header.date);
-            const res = await axios.post<{ id: number }>("/api/inventory/vouchers", {
+            const payload = {
                 type: kind,
                 date: voucherDate,
                 description,
@@ -647,17 +820,45 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                     discountAmt: prefs.lineDiscount ? (parseFloat(l.discountAmt) || 0) : 0,
                     taxRate: prefs.lineTax ? (parseFloat(l.taxRate) || 0) : 0,
                 })),
-            });
+            };
 
-            if (andPost) {
-                await axios.post(`/api/inventory/vouchers/${res.data.id}/post`);
+            // Edit mode → PATCH the same voucher in place; create mode → POST.
+            // The server's PATCH handles both DRAFT (simple update) and POSTED
+            // (reverse + apply + re-post in a single transaction) so the
+            // reference number is preserved across edits. Save & Print / Save
+            // only need the explicit POST /post step when the voucher was a
+            // DRAFT (or a fresh create) — POSTED-on-arrival edits are already
+            // re-posted atomically by PATCH.
+            let savedId: number;
+            const skipExplicitPost = isEditing && editingWasPosted;
+            if (isEditing && editVoucherId != null) {
+                await axios.patch(`/api/inventory/vouchers/${editVoucherId}`, payload);
+                savedId = editVoucherId;
+            } else {
+                const res = await axios.post<{ id: number }>("/api/inventory/vouchers", payload);
+                savedId = res.data.id;
+            }
+
+            if (andPost && !skipExplicitPost) {
+                await axios.post(`/api/inventory/vouchers/${savedId}/post`);
+                toast.success(copy.successPostedMsg);
+            } else if (andPost) {
+                // PATCH already re-posted — surface the same success copy.
                 toast.success(copy.successPostedMsg);
             } else {
                 toast.success(copy.successDraftMsg);
             }
             if (andPrint) {
-                window.open(`/receipt/invoice/${res.data.id}?autoprint=1`, "_blank", "noopener");
+                window.open(`/receipt/invoice/${savedId}?autoprint=1`, "_blank", "noopener");
             }
+
+            if (isEditing) {
+                // Edit done — leave the form and let the user verify the row
+                // updated wherever they came from.
+                router.push("/office/inventory/inventory-details");
+                return;
+            }
+
             // Reset for the next transaction instead of navigating away —
             // the cashier can punch in the next sale without leaving /sale.
             // Cancel / Close X are the explicit exits to the list page.
@@ -683,7 +884,20 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
             {/* ── Title bar ─────────────────────────────────────────────── */}
             <header className="border-b border-border bg-card px-6 py-2.5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-base font-semibold">{copy.title}</h1>
+                    <h1 className="text-base font-semibold">
+                        {isEditing ? `Edit ${copy.title}` : copy.title}
+                        {isEditing && editingRef && (
+                            <span className="ml-2 font-mono text-xs text-muted-foreground">{editingRef}</span>
+                        )}
+                    </h1>
+                    {isEditing && editingWasPosted && (
+                        <span
+                            className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-medium"
+                            title="Saving will reverse this voucher's stock & GL impact and re-post with the new values. Reference number is preserved."
+                        >
+                            Posted — edit reposts on save
+                        </span>
+                    )}
                     {/* CASH / CREDIT pill — same shape as the dialog */}
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
                         {(["CASH", "CREDIT"] as const).map((m) => (
@@ -832,9 +1046,15 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                         {copy.showVoucherRef && (
                             <>
                                 <label className="text-xs text-muted-foreground text-right">{copy.voucherRefLabel}</label>
-                                <div className="font-mono text-xs tabular-nums px-2 py-1.5 rounded-md bg-muted/40 border border-border min-h-9 flex items-center">
-                                    {nextRef || "Generating…"}
-                                </div>
+                                {isEditing ? (
+                                    <div className="border-0 outline-none focus:bg-accent/40 rounded px-2 py-1.5 text-sm font-mono tabular-nums w-44 bg-muted/50">
+                                        {editingRef || (editLoading ? "Loading…" : "—")}
+                                    </div>
+                                ) : (
+                                    <div className="font-mono text-xs tabular-nums px-2 py-1.5 rounded-md bg-muted/40 border border-border min-h-9 flex items-center">
+                                        {nextRef || "Generating…"}
+                                    </div>
+                                )}
                             </>
                         )}
 

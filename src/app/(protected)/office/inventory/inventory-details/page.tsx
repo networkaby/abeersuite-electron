@@ -13,6 +13,7 @@ import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
+import { VoucherActionsMenu, voucherUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,23 +64,8 @@ type DetailResponse = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const VOUCHER_URLS: Record<string, string> = {
-    PURCHASE: "/office/inventory/purchases",
-    SALE: "/office/inventory/sales",
-    SALE_RETURN: "/office/inventory/sale-returns",
-    PURCHASE_RETURN: "/office/inventory/purchase-returns",
-    GRN: "/office/inventory/grn",
-    CHALLAN: "/office/inventory/challans",
-    REJECTION_IN: "/office/inventory/rejections-in",
-    REJECTION_OUT: "/office/inventory/rejections-out",
-    PHYSICAL_STOCK: "/office/inventory/physical-stock",
-    STOCK_JOURNAL: "/office/inventory/stock-journals",
-};
-
-function voucherUrl(type: string, id: number): string | null {
-    const base = VOUCHER_URLS[type];
-    return base ? `${base}/${id}` : null;
-}
+// VOUCHER_URLS + voucherUrl are now exported from VoucherActionsMenu so both
+// the link cell here and the dropdown menu share one source of truth.
 
 const TYPE_COLORS: Record<string, string> = {
     SALE: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
@@ -313,6 +299,7 @@ export default function InventoryDetailsPage() {
                                                 <th className="px-4 py-2 text-right font-medium">Quantity</th>
                                                 <th className="px-4 py-2 text-right font-medium">Rate</th>
                                                 <th className="px-4 py-2 text-center font-medium">Status</th>
+                                                <th className="px-2 py-2 w-10"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border">
@@ -363,6 +350,14 @@ export default function InventoryDetailsPage() {
                                                                             : "Unpaid"}
                                                                 </span>
                                                             )}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-right">
+                                                            <VoucherActionsMenu
+                                                                voucherId={tx.voucherId}
+                                                                voucherType={tx.type}
+                                                                voucherRef={tx.reference}
+                                                                onChanged={handleRefresh}
+                                                            />
                                                         </td>
                                                     </tr>
                                                 );
