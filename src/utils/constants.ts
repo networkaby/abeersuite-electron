@@ -51,6 +51,7 @@ import {
     ArrowLeftRight,
     ClipboardCheck,
     BarChart3,
+    ListChecks,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -299,25 +300,32 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
             // { label: "Warranty terms", icon: ShieldCheck, href: "/office/inventory/warranty-terms", permission: "inventory:manage" },
             { label: "Products", icon: Box, href: "/office/inventory/products", permission: "inventory:manage" },
-            { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger", permission: "inventory:manage" },
+            // { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger", permission: "inventory:manage" },
             { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
             { label: "Inventory Details", icon: ClipboardList, href: "/office/inventory/inventory-details", permission: "inventory:manage" },
             {
                 label: "Masters",
                 icon: ChartArea,
-                href: "/office/inventory/configure",
+                href: "/office/inventory/masters",
                 permission: "finance:voucher:create",
-                // children: [
-                //     { label: "Brands", icon: Tag, href: "/office/inventory/configure/brands", permission: "inventory:manage" },
+                children: [
+                    { label: "Brands", icon: Tag, href: "/office/inventory/masters/brands", permission: "inventory:manage" },
+                    { label: "Units", icon: Ruler, href: "/office/inventory/masters/units", permission: "inventory:manage" },
+                    { label: "Categories", icon: Layers, href: "/office/inventory/masters/categories", permission: "inventory:manage" },
+                    { label: "Groups", icon: LayoutGrid, href: "/office/inventory/masters/groups", permission: "inventory:manage" },
+                    { label: "Warranty Terms", icon: ShieldCheck, href: "/office/inventory/masters/warranty-terms", permission: "inventory:manage" },
+                    { label: "Attribute Masters", icon: ListChecks, href: "/office/inventory/masters/attribute-masters", permission: "inventory:manage" },
 
-                // ]
+                ]
             },
             {
                 label: "Configure",
                 icon: ChartArea,
-                href: "/office/inventory/configure",
+                href: "/office/inventory/configuration",
                 permission: "finance:voucher:create",
-                children: [],
+                children: [
+
+                ],
             },
 
         ],
@@ -497,6 +505,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Statuses", href: "/office/admin/statuses", icon: Settings, permission: "settings:statuses" },
     { label: "Sub-Statuses", href: "/office/admin/sub-statuses", icon: Settings, permission: "settings:statuses" },
     { label: "Pipelines", href: "/office/admin/pipelines", icon: GitBranch, permission: "settings:pipelines" },
+    { label: "Naming Convention", icon: ClipboardList, href: "/office/admin/naming-convention", permission: "inventory:manage" },
     { label: "Year Ending", href: "/office/admin/year-ending", icon: Calendar, permission: "settings:manage" },
 ];
 
