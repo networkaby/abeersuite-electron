@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, BookOpen, BarChart3 } from "lucide-react";
+import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, BookOpen, BarChart3, ClipboardList } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const links = [
@@ -14,6 +14,7 @@ const links = [
     { href: "/office/inventory/products", label: "Products", icon: Box },
     { href: "/office/inventory/stock-ledger", label: "Stock Ledger", icon: BookOpen },
     { href: "/office/inventory/stock-summary", label: "Stock Summary", icon: BarChart3 },
+    { href: "/office/inventory/inventory-details", label: "Inventory Details", icon: ClipboardList },
 ] as const;
 
 export default async function InventoryLayout({ children }: { children: React.ReactNode }) {

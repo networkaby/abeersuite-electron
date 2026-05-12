@@ -78,6 +78,7 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `Sidebar` | `Sidebar.tsx` | Main staff-side nav |
 | `Topbar` | `Topbar.tsx` | Top nav bar |
 | `DataPageHeader` | `DataPageHeader.tsx` | Standard list/detail page header — title + optional subtitle + icon + right-aligned actions slot. |
+| `EntityListPanel` | `EntityListPanel.tsx` | Reusable centre column for list-detail pages: aside with icon + title + count badge + optional Add button, search input, and scrollable list area. Caller renders rows as children. Used by `/office/customers/people` and `/office/inventory/inventory-details`. |
 | `TableLoadingRow`, `TableEmptyRow`, `TableErrorRow` | `DataTableStates.tsx` | Drop-in shadcn `<TableRow>` states for the three common conditions — replaces inline `<TableRow><TableCell colSpan={N}>Loading…</TableCell></TableRow>` blocks. |
 | `StatusBadge` | `StatusBadge.tsx` | Coloured pill that resolves Tailwind classes from `INVOICE_STATUS_COLORS` / `JOURNAL_STATUS_COLORS` / `GL_TYPE_COLORS` based on a `kind` discriminator. |
 | `ButtonBar` | `ButtonBar.tsx` | Right-rail action bar shown on staff pages |

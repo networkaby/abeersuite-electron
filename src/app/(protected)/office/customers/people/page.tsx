@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import Link from "next/link";
 import {
-    Search, Plus, User, Phone, MapPin, Building2,
+    User, Phone, MapPin, Building2,
     Smartphone, ExternalLink, Pencil, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { EntityListPanel } from "@/shared/components/EntityListPanel";
 interface CustomerListItem {
     id: number;
     name: string;
@@ -194,65 +194,40 @@ export default function CustomersPage() {
 
     return (
         <div className="-m-8 flex h-screen">
-            <aside className="flex w-80 shrink-0 flex-col border-r bg-card">
-                <div className="flex items-center justify-between border-b px-4 py-3">
-                    <div className="flex items-center gap-2">
-                        <User size={16} className="text-primary" />
-                        <span className="text-sm font-semibold">Customers</span>
-                        <Badge variant="outline">{customers.length}</Badge>
-                    </div>
-                    <Button type="button" size="sm" onClick={() => setShowCreate(true)}>
-                        <Plus size={13} /> Add
+            <EntityListPanel
+                title="Customers"
+                icon={<User size={16} className="text-primary" />}
+                count={customers.length}
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search name or phone…"
+                onAdd={() => setShowCreate(true)}
+                isEmpty={filtered.length === 0}
+                emptyMessage={search ? "No matches" : "No customers yet"}
+            >
+                {filtered.map((customer) => (
+                    <Button
+                        key={customer.id}
+                        type="button"
+                        variant="ghost"
+                        className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
+                        onClick={() => setSelectedId(customer.id)}
+                    >
+                        <div className="flex w-full items-center gap-3 text-left">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                {initials(customer.name)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">{customer.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
+                            </div>
+                            {customer._count.devices > 0 && (
+                                <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
+                            )}
+                        </div>
                     </Button>
-                </div>
-
-                <div className="border-b p-3">
-                    <div className="relative">
-                        <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search name or phone…"
-                            className="pl-9"
-                        />
-                    </div>
-                </div>
-
-                < ScrollArea className="flex-1 overflow-y-auto">
-                    <div className="flex-1 overflow-y-auto">
-                        {filtered.length === 0 ? (
-                            <p className="py-8 text-center text-xs text-muted-foreground">
-                                {search ? "No matches" : "No customers yet"}
-                            </p>
-                        ) : (
-                            filtered.map((customer) => (
-                                <Button
-                                    key={customer.id}
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
-                                    onClick={() => setSelectedId(customer.id)}
-                                >
-                                    <div className="flex w-full items-center gap-3 text-left">
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                            {initials(customer.name)}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-medium">{customer.name}</p>
-                                            <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
-                                        </div>
-                                        {customer._count.devices > 0 && (
-                                            <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
-                                        )}
-                                    </div>
-                                </Button>
-                            ))
-                        )}
-                    </div>
-                    <ScrollBar orientation="vertical" />
-                </ScrollArea>
-            </aside>
+                ))}
+            </EntityListPanel>
 
             <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
                 {!selectedId && (

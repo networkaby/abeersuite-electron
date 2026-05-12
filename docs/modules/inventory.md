@@ -11,6 +11,7 @@
 - `/office/inventory/grn`, `/purchase-orders`, `/challans`, `/sales-orders`, `/rejections`, `/stock-journal` — vouchers
 - `/office/inventory/stock-ledger` — per-SKU stock movement history
 - `/office/inventory/stock-summary` — live per-product stock valuation (stock × cost/unit); grand total matches Balance Sheet Stock-in-Hand
+- `/office/inventory/inventory-details` — three-column product browser: left sidebar product list (with stock badges), right panel shows product summary card (sale price, cost, stock qty, stock value) + full transaction history table (TYPE | INVOICE/REF | PARTY | DATE | QTY | RATE | STATUS); supports optional date-range filter
 - `/office/inventory/{purchases,sales}/[id]` — voucher detail (cross-references Accountancy invoices)
 
 ### API routes (`src/app/api/inventory/`)
@@ -19,6 +20,7 @@
 - `vouchers` — `InvVoucher` (GRN / PO / Challan / Sales / Rejection / Sale Return / Purchase Return) with three-tier lifecycle (cancel/delete/hard-delete).
 - `stock-journal`, `stock-ledger`, `physical-stock` — stock movement tracking.
 - `reports/stock-summary` — GET returns `StockSummaryRow[]` (id, sku, name, stock, lowStockThreshold, costPaise, unit, brand, category, isLow); UI at `/office/inventory/stock-summary` accepts `?ref=balance-sheet` (back button) and `?asOf=YYYY-MM-DD` (display date).
+- `products/[id]/transactions` — GET returns `{ product, transactions[] }` for a single SKU; transactions are POSTED `InvVoucherLine` rows joined to `InvVoucher` with computed `paymentStatus` (PAID/PARTIAL/UNPAID); accepts optional `?from` / `?to` date params.
 
 ## Permissions (gate keys)
 
