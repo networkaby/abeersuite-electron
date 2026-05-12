@@ -27,6 +27,8 @@
 // What this does NOT seed (run dummy-* seeds for those):
 //   • Test users (tech, front, des) → dummy-users.ts
 //   • Demo products + InvUnit/Category/Brand/etc → dummy-shop.ts
+//   • InvAttributeMaster — seeded by dummy-shop.ts (global attrs + category-specific).
+//     Production users populate attribute masters via Configure → Attribute masters.
 //   • Test customers + companies → dummy-customers.ts
 //   • Sample vouchers → dummy-vouchers.ts
 //   • Opening balances on accounts/products → set via UI
@@ -591,7 +593,7 @@ async function main() {
     console.log("  Run: pnpm prisma db seed   (or after pnpm prisma migrate reset)\n");
 
     // ── Section 1: RBAC ────────────────────────────────────────────────
-    console.log("[1/6] RBAC — Roles, Permissions, Role grants");
+    console.log("[1/7] RBAC — Roles, Permissions, Role grants");
     for (const r of ROLES) {
         await prisma.role.upsert({
             where:  { id: r.id },
@@ -615,7 +617,7 @@ async function main() {
     console.log(`      ✓ ${ROLES.length} roles · ${PERMISSIONS.length} permissions · ${grants.length} grants\n`);
 
     // ── Section 2: Workflow ────────────────────────────────────────────
-    console.log("[2/6] Workflow — Pipelines, Statuses, Sub-statuses, Transitions");
+    console.log("[2/7] Workflow — Pipelines, Statuses, Sub-statuses, Transitions");
     for (const pl of PIPELINES) {
         await prisma.pipeline.upsert({
             where:  { id: pl.id },
@@ -657,7 +659,7 @@ async function main() {
     console.log(`      ✓ ${PIPELINES.length} pipelines · ${PIPELINES.reduce((s, p) => s + p.statuses.length, 0)} statuses · ${SUB_STATUSES.length} sub-statuses\n`);
 
     // ── Section 3: Org structure ────────────────────────────────────────
-    console.log("[3/6] Org structure — Branches, Departments");
+    console.log("[3/7] Org structure — Branches, Departments");
     for (const b of BRANCHES) {
         await pool.query(
             `INSERT INTO "Branch" (id, name, address, phone, "isActive")
@@ -677,7 +679,7 @@ async function main() {
     console.log(`      ✓ ${BRANCHES.length} branches · ${DEPARTMENTS.length} departments\n`);
 
     // ── Section 4: Chart of accounts ───────────────────────────────────
-    console.log("[4/6] Chart of accounts — Groups + GL ledgers (Stock-in-Hand intentionally empty)");
+    console.log("[4/7] Chart of accounts — Groups + GL ledgers (Stock-in-Hand intentionally empty)");
 
     // Primary groups
     const capitalAccountId     = await upsertGroup("Capital Account",        "LIABILITY", 10);
@@ -792,7 +794,7 @@ async function main() {
     console.log(`      ✓ 28 groups · ~50 GL ledgers (Stock-in-Hand: empty by design)\n`);
 
     // ── Section 5: Admin user ──────────────────────────────────────────
-    console.log("[5/6] Admin user");
+    console.log("[5/7] Admin user");
     const password = await bcrypt.hash(ADMIN.password, 10);
     await prisma.user.upsert({
         where:  { email: ADMIN.email },
@@ -802,10 +804,53 @@ async function main() {
     console.log(`      ✓ ${ADMIN.email} (role ${ADMIN.role})  password: ${ADMIN.password}\n`);
 
     // ── Section 6: DB constraints ──────────────────────────────────────
-    console.log("[6/6] DB constraints");
+    console.log("[6/7] DB constraints");
     await ensureXorCheck("Phone", "Phone_owner_xor");
     await ensureXorCheck("Email", "Email_owner_xor");
     console.log(`      ✓ Phone/Email XOR ownership CHECK ensured\n`);
+
+    // ── Section 7: Inventory naming convention (singleton) ─────────────
+    // Drives auto-fill of InvProduct.name / shopSubheading / slug from the
+    // master selects on the product form. Single source of truth for the
+    // default template — must match DEFAULT_NAMING_CONFIG in
+    // src/modules/inventory/lib/productName.ts.
+    console.log("[7/7] Inventory naming convention");
+    const namingDefaults = {
+        nameFields: [
+            { kind: "brand",   enabled: true, defaultValue: null },
+            { kind: "group",   enabled: true, defaultValue: "General" },
+            { kind: "modelNo", enabled: true, defaultValue: null },
+        ],
+        separator: " ",
+        onlineNameFields: [
+            { kind: "brand",    enabled: true, defaultValue: null },
+            { kind: "group",    enabled: true, defaultValue: null },
+            { kind: "category", enabled: true, defaultValue: null },
+            { kind: "modelNo",  enabled: true, defaultValue: null },
+            { kind: "warranty", enabled: true, defaultValue: null },
+        ],
+        onlineSeparator: " ",
+        slugFields: [
+            { kind: "brand",   enabled: true, defaultValue: null },
+            { kind: "group",   enabled: true, defaultValue: null },
+            { kind: "modelNo", enabled: true, defaultValue: null },
+        ],
+        slugSeparator: "-",
+        slugEnabled: true,
+        slugMaxLength: 80,
+        fallbackFields: {
+            group:    ["category", "brand"],
+            category: ["group", "brand"],
+            brand:    ["group", "category"],
+        },
+    };
+    const existingNaming = await prisma.invNamingConfig.findFirst({ orderBy: { id: "asc" } });
+    if (existingNaming) {
+        await prisma.invNamingConfig.update({ where: { id: existingNaming.id }, data: namingDefaults });
+    } else {
+        await prisma.invNamingConfig.create({ data: namingDefaults });
+    }
+    console.log(`      ✓ InvNamingConfig singleton seeded\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

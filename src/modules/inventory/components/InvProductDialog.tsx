@@ -21,9 +21,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
     InvProductFormFields,
     emptyInvProductForm,
+    type AttrMasterRow,
     type InvProductFormState,
 } from "@/modules/inventory/components/InvProductFormFields";
 import { generateSku } from "@/modules/inventory/lib/sku";
+import {
+    DEFAULT_NAMING_CONFIG,
+    type NamingConfigShape,
+} from "@/modules/inventory/lib/productName";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -34,6 +39,8 @@ export type InvProductRow = {
     sku: string;
     name: string;
     isActive: boolean;
+    shopSubheading: string | null;
+    slug: string | null;
     modelNo: string | null;
     unitId: number;
     categoryId: number | null;
@@ -50,6 +57,7 @@ export type InvProductRow = {
     openingStock: number | string | null;
     openingRate: number | string | null;
     openingStockDate: string | null;
+    attrsJson: Record<string, string> | null;
 };
 
 const paiseToRupees = (p: number | null): string =>
@@ -78,6 +86,8 @@ function rowToForm(p: InvProductRow): InvProductFormState {
     return {
         sku: p.sku,
         name: p.name,
+        shopSubheading: p.shopSubheading ?? "",
+        slug: p.slug ?? "",
         unitId: String(p.unitId),
         categoryId: p.categoryId != null ? String(p.categoryId) : "",
         groupId: p.groupId != null ? String(p.groupId) : "",
@@ -101,25 +111,45 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
         openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
         openingDate: p.openingStockDate ? p.openingStockDate.slice(0, 10) : "",
+        attrs: p.attrsJson
+            ? Object.entries(p.attrsJson).map(([key, value]) => ({ key, value: String(value) }))
+            : [],
     };
 }
+
+/** Shape of the POST /api/inventory/products response used by Advanced-create callers. */
+export type InvProductCreatedRow = {
+    id: number; sku: string; name: string;
+    stock: number | null; lowStockThreshold: number;
+    pricePaise: number | null; costPaise: number | null; mrpPaise: number | null;
+    unit: { code: string }; brand: { name: string } | null; barcode1: string | null;
+};
 
 interface Props {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** null = create mode, number = edit mode */
     editId: number | null;
+    /**
+     * Pre-fill the form in create mode (editId === null). Ignored in edit mode.
+     * Useful when opening the full dialog from the quick-create form.
+     */
+    defaultValues?: Partial<InvProductFormState>;
     /** Fired after a successful save. Caller refreshes its list. */
     onSaved?: () => void;
+    /** Fired after a successful CREATE with the raw API response. Edit saves do NOT fire this. */
+    onCreatedProduct?: (product: InvProductCreatedRow) => void;
 }
 
-export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props) {
+export function InvProductDialog({ open, onOpenChange, editId, defaultValues, onSaved, onCreatedProduct }: Props) {
     const [form, setForm] = useState<InvProductFormState>(emptyInvProductForm);
     const [units, setUnits] = useState<Opt[]>([]);
     const [categories, setCategories] = useState<Opt[]>([]);
     const [groups, setGroups] = useState<Opt[]>([]);
     const [brands, setBrands] = useState<Opt[]>([]);
     const [warrantyTerms, setWarrantyTerms] = useState<Opt[]>([]);
+    const [namingConfig, setNamingConfig] = useState<NamingConfigShape>(DEFAULT_NAMING_CONFIG);
+    const [attrMasters, setAttrMasters] = useState<AttrMasterRow[]>([]);
     const [saving, setSaving] = useState(false);
     const [refsLoaded, setRefsLoaded] = useState(false);
 
@@ -132,6 +162,8 @@ export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props)
             axios.get<Opt[]>("/api/inventory/product-groups").then((r) => setGroups(r.data)),
             axios.get<Opt[]>("/api/inventory/brands").then((r) => setBrands(r.data)),
             axios.get<Opt[]>("/api/inventory/warranty-terms").then((r) => setWarrantyTerms(r.data)),
+            axios.get<NamingConfigShape>("/api/inventory/naming-config").then((r) => setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
+            axios.get<AttrMasterRow[]>("/api/inventory/attribute-masters").then((r) => setAttrMasters(r.data)),
         ])
             .then(() => setRefsLoaded(true))
             .catch(() => toast.error("Failed to load reference data"));
@@ -142,7 +174,7 @@ export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props)
     useEffect(() => {
         if (!open) return;
         if (editId == null) {
-            setForm({ ...emptyInvProductForm, sku: generateSku() });
+            setForm({ ...emptyInvProductForm, sku: generateSku(), ...defaultValues });
             return;
         }
         axios
@@ -168,6 +200,8 @@ export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props)
         const payload = {
             sku: form.sku.trim(),
             name: form.name.trim(),
+            shopSubheading: optionalStr(form.shopSubheading),
+            slug: optionalStr(form.slug),
             unitId: unitId!,
             categoryId: optionalId(form.categoryId),
             groupId: optionalId(form.groupId),
@@ -191,13 +225,17 @@ export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props)
             openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
             openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
             openingStockDate: form.openingDate || null,
+            attrsJson: form.attrs.filter((a) => a.key.trim()).length > 0
+                ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
+                : null,
         };
 
         setSaving(true);
         try {
             if (editId == null) {
-                await axios.post("/api/inventory/products", payload);
+                const res = await axios.post<InvProductCreatedRow>("/api/inventory/products", payload);
                 toast.success("Product created");
+                onCreatedProduct?.(res.data);
             } else {
                 await axios.patch(`/api/inventory/products/${editId}`, payload);
                 toast.success("Product updated");
@@ -209,7 +247,7 @@ export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props)
         } finally {
             setSaving(false);
         }
-    }, [editId, form, onOpenChange, onSaved]);
+    }, [editId, form, onOpenChange, onSaved, onCreatedProduct]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -227,6 +265,9 @@ export function InvProductDialog({ open, onOpenChange, editId, onSaved }: Props)
                         brands={brands}
                         warrantyTerms={warrantyTerms}
                         skuDisabled={false}
+                        namingConfig={namingConfig}
+                        attrMasters={attrMasters}
+                        isEditMode={editId != null}
                     />
                 </div>
                 <div className="flex justify-end gap-2 border-t bg-muted/30 px-6 py-3">

@@ -20,7 +20,9 @@ import { createPortal } from "react-dom";
 import axios from "axios";
 import { Plus } from "lucide-react";
 import { useComboboxNav } from "@/shared/hooks";
-import { NewProductDialog, type CreatedProductOption } from "./NewProductDialog";
+import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
+import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
+import type { InvProductFormState } from "./InvProductFormFields";
 
 type ProductOption = {
     id:         number;
@@ -89,6 +91,8 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     const [query, setQuery]         = useState("");
     const [loading, setLoading]     = useState(true);
     const [createOpen, setCreateOpen] = useState(false);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [advancedDefaults, setAdvancedDefaults] = useState<Partial<InvProductFormState> | undefined>();
 
     // Load all products once (cached in memory for fast typing)
     useEffect(() => {
@@ -362,6 +366,45 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                     onOpenChange={setCreateOpen}
                     initialName={query.trim()}
                     onCreated={(np: CreatedProductOption) => {
+                        setProducts((ps) => [...ps, np]);
+                        setQuery(np.name);
+                        onChange(toSelected(np));
+                    }}
+                    onAdvanced={(d: AdvancedDefaults) => {
+                        setAdvancedDefaults({
+                            name: d.name,
+                            sku: d.sku,
+                            unitId: d.unitId,
+                            priceRupees: d.priceRupees,
+                            costRupees: d.costRupees,
+                        });
+                        setAdvancedOpen(true);
+                    }}
+                />
+            )}
+
+            {/* Full product editor — opened from the quick-create "Advanced…" button.
+                On save, append the new product to the in-memory list and auto-select. */}
+            {allowCreate && (
+                <InvProductDialog
+                    open={advancedOpen}
+                    onOpenChange={setAdvancedOpen}
+                    editId={null}
+                    defaultValues={advancedDefaults}
+                    onCreatedProduct={(raw: InvProductCreatedRow) => {
+                        const np: CreatedProductOption = {
+                            id: raw.id,
+                            sku: raw.sku,
+                            name: raw.name,
+                            stock: raw.stock,
+                            lowStockThreshold: raw.lowStockThreshold,
+                            pricePaise: raw.pricePaise,
+                            costPaise: raw.costPaise,
+                            mrpPaise: raw.mrpPaise,
+                            unit: { code: raw.unit.code },
+                            brand: raw.brand,
+                            barcode1: raw.barcode1,
+                        };
                         setProducts((ps) => [...ps, np]);
                         setQuery(np.name);
                         onChange(toSelected(np));

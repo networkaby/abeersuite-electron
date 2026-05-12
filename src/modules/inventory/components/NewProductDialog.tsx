@@ -58,6 +58,14 @@ function rupeesToPaise(s: string): number | null {
     return Math.round(v * 100);
 }
 
+export type AdvancedDefaults = {
+    name: string;
+    sku: string;
+    unitId: string;
+    priceRupees: string;
+    costRupees: string;
+};
+
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -65,9 +73,15 @@ type Props = {
     initialName?: string;
     /** Fires with the newly-created product so the parent can append + auto-select. */
     onCreated: (product: CreatedProductOption) => void;
+    /**
+     * When set, an "Advanced" button appears. Clicking it closes this dialog
+     * and fires the callback with the current form values so the caller can
+     * open the full product editor pre-filled with the same data.
+     */
+    onAdvanced?: (defaults: AdvancedDefaults) => void;
 };
 
-export function NewProductDialog({ open, onOpenChange, initialName = "", onCreated }: Props) {
+export function NewProductDialog({ open, onOpenChange, initialName = "", onCreated, onAdvanced }: Props) {
     const [name, setName] = useState(initialName);
     const [sku, setSku] = useState("");
     const [unitId, setUnitId] = useState<string>("");
@@ -238,14 +252,32 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                         </div>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-                        Cancel
-                    </Button>
-                    <Button onClick={submit} disabled={saving || !name.trim() || !unitId}>
-                        {saving && <Loader2 size={14} className="animate-spin mr-1" />}
-                        Save
-                    </Button>
+                <DialogFooter className="flex-row items-center justify-between gap-2">
+                    <div className="flex gap-2">
+                        {onAdvanced && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    onAdvanced({ name, sku, unitId, priceRupees: salePrice, costRupees: costPrice });
+                                    onOpenChange(false);
+                                }}
+                                disabled={saving}
+                                title="Open the full product editor with these values pre-filled"
+                            >
+                                Advanced…
+                            </Button>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submit} disabled={saving || !name.trim() || !unitId}>
+                            {saving && <Loader2 size={14} className="animate-spin mr-1" />}
+                            Save
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

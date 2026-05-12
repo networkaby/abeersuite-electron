@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
@@ -96,6 +97,9 @@ export async function POST(req: Request) {
                 upc3: b.upc3 ?? null,
                 notes: b.notes ?? null,
                 isActive: b.isActive ?? true,
+                shopSubheading: b.shopSubheading ?? null,
+                slug: b.slug ?? null,
+                attrsJson: b.attrsJson ?? Prisma.DbNull,
                 pricePaise: b.pricePaise ?? null,
                 mrpPaise:   b.mrpPaise   ?? null,
                 // Books-beginning opening stock — server computes openingValue.

@@ -296,7 +296,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             // { label: "Units", icon: Ruler, href: "/office/inventory/units", permission: "inventory:manage" },
             // { label: "Categories", icon: Layers, href: "/office/inventory/categories", permission: "inventory:manage" },
             // { label: "Groups", icon: LayoutGrid, href: "/office/inventory/product-groups", permission: "inventory:manage" },
-           
+
             // { label: "Warranty terms", icon: ShieldCheck, href: "/office/inventory/warranty-terms", permission: "inventory:manage" },
             { label: "Products", icon: Box, href: "/office/inventory/products", permission: "inventory:manage" },
             { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger", permission: "inventory:manage" },
@@ -309,8 +309,15 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 permission: "finance:voucher:create",
                 // children: [
                 //     { label: "Brands", icon: Tag, href: "/office/inventory/configure/brands", permission: "inventory:manage" },
-                    
+
                 // ]
+            },
+            {
+                label: "Configure",
+                icon: ChartArea,
+                href: "/office/inventory/configure",
+                permission: "finance:voucher:create",
+                children: [],
             },
 
         ],

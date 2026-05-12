@@ -85,13 +85,49 @@ export const invProductCreateSchema = z.object({
     brandId: z.number().int().positive().nullish(),
     warrantyTermId: z.number().int().positive().nullish(),
     isActive: z.boolean().optional().default(true),
+    // Auto-generated from masters via the naming-convention config; user can
+    // override. Empty / whitespace → null.
+    shopSubheading: zOptStr(500),
+    slug: zOptStr(120),
     ...productIdentifiers,
     ...productPricing,
     ...productOpening,
+    // Flat key→value bag for SEO naming tokens and extra product info.
+    attrsJson: z.record(z.string(), z.string()).nullish(),
 });
 
 export const invProductUpdateSchema = invProductCreateSchema.partial().extend({
     sku: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(500).optional(),
     unitId: z.coerce.number().int().positive().optional(),
+});
+
+// ── Naming convention (InvNamingConfig singleton) ──────────────────────────
+
+const tokenKind = z.enum(["brand", "category", "group", "modelNo", "warranty", "unit", "literal", "attr"]);
+
+const namingTokenSchema = z.object({
+    kind: tokenKind,
+    enabled: z.boolean(),
+    defaultValue: z.string().max(120).nullish(),
+    literal: z.string().max(120).nullish(),
+    attrKey: z.string().max(64).nullish(),
+    prefix: z.string().max(32).nullish(),
+    suffix: z.string().max(32).nullish(),
+});
+
+// Partial record — only the kinds the user configured need to appear.
+// (Zod 4's `z.record(enum, ...)` enforces ALL enum keys, which we don't want.)
+const fallbackMapSchema = z.record(z.string(), z.array(tokenKind).max(6));
+
+export const invNamingConfigUpdateSchema = z.object({
+    nameFields: z.array(namingTokenSchema).max(20),
+    separator: z.string().max(8),
+    onlineNameFields: z.array(namingTokenSchema).max(20),
+    onlineSeparator: z.string().max(8),
+    slugFields: z.array(namingTokenSchema).max(20),
+    slugSeparator: z.string().min(1).max(4),
+    slugEnabled: z.boolean(),
+    slugMaxLength: z.number().int().min(0).max(255),
+    fallbackFields: fallbackMapSchema,
 });

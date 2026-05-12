@@ -23,7 +23,8 @@ model InvCategory {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  products InvProduct[]
+  products         InvProduct[]
+  attributeMasters InvAttributeMaster[]
 
   @@index([parentId])
 }
@@ -62,6 +63,68 @@ model InvWarrantyTerm {
   updatedAt      DateTime @updatedAt
 
   products InvProduct[]
+}
+
+/// Category-specific attribute definitions — drives the "attr" token in naming
+/// convention and the key dropdown on the product form. Attributes can be global
+/// (categoryId = null) or restricted to a single category.
+model InvAttributeMaster {
+  id         Int          @id @default(autoincrement())
+  /// Machine key stored in InvProduct.attrsJson (e.g. "ram", "storage", "os").
+  key        String
+  /// Human-readable label shown on forms (e.g. "RAM", "Storage", "OS").
+  name       String
+  /// null = applies to all categories; non-null = restricted to one category.
+  categoryId Int?
+  category   InvCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  sortOrder  Int          @default(0)
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([key, categoryId])
+  @@index([categoryId])
+}
+
+/// Singleton config — drives auto-fill of InvProduct.name (offline),
+/// InvProduct.shopSubheading (online display name), and InvProduct.slug
+/// from the master selects on the product form. Three independent token
+/// lists (offline / online / slug) share one fallback chain.
+///
+/// Token shape (per entry in *Fields JSON arrays):
+///   { kind: "brand"|"category"|"group"|"modelNo"|"warranty"|"unit"|"literal",
+///     enabled: boolean,
+///     defaultValue?: string | null,
+///     literal?: string }   // only when kind === "literal"
+model InvNamingConfig {
+  id               Int      @id @default(autoincrement())
+
+  /// Offline (staff / voucher / POS) name token list.
+  nameFields       Json     @default("[]")
+  /// Joiner for offline name. Default " ".
+  separator        String   @default(" ")
+
+  /// Online (storefront display) name token list. Same shape as nameFields.
+  onlineNameFields Json     @default("[]")
+  /// Joiner for online name. Default " ".
+  onlineSeparator  String   @default(" ")
+
+  /// URL slug token list. Same shape; output is slugified (lowercased,
+  /// non-alphanumeric replaced with slugSeparator).
+  slugFields       Json     @default("[]")
+
+  /// Shared per-kind fallback chain across all three outputs.
+  /// Shape: { group: ["category","brand"], category: ["group","brand"], … }
+  fallbackFields   Json     @default("{}")
+
+  /// Master switch — when false, slug auto-fill is disabled.
+  slugEnabled      Boolean  @default(true)
+  /// Slug separator. Default "-".
+  slugSeparator    String   @default("-")
+  /// Hard cap on generated slug length. 0 = uncapped.
+  slugMaxLength    Int      @default(80)
+
+  updatedAt        DateTime @updatedAt
 }
 
 model InvProduct {
@@ -104,6 +167,9 @@ model InvProduct {
   galleryJson       Json?
   /// JSON object of label → value for specs tab
   specsJson         Json?
+  /// Free-form custom attributes — flat { key: value } pairs used for SEO-rich
+  /// naming convention tokens and additional product info (colour, storage, OS, …).
+  attrsJson         Json?
   /// Cached running stock balance — updated atomically on every voucher post/cancel
   /// (mirrors Account.balance pattern from GL module). null = stock not tracked.
   stock             Int?

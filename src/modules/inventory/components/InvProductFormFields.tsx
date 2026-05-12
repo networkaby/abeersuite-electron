@@ -1,6 +1,7 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,10 +15,21 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateSku } from "@/modules/inventory/lib/sku";
+import {
+    buildOfflineName,
+    buildOnlineName,
+    buildOnlineSlug,
+    type NamingConfigShape,
+    type NamingMasters,
+} from "@/modules/inventory/lib/productName";
 
 export type InvProductFormState = {
     sku: string;
     name: string;
+    /** Online (storefront) display name — written to InvProduct.shopSubheading. */
+    shopSubheading: string;
+    /** URL slug — written to InvProduct.slug. */
+    slug: string;
     unitId: string;
     categoryId: string;
     groupId: string;
@@ -45,11 +57,15 @@ export type InvProductFormState = {
     openingQty:    string;
     openingRate:   string;
     openingDate:   string;
+    /** Custom attribute pairs — stored as attrsJson in DB. */
+    attrs: Array<{ key: string; value: string }>;
 };
 
 export const emptyInvProductForm: InvProductFormState = {
     sku: "",
     name: "",
+    shopSubheading: "",
+    slug: "",
     unitId: "",
     categoryId: "",
     groupId: "",
@@ -73,9 +89,12 @@ export const emptyInvProductForm: InvProductFormState = {
     openingQty:  "",
     openingRate: "",
     openingDate: "",
+    attrs: [],
 };
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
+
+export type AttrMasterRow = { id: number; key: string; name: string; categoryId: number | null; isActive: boolean };
 
 export function InvProductFormFields({
     form,
@@ -86,6 +105,10 @@ export function InvProductFormFields({
     brands,
     warrantyTerms,
     skuDisabled,
+    namingConfig,
+    attrMasters = [],
+    /** true = edit mode; all dirty flags start true so existing values aren't clobbered. */
+    isEditMode = false,
 }: {
     form: InvProductFormState;
     setForm: React.Dispatch<React.SetStateAction<InvProductFormState>>;
@@ -95,8 +118,71 @@ export function InvProductFormFields({
     brands: Opt[];
     warrantyTerms: Opt[];
     skuDisabled?: boolean;
+    namingConfig?: NamingConfigShape | null;
+    attrMasters?: AttrMasterRow[];
+    isEditMode?: boolean;
 }) {
     const label = (o: Opt) => o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
+
+    // Per-field dirty flags: once the user hand-edits Name / Online name /
+    // Slug, master changes stop auto-filling that field. Edit mode opens with
+    // all flags `true` so existing saved values are preserved.
+    const nameDirty = useRef(isEditMode);
+    const onlineNameDirty = useRef(isEditMode);
+    const slugDirty = useRef(isEditMode);
+
+    const findById = (list: Opt[], id: string) =>
+        id ? list.find((o) => String(o.id) === id) ?? null : null;
+
+    // Build the masters snapshot from current form + reference lists.
+    const buildMasters = (): NamingMasters => ({
+        brand:    findById(brands,        form.brandId)        ? { name: findById(brands,        form.brandId)!.name ?? "" }       : null,
+        category: findById(categories,    form.categoryId)     ? { name: findById(categories,    form.categoryId)!.name ?? "" }    : null,
+        group:    findById(groups,        form.groupId)        ? { name: findById(groups,        form.groupId)!.name ?? "" }       : null,
+        warranty: findById(warrantyTerms, form.warrantyTermId) ? { name: findById(warrantyTerms, form.warrantyTermId)!.name ?? "" }: null,
+        unit:     findById(units,         form.unitId)         ? { code: findById(units,         form.unitId)!.code ?? "" }        : null,
+        modelNo:  form.modelNo || null,
+        attrs:    form.attrs.length > 0
+            ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
+            : null,
+    });
+
+    // Re-generate a single field on demand (used by the refresh buttons in
+    // edit mode). Resets the dirty flag so future master changes auto-fill again.
+    function regenField(which: "name" | "onlineName" | "slug") {
+        if (!namingConfig) return;
+        const masters = buildMasters();
+        if (which === "name") {
+            nameDirty.current = false;
+            setForm((f) => ({ ...f, name: buildOfflineName(masters, namingConfig) }));
+        } else if (which === "onlineName") {
+            onlineNameDirty.current = false;
+            setForm((f) => ({ ...f, shopSubheading: buildOnlineName(masters, namingConfig) }));
+        } else {
+            slugDirty.current = false;
+            setForm((f) => ({ ...f, slug: buildOnlineSlug(masters, namingConfig) }));
+        }
+    }
+
+    // Live auto-fill from masters whenever a token-source field changes.
+    useEffect(() => {
+        if (!namingConfig) return;
+        const masters = buildMasters();
+        const nextName       = nameDirty.current       ? null : buildOfflineName(masters, namingConfig);
+        const nextOnlineName = onlineNameDirty.current ? null : buildOnlineName(masters, namingConfig);
+        const nextSlug       = slugDirty.current       ? null : buildOnlineSlug(masters, namingConfig);
+        setForm((f) => ({
+            ...f,
+            ...(nextName       !== null ? { name:           nextName }       : {}),
+            ...(nextOnlineName !== null ? { shopSubheading: nextOnlineName } : {}),
+            ...(nextSlug       !== null ? { slug:           nextSlug }       : {}),
+        }));
+    }, [
+        form.brandId, form.categoryId, form.groupId, form.warrantyTermId,
+        form.unitId, form.modelNo, form.attrs,
+        brands, categories, groups, warrantyTerms, units,
+        namingConfig, setForm,
+    ]);
 
     // Tab-panel min-height keeps the dialog from jumping as the user moves
     // between Basics (longest) and Pricing / Opening (shortest). 380px fits
@@ -143,7 +229,29 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Name</Label>
-                        <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={form.name}
+                                onChange={(e) => {
+                                    nameDirty.current = true;
+                                    setForm((f) => ({ ...f, name: e.target.value }));
+                                }}
+                            />
+                            {namingConfig && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    onClick={() => regenField("name")}
+                                    title="Re-generate name from naming convention"
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            )}
+                        </div>
+                        {namingConfig && !nameDirty.current ? (
+                            <p className="text-[11px] text-muted-foreground">Auto-filled from naming convention. Type to override.</p>
+                        ) : null}
                     </div>
                     <div className="space-y-2">
                         <Label>Unit</Label>
@@ -217,6 +325,89 @@ export function InvProductFormFields({
                         <Label>Notes</Label>
                         <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} />
                     </div>
+
+                    <div className="space-y-2 sm:col-span-2">
+                        <div className="flex items-center justify-between">
+                            <Label>Attributes</Label>
+                            <p className="text-[11px] text-muted-foreground">Used in naming convention &amp; SEO</p>
+                        </div>
+                        {(() => {
+                            // Filter masters to those applicable to the current category (global + category-specific).
+                            const catId = form.categoryId ? Number(form.categoryId) : null;
+                            const available = attrMasters.filter(
+                                (m) => m.isActive !== false && (m.categoryId == null || m.categoryId === catId),
+                            );
+                            const usedKeys = new Set(form.attrs.map((a) => a.key));
+                            const addable = available.filter((m) => !usedKeys.has(m.key));
+                            return (
+                                <>
+                                    {form.attrs.length > 0 && (
+                                        <div className="space-y-1.5">
+                                            {form.attrs.map((a, i) => {
+                                                const master = attrMasters.find((m) => m.key === a.key);
+                                                return (
+                                                    <div key={i} className="flex items-center gap-2">
+                                                        <span className="min-w-[120px] font-mono text-xs font-medium text-muted-foreground" title={a.key}>
+                                                            {master ? master.name : a.key}
+                                                        </span>
+                                                        <span className="text-muted-foreground text-xs">:</span>
+                                                        <Input
+                                                            className="flex-1 text-sm"
+                                                            value={a.value}
+                                                            onChange={(e) => {
+                                                                const next = form.attrs.slice();
+                                                                next[i] = { ...a, value: e.target.value };
+                                                                setForm((f) => ({ ...f, attrs: next }));
+                                                            }}
+                                                            placeholder="value"
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon-sm"
+                                                            onClick={() => setForm((f) => ({ ...f, attrs: f.attrs.filter((_, idx) => idx !== i) }))}
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {addable.length > 0 ? (
+                                        <Select
+                                            value=""
+                                            onValueChange={(key) => {
+                                                if (!key) return;
+                                                setForm((f) => ({ ...f, attrs: [...f.attrs, { key, value: "" }] }));
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-56">
+                                                <SelectValue placeholder="Add attribute…" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {addable.map((m) => (
+                                                    <SelectItem key={m.key} value={m.key}>
+                                                        {m.name} <span className="text-muted-foreground font-mono text-xs ml-1">({m.key})</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : addable.length === 0 && available.length > 0 ? (
+                                        <p className="text-xs text-muted-foreground">All available attributes added.</p>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            No attributes defined for this category.{" "}
+                                            <a href="/office/inventory/configure/attribute-masters" className="underline" target="_blank" rel="noreferrer">
+                                                Manage attribute masters
+                                            </a>
+                                        </p>
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </div>
+
                     <div className="flex items-center sm:col-span-2">
                         <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />
@@ -372,9 +563,67 @@ export function InvProductFormFields({
             </TabsContent>
 
             <TabsContent value="online" className={tabPanel}>
-                <p className="text-sm text-muted-foreground">
-                    Shop listing fields (image, slug, shop description, gallery, etc.) live on <code>InvProduct</code> but aren&apos;t exposed in this form yet. Use <em>Edit shop listing</em> from the product list to set them.
-                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2">
+                        <Label>Online display name</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={form.shopSubheading}
+                                onChange={(e) => {
+                                    onlineNameDirty.current = true;
+                                    setForm((f) => ({ ...f, shopSubheading: e.target.value }));
+                                }}
+                                placeholder="Shown on /shop product cards & detail page"
+                            />
+                            {namingConfig && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    onClick={() => regenField("onlineName")}
+                                    title="Re-generate online name from naming convention"
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            )}
+                        </div>
+                        {namingConfig && !onlineNameDirty.current ? (
+                            <p className="text-[11px] text-muted-foreground">Auto-filled from naming convention. Type to override.</p>
+                        ) : null}
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                        <Label>URL slug</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={form.slug}
+                                onChange={(e) => {
+                                    slugDirty.current = true;
+                                    setForm((f) => ({ ...f, slug: e.target.value }));
+                                }}
+                                className="font-mono flex-1"
+                                placeholder="my-product-handle"
+                            />
+                            {namingConfig && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    onClick={() => regenField("slug")}
+                                    title="Re-generate slug from naming convention"
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            URL handle for <code>/shop/product/&lt;slug&gt;</code>. Must be unique.
+                            {namingConfig && !slugDirty.current ? " Auto-filled from naming convention; type to override." : ""}
+                        </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground sm:col-span-2">
+                        Other shop fields (image, gallery, description, badge) aren&apos;t exposed here yet — use <em>Edit shop listing</em> from the product list.
+                    </p>
+                </div>
             </TabsContent>
         </Tabs>
     );

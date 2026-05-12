@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
@@ -102,6 +103,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.upc3 !== undefined ? { upc3: b.upc3 } : {}),
                 ...(b.notes !== undefined ? { notes: b.notes } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
+                ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
+                ...(b.slug !== undefined ? { slug: b.slug } : {}),
+                ...(b.attrsJson !== undefined ? { attrsJson: b.attrsJson ?? Prisma.DbNull } : {}),
                 ...(b.pricePaise !== undefined ? { pricePaise: b.pricePaise } : {}),
                 ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
                 // Opening fields are written together so openingValue stays consistent.

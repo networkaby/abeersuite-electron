@@ -17,6 +17,141 @@ const pool = new Pool({ connectionString: rawUrl, ssl: { rejectUnauthorized: fal
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+/** Upsert one InvCategory by name (no parent). Returns the id. */
+async function upsertCategory(name: string): Promise<number> {
+    const existing = await prisma.invCategory.findFirst({ where: { name, parentId: null } });
+    if (existing) return existing.id;
+    const created = await prisma.invCategory.create({ data: { name, isActive: true } });
+    return created.id;
+}
+
+/** Upsert one InvAttributeMaster. Key+categoryId is the unique identity. */
+async function upsertAttr(key: string, name: string, categoryId: number | null, sortOrder: number) {
+    const existing = await prisma.invAttributeMaster.findFirst({ where: { key, categoryId } });
+    if (existing) {
+        await prisma.invAttributeMaster.update({ where: { id: existing.id }, data: { name, sortOrder, isActive: true } });
+    } else {
+        await prisma.invAttributeMaster.create({ data: { key, name, categoryId, sortOrder, isActive: true } });
+    }
+}
+
+/**
+ * Upsert InvCategory rows for each demo category, then seed InvAttributeMaster
+ * rows (global + per-category). These survive as long as the dummy shop data is
+ * present; hard-clean wipes them along with the other inventory masters.
+ */
+async function upsertDemoAttributes() {
+    // ── Categories ────────────────────────────────────────────────────────────
+    const catId: Record<string, number> = {};
+    for (const name of ["Laptops", "Desktops", "Printers", "CCTV & Security", "Components", "Monitors", "Networking"]) {
+        catId[name] = await upsertCategory(name);
+    }
+
+    // ── Global attributes (categoryId = null — appear in every category) ───────
+    const globals: Array<[string, string]> = [
+        ["color",          "Colour"],
+        ["condition",      "Condition"],
+        ["warranty_period","Warranty Period"],
+    ];
+    for (const [i, [key, name]] of globals.entries()) {
+        await upsertAttr(key, name, null, i);
+    }
+
+    // ── Laptops ───────────────────────────────────────────────────────────────
+    const laptopAttrs: Array<[string, string]> = [
+        ["cpu",     "Processor"],
+        ["ram",     "RAM"],
+        ["storage", "Storage"],
+        ["display", "Screen Size"],
+        ["os",      "Operating System"],
+        ["gpu",     "Graphics Card"],
+        ["battery", "Battery Life"],
+    ];
+    for (const [i, [key, name]] of laptopAttrs.entries()) {
+        await upsertAttr(key, name, catId["Laptops"]!, i);
+    }
+
+    // ── Desktops ──────────────────────────────────────────────────────────────
+    const desktopAttrs: Array<[string, string]> = [
+        ["cpu",         "Processor"],
+        ["ram",         "RAM"],
+        ["storage",     "Storage"],
+        ["os",          "Operating System"],
+        ["gpu",         "Graphics Card"],
+        ["form_factor", "Form Factor"],
+    ];
+    for (const [i, [key, name]] of desktopAttrs.entries()) {
+        await upsertAttr(key, name, catId["Desktops"]!, i);
+    }
+
+    // ── Printers ──────────────────────────────────────────────────────────────
+    const printerAttrs: Array<[string, string]> = [
+        ["technology",   "Print Technology"],
+        ["print_speed",  "Print Speed"],
+        ["paper_size",   "Paper Size"],
+        ["connectivity", "Connectivity"],
+        ["monthly_duty", "Monthly Duty Cycle"],
+    ];
+    for (const [i, [key, name]] of printerAttrs.entries()) {
+        await upsertAttr(key, name, catId["Printers"]!, i);
+    }
+
+    // ── CCTV & Security ───────────────────────────────────────────────────────
+    const cctvAttrs: Array<[string, string]> = [
+        ["resolution",   "Resolution"],
+        ["camera_type",  "Camera Type"],
+        ["channels",     "Channels"],
+        ["lens",         "Lens"],
+        ["ir_distance",  "IR Distance"],
+        ["storage_type", "Storage Type"],
+    ];
+    for (const [i, [key, name]] of cctvAttrs.entries()) {
+        await upsertAttr(key, name, catId["CCTV & Security"]!, i);
+    }
+
+    // ── Components ────────────────────────────────────────────────────────────
+    const componentAttrs: Array<[string, string]> = [
+        ["component_type", "Component Type"],
+        ["capacity",       "Capacity"],
+        ["interface",      "Interface"],
+        ["speed",          "Speed/Frequency"],
+        ["compatibility",  "Compatibility"],
+    ];
+    for (const [i, [key, name]] of componentAttrs.entries()) {
+        await upsertAttr(key, name, catId["Components"]!, i);
+    }
+
+    // ── Monitors ──────────────────────────────────────────────────────────────
+    const monitorAttrs: Array<[string, string]> = [
+        ["display",       "Screen Size"],
+        ["resolution",    "Resolution"],
+        ["panel",         "Panel Type"],
+        ["refresh_rate",  "Refresh Rate"],
+        ["response_time", "Response Time"],
+        ["ports",         "Ports"],
+    ];
+    for (const [i, [key, name]] of monitorAttrs.entries()) {
+        await upsertAttr(key, name, catId["Monitors"]!, i);
+    }
+
+    // ── Networking ────────────────────────────────────────────────────────────
+    const networkAttrs: Array<[string, string]> = [
+        ["device_type",    "Device Type"],
+        ["speed",          "Speed"],
+        ["ports",          "Ports"],
+        ["wifi_standard",  "WiFi Standard"],
+        ["coverage_range", "Coverage Range"],
+    ];
+    for (const [i, [key, name]] of networkAttrs.entries()) {
+        await upsertAttr(key, name, catId["Networking"]!, i);
+    }
+
+    const total = globals.length + laptopAttrs.length + desktopAttrs.length +
+        printerAttrs.length + cctvAttrs.length + componentAttrs.length +
+        monitorAttrs.length + networkAttrs.length;
+    console.log(`      ✓ ${Object.keys(catId).length} categories, ${total} attribute masters`);
+}
+
 /** Idempotent: upsert full demo catalog for the public shop.
  *  Products live on InvProduct — a "PCS" unit is created if absent.
  */
@@ -70,9 +205,14 @@ async function upsertShopDemoCatalog() {
 async function main() {
     console.log("\n⚠️  DUMMY DATA — demo shop catalog. DO NOT run in production.\n");
 
-    await upsertShopDemoCatalog();
+    console.log("[1/2] Upserting categories + attribute masters…");
+    await upsertDemoAttributes();
 
-    console.log(`\n✅ Upserted demo shop catalog (${DEMO_SHOP_CATALOG.length} products).`);
+    console.log("[2/2] Upserting shop catalog…");
+    await upsertShopDemoCatalog();
+    console.log(`      ✓ ${DEMO_SHOP_CATALOG.length} products`);
+
+    console.log("\n✅ Done.");
 }
 
 main()

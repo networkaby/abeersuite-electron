@@ -19,6 +19,8 @@
 //   • AccountGroup tree + pure-GL Account chart
 //   • Account.openingBalance / openingBalanceType / openingBalanceDate
 //     (user-set config — survives clean)
+//   • InvNamingConfig singleton (user-tuned name/slug template — survives;
+//     `pnpm prisma db seed` re-runs to restore defaults if needed)
 //   • Phone/Email XOR check constraint
 //   • CompanySettings + other org-level config tables
 //
@@ -57,6 +59,7 @@ const TRANSACTION_TABLES = [
 const INVENTORY_MASTERS = [
     "InvStockLedger", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
     "InvProduct",
+    "InvAttributeMaster",
     "InvUnit", "InvCategory", "InvProductGroup", "InvBrand", "InvWarrantyTerm",
 ];
 
