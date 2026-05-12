@@ -50,6 +50,7 @@ import {
     PackageX,
     ArrowLeftRight,
     ClipboardCheck,
+    BarChart3,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -326,6 +327,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Brands", icon: Tag, href: "/office/inventory/brands", permission: "inventory:manage" },
             { label: "Warranty terms", icon: ShieldCheck, href: "/office/inventory/warranty-terms", permission: "inventory:manage" },
             { label: "Products", icon: Box, href: "/office/inventory/products", permission: "inventory:manage" },
+            { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger", permission: "inventory:manage" },
+            { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
+            { label: "Inventory Details", icon: ClipboardList, href: "/office/inventory/inventory-details", permission: "inventory:manage" },
         ],
     },
     {

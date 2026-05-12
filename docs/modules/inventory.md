@@ -6,11 +6,11 @@
 
 ### UI pages (`src/app/(protected)/office/(inventory)/inventory/`)
 - `/office/inventory` — overview
-- `/office/inventory/products` — SKU master + create/edit dialog (tabbed form: Basics / Pricing / Stock control / Online listing — see Step 3 2026-05-07)
+- `/office/inventory/products` — SKU master + create/edit dialog (tabbed form: Basics / Pricing / Stock control / Online listing — see Step 3 2026-05-07). Accepts `?edit=<productId>` to deep-link straight to the edit dialog; param is stripped from URL after consumption. Dialog is `max-w-4xl` with sticky footer; tab panels have `min-h-[380px]` so the modal doesn't reflow when switching tabs.
 - `/office/inventory/units`, `/categories`, `/groups`, `/brands`, `/warranty-terms` — masters
 - `/office/inventory/grn`, `/purchase-orders`, `/challans`, `/sales-orders`, `/rejections`, `/stock-journal` — vouchers
 - `/office/inventory/stock-ledger` — per-SKU stock movement history
-- `/office/inventory/stock-summary` — Tally-style stock valuation. Params: `view=group|category|brand` (default `group`), `method=LAST_COST|WEIGHTED_AVG|FIFO|LIFO` (default `LAST_COST`), `profit=1` (show Sale/Profit/Margin columns), `ref=balance-sheet&asOf=YYYY-MM-DD` (back button). Grand total matches Balance Sheet Stock-in-Hand when `method=LAST_COST`.
+- `/office/inventory/stock-summary` — Tally-style stock valuation. Params: `view=group|category|brand` (default `group`), `method=LAST_COST|WEIGHTED_AVG|FIFO|LIFO` (default `LAST_COST`), `profit=1` (show Sale/Profit/Margin columns), `ref=balance-sheet&asOf=YYYY-MM-DD` (back button). Grand total matches Balance Sheet Stock-in-Hand when `method=LAST_COST`. Groups auto-expand on data load; toggle button collapses/expands all at once. Each item row has a pencil button that opens the product edit dialog **inline** (mounted on this page via `<InvProductDialog>`). When Show Profit is off, **Category** and **Brand** columns are shown; when on, those columns are hidden so the Profit columns can fit.
 - `/office/inventory/inventory-details` — three-column product browser: left sidebar product list (with stock badges), right panel shows product summary card (sale price, cost, stock qty, stock value) + full transaction history table (TYPE | INVOICE/REF | PARTY | DATE | QTY | RATE | STATUS); supports optional date-range filter
 - `/office/inventory/{purchases,sales}/[id]` — voucher detail (cross-references Accountancy invoices)
 
@@ -37,6 +37,7 @@
 ## Key components / library
 
 - `src/modules/inventory/components/InvProductFormFields.tsx` — **tabbed product form**: Basics / Pricing / Stock control / Opening / Online listing. Pricing + Opening tabs are wired (cost / price / mrp + opening qty / rate / date). Online listing remains a placeholder.
+- `src/modules/inventory/components/InvProductDialog.tsx` — **reusable create/edit dialog** wrapping `InvProductFormFields` with refs fetch + save (POST/PATCH). Mount on any page that needs to edit a product master. Props: `open`, `onOpenChange`, `editId` (null=create), `onSaved`. Used by `/office/inventory/products` and `/office/inventory/stock-summary`.
 - `src/modules/inventory/components/InvProductPicker.tsx`, `InvProductCombobox.tsx` — autocomplete pickers used in voucher / journal-voucher forms.
 - `src/modules/inventory/components/InvVoucherForm.tsx`, `InvVoucherDetail.tsx` — generic voucher form/detail.
 - `src/shared/types/inventoryTypes.ts` — `invProductDb(prisma)` typed accessor + shared types.
@@ -46,6 +47,7 @@
 
 | Helper | File | Purpose | Use when |
 |---|---|---|---|
+| **`generateSku()`** | `src/modules/inventory/lib/sku.ts` | Returns a 6-digit random numeric SKU (`100000`–`999999`). Uniqueness enforced server-side (`InvProduct.sku @unique`, 409 on conflict). | Auto-filling SKU on the create dialog; "Regenerate" button on the SKU field; quick-create flows. Single source of truth — do NOT inline `Math.random()` in components. |
 | **`productOpeningValue(p)`** | `src/modules/inventory/lib/stockValue.ts` | `qty × rate` (returns null if either field missing) | Writing `InvProduct.openingValue` on master save |
 | **`syncProductCacheFromOpening(p)`** | same | Returns `{ stock, costPaise }` patch for Prisma — opening qty seeds running stock, opening rate seeds cost basis | Inside any product-write Prisma `data: { ... }` block — spread it: `data: { ...syncProductCacheFromOpening(b), ... }`. Used by POST `/api/inventory/products`, PATCH `/api/inventory/products/[id]`, PUT `/api/inventory/products/[id]/opening` |
 | **`productClosingValue(p)`** | same | Per-product live valuation = `stock × costPaise / 100` (0 when stock ≤ 0 or cost null) | Per-row stock value display in any product list / report |
@@ -89,4 +91,4 @@ For per-product stock-value display, **always use `productClosingValue(p)`** —
 - Reorder automation — `lowStockThreshold` exists but no consumer.
 - **Stock Summary → Stock Item Monthly Summary drill-down** (Tally-style F4: Item): clicking a product row in Stock Summary should open a 12-month breakdown showing per-month Inwards (qty + value), Outwards (qty + value + consumption + gross profit + %), and Closing Balance (qty + value), plus an inline bar chart. Drilling into a month should open the Stock Vouchers list for that period; clicking a voucher should jump to the voucher edit page. Decision (2026-05-12): row click in Stock Summary is **deliberately a no-op for now** — was originally wired to `inventory-details` but reverted, because the Tally-style monthly drill is the better destination. Build that page when needed.
 
-_Last updated: 2026-05-12 — added SALE_RETURN/PURCHASE_RETURN enum values + refNumber/refDate/refVoucherId fields to InvVoucher, stock-summary API route, and return-voucher ref gotcha. Tally-style Stock Summary rebuild: view modes (Group/Category/Brand), pluggable valuation (LAST_COST/WA/FIFO/LIFO via `valuation.ts`), Show Profit toggle. `getClosingStockValue` is now a thin wrapper around `valueStockOrgTotal("LAST_COST")`._
+_Last updated: 2026-05-12 — added SALE_RETURN/PURCHASE_RETURN enum values + refNumber/refDate/refVoucherId fields to InvVoucher, stock-summary API route, and return-voucher ref gotcha. Tally-style Stock Summary rebuild: view modes (Group/Category/Brand), pluggable valuation (LAST_COST/WA/FIFO/LIFO via `valuation.ts`), Show Profit toggle (replaces Cat/Brand columns when on), Expand-all/Collapse-all toggle (groups auto-expand by default). Product create dialog now auto-fills SKU via `generateSku()` (6-digit random) with a regenerate button; dialog widened to `max-w-4xl` with sticky footer and fixed-height tab panels; tab list overflows horizontally on narrow viewports. `InvProductDialog` extracted into a reusable component — Stock Summary now opens the edit dialog **inline** (no navigation) via a per-row pencil button. `getClosingStockValue` is a thin wrapper around `valueStockOrgTotal("LAST_COST")`._

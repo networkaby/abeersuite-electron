@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
     Table,
     TableBody,
@@ -15,123 +15,30 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import {
-    InvProductFormFields,
-    emptyInvProductForm,
-    type InvProductFormState,
-} from "@/modules/inventory/components/InvProductFormFields";
-
-type Opt = { id: number; name?: string; code?: string; label?: string };
+import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 
 type ProductRow = {
     id: number;
     sku: string;
     name: string;
     isActive: boolean;
-    modelNo: string | null;
-    unitId: number;
-    categoryId: number | null;
-    groupId: number | null;
-    brandId: number | null;
-    warrantyTermId: number | null;
-    barcode1: string | null;
-    barcode2: string | null;
-    barcode3: string | null;
-    ean1: string | null;
-    ean2: string | null;
-    ean3: string | null;
-    upc1: string | null;
-    upc2: string | null;
-    upc3: string | null;
-    notes: string | null;
     stock: number | null;
     lowStockThreshold: number;
-    costPaise:  number | null;
-    pricePaise: number | null;
-    mrpPaise:   number | null;
-    openingStock:     number | string | null;
-    openingRate:      number | string | null;
-    openingValue:     number | string | null;
-    openingStockDate: string | null;
     unit: { code: string; label: string };
     category: { name: string } | null;
     brand: { name: string } | null;
 };
 
-const paiseToRupees = (p: number | null): string =>
-    p == null ? "" : (p / 100).toFixed(2);
-
-const rupeesToPaise = (r: string): number | null => {
-    const t = r.trim();
-    if (t === "") return null;
-    const n = parseFloat(t);
-    if (!Number.isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-};
-
-function optionalId(s: string): number | null {
-    if (s === "" || s === "__none__") return null;
-    const n = parseInt(s, 10);
-    return Number.isFinite(n) ? n : null;
-}
-
-function optionalStr(s: string): string | null {
-    const t = s.trim();
-    return t === "" ? null : t;
-}
-
-function rowToForm(p: ProductRow): InvProductFormState {
-    return {
-        sku: p.sku,
-        name: p.name,
-        unitId: String(p.unitId),
-        categoryId: p.categoryId != null ? String(p.categoryId) : "",
-        groupId: p.groupId != null ? String(p.groupId) : "",
-        brandId: p.brandId != null ? String(p.brandId) : "",
-        warrantyTermId: p.warrantyTermId != null ? String(p.warrantyTermId) : "",
-        modelNo: p.modelNo ?? "",
-        barcode1: p.barcode1 ?? "",
-        barcode2: p.barcode2 ?? "",
-        barcode3: p.barcode3 ?? "",
-        ean1: p.ean1 ?? "",
-        ean2: p.ean2 ?? "",
-        ean3: p.ean3 ?? "",
-        upc1: p.upc1 ?? "",
-        upc2: p.upc2 ?? "",
-        upc3: p.upc3 ?? "",
-        notes: p.notes ?? "",
-        isActive: p.isActive,
-        costRupees:  paiseToRupees(p.costPaise),
-        priceRupees: paiseToRupees(p.pricePaise),
-        mrpRupees:   paiseToRupees(p.mrpPaise),
-        openingQty:  p.openingStock != null ? String(p.openingStock) : "",
-        openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
-        openingDate: p.openingStockDate ? p.openingStockDate.slice(0, 10) : "",
-    };
-}
-
 export default function InventoryProductsPage() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const editParam = searchParams.get("edit");
+
     const [rows, setRows] = useState<ProductRow[]>([]);
-    const [units, setUnits] = useState<Opt[]>([]);
-    const [categories, setCategories] = useState<Opt[]>([]);
-    const [groups, setGroups] = useState<Opt[]>([]);
-    const [brands, setBrands] = useState<Opt[]>([]);
-    const [warrantyTerms, setWarrantyTerms] = useState<Opt[]>([]);
     const [loading, setLoading] = useState(true);
     const [open, setOpen] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
-    const [form, setForm] = useState<InvProductFormState>(emptyInvProductForm);
-    const [saving, setSaving] = useState(false);
-
-    const loadRefs = useCallback(() => {
-        return Promise.all([
-            axios.get<Opt[]>("/api/inventory/units").then((r) => setUnits(r.data)),
-            axios.get<Opt[]>("/api/inventory/categories").then((r) => setCategories(r.data)),
-            axios.get<Opt[]>("/api/inventory/product-groups").then((r) => setGroups(r.data)),
-            axios.get<Opt[]>("/api/inventory/brands").then((r) => setBrands(r.data)),
-            axios.get<Opt[]>("/api/inventory/warranty-terms").then((r) => setWarrantyTerms(r.data)),
-        ]);
-    }, []);
 
     const loadProducts = useCallback(() => {
         return axios
@@ -141,91 +48,35 @@ export default function InventoryProductsPage() {
     }, []);
 
     useEffect(() => {
-        Promise.all([loadRefs(), loadProducts()]).finally(() => setLoading(false));
-    }, [loadRefs, loadProducts]);
+        loadProducts().finally(() => setLoading(false));
+    }, [loadProducts]);
 
     const openNew = () => {
         setEditId(null);
-        setForm(emptyInvProductForm);
         setOpen(true);
     };
 
-    const openEdit = async (id: number) => {
-        try {
-            const { data } = await axios.get<ProductRow>(`/api/inventory/products/${id}`);
-            setForm(rowToForm(data));
-            setEditId(id);
-            setOpen(true);
-        } catch {
-            toast.error("Failed to load product");
-        }
-    };
+    const openEdit = useCallback((id: number) => {
+        setEditId(id);
+        setOpen(true);
+    }, []);
 
-    const save = async () => {
-        if (!form.name.trim()) {
-            toast.error("Name is required");
-            return;
-        }
-        const unitId = optionalId(form.unitId);
-        if (editId == null) {
-            if (!form.sku.trim()) {
-                toast.error("SKU is required");
-                return;
-            }
-            if (unitId == null) {
-                toast.error("Unit is required");
-                return;
-            }
-        } else if (unitId == null) {
-            toast.error("Unit is required");
-            return;
-        }
-
-        const payload = {
-            sku: form.sku.trim(),
-            name: form.name.trim(),
-            unitId: unitId!,
-            categoryId: optionalId(form.categoryId),
-            groupId: optionalId(form.groupId),
-            brandId: optionalId(form.brandId),
-            warrantyTermId: optionalId(form.warrantyTermId),
-            modelNo: optionalStr(form.modelNo),
-            barcode1: optionalStr(form.barcode1),
-            barcode2: optionalStr(form.barcode2),
-            barcode3: optionalStr(form.barcode3),
-            ean1: optionalStr(form.ean1),
-            ean2: optionalStr(form.ean2),
-            ean3: optionalStr(form.ean3),
-            upc1: optionalStr(form.upc1),
-            upc2: optionalStr(form.upc2),
-            upc3: optionalStr(form.upc3),
-            notes: optionalStr(form.notes),
-            isActive: form.isActive,
-            costPaise:  rupeesToPaise(form.costRupees),
-            pricePaise: rupeesToPaise(form.priceRupees),
-            mrpPaise:   rupeesToPaise(form.mrpRupees),
-            openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
-            openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
-            openingStockDate: form.openingDate || null,
-        };
-
-        setSaving(true);
-        try {
-            if (editId == null) {
-                await axios.post("/api/inventory/products", payload);
-                toast.success("Product created");
-            } else {
-                await axios.patch(`/api/inventory/products/${editId}`, payload);
-                toast.success("Product updated");
-            }
-            setOpen(false);
-            loadProducts();
-        } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Save failed");
-        } finally {
-            setSaving(false);
-        }
-    };
+    // Deep-link: /office/inventory/products?edit=<id> auto-opens the edit
+    // dialog. Strip the param afterwards so a refresh / close doesn't
+    // re-trigger.
+    const handledEditRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!editParam) return;
+        const id = Number(editParam);
+        if (!Number.isFinite(id)) return;
+        if (handledEditRef.current === id) return;
+        handledEditRef.current = id;
+        openEdit(id);
+        const next = new URLSearchParams(searchParams.toString());
+        next.delete("edit");
+        const qs = next.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname);
+    }, [editParam, openEdit, pathname, router, searchParams]);
 
     const del = async (id: number) => {
         if (!confirm("Delete this product master?")) return;
@@ -252,34 +103,14 @@ export default function InventoryProductsPage() {
                     <Plus className="size-4" />
                     New product
                 </Button>
-                <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto border-2 border-border">
-                        <DialogHeader>
-                            <DialogTitle>{editId == null ? "New product" : "Edit product"}</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 pt-2">
-                            <InvProductFormFields
-                                form={form}
-                                setForm={setForm}
-                                units={units}
-                                categories={categories}
-                                groups={groups}
-                                brands={brands}
-                                warrantyTerms={warrantyTerms}
-                                skuDisabled={false}
-                            />
-                            <div className="flex gap-2">
-                                <Button type="button" onClick={save} disabled={saving}>
-                                    Save
-                                </Button>
-                                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                                    Cancel
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
             </div>
+
+            <InvProductDialog
+                open={open}
+                onOpenChange={setOpen}
+                editId={editId}
+                onSaved={loadProducts}
+            />
 
             <div className="overflow-x-auto border border-border">
                 <Table>

@@ -5,13 +5,14 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    Loader2, ArrowLeft, AlertTriangle, ChevronRight, ChevronDown,
+    Loader2, ArrowLeft, AlertTriangle, ChevronRight, ChevronDown, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
+import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,10 @@ export default function StockSummaryPage() {
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+    // Inline edit dialog state
+    const [editId, setEditId] = useState<number | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+
     // ── URL sync helper (don't lose ref/asOf when toggling controls) ──────────
     const pushUrl = useCallback(
         (next: { view?: View; method?: ValuationMethod; showProfit?: boolean }) => {
@@ -92,14 +97,16 @@ export default function StockSummaryPage() {
     const setShowProfit = (p: boolean) => { setShowProfitState(p); pushUrl({ showProfit: p }); };
 
     // ── Fetch (depends on method) ─────────────────────────────────────────────
-    useEffect(() => {
+    const reload = useCallback(() => {
         setLoading(true);
-        axios
+        return axios
             .get<Response>(`/api/inventory/reports/stock-summary?method=${method}`)
             .then((r) => setRows(r.data.rows))
             .catch(() => toast.error("Failed to load stock summary"))
             .finally(() => setLoading(false));
     }, [method]);
+
+    useEffect(() => { reload(); }, [reload]);
 
     // ── Group + roll up (client side) ─────────────────────────────────────────
     const grouped = useMemo(() => {
@@ -139,6 +146,15 @@ export default function StockSummaryPage() {
         return groups;
     }, [rows, view]);
 
+    // Auto-expand every group whenever the underlying group set changes
+    // (initial load, view switch, refetch after save). User can collapse
+    // individuals or use the global toggle. We sync to `grouped` length +
+    // names so a new group added by editing a product also opens.
+    useEffect(() => {
+        if (grouped.length === 0) return;
+        setExpanded(new Set(grouped.map((g) => g.name)));
+    }, [grouped]);
+
     const grandTotalValue = useMemo(
         () => rows.reduce((s, r) => s + (r.valuation.value ?? 0), 0),
         [rows],
@@ -171,6 +187,25 @@ export default function StockSummaryPage() {
             if (next.has(name)) next.delete(name); else next.add(name);
             return next;
         });
+
+    const allExpanded = grouped.length > 0 && grouped.every((g) => expanded.has(g.name));
+    const toggleAll = () => {
+        if (allExpanded) setExpanded(new Set());
+        else setExpanded(new Set(grouped.map((g) => g.name)));
+    };
+
+    const openEdit = (id: number) => {
+        setEditId(id);
+        setDialogOpen(true);
+    };
+
+    // Column counts
+    // Always: Particulars(1) + Qty(1) + Rate(1) + Value(1) = 4
+    // + Edit(1) on the right
+    // When !showProfit: Category(1) + Brand(1) before Quantity → +2
+    // When showProfit: Sale Rate(1) + Sale Value(1) + Profit(1) + Margin(1) → +4
+    // Trailing edit cell is always present.
+    const showCatBrandCols = !showProfit;
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
@@ -236,6 +271,18 @@ export default function StockSummaryPage() {
                     </Select>
                 </div>
 
+                {/* Expand / Collapse all */}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAll}
+                    disabled={grouped.length === 0}
+                >
+                    {allExpanded ? <ChevronDown size={14} className="mr-1" /> : <ChevronRight size={14} className="mr-1" />}
+                    {allExpanded ? "Collapse all" : "Expand all"}
+                </Button>
+
                 {/* Show Profit */}
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none ml-auto">
                     <input
@@ -249,18 +296,24 @@ export default function StockSummaryPage() {
             </div>
 
             {/* Table */}
-            {loading && (
+            {loading && rows.length === 0 && (
                 <div className="flex justify-center py-16">
                     <Loader2 className="animate-spin text-muted-foreground" size={26} />
                 </div>
             )}
 
-            {!loading && (
-                <div className="rounded-lg border border-border overflow-hidden">
+            {(!loading || rows.length > 0) && (
+                <div className="rounded-lg border border-border overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-muted/40 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
                                 <th className="px-3 py-2 text-left font-medium">Particulars</th>
+                                {showCatBrandCols && (
+                                    <>
+                                        <th className="px-3 py-2 text-left font-medium">Category</th>
+                                        <th className="px-3 py-2 text-left font-medium">Brand</th>
+                                    </>
+                                )}
                                 <th className="px-3 py-2 text-right font-medium">Quantity</th>
                                 <th className="px-3 py-2 text-right font-medium">Rate</th>
                                 <th className="px-3 py-2 text-right font-medium">Value</th>
@@ -272,12 +325,13 @@ export default function StockSummaryPage() {
                                         <th className="px-3 py-2 text-right font-medium">Margin %</th>
                                     </>
                                 )}
+                                <th className="px-3 py-2 w-10"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {grouped.length === 0 && (
                                 <tr>
-                                    <td colSpan={showProfit ? 8 : 4} className="px-3 py-10 text-center text-muted-foreground">
+                                    <td colSpan={showProfit ? 9 : 7} className="px-3 py-10 text-center text-muted-foreground">
                                         No active products found.
                                     </td>
                                 </tr>
@@ -300,6 +354,12 @@ export default function StockSummaryPage() {
                                                     </span>
                                                 </span>
                                             </td>
+                                            {showCatBrandCols && (
+                                                <>
+                                                    <td className="px-3 py-2 text-muted-foreground/50">—</td>
+                                                    <td className="px-3 py-2 text-muted-foreground/50">—</td>
+                                                </>
+                                            )}
                                             <td className="px-3 py-2 text-right font-mono">
                                                 {g.unitCode != null && g.totalQty > 0 ? `${g.totalQty} ${g.unitCode}` : <span className="text-muted-foreground/50">—</span>}
                                             </td>
@@ -321,6 +381,7 @@ export default function StockSummaryPage() {
                                                     </td>
                                                 </>
                                             )}
+                                            <td className="px-3 py-2"></td>
                                         </tr>
                                         {/* Item rows */}
                                         {isOpen && g.items.map((r) => {
@@ -330,7 +391,10 @@ export default function StockSummaryPage() {
                                                 : null;
                                             const margin = saleValue != null && saleValue > 0 && profit != null ? (profit / saleValue) * 100 : null;
                                             return (
-                                                <tr key={r.id} className={r.isLow ? "bg-amber-50/40 dark:bg-amber-950/10" : "hover:bg-muted/20"}>
+                                                <tr
+                                                    key={r.id}
+                                                    className={r.isLow ? "bg-amber-50/40 hover:bg-amber-100/60 dark:bg-amber-950/10 dark:hover:bg-amber-900/20" : "hover:bg-muted/30"}
+                                                >
                                                     <td className="px-3 py-1.5 pl-9">
                                                         <span className="text-foreground">{r.name}</span>
                                                         <span className="ml-2 font-mono text-xs text-muted-foreground/70">{r.sku}</span>
@@ -341,6 +405,16 @@ export default function StockSummaryPage() {
                                                             </span>
                                                         )}
                                                     </td>
+                                                    {showCatBrandCols && (
+                                                        <>
+                                                            <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                                                                {r.category?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                                            </td>
+                                                            <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                                                                {r.brand?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                                            </td>
+                                                        </>
+                                                    )}
                                                     <td className="px-3 py-1.5 text-right font-mono">
                                                         {r.stock} {r.unit.code}
                                                     </td>
@@ -370,6 +444,18 @@ export default function StockSummaryPage() {
                                                             </td>
                                                         </>
                                                     )}
+                                                    <td className="px-2 py-1 text-right">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            onClick={(e) => { e.stopPropagation(); openEdit(r.id); }}
+                                                            title="Edit product master"
+                                                            aria-label={`Edit ${r.name}`}
+                                                        >
+                                                            <Pencil className="size-3.5" />
+                                                        </Button>
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
@@ -380,6 +466,12 @@ export default function StockSummaryPage() {
                         <tfoot>
                             <tr className="border-t-2 border-border bg-muted/30 font-semibold">
                                 <td className="px-3 py-2">Grand Total</td>
+                                {showCatBrandCols && (
+                                    <>
+                                        <td></td>
+                                        <td></td>
+                                    </>
+                                )}
                                 <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
                                 <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
                                 <td className="px-3 py-2 text-right font-mono">{fmt(grandTotalValue)}</td>
@@ -397,6 +489,7 @@ export default function StockSummaryPage() {
                                         </td>
                                     </>
                                 )}
+                                <td></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -409,6 +502,14 @@ export default function StockSummaryPage() {
                     Valued using {METHOD_LABELS[method]}. {fallbackCount} product{fallbackCount === 1 ? "" : "s"} fell back to last-purchase cost (no receipt history).
                 </p>
             )}
+
+            {/* Inline edit dialog */}
+            <InvProductDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                editId={editId}
+                onSaved={reload}
+            />
         </div>
     );
 }

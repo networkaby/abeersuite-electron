@@ -1,5 +1,7 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +13,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { generateSku } from "@/modules/inventory/lib/sku";
 
 export type InvProductFormState = {
     sku: string;
@@ -95,9 +98,16 @@ export function InvProductFormFields({
 }) {
     const label = (o: Opt) => o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
 
+    // Tab-panel min-height keeps the dialog from jumping as the user moves
+    // between Basics (longest) and Pricing / Opening (shortest). 380px fits
+    // the Pricing tab without dead space and is comfortable on Basics.
+    const tabPanel = "mt-4 min-h-[380px]";
+
     return (
-        <Tabs defaultValue="basics" className="max-h-[70vh] overflow-y-auto pr-1">
-            <TabsList>
+        <Tabs defaultValue="basics" className="w-full">
+            {/* Horizontal scroll on narrow viewports so all 5 tab labels stay
+                fully readable; on desktop they fit comfortably side-by-side. */}
+            <TabsList className="flex w-full justify-start overflow-x-auto whitespace-nowrap">
                 <TabsTrigger value="basics">Basics</TabsTrigger>
                 <TabsTrigger value="pricing">Pricing</TabsTrigger>
                 <TabsTrigger value="stock">Stock control</TabsTrigger>
@@ -105,11 +115,31 @@ export function InvProductFormFields({
                 <TabsTrigger value="online">Online listing</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="basics" className="mt-4">
+            <TabsContent value="basics" className={tabPanel}>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2 sm:col-span-2">
                         <Label>SKU</Label>
-                        <Input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} disabled={skuDisabled} className="font-mono" />
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={form.sku}
+                                onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+                                disabled={skuDisabled}
+                                className="font-mono"
+                                placeholder="6-digit code"
+                            />
+                            {!skuDisabled && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    onClick={() => setForm((f) => ({ ...f, sku: generateSku() }))}
+                                    title="Generate random 6-digit SKU"
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Auto-filled with a random 6-digit code. Editable; must stay unique.</p>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Name</Label>
@@ -196,7 +226,7 @@ export function InvProductFormFields({
                 </div>
             </TabsContent>
 
-            <TabsContent value="pricing" className="mt-4">
+            <TabsContent value="pricing" className={tabPanel}>
                 <p className="text-xs text-muted-foreground mb-3">
                     All amounts in rupees (₹). Cost auto-updates on every Purchase voucher; you can override here.
                 </p>
@@ -234,7 +264,7 @@ export function InvProductFormFields({
                 </div>
             </TabsContent>
 
-            <TabsContent value="stock" className="mt-4">
+            <TabsContent value="stock" className={tabPanel}>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Warranty term</Label>
@@ -295,7 +325,7 @@ export function InvProductFormFields({
                 </div>
             </TabsContent>
 
-            <TabsContent value="opening" className="mt-4">
+            <TabsContent value="opening" className={tabPanel}>
                 <p className="text-xs text-muted-foreground mb-3">
                     Books-beginning quantity for migration from another system. Saved directly to{" "}
                     <code>InvProduct.openingStock / openingRate / openingValue</code>. Reports use this on{" "}
@@ -341,7 +371,7 @@ export function InvProductFormFields({
                 </p>
             </TabsContent>
 
-            <TabsContent value="online" className="mt-4">
+            <TabsContent value="online" className={tabPanel}>
                 <p className="text-sm text-muted-foreground">
                     Shop listing fields (image, slug, shop description, gallery, etc.) live on <code>InvProduct</code> but aren&apos;t exposed in this form yet. Use <em>Edit shop listing</em> from the product list to set them.
                 </p>
