@@ -71,7 +71,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topPickerKind:        "ledger",
         topFilter:            isCashOrBank,
         rowFilter:            () => true,
-        listPath:             "/office/accountancy/payments",
+        listPath:             "/vouchers/payments",
     },
     RECEIPT: {
         title:                "Receipt Voucher",
@@ -85,7 +85,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topPickerKind:        "ledger",
         topFilter:            isCashOrBank,
         rowFilter:            () => true,
-        listPath:             "/office/accountancy/receipts",
+        listPath:             "/vouchers/receipts",
     },
     CONTRA: {
         title:                "Contra Voucher",
@@ -99,7 +99,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topPickerKind:        "ledger",
         topFilter:            isCashOrBank,
         rowFilter:            isCashOrBank,
-        listPath:             "/office/accountancy/contras",
+        listPath:             "/vouchers/contras",
     },
     CREDIT_NOTE: {
         title:                "Credit Note",
@@ -114,7 +114,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topFilter:            isSundryDebtor,
         rowFilter:            () => true,
         partyGroup:           ACCOUNT_GROUPS.SUNDRY_DEBTORS,
-        listPath:             "/office/accountancy/credit-notes",
+        listPath:             "/vouchers/credit-notes",
     },
     DEBIT_NOTE: {
         title:                "Debit Note",
@@ -129,7 +129,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topFilter:            isSundryCreditor,
         rowFilter:            () => true,
         partyGroup:           ACCOUNT_GROUPS.SUNDRY_CREDITORS,
-        listPath:             "/office/accountancy/debit-notes",
+        listPath:             "/vouchers/debit-notes",
     },
 };
 

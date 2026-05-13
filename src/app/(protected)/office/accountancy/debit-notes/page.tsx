@@ -8,7 +8,7 @@ export default function DebitNotesPage() {
             title="Debit Notes"
             subtitle="Purchase returns and supplier debits"
             basePath="/office/accountancy/debit-notes"
-            newPath="/office/accountancy/debit-notes/new"
+            newPath="/vouchers/debit-notes/new"
         />
     );
 }

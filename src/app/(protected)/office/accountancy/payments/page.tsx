@@ -8,7 +8,7 @@ export default function PaymentsPage() {
             title="Payments"
             subtitle="Money paid out — to suppliers, expenses, or party accounts"
             basePath="/office/accountancy/payments"
-            newPath="/office/accountancy/payments/new"
+            newPath="/vouchers/payments/new"
         />
     );
 }

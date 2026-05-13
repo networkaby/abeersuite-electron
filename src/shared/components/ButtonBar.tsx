@@ -74,25 +74,25 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
         } else if (action.action === "new-journal-voucher") {
-            window.open("/vouchers/journal", "_blank", "noopener");
+            window.open("/vouchers/journal-entries/new", "_blank", "noopener");
         } else if (action.action === "new-debit-note") {
-            window.open("/vouchers/debit-note", "_blank", "noopener");
+            window.open("/vouchers/debit-notes/new", "_blank", "noopener");
         } else if (action.action === "new-contra") {
-            window.open("/vouchers/contra", "_blank", "noopener");
+            window.open("/vouchers/contras/new", "_blank", "noopener");
         } else if (action.action === "new-payment") {
-            window.open("/vouchers/payment", "_blank", "noopener");
+            window.open("/vouchers/payments/new", "_blank", "noopener");
         } else if (action.action === "new-receipt") {
-            window.open("/vouchers/receipt", "_blank", "noopener");
+            window.open("/vouchers/receipts/new", "_blank", "noopener");
         } else if (action.action === "new-credit-note") {
-            window.open("/vouchers/credit-note", "_blank", "noopener");
+            window.open("/vouchers/credit-notes/new", "_blank", "noopener");
         } else if (action.action === "new-sale") {
-            window.open("/vouchers/sale", "_blank", "noopener");
+            window.open("/vouchers/sales/new", "_blank", "noopener");
         } else if (action.action === "new-purchase") {
-            window.open("/vouchers/purchase", "_blank", "noopener");
+            window.open("/vouchers/purchases/new", "_blank", "noopener");
         } else if (action.action === "new-sale-return") {
-            window.open("/vouchers/sale-return", "_blank", "noopener");
+            window.open("/vouchers/sale-returns/new", "_blank", "noopener");
         } else if (action.action === "new-purchase-return") {
-            window.open("/vouchers/purchase-return", "_blank", "noopener");
+            window.open("/vouchers/purchase-returns/new", "_blank", "noopener");
         } else if (action.action === "new-sales-order") {
             window.open("/vouchers/sales-orders/new", "_blank", "noopener");
         } else if (action.action === "new-purchase-order") {
@@ -110,7 +110,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-rejection-out") {
             window.open("/vouchers/rejections-out/new", "_blank", "noopener");
         } else if (action.action === "new-estimate") {
-            window.open("/vouchers/estimate", "_blank", "noopener");
+            window.open("/vouchers/estimates/new", "_blank", "noopener");
         }
     };
 

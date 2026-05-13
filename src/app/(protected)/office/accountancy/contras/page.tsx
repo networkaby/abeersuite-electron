@@ -8,7 +8,7 @@ export default function ContrasPage() {
             title="Contras"
             subtitle="Cash ↔ bank and inter-account transfers"
             basePath="/office/accountancy/contras"
-            newPath="/office/accountancy/contras/new"
+            newPath="/vouchers/contras/new"
         />
     );
 }

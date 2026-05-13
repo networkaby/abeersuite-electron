@@ -8,7 +8,7 @@ export default function ReceiptsPage() {
             title="Receipts"
             subtitle="Money received — from customers, parties, or other sources"
             basePath="/office/accountancy/receipts"
-            newPath="/office/accountancy/receipts/new"
+            newPath="/vouchers/receipts/new"
         />
     );
 }

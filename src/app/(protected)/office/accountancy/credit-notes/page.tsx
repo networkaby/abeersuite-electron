@@ -8,7 +8,7 @@ export default function CreditNotesPage() {
             title="Credit Notes"
             subtitle="Sales returns and customer credits"
             basePath="/office/accountancy/credit-notes"
-            newPath="/office/accountancy/credit-notes/new"
+            newPath="/vouchers/credit-notes/new"
         />
     );
 }

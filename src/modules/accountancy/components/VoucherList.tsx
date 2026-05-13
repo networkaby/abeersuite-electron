@@ -27,13 +27,15 @@ export type VoucherRow = {
 };
 
 export function VoucherList({
-    type, title, subtitle, basePath, newPath,
+    type, title, subtitle, basePath, newPath, newTab = false,
 }: {
     type:     VoucherFormType;
     title:    string;
     subtitle: string;
-    basePath: string;  // /office/accountancy/contras
-    newPath:  string;  // /office/accountancy/contras/new
+    basePath: string;   // e.g. /vouchers/payments
+    newPath:  string;   // e.g. /vouchers/payment (form, opens in new tab when newTab=true)
+    /** Open the "New" button in a new browser tab (for full-page form routes). */
+    newTab?:  boolean;
 }) {
     const [rows, setRows] = useState<VoucherRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -56,7 +58,7 @@ export function VoucherList({
                     <h1 className="text-2xl font-bold">{title}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
                 </div>
-                <Link href={newPath}>
+                <Link href={newPath} {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>
                     <Button><Plus size={16} /> New {title.replace(/s$/, "")}</Button>
                 </Link>
             </div>
@@ -78,7 +80,10 @@ export function VoucherList({
                 </div>
             ) : rows.length === 0 ? (
                 <div className="rounded-lg border border-border bg-card text-center py-16 text-muted-foreground">
-                    No vouchers yet. <Link href={newPath} className="text-primary hover:underline">Create one</Link>
+                    No vouchers yet.{" "}
+                    <Link href={newPath} className="text-primary hover:underline" {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>
+                        Create one
+                    </Link>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow">

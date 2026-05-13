@@ -214,17 +214,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
 
-            // { label: "Sales Register", icon: Receipt, href: "/office/accountancy/sales" },
-            // { label: "Purchases Register", icon: ShoppingCart, href: "/office/accountancy/purchases" },
-            { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
-            // { label: "Payments", icon: Wallet, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
-            // { label: "Receipts", icon: Wallet, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
-            // { label: "Contras", icon: Wallet, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
-            // { label: "Credit Notes", icon: FileText, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
-            // { label: "Debit Notes", icon: FileText, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
-
-            // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
-            // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
+            { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
 
             // { label: "Financial Insights", icon: ChartArea, href: "/office/accountancy/reports" },
             {
@@ -251,18 +241,18 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             },
 
             {
-                label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create",
+                label: "Vouchers Register", icon: ClipboardList, href: "/vouchers/sales", permission: "finance:voucher:create",
                 children: [
-                    // { label: "Contras", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
-                    // { label: "Payment", icon: ClipboardList, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
-                    // { label: "Receipt", icon: ClipboardList, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
-                    { label: "Credit Note", icon: ClipboardList, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
-                    { label: "Debit Note", icon: ClipboardList, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
-                    // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
-                    // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
-                    { label: "Sales", icon: Receipt, href: "/office/accountancy/sales" },
-                    { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/purchases" },
-                    // { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
+                    { label: "Sales", icon: Receipt, href: "/vouchers/sales" },
+                    { label: "Purchases", icon: ShoppingCart, href: "/vouchers/purchases" },
+                    { label: "Sale Returns", icon: Receipt, href: "/vouchers/sale-returns" },
+                    { label: "Purchase Returns", icon: ShoppingCart, href: "/vouchers/purchase-returns" },
+                    { label: "Payments", icon: Wallet, href: "/vouchers/payments", permission: "finance:voucher:create" },
+                    { label: "Receipts", icon: Wallet, href: "/vouchers/receipts", permission: "finance:voucher:create" },
+                    { label: "Contras", icon: Wallet, href: "/vouchers/contras", permission: "finance:voucher:create" },
+                    { label: "Credit Notes", icon: FileText, href: "/vouchers/credit-notes", permission: "finance:voucher:create" },
+                    { label: "Debit Notes", icon: FileText, href: "/vouchers/debit-notes", permission: "finance:voucher:create" },
+                    { label: "Journal Entries", icon: FileText, href: "/vouchers/journal-entries", permission: "finance:voucher:create" },
                 ]
 
             },

@@ -74,7 +74,7 @@ const lineAmount = (l: Line) =>
         ? l.stockItems.reduce((s, it) => s + stockItemAmount(it), 0)
         : parseAmount(l.amount);
 
-const listPath = "/office/accountancy/journal-entries";
+const listPath = "/vouchers/journal-entries";
 
 export function JournalVoucherPage() {
     const router = useRouter();
