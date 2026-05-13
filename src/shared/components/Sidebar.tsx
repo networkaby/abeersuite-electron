@@ -11,7 +11,7 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
-    PanelLeft, Sun, Moon, ShieldCheck, Bell,
+    PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -412,7 +412,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                             onClick={() => setSidebarMode("expanded")}
                             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                         >
-                            <PanelLeft size={15} />
+                            <PanelLeftOpen size={15} />
                         </button>
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                             S
@@ -438,7 +438,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 onClick={() => setSidebarMode("collapsed")}
                                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
                             >
-                                <PanelLeft size={14} />
+                                <PanelLeftClose size={14} />
                             </button>
                         </div>
                         <Link
