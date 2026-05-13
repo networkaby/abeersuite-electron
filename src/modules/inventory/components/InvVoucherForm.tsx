@@ -280,6 +280,7 @@ type ListRow = {
     totalAmount: number;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
     deletedAt:   string | null;
+    branch?:     { name: string } | null;
     _count:      { lines: number };
     createdBy:   { name: string };
 };
@@ -345,6 +346,7 @@ export function InvVoucherList({
                             <tr>
                                 <th className="px-5 py-3 text-left font-medium">Reference</th>
                                 <th className="px-5 py-3 text-left font-medium">Date</th>
+                                <th className="px-5 py-3 text-left font-medium">Branch</th>
                                 <th className="px-5 py-3 text-left font-medium">Party</th>
                                 <th className="px-5 py-3 text-left font-medium">Narration</th>
                                 <th className="px-5 py-3 text-center font-medium w-16">Items</th>
@@ -360,6 +362,7 @@ export function InvVoucherList({
                                     <td className="px-5 py-3 text-muted-foreground text-xs">
                                         {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                                     </td>
+                                    <td className="px-5 py-3 text-xs text-muted-foreground">{r.branch?.name ?? <span className="opacity-40">—</span>}</td>
                                     <td className="px-5 py-3">{r.partyName ?? <span className="text-muted-foreground/50">—</span>}</td>
                                     <td className="px-5 py-3 text-muted-foreground max-w-[200px] truncate">{r.description}</td>
                                     <td className="px-5 py-3 text-center text-muted-foreground">{r._count.lines}</td>

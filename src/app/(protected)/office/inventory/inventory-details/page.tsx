@@ -55,6 +55,7 @@ type ProductDetail = {
     unit: { code: string; label: string };
     category: { name: string } | null;
     brand: { name: string } | null;
+    branchStocks?: { stock: number; branch: { id: string; name: string } }[];
 };
 
 type DetailResponse = {
@@ -252,6 +253,37 @@ export default function InventoryDetailsPage() {
                                     }
                                 />
                             </div>
+
+                            {/* Per-branch stock breakdown */}
+                            {detail.product.branchStocks && detail.product.branchStocks.length > 0 && (
+                                <div className="mt-3 rounded-lg border border-border bg-muted/30 overflow-hidden">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="border-b border-border bg-muted/60">
+                                                <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Branch</th>
+                                                <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Stock</th>
+                                                <th className="px-3 py-1.5 text-right font-medium text-muted-foreground"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {detail.product.branchStocks.map((bs) => {
+                                                const isLow = bs.stock <= detail.product.lowStockThreshold;
+                                                return (
+                                                    <tr key={bs.branch.id} className="border-b last:border-0">
+                                                        <td className="px-3 py-1.5 text-muted-foreground">{bs.branch.name}</td>
+                                                        <td className={cn("px-3 py-1.5 text-right font-mono font-medium", isLow ? "text-amber-700 dark:text-amber-400" : "")}>
+                                                            {bs.stock} {detail.product.unit.code}
+                                                        </td>
+                                                        <td className="px-3 py-1.5 text-right">
+                                                            {isLow && <AlertTriangle size={11} className="inline text-amber-500" />}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
 
                         {/* Transactions */}

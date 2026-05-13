@@ -43,6 +43,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 unit: { select: { code: true, label: true } },
                 category: { select: { name: true } },
                 brand: { select: { name: true } },
+                branchStocks: {
+                    orderBy: { stock: "desc" },
+                    select: { stock: true, branch: { select: { id: true, name: true } } },
+                },
             },
         });
         if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
