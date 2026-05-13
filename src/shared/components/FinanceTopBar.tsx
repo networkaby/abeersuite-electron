@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
-import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelBottomOpen, PanelBottomClose, PanelRightOpen, PanelRightClose } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelBottomOpen, PanelBottomClose } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { usePanelStore } from "@/store/panelStore";
 
@@ -202,8 +202,8 @@ export default function FinanceTopBar({
                     className={["ml-1 rounded p-1 transition-colors", barMode === "hidden" ? "opacity-40 hover:opacity-100 text-muted-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
                 >
                     {barMode === "hidden"
-                        ? <PanelRightOpen size={15} />
-                        : <PanelRightClose size={15} />}
+                        ? <PanelBottomOpen size={15} />
+                        : <PanelBottomClose size={15} />}
                 </button>
             </div>
         </div>
