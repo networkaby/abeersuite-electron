@@ -4,13 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
-import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelLeft, PanelRight } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelTop, PanelBottom } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { usePanelStore, type PanelMode } from "@/store/panelStore";
+import { usePanelStore } from "@/store/panelStore";
 
-function nextMode(m: PanelMode): PanelMode {
-    return m === "expanded" ? "collapsed" : m === "collapsed" ? "hidden" : "expanded";
-}
 
 type CashPosition = {
     asOf: string;
@@ -120,14 +117,14 @@ export default function FinanceTopBar({
     return (
         <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-border bg-sidebar/60 px-3 backdrop-blur-sm">
 
-            {/* Sidebar panel toggle */}
+            {/* Sidebar show/hide toggle */}
             <button
                 type="button"
-                title={sidebarMode === "hidden" ? "Show sidebar" : sidebarMode === "expanded" ? "Collapse sidebar" : "Hide sidebar"}
-                onClick={() => setSidebarMode(nextMode(sidebarMode))}
+                title={sidebarMode === "hidden" ? "Show sidebar" : "Hide sidebar"}
+                onClick={() => setSidebarMode(sidebarMode === "hidden" ? "expanded" : "hidden")}
                 className={["mr-2 rounded p-1 transition-all", sidebarMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
             >
-                <PanelLeft size={14} />
+                <PanelTop size={14} />
             </button>
 
             {/* Metrics — only when permitted */}
@@ -195,14 +192,14 @@ export default function FinanceTopBar({
                     </button>
                 )}
 
-                {/* Button bar panel toggle */}
+                {/* Button bar show/hide toggle */}
                 <button
                     type="button"
-                    title={barMode === "hidden" ? "Show action bar" : barMode === "expanded" ? "Collapse action bar" : "Hide action bar"}
-                    onClick={() => setBarMode(nextMode(barMode))}
+                    title={barMode === "hidden" ? "Show action bar" : "Hide action bar"}
+                    onClick={() => setBarMode(barMode === "hidden" ? "expanded" : "hidden")}
                     className={["ml-1 rounded p-1 transition-all", barMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
                 >
-                    <PanelRight size={14} />
+                    <PanelBottom size={14} />
                 </button>
             </div>
         </div>

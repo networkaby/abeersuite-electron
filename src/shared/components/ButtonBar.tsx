@@ -6,7 +6,7 @@ import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import axios from "axios";
-import { ChevronLeft, ChevronRight, Zap, Grid2x2 } from "lucide-react";
+import { PanelRight, Zap, Grid2x2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
@@ -171,18 +171,6 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                     transition: barDragging ? "none" : "width 0.3s",
                 }}
             >
-                {/* Panel edge toggle tab — sticks out from left edge */}
-                {!isHidden && (
-                    <div
-                        className="absolute -left-[17px] top-1/3 z-30 flex h-14 w-[17px] cursor-pointer select-none items-center justify-center rounded-l-lg border border-r-0 border-border bg-sidebar shadow-sm transition-all hover:bg-accent hover:shadow-md"
-                        onClick={() =>
-                            setBarMode(barMode === "expanded" ? "collapsed" : "expanded")
-                        }
-                        title={collapsed ? "Expand action bar" : "Collapse action bar"}
-                    >
-                        {collapsed ? <ChevronLeft size={12} className="text-muted-foreground" /> : <ChevronRight size={12} className="text-muted-foreground" />}
-                    </div>
-                )}
 
                 {/* Drag-to-resize handle — left edge, expanded only */}
                 {!collapsed && !isHidden && (
@@ -201,17 +189,37 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                 )}
 
                 {/* Header */}
-                <div className={`flex items-center border-b border-border px-4 py-3 ${collapsed ? "justify-center px-3" : "gap-2.5"}`}>
+                <div className={`flex items-center border-b border-border px-3 py-3 ${collapsed ? "flex-col gap-2" : "gap-2.5"}`}>
+                    {collapsed && (
+                        <button
+                            type="button"
+                            title="Expand action bar"
+                            onClick={() => setBarMode("expanded")}
+                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        >
+                            <PanelRight size={15} />
+                        </button>
+                    )}
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-primary/10 text-primary">
                         <Zap size={14} />
                     </div>
                     {!collapsed && (
-                        <div className="min-w-0">
-                            <p className="text-sm font-semibold text-foreground">{headerLabel}</p>
-                            {user?.name && (
-                                <p className="truncate text-xs text-muted-foreground">{user.name}</p>
-                            )}
-                        </div>
+                        <>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-foreground">{headerLabel}</p>
+                                {user?.name && (
+                                    <p className="truncate text-xs text-muted-foreground">{user.name}</p>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                title="Collapse action bar"
+                                onClick={() => setBarMode("collapsed")}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                            >
+                                <PanelRight size={14} />
+                            </button>
+                        </>
                     )}
                 </div>
 

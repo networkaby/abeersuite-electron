@@ -11,7 +11,7 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
-    ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell,
+    PanelLeft, Sun, Moon, ShieldCheck, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -376,18 +376,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 transition: sidebarDragging ? "none" : "width 0.3s",
             }}
         >
-            {/* Panel edge toggle tab — sticks out from right edge */}
-            {!isHidden && (
-                <div
-                    className="absolute -right-[17px] top-1/3 z-30 flex h-14 w-[17px] cursor-pointer select-none items-center justify-center rounded-r-lg border border-l-0 border-border bg-sidebar shadow-sm transition-all hover:bg-accent hover:shadow-md"
-                    onClick={() =>
-                        setSidebarMode(sidebarMode === "expanded" ? "collapsed" : "expanded")
-                    }
-                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                    {collapsed ? <ChevronRight size={12} className="text-muted-foreground" /> : <ChevronLeft size={12} className="text-muted-foreground" />}
-                </div>
-            )}
 
             {/* Drag-to-resize handle — right edge, expanded only */}
             {!collapsed && !isHidden && (
@@ -409,6 +397,14 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
                 {collapsed ? (
                     <div className="flex flex-col items-center gap-2">
+                        <button
+                            type="button"
+                            title="Expand sidebar"
+                            onClick={() => setSidebarMode("expanded")}
+                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        >
+                            <PanelLeft size={15} />
+                        </button>
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                             S
                         </div>
@@ -425,7 +421,17 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     </div>
                 ) : (
                     <div className="space-y-2.5">
-                        <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                        <div className="flex items-center justify-between">
+                            <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                            <button
+                                type="button"
+                                title="Collapse sidebar"
+                                onClick={() => setSidebarMode("collapsed")}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                            >
+                                <PanelLeft size={14} />
+                            </button>
+                        </div>
                         <Link
                             href={user?.id ? `/office/social/users/${user.id}` : "/office/admin/users"}
                             className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
