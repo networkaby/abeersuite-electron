@@ -1,6 +1,7 @@
-"use client";
-import { InvVoucherForm } from "@/modules/inventory/components/InvVoucherForm";
+import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
 
-export default function NewGrnPage() {
-    return <InvVoucherForm type="GRN" redirectTo="/office/inventory/grn" />;
+// Goods Received Note — increments stock, no GL post (Purchase invoice posts).
+// Parent-link picker offers any POSTED Purchase Order to copy lines from.
+export default function Page() {
+    return <SaleVoucherPage kind="GRN" />;
 }

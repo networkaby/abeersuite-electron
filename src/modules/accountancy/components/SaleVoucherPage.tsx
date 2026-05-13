@@ -58,6 +58,8 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
+import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
 
@@ -139,7 +141,11 @@ function numSigned(s: string): string {
 // table + totals + cash/bank picker). Only labels, party group, rate
 // auto-fill source, ref field, and a few visibility flags differ.
 
-export type TradingKind = "SALE" | "PURCHASE" | "SALE_RETURN" | "PURCHASE_RETURN";
+export type TradingKind =
+    | "SALE" | "PURCHASE" | "SALE_RETURN" | "PURCHASE_RETURN"
+    | "SALES_ORDER" | "PURCHASE_ORDER"
+    | "GRN" | "CHALLAN"
+    | "REJECTION_IN" | "REJECTION_OUT";
 
 type KindConfig = {
     title:            string;
@@ -174,6 +180,22 @@ type KindConfig = {
     /// Returns (SR / PR) don't carry credit-term semantics so the
     /// Payment Terms + Due Date pair is hidden entirely.
     showPaymentTerms: boolean;
+    /// CASH / CREDIT pill, Received / Balance row, Payment Account picker.
+    /// Hidden on non-GL kinds (orders, GRN, challan, rejections) where money
+    /// settlement is irrelevant — the linked Sale / Purchase invoice posts GL.
+    showPaymentBlock: boolean;
+    /// "Save & Print" voucher kinds — sale invoice, sale return, plus delivery
+    /// challan. Print template itself ships per kind elsewhere.
+    /// (Already covered by `showPrint` above; kept for backward compatibility.)
+    /// Optional FK link to a source voucher (e.g. GRN → PURCHASE_ORDER). When
+    /// set, the form renders a parent picker; on pick, lines auto-copy and
+    /// refVoucherId / refNumber / refDate save with the voucher.
+    /// `null` disables the picker.
+    linkParentType:   TradingKind | null;
+    /// Label for the parent-voucher picker ("Link to Purchase Order").
+    linkParentLabel:  string | null;
+    /// Render the Challan-only "Show prices on print" toggle.
+    showShowPricesToggle: boolean;
 };
 
 const PER_KIND: Record<TradingKind, KindConfig> = {
@@ -197,6 +219,9 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showVoucherRef: true,
         showVoucherDate: true,
         showPaymentTerms: true,
+        showPaymentBlock: true,
+        linkParentType: null, linkParentLabel: null,
+        showShowPricesToggle: false,
     },
     PURCHASE: {
         title: "Purchase Invoice",
@@ -220,6 +245,9 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showVoucherRef: false,
         showVoucherDate: false,   // Bill Date drives the voucher date on submit
         showPaymentTerms: true,   // credit purchases still need terms / due date
+        showPaymentBlock: true,
+        linkParentType: null, linkParentLabel: null,
+        showShowPricesToggle: false,
     },
     SALE_RETURN: {
         title: "Sale Return",
@@ -241,6 +269,9 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showVoucherRef: true,
         showVoucherDate: true,
         showPaymentTerms: false,  // returns don't carry credit-term semantics
+        showPaymentBlock: true,
+        linkParentType: null, linkParentLabel: null,
+        showShowPricesToggle: false,
     },
     PURCHASE_RETURN: {
         title: "Purchase Return",
@@ -262,6 +293,160 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showVoucherRef: true,
         showVoucherDate: true,
         showPaymentTerms: false,
+        showPaymentBlock: true,
+        linkParentType: null, linkParentLabel: null,
+        showShowPricesToggle: false,
+    },
+    // ── Stock-only / commitment vouchers (no GL posting). They share the
+    // rich Sale/Purchase form but hide the payment block since money
+    // settlement happens on the linked invoice, not here. ─────────────────
+    SALES_ORDER: {
+        title: "Sales Order",
+        party: "Sundry Debtors",
+        partyPlaceholder: "Search customer by name or phone…",
+        ratePick: (p) => p.salePrice,
+        refLabel: "Customer PO Ref", refDateLabel: "Customer PO Date",
+        listPath: "/office/inventory/sales-orders",
+        nextRefType: "SALES_ORDER",
+        showProfit: true, showPrint: false,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Sales Order for ${n}` : "Sales Order",
+        successPostedMsg: "Sales Order confirmed — no stock or GL impact until fulfilled",
+        successDraftMsg:  "Sales Order saved as draft",
+        newButtonLabel: "New Sales Order",
+        closeRouteLabel: "Open another Sales Order in a new tab",
+        voucherRefLabel: "SO Number",
+        voucherDateLabel: "Order Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: null, linkParentLabel: null,
+        showShowPricesToggle: false,
+    },
+    PURCHASE_ORDER: {
+        title: "Purchase Order",
+        party: "Sundry Creditors",
+        partyPlaceholder: "Search supplier by name or phone…",
+        ratePick: (p) => p.costPrice,
+        refLabel: "Supplier Quote Ref", refDateLabel: "Quote Date",
+        listPath: "/office/inventory/purchase-orders",
+        nextRefType: "PURCHASE_ORDER",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Purchase Order to ${n}` : "Purchase Order",
+        successPostedMsg: "Purchase Order confirmed — no stock or GL impact until receipt",
+        successDraftMsg:  "Purchase Order saved as draft",
+        newButtonLabel: "New Purchase Order",
+        closeRouteLabel: "Open another Purchase Order in a new tab",
+        voucherRefLabel: "PO Number",
+        voucherDateLabel: "Order Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: null, linkParentLabel: null,
+        showShowPricesToggle: false,
+    },
+    GRN: {
+        title: "Goods Received Note",
+        party: "Sundry Creditors",
+        partyPlaceholder: "Search supplier by name or phone…",
+        ratePick: (p) => p.costPrice,
+        refLabel: "Supplier Challan #", refDateLabel: "Supplier Challan Date",
+        listPath: "/office/inventory/grn",
+        nextRefType: "GRN",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Goods received from ${n}` : "Goods Received Note",
+        successPostedMsg: "GRN posted — stock incremented",
+        successDraftMsg:  "GRN saved as draft",
+        newButtonLabel: "New GRN",
+        closeRouteLabel: "Open another GRN in a new tab",
+        voucherRefLabel: "GRN Number",
+        voucherDateLabel: "Receipt Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: "PURCHASE_ORDER",
+        linkParentLabel: "Link to Purchase Order",
+        showShowPricesToggle: false,
+    },
+    CHALLAN: {
+        title: "Delivery Challan",
+        party: "Sundry Debtors",
+        partyPlaceholder: "Search customer by name or phone…",
+        ratePick: (p) => p.salePrice,
+        refLabel: "Customer PO Ref", refDateLabel: "Customer PO Date",
+        listPath: "/office/inventory/challans",
+        nextRefType: "CHALLAN",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Delivered to ${n}` : "Delivery Challan",
+        successPostedMsg: "Challan posted — stock decremented",
+        successDraftMsg:  "Challan saved as draft",
+        newButtonLabel: "New Challan",
+        closeRouteLabel: "Open another Challan in a new tab",
+        voucherRefLabel: "Challan No",
+        voucherDateLabel: "Delivery Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: "SALES_ORDER",
+        linkParentLabel: "Link to Sales Order",
+        showShowPricesToggle: true,
+    },
+    REJECTION_IN: {
+        title: "Rejection In",
+        party: "Sundry Debtors",
+        partyPlaceholder: "Search customer by name or phone…",
+        ratePick: (p) => p.salePrice,
+        refLabel: "Original Ref", refDateLabel: "Original Ref Date",
+        listPath: "/office/inventory/rejections-in",
+        nextRefType: "REJECTION_IN",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Goods rejected back from ${n}` : "Rejection In",
+        successPostedMsg: "Rejection In posted — stock incremented",
+        successDraftMsg:  "Rejection In saved as draft",
+        newButtonLabel: "New Rejection In",
+        closeRouteLabel: "Open another Rejection In in a new tab",
+        voucherRefLabel: "RIN Number",
+        voucherDateLabel: "Return Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: "CHALLAN",
+        linkParentLabel: "Link to Challan / Sale",
+        showShowPricesToggle: false,
+    },
+    REJECTION_OUT: {
+        title: "Rejection Out",
+        party: "Sundry Creditors",
+        partyPlaceholder: "Search supplier by name or phone…",
+        ratePick: (p) => p.costPrice,
+        refLabel: "Original Ref", refDateLabel: "Original Ref Date",
+        listPath: "/office/inventory/rejections-out",
+        nextRefType: "REJECTION_OUT",
+        showProfit: false, showPrint: false,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Goods rejected to ${n}` : "Rejection Out",
+        successPostedMsg: "Rejection Out posted — stock decremented",
+        successDraftMsg:  "Rejection Out saved as draft",
+        newButtonLabel: "New Rejection Out",
+        closeRouteLabel: "Open another Rejection Out in a new tab",
+        voucherRefLabel: "ROUT Number",
+        voucherDateLabel: "Return Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: "GRN",
+        linkParentLabel: "Link to GRN / Purchase",
+        showShowPricesToggle: false,
     },
 };
 
@@ -293,7 +478,16 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
     const [lines, setLines] = useState<LineState[]>([newLine()]);
     // CREDIT is the default — most sales need a party on file so the
     // outstanding can be tracked. CASH is the walk-in / counter mode.
+    // Non-GL kinds (orders, GRN, challan, rejections) keep CREDIT — they don't
+    // render the CASH pill, so payMode never toggles for them.
     const [payMode, setPayMode] = useState<"CREDIT" | "CASH">("CREDIT");
+    // Parent voucher linkage (GRN→PO, Challan→SO, etc.) — saved as
+    // refVoucherId on the InvVoucher row. Picker only renders when
+    // copy.linkParentType is set.
+    const [parentLink, setParentLink] = useState<{ id: number; reference: string } | null>(null);
+    // Challan-only print toggle. Persisted as InvVoucher.showPrices and read
+    // back by the print job (deferred — see plan TODO).
+    const [showPricesOnPrint, setShowPricesOnPrint] = useState(true);
     const [party, setParty] = useState<PickedParty | null>(null);
     const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
     // CASH walk-in fields — free-form name + phone. Stored on the voucher as
@@ -363,12 +557,13 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
             refNumber: string | null;
             refDate: string | null;
             refVoucherId: number | null;
-            refVoucher?: { reference: string } | null;
+            refVoucher?: { id: number; reference: string } | null;
             shippingAmt: string | number;
             roundOff: string | number;
             discountPct: string | number | null;
             discountAmt: string | number | null;
             amountReceived: string | number;
+            showPrices?: boolean;
             lines: {
                 id: number;
                 productId: number;
@@ -465,6 +660,10 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                     refNumber: v.refNumber ?? "",
                     refDate: v.refDate ? v.refDate.slice(0, 10) : "",
                 });
+                if (v.refVoucherId && v.refVoucher) {
+                    setParentLink({ id: v.refVoucherId, reference: v.refVoucher.reference });
+                }
+                if (typeof v.showPrices === "boolean") setShowPricesOnPrint(v.showPrices);
             })
             .catch(() => {
                 if (cancelled) return;
@@ -744,6 +943,8 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
         setShowDescription(false);
         setEnableRoundOff(false);
         setRoundOffManuallyEdited(false);
+        setParentLink(null);
+        setShowPricesOnPrint(true);
     };
 
     const submit = async (andPost = false, andPrint = false) => {
@@ -805,6 +1006,10 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                     refNumber: header.refNumber.trim() || undefined,
                     refDate:   header.refDate || undefined,
                 } : {}),
+                // Parent voucher link (GRN→PO, Challan→SO, Rejection→Sale/GRN).
+                ...(parentLink ? { refVoucherId: parentLink.id } : {}),
+                // Challan-only print toggle.
+                ...(copy.showShowPricesToggle ? { showPrices: showPricesOnPrint } : {}),
                 shippingAmt: shipping,
                 roundOff,
                 discountPct: prefs.overallDiscount ? (parseFloat(header.discountPct) || 0) : 0,
@@ -899,21 +1104,23 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                         </span>
                     )}
                     {/* CASH / CREDIT pill — same shape as the dialog */}
-                    <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
-                        {(["CASH", "CREDIT"] as const).map((m) => (
-                            <button
-                                key={m}
-                                type="button"
-                                onClick={() => setPayMode(m)}
-                                className={`px-3 py-1 transition-colors ${payMode === m
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-card text-muted-foreground hover:bg-muted"
-                                    }`}
-                            >
-                                {m}
-                            </button>
-                        ))}
-                    </div>
+                    {copy.showPaymentBlock && (
+                        <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
+                            {(["CASH", "CREDIT"] as const).map((m) => (
+                                <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => setPayMode(m)}
+                                    className={`px-3 py-1 transition-colors ${payMode === m
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-card text-muted-foreground hover:bg-muted"
+                                        }`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     {/* Spawn another Sale Invoice in a fresh window — lets the
                         cashier work on parallel transactions without losing
                         the current draft. window.open uses noopener so the
@@ -1432,11 +1639,81 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                     <div className="grid grid-cols-[1fr_1fr] gap-8 px-6 py-4">
                         {/* Left: voucher-level actions */}
                         <div className="space-y-3 max-w-md">
+                            {/* Parent voucher link — GRN→PO, Challan→SO, etc.
+                                On pick, the lines auto-copy into the form (user
+                                can edit qty for partial fulfilment). */}
+                            {copy.linkParentType && (
+                                <ParentVoucherPicker
+                                    parentType={copy.linkParentType}
+                                    pickedRef={parentLink?.reference ?? null}
+                                    onClear={() => setParentLink(null)}
+                                    label={copy.linkParentLabel ?? "Link to parent"}
+                                    onPick={(parent) => {
+                                        setParentLink({ id: parent.id, reference: parent.reference });
+                                        // Carry over the parent's party so the user doesn't re-pick.
+                                        if (parent.partyId != null && parent.partyType) {
+                                            setParty({
+                                                id: parent.partyId,
+                                                kind: (parent.partyType === "customer" || parent.partyType === "supplier" || parent.partyType === "company")
+                                                    ? parent.partyType
+                                                    : (copy.party === "Sundry Debtors" ? "customer" : "supplier"),
+                                                name: parent.partyName ?? "",
+                                                phone: parent.partyPhone ?? null,
+                                            } as PickedParty);
+                                        }
+                                        // Save the parent's reference + date for downstream printing /
+                                        // tracking — the form already reuses these for supplier-bill.
+                                        setHeader((h) => ({
+                                            ...h,
+                                            refNumber: parent.reference,
+                                            refDate:   parent.date ? parent.date.slice(0, 10) : h.refDate,
+                                        }));
+                                        // Verbatim line copy — user can edit qty for partial fulfilment.
+                                        setLines(parent.lines.length === 0 ? [newLine()] : parent.lines.map((l) => ({
+                                            id: ++lineSeq,
+                                            product: {
+                                                id: l.product.id,
+                                                sku: l.product.sku,
+                                                name: l.product.name,
+                                                unitCode: l.product.unit.code,
+                                                stock: null,
+                                                salePrice: null,
+                                                costPrice: null,
+                                                mrp: null,
+                                            },
+                                            quantity:    String(Number(l.quantity) || 0),
+                                            freeQty:     l.freeQty != null && Number(l.freeQty) > 0 ? String(Number(l.freeQty)) : "",
+                                            rate:        String(Number(l.rate) || 0),
+                                            discountPct: Number(l.discountPct) > 0 ? String(Number(l.discountPct)) : "",
+                                            discountAmt: Number(l.discountAmt) > 0 ? String(Number(l.discountAmt)) : "",
+                                            taxRate:     Number(l.taxRate)     > 0 ? String(Number(l.taxRate))     : "",
+                                            taxAmount:   Number(l.taxAmount)   > 0 ? String(Number(l.taxAmount))   : "",
+                                            description: l.description ?? "",
+                                            showDescription: !!l.description,
+                                        })));
+                                    }}
+                                />
+                            )}
+
+                            {/* Challan-only: persist printable price visibility on the voucher. */}
+                            {copy.showShowPricesToggle && (
+                                <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+                                    <div>
+                                        <p className="font-medium text-foreground">Show prices on printed challan</p>
+                                        <p className="text-muted-foreground">Off → print shows quantities only. Useful for confidential B2B delivery.</p>
+                                    </div>
+                                    <Switch
+                                        checked={showPricesOnPrint}
+                                        onCheckedChange={(v) => setShowPricesOnPrint(v)}
+                                    />
+                                </div>
+                            )}
+
                             {/* Cash / Bank ledger picker — Vyapar's "Payment Type"
                                 slot. Always visible in CASH mode; in CREDIT mode,
                                 only when the user has typed a Received amount > 0
                                 (the upfront cash has to land somewhere). */}
-                            {(payMode === "CASH" || received > 0) && cashBankAccounts.length > 0 && (
+                            {copy.showPaymentBlock && (payMode === "CASH" || received > 0) && cashBankAccounts.length > 0 && (
                                 <div className="space-y-1">
                                     <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
                                         {copy.cashLedgerLabel}
@@ -1572,25 +1849,29 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                                 <span className="text-right">Total</span>
                                 <span className="w-28 text-right font-mono tabular-nums">₹ {fmt(grandTotal)}</span>
                             </div>
-                            <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm pt-2 border-t border-border">
-                                <span className="text-muted-foreground text-right">Received</span>
-                                <Input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={header.received}
-                                    onChange={(e) => setHeader((h) => ({ ...h, received: num(e.target.value) }))}
-                                    className="h-8 w-20 text-xs text-right"
-                                    placeholder="0"
-                                />
-                                <span className="w-28 text-right font-mono tabular-nums">{fmt(received)}</span>
-                            </div>
-                            <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm font-semibold">
-                                <span className="text-right">Balance</span>
-                                <span className="w-20" />
-                                <span className={`w-28 text-right font-mono tabular-nums ${balance > 0 ? "text-destructive" : "text-green-600"}`}>
-                                    ₹ {fmt(balance)}
-                                </span>
-                            </div>
+                            {copy.showPaymentBlock && (
+                                <>
+                                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm pt-2 border-t border-border">
+                                        <span className="text-muted-foreground text-right">Received</span>
+                                        <Input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={header.received}
+                                            onChange={(e) => setHeader((h) => ({ ...h, received: num(e.target.value) }))}
+                                            className="h-8 w-20 text-xs text-right"
+                                            placeholder="0"
+                                        />
+                                        <span className="w-28 text-right font-mono tabular-nums">{fmt(received)}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm font-semibold">
+                                        <span className="text-right">Balance</span>
+                                        <span className="w-20" />
+                                        <span className={`w-28 text-right font-mono tabular-nums ${balance > 0 ? "text-destructive" : "text-green-600"}`}>
+                                            ₹ {fmt(balance)}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

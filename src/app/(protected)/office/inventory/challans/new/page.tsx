@@ -1,6 +1,8 @@
-"use client";
-import { InvVoucherForm } from "@/modules/inventory/components/InvVoucherForm";
+import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
 
-export default function NewChallanPage() {
-    return <InvVoucherForm type="CHALLAN" redirectTo="/office/inventory/challans" />;
+// Delivery Challan — decrements stock; no GL post (Sale invoice posts).
+// Parent-link picker offers any POSTED Sales Order to copy lines from.
+// `showPrices` toggle persists on the voucher for the print job.
+export default function Page() {
+    return <SaleVoucherPage kind="CHALLAN" />;
 }

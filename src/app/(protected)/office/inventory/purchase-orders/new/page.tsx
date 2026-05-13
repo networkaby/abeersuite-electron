@@ -1,6 +1,7 @@
-"use client";
-import { InvVoucherForm } from "@/modules/inventory/components/InvVoucherForm";
+import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
 
-export default function NewPurchaseOrderPage() {
-    return <InvVoucherForm type="PURCHASE_ORDER" redirectTo="/office/inventory/purchase-orders" />;
+// Full-screen Purchase Order form — stock-neutral commitment; converts to a
+// GRN on receipt and ultimately a Purchase invoice.
+export default function Page() {
+    return <SaleVoucherPage kind="PURCHASE_ORDER" />;
 }

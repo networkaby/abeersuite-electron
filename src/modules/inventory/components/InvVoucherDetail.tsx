@@ -9,7 +9,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, CheckCircle, ExternalLink } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, ExternalLink, Pencil, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
@@ -36,6 +36,8 @@ type Voucher = {
     deleteReason:   string | null;
     createdBy:      { name: string };
     createdAt:      string;
+    refVoucherId:   number | null;
+    refVoucher:     { id: number; reference: string; type: string } | null;
     lines: {
         id:          number;
         quantity:    number;
@@ -44,6 +46,19 @@ type Voucher = {
         description: string | null;
         product:     { id: number; sku: string; name: string; unit: { code: string; label: string } };
     }[];
+};
+
+// Map each non-GL voucher type to the route segment its detail page lives at.
+// Used to render a clickable back-link to the parent voucher (e.g. GRN → PO).
+const TYPE_ROUTE: Record<string, string> = {
+    SALES_ORDER:     "/office/inventory/sales-orders",
+    PURCHASE_ORDER:  "/office/inventory/purchase-orders",
+    GRN:             "/office/inventory/grn",
+    CHALLAN:         "/office/inventory/challans",
+    REJECTION_IN:    "/office/inventory/rejections-in",
+    REJECTION_OUT:   "/office/inventory/rejections-out",
+    SALE:            "/office/inventory/sales",
+    PURCHASE:        "/office/inventory/purchases",
 };
 
 export function InvVoucherDetail({ basePath, label }: { basePath: string; label: string }) {
@@ -98,6 +113,15 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.description}</p>
                 </div>
                 <div className="flex gap-2 items-center">
+                    {voucher.status !== "CANCELLED" && !voucher.deletedAt && (
+                        <Button
+                            variant="outline"
+                            onClick={() => router.push(`${basePath}/new?voucherId=${voucher.id}`)}
+                            title="Edit voucher in the rich form"
+                        >
+                            <Pencil size={14} /> Edit
+                        </Button>
+                    )}
                     {voucher.status === "DRAFT" && (
                         <Button onClick={post} disabled={posting} className="bg-green-600 hover:bg-green-700 text-white">
                             {posting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />} Post
@@ -136,6 +160,19 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
                     </Card>
                 )}
             </div>
+
+            {voucher.refVoucher && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm flex items-center gap-2">
+                    <Link2 size={14} className="text-primary" />
+                    <span className="text-muted-foreground">Linked to</span>
+                    <Link
+                        href={`${TYPE_ROUTE[voucher.refVoucher.type] ?? basePath}/${voucher.refVoucher.id}`}
+                        className="font-mono font-medium text-primary hover:underline"
+                    >
+                        {voucher.refVoucher.reference}
+                    </Link>
+                </div>
+            )}
 
             {voucher.cancelReason && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">

@@ -143,6 +143,7 @@ export const WORKSPACE_NAV: NavItem[] = [
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [
+    // Customers
     {
         label: "Customers",
         icon: Users,
@@ -160,6 +161,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Companies", href: "/office/customers/companies", icon: Building2, permission: "customers:view" },
         ],
     },
+    // Repair & Warranty
     {
         label: "Repair & Warranty",
         icon: Wrench,
@@ -175,6 +177,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
         ],
     },
+
+    // Accountancy
     {
         label: "Accountancy",
         icon: Calculator,
@@ -195,6 +199,18 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Credit Note +", subtitle: "New credit note (dialog)", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
             { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
             { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
+
+
+            { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "default", href: "/office/inventory/sales-orders/new", permission: "inventory:manage" },
+            { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", href: "/office/inventory/purchase-orders/new", permission: "inventory:manage" },
+            { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", href: "/office/inventory/grn/new", permission: "inventory:manage" },
+            { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", href: "/office/inventory/challans/new", permission: "inventory:manage" },
+            { label: "Stock Journal +", subtitle: "New stock journal", icon: ArrowLeftRight, variant: "outline", href: "/office/inventory/stock-journals/new", permission: "inventory:manage" },
+            { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", href: "/office/inventory/physical-stock/new", permission: "inventory:manage" },
+            { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-in/new", permission: "inventory:manage" },
+            { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
+
+
         ],
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
@@ -268,13 +284,30 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
     },
+
+    // Accountancy
     {
-        label: "Inventory",
-        icon: Box,
-        key: "inventory",
-        dashboardHref: "/office/inventory",
-        pathPrefixes: ["/office/inventory"],
+        label: "Accountancy",
+        icon: Calculator,
+        key: "accountancy",
+        permission: "accountancy:view:org",
+        dashboardHref: "/office/accountancy",
+        // pathPrefixes: ["/office/accountancy/account-groups", "/office/accountancy/ledgers", "/office/accountancy/sales", "/office/accountancy/purchases", "/office/accountancy/estimates", "/office/accountancy/payments", "/office/accountancy/receipts", "/office/accountancy/contras", "/office/accountancy/credit-notes", "/office/accountancy/debit-notes", "/office/accountancy/journal-entries", "/office/accountancy/invoices", "/office/accountancy/opening-balance", "/office/accountancy/reports"],
+        pathPrefixes: ["/office/accountancy"],
         createActions: [
+            { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
+            { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
+            { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
+            { label: "Purchase Return +", subtitle: "Return goods to supplier (Debit Note)", icon: ShoppingCart, variant: "outline", action: "new-purchase-return" },
+            { label: "Estimate +", subtitle: "New estimate (dialog)", icon: ScrollText, variant: "outline", action: "new-estimate" },
+            { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
+            { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note (dialog)", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
+            { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
+            { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
+
+
             { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "default", href: "/office/inventory/sales-orders/new", permission: "inventory:manage" },
             { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", href: "/office/inventory/purchase-orders/new", permission: "inventory:manage" },
             { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", href: "/office/inventory/grn/new", permission: "inventory:manage" },
@@ -283,6 +316,112 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", href: "/office/inventory/physical-stock/new", permission: "inventory:manage" },
             { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-in/new", permission: "inventory:manage" },
             { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
+
+
+        ],
+        children: [
+            { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
+
+            // { label: "Sales Register", icon: Receipt, href: "/office/accountancy/sales" },
+            // { label: "Purchases Register", icon: ShoppingCart, href: "/office/accountancy/purchases" },
+            { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
+            // { label: "Payments", icon: Wallet, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
+            // { label: "Receipts", icon: Wallet, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
+            // { label: "Contras", icon: Wallet, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
+            // { label: "Credit Notes", icon: FileText, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
+            // { label: "Debit Notes", icon: FileText, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
+
+            // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
+            // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
+
+            // { label: "Financial Insights", icon: ChartArea, href: "/office/accountancy/reports" },
+            {
+                label: "Financial Insights",
+                icon: ChartArea,
+                href: "/office/accountancy/reports",
+                permission: "finance:voucher:create",
+                children: [
+                    { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
+                    { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
+                    { label: "Trial Balance", icon: Wallet, href: "/office/accountancy/reports/trial-balance" },
+                    // { label: "Day Book", icon: ClipboardList, href: "/office/accountancy/reports/day-book" },
+                    { label: "Cash Book", icon: Wallet, href: "/office/accountancy/reports/cash-book" },
+                    { label: "Bank Book", icon: Wallet, href: "/office/accountancy/reports/bank-book" },
+                    { label: "Receivables", icon: Wallet, href: "/office/accountancy/reports/receivables" },
+                    { label: "Payables", icon: Wallet, href: "/office/accountancy/reports/payables" },
+                    { label: "Cash Flow", icon: ClipboardList, href: "/office/accountancy/reports/cash-flow" },
+                    { label: "Fund Flow", icon: ClipboardList, href: "/office/accountancy/reports/fund-flow" },
+                    { label: "Ratio Analysis", icon: ClipboardList, href: "/office/accountancy/reports/ratio-analysis" },
+                    { label: "Statistics", icon: ClipboardList, href: "/office/accountancy/reports/statistics" },
+                    { label: "Bank Reconciliation", icon: Wallet, href: "/office/accountancy/reports/bank-reconciliation" },
+
+                ]
+            },
+
+            {
+                label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create",
+                children: [
+                    // { label: "Contras", icon: ClipboardList, href: "/office/accountancy/contras", permission: "finance:voucher:create" },
+                    // { label: "Payment", icon: ClipboardList, href: "/office/accountancy/payments", permission: "finance:voucher:create" },
+                    // { label: "Receipt", icon: ClipboardList, href: "/office/accountancy/receipts", permission: "finance:voucher:create" },
+                    { label: "Credit Note", icon: ClipboardList, href: "/office/accountancy/credit-notes", permission: "finance:voucher:create" },
+                    { label: "Debit Note", icon: ClipboardList, href: "/office/accountancy/debit-notes", permission: "finance:voucher:create" },
+                    // { label: "Journal entries", icon: FileText, href: "/office/accountancy/journal-entries" },
+                    // { label: "Invoices", icon: ClipboardList, href: "/office/accountancy/invoices" },
+                    { label: "Sales", icon: Receipt, href: "/office/accountancy/sales" },
+                    { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/purchases" },
+                    // { label: "Estimates", icon: ScrollText, href: "/office/accountancy/estimates" },
+                ]
+
+            },
+
+            {
+                label: "Masters",
+                icon: ChartArea,
+                href: "/office/accountancy",
+                permission: "finance:voucher:create",
+                children: [
+                    { label: "Account Groups", icon: FolderTree, href: "/office/accountancy/groups" },
+                    { label: "Ledgers", icon: BookOpen, href: "/office/accountancy/ledgers" },
+                    { label: "Chart of accounts", icon: Wallet, href: "/office/accountancy/chart-of-accounts" },
+                    { label: "Opening Balance", icon: Wallet, href: "/office/accountancy/opening-balance", permission: "finance:opening-balance:manage" },
+                ]
+            },
+
+
+        ],
+    },
+    // Inventory
+    {
+        label: "Inventory",
+        icon: Box,
+        key: "inventory",
+        dashboardHref: "/office/inventory",
+        pathPrefixes: ["/office/inventory"],
+        createActions: [
+            { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
+            { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
+            { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
+            { label: "Purchase Return +", subtitle: "Return goods to supplier (Debit Note)", icon: ShoppingCart, variant: "outline", action: "new-purchase-return" },
+            { label: "Estimate +", subtitle: "New estimate (dialog)", icon: ScrollText, variant: "outline", action: "new-estimate" },
+            { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
+            { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note (dialog)", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
+            { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
+            { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
+
+
+            { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "default", href: "/office/inventory/sales-orders/new", permission: "inventory:manage" },
+            { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", href: "/office/inventory/purchase-orders/new", permission: "inventory:manage" },
+            { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", href: "/office/inventory/grn/new", permission: "inventory:manage" },
+            { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", href: "/office/inventory/challans/new", permission: "inventory:manage" },
+            { label: "Stock Journal +", subtitle: "New stock journal", icon: ArrowLeftRight, variant: "outline", href: "/office/inventory/stock-journals/new", permission: "inventory:manage" },
+            { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", href: "/office/inventory/physical-stock/new", permission: "inventory:manage" },
+            { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-in/new", permission: "inventory:manage" },
+            { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", href: "/office/inventory/rejections-out/new", permission: "inventory:manage" },
+
+
         ],
         children: [
             // { label: "Overview", icon: ChartArea, href: "/office/inventory", permission: "inventory:manage" },
@@ -294,6 +433,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Physical Stock", icon: ClipboardCheck, href: "/office/inventory/physical-stock", permission: "inventory:manage" },
             { label: "Rejections In", icon: PackageX, href: "/office/inventory/rejections-in", permission: "inventory:manage" },
             { label: "Rejections Out", icon: PackageX, href: "/office/inventory/rejections-out", permission: "inventory:manage" },
+            { label: "Optional Vouchers", icon: ClipboardList, href: "/office/inventory/optional-vouchers", permission: "inventory:manage" },
             // { label: "Units", icon: Ruler, href: "/office/inventory/units", permission: "inventory:manage" },
             // { label: "Categories", icon: Layers, href: "/office/inventory/categories", permission: "inventory:manage" },
             // { label: "Groups", icon: LayoutGrid, href: "/office/inventory/product-groups", permission: "inventory:manage" },
@@ -330,6 +470,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
     },
+    // CRM
     {
         label: "CRM",
         icon: Network,
@@ -343,6 +484,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
         ],
     },
+    // E-Commerce
     {
         label: "E-Commerce",
         icon: ShoppingCart,
@@ -359,6 +501,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     },
 
 
+    // HRM
     {
         label: "HRM",
         icon: UserCog,
@@ -373,6 +516,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Payroll", icon: Wallet, href: "/office/roadmap/hrm/payroll" },
         ],
     },
+    // Delivery
     {
         label: "Delivery",
         icon: Truck,
@@ -386,6 +530,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
         ],
     },
+    // Field Service
     {
         label: "Field Service",
         icon: MapPin,
@@ -399,6 +544,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Van stock", icon: Box, href: "/office/roadmap/field-service/van-stock" },
         ],
     },
+    // HelpDesk
     {
         label: "HelpDesk",
         icon: HelpCircle,
@@ -412,6 +558,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "SLAs", icon: Timer, href: "/office/roadmap/helpdesk/slas" },
         ],
     },
+    // Projects
     {
         label: "Projects",
         icon: Briefcase,
@@ -425,6 +572,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Time log", icon: ClipboardList, href: "/office/roadmap/projects/time" },
         ],
     },
+    // Intelligence
     {
         label: "Intelligence",
         icon: ChartArea,
@@ -438,6 +586,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Exports", icon: Download, href: "/office/roadmap/intelligence/exports" },
         ],
     },
+    // Administration
     {
         label: "Administration",
         icon: Settings,
@@ -451,6 +600,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
         ],
     },
+    // Retention
     {
         label: "Retention",
         icon: TicketPercent,
@@ -464,6 +614,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
         ],
     },
+    // Pricing Strategy
     {
         label: "Pricing Strategy",
         icon: Wallet,
@@ -477,6 +628,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Price lists", icon: ListOrdered, href: "/office/roadmap/pricing-strategy/price-lists" },
         ],
     },
+    // Complience
     {
         label: "Complience",
         icon: ClipboardList,

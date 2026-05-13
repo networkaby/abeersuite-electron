@@ -1,6 +1,7 @@
-"use client";
-import { InvVoucherForm } from "@/modules/inventory/components/InvVoucherForm";
+import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
 
-export default function NewRejectionInPage() {
-    return <InvVoucherForm type="REJECTION_IN" redirectTo="/office/inventory/rejections-in" />;
+// Rejection In — customer returns goods; stock increments. Parent-link picker
+// offers any POSTED Challan (Sale) so lines can be carried over.
+export default function Page() {
+    return <SaleVoucherPage kind="REJECTION_IN" />;
 }

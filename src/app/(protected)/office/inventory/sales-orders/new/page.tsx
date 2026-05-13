@@ -1,6 +1,7 @@
-"use client";
-import { InvVoucherForm } from "@/modules/inventory/components/InvVoucherForm";
+import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
 
-export default function NewSalesOrderPage() {
-    return <InvVoucherForm type="SALES_ORDER" redirectTo="/office/inventory/sales-orders" />;
+// Full-screen Sales Order form — same shell as /sale and /purchase. Stock-
+// neutral commitment; converts to a Sale invoice / Challan downstream.
+export default function Page() {
+    return <SaleVoucherPage kind="SALES_ORDER" />;
 }

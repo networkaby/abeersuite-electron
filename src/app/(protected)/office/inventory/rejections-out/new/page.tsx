@@ -1,6 +1,7 @@
-"use client";
-import { InvVoucherForm } from "@/modules/inventory/components/InvVoucherForm";
+import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
 
-export default function NewRejectionOutPage() {
-    return <InvVoucherForm type="REJECTION_OUT" redirectTo="/office/inventory/rejections-out" />;
+// Rejection Out — we return goods to supplier; stock decrements. Parent-link
+// picker offers any POSTED GRN (Purchase) so lines can be carried over.
+export default function Page() {
+    return <SaleVoucherPage kind="REJECTION_OUT" />;
 }

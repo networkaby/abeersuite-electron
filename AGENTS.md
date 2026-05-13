@@ -7,6 +7,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 Before Any Change You must explain
 use shadcn, zustand
 
+# DRY — don't repeat yourself
+
+Before creating a **new** file for a helper, hook, schema, formatter, or shared UI, look for something similar to reuse: [docs/reusables.md](docs/reusables.md), `src/shared/`, and the relevant `docs/modules/<module>.md` **Reusable helpers — DO NOT duplicate** table. Prefer extending or importing an existing symbol over copying logic. If nothing fits and you add new reusable surface area, implement it in the appropriate shared location and register it in the reusables docs in the same change (see **Reusables registry** under *After every plan / segment completes*).
+
 # Module-specific maps
 
 For module-specific URLs, permissions, models, and wiring, read `docs/modules/<module>.md` first. Each doc follows the same template — URLs (UI + API), Permissions, Prisma models, Key components, Common workflows, Gotchas. Cuts the "what does this module touch" question from N file globs to one file read. Index: [docs/modules/README.md](docs/modules/README.md).

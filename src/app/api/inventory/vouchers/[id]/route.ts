@@ -26,10 +26,9 @@ export async function GET(_req: Request, { params }: Params) {
             },
             stockEntries: { include: { product: { select: { id: true, sku: true, name: true } } } },
             createdBy: { select: { name: true } },
-            // refVoucher.reference powers any "Replaces <old ref>" UI when a
-            // voucher was spun off from another (e.g. SALE_RETURN against a
-            // SALE).
-            refVoucher: { select: { id: true, reference: true } },
+            // refVoucher powers parent-link surfaces — "Replaces <old ref>"
+            // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
+            refVoucher: { select: { id: true, reference: true, type: true } },
         },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -92,6 +91,8 @@ export async function PATCH(req: Request, { params }: Params) {
         dueDate,
         refNumber,
         refDate,
+        refVoucherId,
+        showPrices,
         shippingAmt,
         roundOff,
         discountPct,
@@ -112,6 +113,10 @@ export async function PATCH(req: Request, { params }: Params) {
         dueDate?:          string;
         refNumber?:        string;
         refDate?:          string;
+        /// Parent voucher (e.g. PO for a GRN); null clears the link.
+        refVoucherId?:     number | null;
+        /// Challan-only: persist print-price visibility.
+        showPrices?:       boolean;
         shippingAmt?:      number;
         roundOff?:         number;
         discountPct?:      number;
@@ -282,6 +287,8 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(dueDate          !== undefined ? { dueDate:          dueDate ? new Date(dueDate) : null } : {}),
                     ...(refNumber        !== undefined ? { refNumber:        refNumber        || null } : {}),
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
+                    ...(refVoucherId     !== undefined ? { refVoucherId:     refVoucherId ?? null } : {}),
+                    ...(showPrices       !== undefined ? { showPrices }                              : {}),
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
                     ...(roundOff         !== undefined ? { roundOff }        : {}),
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
