@@ -36,7 +36,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const { barMode, setBarMode, toggleBarVisible } = usePanelStore();
     const collapsed = barMode === "collapsed";
-    const isHidden  = barMode === "hidden";
+    const isHidden = barMode === "hidden";
     const [moreOpen, setMoreOpen] = useState(false);
 
     // Persist mode to localStorage
@@ -49,7 +49,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             if (stored === "expanded" || stored === "collapsed" || stored === "hidden")
                 setBarMode(stored);
         } catch { /* ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const {
@@ -92,7 +92,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                     null;
                 setDefaultPipeline(def);
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     const handleAction = (action: ModuleCreateAction) => {
@@ -197,29 +197,19 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                     }}
                 >
 
-                {/* Header */}
-                <div className={`flex items-center border-b border-border px-3 py-3 ${collapsed ? "flex-col gap-2" : "gap-2.5"}`}>
-                    {collapsed && (
-                        <button
-                            type="button"
-                            title="Expand action bar"
-                            onClick={() => setBarMode("expanded")}
-                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        >
-                            <PanelRightOpen size={15} />
-                        </button>
-                    )}
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-primary/10 text-primary">
-                        <Zap size={14} />
-                    </div>
-                    {!collapsed && (
-                        <>
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-foreground">{headerLabel}</p>
-                                {user?.name && (
-                                    <p className="truncate text-xs text-muted-foreground">{user.name}</p>
-                                )}
-                            </div>
+                    {/* Header */}
+                    <div className={`flex items-center border-b border-border px-3 py-3 ${collapsed ? "flex-col gap-2" : "gap-2.5"}`}>
+                        {collapsed ? (
+                            <button
+                                type="button"
+                                title="Expand action bar"
+                                onClick={() => setBarMode("expanded")}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                            >
+                                <PanelRightOpen size={15} />
+                            </button>
+                        ) : (
+
                             <button
                                 type="button"
                                 title="Collapse action bar"
@@ -228,92 +218,115 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                             >
                                 <PanelRightClose size={14} />
                             </button>
-                        </>
-                    )}
-                </div>
 
-                {/* Action buttons — sidebar-style: flat rows, deep highlight when active */}
-                <ScrollArea className="flex-1 min-h-0">
-                    <div className="space-y-0.5 p-2">
-                        {/* More + button — always first */}
-                        <button
-                            type="button"
-                            title={collapsed ? "More actions" : "More — all create actions"}
-                            onClick={() => setMoreOpen(true)}
-                            className={[
-                                "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
-                                collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
-                                "text-muted-foreground hover:bg-muted hover:text-foreground",
-                            ].join(" ")}
-                        >
-                            <Grid2x2 size={17} className="shrink-0" />
-                            {!collapsed && <span className="truncate text-left">More +</span>}
-                        </button>
+                        )}
+                        {/* <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-primary/10 text-primary">
+                            <Zap size={14} />
 
-                        {/* Module-specific or universal create actions */}
-                        {actions.map((action) => {
-                            const Icon = action.icon;
-                            const isActive = !!(action.href && pathname.startsWith(action.href));
 
-                            const rowClass = [
-                                "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
-                                collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
-                                action.disabled
-                                    ? "cursor-not-allowed text-muted-foreground/30"
-                                    : isActive
-                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                            ].join(" ");
-
-                            const inner = (
-                                <>
-                                    <Icon size={17} className="shrink-0" />
-                                    {!collapsed && (
-                                        <>
-                                            <span className="flex-1 truncate text-left">{action.label}</span>
-                                            {action.disabled && (
-                                                <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
-                                                    Soon
-                                                </Badge>
-                                            )}
-                                        </>
+                        </div> */}
+                        {!collapsed && (
+                            <>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-foreground">{headerLabel}</p>
+                                    {user?.name && (
+                                        <p className="truncate text-xs text-muted-foreground">{user.name}</p>
                                     )}
-                                </>
-                            );
+                                </div>
+                                {/* <button
+                                type="button"
+                                title="Collapse action bar"
+                                onClick={() => setBarMode("collapsed")}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                            >
+                                <PanelRightClose size={14} />
+                            </button> */}
+                            </>
+                        )}
+                    </div>
 
-                            const titleAttr = collapsed ? action.label : `${action.label} — ${action.subtitle}`;
+                    {/* Action buttons — sidebar-style: flat rows, deep highlight when active */}
+                    <ScrollArea className="flex-1 min-h-0">
+                        <div className="space-y-0.5 p-2">
+                            {/* More + button — always first */}
+                            <button
+                                type="button"
+                                title={collapsed ? "More actions" : "More — all create actions"}
+                                onClick={() => setMoreOpen(true)}
+                                className={[
+                                    "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
+                                    collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
+                                    "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                ].join(" ")}
+                            >
+                                <Grid2x2 size={17} className="shrink-0" />
+                                {!collapsed && <span className="truncate text-left">More +</span>}
+                            </button>
 
-                            if (action.href && !action.disabled) {
+                            {/* Module-specific or universal create actions */}
+                            {actions.map((action) => {
+                                const Icon = action.icon;
+                                const isActive = !!(action.href && pathname.startsWith(action.href));
+
+                                const rowClass = [
+                                    "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
+                                    collapsed ? "justify-center px-2 py-2" : "gap-3 px-3 py-2",
+                                    action.disabled
+                                        ? "cursor-not-allowed text-muted-foreground/30"
+                                        : isActive
+                                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                ].join(" ");
+
+                                const inner = (
+                                    <>
+                                        <Icon size={17} className="shrink-0" />
+                                        {!collapsed && (
+                                            <>
+                                                <span className="flex-1 truncate text-left">{action.label}</span>
+                                                {action.disabled && (
+                                                    <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
+                                                        Soon
+                                                    </Badge>
+                                                )}
+                                            </>
+                                        )}
+                                    </>
+                                );
+
+                                const titleAttr = collapsed ? action.label : `${action.label} — ${action.subtitle}`;
+
+                                if (action.href && !action.disabled) {
+                                    return (
+                                        <Link
+                                            key={action.label}
+                                            href={action.href}
+                                            className={rowClass}
+                                            title={titleAttr}
+                                            {...(action.newTab
+                                                ? { target: "_blank", rel: "noopener noreferrer" }
+                                                : {})}
+                                        >
+                                            {inner}
+                                        </Link>
+                                    );
+                                }
+
                                 return (
-                                    <Link
+                                    <button
                                         key={action.label}
-                                        href={action.href}
-                                        className={rowClass}
+                                        type="button"
                                         title={titleAttr}
-                                        {...(action.newTab
-                                            ? { target: "_blank", rel: "noopener noreferrer" }
-                                            : {})}
+                                        disabled={action.disabled}
+                                        onClick={() => handleAction(action)}
+                                        className={rowClass}
                                     >
                                         {inner}
-                                    </Link>
+                                    </button>
                                 );
-                            }
-
-                            return (
-                                <button
-                                    key={action.label}
-                                    type="button"
-                                    title={titleAttr}
-                                    disabled={action.disabled}
-                                    onClick={() => handleAction(action)}
-                                    className={rowClass}
-                                >
-                                    {inner}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </ScrollArea>
+                            })}
+                        </div>
+                    </ScrollArea>
                 </div>{/* end slide wrapper */}
             </aside>
 
