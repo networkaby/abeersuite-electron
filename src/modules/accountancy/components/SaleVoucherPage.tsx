@@ -145,7 +145,8 @@ export type TradingKind =
     | "SALE" | "PURCHASE" | "SALE_RETURN" | "PURCHASE_RETURN"
     | "SALES_ORDER" | "PURCHASE_ORDER"
     | "GRN" | "CHALLAN"
-    | "REJECTION_IN" | "REJECTION_OUT";
+    | "REJECTION_IN" | "REJECTION_OUT"
+    | "ESTIMATE";  // PREVIEW MIGRATION — quotation/estimate, no GL/stock impact
 
 type KindConfig = {
     title:            string;
@@ -446,6 +447,34 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showPaymentBlock: false,
         linkParentType: "GRN",
         linkParentLabel: "Link to GRN / Purchase",
+        showShowPricesToggle: false,
+    },
+    // PREVIEW MIGRATION — Estimate / Quotation. Trading-voucher shape (item
+    // table, party picker), but no GL post and no stock movement on POST
+    // (server gates ESTIMATE out of both posting paths). Used by the
+    // /office/accountancy/preview-vouchers/estimate route.
+    ESTIMATE: {
+        title: "Estimate / Quotation",
+        party: "Sundry Debtors",
+        partyPlaceholder: "Search customer by name or phone…",
+        ratePick: (p) => p.salePrice,
+        refLabel: null, refDateLabel: "",
+        listPath: "/office/accountancy/estimates",
+        nextRefType: "ESTIMATE",
+        showProfit: true, showPrint: true,
+        cashLedgerLabel: "—",
+        narrationFallback: (n) => n ? `Estimate for ${n}` : "Estimate",
+        successPostedMsg: "Estimate saved",
+        successDraftMsg:  "Estimate saved as draft",
+        newButtonLabel: "New Estimate",
+        closeRouteLabel: "Open another Estimate in a new tab",
+        voucherRefLabel: "Estimate No",
+        voucherDateLabel: "Estimate Date",
+        showVoucherRef: true,
+        showVoucherDate: true,
+        showPaymentTerms: false,
+        showPaymentBlock: false,
+        linkParentType: null, linkParentLabel: null,
         showShowPricesToggle: false,
     },
 };
