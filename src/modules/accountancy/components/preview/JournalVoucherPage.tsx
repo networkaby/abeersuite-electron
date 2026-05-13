@@ -250,6 +250,15 @@ export function JournalVoucherPage() {
                             className="h-8 w-40 text-xs"
                         />
                     </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => router.push(listPath)}
+                        title="Close"
+                        className="text-muted-foreground hover:text-foreground"
+                    >
+                        <X size={18} />
+                    </Button>
                 </div>
             </header>
 
