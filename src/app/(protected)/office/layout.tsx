@@ -6,6 +6,7 @@ import SessionWrapper from "@/shared/components/SessionWrapper";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import ButtonBar from "@/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
+import FinanceTopBar from "@/shared/components/FinanceTopBar";
 import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
 import { ContraDialog } from "@/modules/accountancy/components/ContraDialog";
 import {
@@ -58,7 +59,10 @@ export default async function ProtectedLayout({
                     roleColor:   user.roleColor,
                     avatarUrl:   user.avatarUrl,
                 }} />
-                <main className="flex-1 overflow-y-auto p-8">{children}</main>
+                <div className="flex flex-1 flex-col overflow-hidden">
+                    <FinanceTopBar permissions={user.permissions ?? []} />
+                    <main className="flex-1 overflow-y-auto p-8">{children}</main>
+                </div>
                 <ButtonBar user={{
                     name:        user.name,
                     role:        user.role,

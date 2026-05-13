@@ -10,7 +10,7 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
-    ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell,
+    ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell, EyeOff, PanelLeftOpen,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,24 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     const [collapsed, setCollapsed] = useState(false);
+    const [hidden, setHidden] = useState(false);
+
+    // Persist sidebar visibility states
+    useEffect(() => {
+        try {
+            const c = localStorage.getItem("app:sidebar-collapsed");
+            const h = localStorage.getItem("app:sidebar-hidden");
+            if (c === "1") setCollapsed(true);
+            if (h === "1") setHidden(true);
+        } catch { /* SSR / private mode */ }
+    }, []);
+    useEffect(() => {
+        try { localStorage.setItem("app:sidebar-collapsed", collapsed ? "1" : "0"); } catch { /* ignore */ }
+    }, [collapsed]);
+    useEffect(() => {
+        try { localStorage.setItem("app:sidebar-hidden", hidden ? "1" : "0"); } catch { /* ignore */ }
+    }, [hidden]);
+
     const { width: sidebarWidth, isDragging: sidebarDragging, onMouseDown: onSidebarDragStart } = useResizable({
         storageKey: "app:sidebar-width",
         defaultWidth: 256,
@@ -346,27 +364,55 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     };
 
     return (
+        <>
+        {/* Hidden-state restore strip — left edge of viewport */}
+        {hidden && (
+            <div
+                onClick={() => { setHidden(false); setCollapsed(false); }}
+                title="Show sidebar"
+                className="fixed left-0 top-0 h-full w-1.5 z-50 group cursor-pointer hover:w-7 transition-all duration-200 bg-transparent hover:bg-sidebar hover:border-r hover:border-border flex items-center justify-center"
+            >
+                <PanelLeftOpen size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-foreground" />
+            </div>
+        )}
+
         <aside
-            className="relative flex h-screen flex-col border-r border-border bg-sidebar shrink-0"
+            className="relative flex h-screen flex-col border-r border-border bg-sidebar shrink-0 overflow-hidden"
             style={{
-                width: collapsed ? 64 : sidebarWidth,
+                width: hidden ? 0 : collapsed ? 64 : sidebarWidth,
                 transition: sidebarDragging ? "none" : "width 0.3s",
+                minWidth: hidden ? 0 : undefined,
             }}
         >
-            {/* Collapse toggle */}
+            {/* Collapse / expand toggle */}
             <Button
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                onClick={() => setCollapsed((c) => !c)}
+                onClick={() => { setCollapsed((c) => !c); setHidden(false); }}
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 className="absolute -right-3 top-8 z-10 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
             >
                 {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
             </Button>
 
+            {/* Hide button — only shown when already collapsed */}
+            {collapsed && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setHidden(true)}
+                    aria-label="Hide sidebar"
+                    title="Hide sidebar"
+                    className="absolute -right-3 top-16 z-10 rounded-full text-muted-foreground shadow-sm hover:text-destructive"
+                >
+                    <EyeOff size={11} />
+                </Button>
+            )}
+
             {/* Drag-to-resize handle — right edge, only visible when expanded */}
-            {!collapsed && (
+            {!collapsed && !hidden && (
                 <div
                     onMouseDown={onSidebarDragStart}
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 z-20"
@@ -769,5 +815,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             </div>
 
         </aside>
+        </>
     );
 }
