@@ -1,18 +1,32 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
+import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 
-// GET /api/inventory/stock-ledger/[productId]?from=YYYY-MM-DD&to=YYYY-MM-DD
-export async function GET(req: Request, { params }: { params: Promise<{ productId: string }> }) {
+// GET /api/inventory/stock-ledger/[productId]?from=YYYY-MM-DD&to=YYYY-MM-DD&branchId=BR-HQ|all
+export async function GET(req: NextRequest, { params }: { params: Promise<{ productId: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;
 
+    const session = await auth();
     const { productId } = await params;
     const { searchParams } = new URL(req.url);
-    const fromParam = searchParams.get("from");
-    const toParam   = searchParams.get("to");
+    const fromParam   = searchParams.get("from");
+    const toParam     = searchParams.get("to");
+    const branchParam = searchParams.get("branchId");
+
+    let branchFilter: { branchId?: string } = {};
+    if (branchParam === "all") {
+        // No branch filter
+    } else if (branchParam) {
+        branchFilter = { branchId: branchParam };
+    } else {
+        try { branchFilter = { branchId: resolveActiveBranchId(req, session) }; }
+        catch { /* fall back to no filter (legacy / admin) */ }
+    }
 
     const from = fromParam ? new Date(fromParam) : new Date(new Date().getFullYear(), 0, 1);
     const to   = toParam   ? new Date(toParam)   : new Date();
@@ -31,6 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ productI
                 productId: Number(productId),
                 voucher:   { status: "POSTED" },
                 date:      { lt: from },
+                ...branchFilter,
             },
             select: { inQty: true, outQty: true },
         });
@@ -45,6 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ productI
                 productId: Number(productId),
                 voucher:   { status: "POSTED" },
                 date:      { gte: from, lte: to },
+                ...branchFilter,
             },
             orderBy: [{ date: "asc" }, { id: "asc" }],
             include: {

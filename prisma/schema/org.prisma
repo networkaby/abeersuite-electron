@@ -10,6 +10,11 @@ model Branch {
   users       User[]
   departments Department[]
   posts       Post[]
+
+  // Multi-branch inventory back-relations
+  invVouchers     InvVoucher[]       @relation("InvVoucherBranch")
+  invStockLedger  InvStockLedger[]   @relation("InvStockLedgerBranch")
+  invProductStock InvProductBranch[]
 }
 
 model Department {

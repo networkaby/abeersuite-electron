@@ -1,26 +1,48 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { InvVoucherType } from "@/generated/prisma/client";
+import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 
-// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED
-export async function GET(req: Request) {
+// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
+export async function GET(req: NextRequest) {
     const { response } = await requireAuth();
     if (response) return response;
 
+    const session = await auth();
     const { searchParams } = new URL(req.url);
     const type   = searchParams.get("type")   as InvVoucherType | null;
     const status = searchParams.get("status") as "DRAFT" | "POSTED" | "CANCELLED" | null;
+    const branchParam = searchParams.get("branchId");
+
+    let branchFilter: { branchId?: string } = {};
+    if (branchParam === "all") {
+        // No branch filter — admin / org-scope only (enforced at perm layer later).
+    } else if (branchParam) {
+        try { requireBranchAccess(session, branchParam); } catch (e) {
+            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
+            throw e;
+        }
+        branchFilter = { branchId: branchParam };
+    } else {
+        try { branchFilter = { branchId: resolveActiveBranchId(req, session) }; } catch (e) {
+            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
+            throw e;
+        }
+    }
 
     const vouchers = await prisma.invVoucher.findMany({
         where: {
             ...(type   ? { type }   : {}),
             ...(status ? { status } : {}),
+            ...branchFilter,
         },
         orderBy: [{ date: "desc" }, { id: "desc" }],
         include: {
             createdBy: { select: { name: true } },
+            branch:    { select: { id: true, name: true } },
             _count:    { select: { lines: true } },
         },
     });
@@ -29,15 +51,17 @@ export async function GET(req: Request) {
 }
 
 // POST /api/inventory/vouchers
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     const { response, user } = await requireAuth();
     if (response) return response;
 
+    const session = await auth();
     const body = await req.json();
     const {
         type,
         date,
         description,
+        branchId: bodyBranchId,
         partyName,
         partyType,
         partyId,
@@ -61,6 +85,7 @@ export async function POST(req: Request) {
         type:         InvVoucherType;
         date:         string;
         description:  string;
+        branchId?:    string;
         partyName?:   string;
         partyType?:   string;
         partyId?:     number;
@@ -108,6 +133,18 @@ export async function POST(req: Request) {
     if (!lines.length) {
         return NextResponse.json({ error: "At least one line item required" }, { status: 400 });
     }
+
+    let branchId: string;
+    try {
+        branchId = bodyBranchId
+            ? (requireBranchAccess(session, bodyBranchId), bodyBranchId)
+            : resolveActiveBranchId(req, session);
+    } catch (e) {
+        if (e instanceof BranchAccessError) {
+            return NextResponse.json({ error: e.message }, { status: e.code === "forbidden_branch" ? 403 : 400 });
+        }
+        throw e;
+    }
     for (const l of lines) {
         if (!l.productId || l.quantity <= 0) {
             return NextResponse.json({ error: "Each line needs a product and quantity > 0" }, { status: 400 });
@@ -151,6 +188,7 @@ export async function POST(req: Request) {
             data: {
                 type,
                 reference,
+                branchId,
                 date:         new Date(date),
                 description:  description.trim(),
                 partyName:    partyName  || null,

@@ -80,6 +80,10 @@ export const PERMISSIONS = {
 
     // Inventory
     INVENTORY_MANAGE:                   "inventory:manage",
+    INVENTORY_VIEW_BR:                  "inventory:view:branch",
+    INVENTORY_EDIT_BR:                  "inventory:edit:branch",
+    INVENTORY_VIEW_ORG:                 "inventory:view:org",
+    INVENTORY_EDIT_ORG:                 "inventory:edit:org",
     INVENTORY_VOUCHER_CANCEL:           "inventory:voucher:cancel",
     INVENTORY_VOUCHER_DELETE:           "inventory:voucher:delete",
     INVENTORY_VOUCHER_HARD_DELETE:      "inventory:voucher:hard-delete",

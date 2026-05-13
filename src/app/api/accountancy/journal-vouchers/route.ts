@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, nextRef, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
@@ -8,6 +8,8 @@ import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleA
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 
 // POST /api/accountancy/journal-vouchers
 //
@@ -47,14 +49,22 @@ const createSchema = z.object({
     lines:           z.array(lineSchema).min(2),
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CREATE);
     if (response) return response;
 
+    const session = await auth();
     const { data, error } = await validateRequest(req, createSchema);
 
     if (error) return error;
     const body = data;
+
+    let activeBranchId: string;
+    try { activeBranchId = resolveActiveBranchId(req, session); }
+    catch (e) {
+        if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
+        throw e;
+    }
 
     if (!isBalanced(body.lines)) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
@@ -180,6 +190,7 @@ export async function POST(req: Request) {
                     data: {
                         type:        "STOCK_JOURNAL",
                         reference:   sjRef,
+                        branchId:    activeBranchId,
                         date:        new Date(body.date),
                         description: `Auto-created from journal voucher ${reference}`,
                         status:      "POSTED",
@@ -214,6 +225,7 @@ export async function POST(req: Request) {
                         data: {
                             productId: item.productId,
                             voucherId: carrier.id,
+                            branchId:  activeBranchId,
                             date:      new Date(body.date),
                             inQty,
                             outQty,

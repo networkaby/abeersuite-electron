@@ -92,6 +92,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             data: {
                                 productId: line.productId,
                                 voucherId: voucher.id,
+                                branchId:  voucher.branchId,
                                 date:      voucher.date,
                                 inQty,
                                 outQty,
@@ -115,6 +116,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                         : { decrement: -delta },
                                 ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
                             },
+                        });
+                        // Per-branch balance — upsert so first transaction for a
+                        // (product, branch) pair creates the row, subsequent ones
+                        // increment/decrement.
+                        await tx.invProductBranch.upsert({
+                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
+                            create: { productId: line.productId, branchId: voucher.branchId, stock: delta },
+                            update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
                         });
                     }
                 }

@@ -26,6 +26,7 @@ export async function GET(_req: Request, { params }: Params) {
             },
             stockEntries: { include: { product: { select: { id: true, sku: true, name: true } } } },
             createdBy: { select: { name: true } },
+            branch:    { select: { id: true, name: true } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, reference: true, type: true } },
@@ -188,6 +189,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         data: {
                             productId: line.productId,
                             voucherId: existing.id,
+                            branchId:  existing.branchId,
                             date:      new Date(),
                             // Counter direction
                             inQty:     isSale     ? totalQty : 0,
@@ -206,6 +208,13 @@ export async function PATCH(req: Request, { params }: Params) {
                                 : undefined,
                         },
                     });
+                    if (isPurchase || isSale) {
+                        await tx.invProductBranch.upsert({
+                            where:  { productId_branchId: { productId: line.productId, branchId: existing.branchId } },
+                            create: { productId: line.productId, branchId: existing.branchId, stock: isPurchase ? -Math.round(totalQty) : Math.round(totalQty) },
+                            update: { stock: isPurchase ? { decrement: Math.round(totalQty) } : { increment: Math.round(totalQty) } },
+                        });
+                    }
                 }
 
                 // Reverse GL — post a reversal JE and cancel the original.
@@ -345,6 +354,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         data: {
                             productId: line.productId,
                             voucherId: fresh.id,
+                            branchId:  fresh.branchId,
                             date:      fresh.date,
                             inQty,
                             outQty,
@@ -364,6 +374,11 @@ export async function PATCH(req: Request, { params }: Params) {
                                     : { decrement: -delta },
                             ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
                         },
+                    });
+                    await tx.invProductBranch.upsert({
+                        where:  { productId_branchId: { productId: line.productId, branchId: fresh.branchId } },
+                        create: { productId: line.productId, branchId: fresh.branchId, stock: delta },
+                        update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
                     });
                 }
 

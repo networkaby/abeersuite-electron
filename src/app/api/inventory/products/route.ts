@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
@@ -9,6 +9,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
+import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -45,15 +47,45 @@ async function assertProductFks(data: {
     }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
+        const session = await auth();
+        const { searchParams } = new URL(req.url);
+        const branchParam = searchParams.get("branchId");
+
+        let activeBranchId: string | null = null;
+        if (branchParam === "all") {
+            activeBranchId = null; // org-wide view
+        } else if (branchParam) {
+            activeBranchId = branchParam;
+        } else {
+            try { activeBranchId = resolveActiveBranchId(req, session); }
+            catch { activeBranchId = null; }
+        }
+
         const rows = await prisma.invProduct.findMany({
             orderBy: { sku: "asc" },
-            include: productInclude,
+            include: {
+                ...productInclude,
+                branchStocks: activeBranchId
+                    ? { where: { branchId: activeBranchId }, select: { branchId: true, stock: true } }
+                    : { select: { branchId: true, stock: true } },
+            },
         });
-        return NextResponse.json(rows);
+
+        // Surface per-branch stock as `stock` (overrides legacy global cache)
+        // when a single branch is in scope; otherwise return the sum.
+        const enriched = rows.map((r) => {
+            const branchStocks = (r as { branchStocks?: { stock: number }[] }).branchStocks ?? [];
+            const branchStock = activeBranchId
+                ? (branchStocks[0]?.stock ?? 0)
+                : branchStocks.reduce((s, b) => s + b.stock, 0);
+            return { ...r, stock: branchStock };
+        });
+
+        return NextResponse.json(enriched);
     } catch (e) {
         return handleApiError(e, "Failed to fetch products");
     }

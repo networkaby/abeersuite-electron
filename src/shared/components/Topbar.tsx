@@ -3,6 +3,7 @@
 import { PanelLeft, PanelRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePanelStore, type PanelMode } from "@/store/panelStore";
+import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 
 function nextMode(mode: PanelMode): PanelMode {
     if (mode === "expanded") return "collapsed";
@@ -39,6 +40,11 @@ export function TopBar() {
             </Button>
 
             <div className="flex-1" />
+
+            {/* ── Active branch switcher ──────────────────────── */}
+            <BranchSwitcher />
+
+            <div className="w-2" />
 
             {/* ── Button bar trigger ──────────────────────────── */}
             <Button

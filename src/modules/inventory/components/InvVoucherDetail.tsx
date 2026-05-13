@@ -38,6 +38,7 @@ type Voucher = {
     createdAt:      string;
     refVoucherId:   number | null;
     refVoucher:     { id: number; reference: string; type: string } | null;
+    branch?:        { id: string; name: string } | null;
     lines: {
         id:          number;
         quantity:    number;
@@ -142,6 +143,9 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <Card label="Date">{new Date(voucher.date).toLocaleDateString()}</Card>
+                {voucher.branch && (
+                    <Card label="Branch">{voucher.branch.name}</Card>
+                )}
                 {voucher.partyName && (
                     <Card label="Party">
                         {voucher.partyName}

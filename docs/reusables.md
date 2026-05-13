@@ -29,6 +29,18 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 
 ---
 
+## Active branch — `src/store/` + `src/shared/lib/auth/`
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `useActiveBranchStore` | `src/store/activeBranchStore.ts` | Zustand store for the active branch workspace. State: `activeBranchId`, `setActiveBranchId`, `hydrate`. Persists to `localStorage` key `app:active-branch` and sets a same-name cookie for server reads. Use in any client component that creates/filters inventory data by branch. |
+| `resolveActiveBranchId(request, session)` | `src/shared/lib/auth/activeBranch.ts` | Server-side helper — reads `x-active-branch` header → `app:active-branch` cookie → `session.user.branchIds[0]`. Throw-safe; returns the first available branch or `null`. |
+| `requireBranchAccess(session, branchId)` | same | Throws `BranchAccessError` (403) if the given branchId is not in `session.user.branchIds` and the user does not have `admin:bypass`. |
+| `BranchAccessError` | same | Typed error with `code: "BRANCH_ACCESS_DENIED"` for API route 403 handling. |
+| `<BranchSwitcher />` | `src/shared/components/BranchSwitcher.tsx` | Header dropdown (or static badge for single-branch users) for switching the active branch. Fetches session via `/api/auth/session`, branches from `/api/branches`. On change: calls `setActiveBranchId` + `window.location.reload()`. Mounted in `FinanceTopBar` and `Topbar`. |
+
+---
+
 ## Auth — `src/shared/lib/auth/`
 
 | Symbol | File | Purpose |

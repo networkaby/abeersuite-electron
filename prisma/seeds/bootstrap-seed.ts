@@ -177,7 +177,11 @@ const PERMISSIONS = [
     // finance — opening balance
     { id: "finance:opening-balance:manage", label: "Manage opening balances", module: "finance", description: "Edit per-account opening balance and opening stock at the books-beginning date." },
 
-    // inventory — three-tier lifecycle on stock vouchers
+    // inventory — branch-scoped view/edit + three-tier lifecycle on stock vouchers
+    { id: "inventory:view:branch", label: "View inventory (own branch)",   module: "inventory", description: "View vouchers, stock, and reports for the user's assigned branches." },
+    { id: "inventory:edit:branch", label: "Edit inventory (own branch)",   module: "inventory", description: "Create and post vouchers within the user's assigned branches." },
+    { id: "inventory:view:org",    label: "View inventory (all branches)", module: "inventory", description: "View inventory data across all branches." },
+    { id: "inventory:edit:org",    label: "Edit inventory (all branches)", module: "inventory", description: "Create and post vouchers for any branch." },
     { id: "inventory:voucher:cancel",      label: "Cancel inventory vouchers",      module: "inventory", description: "Reverse stock + GL impact and mark CANCELLED." },
     { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
@@ -209,11 +213,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
         "assignments:view-team",
         "crm:view", "crm:manage",
+        "inventory:view:branch", "inventory:edit:branch",
     ],
     R4: [
         "customers:view",
         "tickets:substatus:set", "tickets:assign",
         "assignments:view-team",
+        "inventory:view:branch", "inventory:edit:branch",
     ],
 };
 

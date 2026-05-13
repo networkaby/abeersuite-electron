@@ -8,7 +8,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Building2 } from "lucide-react";
+import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +68,7 @@ const cell = "w-full rounded border border-input bg-background px-2 py-1 text-sm
 
 export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; redirectTo: string }) {
     const router = useRouter();
+    const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState({
@@ -100,6 +102,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
         try {
             const created = await axios.post<{ id: number }>("/api/inventory/vouchers", {
                 type,
+                branchId:     activeBranchId ?? undefined,
                 date:         form.date,
                 description:  form.description,
                 partyName:    form.partyName    || undefined,
@@ -130,9 +133,17 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
 
     return (
         <div className="max-w-4xl mx-auto space-y-5">
-            <div>
-                <h1 className="text-xl font-bold">New {TITLES[type]}</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Reference number is auto-assigned on save.</p>
+            <div className="flex items-start justify-between">
+                <div>
+                    <h1 className="text-xl font-bold">New {TITLES[type]}</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">Reference number is auto-assigned on save.</p>
+                </div>
+                {activeBranchId && (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
+                        <Building2 size={12} className="shrink-0" />
+                        <span>{activeBranchId}</span>
+                    </div>
+                )}
             </div>
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-4">

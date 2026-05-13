@@ -34,11 +34,12 @@
 import { Fragment, useState, useCallback, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { toast } from "sonner";
 import {
     Loader2, Trash2, Plus, StickyNote, Settings2, X,
     Image as ImageIcon, FileText, ScanLine, Link2, ExternalLink,
-    CopyPlus,
+    CopyPlus, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -485,6 +486,7 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
     const copy = PER_KIND[kind];
     const router = useRouter();
     const searchParams = useSearchParams();
+    const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
     const today = new Date().toISOString().slice(0, 10);
 
     // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
@@ -1008,6 +1010,7 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                 : (header.refDate || header.date);
             const payload = {
                 type: kind,
+                branchId: activeBranchId ?? undefined,
                 date: voucherDate,
                 description,
                 partyName: payMode === "CREDIT" ? (party?.name || undefined)
@@ -1165,21 +1168,13 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                         <CopyPlus size={14} /> {copy.newButtonLabel}
                     </Button>
                 </div>
-                <div className="flex items-center gap-1">
-                    {/* Spawn another Sale Invoice in a fresh window — lets the
-                        cashier work on parallel transactions without losing
-                        the current draft. window.open uses noopener so the
-                        new tab is independent. */}
-                    {/* <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => window.open(window.location.pathname, "_blank", "noopener")}
-                        title={copy.closeRouteLabel}
-                        className="gap-1.5 text-muted-foreground hover:text-foreground"
-                    >
-                        <ExternalLink size={14} />
-                        New Tab
-                    </Button> */}
+                <div className="flex items-center gap-2">
+                    {activeBranchId && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
+                            <Building2 size={12} className="shrink-0" />
+                            <span>{activeBranchId}</span>
+                        </div>
+                    )}
                     <Button
                         variant="ghost"
                         size="icon"

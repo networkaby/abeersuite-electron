@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { nextRef } from "@/modules/accountancy/lib/balance";
@@ -7,6 +7,8 @@ import { invNextRef } from "@/modules/inventory/lib/stock";
 import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 
 // POST /api/pos/sale
 // Atomic POS sale — creates the Invoice + InvoiceLines, posts the AR/Revenue
@@ -35,14 +37,22 @@ const createSchema = z.object({
     lines:     z.array(lineSchema).min(1, "At least one line item required"),
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
+    const session = await auth();
     const { data, error } = await validateRequest(req, createSchema);
 
     if (error) return error;
     const body = data;
+
+    let activeBranchId: string;
+    try { activeBranchId = resolveActiveBranchId(req, session); }
+    catch (e) {
+        if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
+        throw e;
+    }
 
     const computedLines = body.lines.map((l) => {
         const lineSubtotal = l.quantity * l.unitPrice;
@@ -99,6 +109,7 @@ export async function POST(req: Request) {
                 data: {
                     type:           "SALE",
                     reference:      voucherRef,
+                    branchId:       activeBranchId,
                     date:           new Date(body.issueDate),
                     description:    `POS sale ${invoiceNumber}`,
                     status:         "POSTED",
@@ -133,12 +144,18 @@ export async function POST(req: Request) {
                     data: {
                         productId: line.productId,
                         voucherId: voucher.id,
+                        branchId:  activeBranchId,
                         date,
                         inQty:  0,
                         outQty: qty,
                         rate:   line.rate,
                         amount: line.amount,
                     },
+                });
+                await tx.invProductBranch.upsert({
+                    where:  { productId_branchId: { productId: line.productId, branchId: activeBranchId } },
+                    create: { productId: line.productId, branchId: activeBranchId, stock: -Math.round(qty) },
+                    update: { stock: { decrement: Math.round(qty) } },
                 });
                 await tx.invProduct.update({
                     where: { id: line.productId },

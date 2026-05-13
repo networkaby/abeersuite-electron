@@ -58,6 +58,7 @@ const TRANSACTION_TABLES = [
 // Phase 5 — inventory masters (all dummy data; bootstrap doesn't touch them)
 const INVENTORY_MASTERS = [
     "InvStockLedger", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
+    "inv_product_branches",
     "InvProduct",
     "InvAttributeMaster",
     "InvUnit", "InvCategory", "InvProductGroup", "InvBrand", "InvWarrantyTerm",

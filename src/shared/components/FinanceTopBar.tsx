@@ -7,6 +7,7 @@ import { fmt } from "@/utils/constants";
 import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { usePanelStore } from "@/store/panelStore";
+import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 
 
 type CashPosition = {
@@ -176,8 +177,9 @@ export default function FinanceTopBar({
                 <span className="text-xs text-muted-foreground animate-pulse">Loading…</span>
             ) : null}
 
-            {/* Right: refresh + timestamp + bar toggle */}
+            {/* Right: branch switcher + refresh + timestamp + bar toggle */}
             <div className="ml-auto flex items-center gap-2">
+                <BranchSwitcher />
                 {canView && lastUpdated && (
                     <span className="text-[10px] text-muted-foreground/60 hidden sm:block">
                         {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

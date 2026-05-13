@@ -33,6 +33,8 @@
 ## Permissions (gate keys)
 
 - `inventory:manage` — broad master-data permission for units / categories / brands / warranty terms / `InvProduct`. (Listed under `module: admin` in seed.)
+- `inventory:view:branch` / `inventory:edit:branch` — branch-scoped view / create+post for users limited to their assigned branches (R3 Front Desk, R4 Despatch get these by default).
+- `inventory:view:org` / `inventory:edit:org` — org-wide view / create+post across any branch (admin/owner only).
 - `inventory:voucher:cancel` / `delete` / `hard-delete` — three-tier on stock vouchers (GRN, PO, etc.).
 
 ## Prisma models (file: `prisma/schema/inventory.prisma`)
@@ -41,8 +43,9 @@
 - `InvUnit`, `InvCategory` (tree), `InvProductGroup`, `InvBrand`, `InvWarrantyTerm` — masters.
 - `InvAttributeMaster` — category-wise attribute key definitions. Fields: `key` (machine key, e.g. `ram`), `name` (display label, e.g. `RAM`), `categoryId?` (null = global, non-null = restricted to one category), `sortOrder`, `isActive`. Unique on `(key, categoryId)`. Drives the Attributes dropdown on the product form and the `attr` token in naming convention. **Dummy data** — seeded by `dummy-shop.ts` (7 demo categories + 43 attributes); wiped by `hard-clean.ts`. Production users populate via UI.
 - `InvProduct.attrsJson` (`Json?`) — flat `{ key: value }` object storing per-product custom attribute values (e.g. `{"ram":"8GB","os":"Windows 11"}`). Keys should match `InvAttributeMaster.key` entries.
-- `InvVoucher` + `InvVoucherLine` — GRN / PO / Challan / Sales / Rejection / Stock Journal / **Sale Return** / **Purchase Return**. Cross-references Accountancy via `JournalEntry`. `InvVoucherType` enum includes `SALE_RETURN` and `PURCHASE_RETURN` (added 2026-05-12). Return vouchers carry three extra fields: `refNumber` (original voucher ref), `refDate` (date of original), `refVoucherId` (FK back to the source `InvVoucher`).
-- `InvStockLedger` — append-only stock movement log (qty deltas keyed to `InvProduct`).
+- `InvVoucher` + `InvVoucherLine` — GRN / PO / Challan / Sales / Rejection / Stock Journal / **Sale Return** / **Purchase Return**. Cross-references Accountancy via `JournalEntry`. `InvVoucherType` enum includes `SALE_RETURN` and `PURCHASE_RETURN` (added 2026-05-12). Return vouchers carry three extra fields: `refNumber` (original voucher ref), `refDate` (date of original), `refVoucherId` (FK back to the source `InvVoucher`). **As of 2026-05-14: `branchId` (FK to `Branch`) is REQUIRED on every InvVoucher** — drives per-branch stock balance, list filtering, and reporting.
+- `InvStockLedger` — append-only stock movement log (qty deltas keyed to `InvProduct`). **As of 2026-05-14: `branchId` is REQUIRED**; stamped from the parent voucher at post time. Indexed `(productId, branchId, date)` for per-branch ledger queries.
+- `InvProductBranch` — **per-branch stock balance** (added 2026-05-14). Composite PK `(productId, branchId)`. One row per (product × branch) pair holding the cached running stock count. Mirrors the `Account.balance` pattern: updated atomically via `upsert` on every voucher post/cancel/delete/restore. Voucher post code in `src/app/api/inventory/vouchers/[id]/post/route.ts` is the canonical source — also called from POS `src/app/api/pos/sale/route.ts`, voucher PATCH (re-post path), and lifecycle reversals (cancel / delete / restore).
 - `InvNamingConfig` — singleton config (one row) driving auto-fill of `InvProduct.name` (offline), `InvProduct.shopSubheading` (online display name), and `InvProduct.slug` from the master selects. Three independent token lists (`nameFields` / `onlineNameFields` / `slugFields`) share one fallback chain (`fallbackFields`). Each token entry: `{ kind, enabled, defaultValue?, literal? }`. Seeded once by `bootstrap-seed.ts`; survives `hard-clean.ts` (user-set config).
 
 ## Key components / library

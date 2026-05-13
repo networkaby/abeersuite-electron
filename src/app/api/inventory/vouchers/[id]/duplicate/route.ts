@@ -39,6 +39,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 data: {
                     type:             source.type,
                     reference,
+                    branchId:         source.branchId,
                     date:             today,
                     description:      source.description,
                     status:           "DRAFT",

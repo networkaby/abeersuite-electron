@@ -200,6 +200,21 @@ async function upsertShopDemoCatalog() {
         where: { slug: { notIn: keepSlugs, not: null }, isListedInShop: true },
         data: { isListedInShop: false },
     });
+
+    // Multi-branch inventory: ensure every active product has a stock row per
+    // active branch (starting balance = product.stock, defaulting to 0).
+    // Voucher posts will upsert into the same table going forward.
+    const branches = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } });
+    const products = await invProductDb(prisma).findMany({ where: { isActive: true } });
+    for (const p of products) {
+        for (const b of branches) {
+            await prisma.invProductBranch.upsert({
+                where: { productId_branchId: { productId: p.id, branchId: b.id } },
+                update: {},
+                create: { productId: p.id, branchId: b.id, stock: 0 },
+            });
+        }
+    }
 }
 
 async function main() {

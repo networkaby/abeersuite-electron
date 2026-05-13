@@ -41,6 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         data: {
                             productId: line.productId,
                             voucherId: voucher.id,
+                            branchId:  voucher.branchId,
                             date:      new Date(),
                             inQty:     isSale     ? qty : 0,
                             outQty:    isPurchase ? qty : 0,
@@ -58,6 +59,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                                 : undefined,
                         },
                     });
+                    if (isPurchase || isSale) {
+                        await tx.invProductBranch.upsert({
+                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
+                            create: { productId: line.productId, branchId: voucher.branchId, stock: isPurchase ? -Math.round(qty) : Math.round(qty) },
+                            update: { stock: isPurchase ? { decrement: Math.round(qty) } : { increment: Math.round(qty) } },
+                        });
+                    }
                 }
 
                 if (voucher.journalEntryId) {
