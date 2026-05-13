@@ -112,7 +112,7 @@ export default function FinanceTopBar({
         return () => clearInterval(interval);
     }, [load]);
 
-    const { sidebarMode, setSidebarMode, barMode, setBarMode } = usePanelStore();
+    const { sidebarMode, barMode, toggleSidebarVisible, toggleBarVisible } = usePanelStore();
 
     return (
         <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-border bg-sidebar/60 px-3 backdrop-blur-sm">
@@ -121,7 +121,7 @@ export default function FinanceTopBar({
             <button
                 type="button"
                 title={sidebarMode === "hidden" ? "Show sidebar" : "Hide sidebar"}
-                onClick={() => setSidebarMode(sidebarMode === "hidden" ? "expanded" : "hidden")}
+                onClick={toggleSidebarVisible}
                 className={["mr-2 rounded p-1 transition-all", sidebarMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
             >
                 <PanelTop size={14} />
@@ -196,7 +196,7 @@ export default function FinanceTopBar({
                 <button
                     type="button"
                     title={barMode === "hidden" ? "Show action bar" : "Hide action bar"}
-                    onClick={() => setBarMode(barMode === "hidden" ? "expanded" : "hidden")}
+                    onClick={toggleBarVisible}
                     className={["ml-1 rounded p-1 transition-all", barMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
                 >
                     <PanelBottom size={14} />

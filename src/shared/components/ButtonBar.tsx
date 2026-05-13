@@ -34,7 +34,7 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 export default function ButtonBar({ user }: { user?: UserType }) {
     const pathname = usePathname();
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
-    const { barMode, setBarMode } = usePanelStore();
+    const { barMode, setBarMode, toggleBarVisible } = usePanelStore();
     const collapsed = barMode === "collapsed";
     const isHidden  = barMode === "hidden";
     const [moreOpen, setMoreOpen] = useState(false);
@@ -168,11 +168,11 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                 className="relative flex h-screen flex-col border-l border-border bg-sidebar shrink-0 overflow-hidden"
                 style={{
                     width: isHidden ? 0 : collapsed ? 64 : barWidth,
-                    transition: barDragging ? "none" : "width 0.3s",
+                    transition: barDragging ? "none" : "width 0.3s ease",
                 }}
             >
 
-                {/* Drag-to-resize handle — left edge, expanded only */}
+                {/* Drag-to-resize handle — left edge, expanded only; stays outside the slide wrapper */}
                 {!collapsed && !isHidden && (
                     <div
                         onMouseEnter={onBarHandleEnter}
@@ -187,6 +187,15 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                         title="Drag to resize"
                     />
                 )}
+
+                {/* Slide wrapper — content animates up to hide, down to show */}
+                <div
+                    className="flex flex-col flex-1 min-h-0"
+                    style={{
+                        transform: isHidden ? "translateY(-100%)" : "translateY(0)",
+                        transition: barDragging ? "none" : "transform 0.3s ease",
+                    }}
+                >
 
                 {/* Header */}
                 <div className={`flex items-center border-b border-border px-3 py-3 ${collapsed ? "flex-col gap-2" : "gap-2.5"}`}>
@@ -305,6 +314,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                         })}
                     </div>
                 </ScrollArea>
+                </div>{/* end slide wrapper */}
             </aside>
 
             {/* Dialogs mounted here — owned by ButtonBar */}

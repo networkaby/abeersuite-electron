@@ -50,7 +50,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
-    const { sidebarMode, setSidebarMode } = usePanelStore();
+    const { sidebarMode, setSidebarMode, toggleSidebarVisible } = usePanelStore();
     const collapsed = sidebarMode === "collapsed";
     const isHidden  = sidebarMode === "hidden";
 
@@ -373,11 +373,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             className="relative flex h-screen flex-col border-r border-border bg-sidebar shrink-0 overflow-hidden"
             style={{
                 width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
-                transition: sidebarDragging ? "none" : "width 0.3s",
+                transition: sidebarDragging ? "none" : "width 0.3s ease",
             }}
         >
 
-            {/* Drag-to-resize handle — right edge, expanded only */}
+            {/* Drag-to-resize handle — right edge, expanded only; stays outside the slide wrapper */}
             {!collapsed && !isHidden && (
                 <div
                     onMouseEnter={onSidebarHandleEnter}
@@ -392,6 +392,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     title="Drag to resize"
                 />
             )}
+
+            {/* Slide wrapper — content animates up to hide, down to show */}
+            <div
+                className="flex flex-col flex-1 min-h-0"
+                style={{
+                    transform: isHidden ? "translateY(-100%)" : "translateY(0)",
+                    transition: sidebarDragging ? "none" : "transform 0.3s ease",
+                }}
+            >
 
             {/* Brand */}
             <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
@@ -805,6 +814,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 </Button>
             </div>
 
+            </div>{/* end slide wrapper */}
         </aside>
     );
 }
