@@ -359,7 +359,7 @@ export default function PosScreen() {
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open("/pos", "_blank", "noopener")}
+                    onClick={() => window.open("/vouchers/pos", "_blank", "noopener")}
                     title="Open another POS in a new tab — start a parallel bill while this one waits"
                 >
                     <ExternalLink size={14} /> New tab

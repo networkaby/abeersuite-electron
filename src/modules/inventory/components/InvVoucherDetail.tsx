@@ -51,12 +51,12 @@ type Voucher = {
 // Map each non-GL voucher type to the route segment its detail page lives at.
 // Used to render a clickable back-link to the parent voucher (e.g. GRN → PO).
 const TYPE_ROUTE: Record<string, string> = {
-    SALES_ORDER:     "/office/inventory/sales-orders",
-    PURCHASE_ORDER:  "/office/inventory/purchase-orders",
-    GRN:             "/office/inventory/grn",
-    CHALLAN:         "/office/inventory/challans",
-    REJECTION_IN:    "/office/inventory/rejections-in",
-    REJECTION_OUT:   "/office/inventory/rejections-out",
+    SALES_ORDER:     "/vouchers/sales-orders",
+    PURCHASE_ORDER:  "/vouchers/purchase-orders",
+    GRN:             "/vouchers/grn",
+    CHALLAN:         "/vouchers/challans",
+    REJECTION_IN:    "/vouchers/rejections-in",
+    REJECTION_OUT:   "/vouchers/rejections-out",
     SALE:            "/office/inventory/sales",
     PURCHASE:        "/office/inventory/purchases",
 };

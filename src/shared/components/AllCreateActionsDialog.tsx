@@ -70,19 +70,42 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
         } else if (action.action === "new-credit-note") {
             openCreditNote(true);
         } else if (action.action === "new-sale") {
-            // Open Sale Invoice in a new window so it surfaces in front
-            // and the user can keep this dialog's parent tab on whatever
-            // they were doing.
-            window.open("/sale", "_blank", "noopener");
+            // Open trading vouchers in their own browser window so they sit
+            // in front of whatever the user was doing (Vyapar / Marg pattern).
+            window.open("/vouchers/sale", "_blank", "noopener");
             onOpenChange(false);
         } else if (action.action === "new-purchase") {
-            window.open("/purchase", "_blank", "noopener");
+            window.open("/vouchers/purchase", "_blank", "noopener");
             onOpenChange(false);
         } else if (action.action === "new-sale-return") {
-            window.open("/sale-return", "_blank", "noopener");
+            window.open("/vouchers/sale-return", "_blank", "noopener");
             onOpenChange(false);
         } else if (action.action === "new-purchase-return") {
-            window.open("/purchase-return", "_blank", "noopener");
+            window.open("/vouchers/purchase-return", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-sales-order") {
+            window.open("/vouchers/sales-orders/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-purchase-order") {
+            window.open("/vouchers/purchase-orders/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-grn") {
+            window.open("/vouchers/grn/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-challan") {
+            window.open("/vouchers/challans/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-stock-journal") {
+            window.open("/office/inventory/stock-journals/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-physical-stock") {
+            window.open("/office/inventory/physical-stock/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-rejection-in") {
+            window.open("/vouchers/rejections-in/new", "_blank", "noopener");
+            onOpenChange(false);
+        } else if (action.action === "new-rejection-out") {
+            window.open("/vouchers/rejections-out/new", "_blank", "noopener");
             onOpenChange(false);
         } else if (action.action === "new-estimate") {
             openEstimate(true);

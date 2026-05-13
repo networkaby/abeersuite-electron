@@ -33,10 +33,12 @@ export const VOUCHER_URLS: Record<string, string> = {
     SALE:            "/office/inventory/sales",
     SALE_RETURN:     "/office/inventory/sale-returns",
     PURCHASE_RETURN: "/office/inventory/purchase-returns",
-    GRN:             "/office/inventory/grn",
-    CHALLAN:         "/office/inventory/challans",
-    REJECTION_IN:    "/office/inventory/rejections-in",
-    REJECTION_OUT:   "/office/inventory/rejections-out",
+    SALES_ORDER:     "/vouchers/sales-orders",
+    PURCHASE_ORDER:  "/vouchers/purchase-orders",
+    GRN:             "/vouchers/grn",
+    CHALLAN:         "/vouchers/challans",
+    REJECTION_IN:    "/vouchers/rejections-in",
+    REJECTION_OUT:   "/vouchers/rejections-out",
     PHYSICAL_STOCK:  "/office/inventory/physical-stock",
     STOCK_JOURNAL:   "/office/inventory/stock-journals",
 };
@@ -51,10 +53,16 @@ export function voucherUrl(type: string, id: number): string | null {
 // voucher types still use the read-only detail page (no editable equivalent
 // yet — Edit falls back to VOUCHER_URLS for them).
 const EDIT_FORM_URLS: Record<string, string> = {
-    SALE:            "/sale",
-    PURCHASE:        "/purchase",
-    SALE_RETURN:     "/sale-return",
-    PURCHASE_RETURN: "/purchase-return",
+    SALE:            "/vouchers/sale",
+    PURCHASE:        "/vouchers/purchase",
+    SALE_RETURN:     "/vouchers/sale-return",
+    PURCHASE_RETURN: "/vouchers/purchase-return",
+    SALES_ORDER:     "/vouchers/sales-orders",
+    PURCHASE_ORDER:  "/vouchers/purchase-orders",
+    GRN:             "/vouchers/grn",
+    CHALLAN:         "/vouchers/challans",
+    REJECTION_IN:    "/vouchers/rejections-in",
+    REJECTION_OUT:   "/vouchers/rejections-out",
 };
 
 function editFormUrl(type: string, id: number): string | null {
