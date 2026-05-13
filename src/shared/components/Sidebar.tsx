@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
+import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -10,7 +11,7 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
-    ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell, EyeOff, PanelLeftOpen,
+    ChevronLeft, ChevronRight, Sun, Moon, ShieldCheck, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,26 +50,30 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
-    const [collapsed, setCollapsed] = useState(false);
-    const [hidden, setHidden] = useState(false);
+    const { sidebarMode, setSidebarMode } = usePanelStore();
+    const collapsed = sidebarMode === "collapsed";
+    const isHidden  = sidebarMode === "hidden";
 
-    // Persist sidebar visibility states
+    // Persist mode to localStorage
+    useEffect(() => {
+        try { localStorage.setItem("app:sidebar-mode", sidebarMode); } catch { /* ignore */ }
+    }, [sidebarMode]);
     useEffect(() => {
         try {
-            const c = localStorage.getItem("app:sidebar-collapsed");
-            const h = localStorage.getItem("app:sidebar-hidden");
-            if (c === "1") setCollapsed(true);
-            if (h === "1") setHidden(true);
-        } catch { /* SSR / private mode */ }
+            const stored = localStorage.getItem("app:sidebar-mode");
+            if (stored === "expanded" || stored === "collapsed" || stored === "hidden")
+                setSidebarMode(stored);
+        } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    useEffect(() => {
-        try { localStorage.setItem("app:sidebar-collapsed", collapsed ? "1" : "0"); } catch { /* ignore */ }
-    }, [collapsed]);
-    useEffect(() => {
-        try { localStorage.setItem("app:sidebar-hidden", hidden ? "1" : "0"); } catch { /* ignore */ }
-    }, [hidden]);
 
-    const { width: sidebarWidth, isDragging: sidebarDragging, onMouseDown: onSidebarDragStart } = useResizable({
+    const {
+        width: sidebarWidth, isDragging: sidebarDragging,
+        dragReady: sidebarDragReady,
+        onMouseDown: onSidebarDragStart,
+        onHandleMouseEnter: onSidebarHandleEnter,
+        onHandleMouseLeave: onSidebarHandleLeave,
+    } = useResizable({
         storageKey: "app:sidebar-width",
         defaultWidth: 256,
         minWidth: 180,
@@ -364,58 +369,38 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     };
 
     return (
-        <>
-        {/* Hidden-state restore strip — left edge of viewport */}
-        {hidden && (
-            <div
-                onClick={() => { setHidden(false); setCollapsed(false); }}
-                title="Show sidebar"
-                className="fixed left-0 top-0 h-full w-1.5 z-50 group cursor-pointer hover:w-7 transition-all duration-200 bg-transparent hover:bg-sidebar hover:border-r hover:border-border flex items-center justify-center"
-            >
-                <PanelLeftOpen size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-foreground" />
-            </div>
-        )}
-
         <aside
             className="relative flex h-screen flex-col border-r border-border bg-sidebar shrink-0 overflow-hidden"
             style={{
-                width: hidden ? 0 : collapsed ? 64 : sidebarWidth,
+                width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
                 transition: sidebarDragging ? "none" : "width 0.3s",
-                minWidth: hidden ? 0 : undefined,
             }}
         >
-            {/* Collapse / expand toggle */}
-            <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                onClick={() => { setCollapsed((c) => !c); setHidden(false); }}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="absolute -right-3 top-8 z-10 rounded-full text-muted-foreground shadow-sm hover:text-foreground"
-            >
-                {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-            </Button>
-
-            {/* Hide button — only shown when already collapsed */}
-            {collapsed && (
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={() => setHidden(true)}
-                    aria-label="Hide sidebar"
-                    title="Hide sidebar"
-                    className="absolute -right-3 top-16 z-10 rounded-full text-muted-foreground shadow-sm hover:text-destructive"
+            {/* Panel edge toggle tab — sticks out from right edge */}
+            {!isHidden && (
+                <div
+                    className="absolute -right-[17px] top-1/3 z-30 flex h-14 w-[17px] cursor-pointer select-none items-center justify-center rounded-r-lg border border-l-0 border-border bg-sidebar shadow-sm transition-all hover:bg-accent hover:shadow-md"
+                    onClick={() =>
+                        setSidebarMode(sidebarMode === "expanded" ? "collapsed" : "expanded")
+                    }
+                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
-                    <EyeOff size={11} />
-                </Button>
+                    {collapsed ? <ChevronRight size={12} className="text-muted-foreground" /> : <ChevronLeft size={12} className="text-muted-foreground" />}
+                </div>
             )}
 
-            {/* Drag-to-resize handle — right edge, only visible when expanded */}
-            {!collapsed && !hidden && (
+            {/* Drag-to-resize handle — right edge, expanded only */}
+            {!collapsed && !isHidden && (
                 <div
+                    onMouseEnter={onSidebarHandleEnter}
+                    onMouseLeave={onSidebarHandleLeave}
                     onMouseDown={onSidebarDragStart}
-                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 z-20"
+                    className={[
+                        "absolute right-0 top-0 h-full w-1.5 z-20 transition-colors",
+                        sidebarDragReady
+                            ? "cursor-col-resize bg-primary/30"
+                            : "cursor-default bg-transparent hover:bg-primary/10",
+                    ].join(" ")}
                     title="Drag to resize"
                 />
             )}
@@ -815,6 +800,5 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             </div>
 
         </aside>
-        </>
     );
 }

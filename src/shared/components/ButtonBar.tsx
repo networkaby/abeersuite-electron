@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
+import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import axios from "axios";
-import { ChevronLeft, ChevronRight, Zap, Grid2x2, EyeOff, PanelRightOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap, Grid2x2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
@@ -33,27 +34,31 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 export default function ButtonBar({ user }: { user?: UserType }) {
     const pathname = usePathname();
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
-    const [collapsed, setCollapsed] = useState(false);
-    const [hidden, setHidden] = useState(false);
+    const { barMode, setBarMode } = usePanelStore();
+    const collapsed = barMode === "collapsed";
+    const isHidden  = barMode === "hidden";
     const [moreOpen, setMoreOpen] = useState(false);
 
-    // Persist button bar visibility states
+    // Persist mode to localStorage
+    useEffect(() => {
+        try { localStorage.setItem("app:buttonbar-mode", barMode); } catch { /* ignore */ }
+    }, [barMode]);
     useEffect(() => {
         try {
-            const c = localStorage.getItem("app:buttonbar-collapsed");
-            const h = localStorage.getItem("app:buttonbar-hidden");
-            if (c === "1") setCollapsed(true);
-            if (h === "1") setHidden(true);
-        } catch { /* SSR / private mode */ }
+            const stored = localStorage.getItem("app:buttonbar-mode");
+            if (stored === "expanded" || stored === "collapsed" || stored === "hidden")
+                setBarMode(stored);
+        } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    useEffect(() => {
-        try { localStorage.setItem("app:buttonbar-collapsed", collapsed ? "1" : "0"); } catch { /* ignore */ }
-    }, [collapsed]);
-    useEffect(() => {
-        try { localStorage.setItem("app:buttonbar-hidden", hidden ? "1" : "0"); } catch { /* ignore */ }
-    }, [hidden]);
 
-    const { width: barWidth, isDragging: barDragging, onMouseDown: onBarDragStart } = useResizable({
+    const {
+        width: barWidth, isDragging: barDragging,
+        dragReady: barDragReady,
+        onMouseDown: onBarDragStart,
+        onHandleMouseEnter: onBarHandleEnter,
+        onHandleMouseLeave: onBarHandleLeave,
+    } = useResizable({
         storageKey: "app:buttonbar-width",
         defaultWidth: 224,
         minWidth: 160,
@@ -159,59 +164,40 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
     return (
         <>
-            {/* Hidden-state restore strip — right edge of viewport */}
-            {hidden && (
-                <div
-                    onClick={() => { setHidden(false); setCollapsed(false); }}
-                    title="Show action bar"
-                    className="fixed right-0 top-0 h-full w-1.5 z-50 group cursor-pointer hover:w-7 transition-all duration-200 bg-transparent hover:bg-sidebar hover:border-l hover:border-border flex items-center justify-center"
-                >
-                    <PanelRightOpen size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-foreground" />
-                </div>
-            )}
-
             <aside
                 className="relative flex h-screen flex-col border-l border-border bg-sidebar shrink-0 overflow-hidden"
                 style={{
-                    width: hidden ? 0 : collapsed ? 64 : barWidth,
+                    width: isHidden ? 0 : collapsed ? 64 : barWidth,
                     transition: barDragging ? "none" : "width 0.3s",
-                    minWidth: hidden ? 0 : undefined,
                 }}
             >
-                {/* Drag-to-resize handle — left edge, only visible when expanded */}
-                {!collapsed && !hidden && (
+                {/* Panel edge toggle tab — sticks out from left edge */}
+                {!isHidden && (
                     <div
-                        onMouseDown={onBarDragStart}
-                        className="absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 z-20"
-                        title="Drag to resize"
-                    />
+                        className="absolute -left-[17px] top-1/3 z-30 flex h-14 w-[17px] cursor-pointer select-none items-center justify-center rounded-l-lg border border-r-0 border-border bg-sidebar shadow-sm transition-all hover:bg-accent hover:shadow-md"
+                        onClick={() =>
+                            setBarMode(barMode === "expanded" ? "collapsed" : "expanded")
+                        }
+                        title={collapsed ? "Expand action bar" : "Collapse action bar"}
+                    >
+                        {collapsed ? <ChevronLeft size={12} className="text-muted-foreground" /> : <ChevronRight size={12} className="text-muted-foreground" />}
+                    </div>
                 )}
 
-                {/* Collapse / expand toggle */}
-                <Button
-                    type="button"
-                    onClick={() => { setCollapsed((c) => !c); setHidden(false); }}
-                    aria-label={collapsed ? "Expand button bar" : "Collapse button bar"}
-                    variant="outline"
-                    size="icon-xs"
-                    className="absolute -left-3 top-8 z-10 rounded-full bg-card text-muted-foreground shadow-sm hover:text-foreground"
-                >
-                    {collapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
-                </Button>
-
-                {/* Hide button — only shown when already collapsed */}
-                {collapsed && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-xs"
-                        onClick={() => setHidden(true)}
-                        aria-label="Hide action bar"
-                        title="Hide action bar"
-                        className="absolute -left-3 top-16 z-10 rounded-full bg-card text-muted-foreground shadow-sm hover:text-destructive"
-                    >
-                        <EyeOff size={11} />
-                    </Button>
+                {/* Drag-to-resize handle — left edge, expanded only */}
+                {!collapsed && !isHidden && (
+                    <div
+                        onMouseEnter={onBarHandleEnter}
+                        onMouseLeave={onBarHandleLeave}
+                        onMouseDown={onBarDragStart}
+                        className={[
+                            "absolute left-0 top-0 h-full w-1.5 z-20 transition-colors",
+                            barDragReady
+                                ? "cursor-col-resize bg-primary/30"
+                                : "cursor-default bg-transparent hover:bg-primary/10",
+                        ].join(" ")}
+                        title="Drag to resize"
+                    />
                 )}
 
                 {/* Header */}

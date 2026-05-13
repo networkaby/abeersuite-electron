@@ -4,8 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
-import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelLeft, PanelRight } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { usePanelStore, type PanelMode } from "@/store/panelStore";
+
+function nextMode(m: PanelMode): PanelMode {
+    return m === "expanded" ? "collapsed" : m === "collapsed" ? "hidden" : "expanded";
+}
 
 type CashPosition = {
     asOf: string;
@@ -110,13 +115,23 @@ export default function FinanceTopBar({
         return () => clearInterval(interval);
     }, [load]);
 
-    if (!canView) return null;
+    const { sidebarMode, setSidebarMode, barMode, setBarMode } = usePanelStore();
 
     return (
         <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-border bg-sidebar/60 px-3 backdrop-blur-sm">
 
-            {/* Metrics */}
-            {data ? (
+            {/* Sidebar panel toggle */}
+            <button
+                type="button"
+                title={sidebarMode === "hidden" ? "Show sidebar" : sidebarMode === "expanded" ? "Collapse sidebar" : "Hide sidebar"}
+                onClick={() => setSidebarMode(nextMode(sidebarMode))}
+                className={["mr-2 rounded p-1 transition-all", sidebarMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
+            >
+                <PanelLeft size={14} />
+            </button>
+
+            {/* Metrics — only when permitted */}
+            {canView && data ? (
                 <>
                     <Pill
                         icon={<Wallet size={12} />}
@@ -158,24 +173,36 @@ export default function FinanceTopBar({
                         colorClass="text-amber-700 dark:text-amber-400"
                     />
                 </>
-            ) : (
+            ) : canView ? (
                 <span className="text-xs text-muted-foreground animate-pulse">Loading…</span>
-            )}
+            ) : null}
 
-            {/* Right: refresh + timestamp */}
+            {/* Right: refresh + timestamp + bar toggle */}
             <div className="ml-auto flex items-center gap-2">
-                {lastUpdated && (
+                {canView && lastUpdated && (
                     <span className="text-[10px] text-muted-foreground/60 hidden sm:block">
                         {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                 )}
+                {canView && (
+                    <button
+                        type="button"
+                        onClick={load}
+                        title="Refresh financials"
+                        className={`text-muted-foreground hover:text-foreground transition-colors ${loading ? "animate-spin" : ""}`}
+                    >
+                        <RefreshCw size={11} />
+                    </button>
+                )}
+
+                {/* Button bar panel toggle */}
                 <button
                     type="button"
-                    onClick={load}
-                    title="Refresh"
-                    className={`text-muted-foreground hover:text-foreground transition-colors ${loading ? "animate-spin" : ""}`}
+                    title={barMode === "hidden" ? "Show action bar" : barMode === "expanded" ? "Collapse action bar" : "Hide action bar"}
+                    onClick={() => setBarMode(nextMode(barMode))}
+                    className={["ml-1 rounded p-1 transition-all", barMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
                 >
-                    <RefreshCw size={11} />
+                    <PanelRight size={14} />
                 </button>
             </div>
         </div>

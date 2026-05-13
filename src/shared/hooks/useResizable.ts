@@ -16,18 +16,32 @@ export function useResizable({
     minWidth = 48,
     maxWidth = 600,
     direction = "right",
+    hoverDelay = 350,
 }: {
     storageKey: string;
     defaultWidth: number;
     minWidth?: number;
     maxWidth?: number;
     direction?: "right" | "left";
+    /** ms to hover before the drag handle becomes active (shows cursor + highlight) */
+    hoverDelay?: number;
 }) {
     const [width, setWidth] = useState(defaultWidth);
     const [isDragging, setIsDragging] = useState(false);
+    const [dragReady, setDragReady] = useState(false);
     const draggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
+    const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const onHandleMouseEnter = useCallback(() => {
+        hoverTimerRef.current = setTimeout(() => setDragReady(true), hoverDelay);
+    }, [hoverDelay]);
+
+    const onHandleMouseLeave = useCallback(() => {
+        if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+        if (!draggingRef.current) setDragReady(false);
+    }, []);
 
     // Load persisted width once on mount
     useEffect(() => {
@@ -85,5 +99,11 @@ export function useResizable({
         [width, direction, minWidth, maxWidth, storageKey],
     );
 
-    return { width, setWidth, isDragging, onMouseDown };
+    return {
+        width, setWidth,
+        isDragging, dragReady,
+        onMouseDown,
+        onHandleMouseEnter,
+        onHandleMouseLeave,
+    };
 }
