@@ -213,8 +213,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
+            { label: "Optional Vouchers", icon: PackageCheck, href: "/office/accountancy/reports/optional-vouchers", permission: "finance:voucher:create" },
 
-            { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
+            // { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
 
             // { label: "Financial Insights", icon: ChartArea, href: "/office/accountancy/reports" },
             {
