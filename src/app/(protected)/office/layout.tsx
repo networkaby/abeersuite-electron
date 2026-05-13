@@ -48,27 +48,28 @@ export default async function ProtectedLayout({
 
     return (
         <SessionWrapper>
-            <div className="flex h-screen overflow-hidden bg-background">
-                <Sidebar user={{
-                    id:          user.id,
-                    name:        user.name,
-                    role:        user.role,
-                    roles:       user.roles,
-                    permissions: user.permissions,
-                    roleLabel:   user.roleLabel,
-                    roleColor:   user.roleColor,
-                    avatarUrl:   user.avatarUrl,
-                }} />
-                <div className="flex flex-1 flex-col overflow-hidden">
-                    <FinanceTopBar permissions={user.permissions ?? []} />
+            <div className="flex h-screen flex-col overflow-hidden bg-background">
+                {/* Top bar spans full width — not affected by sidebar/buttonbar width */}
+                <FinanceTopBar permissions={user.permissions ?? []} />
+                <div className="flex flex-1 overflow-hidden">
+                    <Sidebar user={{
+                        id:          user.id,
+                        name:        user.name,
+                        role:        user.role,
+                        roles:       user.roles,
+                        permissions: user.permissions,
+                        roleLabel:   user.roleLabel,
+                        roleColor:   user.roleColor,
+                        avatarUrl:   user.avatarUrl,
+                    }} />
                     <main className="flex-1 overflow-y-auto p-8">{children}</main>
-                </div>
-                <ButtonBar user={{
-                    name:        user.name,
-                    role:        user.role,
-                    roles:       user.roles,
-                    permissions: user.permissions,
-                }} />
+                    <ButtonBar user={{
+                        name:        user.name,
+                        role:        user.role,
+                        roles:       user.roles,
+                        permissions: user.permissions,
+                    }} />
+                </div>{/* end flex row */}
                 <Toaster richColors />
                 <QuickTicketButton />
                 <JournalVoucherDialog />

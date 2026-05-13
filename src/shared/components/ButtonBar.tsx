@@ -6,7 +6,7 @@ import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import axios from "axios";
-import { PanelRight, Zap, Grid2x2 } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Zap, Grid2x2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
@@ -165,7 +165,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     return (
         <>
             <aside
-                className="relative flex h-screen flex-col border-l border-border bg-sidebar shrink-0 overflow-hidden"
+                className="relative flex h-full flex-col border-l border-border bg-sidebar shrink-0 overflow-hidden"
                 style={{
                     width: isHidden ? 0 : collapsed ? 64 : barWidth,
                     transition: barDragging ? "none" : "width 0.3s ease",
@@ -206,7 +206,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                             onClick={() => setBarMode("expanded")}
                             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                         >
-                            <PanelRight size={15} />
+                            <PanelRightOpen size={15} />
                         </button>
                     )}
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-primary/10 text-primary">
@@ -226,7 +226,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                                 onClick={() => setBarMode("collapsed")}
                                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
                             >
-                                <PanelRight size={14} />
+                                <PanelRightClose size={14} />
                             </button>
                         </>
                     )}

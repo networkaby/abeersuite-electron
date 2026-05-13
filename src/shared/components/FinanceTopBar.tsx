@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
-import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelTop, PanelBottom } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, PanelBottomOpen, PanelBottomClose, PanelRightOpen, PanelRightClose } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { usePanelStore } from "@/store/panelStore";
 
@@ -122,9 +122,11 @@ export default function FinanceTopBar({
                 type="button"
                 title={sidebarMode === "hidden" ? "Show sidebar" : "Hide sidebar"}
                 onClick={toggleSidebarVisible}
-                className={["mr-2 rounded p-1 transition-all", sidebarMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
+                className={["mr-2 rounded p-1 transition-colors", sidebarMode === "hidden" ? "opacity-40 hover:opacity-100 text-muted-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
             >
-                <PanelTop size={14} />
+                {sidebarMode === "hidden"
+                    ? <PanelBottomOpen size={15} />
+                    : <PanelBottomClose size={15} />}
             </button>
 
             {/* Metrics — only when permitted */}
@@ -197,9 +199,11 @@ export default function FinanceTopBar({
                     type="button"
                     title={barMode === "hidden" ? "Show action bar" : "Hide action bar"}
                     onClick={toggleBarVisible}
-                    className={["ml-1 rounded p-1 transition-all", barMode === "hidden" ? "opacity-40 hover:opacity-100" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
+                    className={["ml-1 rounded p-1 transition-colors", barMode === "hidden" ? "opacity-40 hover:opacity-100 text-muted-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"].join(" ")}
                 >
-                    <PanelBottom size={14} />
+                    {barMode === "hidden"
+                        ? <PanelRightOpen size={15} />
+                        : <PanelRightClose size={15} />}
                 </button>
             </div>
         </div>

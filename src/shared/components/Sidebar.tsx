@@ -370,7 +370,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     return (
         <aside
-            className="relative flex h-screen flex-col border-r border-border bg-sidebar shrink-0 overflow-hidden"
+            className="relative flex h-full flex-col border-r border-border bg-sidebar shrink-0 overflow-hidden"
             style={{
                 width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
                 transition: sidebarDragging ? "none" : "width 0.3s ease",
