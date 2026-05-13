@@ -1,0 +1,78 @@
+// ── POS Shift & Cash-drawer reconciliation ───────────────────────────────────
+//
+// Each cashier opens a shift with an opening cash float (Contra: Vault → Till),
+// bills throughout the shift (cash portions debit their personal till account
+// via the POS sale route), records mid-shift cash drops (logged only — no GL),
+// and finally closes the shift by declaring their physical cash count. The
+// system computes the expected balance, surfaces variance, and posts a
+// closing Contra (Till → Vault). Variance (over / short) becomes a small
+// adjustment JE against Cash Short / Cash Over P&L accounts.
+//
+// Till accounts are GL Accounts under Cash-in-Hand, one per cashier user
+// (User.tillAccountId). The receiving end is a per-branch Vault account
+// (Branch.vaultAccountId). See docs/modules/pos.md.
+
+model PosShift {
+  id            Int            @id @default(autoincrement())
+  // Who & where
+  userId        Int
+  user          User           @relation("PosShiftUser", fields: [userId], references: [id])
+  branchId      String
+  branch        Branch         @relation("PosShiftBranch", fields: [branchId], references: [id])
+  // Snapshot at open: which till account this shift is using.
+  // Stored on the row (not derived from user.tillAccountId) so re-assigning
+  // a user's till later doesn't rewrite history.
+  tillAccountId Int
+  tillAccount   Account        @relation("PosShiftTill", fields: [tillAccountId], references: [id])
+  status        PosShiftStatus @default(OPEN)
+
+  // ── Open ──────────────────────────────────────────────────────────────────
+  openedAt               DateTime @default(now())
+  openedById             Int
+  openedBy               User     @relation("PosShiftOpenedBy", fields: [openedById], references: [id])
+  openingFloatPaise      BigInt   @default(0)
+  openingContraVoucherId Int?
+  openingContraVoucher   Voucher? @relation("PosShiftOpeningContra", fields: [openingContraVoucherId], references: [id])
+
+  // ── Close ─────────────────────────────────────────────────────────────────
+  closedAt               DateTime?
+  closedById             Int?
+  closedBy               User?         @relation("PosShiftClosedBy", fields: [closedById], references: [id])
+  declaredCashPaise      BigInt?
+  expectedCashPaise      BigInt?
+  variancePaise          BigInt? // declared − expected; +ve = over, −ve = short
+  closingContraVoucherId Int?
+  closingContraVoucher   Voucher?      @relation("PosShiftClosingContra", fields: [closingContraVoucherId], references: [id])
+  varianceJournalEntryId Int?
+  varianceJournalEntry   JournalEntry? @relation("PosShiftVarianceJe", fields: [varianceJournalEntryId], references: [id])
+
+  notes String?
+
+  drops PosCashDrop[]
+
+  @@index([userId, status])
+  @@index([branchId, openedAt])
+  @@map("pos_shifts")
+}
+
+enum PosShiftStatus {
+  OPEN
+  CLOSED
+}
+
+// Mid-shift cash drop — staff puts cash into the safe during the shift to
+// reduce drawer risk. Log only; no GL movement (cash is still "in the till"
+// from the GL's perspective — it just physically lives in the safe).
+model PosCashDrop {
+  id          Int      @id @default(autoincrement())
+  shiftId     Int
+  shift       PosShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  amountPaise BigInt
+  droppedAt   DateTime @default(now())
+  droppedById Int
+  droppedBy   User     @relation("PosCashDropBy", fields: [droppedById], references: [id])
+  notes       String?
+
+  @@index([shiftId, droppedAt])
+  @@map("pos_cash_drops")
+}

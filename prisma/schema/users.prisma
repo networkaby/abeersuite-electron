@@ -59,4 +59,11 @@ model User {
   userPermissions         UserPermission[]
   crmLeadsOwned           CrmLead[]           @relation("CrmLeadOwner")
   crmLeadsCreated         CrmLead[]           @relation("CrmLeadCreatedBy")
+  // POS shift / till
+  tillAccountId           Int?
+  tillAccount             Account?            @relation("UserTillAccount", fields: [tillAccountId], references: [id])
+  posShifts               PosShift[]          @relation("PosShiftUser")
+  posShiftsOpenedBy       PosShift[]          @relation("PosShiftOpenedBy")
+  posShiftsClosedBy       PosShift[]          @relation("PosShiftClosedBy")
+  posCashDrops            PosCashDrop[]       @relation("PosCashDropBy")
 }

@@ -5,21 +5,24 @@ import { z } from "zod";
 import { nextRef } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
+import { postPosReceiptJe } from "@/modules/pos/lib/postPosReceiptJe";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 
 // POST /api/pos/sale
+//
 // Atomic POS sale — creates the Invoice + InvoiceLines, posts the AR/Revenue
-// journal entry, then writes a parallel InvVoucher (type=SALE, status=POSTED)
-// + InvVoucherLines + InvStockLedger entries and decrements InvProduct.stock.
+// journal entry, writes Payment rows + a cash-receipt JE that immediately
+// closes the AR (Dr Cash/Bank / Cr AR), then writes the parallel InvVoucher
+// (type=SALE, status=POSTED) + InvVoucherLines + InvStockLedger and
+// decrements per-branch stock.
 //
-// One transaction so day-book / customer ledger / stock all move together.
-//
-// We DO NOT call postInvVoucherToGl (that would re-debit AR / re-credit
-// Revenue and double-post the GL). The InvVoucher only carries the stock
-// side; its journalEntryId points at the Invoice's JE for traceability.
+// As of 2026-05-14 the route requires the cashier to have an OPEN PosShift
+// in the active branch. The CASH portion of any payment auto-debits the
+// shift's tillAccountId; non-CASH portions debit the user-picked bank account.
+// See docs/modules/pos.md.
 
 const lineSchema = z.object({
     productId:   z.number().int().positive(),
@@ -29,12 +32,20 @@ const lineSchema = z.object({
     taxRate:     z.number().min(0).max(100).default(0),
 });
 
+const paymentSchema = z.object({
+    method:    z.enum(["CASH", "BANK_TRANSFER", "CARD", "CHEQUE", "MOBILE_PAYMENT", "OTHER"]),
+    amount:    z.number().positive(),
+    accountId: z.number().int().positive().optional(),   // required for non-CASH; CASH auto-routes to till
+    reference: z.string().trim().max(120).optional(),
+});
+
 const createSchema = z.object({
-    accountId: z.number().int().positive(),
+    accountId: z.number().int().positive(),                                       // customer AR account
     issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     dueDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     notes:     z.string().trim().optional(),
     lines:     z.array(lineSchema).min(1, "At least one line item required"),
+    payments:  z.array(paymentSchema).min(1, "At least one payment line required"),
 });
 
 export async function POST(req: NextRequest) {
@@ -43,7 +54,6 @@ export async function POST(req: NextRequest) {
 
     const session = await auth();
     const { data, error } = await validateRequest(req, createSchema);
-
     if (error) return error;
     const body = data;
 
@@ -54,6 +64,21 @@ export async function POST(req: NextRequest) {
         throw e;
     }
 
+    // ── Active shift requirement ──────────────────────────────────────────
+    // Cash receipts need a till to debit. If user has no OPEN shift in this
+    // branch, refuse and let the UI prompt them to open one.
+    const shift = await prisma.posShift.findFirst({
+        where:  { userId: user!.id, branchId: activeBranchId, status: "OPEN" },
+        select: { id: true, tillAccountId: true },
+    });
+    if (!shift) {
+        return NextResponse.json(
+            { error: "Open a shift before billing.", code: "NO_OPEN_SHIFT" },
+            { status: 400 },
+        );
+    }
+
+    // ── Validate payment lines ────────────────────────────────────────────
     const computedLines = body.lines.map((l) => {
         const lineSubtotal = l.quantity * l.unitPrice;
         const lineTax = (lineSubtotal * l.taxRate) / 100;
@@ -70,6 +95,30 @@ export async function POST(req: NextRequest) {
     const subtotal    = computedLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
     const taxAmount   = computedLines.reduce((s, l) => s + l.taxAmount, 0);
     const totalAmount = subtotal + taxAmount;
+
+    const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0);
+    if (Math.abs(paymentTotal - totalAmount) > 0.01) {
+        return NextResponse.json(
+            { error: `Payment total (₹${paymentTotal.toFixed(2)}) does not match invoice total (₹${totalAmount.toFixed(2)}).` },
+            { status: 422 },
+        );
+    }
+
+    // Auto-route CASH to till; require accountId on non-CASH methods.
+    const resolvedPayments: { method: typeof body.payments[number]["method"]; accountId: number; amount: number; reference?: string }[] = [];
+    for (const p of body.payments) {
+        if (p.method === "CASH") {
+            resolvedPayments.push({ method: "CASH", accountId: shift.tillAccountId, amount: p.amount, reference: p.reference });
+        } else {
+            if (!p.accountId) {
+                return NextResponse.json(
+                    { error: `Non-cash payment (${p.method}) needs an account selected.` },
+                    { status: 422 },
+                );
+            }
+            resolvedPayments.push({ method: p.method, accountId: p.accountId, amount: p.amount, reference: p.reference });
+        }
+    }
 
     try {
         const result = await prisma.$transaction(async (tx) => {
@@ -103,7 +152,18 @@ export async function POST(req: NextRequest) {
 
             const je = await postInvoiceJe(tx, invoice.id, invoiceNumber, subtotal, taxAmount, totalAmount, user!.id);
 
-            // ── 2. InvVoucher (type=SALE) + lines + stock ledger + cached stock ─
+            // ── 2. Cash-receipt JE — closes the AR side immediately ──────────
+            const receiptDate = new Date();
+            const receipt = await postPosReceiptJe(tx, {
+                invoiceId:         invoice.id,
+                invoiceNumber,
+                customerAccountId: body.accountId,
+                payments:          resolvedPayments,
+                userId:            user!.id,
+                date:              receiptDate,
+            });
+
+            // ── 3. InvVoucher (type=SALE) + lines + stock ledger + cached stock ─
             const voucherRef = await invNextRef(tx, "SALE");
             const voucher = await tx.invVoucher.create({
                 data: {
@@ -114,12 +174,12 @@ export async function POST(req: NextRequest) {
                     description:    `POS sale ${invoiceNumber}`,
                     status:         "POSTED",
                     postedAt:       new Date(),
-                    paymentMode:    "CASH", // POS-specific shorthand; payment-line breakdown is on the invoice notes
+                    paymentMode:    "CASH",
                     subtotal,
                     taxAmount,
                     totalAmount,
-                    amountReceived: totalAmount, // POS sale always settles the inventory side immediately
-                    journalEntryId: je.id,       // point at the Invoice's JE — no separate GL post
+                    amountReceived: totalAmount,
+                    journalEntryId: je.id,
                     createdById:    user!.id,
                     lines: {
                         create: computedLines.map((l) => ({
@@ -164,11 +224,14 @@ export async function POST(req: NextRequest) {
             }
 
             return {
-                invoiceId:      invoice.id,
-                invoiceNumber:  invoice.number,
-                journalEntryId: je.id,
-                voucherId:      voucher.id,
-                voucherRef:     voucher.reference,
+                invoiceId:        invoice.id,
+                invoiceNumber:    invoice.number,
+                journalEntryId:   je.id,
+                receiptJeId:      receipt.journalEntryId,
+                paymentIds:       receipt.paymentIds,
+                voucherId:        voucher.id,
+                voucherRef:       voucher.reference,
+                shiftId:          shift.id,
             };
         });
 

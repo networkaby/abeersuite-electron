@@ -26,6 +26,8 @@ import {
     type PartySearchAndCreateHandle,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
+import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
+import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +117,38 @@ export default function PosScreen() {
     const [submitting, setSubmitting] = useState(false);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
     const upiAmountRef = useRef<HTMLInputElement>(null);
+
+    // ── Active POS shift ────────────────────────────────────────────────────
+    // /api/pos/sale requires an OPEN shift; we fetch the current one on mount
+    // and re-fetch when the user closes a shift. No shift → block checkout
+    // and surface the ShiftOpenDialog.
+    const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+    const [shiftLoaded, setShiftLoaded] = useState(false);
+    const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
+    const [myTillName, setMyTillName] = useState<string | null>(null);
+
+    const refreshActiveShift = () => {
+        axios.get<ActiveShift | null>("/api/pos/shifts/current")
+            .then((r) => {
+                setActiveShift(r.data);
+                if (r.data?.tillAccount?.name) setMyTillName(r.data.tillAccount.name);
+            })
+            .catch(() => setActiveShift(null))
+            .finally(() => setShiftLoaded(true));
+    };
+    useEffect(() => {
+        refreshActiveShift();
+    }, []);
+
+    // Lookup the first BANK account once — used as the default destination
+    // for UPI / Card / Cheque / Bank Transfer payment lines until a per-row
+    // account picker lands (plan TODO). CASH lines auto-route to till.
+    const [defaultBankAccountId, setDefaultBankAccountId] = useState<number | null>(null);
+    useEffect(() => {
+        axios.get<{ id: number; name: string; group?: { name: string } | null }[]>("/api/accountancy/accounts?group=Bank+Accounts")
+            .then((r) => { if (r.data[0]) setDefaultBankAccountId(r.data[0].id); })
+            .catch(() => { /* non-blocking — submit will 422 if user tries non-CASH */ });
+    }, []);
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
@@ -273,6 +307,11 @@ export default function PosScreen() {
             toast.error("Enter Cash or UPI — or it'll all go on credit (which is fine, just say so)");
             return;
         }
+        if (!activeShift) {
+            toast.error("Open a shift before billing");
+            setShiftOpenDialogOpen(true);
+            return;
+        }
         setSubmitting(true);
         try {
             const today = new Date().toISOString().slice(0, 10);
@@ -282,6 +321,48 @@ export default function PosScreen() {
                 advanceTaken > 0 ? ` | Advance ${fmtINR(advanceTaken)}` :
                     arrearPaid > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
                         "";
+
+            // Build structured payments array. CASH auto-routes to till on the
+            // server (omit accountId). Non-cash methods need an accountId —
+            // until the per-row account picker lands, we use the first BANK
+            // account as a sensible default. WALLET (legacy UI value) maps to
+            // schema's OTHER enum.
+            type PayLine = { method: "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER"; amount: number; accountId?: number; reference?: string };
+            const paymentsList: PayLine[] = [];
+            if (cashNet > 0)  paymentsList.push({ method: "CASH",           amount: cashNet });
+            if (pay.upi > 0)  {
+                if (!defaultBankAccountId) { toast.error("No bank account configured. Add one under Chart of Accounts → Bank Accounts."); setSubmitting(false); return; }
+                paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi, accountId: defaultBankAccountId });
+            }
+            for (const e of extras) {
+                if (e.amount <= 0) continue;
+                if (!defaultBankAccountId) { toast.error("No bank account configured. Add one under Chart of Accounts → Bank Accounts."); setSubmitting(false); return; }
+                const method = e.method === "WALLET" ? "OTHER" : e.method;
+                paymentsList.push({ method, amount: e.amount, reference: e.reference || undefined, accountId: defaultBankAccountId });
+            }
+            // On-credit (unpaid) portion stays as AR — the user pays later. We
+            // only send the COLLECTED portion as payments; if the entire bill
+            // is on credit, no payments line is sent and the server's zod
+            // min(1) catches it. The legacy UI permits "all credit" though;
+            // accommodate by requiring AT LEAST 1 — see toast above on no
+            // cash/upi. If everything is on credit the route is technically
+            // not a POS sale yet; surface a clear error.
+            if (paymentsList.length === 0) {
+                toast.error("POS sale needs at least one paid line (cash, UPI, or other). Use 'Save as credit invoice' for fully-on-credit sales.");
+                setSubmitting(false);
+                return;
+            }
+            // POS sale route now requires payments to TOTAL = invoice total.
+            // The on-credit portion (`onCredit`) breaks this invariant — for
+            // now, only allow full-paid POS sales. Mixed-pay sales should go
+            // through the SaleVoucherPage (credit-mode) instead.
+            const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
+            if (Math.abs(collectedFromPayments - total) > 0.01) {
+                toast.error("POS sale must be fully paid. Use 'Save & Print' on /sale for partial / credit sales.");
+                setSubmitting(false);
+                return;
+            }
+
             const { data } = await axios.post<{ invoiceId: number; invoiceNumber: string }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
@@ -294,6 +375,7 @@ export default function PosScreen() {
                     unitPrice: l.unitPrice,
                     taxRate: 0,
                 })),
+                payments: paymentsList,
             });
             toast.success(`Invoice ${data.invoiceNumber} · ${fmtINR(total)}`);
             setCart([]);
@@ -325,6 +407,35 @@ export default function PosScreen() {
 
     return (
         <div className="flex h-full w-full flex-col">
+            {/* Active shift bar — appears only when user has an OPEN shift.
+                When closed/missing, the ShiftOpenDialog auto-opens once
+                shift state has been loaded. */}
+            {activeShift && <ActiveShiftBar shift={activeShift} onClosed={() => { setActiveShift(null); refreshActiveShift(); }} />}
+            {shiftLoaded && !activeShift && (
+                <div className="flex items-center gap-2 border-b border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-2 text-xs">
+                    <span className="font-semibold text-amber-700 dark:text-amber-300">⚠ No shift open</span>
+                    <span className="text-muted-foreground">Open a shift before billing.</span>
+                    <Button size="sm" className="ml-auto h-7 text-xs" onClick={() => setShiftOpenDialogOpen(true)}>
+                        Open shift
+                    </Button>
+                </div>
+            )}
+
+            <ShiftOpenDialog
+                open={shiftOpenDialogOpen}
+                onOpenChange={setShiftOpenDialogOpen}
+                tillAccountName={myTillName}
+                onOpened={(s) => {
+                    setActiveShift({
+                        id:                s.id,
+                        openedAt:          new Date().toISOString(),
+                        tillAccount:       s.tillAccount,
+                        branch:            s.branch,
+                        openingFloatPaise: s.openingFloatPaise,
+                    });
+                }}
+            />
+
             {/* Top bar — customer search */}
             <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-3">
                 <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">

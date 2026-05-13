@@ -3,25 +3,27 @@
 // Customer/Company references on Invoice use loose partyType + partyId (no FK).
 
 model JournalEntry {
-  id            Int           @id @default(autoincrement())
-  date          DateTime      @db.Date
-  reference     String        @unique
-  description   String
-  status        VoucherStatus @default(DRAFT)
-  postedAt      DateTime?
-  cancelledAt   DateTime?
-  cancelReason  String?
-  cancelledById Int?
-  deletedAt     DateTime?
-  deletedById   Int?
-  deleteReason  String?
-  createdById   Int
-  createdBy     User          @relation("JournalCreatedBy", fields: [createdById], references: [id])
-  cancelledBy   User?         @relation("JournalCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy     User?         @relation("JournalDeletedBy", fields: [deletedById], references: [id])
-  lines         JournalLine[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                Int           @id @default(autoincrement())
+  date              DateTime      @db.Date
+  reference         String        @unique
+  description       String
+  status            VoucherStatus @default(DRAFT)
+  postedAt          DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  cancelledById     Int?
+  deletedAt         DateTime?
+  deletedById       Int?
+  deleteReason      String?
+  createdById       Int
+  createdBy         User          @relation("JournalCreatedBy", fields: [createdById], references: [id])
+  cancelledBy       User?         @relation("JournalCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy         User?         @relation("JournalDeletedBy", fields: [deletedById], references: [id])
+  lines             JournalLine[]
+  // POS shift variance adjustment JEs link back here
+  posShiftVariances PosShift[]    @relation("PosShiftVarianceJe")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@index([status, date])
   @@index([date])
@@ -224,13 +226,16 @@ model Voucher {
   deletedById   Int?
   deleteReason  String?
 
-  partyAccount Account?      @relation("VoucherPartyAccount", fields: [partyAccountId], references: [id])
-  createdBy    User          @relation("VoucherCreatedBy", fields: [createdById], references: [id])
-  cancelledBy  User?         @relation("VoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy    User?         @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
-  lines        VoucherLine[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  partyAccount     Account?      @relation("VoucherPartyAccount", fields: [partyAccountId], references: [id])
+  createdBy        User          @relation("VoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy      User?         @relation("VoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy        User?         @relation("VoucherDeletedBy", fields: [deletedById], references: [id])
+  lines            VoucherLine[]
+  // POS shift back-relations (Contra vouchers posted on shift open / close)
+  posShiftOpenings PosShift[]    @relation("PosShiftOpeningContra")
+  posShiftClosings PosShift[]    @relation("PosShiftClosingContra")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([type, status])
   @@index([date])

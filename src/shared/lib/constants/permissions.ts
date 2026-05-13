@@ -88,6 +88,14 @@ export const PERMISSIONS = {
     INVENTORY_VOUCHER_DELETE:           "inventory:voucher:delete",
     INVENTORY_VOUCHER_HARD_DELETE:      "inventory:voucher:hard-delete",
 
+    // POS — shift / till / handover lifecycle
+    POS_SHIFT_OPEN:                     "pos:shift:open",
+    POS_SHIFT_CLOSE:                    "pos:shift:close",
+    POS_SHIFT_DROP:                     "pos:shift:drop",
+    POS_SHIFT_VIEW_BR:                  "pos:shift:view:branch",
+    POS_SHIFT_VIEW_ORG:                 "pos:shift:view:org",
+    POS_SHIFT_MANAGE:                   "pos:shift:manage",
+
     // Roles
     ROLES_CREATE:                       "roles:create",
     ROLES_EDIT_ORG:                     "roles:edit:org",

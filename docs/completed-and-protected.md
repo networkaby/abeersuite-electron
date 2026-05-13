@@ -4,7 +4,8 @@ Purpose: keep critical completed features stable. Any agent/human touching these
 
 ## Completed list (protect from accidental regressions)
 
-- [x] POS counter flow (`/office/pos`)
+- [x] POS counter flow (`/office/pos`) — now gated by an active `PosShift` per cashier; cash sales debit the cashier's till and close the customer AR in the same transaction (2026-05-14)
+- [x] POS shift lifecycle — `/office/pos/shifts` report, shift open/close with opening float + variance Contra to branch vault (2026-05-14)
 - [x] Accountancy Balance Sheet (`/office/accountancy/reports/balance-sheet`)
 - [x] Accountancy Profit & Loss (`/office/accountancy/reports/profit-loss`)
 - [x] Accountancy Day Book (`/office/accountancy/reports/day-book`)
@@ -35,4 +36,4 @@ Purpose: keep critical completed features stable. Any agent/human touching these
    - Reports: page loads, totals render, drilldown links still work.
 5. If a protected surface must change by request, update this file and note what changed and why in the same PR.
 
-_Last updated: 2026-05-12._
+_Last updated: 2026-05-14 — POS shift discipline + AR closure on cash POS sales._

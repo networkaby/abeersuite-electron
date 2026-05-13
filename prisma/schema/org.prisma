@@ -15,6 +15,11 @@ model Branch {
   invVouchers     InvVoucher[]       @relation("InvVoucherBranch")
   invStockLedger  InvStockLedger[]   @relation("InvStockLedgerBranch")
   invProductStock InvProductBranch[]
+
+  // POS — per-branch vault account where shift-close cash handovers land
+  vaultAccountId Int?
+  vaultAccount   Account?   @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
+  posShifts      PosShift[] @relation("PosShiftBranch")
 }
 
 model Department {

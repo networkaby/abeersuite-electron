@@ -41,6 +41,14 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 
 ---
 
+## Accountancy — system-posted Contra
+
+| Symbol | File | Purpose |
+|---|---|---|
+| `postContra(tx, { date, narration, lines, userId, partyAccountId? })` | `src/modules/accountancy/lib/postContra.ts` | Atomic create-and-post for a CONTRA Voucher inside the caller's `prisma.$transaction`. Generates sequential reference (`CV-…`), creates the `Voucher` (POSTED), the mirror `JournalEntry`, and updates `Account.balance` deltas. Returns `{ voucherId, journalEntryId, reference }`. Use for any system-generated cross-cash-account transfer (POS shift open/close handover, future inter-branch transfers, payroll cash). Do NOT roll your own Contra construction in API routes. |
+
+---
+
 ## Auth — `src/shared/lib/auth/`
 
 | Symbol | File | Purpose |

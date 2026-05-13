@@ -63,6 +63,10 @@ model Account {
   invoices             Invoice[]     @relation("AccountInvoices")
   voucherParty         Voucher[]     @relation("VoucherPartyAccount")
   invVouchersAsPayment InvVoucher[]  @relation("InvVoucherPaymentAccount")
+  // POS reverse rels
+  userTills            User[]        @relation("UserTillAccount")
+  branchVaults         Branch[]      @relation("BranchVaultAccount")
+  shiftTills           PosShift[]    @relation("PosShiftTill")
 
   @@index([isActive])
   @@index([personId])

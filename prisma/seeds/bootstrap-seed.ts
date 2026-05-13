@@ -186,6 +186,14 @@ const PERMISSIONS = [
     { id: "inventory:voucher:delete",      label: "Delete inventory vouchers",      module: "inventory", description: "Soft-delete; reverses stock + GL impact. Recoverable via restore." },
     { id: "inventory:voucher:hard-delete", label: "Hard-delete inventory vouchers", module: "inventory", description: "Physically remove with audit snapshot." },
 
+    // pos — shift / till / handover lifecycle
+    { id: "pos:shift:open",        label: "Open POS shift",                 module: "pos", description: "Open your own till session with an opening cash float." },
+    { id: "pos:shift:close",       label: "Close POS shift",                module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
+    { id: "pos:shift:drop",        label: "Record mid-shift cash drop",     module: "pos", description: "Log cash dropped into the safe during an open shift." },
+    { id: "pos:shift:view:branch", label: "View POS shifts (own branch)",   module: "pos", description: "View shift report for the user's assigned branches." },
+    { id: "pos:shift:view:org",    label: "View POS shifts (all branches)", module: "pos", description: "View shift report across all branches." },
+    { id: "pos:shift:manage",      label: "Manage POS shifts",              module: "pos", description: "Force-close stuck shifts, edit drops, override variance." },
+
     // accountancy — module-level CRUD gate (Owner / CA only)
     { id: "accountancy:create:own",  label: "Create accountancy entries (own)",   module: "accountancy", description: "Create vouchers / invoices / journal entries within own scope." },
     { id: "accountancy:view:own",    label: "View accountancy (own)",             module: "accountancy", description: "View accountancy data scoped to own records." },
@@ -214,12 +222,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "assignments:view-team",
         "crm:view", "crm:manage",
         "inventory:view:branch", "inventory:edit:branch",
+        "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
     ],
     R4: [
         "customers:view",
         "tickets:substatus:set", "tickets:assign",
         "assignments:view-team",
         "inventory:view:branch", "inventory:edit:branch",
+        "pos:shift:open", "pos:shift:close", "pos:shift:drop",
     ],
 };
 
@@ -792,12 +802,36 @@ async function main() {
     await upsertLedger("Advance to Suppliers",    "Loans & Advances (Asset)", "DEBIT");
     await upsertLedger("TDS Receivable",          "Loans & Advances (Asset)", "DEBIT");
     await upsertLedger("Preliminary Expenses",    "Misc. Expenses (Asset)",  "DEBIT");
+    // POS cash-drawer variance — sister P&L accounts used by shift close
+    // adjustment JEs. Short = staff handed in less than expected (expense);
+    // Over = handed in more (income).
+    await upsertLedger("Cash Short",              "Indirect Expenses", "DEBIT",  "6950");
+    await upsertLedger("Cash Over",               "Indirect Incomes",  "CREDIT", "4950");
     // "Difference in Opening Balances" is intentionally NOT seeded — it's
     // a pure synthetic computed by the BS UI = |Σ Dr opening − Σ Cr opening|,
     // shown on the side that needs balancing. Don't add a real ledger by
     // this name; it would double-count.
 
-    console.log(`      ✓ 28 groups · ~50 GL ledgers (Stock-in-Hand: empty by design)\n`);
+    // ── Per-branch Vault accounts + wire Branch.vaultAccountId ──────────────
+    // Each branch needs a "Cash – Vault – <Branch>" account under Cash-in-Hand.
+    // This is the receiving end of the shift-close Contra (Till → Vault) and
+    // the source for the opening float Contra (Vault → Till).
+    for (const b of BRANCHES) {
+        const vaultName = `Cash – Vault – ${b.name}`;
+        await upsertLedger(vaultName, "Cash-in-Hand", "DEBIT");
+        const { rows: vaultRows } = await pool.query<{ id: number }>(
+            `SELECT id FROM "Account" WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+            [vaultName],
+        );
+        if (vaultRows[0]) {
+            await pool.query(
+                `UPDATE "Branch" SET "vaultAccountId" = $1 WHERE id = $2`,
+                [vaultRows[0].id, b.id],
+            );
+        }
+    }
+
+    console.log(`      ✓ 28 groups · ~52 GL ledgers + ${BRANCHES.length} branch vaults\n`);
 
     // ── Section 5: Admin user ──────────────────────────────────────────
     console.log("[5/7] Admin user");
