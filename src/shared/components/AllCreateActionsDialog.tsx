@@ -13,15 +13,8 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
-import { useJournalVoucherStore } from "@/store/journalVoucherStore";
-import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
-import { useContraDialogStore } from "@/store/contraDialogStore";
-import { usePaymentDialogStore } from "@/store/paymentDialogStore";
-import { useReceiptDialogStore } from "@/store/receiptDialogStore";
-import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
-// Sale uses the full-page /sale route now — no dialog store.
-// Purchase uses the full-page /purchase route now — no dialog store.
-import { useEstimateDialogStore } from "@/store/estimateDialogStore";
+// GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
+// Sale / Purchase also use full-page routes.
 
 type Props = {
     open: boolean;
@@ -34,13 +27,7 @@ type Props = {
 export default function AllCreateActionsDialog({ open, onOpenChange, permissions, isAdmin, defaultPipeline }: Props) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { setPersonOpen, setCompanyOpen } = useCreateDialogStore();
-    const { setOpen: openJournalVoucher } = useJournalVoucherStore();
-    const { setOpen: openDebitNote } = useDebitNoteDialogStore();
-    const { setOpen: openContra } = useContraDialogStore();
-    const { setOpen: openPayment } = usePaymentDialogStore();
-    const { setOpen: openReceipt } = useReceiptDialogStore();
-    const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const { setOpen: openEstimate } = useEstimateDialogStore();
+    // GL voucher stores removed — those kinds now navigate to full-page routes.
 
     const canDo = (permission?: string | null) => {
         if (!permission) return true;
@@ -58,57 +45,43 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
         } else if (action.action === "new-journal-voucher") {
-            openJournalVoucher(true);
+            window.open("/vouchers/journal", "_blank", "noopener");
         } else if (action.action === "new-debit-note") {
-            openDebitNote(true);
+            window.open("/vouchers/debit-note", "_blank", "noopener");
         } else if (action.action === "new-contra") {
-            openContra(true);
+            window.open("/vouchers/contra", "_blank", "noopener");
         } else if (action.action === "new-payment") {
-            openPayment(true);
+            window.open("/vouchers/payment", "_blank", "noopener");
         } else if (action.action === "new-receipt") {
-            openReceipt(true);
+            window.open("/vouchers/receipt", "_blank", "noopener");
         } else if (action.action === "new-credit-note") {
-            openCreditNote(true);
+            window.open("/vouchers/credit-note", "_blank", "noopener");
         } else if (action.action === "new-sale") {
-            // Open trading vouchers in their own browser window so they sit
-            // in front of whatever the user was doing (Vyapar / Marg pattern).
             window.open("/vouchers/sale", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-purchase") {
             window.open("/vouchers/purchase", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-sale-return") {
             window.open("/vouchers/sale-return", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-purchase-return") {
             window.open("/vouchers/purchase-return", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-sales-order") {
             window.open("/vouchers/sales-orders/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-purchase-order") {
             window.open("/vouchers/purchase-orders/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-grn") {
             window.open("/vouchers/grn/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-challan") {
             window.open("/vouchers/challans/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-stock-journal") {
             window.open("/office/inventory/stock-journals/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-physical-stock") {
             window.open("/office/inventory/physical-stock/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-rejection-in") {
             window.open("/vouchers/rejections-in/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-rejection-out") {
             window.open("/vouchers/rejections-out/new", "_blank", "noopener");
-            onOpenChange(false);
         } else if (action.action === "new-estimate") {
-            openEstimate(true);
+            window.open("/vouchers/estimate", "_blank", "noopener");
         }
     };
 

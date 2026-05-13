@@ -11,15 +11,9 @@ import { BUTTON_BAR_ACTIONS, type ModuleCreateAction } from "@/utils/constants";
 import { getActiveModule } from "@/utils/active-module";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
 import { useCreateDialogStore } from "@/store/createDialogStore";
-import { useJournalVoucherStore } from "@/store/journalVoucherStore";
-import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
-import { useContraDialogStore } from "@/store/contraDialogStore";
-import { usePaymentDialogStore } from "@/store/paymentDialogStore";
-import { useReceiptDialogStore } from "@/store/receiptDialogStore";
-import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
+// GL vouchers now use full-page routes opened in a new tab — no dialog stores needed.
 // Sale uses the full-page /sale route now — no dialog store.
 // Purchase uses the full-page /purchase route now — no dialog store.
-import { useEstimateDialogStore } from "@/store/estimateDialogStore";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import CreateCompanyDialog from "@/shared/components/CreateCompanyDialog";
 import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
@@ -43,13 +37,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { personOpen, companyOpen, setPersonOpen, setCompanyOpen } = useCreateDialogStore();
-    const { setOpen: openJournalVoucher } = useJournalVoucherStore();
-    const { setOpen: openDebitNote } = useDebitNoteDialogStore();
-    const { setOpen: openContra } = useContraDialogStore();
-    const { setOpen: openPayment } = usePaymentDialogStore();
-    const { setOpen: openReceipt } = useReceiptDialogStore();
-    const { setOpen: openCreditNote } = useCreditNoteDialogStore();
-    const { setOpen: openEstimate } = useEstimateDialogStore();
+    // GL voucher stores removed — those kinds now navigate to full-page routes.
 
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
@@ -86,17 +74,17 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
         } else if (action.action === "new-journal-voucher") {
-            openJournalVoucher(true);
+            window.open("/vouchers/journal", "_blank", "noopener");
         } else if (action.action === "new-debit-note") {
-            openDebitNote(true);
+            window.open("/vouchers/debit-note", "_blank", "noopener");
         } else if (action.action === "new-contra") {
-            openContra(true);
+            window.open("/vouchers/contra", "_blank", "noopener");
         } else if (action.action === "new-payment") {
-            openPayment(true);
+            window.open("/vouchers/payment", "_blank", "noopener");
         } else if (action.action === "new-receipt") {
-            openReceipt(true);
+            window.open("/vouchers/receipt", "_blank", "noopener");
         } else if (action.action === "new-credit-note") {
-            openCreditNote(true);
+            window.open("/vouchers/credit-note", "_blank", "noopener");
         } else if (action.action === "new-sale") {
             window.open("/vouchers/sale", "_blank", "noopener");
         } else if (action.action === "new-purchase") {
@@ -122,7 +110,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
         } else if (action.action === "new-rejection-out") {
             window.open("/vouchers/rejections-out/new", "_blank", "noopener");
         } else if (action.action === "new-estimate") {
-            openEstimate(true);
+            window.open("/vouchers/estimate", "_blank", "noopener");
         }
     };
 

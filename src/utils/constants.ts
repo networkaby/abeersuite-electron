@@ -52,7 +52,6 @@ import {
     ClipboardCheck,
     BarChart3,
     ListChecks,
-    Sparkles,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -194,22 +193,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
             { label: "Purchase Return +", subtitle: "Return goods to supplier (Debit Note)", icon: ShoppingCart, variant: "outline", action: "new-purchase-return" },
-            // PREVIEW MIGRATION — TODO restore or remove after meeting approval.
-            // The seven dialog-based vouchers below are temporarily hidden from
-            // the button bar while the team evaluates the full-page Tally-finish
-            // layouts under /office/accountancy/preview-vouchers. The dialogs
-            // themselves stay mounted (src/app/(protected)/office/layout.tsx)
-            // and remain reachable via each kind's existing /new redirector.
-            // { label: "Estimate +", subtitle: "New estimate (dialog)", icon: ScrollText, variant: "outline", action: "new-estimate" },
-            // { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
-            // { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
-            // { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
-            // { label: "Credit Note +", subtitle: "New credit note (dialog)", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
-            // { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
-            // { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
-            { label: "Preview Vouchers →", subtitle: "Full-page layouts (team review)", icon: Sparkles, variant: "outline", href: "/office/accountancy/preview-vouchers" },
-
-
+            { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", action: "new-estimate" },
+            { label: "Payment +", subtitle: "New payment voucher", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
+            { label: "Receipt +", subtitle: "New receipt voucher", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra voucher", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
+            { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
+            { label: "Journal +", subtitle: "New journal voucher", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
             { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "outline", action: "new-sales-order", permission: "inventory:manage" },
             { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", action: "new-purchase-order", permission: "inventory:manage" },
             { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", action: "new-grn", permission: "inventory:manage" },
@@ -305,18 +295,13 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
             { label: "Purchase Return +", subtitle: "Return goods to supplier (Debit Note)", icon: ShoppingCart, variant: "outline", action: "new-purchase-return" },
-            // PREVIEW MIGRATION — TODO restore or remove after meeting approval.
-            // (See accountancy module createActions for the same comment.)
-            // { label: "Estimate +", subtitle: "New estimate (dialog)", icon: ScrollText, variant: "outline", action: "new-estimate" },
-            // { label: "Payment +", subtitle: "New payment voucher (dialog)", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
-            // { label: "Receipt +", subtitle: "New receipt voucher (dialog)", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
-            // { label: "Contra +", subtitle: "New contra voucher (dialog)", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
-            // { label: "Credit Note +", subtitle: "New credit note (dialog)", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
-            // { label: "Debit Note +", subtitle: "New debit note (dialog)", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
-            // { label: "Journal +", subtitle: "New journal voucher (dialog)", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
-            { label: "Preview Vouchers →", subtitle: "Full-page layouts (team review)", icon: Sparkles, variant: "outline", href: "/office/accountancy/preview-vouchers" },
-
-
+            { label: "Estimate +", subtitle: "New estimate", icon: ScrollText, variant: "outline", action: "new-estimate" },
+            { label: "Payment +", subtitle: "New payment voucher", icon: Wallet, variant: "outline", action: "new-payment", permission: "finance:voucher:create" },
+            { label: "Receipt +", subtitle: "New receipt voucher", icon: Wallet, variant: "outline", action: "new-receipt", permission: "finance:voucher:create" },
+            { label: "Contra +", subtitle: "New contra voucher", icon: Wallet, variant: "outline", action: "new-contra", permission: "finance:voucher:create" },
+            { label: "Credit Note +", subtitle: "New credit note", icon: FileText, variant: "outline", action: "new-credit-note", permission: "finance:voucher:create" },
+            { label: "Debit Note +", subtitle: "New debit note", icon: FileText, variant: "outline", action: "new-debit-note", permission: "finance:voucher:create" },
+            { label: "Journal +", subtitle: "New journal voucher", icon: FileText, variant: "outline", action: "new-journal-voucher", permission: "finance:voucher:create" },
             { label: "Sales Order +", subtitle: "New sales order", icon: ClipboardList, variant: "default", action: "new-sales-order", permission: "inventory:manage" },
             { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", action: "new-purchase-order", permission: "inventory:manage" },
             { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", action: "new-grn", permission: "inventory:manage" },

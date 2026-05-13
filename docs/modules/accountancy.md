@@ -9,23 +9,42 @@
 - `/office/accountancy/dashboard` → `src/app/(protected)/office/accountancy/dashboard/page.tsx`
 - `/office/accountancy/sales[/new][/[id]]`, `/office/accountancy/purchases[/new][/[id]]`
 - `/office/accountancy/payments`, `/receipts`, `/contras`, `/credit-notes`, `/debit-notes`, `/estimates`
-- **`/office/accountancy/preview-vouchers/*`** — **TEMPORARY** Tally-finish full-page previews of the dialog-based voucher kinds (Payment, Receipt, Contra, Credit Note, Debit Note, Journal, Estimate). Index at `/preview-vouchers` lists all seven. Each tile loads a full-page form that POSTs to the same backend endpoints as the existing dialogs (`/api/accountancy/vouchers`, `/api/accountancy/journal-vouchers`, `/api/inventory/vouchers`) so created rows persist and are managed by the normal detail / lifecycle flow. The seven dialog entries in `BUTTON_BAR_ACTIONS` are commented out (`// PREVIEW MIGRATION` markers in `src/utils/constants.ts`); the dialogs themselves stay mounted in `src/app/(protected)/office/layout.tsx` so the existing `/payments/new`-style redirector routes continue to work. **To be deleted after the team meeting approves the new layouts** — see the plan file's "Cleanup after meeting" section. PaymentReceipt/Contra/CreditNote/DebitNote share `MoneyFlowVoucherPage` (5 kinds, one shell); Journal has its own `JournalVoucherPage` (Dr/Cr table + stock attachment); Estimate is the 11th `TradingKind` in `SaleVoucherPage` (Vyapar-rich shell because it's a trading voucher with line items).
 - `/office/accountancy/journal-entries`, `/invoices`, `/ledgers`, `/groups`, `/chart-of-accounts`, `/opening-balance`, `/account/[id]`
 - `/office/accountancy/reports/{balance-sheet,profit-loss,trial-balance,day-book,cash-book,bank-book,receivables,payables,cash-flow,fund-flow,ratio-analysis,statistics,bank-reconciliation,ledger-outstandings/[ledgerId]}`
 - `/office/accountancy/reports/gst/{liability,outward-supplies,inward-supplies,hsn-summary}`
 
 Legacy `/office/tally/*` URLs 307-redirect to `/office/accountancy/*` via `next.config.ts`.
 
-### Trading voucher creation pages (outside accountancy layout gate)
+### Full-page voucher creation pages (outside accountancy layout gate)
 
-These four routes are **not** under `office/accountancy/layout.tsx` — each has its own lightweight layout. All share `SaleVoucherPage` parameterised by `kind`:
+These routes live under `src/app/(protected)/vouchers/` — each opens in a new tab (button bar `window.open`) and has no office sidebar chrome. Auth check is in each route's `layout.tsx`.
+
+**Trading + inventory vouchers** — all share `SaleVoucherPage` parameterised by `kind` (Vyapar-rich layout with item table, line disc/tax, totals strip):
 
 | Route | Kind | Notes |
 |---|---|---|
-| `/sale` | `SALE` | Sale Invoice — stock OUT, GL Cr Sales / Dr party. Accepts `?voucherId=<id>` to load an existing **DRAFT** for in-place edit (PATCHes on save). |
-| `/purchase` | `PURCHASE` | Purchase Invoice — stock IN, GL Dr Purchase / Cr party. Replaces the old `PurchaseDialog`. `/office/accountancy/purchases/new` redirects here. Accepts `?voucherId=<id>` for edit. |
-| `/sale-return` | `SALE_RETURN` | Customer returns goods — stock IN, GL Dr Sales Returns / Cr party. Accepts `?voucherId=<id>` for edit. |
-| `/purchase-return` | `PURCHASE_RETURN` | Return goods to supplier — stock OUT, GL Dr party / Cr Purchase Returns. Accepts `?voucherId=<id>` for edit. |
+| `/vouchers/sale` | `SALE` | Sale Invoice — stock OUT, GL Cr Sales / Dr party. Accepts `?voucherId=<id>` for in-place edit. |
+| `/vouchers/purchase` | `PURCHASE` | Purchase Invoice — stock IN, GL Dr Purchase / Cr party. Accepts `?voucherId=<id>` for edit. |
+| `/vouchers/sale-return` | `SALE_RETURN` | Customer returns — stock IN, GL Dr Sales Returns / Cr party. Accepts `?voucherId=<id>` for edit. |
+| `/vouchers/purchase-return` | `PURCHASE_RETURN` | Return to supplier — stock OUT, GL Dr party / Cr Purchase Returns. Accepts `?voucherId=<id>` for edit. |
+| `/vouchers/estimate` | `ESTIMATE` | Quotation — same Vyapar shell, no GL post. |
+| `/vouchers/sales-orders/new` | `SALES_ORDER` | Commitment — no stock, no GL. Parent-link picker offers PURCHASE_ORDER. |
+| `/vouchers/purchase-orders/new` | `PURCHASE_ORDER` | Commitment — no stock, no GL. |
+| `/vouchers/grn/new` | `GRN` | Goods Receipt Note — stock IN, no GL. Links to PURCHASE_ORDER. |
+| `/vouchers/challans/new` | `CHALLAN` | Delivery Challan — stock OUT, no GL. Links to SALES_ORDER. `showPrices` toggle persists for print. |
+| `/vouchers/rejections-in/new` | `REJECTION_IN` | Supplier rejection received — stock IN, no GL. |
+| `/vouchers/rejections-out/new` | `REJECTION_OUT` | Goods returned to supplier — stock OUT, no GL. |
+
+**Pure-GL vouchers** — share a single `layout.tsx` via the `(gl)` route group (`src/app/(protected)/vouchers/(gl)/layout.tsx`). Payment/Receipt/Contra/CreditNote/DebitNote use **`MoneyFlowVoucherPage`** (Tally-finish: compact top strip, two-column Particulars/Amount, Dr/Cr balance indicator, amount-in-words); Journal uses **`JournalVoucherPage`** (free-form Dr/Cr per row, auto-balance gating Save, optional stock attachment per line):
+
+| Route | Kind / Component | Notes |
+|---|---|---|
+| `/vouchers/payment` | `PAYMENT` / `MoneyFlowVoucherPage` | Cr Cash/Bank top; Dr expense/party rows. |
+| `/vouchers/receipt` | `RECEIPT` / `MoneyFlowVoucherPage` | Dr Cash/Bank top; Cr party/income rows. |
+| `/vouchers/contra` | `CONTRA` / `MoneyFlowVoucherPage` | Both sides Cash/Bank — inter-account transfer. |
+| `/vouchers/credit-note` | `CREDIT_NOTE` / `MoneyFlowVoucherPage` | Party top via `PartySearchAndCreate` (Sundry Debtors). |
+| `/vouchers/debit-note` | `DEBIT_NOTE` / `MoneyFlowVoucherPage` | Party top via `PartySearchAndCreate` (Sundry Creditors). |
+| `/vouchers/journal` | — / `JournalVoucherPage` | Free-form Dr/Cr table; Save disabled until balanced. |
 
 ### API routes (all under `src/app/api/finance/`)
 - List/read endpoints (~30 files) gated by `requirePermission("accountancy:view:org")` — invoices, journal-entries, vouchers, ledgers, gl-accounts, account-groups, opening-balance, allocations, all `reports/*`.
@@ -54,8 +73,11 @@ API folder is still `/api/finance/*` — rename deferred to Step 5 (route restru
 
 ## Key components / library
 
-- `src/modules/accountancy/components/` — `VoucherForm`, `VoucherList`, `VoucherDetail`, `LifecycleActions`, `BookPage`, `DrillRow`, `PartyCombobox`, `GstSummaryView`, `JournalVoucherDialog` (Tally-style adjustment voucher with Dr/Cr columns + optional inventory items per line — opens via `useJournalVoucherStore` from anywhere), `DebitNoteDialog` (modal debit note creator that posts to `/api/finance/vouchers` and opens via `useDebitNoteDialogStore` from ButtonBar / More actions), `ContraDialog` (Tally-style contra entry: destination account at top, multi-source particulars table, only Cash-in-Hand/Bank Accounts ledgers allowed, opens via `useContraDialogStore`).
-- **`SaleVoucherPage`** (`src/app/(protected)/office/accountancy/components/SaleVoucherPage.tsx`) — single parameterised full-page form for all four `TradingKind` values (`"SALE" | "PURCHASE" | "SALE_RETURN" | "PURCHASE_RETURN"`). Driven by a `PER_KIND` config map (`KindConfig`: title, partyGroup, ratePick, refLabel, listPath, narrationFallback, success messages, column-visibility flags). Features: CASH / CREDIT mode toggle, line-item table (qty / rate / line discount / tax), overall discount, round-off, payment terms (Net 15/30/45/60), cash/bank ledger picker, and estimated-profit panel. Column prefs persisted to `localStorage`.
+- `src/modules/accountancy/components/` — `VoucherForm`, `VoucherList`, `VoucherDetail`, `LifecycleActions`, `BookPage`, `DrillRow`, `PartyCombobox`, `GstSummaryView`. Dialog components (`JournalVoucherDialog`, `DebitNoteDialog`, `ContraDialog`, `MoneyFlowDialog`, `EstimateDialog`, etc.) remain mounted in `office/layout.tsx` and are still reachable via their `/new` redirector routes — they are no longer wired into the button bar (which now opens the full-page routes instead).
+- **`SaleVoucherPage`** (`src/modules/accountancy/components/SaleVoucherPage.tsx`) — single parameterised full-page form for all 11 `TradingKind` values (`SALE | PURCHASE | SALE_RETURN | PURCHASE_RETURN | ESTIMATE | SALES_ORDER | PURCHASE_ORDER | GRN | CHALLAN | REJECTION_IN | REJECTION_OUT`). Driven by a `PER_KIND` config map. Features: CASH / CREDIT mode toggle (trading kinds only), line-item table (qty / rate / line discount / tax), overall discount, round-off, payment terms, cash/bank ledger picker, parent-voucher picker (`ParentVoucherPicker`), estimated-profit panel. Column prefs persisted to `localStorage`.
+- **`MoneyFlowVoucherPage`** (`src/modules/accountancy/components/preview/MoneyFlowVoucherPage.tsx`) — Tally-finish full-page form for 5 pure-GL kinds: `PAYMENT | RECEIPT | CONTRA | CREDIT_NOTE | DEBIT_NOTE`. Per-kind config (`COPY`) drives labels, Dr/Cr sides, account filters. Layout: compact top strip → top-side account line → two-column Particulars/Amount table → Dr/Cr balance totals → narration + amount-in-words → sticky footer (Cancel · Save Draft · Save). POSTs to `/api/accountancy/vouchers`.
+- **`JournalVoucherPage`** (`src/modules/accountancy/components/preview/JournalVoucherPage.tsx`) — Tally-finish free-form Dr/Cr journal. Per-row Dr/Cr toggle; two amount columns (Debit | Credit). `isBalanced()` gates Save. Optional stock attachment per row when `isStockEligibleAccount`. POSTs to `/api/accountancy/journal-vouchers`.
+- **`numberToIndianWords`** (`src/shared/lib/format/numberWords.ts`) — Indian crore/lakh amount-in-words ("Rupees Five Thousand Only"). Used by `MoneyFlowVoucherPage` and `JournalVoucherPage`.
 - `src/modules/accountancy/lib/` — see helpers registry below.
 
 ## Reusable helpers — DO NOT duplicate ⚠️
@@ -91,13 +113,13 @@ These are the **single source of truth** for every balance/value calculation in 
 ## Common workflows (wiring)
 
 1. **Create sale invoice** — UI [src/app/(protected)/office/accountancy/sales/new/page.tsx](../../src/app/(protected)/office/accountancy/sales/new/page.tsx) → POST `/api/finance/invoices` → creates `Invoice` + `InvoiceLine[]` + (when status=SENT) auto-posts AR/Revenue `JournalEntry`.
-2. **Create voucher (e.g. payment)** — `/office/accountancy/payments/new` → POST `/api/finance/vouchers` (validated against `isBalanced`) → DRAFT row, separately post via `/api/finance/vouchers/[id]/post`.
+2. **Create voucher (e.g. payment)** — Button bar "Payment +" → `window.open("/vouchers/payment")` → `MoneyFlowVoucherPage` (Tally-finish full-page form) → POST `/api/accountancy/vouchers`. Legacy route `/office/accountancy/payments/new` still opens the old `MoneyFlowDialog`.
 3. **Bill-wise allocation** — POST `/api/finance/allocations` linking any source voucher to any target (full or partial).
 4. **Drill-down on ledger** — `/office/accountancy/ledgers/[id]` → reads from `/api/finance/reports/ledger/[accountId]`.
-5. **Tally-style journal voucher (with optional inventory)** — `useJournalVoucherStore.setOpen(true)` from any page → `JournalVoucherDialog` → POST `/api/finance/journal-vouchers` (atomic: Voucher + JE + Account.balance + optional STOCK_JOURNAL InvVoucher carrier + InvStockLedger). Inventory items are gated to INCOME/EXPENSE ledgers via `isStockEligibleAccount`.
+5. **Tally-style journal voucher (with optional inventory)** — Button bar "Journal +" → `window.open("/vouchers/journal")` → `JournalVoucherPage` (Tally-finish full-page form) → POST `/api/accountancy/journal-vouchers` (atomic: Voucher + JE + Account.balance + optional STOCK_JOURNAL InvVoucher carrier + InvStockLedger). Inventory items are gated to INCOME/EXPENSE ledgers via `isStockEligibleAccount`. Legacy `JournalVoucherDialog` (opens via `useJournalVoucherStore`) still mounted in `office/layout.tsx`.
 6. **Set opening balance on master save** — POST/PATCH `/api/finance/gl-accounts` (writes `openingBalance/openingBalanceType/openingBalanceDate` directly) and POST/PATCH `/api/inventory/products` (also syncs `stock`/`costPaise` cache via `syncProductCacheFromOpening`). The `/office/accountancy/opening-balance` page exposes both inline + dedicated quick-create dialogs.
-7. **Create debit note via dialog** — `ButtonBar` / `AllCreateActionsDialog` action `new-debit-note` → `useDebitNoteDialogStore.setOpen(true)` → `DebitNoteDialog` → POST `/api/finance/vouchers` with `type=DEBIT_NOTE` (+ optional allocations via `/api/finance/allocations`) and optional post via `/api/finance/vouchers/[id]/post`.
-8. **Create contra via dialog** — `ButtonBar` / `AllCreateActionsDialog` action `new-contra` (or `/office/accountancy/contras/new` thin opener route) → `useContraDialogStore.setOpen(true)` → `ContraDialog` → POST `/api/finance/vouchers` with `type=CONTRA` (top Account = DEBIT destination; Particulars rows = CREDIT sources). Picker options are restricted to `ACCOUNT_GROUPS.CASH_IN_HAND` + `ACCOUNT_GROUPS.BANK_ACCOUNTS`.
+7. **Create debit note** — Button bar "Debit Note +" → `window.open("/vouchers/debit-note")` → `MoneyFlowVoucherPage kind="DEBIT_NOTE"` → POST `/api/accountancy/vouchers`. Legacy `/office/accountancy/debit-notes/new` still opens `DebitNoteDialog`.
+8. **Create contra** — Button bar "Contra +" → `window.open("/vouchers/contra")` → `MoneyFlowVoucherPage kind="CONTRA"` — both sides restricted to Cash-in-Hand / Bank Accounts. Legacy `/office/accountancy/contras/new` still opens `ContraDialog`.
 9. **Trading voucher flow (all four kinds)** — Navigate to `/sale`, `/purchase`, `/sale-return`, or `/purchase-return`. Toggle CASH (free-text walk-in) / CREDIT (party via `PartySearchAndCreate`). Add items with qty, rate, line discount (% + ₹), tax (auto-computed). Optionally set payment terms (Net 15/30/45/60) or pick a cash/bank ledger. Save → POST `/api/inventory/vouchers`. Post GL + stock → POST `/api/inventory/vouchers/{id}/post` (calls `postInvVoucherToGl` + updates `InvProduct.stock` cache atomically). Optional auto-print redirects to `/receipt/invoice/{id}?autoprint=1`.
 
 ## Recent decisions / gotchas
@@ -124,4 +146,6 @@ These are the **single source of truth** for every balance/value calculation in 
 - Cost centres / budgets / multi-currency — cut.
 - Renaming `/api/finance/*` to `/api/accountancy/*` — deferred to Step 5.
 
-_Last updated: 2026-05-12 — added full-page trading voucher routes (/purchase, /sale-return, /purchase-return), SaleVoucherPage component, trading voucher workflow (item 9), extended postInvVoucherToGl to all four TradingKind values, removed PurchaseDialog gotcha._
+- **2026-05-13 — Full-page GL voucher routes (team-approved)**: `MoneyFlowVoucherPage` and `JournalVoucherPage` are now permanently mounted at `/vouchers/{payment,receipt,contra,credit-note,debit-note,journal}` and `/vouchers/estimate`. They share a single `layout.tsx` via the `(gl)` route group. Button bar entries for all 7 kinds now `window.open()` those routes instead of triggering the legacy dialogs. The old dialog components (`MoneyFlowDialog`, `JournalVoucherDialog`, `EstimateDialog`, etc.) remain mounted in `office/layout.tsx` and reachable via `/office/accountancy/{payments,receipts,contras,credit-notes,debit-notes,estimates}/new` — they are not deleted, just no longer the primary entry point.
+
+_Last updated: 2026-05-13 — promoted full-page GL voucher routes to permanent, added MoneyFlowVoucherPage + JournalVoucherPage components, ESTIMATE as 11th TradingKind, 11 inventory voucher kinds in SaleVoucherPage._

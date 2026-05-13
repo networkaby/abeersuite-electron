@@ -23,6 +23,7 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | `timeAgo(d)` | `timeAgo.ts` | `5m ago`, `2h ago`, `3d ago` |
 | `cn(...inputs)` | `utils.ts` | shadcn's `clsx + tailwind-merge` className combiner — use everywhere conditional Tailwind class lists appear. |
 | `slugify(input, opts?)` | `slugify.ts` | Lowercase, NFKD-fold, non-alphanumeric runs → separator (default `-`), trim, optional `maxLength`. Use anywhere a string needs to become a URL handle. |
+| `numberToIndianWords(amount)` | `numberWords.ts` | Indian crore/lakh amount → words ("Rupees Five Thousand Only"). Handles paise. Used by `MoneyFlowVoucherPage` + `JournalVoucherPage`. |
 
 > Avoid inline `new Intl.NumberFormat("en-IN", ...)` and inline `toLocaleTimeString(...)` for these cases — use the helpers above.
 
