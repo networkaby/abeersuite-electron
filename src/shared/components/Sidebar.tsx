@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
+import { useResizable } from "@/shared/hooks/useResizable";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -49,6 +50,13 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
     const [collapsed, setCollapsed] = useState(false);
+    const { width: sidebarWidth, isDragging: sidebarDragging, onMouseDown: onSidebarDragStart } = useResizable({
+        storageKey: "app:sidebar-width",
+        defaultWidth: 256,
+        minWidth: 180,
+        maxWidth: 420,
+        direction: "right",
+    });
     const [liveAvatar, setLiveAvatar] = useState<string | null | undefined>(undefined);
     const [adminOpen, setAdminOpen] = useState(
         pathname.startsWith("/office/admin/users") || pathname.startsWith("/office/roles") || pathname.startsWith("/office/admin/org-chart") || pathname.startsWith("/office/admin/branches") || pathname.startsWith("/office/admin/departments") || pathname.startsWith("/office/admin/posts")
@@ -339,10 +347,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     return (
         <aside
-            className={[
-                collapsed ? "w-16" : "w-64",
-                "relative flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300 shrink-0",
-            ].join(" ")}
+            className="relative flex h-screen flex-col border-r border-border bg-sidebar shrink-0"
+            style={{
+                width: collapsed ? 64 : sidebarWidth,
+                transition: sidebarDragging ? "none" : "width 0.3s",
+            }}
         >
             {/* Collapse toggle */}
             <Button
@@ -355,6 +364,15 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             >
                 {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
             </Button>
+
+            {/* Drag-to-resize handle — right edge, only visible when expanded */}
+            {!collapsed && (
+                <div
+                    onMouseDown={onSidebarDragStart}
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 z-20"
+                    title="Drag to resize"
+                />
+            )}
 
             {/* Brand */}
             <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>

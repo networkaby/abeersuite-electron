@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useResizable } from "@/shared/hooks/useResizable";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import axios from "axios";
@@ -34,6 +35,13 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const [collapsed, setCollapsed] = useState(false);
     const [moreOpen, setMoreOpen] = useState(false);
+    const { width: barWidth, isDragging: barDragging, onMouseDown: onBarDragStart } = useResizable({
+        storageKey: "app:buttonbar-width",
+        defaultWidth: 224,
+        minWidth: 160,
+        maxWidth: 360,
+        direction: "left",
+    });
 
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const { personOpen, companyOpen, setPersonOpen, setCompanyOpen } = useCreateDialogStore();
@@ -134,11 +142,21 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     return (
         <>
             <aside
-                className={[
-                    collapsed ? "w-16" : "w-56",
-                    "relative flex h-screen flex-col border-l border-border bg-sidebar transition-all duration-300 shrink-0",
-                ].join(" ")}
+                className="relative flex h-screen flex-col border-l border-border bg-sidebar shrink-0"
+                style={{
+                    width: collapsed ? 64 : barWidth,
+                    transition: barDragging ? "none" : "width 0.3s",
+                }}
             >
+                {/* Drag-to-resize handle — left edge, only visible when expanded */}
+                {!collapsed && (
+                    <div
+                        onMouseDown={onBarDragStart}
+                        className="absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 z-20"
+                        title="Drag to resize"
+                    />
+                )}
+
                 {/* Collapse toggle */}
                 <Button
                     type="button"
