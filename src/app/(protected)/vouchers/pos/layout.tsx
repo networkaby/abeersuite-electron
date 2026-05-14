@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { Toaster } from "sonner";
+import SessionWrapper from "@/shared/components/SessionWrapper";
 
 // Standalone POS shell — NO office sidebar / chrome / nav.
 // Lives at /pos so it can be served from a subdomain in the future
@@ -17,9 +18,11 @@ export default async function PosLayout({ children }: { children: React.ReactNod
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos");
 
     return (
-        <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
-            <Toaster position="top-center" richColors />
-            {children}
-        </div>
+        <SessionWrapper>
+            <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
+                <Toaster position="top-center" richColors />
+                {children}
+            </div>
+        </SessionWrapper>
     );
 }
