@@ -6,6 +6,7 @@ Purpose: keep critical completed features stable. Any agent/human touching these
 
 - [x] POS counter flow (`/office/pos`) — now gated by an active `PosShift` per cashier; cash sales debit the cashier's till and close the customer AR in the same transaction (2026-05-14)
 - [x] POS shift lifecycle — `/office/pos/shifts` report, shift open/close with opening float + variance Contra to branch vault (2026-05-14)
+- [x] POS sale return GL math — `Dr Sales Revenue / Cr Counter Till` (CASH) or `Dr Sales Revenue / Cr Customer AR` (CREDIT); `SALE_RETURN InvVoucher` + `InvStockLedger` IN; `Invoice.returnOfId` back-link; three-tier lookup (by invoice #, by customer, lost-invoice manager bypass) (2026-05-14)
 - [x] Accountancy Balance Sheet (`/office/accountancy/reports/balance-sheet`)
 - [x] Accountancy Profit & Loss (`/office/accountancy/reports/profit-loss`)
 - [x] Accountancy Day Book (`/office/accountancy/reports/day-book`)
@@ -33,7 +34,8 @@ Purpose: keep critical completed features stable. Any agent/human touching these
    - Do not replace helper math with new inline arithmetic.
 4. Validate before declaring done:
    - POS: customer pick/create, cart, checkout shortcut, invoice creation.
+   - POS return: three-tab dialog (invoice #, customer, lost invoice), refund mode toggle, CASH/CREDIT GL path, stock IN.
    - Reports: page loads, totals render, drilldown links still work.
 5. If a protected surface must change by request, update this file and note what changed and why in the same PR.
 
-_Last updated: 2026-05-14 — POS shift discipline + AR closure on cash POS sales._
+_Last updated: 2026-05-14 — POS sale return GL math + three-tier lookup protected._
