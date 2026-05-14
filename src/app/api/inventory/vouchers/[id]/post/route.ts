@@ -21,7 +21,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         include: {
             lines: {
                 include: {
-                    product: { select: { id: true, costPaise: true, stock: true } },
+                    product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } },
                 },
             },
             // Resolved cash/bank Account picked at save time — postInvVoucher
@@ -114,7 +114,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                     : delta > 0
                                         ? { increment: delta }
                                         : { decrement: -delta },
-                                ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
+                                ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100), ...(line.mrpPaise != null ? { mrpPaise: line.mrpPaise } : {}) } : {}),
                             },
                         });
                         // Per-branch balance — upsert so first transaction for a

@@ -344,6 +344,10 @@ model InvVoucherLine {
   /// style schemes. Optional; defaults to 0 at the application layer.
   freeQty     Decimal?   @db.Decimal(10, 3)
   rate        Decimal    @db.Decimal(14, 2)
+  /// MRP (Maximum Retail Price) at the time of the transaction — paise.
+  /// Populated on PURCHASE voucher lines by the form; used to update
+  /// InvProduct.mrpPaise on POST so the product catalog stays current.
+  mrpPaise    Int?
   discountPct Decimal    @default(0) @db.Decimal(5, 2)
   discountAmt Decimal    @default(0) @db.Decimal(14, 2)
   taxRate     Decimal    @default(0) @db.Decimal(5, 2)

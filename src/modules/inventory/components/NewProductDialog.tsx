@@ -22,7 +22,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { generateSku } from "@/modules/inventory/lib/sku";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -90,6 +90,8 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
     const [units, setUnits] = useState<Unit[]>([]);
     const [unitsLoading, setUnitsLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [inlineError, setInlineError] = useState<string | null>(null);
+    const [skuConflict, setSkuConflict] = useState(false);
 
     // Reset form whenever the dialog opens with a new initialName.
     useEffect(() => {
@@ -98,6 +100,8 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
         setSku(generateSku());
         setSalePrice("");
         setCostPrice("");
+        setInlineError(null);
+        setSkuConflict(false);
     }, [open, initialName]);
 
     // Fetch the units list once (cached server-side via unstable_cache).
@@ -126,9 +130,11 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
     };
 
     const submit = async () => {
-        if (!name.trim()) { toast.error("Name is required"); return; }
-        if (!unitId)      { toast.error("Pick a unit");       return; }
+        if (!name.trim()) { setInlineError("Name is required"); return; }
+        if (!unitId)      { setInlineError("Pick a unit");       return; }
         setSaving(true);
+        setInlineError(null);
+        setSkuConflict(false);
         try {
             const res = await axios.post("/api/inventory/products", {
                 sku: sku.trim().toUpperCase(),
@@ -159,22 +165,21 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
         } catch (e: unknown) {
             if (axios.isAxiosError(e)) {
                 if (e.response?.status === 409) {
-                    toast.error("That SKU already exists — try a different one");
+                    setSkuConflict(true);
+                    setInlineError("That SKU is already taken — click ↻ next to the SKU field to generate a new one.");
                 } else if (e.response?.status === 403) {
-                    toast.error("You don't have permission to create products");
+                    setInlineError("You don't have permission to create products.");
                 } else {
                     // Surface the server-side reason where we can — zod validation
                     // failures arrive as `details` or `error` strings depending on
                     // the route's handler.
                     const data = e.response?.data;
-                    const msg = data?.error
-                        ?? (Array.isArray(data?.details) ? data.details.map((d: { message?: string }) => d.message).filter(Boolean).join(", ") : null)
-                        ?? data?.message
-                        ?? `Failed to create product (${e.response?.status ?? "?"})`;
-                    toast.error(msg);
+                    const msg = (data as { error?: string } | undefined)?.error
+                        ?? `Failed to create product (${e.response?.status ?? "network error"})`;
+                    setInlineError(msg);
                 }
             } else {
-                toast.error("Failed to create product");
+                setInlineError("Failed to create product — check your connection and try again.");
             }
         } finally {
             setSaving(false);
@@ -201,13 +206,26 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                     <div className="grid grid-cols-[1fr_auto] gap-3">
                         <div className="grid gap-1.5">
                             <Label htmlFor="np-sku">SKU</Label>
-                            <Input
-                                id="np-sku"
-                                value={sku}
-                                onChange={(e) => setSku(e.target.value.toUpperCase())}
-                                placeholder="123456"
-                                className="font-mono"
-                            />
+                            <div className="flex gap-1.5">
+                                <Input
+                                    id="np-sku"
+                                    value={sku}
+                                    onChange={(e) => { setSku(e.target.value.toUpperCase()); setSkuConflict(false); setInlineError(null); }}
+                                    placeholder="123456"
+                                    className={`font-mono flex-1 ${skuConflict ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    title="Generate a new SKU"
+                                    onClick={() => { setSku(generateSku()); setSkuConflict(false); setInlineError(null); }}
+                                    disabled={saving}
+                                    className="shrink-0"
+                                >
+                                    <RefreshCw size={13} />
+                                </Button>
+                            </div>
                         </div>
                         <div className="grid gap-1.5 w-32">
                             <Label htmlFor="np-unit">Unit</Label>
@@ -252,6 +270,12 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                         </div>
                     </div>
                 </div>
+                {inlineError && (
+                    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                        <span>{inlineError}</span>
+                    </div>
+                )}
                 <DialogFooter className="flex-row items-center justify-between gap-2">
                     <div className="flex gap-2">
                         {onAdvanced && (

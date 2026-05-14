@@ -121,6 +121,8 @@ export async function POST(req: NextRequest) {
             /// Free / complimentary qty — flows out of stock, ₹0 revenue
             freeQty?:    number;
             rate:        number;
+            /// MRP in paise — stored on the line; used to update InvProduct.mrpPaise on post.
+            mrpPaise?:   number;
             discountPct?: number;
             discountAmt?: number;
             taxRate?:    number;
@@ -220,6 +222,7 @@ export async function POST(req: NextRequest) {
                         quantity:    l.quantity,
                         freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
                         rate:        l.rate,
+                        mrpPaise:    l.mrpPaise ?? null,
                         discountPct: l.discountPct ?? 0,
                         discountAmt: l.discountAmt,
                         taxRate:     l.taxRate    ?? 0,

@@ -129,6 +129,8 @@ export async function PATCH(req: Request, { params }: Params) {
             quantity:     number;
             freeQty?:     number;
             rate:         number;
+            /// MRP in paise — stored on the line; used to update InvProduct.mrpPaise on post.
+            mrpPaise?:    number;
             discountPct?: number;
             discountAmt?: number;
             taxRate?:     number;
@@ -139,7 +141,7 @@ export async function PATCH(req: Request, { params }: Params) {
     let totals: { subtotal: number; taxAmount: number; totalAmount: number } | undefined;
     let computedLines: ({
         productId: number; description?: string; quantity: number; freeQty?: number; rate: number;
-        discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
+        mrpPaise?: number; discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
     })[] | undefined;
 
     if (lines?.length) {
@@ -314,6 +316,7 @@ export async function PATCH(req: Request, { params }: Params) {
                                 quantity:    l.quantity,
                                 freeQty:     l.freeQty ?? null,
                                 rate:        l.rate,
+                                mrpPaise:    l.mrpPaise ?? null,
                                 discountPct: l.discountPct ?? 0,
                                 discountAmt: l.discountAmt,
                                 taxRate:     l.taxRate    ?? 0,
@@ -332,7 +335,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 const fresh = await tx.invVoucher.findUnique({
                     where: { id },
                     include: {
-                        lines: { include: { product: { select: { id: true, costPaise: true, stock: true } } } },
+                        lines: { include: { product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } } } },
                         paymentAccount: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
                     },
                 });
@@ -372,7 +375,7 @@ export async function PATCH(req: Request, { params }: Params) {
                                 : delta > 0
                                     ? { increment: delta }
                                     : { decrement: -delta },
-                            ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
+                            ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100), ...(line.mrpPaise != null ? { mrpPaise: line.mrpPaise } : {}) } : {}),
                         },
                     });
                     await tx.invProductBranch.upsert({

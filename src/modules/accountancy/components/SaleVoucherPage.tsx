@@ -72,6 +72,9 @@ type LineState = {
     quantity: string;
     freeQty: string;
     rate: string;
+    /// MRP in ₹ — editable on PURCHASE lines so the product master can be kept
+    /// current; display-only (from product.mrp) on SALE / other kinds.
+    mrpRupees: string;
     discountPct: string;
     discountAmt: string;
     taxRate: string;
@@ -90,6 +93,7 @@ const newLine = (): LineState => ({
     // empty case via parseFloat("") || 0.
     freeQty: "",
     rate: "",
+    mrpRupees: "",
     discountPct: "",
     discountAmt: "",
     taxRate: "",
@@ -98,11 +102,15 @@ const newLine = (): LineState => ({
     showDescription: false,
 });
 
-type CalcOpts = { applyDiscount?: boolean; applyTax?: boolean };
+type CalcOpts = { applyDiscount?: boolean; applyTax?: boolean; rateInclTax?: boolean };
 function calcLine(l: LineState, opts: CalcOpts = {}) {
-    const { applyDiscount = true, applyTax = true } = opts;
+    const { applyDiscount = true, applyTax = true, rateInclTax = false } = opts;
     const qty = parseFloat(l.quantity) || 0;
-    const rate = parseFloat(l.rate) || 0;
+    const rawRate = parseFloat(l.rate) || 0;
+    // When rate is inclusive of tax, back-calculate the exclusive rate for
+    // gross computation so that (gross − discount) × taxRate = taxAmount.
+    const tRate = parseFloat(l.taxRate) || 0;
+    const rate = rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
     const gross = qty * rate;
     const discAmt = applyDiscount ? (parseFloat(l.discountAmt) || 0) : 0;
     const taxable = gross - discAmt;
@@ -645,6 +653,10 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     quantity: String(typeof l.quantity === "string" ? parseFloat(l.quantity) : l.quantity),
                     freeQty: fmtNum(l.freeQty),
                     rate: String(typeof l.rate === "string" ? parseFloat(l.rate) : l.rate),
+                    // Restore MRP from the saved line (mrpPaise → ₹).
+                    mrpRupees: (l as { mrpPaise?: number | null }).mrpPaise != null
+                        ? String(((l as { mrpPaise?: number | null }).mrpPaise as number) / 100)
+                        : "",
                     discountPct: fmtNum(l.discountPct),
                     discountAmt: fmtNum(l.discountAmt),
                     taxRate: fmtNum(l.taxRate),
@@ -780,6 +792,10 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         lineTax: boolean;
         lineDescription: boolean;
         overallDiscount: boolean;
+        /// true = PRICE column shows/accepts tax-inclusive rate;
+        /// false (default) = exclusive. On PURCHASE the MRP column is always
+        /// editable regardless of this toggle.
+        rateInclTax: boolean;
     };
     const DEFAULT_PREFS: ColumnPrefs = {
         freeQty: true,
@@ -788,8 +804,10 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         lineTax: true,
         lineDescription: true,
         overallDiscount: true,
+        rateInclTax: false,
     };
-    const PREFS_KEY = "saleVoucherPage.columnPrefs.v1";
+    // Bumped to v2 when rateInclTax was added — clears stale v1 cache.
+    const PREFS_KEY = "saleVoucherPage.columnPrefs.v2";
     const [prefs, setPrefs] = useState<ColumnPrefs>(DEFAULT_PREFS);
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -818,10 +836,13 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     // cell stays blank (no noisy "0.00" prefills). The other recompute
     // functions delegate to this for tax.
     const withTaxFromRate = (l: LineState): LineState => {
-        const gross = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0);
+        const rawRate = parseFloat(l.rate) || 0;
+        const tRate = parseFloat(l.taxRate) || 0;
+        // Derive the exclusive rate when operating in inclusive-rate mode.
+        const rate = prefs.rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
+        const gross = (parseFloat(l.quantity) || 0) * rate;
         const discAmt = parseFloat(l.discountAmt) || 0;
         const taxable = gross - discAmt;
-        const tRate = parseFloat(l.taxRate) || 0;
         const newTaxAmt = taxable * (tRate / 100);
         return { ...l, taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "" };
     };
@@ -856,7 +877,11 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         setLines((ls) => ls.map((l) => {
             if (l.id !== id) return l;
             const next = { ...l, ...patch };
-            const gross = (parseFloat(next.quantity) || 0) * (parseFloat(next.rate) || 0);
+            const rawRate = parseFloat(next.rate) || 0;
+            const tRate = parseFloat(next.taxRate) || 0;
+            // Use exclusive rate for discount computation regardless of display mode.
+            const rate = prefs.rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
+            const gross = (parseFloat(next.quantity) || 0) * rate;
             const dPct = parseFloat(next.discountPct) || 0;
             const newDiscAmt = gross * (dPct / 100);
             return withTaxFromRate({
@@ -866,28 +891,43 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         }));
 
     const handleProductSelect = useCallback((lineId_: number, product: SelectedProduct | null) => {
-        setLines((ls) => ls.map((l) => {
-            if (l.id !== lineId_) return l;
-            const fillRate = product ? copy.ratePick(product) : null;
-            const nextRate = fillRate != null ? String(fillRate) : l.rate;
-            const gross = (parseFloat(l.quantity) || 0) * (parseFloat(nextRate) || 0);
-            const dPct = parseFloat(l.discountPct) || 0;
-            const newDiscAmt = gross * (dPct / 100);
-            const taxable = gross - newDiscAmt;
-            const tRate = parseFloat(l.taxRate) || 0;
-            const newTaxAmt = taxable * (tRate / 100);
-            return {
-                ...l, product, rate: nextRate,
-                discountAmt: newDiscAmt > 0 ? newDiscAmt.toFixed(2) : "",
-                taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "",
-            };
-        }));
+        setLines((ls) => {
+            const updated = ls.map((l) => {
+                if (l.id !== lineId_) return l;
+                const fillRate = product ? copy.ratePick(product) : null;
+                const nextRate = fillRate != null ? String(fillRate) : l.rate;
+                // MRP: auto-fill from product master (in ₹). Preserved if product has no MRP.
+                const nextMrp = product?.mrp != null && product.mrp > 0
+                    ? String(product.mrp)
+                    : l.mrpRupees;
+                const gross = (parseFloat(l.quantity) || 0) * (parseFloat(nextRate) || 0);
+                const dPct = parseFloat(l.discountPct) || 0;
+                const newDiscAmt = gross * (dPct / 100);
+                const taxable = gross - newDiscAmt;
+                const tRate = parseFloat(l.taxRate) || 0;
+                const newTaxAmt = taxable * (tRate / 100);
+                return {
+                    ...l, product, rate: nextRate, mrpRupees: nextMrp,
+                    discountAmt: newDiscAmt > 0 ? newDiscAmt.toFixed(2) : "",
+                    taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "",
+                };
+            });
+            // Auto-append a blank row when a product is picked on the last line,
+            // so the user can keep adding items without clicking "Add Row".
+            // Guard: only when a product is set (not cleared) and it's truly the last row.
+            if (product && ls[ls.length - 1]?.id === lineId_) {
+                return [...updated, newLine()];
+            }
+            return updated;
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── Totals ────────────────────────────────────────────────────────────
     const computed = lines.map((l) => calcLine(l, {
         applyDiscount: prefs.lineDiscount,
         applyTax: prefs.lineTax,
+        rateInclTax: prefs.rateInclTax,
     }));
     const lineSubtotal = computed.reduce((s, c) => s + c.amount, 0);
     const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0);
@@ -1047,16 +1087,30 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                 discountPct: prefs.overallDiscount ? (parseFloat(header.discountPct) || 0) : 0,
                 discountAmt: overallDiscount,
                 amountReceived: receivedForPayload,
-                lines: validLines.map((l) => ({
-                    productId: l.product!.id,
-                    description: prefs.lineDescription ? (l.description.trim() || undefined) : undefined,
-                    quantity: parseFloat(l.quantity) || 1,
-                    freeQty: prefs.freeQty ? (parseFloat(l.freeQty) || 0) : 0,
-                    rate: parseFloat(l.rate) || 0,
-                    discountPct: prefs.lineDiscount ? (parseFloat(l.discountPct) || 0) : 0,
-                    discountAmt: prefs.lineDiscount ? (parseFloat(l.discountAmt) || 0) : 0,
-                    taxRate: prefs.lineTax ? (parseFloat(l.taxRate) || 0) : 0,
-                })),
+                lines: validLines.map((l) => {
+                    const rawRate = parseFloat(l.rate) || 0;
+                    const tRate = prefs.lineTax ? (parseFloat(l.taxRate) || 0) : 0;
+                    // DB always stores the exclusive rate. When the form is in
+                    // tax-inclusive mode, back-calculate before saving.
+                    const exclusiveRate = prefs.rateInclTax && tRate > 0
+                        ? rawRate / (1 + tRate / 100)
+                        : rawRate;
+                    // MRP in paise — only sent when the user has entered a value.
+                    const mrpPaiseVal = l.mrpRupees.trim()
+                        ? Math.round((parseFloat(l.mrpRupees) || 0) * 100)
+                        : undefined;
+                    return {
+                        productId: l.product!.id,
+                        description: prefs.lineDescription ? (l.description.trim() || undefined) : undefined,
+                        quantity: parseFloat(l.quantity) || 1,
+                        freeQty: prefs.freeQty ? (parseFloat(l.freeQty) || 0) : 0,
+                        rate: exclusiveRate,
+                        mrpPaise: mrpPaiseVal,
+                        discountPct: prefs.lineDiscount ? (parseFloat(l.discountPct) || 0) : 0,
+                        discountAmt: prefs.lineDiscount ? (parseFloat(l.discountAmt) || 0) : 0,
+                        taxRate: tRate,
+                    };
+                }),
             };
 
             // Edit mode → PATCH the same voucher in place; create mode → POST.
@@ -1369,7 +1423,17 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                     <th rowSpan={2} className="px-1 py-2 text-right font-medium w-14 align-bottom" title="Free / complimentary quantity">FREE</th>
                                 )}
                                 <th rowSpan={2} className="px-1 py-2 text-center font-medium w-10 text-muted-foreground/60 align-bottom">UNIT</th>
-                                <th rowSpan={2} className="px-2 py-2 text-right font-medium w-20 align-bottom">PRICE</th>
+                                <th rowSpan={2} className="px-2 py-2 text-right font-medium w-20 align-bottom">
+                                    {/* Toggle: price column treats entered rate as excl. or incl. tax */}
+                                    <button
+                                        type="button"
+                                        title={prefs.rateInclTax ? "Prices are entered inclusive of tax — click to switch to exclusive" : "Prices are entered exclusive of tax — click to switch to inclusive"}
+                                        onClick={() => togglePref("rateInclTax")}
+                                        className={`text-[10px] leading-tight font-semibold uppercase tracking-wide px-1 py-0.5 rounded transition-colors ${prefs.rateInclTax ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" : "hover:bg-muted text-muted-foreground"}`}
+                                    >
+                                        PRICE<br />{prefs.rateInclTax ? "(+Tax)" : "(excl)"}
+                                    </button>
+                                </th>
                                 {prefs.lineDiscount && (
                                     <th colSpan={2} className="px-1 pt-2 pb-0 text-center font-medium border-l border-border/40">DISCOUNT</th>
                                 )}
@@ -1393,6 +1457,9 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                             <DropdownMenuLabel className="text-xs">Per-line extras</DropdownMenuLabel>
                                             <DropdownMenuCheckboxItem checked={prefs.mrpHint} onCheckedChange={() => togglePref("mrpHint")}>MRP column</DropdownMenuCheckboxItem>
                                             <DropdownMenuCheckboxItem checked={prefs.lineDescription} onCheckedChange={() => togglePref("lineDescription")}>Description (note)</DropdownMenuCheckboxItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel className="text-xs">Price entry</DropdownMenuLabel>
+                                            <DropdownMenuCheckboxItem checked={prefs.rateInclTax} onCheckedChange={() => togglePref("rateInclTax")}>Price includes tax (GST-inclusive)</DropdownMenuCheckboxItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuLabel className="text-xs">Footer fields</DropdownMenuLabel>
                                             <DropdownMenuCheckboxItem checked={prefs.overallDiscount} onCheckedChange={() => togglePref("overallDiscount")}>Overall Discount</DropdownMenuCheckboxItem>
@@ -1453,8 +1520,23 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                 />
                                             </td>
                                             {prefs.mrpHint && (
-                                                <td className="px-1 py-1 text-right text-xs tabular-nums text-muted-foreground">
-                                                    {mrp != null && mrp > 0 ? fmt(mrp) : ""}
+                                                <td className="px-1 py-1 text-right text-xs tabular-nums">
+                                                    {/* PURCHASE: editable MRP so the product master stays current.
+                                                        Other kinds: read-only hint from the product lookup. */}
+                                                    {kind === "PURCHASE" ? (
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            value={line.mrpRupees}
+                                                            onChange={(e) => updateLine(line.id, { mrpRupees: num(e.target.value) })}
+                                                            placeholder="—"
+                                                            className={cell}
+                                                        />
+                                                    ) : (
+                                                        <span className="text-muted-foreground">
+                                                            {line.mrpRupees || (mrp != null && mrp > 0 ? fmt(mrp) : "")}
+                                                        </span>
+                                                    )}
                                                 </td>
                                             )}
                                             <td className="px-1 py-1">
@@ -1708,6 +1790,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                             quantity:    String(Number(l.quantity) || 0),
                                             freeQty:     l.freeQty != null && Number(l.freeQty) > 0 ? String(Number(l.freeQty)) : "",
                                             rate:        String(Number(l.rate) || 0),
+                                            mrpRupees:   "",
                                             discountPct: Number(l.discountPct) > 0 ? String(Number(l.discountPct)) : "",
                                             discountAmt: Number(l.discountAmt) > 0 ? String(Number(l.discountAmt)) : "",
                                             taxRate:     Number(l.taxRate)     > 0 ? String(Number(l.taxRate))     : "",
