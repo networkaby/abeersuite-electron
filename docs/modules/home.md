@@ -19,6 +19,7 @@ LAYER 4 — Position-wise buttons      (hasPermission() inside each briefing com
 
 ### API routes
 - `POST /api/quick-log` → `src/app/api/quick-log/route.ts` — any authenticated staff; creates a `CrmLead` in any pipeline (P2/P4/P6). No extra permission gate.
+- `GET /api/tickets/lookup?q=` → `src/app/api/tickets/lookup/route.ts` — any authenticated staff; searches active tickets by customer name or phone (text query) or by ticket ID (numeric query). Returns `TicketLookupResult[]` (max 6). No scope restriction — home-panel-only universal endpoint.
 
 ## Permissions (gate keys)
 
@@ -53,7 +54,7 @@ Users with multiple departments see all their briefings stacked. Users with zero
 
 ## Key components
 
-- `UniversalCustomerPanel` (`src/modules/home/UniversalCustomerPanel.tsx`) — client component. Two search inputs (product lookup via `/api/inventory/products/lookup`, ticket status via `/api/tickets/[id]`) + three log buttons (Sales Query → P6, Customer Problem → P2, Internal Request → P4 via `POST /api/quick-log`).
+- `UniversalCustomerPanel` (`src/modules/home/UniversalCustomerPanel.tsx`) — client component. Two search inputs (product lookup via `/api/inventory/products/lookup`; repair status via `/api/tickets/lookup?q=` — accepts customer name, phone, or ticket #) + three log buttons (Sales Query → P6, Customer Problem → P2, Internal Request → P4 via `POST /api/quick-log`). Sales Query dialog includes a `CustomerPicker` backed by `usePartySearch` to link the lead to an existing `Person` record (`personId`).
 - `RepairBriefing`, `ShowroomBriefing`, `FinanceBriefing`, `AdminBriefing`, `DespatchBriefing`, `HrBriefing`, `NoDeptCard` (`src/modules/home/DeptBriefings.tsx`) — async server components. Show live counts + quick-action links.
 
 ## Common workflows

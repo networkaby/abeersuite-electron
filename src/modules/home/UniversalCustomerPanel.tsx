@@ -10,16 +10,18 @@
  *
  * Three sections:
  *  1. Product quick-lookup (price + stock) — no permission gate
- *  2. Repair ticket status by ID — no permission gate
+ *  2. Repair ticket status — search by customer name, phone, or ticket # — no permission gate
  *  3. Three log buttons → P6 (CRM/sales), P2 (helpdesk), P4 (internal)
+ *     Sales Query also lets staff identify the customer from the system
+ *     (personId link) so CRM sees full history.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     Search, ShoppingBag, Wrench, PhoneCall, HeadphonesIcon, ClipboardList,
-    X, Package,
+    X, Package, User, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +41,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,18 +56,12 @@ interface ProductOption {
     brand: { name: string } | null;
 }
 
-interface TicketPreview {
+interface TicketLookupResult {
     id: number;
     status: string;
-    ticketStatus: { label: string; color: string };
-    device: {
-        brand: string;
-        model: string;
-        account?: {
-            person?: { name: string } | null;
-            company?: { name: string } | null;
-        } | null;
-    };
+    customerName: string;
+    ticketStatus: { label: string; color: string | null };
+    device: { brand: string; model: string };
     primaryOwner: { name: string } | null;
     expectedReturn: string | null;
 }
@@ -216,102 +213,228 @@ function ProductLookup() {
 }
 
 // ── Repair Status Lookup ──────────────────────────────────────────────────────
+// Accepts customer name, phone number, or ticket # — customer never needs to
+// remember the ticket number to get a status update.
 
 function RepairStatusLookup() {
     const [query, setQuery] = useState("");
-    const [ticket, setTicket] = useState<TicketPreview | null>(null);
-    const [notFound, setNotFound] = useState(false);
+    const [tickets, setTickets] = useState<TicketLookupResult[]>([]);
     const [loading, setLoading] = useState(false);
+    const [searched, setSearched] = useState(false);
+    const [expanded, setExpanded] = useState<number | null>(null);
 
-    async function handleSearch() {
-        const q = query.trim();
-        if (!q) return;
-        const numeric = /^\d+$/.test(q);
-        if (!numeric) {
-            toast.error("Please enter a numeric ticket ID");
+    // Debounced search — fires 450 ms after the user stops typing
+    const search = useCallback(async (q: string) => {
+        const trimmed = q.trim();
+        if (trimmed.length < 2) {
+            setTickets([]);
+            setSearched(false);
             return;
         }
         setLoading(true);
-        setNotFound(false);
-        setTicket(null);
+        setSearched(false);
         try {
-            const { data } = await axios.get<TicketPreview>(`/api/tickets/${q}`);
-            setTicket(data);
-        } catch (err: unknown) {
-            if (axios.isAxiosError(err) && err.response?.status === 404) {
-                setNotFound(true);
-            } else {
-                toast.error("Failed to fetch ticket");
-            }
+            const { data } = await axios.get<TicketLookupResult[]>(
+                `/api/tickets/lookup?q=${encodeURIComponent(trimmed)}`
+            );
+            setTickets(data);
+        } catch {
+            toast.error("Failed to search tickets");
+            setTickets([]);
         } finally {
             setLoading(false);
+            setSearched(true);
         }
-    }
+    }, []);
 
-    const customerName =
-        ticket?.device.account?.person?.name ??
-        ticket?.device.account?.company?.name ??
-        "Unknown";
+    useEffect(() => {
+        const id = setTimeout(() => search(query), 450);
+        return () => clearTimeout(id);
+    }, [query, search]);
+
+    function clear() {
+        setQuery("");
+        setTickets([]);
+        setSearched(false);
+        setExpanded(null);
+    }
 
     return (
         <div className="flex-1 min-w-0">
             <Label className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
                 <Wrench size={12} />
-                Repair ticket status
+                Repair status — name, phone or ticket #
             </Label>
-            <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <Input
-                        value={query}
-                        onChange={(e) => { setQuery(e.target.value); setTicket(null); setNotFound(false); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-                        placeholder="Ticket ID (e.g. 1042)…"
-                        className="pl-8 h-9 text-sm"
-                    />
-                </div>
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleSearch}
-                    disabled={loading || !query.trim()}
-                    className="h-9 px-3"
-                >
-                    {loading ? "…" : "Check"}
-                </Button>
+            <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                    value={query}
+                    onChange={(e) => { setQuery(e.target.value); setExpanded(null); }}
+                    placeholder="e.g. Ramesh, 9876543210 or #1042…"
+                    className="pl-8 h-9 text-sm"
+                />
+                {query && (
+                    <button
+                        type="button"
+                        onClick={clear}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                        <X size={14} />
+                    </button>
+                )}
             </div>
 
-            {ticket && (
-                <div className="mt-2 rounded-md border border-border bg-card shadow-sm px-4 py-3 text-sm space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <a
-                            href={`/office/repairing/tickets/${ticket.id}`}
-                            className="font-semibold text-primary hover:underline"
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            Ticket #{ticket.id}
-                        </a>
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${ticket.ticketStatus.color}`}>
-                            {ticket.ticketStatus.label}
-                        </span>
-                    </div>
-                    <p className="text-foreground font-medium">{customerName}</p>
-                    <p className="text-xs text-muted-foreground">
-                        {ticket.device.brand} {ticket.device.model}
-                        {ticket.primaryOwner && <span className="ml-2">· Tech: {ticket.primaryOwner.name}</span>}
-                    </p>
-                    {ticket.expectedReturn && (
-                        <p className="text-xs text-muted-foreground">
-                            Expected: {new Date(ticket.expectedReturn).toLocaleDateString("en-IN")}
-                        </p>
-                    )}
+            {loading && (
+                <p className="text-xs text-muted-foreground mt-2">Searching…</p>
+            )}
+
+            {!loading && tickets.length > 0 && (
+                <div className="mt-2 border border-border rounded-md overflow-hidden bg-card shadow-sm">
+                    {tickets.map((t) => (
+                        <div key={t.id} className="border-b border-border last:border-0">
+                            {/* Summary row — always visible */}
+                            <button
+                                type="button"
+                                onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/40 text-left"
+                            >
+                                <User size={14} className="text-muted-foreground shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-foreground truncate">{t.customerName}</p>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                        #{t.id} &nbsp;·&nbsp; {t.device.brand} {t.device.model}
+                                    </p>
+                                </div>
+                                <span className={`text-xs px-2 py-0.5 rounded font-medium shrink-0 ${t.ticketStatus.color ?? "bg-muted text-muted-foreground"}`}>
+                                    {t.ticketStatus.label}
+                                </span>
+                                <ChevronRight
+                                    size={14}
+                                    className={`text-muted-foreground shrink-0 transition-transform ${expanded === t.id ? "rotate-90" : ""}`}
+                                />
+                            </button>
+
+                            {/* Expanded detail */}
+                            {expanded === t.id && (
+                                <div className="px-4 pb-3 pt-1 text-sm bg-muted/20 space-y-1 border-t border-border">
+                                    <p className="text-muted-foreground">
+                                        <span className="font-medium text-foreground">{t.device.brand} {t.device.model}</span>
+                                        {t.primaryOwner && (
+                                            <span className="ml-2">· Technician: <span className="text-foreground">{t.primaryOwner.name}</span></span>
+                                        )}
+                                    </p>
+                                    {t.expectedReturn && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Expected return: {new Date(t.expectedReturn).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                        </p>
+                                    )}
+                                    <a
+                                        href={`/office/repairing/tickets/${t.id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5"
+                                    >
+                                        Open ticket →
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
 
-            {notFound && (
-                <p className="text-xs text-destructive mt-2">Ticket #{query} not found.</p>
+            {!loading && searched && tickets.length === 0 && query.trim().length >= 2 && (
+                <p className="text-xs text-muted-foreground mt-2">
+                    No active repair found for &ldquo;{query.trim()}&rdquo;
+                </p>
+            )}
+        </div>
+    );
+}
+
+// ── Customer Search (used inside Sales Query dialog) ──────────────────────────
+
+interface CustomerPickerProps {
+    picked: PartyHit | null;
+    onPick: (hit: PartyHit) => void;
+    onClear: () => void;
+}
+
+function CustomerPicker({ picked, onPick, onClear }: CustomerPickerProps) {
+    const [query, setQuery] = useState("");
+    const { hits, loading } = usePartySearch(query, {
+        enabled: picked == null,
+        group: "Sundry Debtors",
+    });
+
+    if (picked) {
+        return (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <User size={14} className="text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{picked.name}</p>
+                    {picked.phone && (
+                        <p className="text-xs text-muted-foreground">{picked.phone}</p>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={() => { onClear(); setQuery(""); }}
+                    className="text-muted-foreground hover:text-foreground shrink-0"
+                    aria-label="Remove customer"
+                >
+                    <X size={14} />
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="relative">
+            <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search existing customer by name or phone…"
+                    className="pl-8 h-9 text-sm"
+                    autoFocus
+                />
+                {query && (
+                    <button type="button" onClick={() => setQuery("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <X size={14} />
+                    </button>
+                )}
+            </div>
+
+            {loading && (
+                <p className="text-xs text-muted-foreground mt-1 pl-1">Searching…</p>
+            )}
+
+            {!loading && hits.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full border border-border rounded-md bg-card shadow-md overflow-hidden">
+                    {hits.map((h) => (
+                        <button
+                            key={`${h.type}-${h.id}`}
+                            type="button"
+                            onClick={() => { onPick(h); setQuery(""); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-muted/50 text-left border-b border-border last:border-0"
+                        >
+                            <User size={13} className="text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <p className="font-medium text-foreground truncate">{h.name}</p>
+                                {h.phone && <p className="text-xs text-muted-foreground">{h.phone}</p>}
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {!loading && query.trim().length >= 2 && hits.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1 pl-1">
+                    No existing customer found — you can still type their name below.
+                </p>
             )}
         </div>
     );
@@ -327,7 +450,9 @@ interface QuickLogDialogProps {
 
 function QuickLogDialog({ logType, open, onClose }: QuickLogDialogProps) {
     const cfg = LOG_CONFIGS[logType];
+    const isSales = logType === "sales";
 
+    const [pickedParty, setPickedParty] = useState<PartyHit | null>(null);
     const [title, setTitle] = useState("");
     const [customerName, setCustomerName] = useState("");
     const [phone, setPhone] = useState("");
@@ -338,6 +463,7 @@ function QuickLogDialog({ logType, open, onClose }: QuickLogDialogProps) {
     // Reset form when dialog opens
     useEffect(() => {
         if (open) {
+            setPickedParty(null);
             setTitle("");
             setCustomerName("");
             setPhone("");
@@ -345,6 +471,18 @@ function QuickLogDialog({ logType, open, onClose }: QuickLogDialogProps) {
             setNotes("");
         }
     }, [open]);
+
+    function handlePickParty(hit: PartyHit) {
+        setPickedParty(hit);
+        setCustomerName(hit.name);
+        if (hit.phone && !phone) setPhone(hit.phone);
+    }
+
+    function handleClearParty() {
+        setPickedParty(null);
+        setCustomerName("");
+        setPhone("");
+    }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -361,6 +499,8 @@ function QuickLogDialog({ logType, open, onClose }: QuickLogDialogProps) {
                 phone: phone.trim() || null,
                 source: cfg.showChannel ? channel : null,
                 notes: notes.trim() || null,
+                personId: pickedParty?.type === "customer" ? pickedParty.id : null,
+                companyId: pickedParty?.type === "company" ? pickedParty.id : null,
             });
             toast.success("Logged — the right team will follow up");
             onClose();
@@ -387,16 +527,33 @@ function QuickLogDialog({ logType, open, onClose }: QuickLogDialogProps) {
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+                    {/* Customer identification — sales queries link to a real customer record */}
+                    {isSales && (
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">
+                                Identify customer
+                                <span className="text-muted-foreground ml-1">(search existing, or fill below)</span>
+                            </Label>
+                            <CustomerPicker
+                                picked={pickedParty}
+                                onPick={handlePickParty}
+                                onClear={handleClearParty}
+                            />
+                        </div>
+                    )}
+
                     {cfg.showCustomer && (
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-xs">Customer Name</Label>
+                                <Label className="text-xs">
+                                    {isSales ? "Name (if not found above)" : "Customer Name"}
+                                </Label>
                                 <Input
                                     value={customerName}
                                     onChange={(e) => setCustomerName(e.target.value)}
                                     placeholder="e.g. Ramesh Borah"
                                     className="h-9 text-sm"
-                                    autoFocus
+                                    autoFocus={!isSales}
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -436,7 +593,6 @@ function QuickLogDialog({ logType, open, onClose }: QuickLogDialogProps) {
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder={cfg.placeholder}
                             className="h-9 text-sm"
-                            autoFocus={!cfg.showCustomer}
                         />
                     </div>
 

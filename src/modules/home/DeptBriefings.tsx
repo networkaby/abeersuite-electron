@@ -79,13 +79,20 @@ export async function RepairBriefing({ userId, isAdmin }: { userId: number; isAd
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [open, escalated, readyToCollect, myOpen, newToday] = await Promise.all([
-        prisma.ticket.count({ where: { ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { escalated: true, ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { status: "S6" } }), // "Ready" status
-        prisma.ticket.count({ where: { primaryOwnerId: userId, ticketStatus: { isTerminal: false } } }),
-        prisma.ticket.count({ where: { createdAt: { gte: today } } }),
-    ]);
+    let open: number | string = "—", escalated: number | string = "—",
+        readyToCollect: number | string = "—", myOpen: number | string = "—",
+        newToday: number | string = "—";
+    try {
+        [open, escalated, readyToCollect, myOpen, newToday] = await Promise.all([
+            prisma.ticket.count({ where: { ticketStatus: { isTerminal: false } } }),
+            prisma.ticket.count({ where: { escalated: true, ticketStatus: { isTerminal: false } } }),
+            prisma.ticket.count({ where: { status: "S6" } }),
+            prisma.ticket.count({ where: { primaryOwnerId: userId, ticketStatus: { isTerminal: false } } }),
+            prisma.ticket.count({ where: { createdAt: { gte: today } } }),
+        ]);
+    } catch {
+        // DB unavailable — show "—" so the page still loads without misleading zeros
+    }
 
     return (
         <BriefingCard
@@ -96,7 +103,7 @@ export async function RepairBriefing({ userId, isAdmin }: { userId: number; isAd
             <div className="space-y-4">
                 <div className="flex gap-3 flex-wrap sm:flex-nowrap">
                     <StatCard label="Open" value={open} />
-                    <StatCard label="Escalated" value={escalated} highlight={escalated > 0} />
+                    <StatCard label="Escalated" value={escalated} highlight={typeof escalated === "number" && escalated > 0} />
                     <StatCard label="Ready to collect" value={readyToCollect} />
                     {!isAdmin && <StatCard label="Mine" value={myOpen} />}
                     <StatCard label="New today" value={newToday} />
@@ -127,13 +134,21 @@ export async function ShowroomBriefing() {
         status:      { not: "VOID" as const },
     };
 
-    const [billsToday, openShifts, todaySales] = await Promise.all([
-        prisma.invoice.count({ where: posFilter }),
-        prisma.posShift.count({ where: { closedAt: null } }),
-        prisma.invoice.aggregate({ where: posFilter, _sum: { totalAmount: true } }),
-    ]);
-
-    const totalRs = Math.round((todaySales._sum.totalAmount?.toNumber() ?? 0));
+    let billsToday: number | string = "—", openShifts: number | string = "—",
+        salesDisplay = "—";
+    try {
+        const [b, s, agg] = await Promise.all([
+            prisma.invoice.count({ where: posFilter }),
+            prisma.posShift.count({ where: { closedAt: null } }),
+            prisma.invoice.aggregate({ where: posFilter, _sum: { totalAmount: true } }),
+        ]);
+        billsToday = b;
+        openShifts = s;
+        const totalRs = Math.round((agg._sum.totalAmount?.toNumber() ?? 0));
+        salesDisplay = `₹${totalRs.toLocaleString("en-IN")}`;
+    } catch {
+        // DB unavailable — show "—" so the page still loads without misleading zeros
+    }
 
     return (
         <BriefingCard
@@ -143,9 +158,9 @@ export async function ShowroomBriefing() {
         >
             <div className="space-y-4">
                 <div className="flex gap-3 flex-wrap sm:flex-nowrap">
-                    <StatCard label="Today's sales" value={`₹${totalRs.toLocaleString("en-IN")}`} />
+                    <StatCard label="Today's sales" value={salesDisplay} />
                     <StatCard label="Bills today" value={billsToday} />
-                    <StatCard label="Open shifts" value={openShifts} highlight={openShifts === 0} />
+                    <StatCard label="Open shifts" value={openShifts} highlight={typeof openShifts === "number" && openShifts === 0} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -183,11 +198,17 @@ export function FinanceBriefing() {
 // ── Admin Overview Briefing ────────────────────────────────────────────────────
 
 export async function AdminBriefing() {
-    const [openRepair, openSupport, openInternal] = await Promise.all([
-        prisma.ticket.count({ where: { pipelineId: "P1", ticketStatus: { isTerminal: false } } }),
-        prisma.crmLead.count({ where: { pipelineId: "P2" } }),
-        prisma.crmLead.count({ where: { pipelineId: "P4" } }),
-    ]);
+    let openRepair: number | string = "—", openSupport: number | string = "—",
+        openInternal: number | string = "—";
+    try {
+        [openRepair, openSupport, openInternal] = await Promise.all([
+            prisma.ticket.count({ where: { pipelineId: "P1", ticketStatus: { isTerminal: false } } }),
+            prisma.crmLead.count({ where: { pipelineId: "P2" } }),
+            prisma.crmLead.count({ where: { pipelineId: "P4" } }),
+        ]);
+    } catch {
+        // DB unavailable — show "—" so the page still loads without misleading zeros
+    }
 
     return (
         <BriefingCard
@@ -215,12 +236,17 @@ export async function AdminBriefing() {
 // ── Despatch Briefing ──────────────────────────────────────────────────────────
 
 export async function DespatchBriefing() {
-    const [pendingDespatch, escalated] = await Promise.all([
-        prisma.ticket.count({
-            where: { ticketSubStatus: { notifyRoles: { has: "R4" } }, ticketStatus: { isTerminal: false } },
-        }),
-        prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
-    ]);
+    let pendingDespatch: number | string = "—", escalated: number | string = "—";
+    try {
+        [pendingDespatch, escalated] = await Promise.all([
+            prisma.ticket.count({
+                where: { ticketSubStatus: { notifyRoles: { has: "R4" } }, ticketStatus: { isTerminal: false } },
+            }),
+            prisma.ticket.count({ where: { escalated: true, status: "S4" } }),
+        ]);
+    } catch {
+        // DB unavailable — show "—" so the page still loads without misleading zeros
+    }
 
     return (
         <BriefingCard
@@ -230,7 +256,7 @@ export async function DespatchBriefing() {
         >
             <div className="space-y-4">
                 <div className="flex gap-3 flex-wrap sm:flex-nowrap">
-                    <StatCard label="Pending despatch" value={pendingDespatch} highlight={pendingDespatch > 0} />
+                    <StatCard label="Pending despatch" value={pendingDespatch} highlight={typeof pendingDespatch === "number" && pendingDespatch > 0} />
                     <StatCard label="Escalated (in repair)" value={escalated} />
                 </div>
                 <div className="grid grid-cols-1 gap-2">
