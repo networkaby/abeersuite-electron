@@ -94,3 +94,4 @@ Each module doc has a **"Reusable helpers — DO NOT duplicate"** table listing 
 - [core.md](./core.md) — Cross-module workspace (assignments, call log, accounts, search-slno)
 - [pos.md](./pos.md) — Point of Sale counter screen
 - [customer-portal.md](./customer-portal.md) — External `/shop` + customer self-service
+- [home.md](./home.md) — Role-aware `/office` landing page: four-layer design (universal customer panel + dept briefings + position buttons + permission safety)
