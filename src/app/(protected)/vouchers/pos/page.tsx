@@ -1,5 +1,5 @@
-import PosScreen from "@/modules/pos/components/PosScreen";
+import { PosSalesRegister } from "@/modules/pos/components/PosSalesRegister";
 
-export default function PosPage() {
-    return <PosScreen />;
+export default function PosSalesPage() {
+    return <PosSalesRegister />;
 }

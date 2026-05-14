@@ -284,10 +284,12 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Monitor,
         key: "pos",
         permission: "pos:shift:open",
+        dashboardHref: "/vouchers/pos",
         pathPrefixes: ["/vouchers/pos", "/office/pos"],
         children: [
-            { label: "POS Register", href: "/vouchers/pos", icon: ShoppingCart, permission: "pos:shift:open", newTab: true },
-            { label: "Shift Reports", href: "/office/pos/shifts", icon: ClipboardList, permission: "pos:shift:view:branch" },
+            { label: "POS Register",  href: "/vouchers/pos/new", icon: ShoppingCart,  permission: "pos:shift:open",         newTab: true },
+            { label: "Sales List",    href: "/vouchers/pos",     icon: ClipboardList, permission: "pos:shift:open" },
+            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock,         permission: "pos:shift:view:branch" },
         ],
     },
     // Inventory

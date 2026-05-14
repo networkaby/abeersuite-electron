@@ -1,15 +1,11 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 
-// Standalone POS shell — NO office sidebar / chrome / nav.
-// Lives at /pos so it can be served from a subdomain in the future
-// (e.g. pos.example.com → rewrite to /pos/* via middleware later).
-//
-// Auth: reuses staff session (same NextAuth provider). Customer sessions
-// are blocked. No specific permission gate — any signed-in staff can
-// generate an invoice from the POS.
+// Shared auth wrapper for /vouchers/pos/* routes.
+// The list page (/vouchers/pos) renders inside the normal office chrome via
+// the parent layout. The register (/vouchers/pos/new) has its own nested
+// layout that adds the fixed-inset-0 standalone shell.
 
 export default async function PosLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
@@ -17,12 +13,5 @@ export default async function PosLayout({ children }: { children: React.ReactNod
     if (!user) redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos");
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers%2Fpos");
 
-    return (
-        <SessionWrapper>
-            <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
-                <Toaster position="top-center" richColors />
-                {children}
-            </div>
-        </SessionWrapper>
-    );
+    return <SessionWrapper>{children}</SessionWrapper>;
 }
