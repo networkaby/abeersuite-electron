@@ -264,6 +264,21 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                     <div key={`${depth}-${child.label}-${child.href ?? "group"}`} className="space-y-0.5">
                         {href ? (
                             <div className="flex w-full items-stretch gap-0.5">
+                                {child.newTab ? (
+                                    <a
+                                        href={href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={[
+                                            "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                            "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                            child.disabled ? "pointer-events-none opacity-40" : "",
+                                        ].join(" ")}
+                                    >
+                                        <CIcon size={15} className="shrink-0" />
+                                        <span className="truncate">{child.label}</span>
+                                    </a>
+                                ) : (
                                 <Link
                                     href={href}
                                     className={[
@@ -282,6 +297,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         </Badge>
                                     )}
                                 </Link>
+                                )}
                                 {hasSubChildren && (
                                     <Button
                                         type="button"

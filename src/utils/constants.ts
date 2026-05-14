@@ -53,6 +53,7 @@ import {
     ClipboardCheck,
     BarChart3,
     ListChecks,
+    RotateCcw,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -77,6 +78,8 @@ export type ModuleChild = {
     label: string;
     icon: LucideIcon;
     href?: string;
+    /** Open the href in a new browser tab (e.g. standalone POS). */
+    newTab?: boolean;
     action?: "new-ticket";
     // "default" resolves to the pipeline where isDefault === true from /api/pipelines
     pipelineRef?: "default";
@@ -273,6 +276,18 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             },
 
 
+        ],
+    },
+    // POS
+    {
+        label: "POS",
+        icon: Monitor,
+        key: "pos",
+        permission: "pos:shift:open",
+        pathPrefixes: ["/vouchers/pos", "/office/pos"],
+        children: [
+            { label: "POS Register", href: "/vouchers/pos", icon: ShoppingCart, permission: "pos:shift:open", newTab: true },
+            { label: "Shift Reports", href: "/office/pos/shifts", icon: ClipboardList, permission: "pos:shift:view:branch" },
         ],
     },
     // Inventory
