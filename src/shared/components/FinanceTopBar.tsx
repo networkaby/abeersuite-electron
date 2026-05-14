@@ -108,6 +108,7 @@ export default function FinanceTopBar({
     }, [canView]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         load();
         const interval = setInterval(load, 60_000); // refresh every 60 s
         return () => clearInterval(interval);

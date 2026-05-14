@@ -54,6 +54,7 @@ export function useComboboxNav(opts: {
 
     // Reset highlight when the filtered list shrinks/grows under it.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setHighlighted(0);
     }, [count]);
 

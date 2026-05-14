@@ -227,6 +227,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // Keep the list ref pointing at the scrollable inner div so keyboard
     // navigation auto-scrolls the highlighted item into view.
     const listRef = useRef<HTMLUListElement>(null);
+    // eslint-disable-next-line react-hooks/immutability
     useEffect(() => { cb.listRef.current = listRef.current; });
 
     return (

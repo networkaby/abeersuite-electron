@@ -374,7 +374,7 @@ export default function YearEndingPage() {
                                             User part
                                         </legend>
                                         <p className="text-[11px] text-muted-foreground">
-                                            Creator's user ID, zero-padded.
+                                            Creator&apos;s user ID, zero-padded.
                                         </p>
                                         <div className="space-y-1">
                                             <Label className="text-xs">Max width</Label>

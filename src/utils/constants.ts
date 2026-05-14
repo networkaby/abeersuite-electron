@@ -53,7 +53,6 @@ import {
     ClipboardCheck,
     BarChart3,
     ListChecks,
-    RotateCcw,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT

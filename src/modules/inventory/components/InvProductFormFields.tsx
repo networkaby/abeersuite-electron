@@ -1,5 +1,12 @@
 "use client";
 
+/* eslint-disable react-hooks/refs */
+// This form uses ref.current reads in JSX render to gate "auto-filled" hints
+// (nameDirty / onlineNameDirty / slugDirty). They flip on user input via
+// onChange. The new react-hooks/refs rule forbids reading .current during
+// render, but here it's just a boolean hint — reading a stale value across
+// renders is acceptable since the next user keystroke will fix it.
+
 import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";

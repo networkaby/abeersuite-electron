@@ -397,8 +397,8 @@ export default function NamingConventionPage() {
                 <div>
                     <p className="text-sm font-semibold">Fallback chain (shared)</p>
                     <p className="text-xs text-muted-foreground">
-                        When a token's source field is empty on a product, walk this chain. If the chain is also
-                        empty, the token's own default value (if set) is used; otherwise the token is skipped.
+                        When a token&apos;s source field is empty on a product, walk this chain. If the chain is also
+                        empty, the token&apos;s own default value (if set) is used; otherwise the token is skipped.
                     </p>
                 </div>
                 <FallbackEditor value={cfg.fallbackFields} onChange={(v) => setCfg({ ...cfg, fallbackFields: v })} />

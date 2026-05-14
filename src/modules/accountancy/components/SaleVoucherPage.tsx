@@ -31,7 +31,7 @@
  */
 /* dont use number input type use text input type and validate to allow only numbers */
 
-import { Fragment, useState, useCallback, useRef, useEffect } from "react";
+import { Fragment, useState, useCallback, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
@@ -482,7 +482,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) {
+function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const copy = PER_KIND[kind];
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1939,5 +1939,13 @@ export function SaleVoucherPage({ kind = "SALE" }: { kind?: TradingKind } = {}) 
                 </div>
             </div>
         </div>
+    );
+}
+
+export function SaleVoucherPage(props: { kind?: TradingKind }) {
+    return (
+        <Suspense fallback={<div>Loading…</div>}>
+            <SaleVoucherPageInner {...props} />
+        </Suspense>
     );
 }

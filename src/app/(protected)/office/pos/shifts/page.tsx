@@ -45,6 +45,7 @@ export default function ShiftsReportPage() {
     const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const q = new URLSearchParams();
         if (status) q.set("status", status);

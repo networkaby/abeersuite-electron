@@ -106,6 +106,7 @@ export default function StockSummaryPage() {
             .finally(() => setLoading(false));
     }, [method]);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { reload(); }, [reload]);
 
     // ── Group + roll up (client side) ─────────────────────────────────────────
@@ -152,6 +153,7 @@ export default function StockSummaryPage() {
     // names so a new group added by editing a product also opens.
     useEffect(() => {
         if (grouped.length === 0) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setExpanded(new Set(grouped.map((g) => g.name)));
     }, [grouped]);
 

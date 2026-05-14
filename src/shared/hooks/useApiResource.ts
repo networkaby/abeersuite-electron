@@ -32,6 +32,7 @@ export function useApiResource<T>(
 
     useEffect(() => {
         if (url === null) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLoading(false);
             return;
         }

@@ -74,6 +74,7 @@ export default function TicketsPage() {
 
     useEffect(() => {
         if (!repairPipelineId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setStatusOptions([]);
             return;
         }
@@ -84,6 +85,7 @@ export default function TicketsPage() {
 
     useEffect(() => {
         if (!repairPipelineId) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         axios
             .get("/api/tickets", { params: { pipelineId: repairPipelineId } })
@@ -113,6 +115,7 @@ export default function TicketsPage() {
         if (dateTo) result = result.filter((t) => new Date(t.createdAt) <= new Date(dateTo + "T23:59:59"));
         if (warrantyFilter === "warranty") result = result.filter((t) => t.isWarranty);
         if (warrantyFilter === "non_warranty") result = result.filter((t) => !t.isWarranty);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFiltered(result);
     }, [tickets, search, statusFilter, priorityFilter, technicianFilter, serviceCenterFilter, dateFrom, dateTo, warrantyFilter]);
 

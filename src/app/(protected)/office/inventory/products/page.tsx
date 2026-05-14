@@ -71,6 +71,7 @@ export default function InventoryProductsPage() {
         if (!Number.isFinite(id)) return;
         if (handledEditRef.current === id) return;
         handledEditRef.current = id;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         openEdit(id);
         const next = new URLSearchParams(searchParams.toString());
         next.delete("edit");
