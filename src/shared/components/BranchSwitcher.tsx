@@ -48,18 +48,24 @@ export function BranchSwitcher() {
                 const res = await axios.get<Branch[]>("/api/branches");
                 if (cancelled) return;
                 const active = res.data.filter((b) => b.isActive !== false);
+                let visible: Branch[] = [];
                 if (isAdmin) {
-                    setBranches(active);
+                    visible = active;
                 } else if (userBranchIds.length > 0) {
-                    setBranches(active.filter((b) => userBranchIds.includes(b.id)));
+                    visible = active.filter((b) => userBranchIds.includes(b.id));
                 }
+                setBranches(visible);
+                // Ensure a branch is always active in the cookie.
+                // hydrate() is a no-op if something is already stored — safe to call here.
+                // This covers admin users who have no branch assignments in the session.
+                hydrate(visible[0]?.id ?? null);
             } catch {
                 /* ignore — fallback to empty list */
             }
         }
         load();
         return () => { cancelled = true; };
-    }, [user, isAdmin, userBranchIds]);
+    }, [user, isAdmin, userBranchIds, hydrate]);
 
     if (!user || branches.length === 0) return null;
 

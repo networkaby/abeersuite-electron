@@ -1,68 +1,111 @@
-// ── POS Shift & Cash-drawer reconciliation ───────────────────────────────────
+// ── POS Counter, Shift & Cash-drawer reconciliation ───────────────────────────
 //
-// Each cashier opens a shift with an opening cash float (Contra: Vault → Till),
-// bills throughout the shift (cash portions debit their personal till account
-// via the POS sale route), records mid-shift cash drops (logged only — no GL),
-// and finally closes the shift by declaring their physical cash count. The
-// system computes the expected balance, surfaces variance, and posts a
-// closing Contra (Till → Vault). Variance (over / short) becomes a small
-// adjustment JE against Cash Short / Cash Over P&L accounts.
+// Each branch has one or more POS counters (physical billing stations). Each
+// counter has its own GL till account (e.g. "Cash – Counter 1 – Main Branch").
+// Cashiers open shifts at a specific counter. Cash sales debit the counter's
+// till account. At close, surplus cash is swept to the branch vault via Contra;
+// a configurable float can be left in the counter overnight (carryOverNextPaise).
 //
-// Till accounts are GL Accounts under Cash-in-Hand, one per cashier user
-// (User.tillAccountId). The receiving end is a per-branch Vault account
-// (Branch.vaultAccountId). See docs/modules/pos.md.
+// Shift handover (A → B, same counter):
+//   A initiates (shift → AWAITING_HANDOVER), A logs out, B logs in, B counts
+//   the physical cash and accepts. On accept: variance JE + closing Contra
+//   (surplus to vault) are posted, A's shift is CLOSED, B's shift opens.
+//   No Contra needed for same-counter handover — cash never leaves the counter
+//   till account.
+//
+// Contra is only needed when cash physically moves to/from the vault:
+//   • Day start top-up:    Vault → Counter till (vaultTopUpPaise portion)
+//   • End-of-day sweep:    Counter till → Vault (surplus after carry-over)
+//
+// See docs/modules/pos.md.
+
+// ── POS Counter (physical billing station) ────────────────────────────────────
+
+model PosCounter {
+  id                Int       @id @default(autoincrement())
+  branchId          String
+  branch            Branch    @relation("BranchCounters", fields: [branchId], references: [id])
+  name              String    // "Counter 1", "Billing Desk", "Service Counter"
+  tillAccountId     Int       @unique
+  tillAccount       Account   @relation("CounterTill", fields: [tillAccountId], references: [id])
+  isActive          Boolean   @default(true)
+  shifts            PosShift[]
+
+  @@unique([branchId, name])
+  @@index([branchId])
+  @@map("pos_counters")
+}
+
+// ── POS Shift (one cashier's session at one counter) ─────────────────────────
 
 model PosShift {
-  id            Int            @id @default(autoincrement())
+  id        Int            @id @default(autoincrement())
+
   // Who & where
-  userId        Int
-  user          User           @relation("PosShiftUser", fields: [userId], references: [id])
-  branchId      String
-  branch        Branch         @relation("PosShiftBranch", fields: [branchId], references: [id])
-  // Snapshot at open: which till account this shift is using.
-  // Stored on the row (not derived from user.tillAccountId) so re-assigning
-  // a user's till later doesn't rewrite history.
-  tillAccountId Int
-  tillAccount   Account        @relation("PosShiftTill", fields: [tillAccountId], references: [id])
-  status        PosShiftStatus @default(OPEN)
+  userId    Int
+  user      User           @relation("PosShiftUser", fields: [userId], references: [id])
+  counterId Int
+  counter   PosCounter     @relation(fields: [counterId], references: [id])
+  // branchId duplicated from counter for indexed lookups (avoids join on hot paths)
+  branchId  String
+  branch    Branch         @relation("PosShiftBranch", fields: [branchId], references: [id])
+
+  status    PosShiftStatus @default(OPEN)
 
   // ── Open ──────────────────────────────────────────────────────────────────
   openedAt               DateTime @default(now())
   openedById             Int
   openedBy               User     @relation("PosShiftOpenedBy", fields: [openedById], references: [id])
+  // openingFloatPaise = carryOverFloatPaise + vaultTopUpPaise
   openingFloatPaise      BigInt   @default(0)
-  openingContraVoucherId Int?
+  carryOverFloatPaise    BigInt   @default(0) // already in counter from previous close
+  vaultTopUpPaise        BigInt   @default(0) // fresh draw from vault (Contra posted)
+  openingContraVoucherId Int?                 // null when vaultTopUpPaise = 0
   openingContraVoucher   Voucher? @relation("PosShiftOpeningContra", fields: [openingContraVoucherId], references: [id])
 
   // ── Close ─────────────────────────────────────────────────────────────────
   closedAt               DateTime?
   closedById             Int?
   closedBy               User?         @relation("PosShiftClosedBy", fields: [closedById], references: [id])
-  declaredCashPaise      BigInt?
-  expectedCashPaise      BigInt?
-  variancePaise          BigInt? // declared − expected; +ve = over, −ve = short
-  closingContraVoucherId Int?
+  declaredCashPaise      BigInt?       // what the closer physically counted
+  expectedCashPaise      BigInt?       // opening + cash sales − drops (computed at close)
+  variancePaise          BigInt?       // declared − expected; +ve = over, −ve = short
+  carryOverNextPaise     BigInt?       // float left in counter for next shift
+  toVaultPaise           BigInt?       // amount swept to vault (declared − carryOverNext)
+  closingContraVoucherId Int?          // null when toVaultPaise = 0
   closingContraVoucher   Voucher?      @relation("PosShiftClosingContra", fields: [closingContraVoucherId], references: [id])
   varianceJournalEntryId Int?
   varianceJournalEntry   JournalEntry? @relation("PosShiftVarianceJe", fields: [varianceJournalEntryId], references: [id])
 
-  notes String?
+  // ── Handover chain ────────────────────────────────────────────────────────
+  // Set when A's AWAITING_HANDOVER shift is accepted by B: points to B's shift.
+  handoverToShiftId  Int?
+  handoverToShift    PosShift?   @relation("ShiftHandover", fields: [handoverToShiftId], references: [id])
+  handoverFromShifts PosShift[]  @relation("ShiftHandover")
+  // The pending handover record (only exists during AWAITING_HANDOVER state).
+  handover           PosHandover? @relation("HandoverFromShift")
+  // If this shift was opened via handover acceptance, link back.
+  receivedHandover   PosHandover? @relation("HandoverToShift")
 
+  notes String?
   drops PosCashDrop[]
 
   @@index([userId, status])
   @@index([branchId, openedAt])
+  @@index([counterId, status])
   @@map("pos_shifts")
 }
 
 enum PosShiftStatus {
   OPEN
+  AWAITING_HANDOVER
   CLOSED
 }
 
-// Mid-shift cash drop — staff puts cash into the safe during the shift to
-// reduce drawer risk. Log only; no GL movement (cash is still "in the till"
-// from the GL's perspective — it just physically lives in the safe).
+// ── Mid-shift cash drop ───────────────────────────────────────────────────────
+// Staff puts cash into the safe mid-shift to reduce drawer risk. Log only;
+// no GL movement (cash is still "in the counter till" from the GL's perspective).
+
 model PosCashDrop {
   id          Int      @id @default(autoincrement())
   shiftId     Int
@@ -75,4 +118,46 @@ model PosCashDrop {
 
   @@index([shiftId, droppedAt])
   @@map("pos_cash_drops")
+}
+
+// ── POS Handover (two-step cashier-to-cashier) ───────────────────────────────
+// A initiates: shift → AWAITING_HANDOVER, PosHandover created (PENDING).
+// A logs out, B logs in. B sees the pending handover, counts physical cash,
+// and accepts. On accept (one transaction):
+//   1. Variance JE posted against counter till if declared ≠ expected.
+//   2. Closing Contra posted if (declared − carryOverNext) > 0 (vault sweep).
+//   3. A's shift → CLOSED; B's new PosShift created (OPEN).
+//   4. PosHandover → ACCEPTED.
+// Any discrepancy between A's declared and B's count hits A's shift variance.
+
+model PosHandover {
+  id               Int               @id @default(autoincrement())
+
+  fromShiftId      Int               @unique
+  fromShift        PosShift          @relation("HandoverFromShift", fields: [fromShiftId], references: [id])
+
+  toUserId         Int
+  toUser           User              @relation("HandoverToUser", fields: [toUserId], references: [id])
+
+  // Filled when B accepts — points to B's new shift.
+  toShiftId        Int?              @unique
+  toShift          PosShift?         @relation("HandoverToShift", fields: [toShiftId], references: [id])
+
+  status           PosHandoverStatus @default(PENDING)
+
+  declaredByAPaise BigInt            // what A declared (pre-filled from A's declared count)
+  countedByBPaise  BigInt?           // what B counted on acceptance
+  carryOverPaise   BigInt            @default(0) // carry-over float for B's shift
+  notes            String?
+
+  initiatedAt      DateTime          @default(now())
+  acceptedAt       DateTime?
+
+  @@map("pos_handovers")
+}
+
+enum PosHandoverStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
 }

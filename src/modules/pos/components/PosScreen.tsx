@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -27,7 +27,8 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
-import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
+import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
+import { HandoverAcceptDialog, type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -119,26 +120,43 @@ export default function PosScreen() {
     const upiAmountRef = useRef<HTMLInputElement>(null);
 
     // ── Active POS shift ────────────────────────────────────────────────────
-    // /api/pos/sale requires an OPEN shift; we fetch the current one on mount
-    // and re-fetch when the user closes a shift. No shift → block checkout
-    // and surface the ShiftOpenDialog.
-    const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
-    const [shiftLoaded, setShiftLoaded] = useState(false);
+    // Mount order:
+    //   1. GET /api/pos/shifts/current
+    //      → OPEN            : show ActiveShiftBar (billing enabled)
+    //      → AWAITING_HANDOVER: show ActiveShiftBar in amber mode (billing blocked)
+    //      → null            : check for pending handover ↓
+    //   2. GET /api/pos/shifts/pending-handover
+    //      → found           : show HandoverAcceptDialog (B accepts A's handover)
+    //      → null            : show ShiftOpenDialog (fresh start)
+    const [activeShift, setActiveShift]           = useState<ActiveShift | null>(null);
+    const [pendingHandover, setPendingHandover]   = useState<PendingHandover | null>(null);
+    const [shiftLoaded, setShiftLoaded]           = useState(false);
     const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
-    const [myTillName, setMyTillName] = useState<string | null>(null);
 
-    const refreshActiveShift = () => {
+    const refreshActiveShift = useCallback(() => {
         axios.get<ActiveShift | null>("/api/pos/shifts/current")
-            .then((r) => {
-                setActiveShift(r.data);
-                if (r.data?.tillAccount?.name) setMyTillName(r.data.tillAccount.name);
+            .then(async (r) => {
+                if (r.data) {
+                    setActiveShift(r.data);
+                    setPendingHandover(null);
+                } else {
+                    setActiveShift(null);
+                    // Check if B has a handover waiting.
+                    try {
+                        const h = await axios.get<PendingHandover | null>("/api/pos/shifts/pending-handover");
+                        setPendingHandover(h.data);
+                    } catch {
+                        setPendingHandover(null);
+                    }
+                }
             })
-            .catch(() => setActiveShift(null))
+            .catch(() => { setActiveShift(null); setPendingHandover(null); })
             .finally(() => setShiftLoaded(true));
-    };
+    }, []);
+
     useEffect(() => {
         refreshActiveShift();
-    }, []);
+    }, [refreshActiveShift]);
 
     // Lookup the first BANK account once — used as the default destination
     // for UPI / Card / Cheque / Bank Transfer payment lines until a per-row
@@ -407,11 +425,16 @@ export default function PosScreen() {
 
     return (
         <div className="flex h-full w-full flex-col">
-            {/* Active shift bar — appears only when user has an OPEN shift.
-                When closed/missing, the ShiftOpenDialog auto-opens once
-                shift state has been loaded. */}
-            {activeShift && <ActiveShiftBar shift={activeShift} onClosed={() => { setActiveShift(null); refreshActiveShift(); }} />}
-            {shiftLoaded && !activeShift && (
+            {/* Active shift bar */}
+            {activeShift && (
+                <ActiveShiftBar
+                    shift={activeShift}
+                    onClosed={() => { setActiveShift(null); refreshActiveShift(); }}
+                    onHandoverCancelled={refreshActiveShift}
+                />
+            )}
+            {/* No-shift warning — only when loaded + no active shift + no pending handover */}
+            {shiftLoaded && !activeShift && !pendingHandover && (
                 <div className="flex items-center gap-2 border-b border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-2 text-xs">
                     <span className="font-semibold text-amber-700 dark:text-amber-300">⚠ No shift open</span>
                     <span className="text-muted-foreground">Open a shift before billing.</span>
@@ -421,20 +444,40 @@ export default function PosScreen() {
                 </div>
             )}
 
+            {/* ShiftOpenDialog — fresh start (no handover waiting) */}
             <ShiftOpenDialog
                 open={shiftOpenDialogOpen}
                 onOpenChange={setShiftOpenDialogOpen}
-                tillAccountName={myTillName}
-                onOpened={(s) => {
+                onOpened={(s: OpenedShift) => {
                     setActiveShift({
                         id:                s.id,
+                        status:            "OPEN",
                         openedAt:          new Date().toISOString(),
-                        tillAccount:       s.tillAccount,
+                        counter:           s.counter,
                         branch:            s.branch,
                         openingFloatPaise: s.openingFloatPaise,
                     });
+                    setShiftOpenDialogOpen(false);
                 }}
             />
+
+            {/* HandoverAcceptDialog — shown when B has a pending handover */}
+            {pendingHandover && (
+                <HandoverAcceptDialog
+                    open={true}
+                    handover={pendingHandover}
+                    onAccepted={(shiftId, openingFloat) => {
+                        setPendingHandover(null);
+                        refreshActiveShift();
+                        void shiftId;
+                        void openingFloat;
+                    }}
+                    onDismiss={() => {
+                        // User chose to log out instead.
+                        window.location.href = "/api/auth/signout";
+                    }}
+                />
+            )}
 
             {/* Top bar — customer search */}
             <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-3">

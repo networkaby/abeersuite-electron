@@ -1,11 +1,11 @@
 // /api/pos/shifts — shift lifecycle endpoints (list, open).
 //
-// GET   — list shifts (filterable). Default scope: active branch.
-//         `branchId=all` requires pos:shift:view:org (or admin:bypass).
-// POST  — open a new shift for the current user. Body: { openingFloatPaise }.
-//         Resolves the user's tillAccountId and the branch's vaultAccountId,
-//         then posts the opening Contra (Cr Vault, Dr Till) and writes the
-//         PosShift row in one transaction.
+// GET  — list shifts (filterable). Default scope: active branch.
+//        `branchId=all` requires pos:shift:view:org (or admin:bypass).
+// POST — open a new shift at a specific counter. Body: { counterId, vaultTopUpPaise, notes? }.
+//        The counter's till account carries any existing balance (carry-over from
+//        the previous close). Only the `vaultTopUpPaise` portion triggers a Contra
+//        (Vault → Counter till). If 0, no Contra is posted.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
@@ -18,11 +18,12 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 
 const openSchema = z.object({
-    openingFloatPaise: z.number().int().min(0),                                  // rupees * 100, can be 0
-    notes:             z.string().trim().max(500).optional(),
+    counterId:       z.number().int().positive(),
+    vaultTopUpPaise: z.number().int().min(0).default(0), // fresh cash drawn from vault
+    notes:           z.string().trim().max(500).optional(),
 });
 
-// ── GET /api/pos/shifts?branchId=&userId=&status=&from=&to= ─────────────────
+// ── GET /api/pos/shifts ──────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
     const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW_BR);
     if (response) return response;
@@ -30,11 +31,12 @@ export async function GET(req: NextRequest) {
     try {
         const session = await auth();
         const { searchParams } = new URL(req.url);
-        const branchParam = searchParams.get("branchId");
-        const userIdParam = searchParams.get("userId");
-        const statusParam = searchParams.get("status") as "OPEN" | "CLOSED" | null;
-        const fromParam   = searchParams.get("from");
-        const toParam     = searchParams.get("to");
+        const branchParam  = searchParams.get("branchId");
+        const userIdParam  = searchParams.get("userId");
+        const counterParam = searchParams.get("counterId");
+        const statusParam  = searchParams.get("status") as "OPEN" | "AWAITING_HANDOVER" | "CLOSED" | null;
+        const fromParam    = searchParams.get("from");
+        const toParam      = searchParams.get("to");
 
         let branchFilter: { branchId?: string } = {};
         if (branchParam === "all") {
@@ -55,8 +57,9 @@ export async function GET(req: NextRequest) {
         const rows = await prisma.posShift.findMany({
             where: {
                 ...branchFilter,
-                ...(statusParam ? { status: statusParam } : {}),
-                ...(userIdParam ? { userId: Number(userIdParam) } : {}),
+                ...(statusParam  ? { status: statusParam } : {}),
+                ...(userIdParam  ? { userId: Number(userIdParam) } : {}),
+                ...(counterParam ? { counterId: Number(counterParam) } : {}),
                 ...(fromParam || toParam ? {
                     openedAt: {
                         ...(fromParam ? { gte: new Date(fromParam) } : {}),
@@ -66,9 +69,9 @@ export async function GET(req: NextRequest) {
             },
             orderBy: [{ openedAt: "desc" }],
             include: {
-                user:        { select: { id: true, name: true, email: true } },
-                branch:      { select: { id: true, name: true } },
-                tillAccount: { select: { id: true, name: true } },
+                user:    { select: { id: true, name: true, email: true } },
+                branch:  { select: { id: true, name: true } },
+                counter: { select: { id: true, name: true, tillAccount: { select: { id: true, name: true } } } },
                 openingContraVoucher: { select: { id: true, reference: true } },
                 closingContraVoucher: { select: { id: true, reference: true } },
                 _count: { select: { drops: true } },
@@ -77,17 +80,21 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(rows.map((s) => ({
             ...s,
-            openingFloatPaise: s.openingFloatPaise.toString(),
-            declaredCashPaise: s.declaredCashPaise?.toString() ?? null,
-            expectedCashPaise: s.expectedCashPaise?.toString() ?? null,
-            variancePaise:     s.variancePaise?.toString() ?? null,
+            openingFloatPaise:   s.openingFloatPaise.toString(),
+            carryOverFloatPaise: s.carryOverFloatPaise.toString(),
+            vaultTopUpPaise:     s.vaultTopUpPaise.toString(),
+            declaredCashPaise:   s.declaredCashPaise?.toString()  ?? null,
+            expectedCashPaise:   s.expectedCashPaise?.toString()  ?? null,
+            variancePaise:       s.variancePaise?.toString()      ?? null,
+            carryOverNextPaise:  s.carryOverNextPaise?.toString() ?? null,
+            toVaultPaise:        s.toVaultPaise?.toString()       ?? null,
         })));
     } catch (e) {
         return handleApiError(e, "Failed to fetch shifts");
     }
 }
 
-// ── POST /api/pos/shifts ────────────────────────────────────────────────────
+// ── POST /api/pos/shifts ─────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
     const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_OPEN);
     if (response) return response;
@@ -104,77 +111,145 @@ export async function POST(req: NextRequest) {
         throw e;
     }
 
-    // Resolve user's till + branch's vault before opening.
-    const me = await prisma.user.findUnique({
-        where:  { id: user!.id },
-        select: { id: true, name: true, tillAccountId: true },
+    // Resolve the counter + verify it belongs to this branch.
+    const counter = await prisma.posCounter.findUnique({
+        where:   { id: body.counterId },
+        include: { tillAccount: { select: { id: true, name: true, balance: true } } },
     });
-    if (!me?.tillAccountId) {
-        return NextResponse.json(
-            { error: "You don't have a till account assigned. Ask admin to configure it on your user profile." },
-            { status: 400 },
-        );
+    if (!counter) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
+    if (counter.branchId !== branchId) {
+        return NextResponse.json({ error: "Counter does not belong to your active branch" }, { status: 400 });
     }
+    if (!counter.isActive) {
+        return NextResponse.json({ error: "Counter is inactive" }, { status: 400 });
+    }
+
+    // Resolve the branch vault (needed only if vaultTopUpPaise > 0).
     const branch = await prisma.branch.findUnique({
         where:  { id: branchId },
         select: { id: true, name: true, vaultAccountId: true },
     });
-    if (!branch?.vaultAccountId) {
+    if (body.vaultTopUpPaise > 0 && !branch?.vaultAccountId) {
         return NextResponse.json(
             { error: `Branch ${branch?.name ?? branchId} has no Vault account configured.` },
             { status: 400 },
         );
     }
 
-    // Refuse if user already has an open shift in this branch (one at a time).
+    // Check whether the counter already has an active shift.
     const existing = await prisma.posShift.findFirst({
-        where:  { userId: me.id, branchId, status: "OPEN" },
-        select: { id: true },
+        where:   { counterId: counter.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
+        include: {
+            counter: { include: { tillAccount: { select: { id: true, name: true } } } },
+            branch:  { select: { id: true, name: true } },
+        },
     });
     if (existing) {
-        return NextResponse.json({ error: "You already have an open shift in this branch.", shiftId: existing.id }, { status: 409 });
+        // ── Same cashier returning (e.g. browser crashed / reopened) ─────────
+        // Hand back the running shift instead of blocking. The cashier can
+        // continue billing seamlessly from any browser.
+        if (existing.userId === user!.id && existing.status === "OPEN") {
+            return NextResponse.json({
+                id:                  existing.id,
+                status:              existing.status,
+                openedAt:            existing.openedAt,
+                notes:               existing.notes,
+                resumed:             true,
+                openingFloatPaise:   existing.openingFloatPaise.toString(),
+                carryOverFloatPaise: existing.carryOverFloatPaise.toString(),
+                vaultTopUpPaise:     existing.vaultTopUpPaise.toString(),
+                declaredCashPaise:   null,
+                expectedCashPaise:   null,
+                variancePaise:       null,
+                counter: {
+                    id:   existing.counter.id,
+                    name: existing.counter.name,
+                    tillAccount: { id: existing.counter.tillAccount.id, name: existing.counter.tillAccount.name },
+                },
+                branch: { id: existing.branch.id, name: existing.branch.name },
+            });  // 200 — not created, resumed
+        }
+        // ── Same cashier but shift is AWAITING_HANDOVER ───────────────────────
+        if (existing.userId === user!.id) {
+            return NextResponse.json(
+                { error: "Your shift is awaiting handover. Cancel it first or let the next cashier accept.", shiftId: existing.id },
+                { status: 409 },
+            );
+        }
+        // ── Different cashier — hard block ────────────────────────────────────
+        return NextResponse.json(
+            { error: "This counter is already in use by another cashier.", shiftId: existing.id },
+            { status: 409 },
+        );
     }
+
+    // The existing till balance is the carry-over from the last close.
+    const carryOverPaise = Math.round(Number(counter.tillAccount.balance) * 100);
+    const totalFloatPaise = carryOverPaise + body.vaultTopUpPaise;
 
     try {
         const shift = await prisma.$transaction(async (tx) => {
-            // Post the opening-float Contra ONLY if there's actually a float.
-            let openingContra: { voucherId: number } | null = null;
-            if (body.openingFloatPaise > 0) {
-                const rupees = body.openingFloatPaise / 100;
-                openingContra = await postContra(tx, {
+            // Post opening Contra ONLY for the vault top-up portion.
+            let openingContraId: number | null = null;
+            if (body.vaultTopUpPaise > 0) {
+                const rupees = body.vaultTopUpPaise / 100;
+                const contra = await postContra(tx, {
                     date:      new Date(),
-                    narration: `Shift opening float — ${me.name} @ ${branch.name}`,
-                    userId:    me.id,
+                    narration: `Shift opening top-up — ${counter.name} @ ${branch!.name}`,
+                    userId:    user!.id,
                     lines: [
-                        { accountId: me.tillAccountId!,      type: "DEBIT",  amount: rupees, description: "Opening float (in till)" },
-                        { accountId: branch.vaultAccountId!, type: "CREDIT", amount: rupees, description: "Opening float (from vault)" },
+                        { accountId: counter.tillAccountId,   type: "DEBIT",  amount: rupees, description: "Opening top-up (into counter till)" },
+                        { accountId: branch!.vaultAccountId!, type: "CREDIT", amount: rupees, description: "Opening top-up (from vault)" },
                     ],
                 });
+                openingContraId = contra.voucherId;
             }
 
             return tx.posShift.create({
                 data: {
-                    userId:                 me.id,
+                    userId:                user!.id,
+                    counterId:             counter.id,
                     branchId,
-                    tillAccountId:          me.tillAccountId!,
-                    openedById:             me.id,
-                    openingFloatPaise:      BigInt(body.openingFloatPaise),
-                    openingContraVoucherId: openingContra?.voucherId ?? null,
-                    notes:                  body.notes ?? null,
+                    openedById:            user!.id,
+                    openingFloatPaise:     BigInt(totalFloatPaise),
+                    carryOverFloatPaise:   BigInt(carryOverPaise),
+                    vaultTopUpPaise:       BigInt(body.vaultTopUpPaise),
+                    openingContraVoucherId: openingContraId,
+                    notes:                 body.notes ?? null,
                 },
                 include: {
-                    tillAccount: { select: { id: true, name: true } },
-                    branch:      { select: { id: true, name: true } },
+                    counter: { include: { tillAccount: { select: { id: true, name: true } } } },
+                    branch:  { select: { id: true, name: true } },
                 },
             });
         });
 
+        // Explicit fields only — never spread the Prisma object; BigInt fields
+        // (e.g. counter.defaultFloatPaise) would cause JSON.stringify to throw,
+        // which would return a 500 while the shift is already committed in the DB.
         return NextResponse.json({
-            ...shift,
-            openingFloatPaise: shift.openingFloatPaise.toString(),
-            declaredCashPaise: null,
-            expectedCashPaise: null,
-            variancePaise:     null,
+            id:                  shift.id,
+            status:              shift.status,
+            openedAt:            shift.openedAt,
+            notes:               shift.notes,
+            openingFloatPaise:   shift.openingFloatPaise.toString(),
+            carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
+            vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),
+            declaredCashPaise:   null,
+            expectedCashPaise:   null,
+            variancePaise:       null,
+            counter: {
+                id:   shift.counter.id,
+                name: shift.counter.name,
+                tillAccount: {
+                    id:   shift.counter.tillAccount.id,
+                    name: shift.counter.tillAccount.name,
+                },
+            },
+            branch: {
+                id:   shift.branch.id,
+                name: shift.branch.name,
+            },
         }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to open shift");

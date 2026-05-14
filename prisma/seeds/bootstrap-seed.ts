@@ -813,9 +813,8 @@ async function main() {
     // this name; it would double-count.
 
     // ── Per-branch Vault accounts + wire Branch.vaultAccountId ──────────────
-    // Each branch needs a "Cash – Vault – <Branch>" account under Cash-in-Hand.
-    // This is the receiving end of the shift-close Contra (Till → Vault) and
-    // the source for the opening float Contra (Vault → Till).
+    // Each branch needs a "Cash – Vault – <Branch>" under Cash-in-Hand.
+    // This is where surplus cash lands at end-of-day (closing Contra).
     for (const b of BRANCHES) {
         const vaultName = `Cash – Vault – ${b.name}`;
         await upsertLedger(vaultName, "Cash-in-Hand", "DEBIT");
@@ -831,7 +830,44 @@ async function main() {
         }
     }
 
-    console.log(`      ✓ 28 groups · ~52 GL ledgers + ${BRANCHES.length} branch vaults\n`);
+    // ── Per-branch POS Counters (physical billing stations) ──────────────────
+    // Bootstrap creates one default counter per branch ("Counter 1").
+    // Admins can add more via UI. Each counter has its own till GL account
+    // ("Cash – Counter 1 – <Branch>") so per-counter cash flow is traceable.
+    // Counter tills are NOT personal-user accounts — any cashier can work
+    // a counter. Shortage accountability is via the shift report, not GL.
+    for (const b of BRANCHES) {
+        const counterName = "Counter 1";
+        const tillName    = `Cash – Counter 1 – ${b.name}`;
+        await upsertLedger(tillName, "Cash-in-Hand", "DEBIT");
+        const { rows: tillRows } = await pool.query<{ id: number }>(
+            `SELECT id FROM "Account" WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+            [tillName],
+        );
+        if (!tillRows[0]) continue;
+        const tillId = tillRows[0].id;
+
+        // Upsert the PosCounter row.
+        const { rows: existing } = await pool.query<{ id: number }>(
+            `SELECT id FROM "pos_counters" WHERE "branchId" = $1 AND name = $2 LIMIT 1`,
+            [b.id, counterName],
+        );
+        if (existing[0]) {
+            // Already exists — make sure the till account is wired.
+            await pool.query(
+                `UPDATE "pos_counters" SET "tillAccountId" = $1 WHERE id = $2`,
+                [tillId, existing[0].id],
+            );
+        } else {
+            await pool.query(
+                `INSERT INTO "pos_counters" ("branchId", name, "tillAccountId", "isActive")
+                 VALUES ($1, $2, $3, true)`,
+                [b.id, counterName, tillId],
+            );
+        }
+    }
+
+    console.log(`      ✓ 28 groups · ~54 GL ledgers + ${BRANCHES.length} vaults + ${BRANCHES.length} counters\n`);
 
     // ── Section 5: Admin user ──────────────────────────────────────────
     console.log("[5/7] Admin user");

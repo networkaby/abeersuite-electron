@@ -16,10 +16,11 @@ model Branch {
   invStockLedger  InvStockLedger[]   @relation("InvStockLedgerBranch")
   invProductStock InvProductBranch[]
 
-  // POS — per-branch vault account where shift-close cash handovers land
+  // POS — per-branch vault account where end-of-day surplus lands
   vaultAccountId Int?
-  vaultAccount   Account?   @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
-  posShifts      PosShift[] @relation("PosShiftBranch")
+  vaultAccount   Account?      @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
+  posCounters    PosCounter[]  @relation("BranchCounters")
+  posShifts      PosShift[]    @relation("PosShiftBranch")
 }
 
 model Department {

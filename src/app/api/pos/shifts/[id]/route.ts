@@ -1,8 +1,9 @@
 // GET /api/pos/shifts/[id]
 //
 // Full shift detail — header info, drops list, linked Contras, and the
-// running cash-sales total computed from CASH-method Payment rows in the
-// shift window. Used by the shift detail drawer / page.
+// running cash-sales total computed from CASH-method Payment rows tied
+// to this counter in the shift window. Used by ActiveShiftBar polling,
+// ShiftCloseDialog, and the audit page.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
@@ -23,14 +24,31 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         const shift = await prisma.posShift.findUnique({
             where: { id },
             include: {
-                user:                 { select: { id: true, name: true, email: true } },
-                branch:               { select: { id: true, name: true, vaultAccountId: true } },
-                tillAccount:          { select: { id: true, name: true, balance: true } },
+                user:    { select: { id: true, name: true, email: true } },
+                branch:  { select: { id: true, name: true, vaultAccountId: true } },
+                counter: {
+                    include: { tillAccount: { select: { id: true, name: true, balance: true } } },
+                },
                 openedBy:             { select: { id: true, name: true } },
                 closedBy:             { select: { id: true, name: true } },
                 openingContraVoucher: { select: { id: true, reference: true, date: true } },
                 closingContraVoucher: { select: { id: true, reference: true, date: true } },
                 varianceJournalEntry: { select: { id: true, reference: true, date: true } },
+                handover: {
+                    select: {
+                        id: true, status: true,
+                        declaredByAPaise: true, countedByBPaise: true, carryOverPaise: true,
+                        toUser:  { select: { id: true, name: true } },
+                        toShift: { select: { id: true } },
+                    },
+                },
+                receivedHandover: {
+                    select: {
+                        id: true,
+                        fromShift: { select: { id: true, userId: true, user: { select: { name: true } } } },
+                        declaredByAPaise: true, countedByBPaise: true,
+                    },
+                },
                 drops: {
                     orderBy: { droppedAt: "desc" },
                     include: { droppedBy: { select: { id: true, name: true } } },
@@ -47,8 +65,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "No access to this branch's shifts" }, { status: 403 });
         }
 
-        // Running cash-sales total — sum of CASH-method Payment rows for this
-        // user in the shift window. Excludes cancelled/deleted payments.
+        // Running cash-sales total — CASH Payment rows in this shift window,
+        // scoped to the same counter (via invoices created on the counter shift).
+        // We join via createdById (the cashier) + time window as a proxy.
         const cashEnd = shift.closedAt ?? new Date();
         const cashPayments = await prisma.payment.findMany({
             where: {
@@ -65,15 +84,29 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         return NextResponse.json({
             ...shift,
-            openingFloatPaise: shift.openingFloatPaise.toString(),
-            declaredCashPaise: shift.declaredCashPaise?.toString() ?? null,
-            expectedCashPaise: shift.expectedCashPaise?.toString() ?? null,
-            variancePaise:     shift.variancePaise?.toString() ?? null,
-            cashSalesPaise:    cashSalesPaise.toString(),
-            dropsPaise:        dropsPaise.toString(),
-            // Running expected balance (matches what shift-close will compute).
+            openingFloatPaise:   shift.openingFloatPaise.toString(),
+            carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
+            vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),
+            declaredCashPaise:   shift.declaredCashPaise?.toString()  ?? null,
+            expectedCashPaise:   shift.expectedCashPaise?.toString()  ?? null,
+            variancePaise:       shift.variancePaise?.toString()      ?? null,
+            carryOverNextPaise:  shift.carryOverNextPaise?.toString() ?? null,
+            toVaultPaise:        shift.toVaultPaise?.toString()       ?? null,
+            cashSalesPaise:      cashSalesPaise.toString(),
+            dropsPaise:          dropsPaise.toString(),
             runningExpectedPaise: (shift.openingFloatPaise + cashSalesPaise - dropsPaise).toString(),
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
+            handover: shift.handover ? {
+                ...shift.handover,
+                declaredByAPaise: shift.handover.declaredByAPaise.toString(),
+                countedByBPaise:  shift.handover.countedByBPaise?.toString() ?? null,
+                carryOverPaise:   shift.handover.carryOverPaise.toString(),
+            } : null,
+            receivedHandover: shift.receivedHandover ? {
+                ...shift.receivedHandover,
+                declaredByAPaise: shift.receivedHandover.declaredByAPaise.toString(),
+                countedByBPaise:  shift.receivedHandover.countedByBPaise?.toString() ?? null,
+            } : null,
         });
     } catch (e) {
         return handleApiError(e, "Failed to fetch shift");

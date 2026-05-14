@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { nextRef } from "@/modules/accountancy/lib/balance";
@@ -8,8 +8,9 @@ import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
 import { postPosReceiptJe } from "@/modules/pos/lib/postPosReceiptJe";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
-import { auth } from "@/auth";
+// Note: branch context comes from the cashier's active shift, NOT from the
+// session cookie. This allows multiple browsers / users to bill in parallel
+// from different counters without their active-branch cookie interfering.
 
 // POST /api/pos/sale
 //
@@ -48,28 +49,21 @@ const createSchema = z.object({
     payments:  z.array(paymentSchema).min(1, "At least one payment line required"),
 });
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
     const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
-    const session = await auth();
     const { data, error } = await validateRequest(req, createSchema);
     if (error) return error;
     const body = data;
 
-    let activeBranchId: string;
-    try { activeBranchId = resolveActiveBranchId(req, session); }
-    catch (e) {
-        if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
-        throw e;
-    }
-
     // ── Active shift requirement ──────────────────────────────────────────
-    // Cash receipts need a till to debit. If user has no OPEN shift in this
-    // branch, refuse and let the UI prompt them to open one.
+    // Branch context comes from the shift, not the session cookie.
+    // This lets multiple users bill in parallel from different browsers
+    // without their active-branch cookie interfering.
     const shift = await prisma.posShift.findFirst({
-        where:  { userId: user!.id, branchId: activeBranchId, status: "OPEN" },
-        select: { id: true, tillAccountId: true },
+        where:  { userId: user!.id, status: "OPEN" },
+        select: { id: true, branchId: true, counter: { select: { tillAccountId: true } } },
     });
     if (!shift) {
         return NextResponse.json(
@@ -77,6 +71,8 @@ export async function POST(req: NextRequest) {
             { status: 400 },
         );
     }
+    const tillAccountId  = shift.counter.tillAccountId;
+    const activeBranchId = shift.branchId;
 
     // ── Validate payment lines ────────────────────────────────────────────
     const computedLines = body.lines.map((l) => {
@@ -108,7 +104,7 @@ export async function POST(req: NextRequest) {
     const resolvedPayments: { method: typeof body.payments[number]["method"]; accountId: number; amount: number; reference?: string }[] = [];
     for (const p of body.payments) {
         if (p.method === "CASH") {
-            resolvedPayments.push({ method: "CASH", accountId: shift.tillAccountId, amount: p.amount, reference: p.reference });
+            resolvedPayments.push({ method: "CASH", accountId: tillAccountId, amount: p.amount, reference: p.reference });
         } else {
             if (!p.accountId) {
                 return NextResponse.json(

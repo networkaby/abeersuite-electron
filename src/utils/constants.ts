@@ -13,6 +13,7 @@ import {
     Calculator,
     Network,
     Briefcase,
+    Monitor,
     PhoneCall,
     Search,
     ShoppingCart,
@@ -532,6 +533,7 @@ export const ADMIN_NAV: SettingsNavItem[] = [
     { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "settings:manage" },
     { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "settings:manage" },
     { label: "Posts", href: "/office/admin/posts", icon: Briefcase, permission: "settings:manage" },
+    { label: "POS Counters", href: "/office/admin/counters", icon: Monitor, permission: "settings:manage" },
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [

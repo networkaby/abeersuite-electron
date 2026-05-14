@@ -1,49 +1,62 @@
 // GET /api/pos/shifts/current
 //
-// Returns the current user's OPEN shift in the active branch, or null when
-// they don't have one. PosScreen calls this on mount: if null → show
-// ShiftOpenDialog; if a shift exists → show ActiveShiftBar.
+// Returns the current user's active shift (OPEN or AWAITING_HANDOVER), or null.
+// No branch filter — a cashier should always see their active shift regardless of
+// which branch cookie is set. (Branch filter caused 404 whenever the user switched
+// the branch switcher after opening a shift.)
+// PosScreen calls this on mount:
+//   • OPEN            → show ActiveShiftBar
+//   • AWAITING_HANDOVER → show amber "Handover pending" bar
+//   • null            → check /api/pos/shifts/pending-handover, then ShiftOpenDialog
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { resolveActiveBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
-import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
     const { user, response } = await requireAuth();
     if (response) return response;
 
     try {
-        const session = await auth();
-        let branchId: string;
-        try { branchId = resolveActiveBranchId(req, session); }
-        catch (e) {
-            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
-            throw e;
-        }
-
         const shift = await prisma.posShift.findFirst({
-            where:  { userId: user!.id, branchId, status: "OPEN" },
+            where:   { userId: user!.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
             include: {
-                tillAccount: { select: { id: true, name: true, balance: true } },
-                branch:      { select: { id: true, name: true, vaultAccountId: true } },
-                drops:       { orderBy: { droppedAt: "desc" }, select: { id: true, amountPaise: true, droppedAt: true, notes: true } },
+                counter: {
+                    include: { tillAccount: { select: { id: true, name: true, balance: true } } },
+                },
+                branch:  { select: { id: true, name: true, vaultAccountId: true } },
+                drops:   { orderBy: { droppedAt: "desc" }, select: { id: true, amountPaise: true, droppedAt: true, notes: true } },
+                // Include pending handover so UI can show who B is.
+                handover: {
+                    select: {
+                        id: true,
+                        status: true,
+                        declaredByAPaise: true,
+                        carryOverPaise: true,
+                        toUser: { select: { id: true, name: true } },
+                    },
+                },
             },
             orderBy: { openedAt: "desc" },
         });
 
         if (!shift) return NextResponse.json(null);
 
-        // BigInt is not JSON-serializable — stringify selectively.
         return NextResponse.json({
             ...shift,
-            openingFloatPaise: shift.openingFloatPaise.toString(),
-            declaredCashPaise: shift.declaredCashPaise?.toString() ?? null,
-            expectedCashPaise: shift.expectedCashPaise?.toString() ?? null,
-            variancePaise:     shift.variancePaise?.toString() ?? null,
+            openingFloatPaise:   shift.openingFloatPaise.toString(),
+            carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
+            vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),
+            declaredCashPaise:   shift.declaredCashPaise?.toString()  ?? null,
+            expectedCashPaise:   shift.expectedCashPaise?.toString()  ?? null,
+            variancePaise:       shift.variancePaise?.toString()      ?? null,
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
+            handover: shift.handover ? {
+                ...shift.handover,
+                declaredByAPaise: shift.handover.declaredByAPaise.toString(),
+                carryOverPaise:   shift.handover.carryOverPaise.toString(),
+            } : null,
         });
     } catch (e) {
         return handleApiError(e, "Failed to fetch current shift");

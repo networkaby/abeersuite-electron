@@ -82,7 +82,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     });
     const [liveAvatar, setLiveAvatar] = useState<string | null | undefined>(undefined);
     const [adminOpen, setAdminOpen] = useState(
-        pathname.startsWith("/office/admin/users") || pathname.startsWith("/office/roles") || pathname.startsWith("/office/admin/org-chart") || pathname.startsWith("/office/admin/branches") || pathname.startsWith("/office/admin/departments") || pathname.startsWith("/office/admin/posts")
+        pathname.startsWith("/office/admin/users") || pathname.startsWith("/office/roles") || pathname.startsWith("/office/admin/org-chart") || pathname.startsWith("/office/admin/branches") || pathname.startsWith("/office/admin/departments") || pathname.startsWith("/office/admin/posts") || pathname.startsWith("/office/admin/counters")
     );
     const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/office/settings"));
     const [workspaceOpen, setWorkspaceOpen] = useState<Record<string, boolean>>({

@@ -1,101 +1,157 @@
 # POS (Point of Sale)
 
-> Counter-side sale screen. Search a customer, build a cart of inventory items, take cash / card / cheque / bank-transfer / wallet payment, post the sale to the GL. As of 2026-05-14 the POS runs inside a **shift** lifecycle: each cashier opens a till session with a cash float, bills throughout, drops cash to safe mid-shift, then hands over to manager at close.
+> Counter-side sale screen. Search a customer, build a cart of inventory items, take cash / card / cheque / bank-transfer / wallet payment, post the sale to the GL. POS is organised around **counters** (physical billing stations in a branch) and **shifts** (a cashier's session at one counter).
+
+## Account structure
+
+```
+Cash-in-Hand
+  ├── Cash – Counter 1 – Main Branch   ← POS counter till (per billing station)
+  ├── Cash – Counter 1 – Online Branch ← POS counter till
+  ├── Cash – Vault – Main Branch       ← branch vault (end-of-day surplus)
+  └── Cash – Vault – Online Branch
+```
+
+Personal-user till accounts no longer exist. Tills belong to counters, not people. Shortage accountability is via the shift report, not the GL ledger.
 
 ## URLs
 
 ### UI pages
-- `/office/pos` — the single-page POS register. Full-screen, keyboard-driven (Ctrl+Enter checkout). File: `src/app/(protected)/office/pos/page.tsx` (thin wrapper) + `src/modules/pos/components/PosScreen.tsx` (client component).
-- `/office/pos/shifts` — **NEW (2026-05-14)** shift report. List of shifts with filters (status, branch, user, date range) and variance column. Manager/admin view.
-- `/office/pos/shifts/[id]` — shift detail / audit page. Drops timeline, linked opening + closing Contras, variance JE.
+- `/office/pos` — single-page POS register. File: `src/app/(protected)/office/pos/page.tsx` + `src/modules/pos/components/PosScreen.tsx`.
+- `/office/pos/shifts` — shift report (manager/admin). Columns: counter, user, opening, declared, →vault, variance, status.
+- `/office/pos/shifts/[id]` — shift audit page. Shows carry-over, vault top-up, handover chain, drops, linked Contras + variance JE.
+- `/office/admin/counters` — POS counter management (admin). Create / rename / set default float / activate-deactivate / delete counters per branch. Auto-creates the till GL account under Cash-in-Hand.
 
 ### API routes
-- `GET /api/people?lookup=…` — debounced party search consumed by shared `PartySearchAndCreate` (`src/shared/components/PartySearchAndCreate.tsx`).
-- `GET /api/pos/account-snapshot/[accountId]` — full customer profile (balance, credit limit, turnover, loyalty, recent tickets, warranty alerts, personalised offers).
-- `GET /api/pos/person-snapshot/[id]` — same as above but keyed on `personId` (for company-linked persons).
-- `GET /api/pos/people/search?q=…` — alternate search endpoint (kept for back-compat with older POS calls).
-- `POST /api/pos/sale` — submit the cart. Creates `Invoice` + AR/Revenue JE + **cash-receipt JE** (closes AR) + parallel `InvVoucher` (type=SALE) + stock. Requires an OPEN shift for the cashier in the active branch.
-- **NEW**: `GET /api/pos/shifts/current` — returns the current user's OPEN shift in active branch, or null.
-- **NEW**: `GET /api/pos/shifts` — list shifts (`?branchId=`, `?userId=`, `?status=`, `?from=`, `?to=`). Branch-scoped by default; `branchId=all` needs `pos:shift:view:org`.
-- **NEW**: `POST /api/pos/shifts` — open a shift. Body `{ openingFloatPaise, notes? }`. Posts opening Contra (Vault → Till) when float > 0.
-- **NEW**: `GET /api/pos/shifts/[id]` — shift detail including drops + linked vouchers + live running expected balance.
-- **NEW**: `POST /api/pos/shifts/[id]/drops` — log mid-shift cash drop. Body `{ amountPaise, notes? }`. No GL movement.
-- **NEW**: `PATCH /api/pos/shifts/[id]/close` — close shift. Body `{ declaredCashPaise, notes? }`. Computes variance, posts closing Contra (Till → Vault) + variance JE (Cash Short/Over) if needed.
 
-## Permissions (gate keys)
-- `pos:shift:open` — open own shift (R3 Front Desk, R4 Despatch by default).
-- `pos:shift:close` — close own shift.
+#### Counters
+- `GET /api/pos/counters` — active counters in the active branch with current till balance. Consumed by `ShiftOpenDialog`.
+- `GET /api/pos/counters?scope=all` — every counter in every branch (admin only). Consumed by `/office/admin/counters`.
+- `POST /api/pos/counters` — create a counter. Body: `{ branchId, name, defaultFloatPaise? }`. Auto-creates the till account `Cash – <name> – <branch>` under Cash-in-Hand. Requires `settings:manage`.
+- `PATCH /api/pos/counters/[id]` — rename / change default float / toggle active. Renaming also renames the till GL account. Blocks deactivation if a shift is OPEN or AWAITING_HANDOVER on it. Requires `settings:manage`.
+- `DELETE /api/pos/counters/[id]` — delete a counter. Only allowed when (a) zero shifts ever used it and (b) till balance is zero. Till GL account is preserved for audit. Requires `settings:manage`.
+
+#### Shifts
+- `GET /api/pos/shifts/current` — current user's OPEN or AWAITING_HANDOVER shift in active branch, or null.
+- `GET /api/pos/shifts` — list shifts (`?branchId=`, `?counterId=`, `?userId=`, `?status=`, `?from=`, `?to=`).
+- `POST /api/pos/shifts` — open shift. Body: `{ counterId, vaultTopUpPaise, notes? }`. Posts Contra (Vault → Counter till) only for the top-up portion; carry-over stays.
+- `GET /api/pos/shifts/[id]` — full detail.
+- `POST /api/pos/shifts/[id]/drops` — mid-shift cash drop (log only, no GL).
+- `PATCH /api/pos/shifts/[id]/close` — close shift to vault. Body: `{ declaredCashPaise, carryOverNextPaise?, notes? }`. Posts variance JE + Contra (Counter → Vault) for surplus only.
+
+#### Handover (two-step cashier-to-cashier)
+- `POST /api/pos/shifts/[id]/handover` — A initiates. Body: `{ toUserId, declaredCashPaise, carryOverPaise?, notes? }`. Shift → AWAITING_HANDOVER. **No GL yet.**
+- `DELETE /api/pos/shifts/[id]/handover` — A (or manager) cancels. Shift → OPEN.
+- `GET /api/pos/shifts/pending-handover` — B checks for a PENDING handover addressed to them.
+- `GET /api/pos/shifts/handover-candidates?counterId=` — eligible cashiers B can be (no active shift, has pos:shift:open).
+- `POST /api/pos/handovers/[id]/accept` — B accepts. Body: `{ countedByBPaise, notes? }`. One transaction: variance JE + Contra + close A's shift + open B's shift.
+
+#### Sale
+- `POST /api/pos/sale` — submit cart. Requires OPEN shift. CASH debits `shift.counter.tillAccountId`; non-CASH debits user-picked bank account.
+
+## Permissions
+- `pos:shift:open` — open a shift at a counter (R3 Front Desk, R4 Despatch).
+- `pos:shift:close` — close own shift / initiate handover.
 - `pos:shift:drop` — log mid-shift cash drops.
-- `pos:shift:view:branch` — see all shifts in user's branches (managers/owners).
-- `pos:shift:view:org` — see shifts across all branches (admin / owner).
-- `pos:shift:manage` — force-close a stuck shift, edit drops, override variance, close another user's shift.
-- POS sale itself still goes through `requirePermission(ACCOUNTANCY_VIEW_ORG)` for now (legacy gate; not POS-specific).
+- `pos:shift:view:branch` — see all shifts in user's branches.
+- `pos:shift:view:org` — see shifts across all branches.
+- `pos:shift:manage` — force-close, cancel handover, override variance, close another user's shift.
 
 ## Prisma models
-- `InvVoucher` (file: `prisma/schema/inventory.prisma`) — the receipt; `type = "SALE"`, `journalEntryId` back-links the AR/Revenue JE. `branchId` (since 2026-05-13) ties the voucher to the cashier's active branch.
-- `InvVoucherLine` — one row per cart item; carries qty, rate, tax, discount.
-- `JournalEntry` + `JournalLine` — GL posts (one for AR/Revenue, a second for the cash receipt that closes the AR).
-- `Account` — party ledger (debited then credited) + Sales A/c (credited) + Cash/Bank ledger (debited on receipt).
-- `Payment` — **now actually written by POS sales (2026-05-14)** — one row per payment method line. Links to invoice + journalEntryId for traceability.
-- **NEW** `PosShift` (file: `prisma/schema/pos.prisma`) — cashier till session. Carries `userId`, `branchId`, `tillAccountId` (snapshot), opening float, declared/expected/variance at close, FKs to opening + closing Contra Vouchers + variance JournalEntry.
-- **NEW** `PosCashDrop` — mid-shift safe drops. Log-only, no GL impact.
-- **`User.tillAccountId`** (FK Account) — each cashier's permanent till account. Auto-created by `dummy-users.ts` for R3/R4 demo users; production setup via UI (TODO).
-- **`Branch.vaultAccountId`** (FK Account) — per-branch vault where shift-close handovers land. Auto-created by `bootstrap-seed.ts` for every seeded branch.
+- `PosCounter` (`prisma/schema/pos.prisma`) — physical billing station. Has `tillAccountId` (Account), `defaultFloatPaise`, `branchId`. Unique on `(branchId, name)`.
+- `PosShift` — cashier session. Links `userId`, `counterId`, `branchId`. Status: OPEN → AWAITING_HANDOVER → CLOSED. Carries `carryOverFloatPaise`, `vaultTopUpPaise`, `carryOverNextPaise`, `toVaultPaise`. Self-relation `handoverToShiftId` for audit chain.
+- `PosCashDrop` — mid-shift log. No GL.
+- `PosHandover` — two-step handover record. `fromShiftId`, `toUserId`, `toShiftId` (filled on accept). Status: PENDING → ACCEPTED / CANCELLED. Carries `declaredByAPaise`, `countedByBPaise`, `carryOverPaise`.
+- `Branch.vaultAccountId` — per-branch vault; auto-created by bootstrap seed.
 
 ## Key components
-- `PosScreen` (file: `src/modules/pos/components/PosScreen.tsx`) — the entire POS UI. Now mounts `ActiveShiftBar` at top when shift is open and `ShiftOpenDialog` when no shift exists.
-- **NEW** `ActiveShiftBar` (`src/modules/pos/components/ActiveShiftBar.tsx`) — top strip showing shift #, till, opened time, running cash sales / drops / drawer estimate. Has [Drop to safe] and [Close shift] buttons. Polls `/api/pos/shifts/[id]` every 30 s.
-- **NEW** `ShiftOpenDialog` (`src/modules/pos/components/ShiftOpenDialog.tsx`) — opening float modal.
-- **NEW** `CashDropDialog` (`src/modules/pos/components/CashDropDialog.tsx`) — mid-shift drop modal.
-- **NEW** `ShiftCloseDialog` (`src/modules/pos/components/ShiftCloseDialog.tsx`) — declared-count + variance preview + handover Contra.
-- `PartySearchAndCreate` (`src/shared/components/PartySearchAndCreate.tsx`) — shared party omnibox used by POS.
+- `PosScreen` (`src/modules/pos/components/PosScreen.tsx`) — full POS UI. On mount: checks `/current`, then `/pending-handover`. Shows `ActiveShiftBar` (OPEN), amber bar (AWAITING_HANDOVER), `HandoverAcceptDialog` (pending handover for B), or no-shift banner.
+- `ActiveShiftBar` (`ActiveShiftBar.tsx`) — top strip. OPEN: shows sales/drops/drawer + Drop/Close buttons. AWAITING_HANDOVER: amber strip with Cancel Handover.
+- `ShiftOpenDialog` (`ShiftOpenDialog.tsx`) — counter picker + carry-over balance + vault top-up input.
+- `CashDropDialog` — mid-shift drop.
+- `ShiftCloseDialog` (`ShiftCloseDialog.tsx`) — two tabs: **Close to vault** (carry-over field + to-vault preview) | **Hand to cashier** (cashier picker, GL posts only on acceptance).
+- `HandoverAcceptDialog` (`HandoverAcceptDialog.tsx`) — shown to B. B counts cash, sees discrepancy vs A's declared, accepts to start their shift.
 
-## Library / helpers
-- **NEW** `postPosReceiptJe` (`src/modules/pos/lib/postPosReceiptJe.ts`) — closes AR for a POS invoice by creating Payment rows + a single cash-receipt JE (Dr Till/Bank / Cr AR) + setting `invoice.amountPaid = total`, `status = PAID`.
-- **NEW** `computeExpectedCash` / `computeVariance` / `sumPaise` (`src/modules/pos/lib/shiftMath.ts`) — paise-precision helpers for shift close arithmetic.
-- Consumes `postContra` (`src/modules/accountancy/lib/postContra.ts`) for opening/closing Contra postings. Consumes `postInvoiceJe` (existing) for the AR/Revenue JE.
+## Common workflows
 
-## Common workflows (wiring)
+### Counter float lifecycle (daily)
+```
+Day start:
+  Manager draws ₹2,000 from vault OR counter already has ₹2,000 carry-over
+  → Cashier A opens shift at Counter 1 (top-up Contra posted only if > 0)
+  → A bills through the day (Dr Counter 1 / Cr Revenue on each cash sale)
 
-### Shift lifecycle (NEW 2026-05-14)
-1. **Open shift** — cashier visits `/office/pos`. PosScreen calls `GET /api/pos/shifts/current`; if null, `ShiftOpenDialog` pops automatically (or via "Open shift" button). User enters opening float (default ₹2000) → `POST /api/pos/shifts` → opening Contra (`Cash – Vault – <Branch>` → `Cash – <User>`) posted in one transaction → PosScreen swaps the warning bar for `ActiveShiftBar`.
-2. **Bill** — search customer, add items, hit Ctrl+Enter → checkout dialog → enter cash/UPI/extras → "Save (& Print)" → `POST /api/pos/sale` builds `payments: { method, amount, accountId? }[]` and submits. Server requires an OPEN shift; CASH amount auto-routes to the shift's `tillAccountId`, non-CASH methods route to user-picked bank account (default = first Bank account). Cash-receipt JE closes the AR same transaction.
-3. **Mid-shift drop** — cashier clicks "Drop to safe" → `CashDropDialog` → `POST /api/pos/shifts/[id]/drops`. Log entry only; the till balance in the books is unchanged because the cash is still attributed to the cashier (it just physically lives in the safe).
-4. **Close shift** — at end of shift, cashier clicks "Close shift" → `ShiftCloseDialog` loads live summary (opening + sales − drops = expected) → cashier declares physical count → variance previewed → "Hand over & close" → `PATCH /api/pos/shifts/[id]/close` → closing Contra (`Cash – <User>` → `Cash – Vault – <Branch>`) for the **declared** amount + variance JE (Dr Cash Short / Cr till for shortfall, Dr till / Cr Cash Over for overage) if variance ≠ 0.
+End of day (A closes to vault):
+  A declares ₹15,000 physical
+  Keep in counter: ₹2,000 (defaultFloatPaise)
+  → Variance JE if expected ≠ declared
+  → Contra: Counter 1 → Vault ₹13,000
+  Counter 1 overnight balance: ₹2,000 ✓
 
-### Manager review
-- Visit `/office/pos/shifts` → filter by branch / user / status / date range → row-click → audit detail with drops timeline + opening Contra ref + closing Contra ref + variance JE ref. Open shifts surface in green; closed shifts grey. Variance > ₹50 magnitude triggers a red ⚠ chip.
+Next morning:
+  Counter 1 already has ₹2,000 — no Contra needed to open
+```
+
+### Two-step cashier handover (A 9am–12:30pm, B 12:30pm–7pm)
+```
+12:30pm — A:
+  Opens ShiftCloseDialog → "Hand to cashier" tab
+  Declares ₹8,500, picks B, sets carry-over ₹2,000
+  Clicks "Request handover"
+  → PosHandover created (PENDING), shift → AWAITING_HANDOVER
+  → No GL yet. ActiveShiftBar shows amber "Awaiting B"
+  A logs out.
+
+B logs in → PosScreen:
+  GET /current → null (A's shift is AWAITING, B has no shift)
+  GET /pending-handover → found (PosHandover addressed to B)
+  → HandoverAcceptDialog shows: "A declared ₹8,500 · carry-over ₹2,000"
+  B counts: ₹8,450
+  B clicks "Accept & start shift"
+
+Server (one transaction):
+  Till discrepancy = 8,500 (expected/declared) − 8,450 (B counted) = 50
+  Variance JE: Dr Cash Short ₹50 / Cr Counter 1 ₹50
+  toVault = 8,450 − 2,000 = 6,450
+  Contra: Counter 1 → Vault ₹6,450
+  A's shift → CLOSED, B's shift → OPEN (openingFloat = 8,450)
+
+B sees ActiveShiftBar: "Shift #43 · Counter 1 · ₹8,450"
+B bills 12:30pm–7pm...
+```
+
+### Shortage accountability
+GL entry: Dr Cash Short / Cr Counter 1 (counter's account, not personal).
+Accountability: `/office/pos/shifts` shows variance on A's shift row — who was on when, at which counter.
 
 ## Reusable helpers — DO NOT duplicate
 
-| Helper | File | Purpose | Use when |
-|---|---|---|---|
-| **`postContra(tx, { date, narration, lines, userId })`** | `src/modules/accountancy/lib/postContra.ts` | Atomic create-and-post for a CONTRA Voucher + mirror JournalEntry + Account.balance deltas. | Any system-generated cross-cash-account transfer (shift open/close, future inter-branch transfers, payroll cash handover). |
-| **`postPosReceiptJe(tx, { invoiceId, customerAccountId, payments, ... })`** | `src/modules/pos/lib/postPosReceiptJe.ts` | Settles the AR side of a POS invoice by creating Payment rows + a cash-receipt JE + marking invoice PAID. | Inside `POST /api/pos/sale`. Don't replicate the multi-row receipt construction. |
-| **`computeExpectedCash`, `computeVariance`, `sumPaise`** | `src/modules/pos/lib/shiftMath.ts` | Paise-arithmetic for shift close. | Anywhere expected/variance is computed (shift close API + UI preview). |
+| Helper | File | Purpose |
+|---|---|---|
+| `postContra(tx, { date, narration, lines, userId })` | `src/modules/accountancy/lib/postContra.ts` | Atomic Contra voucher + JE + balance deltas. Used for vault top-up + vault sweep. |
+| `postPosReceiptJe(tx, { invoiceId, ... })` | `src/modules/pos/lib/postPosReceiptJe.ts` | Settles AR on POS cash sales. |
+| `computeExpectedCash`, `computeVariance`, `sumPaise` | `src/modules/pos/lib/shiftMath.ts` | BigInt paise arithmetic for shift close. |
 
-## Recent decisions / gotchas
+## Seeds
+- **Bootstrap** (`bootstrap-seed.ts`) — creates `Cash – Vault – <Branch>` + `Cash – Counter 1 – <Branch>` accounts and one `PosCounter` row per branch. Default float ₹2,000.
+- **Dummy users** (`dummy-users.ts`) — no longer creates till accounts (personal tills dropped). Just creates demo users.
+- **Hard-clean** (`hard-clean.ts`) — `pos_handovers`, `pos_cash_drops`, `pos_shifts` in `TRANSACTION_TABLES`. `pos_counters` is bootstrap data — preserved.
 
-- **POS sales now close AR (2026-05-14)** — previously the route created Invoice with `amountPaid: 0` and only the AR/Revenue JE. The cash collected at the counter was lost from the GL's perspective (it lived as text in `invoice.notes`). Now `postPosReceiptJe` posts a parallel cash-receipt JE that debits the till/bank and credits AR for the full collected amount, marking the invoice PAID. **This is a regression-protected behaviour** — see `docs/completed-and-protected.md`.
-- **Per-cashier till accounts** — each cashier needs `User.tillAccountId` set. R3/R4 demo users get auto-provisioned tills by `dummy-users.ts`. Production cashiers need a one-time admin setup (open their user profile, assign a `Cash – <Name>` account). Without one, `POST /api/pos/shifts` returns 400.
-- **Per-branch vault** — every branch needs `Branch.vaultAccountId` (`Cash – Vault – <Branch>`). Auto-created by bootstrap seed.
-- **PosScreen still has the legacy multi-line payment UI** — current behaviour: CASH auto-routes to till on the server; UPI / Card / Cheque / Bank Transfer / Wallet auto-route to the **first Bank account** on the client. Per-row account picker is a follow-up (plan TODO).
-- **Mid-shift drops don't touch GL** — physically the cash leaves the drawer but books-wise the cashier still owns it. The closing Contra moves the entire till balance at once, including amounts that were physically dropped. Don't add a per-drop Contra — it'd double-count.
-- **Variance accounts** — `Cash Short` (Indirect Expenses, code 6950) and `Cash Over` (Indirect Incomes, code 4950) are seeded by bootstrap. If missing, the close API returns 500 telling you to re-seed.
-- **One open shift per (user, branch)** — `POST /api/pos/shifts` returns 409 if there's already an OPEN shift for the user in the active branch. To open a new shift, close the existing one first (or admin can force-close via `pos:shift:manage`).
-- PosScreen is UX-critical — party search/create logic is centralized in shared `PartySearchAndCreate`. Any future changes must preserve current keyboard flow.
-- `POST /api/pos/sale` is synchronous — long-running for big carts. No queue yet.
+## Gotchas / decisions
+- **Counter till, not user till** — the GL till account belongs to the physical counter. Any cashier can work it. Variance on the GL hits the counter account; human accountability is via the shift report.
+- **No Contra on same-counter handover** — cash never leaves the counter till account when A→B at the same counter. Contra only moves cash to/from vault.
+- **Carry-over float** — `carryOverNextPaise` at close = amount left in counter overnight. `toVaultPaise = declared − carryOverNext`. Opening next shift reads the till balance directly (already non-zero).
+- **Variance is always against the counter till** — Dr Cash Short / Cr Counter (or Dr Counter / Cr Cash Over). Personal payroll deductions are handled by management outside the books.
+- **AWAITING_HANDOVER blocks billing** — POS sale requires `status: "OPEN"` shift. Cashier in AWAITING_HANDOVER state cannot bill.
+- **B must be logged in as themselves** — accept endpoint checks `session.user.id === handover.toUserId`. A cannot accept their own handover (→ 403).
+- **One active shift per counter** — `POST /api/pos/shifts` returns 409 if counter already has OPEN or AWAITING_HANDOVER.
+- **Variance ledgers** — `Cash Short` (6950) and `Cash Over` (4950) seeded by bootstrap. If missing, close API returns 500.
 
 ## Out of scope / deferred
+- Per-row bank account picker for UPI/Card (currently all non-CASH auto-routes to first Bank account).
+- Two-step manager handover with AWAITING_HANDOVER from staff to manager (current handover is cashier-to-cashier).
+- Stuck-shift auto-close cron.
+- Per-shift Z-report print.
+- Float carry-over by counter default already implemented; manager override per-close already supported.
 
-- **Per-row account picker** for non-CASH payment lines in PosScreen (UPI / Card etc. — currently all auto-route to the first Bank account).
-- **Two-step manager handover** — currently staff self-closes. Future: `AWAITING_HANDOVER` interstate; manager "Receive Cash & Confirm" posts the Contra.
-- **Stuck-shift auto-close cron** — alert + admin force-close if shift OPEN > 24h.
-- **Float carry-over** — option to leave a fixed float in drawer between shifts (Contra only the surplus).
-- **Per-shift Z-report print** — printable line-item shift summary.
-- Barcode scanner integration.
-- Layby / hold orders.
-- Cash-drawer / printer hardware control.
-- Per-cashier discount permissions.
-
-_Last updated: 2026-05-14 — multi-staff shift lifecycle (open/drop/close), per-staff tills, per-branch vaults, AR closure on POS cash sales._
+_Last updated: 2026-05-14 — counter-based tills, two-step cashier handover, carry-over float, dropped personal user tills._
