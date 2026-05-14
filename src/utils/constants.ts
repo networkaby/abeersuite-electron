@@ -165,21 +165,21 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     // Repair & Warranty
-    {
-        label: "Repair & Warranty",
-        icon: Wrench,
-        key: "repair",
-        dashboardHref: "/office/repairing",
-        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
-        pathPrefixes: ["/office/repairing"],
-        createActions: [
-            { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
-        ],
-        children: [
-            { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
-            { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
-        ],
-    },
+    // {
+    //     label: "Repair & Warranty",
+    //     icon: Wrench,
+    //     key: "repair",
+    //     dashboardHref: "/office/repairing",
+    //     // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
+    //     pathPrefixes: ["/office/repairing"],
+    //     createActions: [
+    //         { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default" },
+    //     ],
+    //     children: [
+    //         { label: "All Repair", icon: ClipboardList, href: "/office/repairing/tickets", pipelineRef: "default" },
+    //         { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers", permission: "service-centers:view" },
+    //     ],
+    // },
 
 
     // Accountancy
@@ -217,6 +217,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "Daybook", icon: ClipboardList, href: "/office/accountancy/reports/day-book", permission: "finance:voucher:create" },
             { label: "Optional Vouchers", icon: PackageCheck, href: "/office/accountancy/reports/optional-vouchers", permission: "finance:voucher:create" },
+            { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
+            { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
 
             // { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
 
@@ -227,8 +229,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 href: "/office/accountancy/reports",
                 permission: "finance:voucher:create",
                 children: [
-                    { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
-                    { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
+                    // { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
+                    // { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
                     { label: "Trial Balance", icon: Wallet, href: "/office/accountancy/reports/trial-balance" },
                     // { label: "Day Book", icon: ClipboardList, href: "/office/accountancy/reports/day-book" },
                     { label: "Cash Book", icon: Wallet, href: "/office/accountancy/reports/cash-book" },
@@ -286,9 +288,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/vouchers/pos",
         pathPrefixes: ["/vouchers/pos", "/office/pos"],
         children: [
-            { label: "POS Register",  href: "/vouchers/pos/new", icon: ShoppingCart,  permission: "pos:shift:open",         newTab: true },
-            { label: "Sales List",    href: "/vouchers/pos",     icon: ClipboardList, permission: "pos:shift:open" },
-            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock,         permission: "pos:shift:view:branch" },
+            { label: "POS Register", href: "/vouchers/pos/new", icon: ShoppingCart, permission: "pos:shift:open", newTab: true },
+            { label: "Sales List", href: "/vouchers/pos", icon: ClipboardList, permission: "pos:shift:open" },
+            { label: "Shift Reports", href: "/office/pos/shifts", icon: Clock, permission: "pos:shift:view:branch" },
         ],
     },
     // Inventory
@@ -369,149 +371,149 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     // CRM
-    {
-        label: "CRM",
-        icon: Network,
-        key: "crm",
-        dashboardHref: "/office/crm",
-        pathPrefixes: ["/office/crm"],
-        createActions: [
-            { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
-        ],
-        children: [
-            { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
-        ],
-    },
+    // {
+    //     label: "CRM",
+    //     icon: Network,
+    //     key: "crm",
+    //     dashboardHref: "/office/crm",
+    //     pathPrefixes: ["/office/crm"],
+    //     createActions: [
+    //         { label: "Lead +", subtitle: "Create a new lead", icon: Network, variant: "default", href: "/office/crm/leads/new", permission: "crm:manage" },
+    //     ],
+    //     children: [
+    //         { label: "Leads", icon: ClipboardList, href: "/office/crm/leads", permission: "crm:view" },
+    //     ],
+    // },
     // E-Commerce
-    {
-        label: "E-Commerce",
-        icon: ShoppingCart,
-        key: "e-commerce",
-        dashboardHref: "/office/ecommerce",
-        pathPrefixes: ["/office/ecommerce"],
-        children: [
-            // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
-            { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
-            { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
-            { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
-            { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
-        ],
-    },
+    // {
+    //     label: "E-Commerce",
+    //     icon: ShoppingCart,
+    //     key: "e-commerce",
+    //     dashboardHref: "/office/ecommerce",
+    //     pathPrefixes: ["/office/ecommerce"],
+    //     children: [
+    //         // { label: "Dashboard", icon: ChartArea, href: "/office/ecommerce", permission: "ecommerce:manage" },
+    //         { label: "Orders", icon: ClipboardList, href: "/office/ecommerce/orders", permission: "ecommerce:manage" },
+    //         { label: "Products", icon: Box, href: "/office/ecommerce/products", permission: "ecommerce:manage" },
+    //         { label: "Categories", icon: Layers, href: "/office/ecommerce/categories", permission: "ecommerce:manage" },
+    //         { label: "Coupons", icon: BadgePercent, href: "/office/ecommerce/coupons", permission: "ecommerce:manage" },
+    //     ],
+    // },
 
 
     // HRM
-    {
-        label: "HRM",
-        icon: UserCog,
-        key: "hrm",
-        dashboardHref: "/office/roadmap/hrm",
-        pathPrefixes: ["/office/roadmap/hrm"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/hrm" },
-            { label: "Staff directory", icon: Users, href: "/office/roadmap/hrm/directory" },
-            { label: "Attendance", icon: Clock, href: "/office/roadmap/hrm/attendance" },
-            { label: "Leave", icon: Calendar, href: "/office/roadmap/hrm/leave" },
-            { label: "Payroll", icon: Wallet, href: "/office/roadmap/hrm/payroll" },
-        ],
-    },
+    // {
+    //     label: "HRM",
+    //     icon: UserCog,
+    //     key: "hrm",
+    //     dashboardHref: "/office/roadmap/hrm",
+    //     pathPrefixes: ["/office/roadmap/hrm"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/hrm" },
+    //         { label: "Staff directory", icon: Users, href: "/office/roadmap/hrm/directory" },
+    //         { label: "Attendance", icon: Clock, href: "/office/roadmap/hrm/attendance" },
+    //         { label: "Leave", icon: Calendar, href: "/office/roadmap/hrm/leave" },
+    //         { label: "Payroll", icon: Wallet, href: "/office/roadmap/hrm/payroll" },
+    //     ],
+    // },
     // Delivery
-    {
-        label: "Delivery",
-        icon: Truck,
-        key: "delivery",
-        dashboardHref: "/office/roadmap/delivery",
-        pathPrefixes: ["/office/roadmap/delivery"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/delivery" },
-            { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
-            { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
-            { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
-        ],
-    },
+    // {
+    //     label: "Delivery",
+    //     icon: Truck,
+    //     key: "delivery",
+    //     dashboardHref: "/office/roadmap/delivery",
+    //     pathPrefixes: ["/office/roadmap/delivery"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/delivery" },
+    //         { label: "Shipments", icon: Package, href: "/office/roadmap/delivery/shipments" },
+    //         { label: "Couriers", icon: Building2, href: "/office/roadmap/delivery/couriers" },
+    //         { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
+    //     ],
+    // },
     // Field Service
-    {
-        label: "Field Service",
-        icon: MapPin,
-        key: "field-service",
-        dashboardHref: "/office/roadmap/field-service",
-        pathPrefixes: ["/office/roadmap/field-service"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/field-service" },
-            { label: "Jobs", icon: Wrench, href: "/office/roadmap/field-service/jobs" },
-            { label: "Schedule", icon: Calendar, href: "/office/roadmap/field-service/schedule" },
-            { label: "Van stock", icon: Box, href: "/office/roadmap/field-service/van-stock" },
-        ],
-    },
+    // {
+    //     label: "Field Service",
+    //     icon: MapPin,
+    //     key: "field-service",
+    //     dashboardHref: "/office/roadmap/field-service",
+    //     pathPrefixes: ["/office/roadmap/field-service"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/field-service" },
+    //         { label: "Jobs", icon: Wrench, href: "/office/roadmap/field-service/jobs" },
+    //         { label: "Schedule", icon: Calendar, href: "/office/roadmap/field-service/schedule" },
+    //         { label: "Van stock", icon: Box, href: "/office/roadmap/field-service/van-stock" },
+    //     ],
+    // },
     // HelpDesk
-    {
-        label: "HelpDesk",
-        icon: HelpCircle,
-        key: "helpdesk",
-        dashboardHref: "/office/roadmap/helpdesk",
-        pathPrefixes: ["/office/roadmap/helpdesk"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/helpdesk" },
-            { label: "Queues", icon: Inbox, href: "/office/roadmap/helpdesk/queues" },
-            { label: "Knowledge base", icon: BookOpen, href: "/office/roadmap/helpdesk/knowledge" },
-            { label: "SLAs", icon: Timer, href: "/office/roadmap/helpdesk/slas" },
-        ],
-    },
+    // {
+    //     label: "HelpDesk",
+    //     icon: HelpCircle,
+    //     key: "helpdesk",
+    //     dashboardHref: "/office/roadmap/helpdesk",
+    //     pathPrefixes: ["/office/roadmap/helpdesk"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/helpdesk" },
+    //         { label: "Queues", icon: Inbox, href: "/office/roadmap/helpdesk/queues" },
+    //         { label: "Knowledge base", icon: BookOpen, href: "/office/roadmap/helpdesk/knowledge" },
+    //         { label: "SLAs", icon: Timer, href: "/office/roadmap/helpdesk/slas" },
+    //     ],
+    // },
     // Projects
-    {
-        label: "Projects",
-        icon: Briefcase,
-        key: "projects",
-        dashboardHref: "/office/roadmap/projects",
-        pathPrefixes: ["/office/roadmap/projects"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/projects" },
-            { label: "Active", icon: PlayCircle, href: "/office/roadmap/projects/active" },
-            { label: "Tasks", icon: FolderKanban, href: "/office/roadmap/projects/tasks" },
-            { label: "Time log", icon: ClipboardList, href: "/office/roadmap/projects/time" },
-        ],
-    },
+    // {
+    //     label: "Projects",
+    //     icon: Briefcase,
+    //     key: "projects",
+    //     dashboardHref: "/office/roadmap/projects",
+    //     pathPrefixes: ["/office/roadmap/projects"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/projects" },
+    //         { label: "Active", icon: PlayCircle, href: "/office/roadmap/projects/active" },
+    //         { label: "Tasks", icon: FolderKanban, href: "/office/roadmap/projects/tasks" },
+    //         { label: "Time log", icon: ClipboardList, href: "/office/roadmap/projects/time" },
+    //     ],
+    // },
     // Intelligence
-    {
-        label: "Intelligence",
-        icon: ChartArea,
-        key: "intelligence",
-        dashboardHref: "/office/roadmap/intelligence",
-        pathPrefixes: ["/office/roadmap/intelligence"],
-        children: [
-            // { label: "Overview", icon: LayoutDashboard, href: "/office/roadmap/intelligence" },
-            { label: "Dashboards", icon: BarChart2, href: "/office/roadmap/intelligence/dashboards" },
-            { label: "Ticket insights", icon: ClipboardList, href: "/office/roadmap/intelligence/tickets" },
-            { label: "Exports", icon: Download, href: "/office/roadmap/intelligence/exports" },
-        ],
-    },
+    // {
+    //     label: "Intelligence",
+    //     icon: ChartArea,
+    //     key: "intelligence",
+    //     dashboardHref: "/office/roadmap/intelligence",
+    //     pathPrefixes: ["/office/roadmap/intelligence"],
+    //     children: [
+    //         // { label: "Overview", icon: LayoutDashboard, href: "/office/roadmap/intelligence" },
+    //         { label: "Dashboards", icon: BarChart2, href: "/office/roadmap/intelligence/dashboards" },
+    //         { label: "Ticket insights", icon: ClipboardList, href: "/office/roadmap/intelligence/tickets" },
+    //         { label: "Exports", icon: Download, href: "/office/roadmap/intelligence/exports" },
+    //     ],
+    // },
     // Administration
-    {
-        label: "Administration",
-        icon: Settings,
-        key: "administration",
-        dashboardHref: "/office/roadmap/administration",
-        pathPrefixes: ["/office/roadmap/administration"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/administration" },
-            { label: "Audit log", icon: ScrollText, href: "/office/roadmap/administration/audit" },
-            { label: "Policies", icon: ShieldCheck, href: "/office/roadmap/administration/policies" },
-            { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
-        ],
-    },
+    // {
+    //     label: "Administration",
+    //     icon: Settings,
+    //     key: "administration",
+    //     dashboardHref: "/office/roadmap/administration",
+    //     pathPrefixes: ["/office/roadmap/administration"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/administration" },
+    //         { label: "Audit log", icon: ScrollText, href: "/office/roadmap/administration/audit" },
+    //         { label: "Policies", icon: ShieldCheck, href: "/office/roadmap/administration/policies" },
+    //         { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
+    //     ],
+    // },
     // Retention
-    {
-        label: "Retention",
-        icon: TicketPercent,
-        key: "retention",
-        dashboardHref: "/office/roadmap/retention",
-        pathPrefixes: ["/office/roadmap/retention"],
-        children: [
-            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
-            { label: "Coupon programs", icon: BadgePercent, href: "/office/roadmap/retention/coupons" },
-            { label: "Loyalty", icon: Gift, href: "/office/roadmap/retention/loyalty" },
-            { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
-        ],
-    },
+    // {
+    //     label: "Retention",
+    //     icon: TicketPercent,
+    //     key: "retention",
+    //     dashboardHref: "/office/roadmap/retention",
+    //     pathPrefixes: ["/office/roadmap/retention"],
+    //     children: [
+    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
+    //         { label: "Coupon programs", icon: BadgePercent, href: "/office/roadmap/retention/coupons" },
+    //         { label: "Loyalty", icon: Gift, href: "/office/roadmap/retention/loyalty" },
+    //         { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
+    //     ],
+    // },
     // Pricing Strategy
     {
         label: "Pricing Strategy",
@@ -527,19 +529,19 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
     // Complience
-    {
-        label: "Complience",
-        icon: ClipboardList,
-        key: "complience",
-        dashboardHref: "/office/accountancy/reports/gst",
-        pathPrefixes: ["/office/complience"],
-        children: [
-            { label: "Net GST Liability", icon: ClipboardList, href: "/office/accountancy/reports/gst/liability" },
-            { label: "Outward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/outward-supplies" },
-            { label: "Inward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/inward-supplies" },
-            { label: "HSN Summary", icon: ClipboardList, href: "/office/accountancy/reports/gst/hsn-summary" },
-        ]
-    },
+    // {
+    //     label: "Complience",
+    //     icon: ClipboardList,
+    //     key: "complience",
+    //     dashboardHref: "/office/accountancy/reports/gst",
+    //     pathPrefixes: ["/office/complience"],
+    //     children: [
+    //         { label: "Net GST Liability", icon: ClipboardList, href: "/office/accountancy/reports/gst/liability" },
+    //         { label: "Outward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/outward-supplies" },
+    //         { label: "Inward Supplies", icon: ClipboardList, href: "/office/accountancy/reports/gst/inward-supplies" },
+    //         { label: "HSN Summary", icon: ClipboardList, href: "/office/accountancy/reports/gst/hsn-summary" },
+    //     ]
+    // },
 ];
 
 export const ADMIN_NAV: SettingsNavItem[] = [
