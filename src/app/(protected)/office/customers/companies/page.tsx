@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import Link from "next/link";
 import {
-    Search, Plus, Building2, Phone, MapPin,
+    Building2, Phone, MapPin,
     User, Smartphone, ExternalLink, Pencil, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,7 +30,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { EntityListPanel } from "@/shared/components/EntityListPanel";
+import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 
 interface CompanyListItem {
     id: number;
@@ -68,7 +69,7 @@ interface CompanyDetail {
     customers: { id: number; customer: { id: number; name: string; phone: string | null } }[];
 }
 
-type Tab = "contacts" | "devices";
+type Tab = "contacts" | "devices" | "transactions";
 
 function initials(name: string) {
     return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
@@ -90,6 +91,8 @@ export default function CompaniesPage() {
     const [detail, setDetail] = useState<CompanyDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [tab, setTab] = useState<Tab>("contacts");
+    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    const [txLoading, setTxLoading] = useState(false);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
@@ -113,9 +116,11 @@ export default function CompaniesPage() {
     useEffect(() => {
         if (!selectedId) {
             setDetail(null);
+            setTransactions(null);
             return;
         }
         setDetailLoading(true);
+        setTransactions(null);
         axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
@@ -124,6 +129,17 @@ export default function CompaniesPage() {
             .catch(() => toast.error("Failed to load company"))
             .finally(() => setDetailLoading(false));
     }, [selectedId]);
+
+    const handleTabChange = (next: Tab) => {
+        setTab(next);
+        if (next === "transactions" && !transactions && selectedId) {
+            setTxLoading(true);
+            axios.get<CustomerTransactions>(`/api/companies/${selectedId}/transactions`)
+                .then((r) => setTransactions(r.data))
+                .catch(() => toast.error("Failed to load transactions"))
+                .finally(() => setTxLoading(false));
+        }
+    };
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -195,66 +211,41 @@ export default function CompaniesPage() {
         : companies;
 
     return (
-        <div className="-m-8 flex h-screen">
-            <aside className="flex w-80 shrink-0 flex-col border-r bg-card">
-                <div className="flex items-center justify-between border-b px-4 py-3">
-                    <div className="flex items-center gap-2">
-                        <Building2 size={16} className="text-primary" />
-                        <span className="text-sm font-semibold">Companies</span>
-                        <Badge variant="outline">{companies.length}</Badge>
-                    </div>
-                    <Button type="button" size="sm" onClick={() => setShowCreate(true)}>
-                        <Plus size={13} /> Add
+        <div className="-m-8 flex h-screen overflow-hidden bg-card">
+            <EntityListPanel
+                title="Companies"
+                icon={<Building2 size={16} className="text-primary" />}
+                count={companies.length}
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search name, phone, reg…"
+                onAdd={() => setShowCreate(true)}
+                isEmpty={filtered.length === 0}
+                emptyMessage={search ? "No matches" : "No companies yet"}
+            >
+                {filtered.map((company) => (
+                    <Button
+                        key={company.id}
+                        type="button"
+                        variant="ghost"
+                        className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${selectedId === company.id ? "bg-muted" : ""}`}
+                        onClick={() => setSelectedId(company.id)}
+                    >
+                        <div className="flex w-full items-center gap-3 text-left">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                {initials(company.name)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">{company.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
+                            </div>
+                            {company._count.customers > 0 && (
+                                <span className="text-xs text-muted-foreground">{company._count.customers}c</span>
+                            )}
+                        </div>
                     </Button>
-                </div>
-
-                <div className="border-b p-3">
-                    <div className="relative">
-                        <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search name, phone, reg…"
-                            className="pl-9"
-                        />
-                    </div>
-                </div>
-
-                < ScrollArea className="flex-1 overflow-y-auto">
-                    <div className="flex-1 overflow-y-auto">
-                        {filtered.length === 0 ? (
-                            <p className="py-8 text-center text-xs text-muted-foreground">
-                                {search ? "No matches" : "No companies yet"}
-                            </p>
-                        ) : (
-                            filtered.map((company) => (
-                                <Button
-                                    key={company.id}
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
-                                    onClick={() => setSelectedId(company.id)}
-                                >
-                                    <div className="flex w-full items-center gap-3 text-left">
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                            {initials(company.name)}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-medium">{company.name}</p>
-                                            <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
-                                        </div>
-                                        {company._count.customers > 0 && (
-                                            <span className="text-xs text-muted-foreground">{company._count.customers}c</span>
-                                        )}
-                                    </div>
-                                </Button>
-                            ))
-                        )}
-                    </div>
-                    <ScrollBar orientation="vertical" />
-                </ScrollArea>
-            </aside>
+                ))}
+            </EntityListPanel>
 
             <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
                 {!selectedId && (
@@ -311,9 +302,7 @@ export default function CompaniesPage() {
                                 <div className="flex items-center gap-2 shrink-0">
                                     {editing ? (
                                         <>
-                                            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>
-                                                Cancel
-                                            </Button>
+                                            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
                                             <Button type="button" size="sm" onClick={saveEdit} disabled={editSaving}>
                                                 {editSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
                                             </Button>
@@ -336,19 +325,19 @@ export default function CompaniesPage() {
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <Badge variant="outline"><User size={11} /> {detail.customers.length} contact{detail.customers.length !== 1 ? "s" : ""}</Badge>
                                 <Badge variant="outline"><Smartphone size={11} /> {detail.devices.length} device{detail.devices.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline">{detail.devices.flatMap((device) => device.tickets).length} ticket{detail.devices.flatMap((device) => device.tickets).length !== 1 ? "s" : ""}</Badge>
+                                <Badge variant="outline">{detail.devices.flatMap((d) => d.tickets).length} ticket{detail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
                             </div>
                         </div>
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["contacts", "devices"] as Tab[]).map((item) => (
+                                {(["contacts", "devices", "transactions"] as Tab[]).map((item) => (
                                     <Button
                                         key={item}
                                         type="button"
                                         size="sm"
                                         variant={tab === item ? "default" : "ghost"}
-                                        onClick={() => setTab(item)}
+                                        onClick={() => handleTabChange(item)}
                                     >
                                         {item}
                                     </Button>
@@ -374,9 +363,6 @@ export default function CompaniesPage() {
                                                             {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
                                                         </div>
                                                     </div>
-                                                    {/* <Button asChild variant="link" size="sm">
-                                                        <Link href={`/office/customers/${companyContact.customer.id}`}>View</Link>
-                                                    </Button>  // breaking*/}
                                                 </CardContent>
                                             </Card>
                                         ))}
@@ -427,6 +413,16 @@ export default function CompaniesPage() {
                                     </Card>
                                 )
                             )}
+
+                            {tab === "transactions" && (
+                                txLoading ? (
+                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
+                                    <EmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                ) : (
+                                    <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
+                                )
+                            )}
                         </div>
                     </>
                 )}
@@ -468,12 +464,8 @@ export default function CompaniesPage() {
                             <Input value={form.address} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} />
                         </div>
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={saving}>
-                                {saving ? "Creating…" : "Create"}
-                            </Button>
+                            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                            <Button type="submit" disabled={saving}>{saving ? "Creating…" : "Create"}</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>

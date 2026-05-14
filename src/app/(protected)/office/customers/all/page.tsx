@@ -8,7 +8,6 @@ import {
     Loader2,
     MapPin,
     Phone,
-    Search,
     Smartphone,
     User,
 } from "lucide-react";
@@ -16,11 +15,11 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { EntityListPanel } from "@/shared/components/EntityListPanel";
+import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 
 type PersonRow = {
     id: number;
@@ -63,8 +62,8 @@ type CompanyDetail = {
 };
 
 type SelectedItem = { kind: "person" | "company"; id: number };
-type PersonTab = "tickets" | "devices" | "companies";
-type CompanyTab = "contacts" | "devices";
+type PersonTab = "tickets" | "devices" | "companies" | "transactions";
+type CompanyTab = "contacts" | "devices" | "transactions";
 
 type Ticket = {
     id: number;
@@ -103,6 +102,8 @@ export default function AllCustomersPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [personTab, setPersonTab] = useState<PersonTab>("tickets");
     const [companyTab, setCompanyTab] = useState<CompanyTab>("contacts");
+    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    const [txLoading, setTxLoading] = useState(false);
 
     useEffect(() => {
         axios.get<PersonRow[]>("/api/people").then((res) => setPeople(res.data)).catch(() => setPeople([]));
@@ -114,6 +115,7 @@ export default function AllCustomersPage() {
             const id = window.setTimeout(() => {
                 setPersonDetail(null);
                 setCompanyDetail(null);
+                setTransactions(null);
                 setDetailLoading(false);
             }, 0);
             return () => window.clearTimeout(id);
@@ -123,9 +125,8 @@ export default function AllCustomersPage() {
         queueMicrotask(() => {
             if (cancelled) return;
             setDetailLoading(true);
-            const finishLoading = () => {
-                if (!cancelled) setDetailLoading(false);
-            };
+            setTransactions(null);
+            const finishLoading = () => { if (!cancelled) setDetailLoading(false); };
 
             if (selected.kind === "person") {
                 axios
@@ -136,11 +137,7 @@ export default function AllCustomersPage() {
                         setCompanyDetail(null);
                         setPersonTab("tickets");
                     })
-                    .catch(() => {
-                        if (cancelled) return;
-                        setPersonDetail(null);
-                        setCompanyDetail(null);
-                    })
+                    .catch(() => { if (cancelled) return; setPersonDetail(null); setCompanyDetail(null); })
                     .finally(finishLoading);
                 return;
             }
@@ -153,23 +150,39 @@ export default function AllCustomersPage() {
                     setPersonDetail(null);
                     setCompanyTab("contacts");
                 })
-                .catch(() => {
-                    if (cancelled) return;
-                    setCompanyDetail(null);
-                    setPersonDetail(null);
-                })
+                .catch(() => { if (cancelled) return; setCompanyDetail(null); setPersonDetail(null); })
                 .finally(finishLoading);
         });
 
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, [selected]);
+
+    const handlePersonTabChange = (next: PersonTab) => {
+        setPersonTab(next);
+        if (next === "transactions" && !transactions && selected) {
+            setTxLoading(true);
+            axios.get<CustomerTransactions>(`/api/people/${selected.id}/transactions`)
+                .then((r) => setTransactions(r.data))
+                .catch(() => {})
+                .finally(() => setTxLoading(false));
+        }
+    };
+
+    const handleCompanyTabChange = (next: CompanyTab) => {
+        setCompanyTab(next);
+        if (next === "transactions" && !transactions && selected) {
+            setTxLoading(true);
+            axios.get<CustomerTransactions>(`/api/companies/${selected.id}/transactions`)
+                .then((r) => setTransactions(r.data))
+                .catch(() => {})
+                .finally(() => setTxLoading(false));
+        }
+    };
 
     const merged = useMemo<CombinedListItem[]>(
         () => [
-            ...people.map((person) => ({ kind: "person" as const, id: person.id, name: person.name, phone: person.phone })),
-            ...companies.map((company) => ({ kind: "company" as const, id: company.id, name: company.name, phone: company.phone })),
+            ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone })),
+            ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone })),
         ],
         [people, companies]
     );
@@ -193,67 +206,45 @@ export default function AllCustomersPage() {
         : [];
 
     return (
-        <div className="-m-8 flex h-screen">
-            <aside className="flex w-80 shrink-0 flex-col border-r bg-card">
-                <div className="flex items-center justify-between border-b px-4 py-3">
-                    <div className="flex items-center gap-2">
-                        <User size={16} className="text-primary" />
-                        <span className="text-sm font-semibold">All Customers</span>
-                        <Badge variant="outline">{people.length} + {companies.length} = {people.length + companies.length}</Badge>
-                    </div>
-                </div>
-
-                <div className="border-b p-3">
-                    <div className="relative">
-                        <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search name or phone..."
-                            className="pl-9"
-                        />
-                    </div>
-                </div>
-
-                < ScrollArea className="flex-1 overflow-y-auto">
-                    <div className="flex-1 overflow-y-auto">
-                        {filtered.length === 0 ? (
-                            <p className="py-8 text-center text-xs text-muted-foreground">
-                                {search ? "No matches" : "No customers yet"}
-                            </p>
-                        ) : (
-                            filtered.map((item) => {
-                                const Icon = item.kind === "person" ? User : Building2;
-                                const isActive = selected?.kind === item.kind && selected.id === item.id;
-                                return (
-                                    <Button
-                                        key={`${item.kind}-${item.id}`}
-                                        type="button"
-                                        variant="ghost"
-                                        className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${isActive ? "bg-muted" : ""}`}
-                                        onClick={() => setSelected({ kind: item.kind, id: item.id })}
-                                    >
-                                        <div className="flex w-full items-center gap-3 text-left">
-                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                                {initials(item.name)}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-medium">{item.name}</p>
-                                                <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
-                                            </div>
-                                            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                                <Icon size={10} className="mr-1" />
-                                                {item.kind === "person" ? "Person" : "Company"}
-                                            </Badge>
-                                        </div>
-                                    </Button>
-                                );
-                            })
-                        )}
-                    </div>
-                </ScrollArea>
-            </aside>
+        <div className="-m-8 flex h-screen overflow-hidden bg-card">
+            <EntityListPanel
+                title="All Customers"
+                icon={<User size={15} className="text-primary" />}
+                count={people.length + companies.length}
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search name or phone…"
+                isEmpty={filtered.length === 0}
+                emptyMessage={search ? "No matches" : "No customers yet"}
+            >
+                {filtered.map((item) => {
+                    const Icon = item.kind === "person" ? User : Building2;
+                    const isActive = selected?.kind === item.kind && selected.id === item.id;
+                    return (
+                        <Button
+                            key={`${item.kind}-${item.id}`}
+                            type="button"
+                            variant="ghost"
+                            className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${isActive ? "bg-muted" : ""}`}
+                            onClick={() => setSelected({ kind: item.kind, id: item.id })}
+                        >
+                            <div className="flex w-full items-center gap-3 text-left">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                    {initials(item.name)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{item.name}</p>
+                                    <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
+                                </div>
+                                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                    <Icon size={10} className="mr-1" />
+                                    {item.kind === "person" ? "Person" : "Company"}
+                                </Badge>
+                            </div>
+                        </Button>
+                    );
+                })}
+            </EntityListPanel>
 
             <section className="flex flex-1 bg-muted/30 p-6">
                 {!selected && (
@@ -301,8 +292,8 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["tickets", "devices", "companies"] as PersonTab[]).map((item) => (
-                                    <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => setPersonTab(item)}>
+                                {(["tickets", "devices", "companies", "transactions"] as PersonTab[]).map((item) => (
+                                    <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
                                         {item}
                                     </Button>
                                 ))}
@@ -394,6 +385,16 @@ export default function AllCustomersPage() {
                                     </div>
                                 )
                             )}
+
+                            {personTab === "transactions" && (
+                                txLoading ? (
+                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
+                                    <div className="py-10 text-center text-sm text-muted-foreground">No transactions found</div>
+                                ) : (
+                                    <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
+                                )
+                            )}
                         </div>
                     </div>
                 )}
@@ -426,14 +427,14 @@ export default function AllCustomersPage() {
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <Badge variant="outline"><User size={11} /> {companyDetail.customers.length} contact{companyDetail.customers.length !== 1 ? "s" : ""}</Badge>
                                 <Badge variant="outline"><Smartphone size={11} /> {companyDetail.devices.length} device{companyDetail.devices.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline">{companyDetail.devices.flatMap((device) => device.tickets).length} ticket{companyDetail.devices.flatMap((device) => device.tickets).length !== 1 ? "s" : ""}</Badge>
+                                <Badge variant="outline">{companyDetail.devices.flatMap((d) => d.tickets).length} ticket{companyDetail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
                             </div>
                         </div>
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["contacts", "devices"] as CompanyTab[]).map((item) => (
-                                    <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => setCompanyTab(item)}>
+                                {(["contacts", "devices", "transactions"] as CompanyTab[]).map((item) => (
+                                    <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
                                         {item}
                                     </Button>
                                 ))}
@@ -498,6 +499,16 @@ export default function AllCustomersPage() {
                                             </Table>
                                         </CardContent>
                                     </Card>
+                                )
+                            )}
+
+                            {companyTab === "transactions" && (
+                                txLoading ? (
+                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
+                                    <div className="py-10 text-center text-sm text-muted-foreground">No transactions found</div>
+                                ) : (
+                                    <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
                                 )
                             )}
                         </div>

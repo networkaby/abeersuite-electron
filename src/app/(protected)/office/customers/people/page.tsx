@@ -32,6 +32,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
+import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
 interface CustomerListItem {
     id: number;
     name: string;
@@ -66,7 +67,7 @@ interface CustomerDetail {
     companies: { id: number; company: { id: number; name: string; phone: string | null } }[];
 }
 
-type Tab = "tickets" | "devices" | "companies";
+type Tab = "tickets" | "devices" | "companies" | "transactions";
 
 function initials(name: string) {
     return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
@@ -96,6 +97,8 @@ export default function CustomersPage() {
     const [editing, setEditing] = useState(false);
     const [editForm, setEditForm] = useState({ name: "", phone: "", email: "", address: "" });
     const [editSaving, setEditSaving] = useState(false);
+    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    const [txLoading, setTxLoading] = useState(false);
 
     const loadList = useCallback(async () => {
         try {
@@ -114,6 +117,7 @@ export default function CustomersPage() {
             return;
         }
         setDetailLoading(true);
+        setTransactions(null);
         axios.get<CustomerDetail>(`/api/people/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
@@ -122,6 +126,17 @@ export default function CustomersPage() {
             .catch(() => toast.error("Failed to load customer"))
             .finally(() => setDetailLoading(false));
     }, [selectedId]);
+
+    const handleTabChange = (next: Tab) => {
+        setTab(next);
+        if (next === "transactions" && !transactions && selectedId) {
+            setTxLoading(true);
+            axios.get<CustomerTransactions>(`/api/people/${selectedId}/transactions`)
+                .then((r) => setTransactions(r.data))
+                .catch(() => toast.error("Failed to load transactions"))
+                .finally(() => setTxLoading(false));
+        }
+    };
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -312,13 +327,13 @@ export default function CustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["tickets", "devices", "companies"] as Tab[]).map((item) => (
+                                {(["tickets", "devices", "companies", "transactions"] as Tab[]).map((item) => (
                                     <Button
                                         key={item}
                                         type="button"
                                         size="sm"
                                         variant={tab === item ? "default" : "ghost"}
-                                        onClick={() => setTab(item)}
+                                        onClick={() => handleTabChange(item)}
                                     >
                                         {item}
                                     </Button>
@@ -420,6 +435,16 @@ export default function CustomersPage() {
                                     </div>
                                 )
                             )}
+
+                            {tab === "transactions" && (
+                                txLoading ? (
+                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
+                                    <EmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                ) : (
+                                    <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
+                                )
+                            )}
                         </div>
                     </>
                 )}
@@ -462,3 +487,4 @@ export default function CustomersPage() {
         </div>
     );
 }
+
