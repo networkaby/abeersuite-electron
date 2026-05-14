@@ -200,10 +200,11 @@ model InvProduct {
   brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
-  orderLines   ShopOrderLine[]
-  voucherLines InvVoucherLine[]
-  stockEntries InvStockLedger[]
-  branchStocks InvProductBranch[]
+  orderLines    ShopOrderLine[]
+  voucherLines  InvVoucherLine[]
+  invoiceLines  InvoiceLine[]    @relation("InvoiceLineProduct")
+  stockEntries  InvStockLedger[]
+  branchStocks  InvProductBranch[]
 
   @@index([unitId])
   @@index([categoryId])

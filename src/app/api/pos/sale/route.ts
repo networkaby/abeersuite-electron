@@ -135,6 +135,7 @@ export async function POST(req: Request) {
                     createdById: user!.id,
                     lines: {
                         create: computedLines.map((l) => ({
+                            productId:   l.productId,   // stored so sale-return can trace stock
                             description: l.description,
                             quantity:    l.quantity,
                             unitPrice:   l.unitPrice,

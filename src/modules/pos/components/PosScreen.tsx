@@ -9,7 +9,7 @@ import {
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
-    ReceiptIndianRupee,
+    ReceiptIndianRupee, Check, RotateCcw,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
 import { HandoverAcceptDialog, type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
+import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ export default function PosScreen() {
     const [pendingHandover, setPendingHandover]   = useState<PendingHandover | null>(null);
     const [shiftLoaded, setShiftLoaded]           = useState(false);
     const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
+    const [returnDialogOpen, setReturnDialogOpen]       = useState(false);
 
     const refreshActiveShift = useCallback(() => {
         axios.get<ActiveShift | null>("/api/pos/shifts/current")
@@ -518,7 +520,22 @@ export default function PosScreen() {
                 >
                     <ExternalLink size={14} /> New tab
                 </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setReturnDialogOpen(true)}
+                    title="Process a sale return — by invoice number, customer, or lost invoice"
+                >
+                    <RotateCcw size={14} /> Return
+                </Button>
             </header>
+
+            {/* Sale Return dialog */}
+            <PosReturnDialog
+                open={returnDialogOpen}
+                onOpenChange={setReturnDialogOpen}
+                onDone={() => { /* no cart refresh needed — return is a standalone action */ }}
+            />
 
             {/* Main grid */}
             <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_360px]">
@@ -705,7 +722,21 @@ export default function PosScreen() {
                                 <div className="space-y-2">
                                     {/* Cash — tendered + return on the same row, hint with net cash */}
                                     <div className="grid grid-cols-[80px_1fr_auto_1fr] items-center gap-2">
-                                        <Label className="flex items-center gap-1.5 text-xs"><Banknote size={12} /> Cash</Label>
+                                        <Label className="flex items-center gap-1 text-xs">
+                                            <Banknote size={12} /> Cash
+                                            <button
+                                                type="button"
+                                                title="Fill remaining amount in cash"
+                                                onClick={() => {
+                                                    const remaining = Math.max(0, +(total - pay.upi - extrasSum).toFixed(2));
+                                                    setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
+                                                    setTimeout(() => cashTenderedRef.current?.select(), 0);
+                                                }}
+                                                className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
+                                            >
+                                                <Check size={11} strokeWidth={2.5} />
+                                            </button>
+                                        </Label>
                                         <Input
                                             ref={cashTenderedRef}
                                             value={pay.cashTendered || ""}
@@ -733,7 +764,21 @@ export default function PosScreen() {
 
                                     {/* UPI — single amount field, no reference */}
                                     <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                                        <Label className="flex items-center gap-1.5 text-xs"><Smartphone size={12} /> UPI</Label>
+                                        <Label className="flex items-center gap-1 text-xs">
+                                            <Smartphone size={12} /> UPI
+                                            <button
+                                                type="button"
+                                                title="Fill remaining amount in UPI"
+                                                onClick={() => {
+                                                    const remaining = Math.max(0, +(total - cashNet - extrasSum).toFixed(2));
+                                                    setPay((s) => ({ ...s, upi: remaining }));
+                                                    setTimeout(() => upiAmountRef.current?.select(), 0);
+                                                }}
+                                                className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
+                                            >
+                                                <Check size={11} strokeWidth={2.5} />
+                                            </button>
+                                        </Label>
                                         <Input
                                             ref={upiAmountRef}
                                             value={pay.upi || ""}

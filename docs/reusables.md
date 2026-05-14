@@ -191,6 +191,7 @@ Helpers used by only **one** module live inside that module and are documented i
 - [accountancy.md](modules/accountancy.md) — `aggregateLedger`, `effectiveBalance`, `loadGroupRolledUpBalances`, `closingStock`, `netProfitLoss`, `voucherLifecycle`, `postInvVoucher`, `postInvoiceJe`, `refResolver`, `seedVoucherSeries`, …
 - [inventory.md](modules/inventory.md) — `stock` / `stockValue` helpers (`productOpeningValue`, `productClosingValue`, `calcLineTotals`, `calcVoucherTotals`, …)
 - [people.md](modules/people.md) — `crmPipeline`, `companyContacts`, `contactWrite`
+- [pos.md](modules/pos.md) — `postContra`, `postPosReceiptJe`, `shiftMath`, `PosReturnDialog`
 - [repair.md](modules/repair.md) — `ticketScope`, `repairPipeline`
 - [sales.md](modules/sales.md) — `ordersPipeline`, `orderStatus`, `orderStatusTransitions`, `productAdmin`
 - [messaging.md](modules/messaging.md) — `inbox` (room/membership/unread helpers)

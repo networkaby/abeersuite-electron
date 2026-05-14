@@ -49,6 +49,11 @@ Personal-user till accounts no longer exist. Tills belong to counters, not peopl
 #### Sale
 - `POST /api/pos/sale` — submit cart. Requires OPEN shift. CASH debits `shift.counter.tillAccountId`; non-CASH debits user-picked bank account.
 
+#### Sale Return
+- `GET /api/pos/return/search` — two modes: `?q=INV-…` (substring match on invoice number) or `?customerId=N` (all PAID, non-return invoices for that account). Returns `FoundInvoice[]`. Requires `pos:shift:open`.
+- `POST /api/pos/return` — standard return. Body: `{ originalInvoiceId, lines: [{invoiceLineId, qty}], refundMode: "CASH"|"CREDIT", notes? }`. Creates negative Invoice with `returnOfId` set, posts JE, creates `SALE_RETURN InvVoucher`, restores stock. Requires `pos:shift:open`.
+- `POST /api/pos/return/lost` — manager-only lost-invoice return. Body: `{ customerAccountId, lines: [{productId, qty, unitPrice, taxRate}], refundMode, reason (min 5 chars) }`. Same GL + stock as normal return; `returnOfId = null`; `refVoucherId = null`. Requires `pos:shift:manage`.
+
 ## Permissions
 - `pos:shift:open` — open a shift at a counter (R3 Front Desk, R4 Despatch).
 - `pos:shift:close` — close own shift / initiate handover.
@@ -124,6 +129,27 @@ B bills 12:30pm–7pm...
 GL entry: Dr Cash Short / Cr Counter 1 (counter's account, not personal).
 Accountability: `/office/pos/shifts` shows variance on A's shift row — who was on when, at which counter.
 
+### Sale return flow
+Three lookup tiers — all routed through the same `PosReturnDialog`:
+
+| Tier | Who | Entry point |
+|---|---|---|
+| By invoice # | Cashier (`pos:shift:open`) | Types the invoice number |
+| By customer | Cashier (`pos:shift:open`) | `PartySearchAndCreate` → `/api/pos/return/search?customerId=N` |
+| Lost invoice | Manager (`pos:shift:manage`) | `PartySearchAndCreate` + free-form product lines + mandatory reason |
+
+GL for all tiers:
+- **CASH refund**: `Dr Sales Revenue / Cr Counter Till` — requires OPEN shift; cash leaves the till.
+- **Credit note**: `Dr Sales Revenue / Cr Customer AR` — credit sits as advance until next sale draws it down.
+
+Stock: `SALE_RETURN InvVoucher` + `InvStockLedger` IN row per product. `InvProductBranch.stock` + `InvProduct.stock` increment. `refVoucherId` links back to original SALE voucher (null for lost-invoice path).
+
+Walk-ins (no customer account) are blocked on all tiers — `customerAccountId` is required.
+
+**Schema additions for return tracing:**
+- `Invoice.returnOfId Int?` — self-FK; credit note invoice → original sale invoice.
+- `InvoiceLine.productId Int?` — stored by POS sale so the return can match stock.
+
 ## Reusable helpers — DO NOT duplicate
 
 | Helper | File | Purpose |
@@ -131,6 +157,7 @@ Accountability: `/office/pos/shifts` shows variance on A's shift row — who was
 | `postContra(tx, { date, narration, lines, userId })` | `src/modules/accountancy/lib/postContra.ts` | Atomic Contra voucher + JE + balance deltas. Used for vault top-up + vault sweep. |
 | `postPosReceiptJe(tx, { invoiceId, ... })` | `src/modules/pos/lib/postPosReceiptJe.ts` | Settles AR on POS cash sales. |
 | `computeExpectedCash`, `computeVariance`, `sumPaise` | `src/modules/pos/lib/shiftMath.ts` | BigInt paise arithmetic for shift close. |
+| `PosReturnDialog` | `src/modules/pos/components/PosReturnDialog.tsx` | Three-tab sale return dialog (by invoice #, by customer, lost invoice). Mount inside `PosScreen`; pass `open`, `onOpenChange`, `onDone`. |
 
 ## Seeds
 - **Bootstrap** (`bootstrap-seed.ts`) — creates `Cash – Vault – <Branch>` + `Cash – Counter 1 – <Branch>` accounts and one `PosCounter` row per branch. Default float ₹2,000.
@@ -153,5 +180,8 @@ Accountability: `/office/pos/shifts` shows variance on A's shift row — who was
 - Stuck-shift auto-close cron.
 - Per-shift Z-report print.
 - Float carry-over by counter default already implemented; manager override per-close already supported.
+- Return receipt print page (`/receipt/return/[id]`).
+- Multiple partial-return guard: currently caps per-line at original qty but does not subtract qty already returned in prior return invoices.
+- Exchange as one atomic transaction (currently: issue credit note, then start new sale that draws down the advance).
 
-_Last updated: 2026-05-14 — counter-based tills, two-step cashier handover, carry-over float, dropped personal user tills._
+_Last updated: 2026-05-14 — sale return flow (three tiers), lost-invoice manager bypass, InvoiceLine.productId, Invoice.returnOfId._

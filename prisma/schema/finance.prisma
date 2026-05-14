@@ -105,6 +105,11 @@ model Invoice {
   account     Account?      @relation("AccountInvoices", fields: [accountId], references: [id])
   shopOrder   ShopOrder?    @relation("OrderInvoice", fields: [shopOrderId], references: [id], onDelete: SetNull)
   ticket      Ticket?       @relation("TicketInvoices", fields: [ticketId], references: [id], onDelete: SetNull)
+  // Credit note back-link — set when this invoice is a return of another invoice.
+  returnOfId  Int?
+  returnOf    Invoice?      @relation("InvoiceReturns", fields: [returnOfId], references: [id])
+  returns     Invoice[]     @relation("InvoiceReturns")
+
   lines       InvoiceLine[]
   payments    Payment[]
   createdAt   DateTime      @default(now())
@@ -136,17 +141,21 @@ model InvoiceAudit {
 }
 
 model InvoiceLine {
-  id          Int     @id @default(autoincrement())
+  id          Int        @id @default(autoincrement())
   invoiceId   Int
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice     Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  // Nullable — populated on POS sales so sale-return can locate the product for stock reversal.
+  productId   Int?
+  product     InvProduct? @relation("InvoiceLineProduct", fields: [productId], references: [id])
   description String
-  quantity    Decimal @db.Decimal(10, 3)
-  unitPrice   Decimal @db.Decimal(14, 2)
-  taxRate     Decimal @default(0) @db.Decimal(5, 2)
-  taxAmount   Decimal @default(0) @db.Decimal(14, 2)
-  amount      Decimal @db.Decimal(14, 2)
+  quantity    Decimal    @db.Decimal(10, 3)
+  unitPrice   Decimal    @db.Decimal(14, 2)
+  taxRate     Decimal    @default(0) @db.Decimal(5, 2)
+  taxAmount   Decimal    @default(0) @db.Decimal(14, 2)
+  amount      Decimal    @db.Decimal(14, 2)
 
   @@index([invoiceId])
+  @@index([productId])
 }
 
 model Payment {
