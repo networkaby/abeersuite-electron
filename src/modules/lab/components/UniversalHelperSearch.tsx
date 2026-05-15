@@ -19,6 +19,11 @@ import { cn } from "@/shared/lib/format/utils";
 import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
 import CustomerContextPanel from "@/modules/lab/components/CustomerContextPanel";
 import QuickTicketDialog from "@/modules/lab/components/QuickTicketDialog";
+import InteractionChannelPicker, {
+    type InteractionChannel,
+} from "@/modules/lab/components/InteractionChannelPicker";
+import RegisterCustomerDialog from "@/modules/lab/components/RegisterCustomerDialog";
+import { UserPlus } from "lucide-react";
 import { type PickedParty } from "@/shared/components/PartySearchAndCreate";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -173,6 +178,12 @@ export default function UniversalHelperSearch() {
     const [pickedParty, setPickedParty] = useState<PartyHit | null>(null);
     const [ticketOpen, setTicketOpen]   = useState(false);
 
+    // ── Interaction channel (which medium is the customer reaching us on?) ─
+    const [channel, setChannel] = useState<InteractionChannel | null>(null);
+
+    // ── Register-new-customer dialog ──────────────────────────────────────
+    const [registerOpen, setRegisterOpen] = useState(false);
+
     const dataReady  = productsLoaded && ticketsLoaded;
     const searching  = hasQuery && (peopleLoading || !dataReady);
     const noResults  = hasQuery && !searching && !ticketId &&
@@ -199,6 +210,9 @@ export default function UniversalHelperSearch() {
 
     return (
         <section className="space-y-3">
+
+            {/* ── Interaction channel — which medium is the customer reaching us on? ── */}
+            <InteractionChannelPicker channel={channel} onChange={setChannel} />
 
             {/* ── Hero search input ── */}
             <div className="relative flex items-center rounded-xl border border-border bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/25 transition-shadow">
@@ -444,10 +458,34 @@ export default function UniversalHelperSearch() {
                             </p>
                         )}
                         {noResults && (
-                            <p className="py-4 text-center text-xs text-muted-foreground">
-                                No results for &ldquo;{query}&rdquo;.{" "}
-                                Try a name, phone number, device brand, or ticket ID.
-                            </p>
+                            <div className="flex flex-col items-center gap-3 py-5">
+                                <p className="text-center text-xs text-muted-foreground">
+                                    No results for &ldquo;{query}&rdquo;.{" "}
+                                    Try a name, phone number, device brand, or ticket ID.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setRegisterOpen(true)}
+                                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-blue-500/40 bg-blue-500/5 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
+                                >
+                                    <UserPlus size={13} />
+                                    Register new customer
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Register CTA also visible when there ARE customer hits but none match the right person */}
+                        {hasQuery && peopleHits.length > 0 && !peopleLoading && (
+                            <div className="border-t border-dashed border-border pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setRegisterOpen(true)}
+                                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                                >
+                                    <UserPlus size={11} />
+                                    Not the right person? Register new customer
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -467,6 +505,17 @@ export default function UniversalHelperSearch() {
                 open={ticketOpen}
                 onOpenChange={setTicketOpen}
                 initialParty={pickedParty ? partyHitToPicked(pickedParty) : null}
+            />
+
+            {/* Register-new-customer dialog (wraps PartySearchAndCreate as-is) */}
+            <RegisterCustomerDialog
+                open={registerOpen}
+                onOpenChange={setRegisterOpen}
+                onRegistered={(party) => {
+                    // Auto-select the freshly registered customer so the
+                    // context panel slides in with their info immediately.
+                    setPickedParty(party);
+                }}
             />
         </section>
     );

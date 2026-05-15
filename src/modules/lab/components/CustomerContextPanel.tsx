@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type PartyHit } from "@/shared/hooks/usePartySearch";
+import CustomerHeadsUpStrip from "@/modules/lab/components/CustomerHeadsUpStrip";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -351,6 +352,9 @@ export default function CustomerContextPanel({
                             )}
                         </div>
                     )}
+
+                    {/* ── Heads-up strip — proactive prompts (mock data for now) ── */}
+                    <CustomerHeadsUpStrip accountId={party.accountId} />
 
                     {/* ── Tickets + Invoices two-column ── */}
                     <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
