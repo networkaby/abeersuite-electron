@@ -25,6 +25,8 @@ interface QuickTicketDialogProps {
     onOpenChange: (open: boolean) => void;
     /** Called after a ticket is successfully created. */
     onCreated?: (ticketId: string) => void;
+    /** Pre-select a customer (e.g. from the Universal Helper Search panel). */
+    initialParty?: PickedParty | null;
 }
 
 interface CreatedTicket {
@@ -45,6 +47,7 @@ export default function QuickTicketDialog({
     open,
     onOpenChange,
     onCreated,
+    initialParty,
 }: QuickTicketDialogProps) {
     const [picked, setPicked] = useState<PickedParty | null>(null);
     const [deviceType, setDeviceType] = useState("");
@@ -53,16 +56,17 @@ export default function QuickTicketDialog({
     const [problem, setProblem] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    // Reset form whenever the dialog opens fresh.
+    // Reset form whenever the dialog opens fresh; pre-select if initialParty given.
     useEffect(() => {
         if (open) {
-            setPicked(null);
+            setPicked(initialParty ?? null);
             setDeviceType("");
             setBrand("");
             setModel("");
             setProblem("");
             setSubmitting(false);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
     const canSubmit =

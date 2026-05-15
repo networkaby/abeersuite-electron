@@ -20,7 +20,10 @@ import {
     CommandItem,
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
-import { usePartySearch } from "@/shared/hooks/usePartySearch";
+import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
+import CustomerContextPanel from "@/modules/lab/components/CustomerContextPanel";
+import QuickTicketDialog from "@/modules/lab/components/QuickTicketDialog";
+import { type PickedParty } from "@/shared/components/PartySearchAndCreate";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,20 +43,28 @@ const TICKET_RE = /^(?:tkt[- ]?)?(\d{1,8})$/i;
 const PHONE_RE = /^[6-9]\d{9}$/;
 
 function detectTicketId(q: string): string | null {
-    const trimmed = q.trim();
-    const m = TICKET_RE.exec(trimmed);
-    if (!m) return null;
-    return `TKT-${m[1]}`;
+    const m = TICKET_RE.exec(q.trim());
+    return m ? `TKT-${m[1]}` : null;
 }
 
 function isPhone(q: string): boolean {
-    const digits = q.trim().replace(/\D/g, "");
-    return PHONE_RE.test(digits);
+    return PHONE_RE.test(q.trim().replace(/\D/g, ""));
 }
 
 function formatPaise(paise: number | null): string {
     if (paise == null) return "—";
-    return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+    return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+/** Convert a PartyHit to the PickedParty shape QuickTicketDialog expects. */
+function partyHitToPicked(p: PartyHit): PickedParty {
+    return {
+        kind: p.type === "company" ? "company" : "person",
+        id: p.id,
+        name: p.name,
+        phone: p.phone,
+        accountId: p.accountId,
+    };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -66,16 +77,20 @@ function formatPaise(paise: number | null): string {
  *   - Customer matches    (debounced /api/people?lookup=)
  *   - Product matches     (in-memory filter on /api/inventory/products/lookup)
  *
+ * Picking a customer opens the CustomerContextPanel below — showing KYC,
+ * a computed relationship rating, account health, open tickets, and recent
+ * invoices, giving the desk staff full context before the conversation starts.
+ *
  * Empty state shows three example queries so first-time users know what to try.
  */
 export default function UniversalHelperSearch() {
     const router = useRouter();
     const [query, setQuery] = useState("");
 
-    // Customers come from the canonical debounced hook.
+    // Customers — debounced
     const { hits: peopleHits, loading: peopleLoading } = usePartySearch(query);
 
-    // Products: load once, filter in memory (matches the InvProductCombobox pattern).
+    // Products — load once, filter in memory
     const [products, setProducts] = useState<Product[]>([]);
     const [productsLoaded, setProductsLoaded] = useState(false);
 
@@ -92,36 +107,39 @@ export default function UniversalHelperSearch() {
                 if (cancelled) return;
                 setProductsLoaded(true);
             });
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, []);
 
     const productMatches = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (q.length < 2) return [];
-        const matches = products.filter((p) => {
-            const haystack = `${p.name} ${p.sku ?? ""} ${p.brand?.name ?? ""}`.toLowerCase();
-            return haystack.includes(q);
-        });
-        return matches.slice(0, 8);
+        return products
+            .filter((p) => {
+                const hay = `${p.name} ${p.sku ?? ""} ${p.brand?.name ?? ""}`.toLowerCase();
+                return hay.includes(q);
+            })
+            .slice(0, 8);
     }, [query, products]);
 
     const ticketId = detectTicketId(query);
     const phoneish = isPhone(query);
     const hasQuery = query.trim().length >= 2;
 
+    // ── Customer context panel state ──────────────────────────────────────
+    const [pickedParty, setPickedParty] = useState<PartyHit | null>(null);
+    const [ticketOpen, setTicketOpen] = useState(false);
+
     return (
         <section className="rounded-xl border border-border bg-card p-1 shadow-sm">
-            <Command
-                shouldFilter={false}
-                className="rounded-lg"
-                /* cmdk filters by default; we already filter ourselves above. */
-            >
+            <Command shouldFilter={false} className="rounded-lg">
                 <CommandInput
                     placeholder="Help a customer — search products, tickets, customers, or type a phone number…"
                     value={query}
-                    onValueChange={setQuery}
+                    onValueChange={(v) => {
+                        setQuery(v);
+                        // Clear the panel when the user clears the search box entirely.
+                        if (!v.trim()) setPickedParty(null);
+                    }}
                     className="text-base"
                 />
                 <CommandList className="max-h-[420px]">
@@ -153,22 +171,14 @@ export default function UniversalHelperSearch() {
                             {peopleHits.length > 0 && (
                                 <CommandGroup
                                     heading={
-                                        phoneish
-                                            ? "Customers · phone match"
-                                            : "Customers"
+                                        phoneish ? "Customers · phone match" : "Customers"
                                     }
                                 >
                                     {peopleHits.slice(0, 6).map((p) => (
                                         <CommandItem
                                             key={`person-${p.type}-${p.id}`}
                                             value={`person-${p.type}-${p.id}`}
-                                            onSelect={() =>
-                                                router.push(
-                                                    p.type === "company"
-                                                        ? `/office/customers/companies`
-                                                        : `/office/customers/people`
-                                                )
-                                            }
+                                            onSelect={() => setPickedParty(p)}
                                             className="cursor-pointer"
                                         >
                                             {p.type === "company" ? (
@@ -176,16 +186,12 @@ export default function UniversalHelperSearch() {
                                             ) : (
                                                 <User />
                                             )}
-                                            <span className="flex-1 truncate">
-                                                {p.name}
-                                            </span>
+                                            <span className="flex-1 truncate">{p.name}</span>
                                             <Badge
                                                 variant="secondary"
                                                 className="text-[10px]"
                                             >
-                                                {p.type === "company"
-                                                    ? "Company"
-                                                    : "Person"}
+                                                {p.type === "company" ? "Company" : "Person"}
                                             </Badge>
                                             <span className="w-32 truncate text-right text-xs text-muted-foreground">
                                                 {p.phone ?? ""}
@@ -204,9 +210,7 @@ export default function UniversalHelperSearch() {
                                                 key={`product-${prod.id}`}
                                                 value={`product-${prod.id}`}
                                                 onSelect={() =>
-                                                    router.push(
-                                                        `/office/inventory/products`
-                                                    )
+                                                    router.push(`/office/inventory/products`)
                                                 }
                                                 className="cursor-pointer"
                                             >
@@ -255,11 +259,28 @@ export default function UniversalHelperSearch() {
                     )}
                 </CommandList>
             </Command>
+
             {!productsLoaded && (
                 <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
                     Loading product catalogue…
                 </div>
             )}
+
+            {/* Customer context panel — slides in below search when a customer is picked */}
+            {pickedParty && (
+                <CustomerContextPanel
+                    party={pickedParty}
+                    onClose={() => setPickedParty(null)}
+                    onNewTicket={() => setTicketOpen(true)}
+                />
+            )}
+
+            {/* Quick-ticket dialog — pre-filled with the picked customer */}
+            <QuickTicketDialog
+                open={ticketOpen}
+                onOpenChange={setTicketOpen}
+                initialParty={pickedParty ? partyHitToPicked(pickedParty) : null}
+            />
         </section>
     );
 }
@@ -282,26 +303,19 @@ function EmptyHint() {
                 {examples.map((ex) => {
                     const Icon = ex.icon;
                     return (
-                        <li
-                            key={ex.label}
-                            className="flex items-center gap-3 text-sm"
-                        >
-                            <Icon
-                                size={14}
-                                className="shrink-0 text-muted-foreground"
-                            />
+                        <li key={ex.label} className="flex items-center gap-3 text-sm">
+                            <Icon size={14} className="shrink-0 text-muted-foreground" />
                             <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
                                 {ex.label}
                             </code>
-                            <span className="text-xs text-muted-foreground">
-                                {ex.desc}
-                            </span>
+                            <span className="text-xs text-muted-foreground">{ex.desc}</span>
                         </li>
                     );
                 })}
             </ul>
             <div className="mt-4 border-t border-border pt-3 text-[11px] text-muted-foreground">
-                Tip — keyboard <kbd className="rounded border border-border bg-muted px-1 font-mono">↑</kbd>{" "}
+                Tip — keyboard{" "}
+                <kbd className="rounded border border-border bg-muted px-1 font-mono">↑</kbd>{" "}
                 <kbd className="rounded border border-border bg-muted px-1 font-mono">↓</kbd>{" "}
                 to navigate,{" "}
                 <kbd className="rounded border border-border bg-muted px-1 font-mono">↵</kbd>{" "}
@@ -310,4 +324,3 @@ function EmptyHint() {
         </div>
     );
 }
-
