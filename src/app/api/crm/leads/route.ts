@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { assertCrmStatus, getCrmPipeline } from "@/modules/customer/lib/crmPipeline";
-import { parseCursor } from "@/shared/lib/api";
+import { parseCursor, validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -111,19 +111,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "CRM pipeline not configured" }, { status: 503 });
     }
 
-    let body: unknown;
-    try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
-
-    const parsed = createLeadSchema.safeParse(body);
-    if (!parsed.success) {
-        return NextResponse.json({ error: "Validation failed", issues: parsed.error.flatten() }, { status: 400 });
-    }
-
-    const data = parsed.data;
+    const { data, error } = await validateRequest(req, createLeadSchema);
+    if (error) return error;
     const entryStatus =
         pipeline.statuses.find((s) => s.isEntryPoint) ?? pipeline.statuses[0];
     if (!entryStatus) {

@@ -2,18 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-
-export interface OrgNode {
-    id: number;
-    name: string;
-    title: string | null;
-    role: string;
-    avatarUrl: string | null;
-    userRole: { label: string; color: string; rank: number };
-    departments: { id: string; name: string }[];
-    branches:    { id: string; name: string }[];
-    children: OrgNode[];
-}
+import type { OrgNode } from "@/shared/types/orgChart";
 
 const USER_SELECT = {
     id:          true,

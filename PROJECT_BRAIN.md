@@ -493,7 +493,6 @@ _(Nothing actively in progress — POS sale return flow shipped 2026-05-14 with 
 - **Account model**: Still present in schema alongside `Customer` and `Company` — acts as a legacy bridge. The `Customer` and `Company` models are the source of truth going forward. `Account` may be cleaned up later.
 - **Tasks feature removed**: task application code is removed. Some historical migrations may still mention task tables from older iterations.
 - **`settings:manage` permission**: Branches + Departments pages require this permission. If the Admin role doesn't have it yet, go to Settings → Roles → Admin → Permissions and add `settings:manage`.
-- **Sentry example files**: `src/app/api/sentry-example-api/route.ts` and `src/app/sentry-example-page/page.tsx` were added by Sentry setup — remove before production deploy if not needed.
 - **Module migration incomplete**: Some components may still live in `src/components/` rather than their domain module. Gradual migration is fine; no functional impact.
 - **Razorpay webhook secret**: `RAZORPAY_WEBHOOK_SECRET` must be set in `.env`; webhook handler will reject all events if missing. Verify in Razorpay dashboard → Webhooks.
 - **Portal auth is separate from staff auth**: `CustomerPortalCredential` is a separate credential table; portal users cannot access staff routes and vice versa. Do not reuse staff session cookies for portal.

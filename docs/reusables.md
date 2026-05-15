@@ -92,6 +92,7 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 | Symbol | File | Purpose |
 |---|---|---|
 | `InvProductFull`, `InvProductDb`, `invProductDb` | `inventoryTypes.ts` | Typed `InvProduct` shapes used by inventory + ecommerce + shop |
+| `OrgNode`, `PostNode` | `orgChart.ts` | Tree-node shapes returned by `/api/org-chart` and `/api/posts/structure`. Consumed by `OrgTree`, `StructureTree`, and the admin org-chart / social profile pages. Keep the route's response shape and this type in sync. |
 
 ## Shared UI — `src/shared/components/`
 

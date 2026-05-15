@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { assertCrmStatus, getCrmPipeline } from "@/modules/customer/lib/crmPipeline";
 import { z } from "zod";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { validateRequest } from "@/shared/lib/api";
 
 const leadInclude = {
     ticketStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
@@ -93,19 +94,9 @@ export async function PATCH(req: Request, { params }: Params) {
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    let body: unknown;
-    try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+    const { data, error } = await validateRequest(req, patchLeadSchema);
+    if (error) return error;
 
-    const parsed = patchLeadSchema.safeParse(body);
-    if (!parsed.success) {
-        return NextResponse.json({ error: "Validation failed", issues: parsed.error.flatten() }, { status: 400 });
-    }
-
-    const data = parsed.data;
     if (data.status != null) {
         const check = await assertCrmStatus(prisma, pipeline.id, data.status);
         if (!check.ok) return NextResponse.json({ error: check.message }, { status: 400 });

@@ -1,26 +1,18 @@
-import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ensureCoreRoomsForUser, markRoomRead } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 
 export async function GET() {
-    const session = await auth();
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { user, response } = await requireAuth();
+    if (response) return response;
 
-    const sessionUser = session.user as {
-        id?: string;
-        role?: string;
-        roles?: string[];
-    };
-    const userId = Number(sessionUser.id ?? "0");
-    const roles = sessionUser.roles ?? (sessionUser.role ? [sessionUser.role] : []);
-
-    await ensureCoreRoomsForUser({ id: userId, roles });
+    await ensureCoreRoomsForUser({ id: user.id, roles: user.roles });
     const room = await prisma.chatRoom.findUnique({
-        where: { key: `system:${userId}` },
+        where: { key: `system:${user.id}` },
         include: {
             members: {
-                where: { userId },
+                where: { userId: user.id },
                 select: { lastReadAt: true },
             },
             messages: {
@@ -44,16 +36,15 @@ export async function GET() {
 }
 
 export async function PATCH() {
-    const session = await auth();
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { user, response } = await requireAuth();
+    if (response) return response;
 
-    const userId = Number((session.user as { id?: string }).id ?? "0");
     const room = await prisma.chatRoom.findUnique({
-        where: { key: `system:${userId}` },
+        where: { key: `system:${user.id}` },
         select: { id: true },
     });
     if (!room) return NextResponse.json({ ok: true });
 
-    await markRoomRead(userId, room.id);
+    await markRoomRead(user.id, room.id);
     return NextResponse.json({ ok: true });
 }

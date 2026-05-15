@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatTimeOnly } from "@/shared/lib/format/formatDate";
-import type { OrgNode } from "@/app/api/org-chart/route";
+import type { OrgNode } from "@/shared/types/orgChart";
 import OrgTree from "@/modules/admin/components/OrgTree";
 import UserAvatar from "@/shared/components/UserAvatar";
 

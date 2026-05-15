@@ -6,8 +6,7 @@ import axios from "axios";
 import { Users, Briefcase, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import type { OrgNode } from "@/app/api/org-chart/route";
-import type { PostNode } from "@/app/api/posts/structure/route";
+import type { OrgNode, PostNode } from "@/shared/types/orgChart";
 import OrgTree from "@/modules/admin/components/OrgTree";
 import StructureTree from "@/modules/admin/components/StructureTree";
 

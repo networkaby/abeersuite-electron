@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { OrgNode } from "@/app/api/org-chart/route";
+import type { OrgNode } from "@/shared/types/orgChart";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

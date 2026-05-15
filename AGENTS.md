@@ -64,6 +64,7 @@ Before declaring a plan or segment done, update **all three** of the following i
    - `docs/seeds.md` if seed scripts, fixture data, or `hard-clean.ts` changed.
    - `docs/plans/<NN>-<segment>.md` if the executed plan diverged from what was written there — record what actually happened.
    - Any other `docs/<file>.md` referenced by the change.
+   - Do not remove any document during any cleanup.
 2. **Todo list** — mark every task `completed` as you finish it (not batched at the end). Remove dropped tasks, add follow-ups discovered during execution. The list should match what was actually done before the commit lands.
 3. **Reusables registry** — if the change added or removed a helper, hook, schema, formatter, or shared component, register or unregister it in:
    - `docs/reusables.md` (cross-cutting items in `src/shared/`).

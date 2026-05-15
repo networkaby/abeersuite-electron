@@ -2,20 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-
-export interface PostNode {
-    id: string;
-    title: string;
-    branchId: string | null;
-    departmentId: string | null;
-    parentPostId: string | null;
-    branch:     { id: string; name: string } | null;
-    department: { id: string; name: string } | null;
-    holders: {
-        user: { id: number; name: string; avatarUrl: string | null; role: string; title: string | null; userRole: { label: string; color: string } };
-    }[];
-    children: PostNode[];
-}
+import type { PostNode } from "@/shared/types/orgChart";
 
 export async function GET() {
     const { response } = await requireAuth();

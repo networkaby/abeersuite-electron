@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight, Building2, Layers, Briefcase } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { PostNode } from "@/app/api/posts/structure/route";
+import type { PostNode } from "@/shared/types/orgChart";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

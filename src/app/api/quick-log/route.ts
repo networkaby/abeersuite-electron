@@ -17,10 +17,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { validateRequest } from "@/shared/lib/api";
 
 // Allowed pipeline ids for quick-log
 const ALLOWED_PIPELINE_IDS = ["P2", "P4", "P6"] as const;
-type AllowedPipelineId = (typeof ALLOWED_PIPELINE_IDS)[number];
 
 const quickLogSchema = z.object({
     pipelineId: z.enum(ALLOWED_PIPELINE_IDS),
@@ -39,23 +39,9 @@ export async function POST(req: Request) {
     if (auth.response) return auth.response;
     const { user } = auth;
 
-    let body: unknown;
-    try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
-
-    const parsed = quickLogSchema.safeParse(body);
-    if (!parsed.success) {
-        return NextResponse.json(
-            { error: "Validation failed", issues: parsed.error.flatten() },
-            { status: 400 },
-        );
-    }
-
-    const { pipelineId, title, contactName, phone, source, notes, personId, companyId } =
-        parsed.data as { pipelineId: AllowedPipelineId; title: string; contactName?: string | null; phone?: string | null; source?: string | null; notes?: string | null; personId?: number | null; companyId?: number | null };
+    const { data, error } = await validateRequest(req, quickLogSchema);
+    if (error) return error;
+    const { pipelineId, title, contactName, phone, source, notes, personId, companyId } = data;
 
     // Resolve the entry-point status for the target pipeline.
     const entryStatus = await prisma.ticketStatus.findFirst({

@@ -1,12 +1,11 @@
-import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
+import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { invProductDb } from "@/shared/types/inventoryTypes";
-import { validateRequest } from "@/shared/lib/api";
-import { handleApiError } from "@/shared/lib/api";
+import { validateRequest, handleApiError } from "@/shared/lib/api";
 
 const lineSchema = z.object({
     productId: z.coerce.number().int().positive(),
@@ -20,20 +19,13 @@ const createOrderSchema = z.object({
 
 export async function POST(req: Request) {
     try {
+        const customerAuth = await requirePortalCustomer();
+        if (customerAuth.response) return customerAuth.response;
+        const { customerId } = customerAuth;
+
         const { data, error } = await validateRequest(req, createOrderSchema);
         if (error) return error;
         const { lines, accountId } = data;
-
-        const session = await auth();
-        const kind = (session?.user as { kind?: string } | undefined)?.kind;
-        if (!session?.user || kind !== "customer") {
-            return NextResponse.json({ error: "Customer sign-in required" }, { status: 401 });
-        }
-        const sessionUser = session.user as { customerId?: string };
-        const customerId = sessionUser.customerId ? parseInt(sessionUser.customerId, 10) : NaN;
-        if (!Number.isFinite(customerId)) {
-            return NextResponse.json({ error: "Customer sign-in required" }, { status: 401 });
-        }
 
         const context = await resolvePortalAccountContext(customerId, accountId);
         if (context.active.accountId !== accountId) {
