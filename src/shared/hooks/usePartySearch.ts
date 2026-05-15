@@ -10,6 +10,8 @@ export type PartyHit = {
     id: number;
     name: string;
     phone: string | null;
+    email?: string | null;
+    address?: string | null;
     /** Discriminator — kept as "customer"/"company" for back-compat with POS, QuickTicket, party pickers. */
     type: "customer" | "company";
     accountId: number | null;

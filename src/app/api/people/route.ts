@@ -5,7 +5,7 @@ import { z } from "zod";
 import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 
 // Multi-value `phones` / `emails` arrays default to []; the first entry is
@@ -21,6 +21,8 @@ type LookupResult = {
     id: number;
     name: string;
     phone: string | null;
+    email: string | null;
+    address: string | null;
     // Discriminator kept as "customer"/"company" for back-compat with existing
     // consumers (POS, QuickTicket, party pickers).
     type: "customer" | "company";
@@ -35,19 +37,33 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
     const accountGroupFilter = group
         ? { account: { is: { group: { is: { name: group } } } } }
         : {};
+
+    // Split multi-word queries (e.g. "abeer 9954") into tokens and AND them —
+    // each token must match either the name or a phone number.
+    const tokens = term.trim().split(/\s+/).filter(Boolean);
+    const tokenFilter = tokens.length <= 1
+        ? { OR: [
+            { name: { contains: term, mode: "insensitive" as const } },
+            { phones: { some: { phone: { contains: term } } } },
+          ] }
+        : { AND: tokens.map(t => ({
+            OR: [
+                { name: { contains: t, mode: "insensitive" as const } },
+                { phones: { some: { phone: { contains: t } } } },
+            ],
+          })) };
+
     const [persons, companies] = await Promise.all([
         prisma.person.findMany({
             where: {
                 isActive: true,
                 ...accountGroupFilter,
-                OR: [
-                    { name: { contains: term, mode: "insensitive" } },
-                    { phones: { some: { phone: { contains: term } } } },
-                ],
+                ...tokenFilter,
             },
             include: {
                 account: { select: { id: true } },
                 phones: selectPrimaryPhone,
+                emails: selectPrimaryEmail,
                 companies: {
                     where: { unlinkedAt: null },
                     include: {
@@ -64,14 +80,12 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
             where: {
                 isActive: true,
                 ...accountGroupFilter,
-                OR: [
-                    { name: { contains: term, mode: "insensitive" } },
-                    { phones: { some: { phone: { contains: term } } } },
-                ],
+                ...tokenFilter,
             },
             include: {
                 account: { select: { id: true } },
                 phones: selectPrimaryPhone,
+                emails: selectPrimaryEmail,
             },
             take: 8,
             orderBy: { createdAt: "desc" },
@@ -83,6 +97,8 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
             id: p.id,
             name: p.name,
             phone: p.phones[0]?.phone ?? null,
+            email: p.emails[0]?.email ?? null,
+            address: p.address ?? null,
             type: "customer" as const,
             accountId: p.account?.id ?? null,
             linkedCompanies: p.companies.map(lc => ({
@@ -95,6 +111,8 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
             id: c.id,
             name: c.name,
             phone: c.phones[0]?.phone ?? null,
+            email: c.emails[0]?.email ?? null,
+            address: null,
             type: "company" as const,
             accountId: c.account?.id ?? null,
             linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],

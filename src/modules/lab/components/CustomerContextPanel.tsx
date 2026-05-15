@@ -141,10 +141,13 @@ export default function CustomerContextPanel({
     party,
     onClose,
     onNewTicket,
+    onViewFullProfile,
 }: {
     party: PartyHit;
     onClose: () => void;
     onNewTicket?: () => void;
+    /** When provided, the avatar+name header becomes a button that opens the full detail view. */
+    onViewFullProfile?: () => void;
 }) {
     const router = useRouter();
 
@@ -218,8 +221,14 @@ export default function CustomerContextPanel({
         <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card shadow-md">
             {/* ── Header ── */}
             <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/30 px-4 py-3">
-                {/* Avatar + name */}
-                <div className="flex items-center gap-3">
+                {/* Avatar + name — clickable when onViewFullProfile is provided */}
+                <button
+                    type="button"
+                    onClick={onViewFullProfile}
+                    disabled={!onViewFullProfile}
+                    className={`flex flex-1 min-w-0 items-center gap-3 text-left ${onViewFullProfile ? "cursor-pointer rounded-lg p-1 -m-1 hover:bg-muted/60 transition-colors group" : "cursor-default"}`}
+                    title={onViewFullProfile ? "Open full profile" : undefined}
+                >
                     <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                             party.type === "company"
@@ -229,12 +238,12 @@ export default function CustomerContextPanel({
                     >
                         {party.name.slice(0, 2).toUpperCase()}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">
+                            <span className="font-semibold text-foreground truncate">
                                 {detail?.name ?? party.name}
                             </span>
-                            <Badge variant="secondary" className="text-[10px]">
+                            <Badge variant="secondary" className="text-[10px] shrink-0">
                                 {party.type === "company" ? "Company" : "Person"}
                             </Badge>
                         </div>
@@ -248,11 +257,16 @@ export default function CustomerContextPanel({
                                 </span>
                             </div>
                         )}
+                        {onViewFullProfile && (
+                            <span className="mt-0.5 text-[10px] text-primary/60 group-hover:text-primary flex items-center gap-0.5 transition-colors">
+                                Open full profile →
+                            </span>
+                        )}
                     </div>
-                </div>
+                </button>
                 <button
                     onClick={onClose}
-                    className="mt-0.5 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     title="Close"
                 >
                     <X size={15} />

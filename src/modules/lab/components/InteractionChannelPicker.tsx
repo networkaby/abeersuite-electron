@@ -4,10 +4,11 @@ import {
     Footprints,
     Phone,
     MessageCircle,
-    Instagram,
-    Facebook,
+    Camera,
+    ThumbsUp,
     type LucideIcon,
 } from "lucide-react";
+
 import { cn } from "@/shared/lib/format/utils";
 
 /**
@@ -60,14 +61,14 @@ const CHANNELS: ChannelDef[] = [
     {
         id: "instagram",
         label: "Instagram",
-        icon: Instagram,
+        icon: Camera,
         activeBg: "bg-pink-500/15",
         activeText: "text-pink-700 dark:text-pink-400",
     },
     {
         id: "facebook",
         label: "Facebook",
-        icon: Facebook,
+        icon: ThumbsUp,
         activeBg: "bg-indigo-500/15",
         activeText: "text-indigo-700 dark:text-indigo-400",
     },
@@ -99,10 +100,10 @@ export default function InteractionChannelPicker({
                             "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
                             active
                                 ? cn(
-                                      c.activeBg,
-                                      c.activeText,
-                                      "border-transparent shadow-sm"
-                                  )
+                                    c.activeBg,
+                                    c.activeText,
+                                    "border-transparent shadow-sm"
+                                )
                                 : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                         )}
                         title={

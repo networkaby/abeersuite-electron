@@ -65,4 +65,17 @@ model User {
   posShiftsClosedBy       PosShift[]          @relation("PosShiftClosedBy")
   posCashDrops            PosCashDrop[]       @relation("PosCashDropBy")
   handoversReceived       PosHandover[]       @relation("HandoverToUser")
+  quickNotes              QuickNote[]
+}
+
+// ── QuickNote — per-user scratch pad ──────────────────────────────────────
+
+model QuickNote {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  text      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
