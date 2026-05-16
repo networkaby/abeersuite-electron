@@ -58,6 +58,7 @@ import {
     BarChart3,
     ListChecks,
     Percent,
+    Printer,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -580,6 +581,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Pipelines", href: "/office/admin/pipelines", icon: GitBranch, permission: "settings:pipelines" },
     { label: "Naming Convention", icon: ClipboardList, href: "/office/admin/naming-convention", permission: "inventory:manage" },
     { label: "Year Ending", href: "/office/admin/year-ending", icon: Calendar, permission: "settings:manage" },
+    { label: "Thermal Printer", href: "/office/admin/printer-settings", icon: Printer, permission: "settings:manage" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

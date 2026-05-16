@@ -403,7 +403,35 @@ export default function PosScreen() {
             setExtras([]);
             setCheckoutOpen(false);
             if (printAfter) {
-                window.open(`/receipt/invoice/${data.invoiceId}?autoprint=1`, "_blank", "noopener");
+                const relayAvailable = await fetch("http://localhost:9191/health", { signal: AbortSignal.timeout(1000) })
+                    .then((r) => r.ok).catch(() => false);
+                if (relayAvailable) {
+                    fetch("http://localhost:9191/print/pos", {
+                        method:  "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            invoiceNumber:  data.invoiceNumber,
+                            date:           today,
+                            customerName:   snapshot?.party.name ?? "Walk-in",
+                            lines: cart.map((l) => ({
+                                name:      l.name,
+                                qty:       l.qty,
+                                unitPrice: l.unitPrice,
+                                amount:    l.qty * l.unitPrice,
+                            })),
+                            subtotal,
+                            discountPct,
+                            discountAmount,
+                            tax,
+                            total,
+                            cashPaid:   cashNet,
+                            upiPaid:    pay.upi,
+                            extrasPaid: extras.map((e) => ({ method: e.method, amount: e.amount, reference: e.reference })),
+                        }),
+                    }).catch(() => toast.error("Thermal print failed"));
+                } else {
+                    window.open(`/receipt/invoice/${data.invoiceId}?autoprint=1`, "_blank", "noopener");
+                }
             }
         } catch (e: unknown) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error : undefined;

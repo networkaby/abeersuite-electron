@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, Trash2, Undo2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, Trash2, Undo2, AlertTriangle, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -108,7 +108,7 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
     return (
         <div className="max-w-3xl mx-auto space-y-6">
             <div className="flex items-center gap-4">
-                <Link href={basePath} className="text-muted-foreground hover:text-foreground">
+                <Link href={basePath} className="text-muted-foreground hover:text-foreground print:hidden">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex-1">
@@ -118,7 +118,10 @@ export function VoucherDetail({ basePath }: { basePath: string }) {
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.narration ?? "—"}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 print:hidden">
+                    <Button variant="outline" onClick={() => window.print()}>
+                        <Printer size={14} /> Print
+                    </Button>
                     {voucher.deletedAt ? (
                         <>
                             {canDelete && (

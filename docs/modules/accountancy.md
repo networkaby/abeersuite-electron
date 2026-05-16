@@ -145,6 +145,53 @@ These are the **single source of truth** for every balance/value calculation in 
 - **2026-05-12 — PurchaseDialog removed**: `src/store/purchaseDialogStore.ts` and its modal mount in `office/layout.tsx` were deleted. `/purchase` is now a standalone full-page route (same pattern as `/sale`). Any deep-link or "shortcut" that previously opened the dialog must point to `/purchase` instead. `/office/accountancy/purchases/new` redirects to `/purchase`.
 - **2026-05-12 — Trading voucher edit-in-place (preserves reference)**: All four trading voucher form pages (`/sale`, `/purchase`, `/sale-return`, `/purchase-return`) accept `?voucherId=<id>`. The form fetches + prefills the voucher and PATCHes on save. **The voucher reference number is preserved across edits** — same row, same `id`, same `reference`. Server-side PATCH handles both states: DRAFT edits are a plain update; **POSTED edits run reverse → apply → re-post in one transaction** (reverses original stock ledger + cached stock, posts a reversal JE + cancels the original JE for audit, replaces lines + header, then re-posts via `postInvVoucherToGl`). Cancelled / deleted vouchers return 409 ("use Duplicate to make a fresh copy"). The form shows an amber pill `"Posted — edit reposts on save"` when editing a POSTED voucher so the user knows the implications.
 
+## Thermal print (voucher)
+
+Voucher detail pages (`VoucherDetail.tsx`) have a **Print** button that sends the voucher directly to a LAN thermal printer with no browser dialog.
+
+### Architecture
+Because the Next.js app is cloud-hosted, the server cannot reach a local LAN printer. Printing is **client-initiated**: the browser calls a tiny local relay script running on the shop PC, which forwards ESC/POS commands to the printer over TCP.
+
+```
+Browser → http://localhost:9191/print → tools/thermal-relay/relay.js → Printer IP:9100
+```
+
+### Setup (shop PC)
+1. Copy `tools/thermal-relay/` to the shop PC.
+2. Edit `config.json` — set `printerIp` to the printer's LAN IP.
+3. `npm install` (once), then `node relay.js` (or add to Windows startup via Task Scheduler / pm2).
+
+### Relay endpoints
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `http://localhost:9191/health` | Liveness check — called before every print job |
+| `POST` | `http://localhost:9191/print` | Accepts voucher JSON, builds ESC/POS, sends to printer |
+
+### Print payload (sent by browser)
+```jsonc
+{
+  "reference": "PV-2026-0001",
+  "date": "2026-05-17T...",
+  "type": "PAYMENT",
+  "party": "XYZ Ltd",          // null if no partyAccount
+  "narration": "...",           // null if absent
+  "lines": [
+    { "accountName": "Cash", "type": "CREDIT", "amount": 10000, "description": null }
+  ],
+  "totalDebit": 10000,
+  "totalCredit": 10000,
+  "status": "POSTED",
+  "createdBy": "Admin"
+}
+```
+
+### Files
+- `tools/thermal-relay/relay.js` — Express server, ESC/POS builder, TCP sender
+- `tools/thermal-relay/package.json` — deps: `express`, `cors`, `node-thermal-printer`
+- `tools/thermal-relay/config.json` — local config (gitignored; never commit printer IP)
+- `tools/thermal-relay/README.md` — full setup guide
+- `src/modules/accountancy/components/VoucherDetail.tsx` — Print button + `handlePrint`
+
 ## Out of scope / deferred
 
 - GSTR returns, e-Invoice, RCM — deferred (see [tally_module_status memory](../../memory/tally_module_status.md)).
@@ -155,4 +202,4 @@ These are the **single source of truth** for every balance/value calculation in 
 
 - **2026-05-16 — Tax Classification report shipped**: new master-data view at `/office/accountancy/reports/gst/classification` with four tabs (Rate-wise / HSN-wise / Group hierarchy / Item-wise). All four read from a single new endpoint `GET /api/accountancy/reports/gst-classification` that returns the entire catalog cascade-resolved in 3 SQL queries (products + groups + orgDefaults) via `resolveProductTaxBatch` in `gstResolver.ts`. Inline-edit cells on Group hierarchy + Item-wise tabs PATCH directly to `/api/inventory/product-groups/[id]` and `/api/inventory/products/[id]` (gated by `inventory:manage`). Per-row pencil on Item-wise opens the full `InvProductDialog` directly on the Tax tab via new `defaultTab` prop (also threaded into `InvProductFormFields`). Page added as a 5th card on the GST hub.
 
-_Last updated: 2026-05-16 — Sidebar: Accountancy includes **GST Reports** submenu (`MODULE_SECTIONS` in `constants.ts`) linking hub + outward/inward liability + HSN Summary + Tax Classification. Previously: Tax Classification report shipped (master-derived complement to HSN Summary). Earlier: added `postContra(tx, ...)` helper for system-generated Contras (used by POS shift open/close); POS sales now create a cash-receipt JE that closes AR same-transaction._
+_Last updated: 2026-05-17 — Thermal print added: `VoucherDetail` now has a Print button that routes through a local relay script (`tools/thermal-relay/`) to an ESC/POS LAN printer — no browser dialog, no port forwarding. Previously (2026-05-16): Tax Classification report shipped; GST Reports submenu added to sidebar._

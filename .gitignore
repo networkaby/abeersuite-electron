@@ -45,3 +45,7 @@ next-env.d.ts
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Thermal relay local config (contains printer IP)
+tools/thermal-relay/config.json
+tools/thermal-relay/node_modules/
