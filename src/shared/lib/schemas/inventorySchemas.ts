@@ -32,7 +32,14 @@ export const invCategoryCreateSchema = nameIsActiveSchema.extend({
 
 export const invCategoryUpdateSchema = invCategoryCreateSchema.partial();
 
-export const invProductGroupCreateSchema = nameIsActiveSchema;
+const TAXABILITY = ["TAXABLE", "EXEMPT", "NIL_RATED", "NON_GST"] as const;
+
+export const invProductGroupCreateSchema = nameIsActiveSchema.extend({
+    parentId:   z.number().int().positive().nullish(),
+    gstRateId:  z.number().int().positive().nullish(),
+    hsnCode:    zOptStr(32),
+    taxability: z.enum(TAXABILITY).nullish(),
+});
 
 export const invProductGroupUpdateSchema = invProductGroupCreateSchema.partial();
 
@@ -94,6 +101,11 @@ export const invProductCreateSchema = z.object({
     ...productOpening,
     // Flat key→value bag for SEO naming tokens and extra product info.
     attrsJson: z.record(z.string(), z.string()).nullish(),
+    // GST classification — all optional; null means "inherit via cascade".
+    // No defaults; the product form must NOT prefill these.
+    gstRateId:  z.number().int().positive().nullish(),
+    hsnCode:    zOptStr(32),
+    taxability: z.enum(TAXABILITY).nullish(),
 });
 
 export const invProductUpdateSchema = invProductCreateSchema.partial().extend({

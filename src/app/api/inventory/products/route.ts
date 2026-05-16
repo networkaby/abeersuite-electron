@@ -18,6 +18,7 @@ const productInclude = {
     group: { select: { id: true, name: true } },
     brand: { select: { id: true, name: true } },
     warrantyTerm: { select: { id: true, name: true } },
+    gstRate: { select: { id: true, rate: true, label: true } },
 } as const;
 
 async function assertProductFks(data: {
@@ -26,6 +27,7 @@ async function assertProductFks(data: {
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
+    gstRateId: number | null;
 }) {
     const u = await prisma.invUnit.findUnique({ where: { id: data.unitId } });
     if (!u) throw new Error("Unit not found");
@@ -44,6 +46,10 @@ async function assertProductFks(data: {
     if (data.warrantyTermId != null) {
         const w = await prisma.invWarrantyTerm.findUnique({ where: { id: data.warrantyTermId } });
         if (!w) throw new Error("Warranty term not found");
+    }
+    if (data.gstRateId != null) {
+        const gr = await prisma.gstRate.findUnique({ where: { id: data.gstRateId } });
+        if (!gr) throw new Error("GST rate not found");
     }
 }
 
@@ -107,6 +113,7 @@ export async function POST(req: Request) {
             groupId: b.groupId ?? null,
             brandId: b.brandId ?? null,
             warrantyTermId: b.warrantyTermId ?? null,
+            gstRateId: b.gstRateId ?? null,
         });
         const row = await prisma.invProduct.create({
             data: {
@@ -139,6 +146,10 @@ export async function POST(req: Request) {
                 openingRate:      b.openingRate  ?? null,
                 openingValue:     productOpeningValue(b),
                 openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
+                // GST classification — all null by default (resolver cascades at read time).
+                gstRateId:  b.gstRateId  ?? null,
+                hsnCode:    b.hsnCode    ?? null,
+                taxability: b.taxability ?? null,
                 // Sync running caches via shared helper so reports light up
                 // immediately. Explicit costPaise (Pricing tab) wins over the
                 // helper's opening-derived costPaise — see merge below.

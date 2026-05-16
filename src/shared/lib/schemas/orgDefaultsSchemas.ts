@@ -14,7 +14,9 @@ const trimToNullable = (maxLen: number) =>
 
 export const orgDefaultsUpdateSchema = z.object({
     defaultUnitId:              z.number().int().positive().nullable().optional(),
-    defaultGstRate:             z.number().min(0).max(100).nullable().optional(),
+    /// FK to GstRate master — used as the final fallback in the cascading
+    /// product → group → org-default lookup.
+    defaultGstRateId:           z.number().int().positive().nullable().optional(),
     defaultHsnCode:             trimToNullable(32).optional(),
     defaultTaxability:          z.enum(TAXABILITY).nullable().optional(),
     defaultSaleCreditPeriod:     z.number().int().min(0).nullable().optional(),

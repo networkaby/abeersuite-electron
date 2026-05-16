@@ -66,6 +66,11 @@ export type InvProductFormState = {
     openingDate:   string;
     /** Custom attribute pairs — stored as attrsJson in DB. */
     attrs: Array<{ key: string; value: string }>;
+    // GST classification — all optional; empty = "inherit from group/org-default".
+    // These must NEVER be prefilled; empty string means null (cascade applies).
+    gstRateId:  string;
+    hsnCode:    string;
+    taxability: string;
 };
 
 export const emptyInvProductForm: InvProductFormState = {
@@ -97,11 +102,43 @@ export const emptyInvProductForm: InvProductFormState = {
     openingRate: "",
     openingDate: "",
     attrs: [],
+    // GST fields — always empty on create; never prefilled.
+    gstRateId:  "",
+    hsnCode:    "",
+    taxability: "",
 };
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
+export type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
+
+/** Read-only cascade preview returned by /api/inventory/products/[id]/resolved-tax */
+export type EffectiveTax = {
+    gstRate: number | null;
+    gstRateLabel: string | null;
+    gstSource: string | { kind: "group"; groupId: number; groupName: string } | null;
+    hsnCode: string | null;
+    hsnSource: string | { kind: "group"; groupId: number; groupName: string } | null;
+    taxability: string | null;
+    taxabilitySource: string | { kind: "group"; groupId: number; groupName: string } | null;
+};
+
 export type AttrMasterRow = { id: number; key: string; name: string; categoryId: number | null; isActive: boolean };
+
+const TAXABILITY_OPTIONS = [
+    { value: "TAXABLE",  label: "Taxable" },
+    { value: "EXEMPT",   label: "Exempt" },
+    { value: "NIL_RATED", label: "Nil Rated (0%)" },
+    { value: "NON_GST",  label: "Non-GST" },
+] as const;
+
+function taxSourceLabel(src: EffectiveTax["gstSource"]): string {
+    if (!src) return "not set";
+    if (src === "product") return "this product";
+    if (src === "org-default") return "org default";
+    if (typeof src === "object" && src.kind === "group") return `group: ${src.groupName}`;
+    return String(src);
+}
 
 export function InvProductFormFields({
     form,
@@ -111,6 +148,8 @@ export function InvProductFormFields({
     groups,
     brands,
     warrantyTerms,
+    gstRates = [],
+    effectiveTax,
     skuDisabled,
     namingConfig,
     attrMasters = [],
@@ -124,6 +163,9 @@ export function InvProductFormFields({
     groups: Opt[];
     brands: Opt[];
     warrantyTerms: Opt[];
+    gstRates?: GstRateOpt[];
+    /** Read-only cascade preview. Undefined while loading; null if not applicable. */
+    effectiveTax?: EffectiveTax | null;
     skuDisabled?: boolean;
     namingConfig?: NamingConfigShape | null;
     attrMasters?: AttrMasterRow[];
@@ -204,6 +246,7 @@ export function InvProductFormFields({
                 <TabsTrigger value="basics">Basics</TabsTrigger>
                 <TabsTrigger value="pricing">Pricing</TabsTrigger>
                 <TabsTrigger value="stock">Stock control</TabsTrigger>
+                <TabsTrigger value="tax">Tax</TabsTrigger>
                 <TabsTrigger value="opening">Opening</TabsTrigger>
                 <TabsTrigger value="online">Online listing</TabsTrigger>
             </TabsList>
@@ -521,6 +564,104 @@ export function InvProductFormFields({
                         </div>
                     </div>
                 </div>
+            </TabsContent>
+
+            <TabsContent value="tax" className={tabPanel}>
+                <p className="text-xs text-muted-foreground mb-4">
+                    Leave all fields empty to inherit GST / HSN from the product&apos;s group hierarchy.
+                    The &quot;Effective&quot; row below shows what will be applied when this product is added to a voucher.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                        <Label>GST rate</Label>
+                        <Select
+                            value={form.gstRateId || "__none__"}
+                            onValueChange={(v) => setForm((f) => ({ ...f, gstRateId: v === "__none__" ? "" : v }))}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="— inherit —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">— inherit —</SelectItem>
+                                {gstRates.filter((r) => r.isActive).map((r) => (
+                                    <SelectItem key={r.id} value={String(r.id)}>
+                                        {r.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">Empty = inherit from group / org default.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>HSN / SAC code</Label>
+                        <Input
+                            value={form.hsnCode}
+                            onChange={(e) => setForm((f) => ({ ...f, hsnCode: e.target.value }))}
+                            placeholder="Leave empty to inherit"
+                            maxLength={32}
+                        />
+                        <p className="text-[11px] text-muted-foreground">4–8 digit code for GST reports (HSN for goods, SAC for services).</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Taxability</Label>
+                        <Select
+                            value={form.taxability || "__none__"}
+                            onValueChange={(v) => setForm((f) => ({ ...f, taxability: v === "__none__" ? "" : v }))}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="— inherit —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">— inherit —</SelectItem>
+                                {TAXABILITY_OPTIONS.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>
+                                        {o.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">Empty = inherit from group / org default.</p>
+                    </div>
+                </div>
+
+                {/* Read-only cascade preview */}
+                {effectiveTax !== undefined && (
+                    <div className="mt-5 rounded-md border bg-muted/40 p-3 space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Effective (cascade result)</p>
+                        <div className="grid gap-1 text-xs sm:grid-cols-3">
+                            <div>
+                                <span className="text-muted-foreground">GST rate: </span>
+                                {effectiveTax == null ? (
+                                    <span className="text-muted-foreground italic">loading…</span>
+                                ) : effectiveTax.gstRate != null ? (
+                                    <><span className="font-medium">{Number(effectiveTax.gstRate).toFixed(2)}%</span> <span className="text-muted-foreground">({taxSourceLabel(effectiveTax.gstSource)})</span></>
+                                ) : (
+                                    <span className="text-muted-foreground italic">not set</span>
+                                )}
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">HSN: </span>
+                                {effectiveTax == null ? (
+                                    <span className="text-muted-foreground italic">loading…</span>
+                                ) : effectiveTax.hsnCode ? (
+                                    <><span className="font-mono font-medium">{effectiveTax.hsnCode}</span> <span className="text-muted-foreground">({taxSourceLabel(effectiveTax.hsnSource)})</span></>
+                                ) : (
+                                    <span className="text-muted-foreground italic">not set</span>
+                                )}
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">Taxability: </span>
+                                {effectiveTax == null ? (
+                                    <span className="text-muted-foreground italic">loading…</span>
+                                ) : effectiveTax.taxability ? (
+                                    <><span className="font-medium">{effectiveTax.taxability}</span> <span className="text-muted-foreground">({taxSourceLabel(effectiveTax.taxabilitySource)})</span></>
+                                ) : (
+                                    <span className="text-muted-foreground italic">not set</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </TabsContent>
 
             <TabsContent value="opening" className={tabPanel}>

@@ -3,7 +3,8 @@ import axios from "axios";
 export interface OrgDefaultsData {
     id: number;
     defaultUnitId: number | null;
-    defaultGstRate: string | null;
+    /// FK to GstRate master — final fallback in the cascading GST lookup.
+    defaultGstRateId: number | null;
     defaultHsnCode: string | null;
     defaultTaxability: string | null;
     defaultSaleCreditPeriod: number | null;

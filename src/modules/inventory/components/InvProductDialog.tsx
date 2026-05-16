@@ -23,6 +23,8 @@ import {
     InvProductFormFields,
     emptyInvProductForm,
     type AttrMasterRow,
+    type EffectiveTax,
+    type GstRateOpt,
     type InvProductFormState,
 } from "@/modules/inventory/components/InvProductFormFields";
 import { generateSku } from "@/modules/inventory/lib/sku";
@@ -59,6 +61,9 @@ export type InvProductRow = {
     openingRate: number | string | null;
     openingStockDate: string | null;
     attrsJson: Record<string, string> | null;
+    gstRateId: number | null;
+    hsnCode: string | null;
+    taxability: string | null;
 };
 
 const paiseToRupees = (p: number | null): string =>
@@ -115,6 +120,10 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         attrs: p.attrsJson
             ? Object.entries(p.attrsJson).map(([key, value]) => ({ key, value: String(value) }))
             : [],
+        // GST fields — populated from saved values; empty = null = inherit.
+        gstRateId:  p.gstRateId  != null ? String(p.gstRateId)  : "",
+        hsnCode:    p.hsnCode    ?? "",
+        taxability: p.taxability ?? "",
     };
 }
 
@@ -149,8 +158,10 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [groups, setGroups] = useState<Opt[]>([]);
     const [brands, setBrands] = useState<Opt[]>([]);
     const [warrantyTerms, setWarrantyTerms] = useState<Opt[]>([]);
+    const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
     const [namingConfig, setNamingConfig] = useState<NamingConfigShape>(DEFAULT_NAMING_CONFIG);
     const [attrMasters, setAttrMasters] = useState<AttrMasterRow[]>([]);
+    const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
     const [saving, setSaving] = useState(false);
     const [refsLoaded, setRefsLoaded] = useState(false);
 
@@ -163,6 +174,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             axios.get<Opt[]>("/api/inventory/product-groups").then((r) => setGroups(r.data)),
             axios.get<Opt[]>("/api/inventory/brands").then((r) => setBrands(r.data)),
             axios.get<Opt[]>("/api/inventory/warranty-terms").then((r) => setWarrantyTerms(r.data)),
+            axios.get<GstRateOpt[]>("/api/inventory/gst-rates").then((r) => setGstRates(r.data)),
             axios.get<NamingConfigShape>("/api/inventory/naming-config").then((r) => setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
             axios.get<AttrMasterRow[]>("/api/inventory/attribute-masters").then((r) => setAttrMasters(r.data)),
         ])
@@ -176,6 +188,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         if (!open) return;
         if (editId == null) {
             // Fetch org defaults to pre-fill unit; explicit defaultValues always win.
+            // GST fields are intentionally NOT prefilled — user must explicitly set them.
+            setEffectiveTax(undefined);
             getOrgDefaults()
                 .then((d) => {
                     setForm({
@@ -190,9 +204,15 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 });
             return;
         }
+        setEffectiveTax(undefined);
         axios
             .get<InvProductRow>(`/api/inventory/products/${editId}`)
-            .then((r) => setForm(rowToForm(r.data)))
+            .then((r) => {
+                setForm(rowToForm(r.data));
+                // Load cascade preview for edit mode.
+                return axios.get<EffectiveTax>(`/api/inventory/products/${editId}/resolved-tax`);
+            })
+            .then((r) => setEffectiveTax(r.data))
             .catch(() => {
                 toast.error("Failed to load product");
                 onOpenChange(false);
@@ -242,6 +262,10 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             attrsJson: form.attrs.filter((a) => a.key.trim()).length > 0
                 ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
                 : null,
+            // GST fields — null clears back to "inherit"; empty string treated as null.
+            gstRateId:  form.gstRateId.trim() !== "" ? parseInt(form.gstRateId, 10) : null,
+            hsnCode:    optionalStr(form.hsnCode),
+            taxability: form.taxability.trim() !== "" ? form.taxability : null,
         };
 
         setSaving(true);
@@ -278,6 +302,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         groups={groups}
                         brands={brands}
                         warrantyTerms={warrantyTerms}
+                        gstRates={gstRates}
+                        effectiveTax={effectiveTax}
                         skuDisabled={false}
                         namingConfig={namingConfig}
                         attrMasters={attrMasters}

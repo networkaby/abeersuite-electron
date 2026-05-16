@@ -915,6 +915,30 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             }
             return updated;
         });
+        // Cascade GST prefill: resolve effective tax from product → group → org-default,
+        // then snapshot onto the line's taxRate. User can override after.
+        if (product) {
+            axios
+                .get<{ gstRate: number | null }>(`/api/inventory/products/${product.id}/resolved-tax`)
+                .then(({ data }) => {
+                    if (data.gstRate == null) return;
+                    const resolvedRate = String(data.gstRate);
+                    setLines((ls) => ls.map((l) => {
+                        if (l.id !== lineId_) return l;
+                        // Only apply if the user hasn't manually typed a rate already.
+                        const existing = l.taxRate.trim();
+                        if (existing !== "" && existing !== "0") return l;
+                        const newTaxRate = resolvedRate;
+                        const gross = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0);
+                        const discAmt = parseFloat(l.discountAmt) || 0;
+                        const taxable = gross - discAmt;
+                        const tRate = parseFloat(newTaxRate) || 0;
+                        const newTaxAmt = taxable * (tRate / 100);
+                        return { ...l, taxRate: newTaxRate, taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "" };
+                    }));
+                })
+                .catch(() => {/* non-fatal — user can set taxRate manually */});
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

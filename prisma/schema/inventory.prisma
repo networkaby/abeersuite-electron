@@ -20,6 +20,11 @@ model GstRate {
   label       String  @unique
   description String?
   isActive    Boolean @default(true)
+
+  // Back-relations for cascading GST lookup (product → group → org-default).
+  products       InvProduct[]      @relation("InvProductGst")
+  productGroups  InvProductGroup[] @relation("InvProductGroupGst")
+  orgDefaults    OrgDefaults[]     @relation("OrgDefaultsGst")
 }
 
 model InvCategory {
@@ -46,9 +51,23 @@ model InvProductGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ── Hierarchy ──────────────────────────────────────────────────────────────
+  // Self-referential parent chain drives the GST / HSN / Taxability cascade
+  // on InvProduct: product → group → parent group → … → OrgDefaults.
+  parentId  Int?
+  parent    InvProductGroup?  @relation("InvProductGroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  InvProductGroup[] @relation("InvProductGroupHierarchy")
+
+  // ── GST / HSN classification (optional — inherited from parent when null) ──
+  gstRateId   Int?
+  gstRate     GstRate?    @relation("InvProductGroupGst", fields: [gstRateId], references: [id], onDelete: SetNull)
+  hsnCode     String?
+  taxability  Taxability?
+
   products InvProduct[]
 
   @@unique([name])
+  @@index([parentId])
 }
 
 model InvBrand {
@@ -196,12 +215,15 @@ model InvProduct {
   openingValue     Decimal?  @db.Decimal(14, 2)
   openingStockDate DateTime? @db.Date
 
-  // ── GST classification ──────────────────────────────────────────────────
-  /// HSN (goods) or SAC (services) code — drives the rate-wise summary
+  // ── GST classification (optional — inherited from group/parent group when null) ──
+  /// HSN (goods) or SAC (services) code — drives the rate-wise summary.
+  /// null → resolver walks group ancestors, then OrgDefaults.defaultHsnCode.
   hsnCode    String?
-  /// Default GST rate at point-of-sale (0 / 5 / 12 / 18 / 28). Voucher line
-  /// can still override on entry.
-  gstRate    Decimal?    @db.Decimal(5, 2)
+  /// FK to the GstRate master. null → resolver walks group ancestors, then
+  /// OrgDefaults.defaultGstRateId. Each voucher line snapshots the resolved
+  /// rate at entry time so past invoices stay immutable.
+  gstRateId  Int?
+  gstRate    GstRate?    @relation("InvProductGst", fields: [gstRateId], references: [id], onDelete: SetNull)
   taxability Taxability?
 
   unit         InvUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
@@ -221,6 +243,7 @@ model InvProduct {
   @@index([groupId])
   @@index([brandId])
   @@index([warrantyTermId])
+  @@index([gstRateId])
   @@index([isListedInShop])
 }
 

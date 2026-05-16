@@ -75,10 +75,12 @@ model UserPost {
 model OrgDefaults {
   id Int @id @default(1) // singleton — always row id=1
 
-  // Product defaults
+  // Product defaults — final fallback in the GST/HSN cascade
+  // (product → group → parent group → … → here).
   defaultUnitId      Int?
   defaultUnit        InvUnit?    @relation(fields: [defaultUnitId], references: [id], onDelete: SetNull)
-  defaultGstRate     Decimal?    @db.Decimal(5, 2)
+  defaultGstRateId   Int?
+  defaultGstRate     GstRate?    @relation("OrgDefaultsGst", fields: [defaultGstRateId], references: [id], onDelete: SetNull)
   defaultHsnCode     String?
   defaultTaxability  Taxability?
 

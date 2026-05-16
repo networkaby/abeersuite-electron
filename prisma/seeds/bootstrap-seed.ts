@@ -929,7 +929,7 @@ async function main() {
     console.log(`      ✓ InvNamingConfig singleton seeded\n`);
 
     // ── Section 8: GST Rate master ─────────────────────────────────────
-    console.log("[8/8] GST Rate master (Indian slabs)");
+    console.log("[8/9] GST Rate master (Indian slabs)");
     const GST_RATES = [
         { rate: "0.00",  label: "Nil (0%)",         description: "Nil rated — essential goods & services" },
         { rate: "0.25",  label: "Special (0.25%)",   description: "Rough / uncut diamonds" },
@@ -947,6 +947,25 @@ async function main() {
         });
     }
     console.log(`      ✓ ${GST_RATES.length} GST rates seeded\n`);
+
+    // ── Section 9: Org Defaults singleton ─────────────────────────────
+    console.log("[9/9] Org Defaults (singleton, id=1)");
+    // Resolve the GST 18% master row that we just seeded in section 8.
+    const gst18 = await prisma.gstRate.findUnique({ where: { label: "GST 18%" } });
+    await prisma.orgDefaults.upsert({
+        where:  { id: 1 },
+        // On first run: seed with sensible defaults (GST 18%, TAXABLE, ₹).
+        // On re-run: update only fields that are still at their default so
+        // admin-customised values are NOT overwritten.
+        create: {
+            id: 1,
+            defaultGstRateId:  gst18?.id ?? null,
+            defaultTaxability: "TAXABLE",
+            defaultCurrencySymbol: "₹",
+        },
+        update: {},   // never overwrite admin changes on re-seed
+    });
+    console.log(`      ✓ OrgDefaults singleton seeded (defaultGstRateId=${gst18?.id ?? "null"} → 18%, TAXABLE, ₹)\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

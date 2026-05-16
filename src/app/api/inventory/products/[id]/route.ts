@@ -16,6 +16,7 @@ const productInclude = {
     group: { select: { id: true, name: true } },
     brand: { select: { id: true, name: true } },
     warrantyTerm: { select: { id: true, name: true } },
+    gstRate: { select: { id: true, rate: true, label: true } },
 } as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +72,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const w = await prisma.invWarrantyTerm.findUnique({ where: { id: warrantyTermId } });
             if (!w) return NextResponse.json({ error: "Warranty term not found" }, { status: 400 });
         }
+        if (b.gstRateId != null) {
+            const gr = await prisma.gstRate.findUnique({ where: { id: b.gstRateId } });
+            if (!gr) return NextResponse.json({ error: "GST rate not found" }, { status: 400 });
+        }
 
         let sku = current.sku;
         if (b.sku !== undefined) {
@@ -121,6 +126,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
                 } : {}),
                 ...(b.costPaise !== undefined ? { costPaise: b.costPaise } : {}),
+                // GST classification — null clears the override and re-enables cascade.
+                ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),
+                ...(b.hsnCode    !== undefined ? { hsnCode:    b.hsnCode    } : {}),
+                ...(b.taxability !== undefined ? { taxability: b.taxability } : {}),
             },
             include: productInclude,
         });

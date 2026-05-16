@@ -190,7 +190,7 @@ Import from the barrel: `import { … } from "@/shared/lib/api"`.
 Helpers used by only **one** module live inside that module and are documented in its `docs/modules/<m>.md` "Reusable helpers — DO NOT duplicate" table. Check there before adding new helpers to a module:
 
 - [accountancy.md](modules/accountancy.md) — `aggregateLedger`, `effectiveBalance`, `loadGroupRolledUpBalances`, `closingStock`, `netProfitLoss`, `voucherLifecycle`, `postInvVoucher`, `postInvoiceJe`, `refResolver`, `seedVoucherSeries`, …
-- [inventory.md](modules/inventory.md) — `stock` / `stockValue` helpers (`productOpeningValue`, `productClosingValue`, `calcLineTotals`, `calcVoucherTotals`, …)
+- [inventory.md](modules/inventory.md) — `stock` / `stockValue` helpers (`productOpeningValue`, `productClosingValue`, `calcLineTotals`, `calcVoucherTotals`, …); `resolveProductTax` (GST/HSN cascade resolver)
 - [people.md](modules/people.md) — `crmPipeline`, `companyContacts`, `contactWrite`
 - [pos.md](modules/pos.md) — `postContra`, `postPosReceiptJe`, `shiftMath`, `PosReturnDialog`
 - [repair.md](modules/repair.md) — `ticketScope`, `repairPipeline`

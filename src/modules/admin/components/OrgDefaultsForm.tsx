@@ -23,10 +23,17 @@ interface InvUnit {
     isActive: boolean;
 }
 
+interface GstRateOpt {
+    id: number;
+    rate: string | number;
+    label: string;
+    isActive: boolean;
+}
+
 interface OrgDefaults {
     id: number;
     defaultUnitId: number | null;
-    defaultGstRate: string | null;
+    defaultGstRateId: number | null;
     defaultHsnCode: string | null;
     defaultTaxability: string | null;
     defaultSaleCreditPeriod: number | null;
@@ -46,15 +53,19 @@ const NONE = "__none__";
 export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
     const [data, setData] = useState<OrgDefaults | null>(null);
     const [draft, setDraft] = useState<OrgDefaults | null>(null);
+    const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        axios
-            .get<OrgDefaults>("/api/settings/org-defaults")
-            .then((r) => {
-                setData(r.data);
-                setDraft(r.data);
+        Promise.all([
+            axios.get<OrgDefaults>("/api/settings/org-defaults"),
+            axios.get<GstRateOpt[]>("/api/inventory/gst-rates"),
+        ])
+            .then(([defaultsRes, ratesRes]) => {
+                setData(defaultsRes.data);
+                setDraft(defaultsRes.data);
+                setGstRates(ratesRes.data);
             })
             .catch(() => toast.error("Failed to load org defaults"))
             .finally(() => setLoading(false));
@@ -70,7 +81,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
         try {
             const payload = {
                 defaultUnitId: draft.defaultUnitId,
-                defaultGstRate: draft.defaultGstRate !== null ? Number(draft.defaultGstRate) : null,
+                defaultGstRateId: draft.defaultGstRateId,
                 defaultHsnCode: draft.defaultHsnCode,
                 defaultTaxability: draft.defaultTaxability,
                 defaultSaleCreditPeriod: draft.defaultSaleCreditPeriod,
@@ -148,19 +159,24 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                     </div>
 
                     <div className="space-y-1">
-                        <Label className="text-xs">Default GST rate (%)</Label>
-                        <Input
-                            type="text" // validate as number between 0 and 100 in ui level.
-                            // min={0}
-                            // max={100}
-                            // step={0.01}
-                            className="h-9"
-                            placeholder="e.g. 18"
-                            value={draft.defaultGstRate ?? ""}
-                            onChange={(e) =>
-                                set("defaultGstRate", e.target.value === "" ? null : e.target.value)
-                            }
-                        />
+                        <Label className="text-xs">Default GST rate</Label>
+                        <Select
+                            value={draft.defaultGstRateId != null ? String(draft.defaultGstRateId) : NONE}
+                            onValueChange={(v) => set("defaultGstRateId", v === NONE ? null : Number(v))}
+                        >
+                            <SelectTrigger className="h-9">
+                                <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NONE}>None</SelectItem>
+                                {gstRates.filter((r) => r.isActive).map((r) => (
+                                    <SelectItem key={r.id} value={String(r.id)}>
+                                        {r.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">Final fallback when product and group have no GST.</p>
                     </div>
 
                     <div className="space-y-1">

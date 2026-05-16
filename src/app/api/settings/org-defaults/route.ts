@@ -5,6 +5,10 @@ import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { orgDefaultsUpdateSchema } from "@/shared/lib/schemas/orgDefaultsSchemas";
 
+const orgDefaultsInclude = {
+    defaultGstRate: { select: { id: true, rate: true, label: true } },
+} as const;
+
 // GET /api/settings/org-defaults — singleton; auto-creates row if missing.
 export async function GET() {
     const { response } = await requireAuth();
@@ -14,6 +18,7 @@ export async function GET() {
         where: { id: 1 },
         create: { id: 1 },
         update: {},
+        include: orgDefaultsInclude,
     });
     return NextResponse.json(row);
 }
@@ -30,6 +35,7 @@ export async function PATCH(req: Request) {
         where: { id: 1 },
         create: { id: 1, ...data },
         update: data,
+        include: orgDefaultsInclude,
     });
     return NextResponse.json(row);
 }

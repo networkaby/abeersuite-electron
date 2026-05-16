@@ -42,12 +42,12 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 
 - `User`, `Role`, `Permission`, `RolePermission`, `UserPermission` (in `prisma/schema/users.prisma`).
 - `Branch`, `Department`, `Post`, `PostHolder` (org-shape).
-- `OrgDefaults` — singleton (id=1) in `prisma/schema/org.prisma`. Fields: `defaultUnitId`, `defaultGstRate`, `defaultHsnCode`, `defaultTaxability`, `defaultSalePaymentTerm`, `defaultPurchasePaymentTerm`, `defaultCurrencyCode`, `defaultLocale`. Auto-upserted on first GET; no bootstrap seed required (follows `BooksConfig` pattern).
+- `OrgDefaults` — singleton (id=1) in `prisma/schema/org.prisma`. Fields: `defaultUnitId` (FK → `InvUnit`), `defaultGstRateId` (FK → `GstRate`), `defaultHsnCode`, `defaultTaxability`, `defaultSaleCreditPeriod` (days), `defaultPurchaseCreditPeriod` (days), `defaultCurrencySymbol`. Auto-upserted on first GET; bootstrap seed upserts the row with `defaultGstRateId` pointing to the 18% `GstRate` row. Acts as final fallback in the GST/HSN cascade (after product and all group ancestors return null).
 - `Pipeline`, `TicketStatus`, `TicketSubStatus`, `SubStatusGroup`, `StatusTransition`, `SubStatusTransition` (in `prisma/schema/pipeline.prisma`).
 
 ## Key components / library
 
-- `src/modules/admin/components/OrgDefaultsForm.tsx` — client form for org defaults (axios + sonner, no react-hook-form since single flat state).
+- `src/modules/admin/components/OrgDefaultsForm.tsx` — client form for org defaults (axios + sonner, no react-hook-form since single flat state). Loads `GstRate` options from `/api/inventory/gst-rates` and renders a Select (not a text input) for `defaultGstRateId`.
 - `src/shared/lib/schemas/orgDefaultsSchemas.ts` — `orgDefaultsUpdateSchema` (zod). Reusable for downstream wiring (product/voucher defaults).
 - `src/shared/lib/auth/authGuard.ts` — `requireAuth`, `requirePermission`, `requireRole`, `hasPermission`.
 - `src/shared/lib/auth/permissionScope.ts` — `hasPermissionWithScope` (handles `area:op:scope` lookup with widening).
@@ -73,4 +73,4 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-16 — added Org Defaults page + OrgDefaults model + API. Schema fix: Person.account and Company.account made optional? (FK lives on Account side, enforced at app level)._
+_Last updated: 2026-05-16 — OrgDefaults `defaultGstRate Decimal?` replaced with `defaultGstRateId Int? FK → GstRate`; OrgDefaultsForm now uses a GstRate Select dropdown. Previously: added Org Defaults page + OrgDefaults model + API._
