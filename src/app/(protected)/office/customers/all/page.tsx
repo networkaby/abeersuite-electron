@@ -100,8 +100,8 @@ export default function AllCustomersPage() {
     const [personDetail, setPersonDetail] = useState<PersonDetail | null>(null);
     const [companyDetail, setCompanyDetail] = useState<CompanyDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [personTab, setPersonTab] = useState<PersonTab>("tickets");
-    const [companyTab, setCompanyTab] = useState<CompanyTab>("contacts");
+    const [personTab, setPersonTab] = useState<PersonTab>("transactions");
+    const [companyTab, setCompanyTab] = useState<CompanyTab>("transactions");
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
 
@@ -135,7 +135,7 @@ export default function AllCustomersPage() {
                         if (cancelled) return;
                         setPersonDetail(res.data);
                         setCompanyDetail(null);
-                        setPersonTab("tickets");
+                        setPersonTab("transactions");
                     })
                     .catch(() => { if (cancelled) return; setPersonDetail(null); setCompanyDetail(null); })
                     .finally(finishLoading);
@@ -148,7 +148,7 @@ export default function AllCustomersPage() {
                     if (cancelled) return;
                     setCompanyDetail(res.data);
                     setPersonDetail(null);
-                    setCompanyTab("contacts");
+                    setCompanyTab("transactions");
                 })
                 .catch(() => { if (cancelled) return; setCompanyDetail(null); setPersonDetail(null); })
                 .finally(finishLoading);
@@ -159,25 +159,31 @@ export default function AllCustomersPage() {
 
     const handlePersonTabChange = (next: PersonTab) => {
         setPersonTab(next);
-        if (next === "transactions" && !transactions && selected) {
-            setTxLoading(true);
-            axios.get<CustomerTransactions>(`/api/people/${selected.id}/transactions`)
-                .then((r) => setTransactions(r.data))
-                .catch(() => {})
-                .finally(() => setTxLoading(false));
-        }
     };
 
     const handleCompanyTabChange = (next: CompanyTab) => {
         setCompanyTab(next);
-        if (next === "transactions" && !transactions && selected) {
-            setTxLoading(true);
-            axios.get<CustomerTransactions>(`/api/companies/${selected.id}/transactions`)
-                .then((r) => setTransactions(r.data))
-                .catch(() => {})
-                .finally(() => setTxLoading(false));
-        }
     };
+
+    useEffect(() => {
+        if (!selected) return;
+        const wantsTransactions =
+            (selected.kind === "person" && personTab === "transactions")
+            || (selected.kind === "company" && companyTab === "transactions");
+        if (!wantsTransactions || transactions) return;
+
+        setTxLoading(true);
+        const url =
+            selected.kind === "person"
+                ? `/api/people/${selected.id}/transactions`
+                : `/api/companies/${selected.id}/transactions`;
+
+        axios
+            .get<CustomerTransactions>(url)
+            .then((r) => setTransactions(r.data))
+            .catch(() => {})
+            .finally(() => setTxLoading(false));
+    }, [selected, personTab, companyTab, transactions]);
 
     const merged = useMemo<CombinedListItem[]>(
         () => [
@@ -246,7 +252,7 @@ export default function AllCustomersPage() {
                 })}
             </EntityListPanel>
 
-            <section className="flex flex-1 bg-muted/30 p-6">
+            <section className="flex flex-1 bg-muted/30">
                 {!selected && (
                     <div className="m-auto text-sm text-muted-foreground">
                         Select a person or company from the list to open details.
