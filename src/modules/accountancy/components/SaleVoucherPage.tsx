@@ -77,6 +77,7 @@ type LineState = {
     discountAmt: string;
     taxRate: string;
     taxAmount: string;
+    amountInput: string;
     description: string;
     showDescription: boolean;
 };
@@ -96,6 +97,7 @@ const newLine = (): LineState => ({
     discountAmt: "",
     taxRate: "",
     taxAmount: "",
+    amountInput: "",
     description: "",
     showDescription: false,
 });
@@ -661,6 +663,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     discountAmt: fmtNum(l.discountAmt),
                     taxRate: fmtNum(l.taxRate),
                     taxAmount: fmtNum(l.taxAmount),
+                    amountInput: "",
                     description: l.description ?? "",
                     showDescription: !!l.description,
                 })));
@@ -808,6 +811,8 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     // Bumped to v2 when rateInclTax was added — clears stale v1 cache.
     const PREFS_KEY = "saleVoucherPage.columnPrefs.v2";
     const [prefs, setPrefs] = useState<ColumnPrefs>(DEFAULT_PREFS);
+    const prefsRef = useRef<ColumnPrefs>(DEFAULT_PREFS);
+    useEffect(() => { prefsRef.current = prefs; });
     useEffect(() => {
         if (typeof window === "undefined") return;
         try {
@@ -872,6 +877,18 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         const r = taxable > 0 ? (a / taxable) * 100 : 0;
         return { ...l, taxAmount: amt, taxRate: r > 0 ? r.toFixed(2) : "" };
     }));
+    const setLineAmount = (id: number, amt: string) => setLines((ls) => ls.map((l) => {
+        if (l.id !== id) return l;
+        const a = parseFloat(amt) || 0;
+        const qty = parseFloat(l.quantity) || 1;
+        const tRate = parseFloat(l.taxRate) || 0;
+        // exclusive: amount = qty * rate * (1 + tax/100) → rate = amount / (qty * (1 + tax/100))
+        // inclusive: amount = qty * inclusiveRate → inclusiveRate = amount / qty
+        const newRate = prefs.rateInclTax && tRate > 0
+            ? a / qty
+            : (tRate > 0 ? a / (qty * (1 + tRate / 100)) : a / qty);
+        return withTaxFromRate({ ...l, rate: newRate > 0 ? String(Number(newRate.toFixed(6))) : "", amountInput: amt });
+    }));
     const setLineQtyOrRate = (id: number, patch: { quantity?: string; rate?: string }) =>
         setLines((ls) => ls.map((l) => {
             if (l.id !== id) return l;
@@ -899,11 +916,14 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                 const nextMrp = product?.mrp != null && product.mrp > 0
                     ? String(product.mrp)
                     : l.mrpRupees;
-                const gross = (parseFloat(l.quantity) || 0) * (parseFloat(nextRate) || 0);
+                const tRate = parseFloat(l.taxRate) || 0;
+                const rateInclTax = prefsRef.current.rateInclTax;
+                const parsedRate = parseFloat(nextRate) || 0;
+                const exclusiveRate = rateInclTax && tRate > 0 ? parsedRate / (1 + tRate / 100) : parsedRate;
+                const gross = (parseFloat(l.quantity) || 0) * exclusiveRate;
                 const dPct = parseFloat(l.discountPct) || 0;
                 const newDiscAmt = gross * (dPct / 100);
                 const taxable = gross - newDiscAmt;
-                const tRate = parseFloat(l.taxRate) || 0;
                 const newTaxAmt = taxable * (tRate / 100);
                 return {
                     ...l, product, rate: nextRate, mrpRupees: nextMrp,
@@ -933,10 +953,13 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                         const existing = l.taxRate.trim();
                         if (existing !== "" && existing !== "0") return l;
                         const newTaxRate = resolvedRate;
-                        const gross = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0);
+                        const rateInclTax = prefsRef.current.rateInclTax;
+                        const rawRate = parseFloat(l.rate) || 0;
+                        const tRate = parseFloat(newTaxRate) || 0;
+                        const exclusiveRate = rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
+                        const gross = (parseFloat(l.quantity) || 0) * exclusiveRate;
                         const discAmt = parseFloat(l.discountAmt) || 0;
                         const taxable = gross - discAmt;
-                        const tRate = parseFloat(newTaxRate) || 0;
                         const newTaxAmt = taxable * (tRate / 100);
                         return { ...l, taxRate: newTaxRate, taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "" };
                     }));
@@ -1625,8 +1648,19 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                     </td>
                                                 </>
                                             )}
-                                            <td className="px-2 py-1 text-right font-mono font-medium border-l border-border/40">
-                                                {c.amount > 0 ? fmt(c.amount) : ""}
+                                            <td className="px-2 py-1 border-l border-border/40">
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={line.amountInput !== "" ? line.amountInput : (c.amount > 0 ? c.amount.toFixed(2) : "")}
+                                                    onFocus={(e) => {
+                                                        updateLine(line.id, { amountInput: c.amount > 0 ? c.amount.toFixed(2) : "" });
+                                                        e.target.select();
+                                                    }}
+                                                    onChange={(e) => setLineAmount(line.id, num(e.target.value))}
+                                                    onBlur={() => updateLine(line.id, { amountInput: "" })}
+                                                    className={`${cell} text-right font-mono font-medium`}
+                                                />
                                             </td>
                                             <td className="px-1 py-1 text-center">
                                                 {/* Right action cell now only holds the note toggle —
@@ -1805,6 +1839,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                             discountAmt: Number(l.discountAmt) > 0 ? String(Number(l.discountAmt)) : "",
                                             taxRate:     Number(l.taxRate)     > 0 ? String(Number(l.taxRate))     : "",
                                             taxAmount:   Number(l.taxAmount)   > 0 ? String(Number(l.taxAmount))   : "",
+                                            amountInput: "",
                                             description: l.description ?? "",
                                             showDescription: !!l.description,
                                         })));
