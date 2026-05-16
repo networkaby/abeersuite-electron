@@ -13,6 +13,15 @@ model InvUnit {
   orgDefaultFor  OrgDefaults[]
 }
 
+model GstRate {
+  id          Int     @id @default(autoincrement())
+  /// GST rate percentage, e.g. 18.00 for 18%
+  rate        Decimal @db.Decimal(5, 2)
+  label       String  @unique
+  description String?
+  isActive    Boolean @default(true)
+}
+
 model InvCategory {
   id        Int           @id @default(autoincrement())
   name      String

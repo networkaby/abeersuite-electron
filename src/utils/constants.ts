@@ -53,6 +53,7 @@ import {
     ClipboardCheck,
     BarChart3,
     ListChecks,
+    Percent,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -356,7 +357,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Groups", icon: LayoutGrid, href: "/office/inventory/masters/product-groups", permission: "inventory:manage" },
                     { label: "Warranty Terms", icon: ShieldCheck, href: "/office/inventory/masters/warranty-terms", permission: "inventory:manage" },
                     { label: "Attribute Masters", icon: ListChecks, href: "/office/inventory/masters/attribute-masters", permission: "inventory:manage" },
-
+                    { label: "GST Rates", icon: Percent, href: "/office/inventory/masters/gst-rates", permission: "inventory:manage" },
                 ]
             },
             // {

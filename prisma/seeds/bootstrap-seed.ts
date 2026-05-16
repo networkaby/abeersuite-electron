@@ -928,6 +928,26 @@ async function main() {
     }
     console.log(`      ✓ InvNamingConfig singleton seeded\n`);
 
+    // ── Section 8: GST Rate master ─────────────────────────────────────
+    console.log("[8/8] GST Rate master (Indian slabs)");
+    const GST_RATES = [
+        { rate: "0.00",  label: "Nil (0%)",         description: "Nil rated — essential goods & services" },
+        { rate: "0.25",  label: "Special (0.25%)",   description: "Rough / uncut diamonds" },
+        { rate: "3.00",  label: "Special (3%)",      description: "Gold, silver, precious metals & jewellery" },
+        { rate: "5.00",  label: "GST 5%",            description: "Basic necessities — packaged food, transport, etc." },
+        { rate: "12.00", label: "GST 12%",           description: "Processed food, business class travel, etc." },
+        { rate: "18.00", label: "GST 18%",           description: "Standard rate — electronics, IT services, etc." },
+        { rate: "28.00", label: "GST 28%",           description: "Luxury goods, automobiles, tobacco, etc." },
+    ];
+    for (const g of GST_RATES) {
+        await prisma.gstRate.upsert({
+            where:  { label: g.label },
+            update: { rate: g.rate, description: g.description, isActive: true },
+            create: { rate: g.rate, label: g.label, description: g.description, isActive: true },
+        });
+    }
+    console.log(`      ✓ ${GST_RATES.length} GST rates seeded\n`);
+
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");
     console.log("    Run `pnpm seed:dummy-all` to populate demo data, or skip for a clean prod start.\n");
