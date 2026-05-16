@@ -34,6 +34,7 @@
 import { Fragment, useState, useCallback, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
+import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { toast } from "sonner";
 import {
@@ -566,6 +567,26 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         axios.get<{ reference: string }>(`/api/inventory/vouchers/next-ref?type=${copy.nextRefType}`)
             .then((r) => setNextRef(r.data.reference))
             .catch(() => setNextRef(""));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditing]);
+
+    // Pre-fill payment terms from OrgDefaults on new vouchers (create mode only).
+    useEffect(() => {
+        if (isEditing || !copy.showPaymentTerms) return;
+        getOrgDefaults()
+            .then((d) => {
+                const term = kind === "PURCHASE"
+                    ? d.defaultPurchasePaymentTerm
+                    : d.defaultSalePaymentTerm;
+                if (!term) return;
+                const preset = PAYMENT_TERMS.find((t) => t.label === term);
+                setHeader((h) => ({
+                    ...h,
+                    paymentTerms: term,
+                    dueDate: preset && preset.days != null ? addDays(h.date, preset.days) : h.dueDate,
+                }));
+            })
+            .catch(() => {/* silent — defaults are optional */});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
 

@@ -1,0 +1,25 @@
+import { z } from "zod";
+
+const TAXABILITY = ["TAXABLE", "EXEMPT", "NIL_RATED", "NON_GST"] as const;
+
+const trimToNullable = (maxLen: number) =>
+    z
+        .union([z.string(), z.null(), z.undefined()])
+        .transform((v) => {
+            if (v === undefined || v === null) return null;
+            const t = String(v).trim();
+            if (t === "") return null;
+            return t.slice(0, maxLen);
+        });
+
+export const orgDefaultsUpdateSchema = z.object({
+    defaultUnitId:              z.number().int().positive().nullable().optional(),
+    defaultGstRate:             z.number().min(0).max(100).nullable().optional(),
+    defaultHsnCode:             trimToNullable(32).optional(),
+    defaultTaxability:          z.enum(TAXABILITY).nullable().optional(),
+    defaultSalePaymentTerm:     trimToNullable(64).optional(),
+    defaultPurchasePaymentTerm: trimToNullable(64).optional(),
+    defaultCurrencySymbol:      z.string().trim().min(1).max(8).optional(),
+});
+
+export type OrgDefaultsUpdateInput = z.infer<typeof orgDefaultsUpdateSchema>;

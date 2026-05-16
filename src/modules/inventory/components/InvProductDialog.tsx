@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -174,7 +175,19 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     useEffect(() => {
         if (!open) return;
         if (editId == null) {
-            setForm({ ...emptyInvProductForm, sku: generateSku(), ...defaultValues });
+            // Fetch org defaults to pre-fill unit; explicit defaultValues always win.
+            getOrgDefaults()
+                .then((d) => {
+                    setForm({
+                        ...emptyInvProductForm,
+                        sku: generateSku(),
+                        unitId: d.defaultUnitId != null ? String(d.defaultUnitId) : "",
+                        ...defaultValues,
+                    });
+                })
+                .catch(() => {
+                    setForm({ ...emptyInvProductForm, sku: generateSku(), ...defaultValues });
+                });
             return;
         }
         axios
@@ -184,6 +197,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 toast.error("Failed to load product");
                 onOpenChange(false);
             });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, editId, onOpenChange]);
 
     const save = useCallback(async () => {

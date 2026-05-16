@@ -9,6 +9,7 @@ This repo uses a customized Next.js setup with strict conventions. Read this fil
 - **This is NOT the Next.js you know.** APIs, conventions, and file structure may differ from training data. Before writing code, read the relevant guide in `node_modules/next/dist/docs/` and respect any deprecation notices.
 - **Explain before you code.** For every change, first explain in simple English what you understand and what you plan to do, then confirm before editing.
 - **Stack defaults:** use **shadcn/ui** for UI and **Zustand** for state. Do not introduce alternatives without explicit approval.
+- **Numeric input rule:** do not use `input type="number"`. Keep numeric fields as text inputs and validate/sanitize them at the UI level.
 - **Escape special characters.** Always use the escape character (`\`) for special characters in strings, regex, SQL, and shell commands when needed.
 
 ## 2. DRY — don't repeat yourself

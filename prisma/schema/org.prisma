@@ -66,3 +66,28 @@ model UserPost {
 
   @@id([userId, postId])
 }
+
+// ── Org-wide defaults — singleton row (id=1) ──────────────────────────────────
+// Holds pre-fill values used when creating new products, sale vouchers, and
+// purchase vouchers. Follows the BooksConfig singleton pattern: row is
+// auto-upserted on first GET, so no bootstrap seeding is required.
+// All business-defaults are optional — admin fills them in via the UI.
+model OrgDefaults {
+  id Int @id @default(1) // singleton — always row id=1
+
+  // Product defaults
+  defaultUnitId      Int?
+  defaultUnit        InvUnit?    @relation(fields: [defaultUnitId], references: [id], onDelete: SetNull)
+  defaultGstRate     Decimal?    @db.Decimal(5, 2)
+  defaultHsnCode     String?
+  defaultTaxability  Taxability?
+
+  // Voucher defaults
+  defaultSalePaymentTerm     String?
+  defaultPurchasePaymentTerm String?
+
+  // Currency display (free-form: ₹ / INR / Rs. / $ / USD — no conversion)
+  defaultCurrencySymbol String @default("₹")
+
+  updatedAt DateTime @updatedAt
+}

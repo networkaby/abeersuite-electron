@@ -12,6 +12,7 @@
 - `/office/admin/pipelines` — pipeline master (moved from `/office/repairing/settings/pipelines` Step 2 2026-05-07)
 - `/office/admin/statuses` — ticket statuses
 - `/office/admin/sub-statuses` — ticket sub-statuses (with sub-status groups)
+- `/office/admin/org-defaults` — org-wide defaults (unit, GST, HSN, taxability, payment terms, currency)
 - `/office/admin/year-ending` — financial year close + opening balance setup
 
 > 2026-05-11: route groups `(admin)`, `(core)`, `(message)`, `(roadmap)`, `(social)` were promoted to real URL segments. Sub-paths now carry their module prefix (e.g. `/office/branches` → `/office/admin/branches`, `/office/users` → `/office/admin/users`, profile pages `/office/users/[id]` → `/office/social/users/[id]`).
@@ -23,6 +24,7 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 - `/api/roles[/[id]]` — role + permission grant matrix endpoints.
 - `/api/permissions` — list of all defined permission IDs (read-only; source of truth is `src/new-seed.ts`).
 - `/api/branches`, `/api/departments`, `/api/posts`, `/api/posts/[id]/holders` — org structure.
+- `/api/settings/org-defaults` — GET (read singleton, auto-upserts row id=1) + PATCH (update). Permission: `settings:manage`.
 - `/api/pipelines[/[id]]`, `/api/ticket-statuses[/[id]]`, `/api/sub-statuses[/[id]]`, `/api/sub-status-groups[/[id]]`, `/api/status-transitions[/[id]]`, `/api/sub-status-transitions[/[id]]` — pipeline machinery (these stay where they are even though the UI moved).
 
 ## Permissions (gate keys)
@@ -40,10 +42,13 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 
 - `User`, `Role`, `Permission`, `RolePermission`, `UserPermission` (in `prisma/schema/users.prisma`).
 - `Branch`, `Department`, `Post`, `PostHolder` (org-shape).
+- `OrgDefaults` — singleton (id=1) in `prisma/schema/org.prisma`. Fields: `defaultUnitId`, `defaultGstRate`, `defaultHsnCode`, `defaultTaxability`, `defaultSalePaymentTerm`, `defaultPurchasePaymentTerm`, `defaultCurrencyCode`, `defaultLocale`. Auto-upserted on first GET; no bootstrap seed required (follows `BooksConfig` pattern).
 - `Pipeline`, `TicketStatus`, `TicketSubStatus`, `SubStatusGroup`, `StatusTransition`, `SubStatusTransition` (in `prisma/schema/pipeline.prisma`).
 
 ## Key components / library
 
+- `src/modules/admin/components/OrgDefaultsForm.tsx` — client form for org defaults (axios + sonner, no react-hook-form since single flat state).
+- `src/shared/lib/schemas/orgDefaultsSchemas.ts` — `orgDefaultsUpdateSchema` (zod). Reusable for downstream wiring (product/voucher defaults).
 - `src/shared/lib/auth/authGuard.ts` — `requireAuth`, `requirePermission`, `requireRole`, `hasPermission`.
 - `src/shared/lib/auth/permissionScope.ts` — `hasPermissionWithScope` (handles `area:op:scope` lookup with widening).
 - `src/shared/lib/auth/makePermissionLayout.tsx` — `makePermissionLayout(permission)` — used by every `(admin)/<page>/layout.tsx`.
@@ -68,4 +73,4 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-07 — covers state after Step 0 + Step 2._
+_Last updated: 2026-05-16 — added Org Defaults page + OrgDefaults model + API. Schema fix: Person.account and Company.account made optional? (FK lives on Account side, enforced at app level)._

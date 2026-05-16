@@ -29,7 +29,7 @@ model Person {
   gstStateCode String?
   gstRegType   GstRegType?
 
-  account          Account   // a person must have account
+  account          Account?  // enforced at app level; FK lives on Account.personId
   companies        PersonCompany[]
   portalCredential PersonPortalCredential?
   shopOrders       ShopOrder[]
@@ -58,7 +58,7 @@ model Company {
   financialYearFrom  DateTime? @db.Date
   booksBeginningFrom DateTime? @db.Date
 
-  account  Account   //a compnay must have account
+  account  Account?  // enforced at app level; FK lives on Account.companyId
   persons  PersonCompany[]
   crmLeads CrmLead[]
   phones   Phone[]
