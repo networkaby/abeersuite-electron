@@ -830,6 +830,36 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         });
     };
 
+    // Toggling rateInclTax flips how the entered PRICE is interpreted: the
+    // user's typed number stays as-is, but the AMOUNT column re-derives.
+    // Without resyncing taxAmount, calcLine would keep the previous mode's
+    // stale value and the total would drift.
+    const toggleRateInclTax = () => {
+        const willBeInclusive = !prefs.rateInclTax;
+        setPrefs((p) => {
+            const next = { ...p, rateInclTax: !p.rateInclTax };
+            try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(next)); }
+            catch { /* ignore */ }
+            return next;
+        });
+        setLines((ls) => ls.map((l) => {
+            const rawRate = parseFloat(l.rate) || 0;
+            if (rawRate === 0) return l;
+            const tRate = parseFloat(l.taxRate) || 0;
+            if (tRate === 0) return l; // tax-free — taxAmount stays ""
+            const factor = 1 + tRate / 100;
+            const exclusiveRate = willBeInclusive ? rawRate / factor : rawRate;
+            const qty = parseFloat(l.quantity) || 0;
+            const discAmt = parseFloat(l.discountAmt) || 0;
+            const taxable = qty * exclusiveRate - discAmt;
+            const newTaxAmt = taxable * (tRate / 100);
+            return {
+                ...l,
+                taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "",
+            };
+        }));
+    };
+
     // ── Line edit helpers (paired %/₹) ────────────────────────────────────
     const updateLine = (id: number, patch: Partial<LineState>) =>
         setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -1461,7 +1491,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                     <button
                                         type="button"
                                         title={prefs.rateInclTax ? "Prices are entered inclusive of tax — click to switch to exclusive" : "Prices are entered exclusive of tax — click to switch to inclusive"}
-                                        onClick={() => togglePref("rateInclTax")}
+                                        onClick={() => toggleRateInclTax()}
                                         className={`text-[10px] leading-tight font-semibold uppercase tracking-wide px-1 py-0.5 rounded transition-colors ${prefs.rateInclTax ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" : "hover:bg-muted text-muted-foreground"}`}
                                     >
                                         PRICE<br />{prefs.rateInclTax ? "(incl)" : "(excl)"}
@@ -1492,7 +1522,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                             <DropdownMenuCheckboxItem checked={prefs.lineDescription} onCheckedChange={() => togglePref("lineDescription")}>Description (note)</DropdownMenuCheckboxItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuLabel className="text-xs">Price entry</DropdownMenuLabel>
-                                            <DropdownMenuCheckboxItem checked={prefs.rateInclTax} onCheckedChange={() => togglePref("rateInclTax")}>Price includes tax (GST-inclusive)</DropdownMenuCheckboxItem>
+                                            <DropdownMenuCheckboxItem checked={prefs.rateInclTax} onCheckedChange={() => toggleRateInclTax()}>Price includes tax (GST-inclusive)</DropdownMenuCheckboxItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuLabel className="text-xs">Footer fields</DropdownMenuLabel>
                                             <DropdownMenuCheckboxItem checked={prefs.overallDiscount} onCheckedChange={() => togglePref("overallDiscount")}>Overall Discount</DropdownMenuCheckboxItem>
