@@ -1,5 +1,7 @@
-// DUMMY DATA — brand master for computer / CCTV / peripherals business (India).
-// Run: pnpm seed:dummy-brands  (npx tsx prisma/seeds/dummy-brands.ts)
+// HELPER SEED — real brand master for computer / CCTV / peripherals business (India).
+// Optional: run after bootstrap if you want brands pre-populated.
+// Not needed if products are imported directly — brands will be created at import time.
+// Run: pnpm seed:helper-brands  (npx tsx prisma/seeds/helper-brands.ts)
 //
 // Sources:
 //   • Extracted from "Export Items.xlsx" product catalog (brands found in names)
