@@ -94,6 +94,12 @@ export type PartySearchAndCreateProps = {
      * a Person row makes sense. Defaults to true.
      */
     allowCompanyCreate?: boolean;
+    /**
+     * When true, opening the create dialog pre-fills the Company Name field
+     * (instead of Person Name) and focuses it. Useful for purchase contexts
+     * where suppliers are almost always companies.
+     */
+    defaultToCompany?: boolean;
 };
 
 // ── Validators ──────────────────────────────────────────────────────────────
@@ -152,12 +158,15 @@ export const PartySearchAndCreate = forwardRef<
     {
         onPicked, locked = false, autoFocus = false, placeholder, footerSlot, className,
         onDialogOpenChange, partyGroup = null, allowIncludeOther = false, allowCompanyCreate = true,
+        defaultToCompany = false,
     },
     ref,
 ) {
     const [query, setQuery] = useState("");
     const [highlightedHit, setHighlightedHit] = useState(0);
     const [includeOther, setIncludeOther] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
+    const [browseHits, setBrowseHits] = useState<PartyHit[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Effective group filter — strict to `partyGroup` unless the user opted to
@@ -171,8 +180,26 @@ export const PartySearchAndCreate = forwardRef<
         : partyGroup === "Sundry Creditors" ? "Sundry Debtors"
         : null;
 
-    // Reset highlight when hits change
-    useEffect(() => { setHighlightedHit(0); }, [hits]);
+    // Browse-on-focus: fetch the full group list whenever the input is active
+    // and empty (initial focus, or after backspace/delete clears the field).
+    useEffect(() => {
+        if (!isFocused || query.trim() || locked || !partyGroup) {
+            setBrowseHits([]);
+            return;
+        }
+        let cancelled = false;
+        axios
+            .get<PartyHit[]>(`/api/person?lookup=&group=${encodeURIComponent(partyGroup)}`)
+            .then((r) => { if (!cancelled) setBrowseHits(r.data); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [isFocused, query, locked, partyGroup]);
+
+    // activeHits: use browse list when focused+empty, search results otherwise
+    const activeHits = isFocused && !query.trim() ? browseHits : hits;
+
+    // Reset highlight when active hits change
+    useEffect(() => { setHighlightedHit(0); }, [activeHits]);
 
     // ── Create dialog state ─────────────────────────────────────────────────
     const [openDialog, setOpenDialog] = useState(false);
@@ -211,10 +238,13 @@ export const PartySearchAndCreate = forwardRef<
         if (!openDialog) return;
         setServerError(null);
         const t = setTimeout(() => {
-            (openedAsPhoneQuery ? nameRef.current : phoneRef.current)?.focus();
+            if (defaultToCompany && !openedAsPhoneQuery)
+                companyNameRef.current?.focus();
+            else
+                (openedAsPhoneQuery ? nameRef.current : phoneRef.current)?.focus();
         }, 50);
         return () => clearTimeout(t);
-    }, [openDialog, openedAsPhoneQuery]);
+    }, [openDialog, openedAsPhoneQuery, defaultToCompany]);
 
     // Clear the banner the moment the user touches any field — they're
     // fixing the input, the error is no longer current.
@@ -283,10 +313,12 @@ export const PartySearchAndCreate = forwardRef<
         }
         const phoneLike = isPhoneLike(q);
         setOpenedAsPhoneQuery(phoneLike);
+        const toCompany = defaultToCompany && !phoneLike;
         setNewParty({
             ...EMPTY_NEW_PARTY,
-            name: phoneLike ? "" : q,
-            phone: phoneLike ? q : "",
+            companyName: toCompany ? q : "",
+            name:        toCompany ? "" : (phoneLike ? "" : q),
+            phone:       phoneLike ? q : "",
         });
         setCompanyAddressTouched(false);
         setOpenDialog(true);
@@ -294,18 +326,18 @@ export const PartySearchAndCreate = forwardRef<
 
     const onSearchKeyDown = async (e: ReactKeyboardEvent<HTMLInputElement>) => {
         if (e.key === "ArrowDown") {
-            if (hits.length === 0) return;
+            if (activeHits.length === 0) return;
             e.preventDefault();
-            setHighlightedHit((i) => Math.min(i + 1, hits.length - 1));
+            setHighlightedHit((i) => Math.min(i + 1, activeHits.length - 1));
         } else if (e.key === "ArrowUp") {
-            if (hits.length === 0) return;
+            if (activeHits.length === 0) return;
             e.preventDefault();
             setHighlightedHit((i) => Math.max(i - 1, 0));
         } else if (e.key === "Enter") {
             if (query.trim().length < 2) return;
             e.preventDefault();
-            if (hits.length > 0) {
-                const hit = hits[highlightedHit] ?? hits[0];
+            if (activeHits.length > 0) {
+                const hit = activeHits[highlightedHit] ?? activeHits[0];
                 if (hit) pickHit(hit);
                 return;
             }
@@ -395,6 +427,7 @@ export const PartySearchAndCreate = forwardRef<
                             .filter(Boolean).join(" - "),
                     ].filter(Boolean).join("\n"),
                     taxId: newParty.companyGstin.trim(),
+                    ...(createUnderGroup ? { accountGroup: createUnderGroup } : {}),
                 });
                 companyId = companyRes.data.id;
                 companyName = companyRes.data.name;
@@ -482,7 +515,7 @@ export const PartySearchAndCreate = forwardRef<
         }
     };
 
-    const showDropdown = !locked && (hits.length > 0 || query.trim().length >= 2);
+    const showDropdown = !locked && (activeHits.length > 0 || query.trim().length >= 2);
 
     return (
         <div className={`relative ${className ?? ""}`}>
@@ -497,6 +530,8 @@ export const PartySearchAndCreate = forwardRef<
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={onSearchKeyDown}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
                     placeholder={placeholder ?? "Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"}
                     className={`pl-9 ${locked ? "bg-muted/50 cursor-default" : ""}`}
                     readOnly={locked}
@@ -517,7 +552,7 @@ export const PartySearchAndCreate = forwardRef<
             )}
             {showDropdown && (
                 <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
-                    {hits.map((c, i) => (
+                    {activeHits.map((c, i) => (
                         <li key={`${c.type}-${c.id}`}>
                             <button
                                 type="button"
@@ -544,7 +579,7 @@ export const PartySearchAndCreate = forwardRef<
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
                             >
                                 <UserPlus size={14} />
-                                New customer{hits.length === 0 ? `: "${query.trim()}"` : ""}
+                                New customer{activeHits.length === 0 ? `: "${query.trim()}"` : ""}
                                 <span className="ml-auto text-[10px] text-muted-foreground">
                                     {loading ? "searching…" : "↵"}
                                 </span>

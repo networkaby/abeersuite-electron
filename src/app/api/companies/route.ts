@@ -11,6 +11,7 @@ const createSchema = phoneEmailSchema.extend({
     address: z.string().trim().optional().or(z.literal("")),
     companyReg: z.string().trim().optional().or(z.literal("")),
     taxId: z.string().trim().optional().or(z.literal("")),
+    accountGroup: z.enum(["Sundry Debtors", "Sundry Creditors"]).optional(),
 });
 
 // GET /api/companies?q=...
@@ -93,12 +94,13 @@ export async function POST(req: Request) {
                 });
             }
 
-            const sundryDebtors = await tx.accountGroup.findFirst({
-                where: { name: ACCOUNT_GROUPS.SUNDRY_DEBTORS },
+            const targetGroupName = body.accountGroup ?? ACCOUNT_GROUPS.SUNDRY_DEBTORS;
+            const accountGroup = await tx.accountGroup.findFirst({
+                where: { name: targetGroupName },
                 select: { id: true },
             });
             await tx.account.create({
-                data: { companyId: c.id, name: c.name, groupId: sundryDebtors?.id ?? null },
+                data: { companyId: c.id, name: c.name, groupId: accountGroup?.id ?? null },
             });
             return c;
         });

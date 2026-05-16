@@ -134,7 +134,9 @@ export async function GET(req: Request) {
 
     try {
         if (phone) return NextResponse.json(await lookupAccounts(phone, group));
-        if (lookup) return NextResponse.json(await lookupAccounts(lookup, group));
+        // lookup !== undefined means the param was explicitly passed (even if empty),
+        // allowing ?lookup=&group=... to browse the full group list on focus.
+        if (lookup !== undefined) return NextResponse.json(await lookupAccounts(lookup, group));
 
         const persons = await prisma.person.findMany({
             where: {

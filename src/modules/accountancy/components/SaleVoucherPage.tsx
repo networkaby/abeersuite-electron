@@ -191,6 +191,9 @@ type KindConfig = {
     linkParentLabel:  string | null;
     /// Render the Challan-only "Show prices on print" toggle.
     showShowPricesToggle: boolean;
+    /// Label for the amount-paid/received input row. Defaults to "Received".
+    /// Purchase invoices should show "Paid" instead.
+    receivedLabel?: string;
 };
 
 const PER_KIND: Record<TradingKind, KindConfig> = {
@@ -241,6 +244,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showVoucherDate: false,   // Bill Date drives the voucher date on submit
         showPaymentTerms: true,   // credit purchases still need terms / due date
         showPaymentBlock: true,
+        receivedLabel: "Paid",
         linkParentType: null, linkParentLabel: null,
         showShowPricesToggle: false,
     },
@@ -1040,6 +1044,16 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             toast.error("Add at least one item with a product and quantity");
             return;
         }
+        if (copy.refLabel) {
+            if (!header.refNumber.trim()) {
+                toast.error(`${copy.refLabel} is required`);
+                return;
+            }
+            if (!header.refDate) {
+                toast.error(`${copy.refDateLabel} is required`);
+                return;
+            }
+        }
         const displayName = payMode === "CREDIT" ? party?.name : (walkInName.trim() || undefined);
         const description = header.description.trim() || copy.narrationFallback(displayName);
 
@@ -1274,6 +1288,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                         placeholder={copy.partyPlaceholder}
                                         partyGroup={copy.party}
                                         allowIncludeOther
+                                        defaultToCompany={copy.party === "Sundry Creditors"}
                                     />
                                 </div>
                                 {/* Picked-party compact info card — name, mobile, outstanding,
@@ -1369,14 +1384,14 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                             returned against. SALE skips this field entirely. */}
                         {copy.refLabel && (
                             <>
-                                <label className="text-xs text-muted-foreground text-right">{copy.refLabel}</label>
+                                <label className="text-xs text-muted-foreground text-right">{copy.refLabel} <span className="text-destructive">*</span></label>
                                 <Input
                                     value={header.refNumber}
                                     onChange={(e) => setHeader((h) => ({ ...h, refNumber: e.target.value }))}
                                     placeholder="—"
                                     className="h-9 text-xs"
                                 />
-                                <label className="text-xs text-muted-foreground text-right">{copy.refDateLabel}</label>
+                                <label className="text-xs text-muted-foreground text-right">{copy.refDateLabel} <span className="text-destructive">*</span></label>
                                 <Input
                                     type="date"
                                     value={header.refDate}
@@ -1426,7 +1441,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                         onClick={() => togglePref("rateInclTax")}
                                         className={`text-[10px] leading-tight font-semibold uppercase tracking-wide px-1 py-0.5 rounded transition-colors ${prefs.rateInclTax ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" : "hover:bg-muted text-muted-foreground"}`}
                                     >
-                                        PRICE<br />{prefs.rateInclTax ? "(+Tax)" : "(excl)"}
+                                        PRICE<br />{prefs.rateInclTax ? "(incl)" : "(excl)"}
                                     </button>
                                 </th>
                                 {prefs.lineDiscount && (
@@ -1954,7 +1969,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                             {copy.showPaymentBlock && (
                                 <>
                                     <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm pt-2 border-t border-border">
-                                        <span className="text-muted-foreground text-right">Received</span>
+                                        <span className="text-muted-foreground text-right">{copy.receivedLabel ?? "Received"}</span>
                                         <Input
                                             type="text"
                                             inputMode="decimal"
