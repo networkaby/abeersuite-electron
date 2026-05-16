@@ -28,7 +28,7 @@ export default function CustomerEmergencyPasswordResetCard({ customerId }: Props
 
         setSaving(true);
         try {
-            await axios.patch(`/api/people/${customerId}/portal-password`, {
+            await axios.patch(`/api/person/${customerId}/portal-password`, {
                 tempPassword: tempPassword.trim(),
             });
             toast.success("Emergency portal password reset successful");

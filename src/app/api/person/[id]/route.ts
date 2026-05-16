@@ -64,12 +64,14 @@ export async function GET(
         // Backward-compat scalar accessors from the primary contact rows.
         phone: person.phones[0]?.phone ?? null,
         email: person.emails[0]?.email ?? null,
-        devices: person.account?.devices ?? [],
+        accountId: person.account!.id,
+        devices: person.account!.devices,
         companies: person.companies.map(link => ({
             ...link,
             company: {
                 ...link.company,
                 phone: link.company.phones[0]?.phone ?? null,
+                accountId: link.company.account!.id,
             },
         })),
     });

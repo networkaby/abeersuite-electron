@@ -29,7 +29,7 @@ model Person {
   gstStateCode String?
   gstRegType   GstRegType?
 
-  account          Account?
+  account          Account   // a person must have account
   companies        PersonCompany[]
   portalCredential PersonPortalCredential?
   shopOrders       ShopOrder[]
@@ -58,7 +58,7 @@ model Company {
   financialYearFrom  DateTime? @db.Date
   booksBeginningFrom DateTime? @db.Date
 
-  account  Account?
+  account  Account   //a compnay must have account
   persons  PersonCompany[]
   crmLeads CrmLead[]
   phones   Phone[]

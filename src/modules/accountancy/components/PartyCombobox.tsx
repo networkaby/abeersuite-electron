@@ -2,9 +2,9 @@
 
 // PartyCombobox — Tally-style inline party search + create.
 // Mirrors the first two steps of QuickTicketButton:
-//   1. Search Customer + Company by name OR phone via /api/people?lookup=...
+//   1. Search Customer + Company by name OR phone via /api/person?lookup=...
 //   2. If no match, click "+ Create" to open a quick-create form that POSTs
-//      to /api/people (which auto-creates the Sundry Debtors ledger).
+//      to /api/person (which auto-creates the Sundry Debtors ledger).
 // On select, returns the linked Account so the GL post hits the right party.
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -74,7 +74,7 @@ export function PartyCombobox({
         const q = term.trim();
         if (q.length < 1) { setResults([]); return; }
         setLoading(true);
-        axios.get<LookupResponse[]>(`/api/people?lookup=${encodeURIComponent(q)}`)
+        axios.get<LookupResponse[]>(`/api/person?lookup=${encodeURIComponent(q)}`)
             .then((r) => { setResults(r.data); setHighlighted(0); })
             .catch(() => setResults([]))
             .finally(() => setLoading(false));
@@ -230,7 +230,7 @@ export function PartyCombobox({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Inline create form — POSTs to /api/people (which auto-creates the
+// Inline create form — POSTs to /api/person (which auto-creates the
 // Sundry Debtors ledger). Mirrors step 2 of QuickTicketButton, minus company
 // linkage (which can be added later if needed for B2B sales).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -283,7 +283,7 @@ function CreatePartyDialog({
                 name:  string;
                 phone: string | null;
                 account: { id: number } | null;
-            }>("/api/people", {
+            }>("/api/person", {
                 name:    form.name.trim(),
                 phones:  form.phone.trim() ? [form.phone.trim()] : [],
                 emails:  form.email.trim() ? [form.email.trim()] : [],

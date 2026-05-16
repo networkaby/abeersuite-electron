@@ -763,7 +763,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             return;
         }
         let cancelled = false;
-        axios.get<{ address: string | null; account?: { balance: number | string | null } }>(`/api/people/${party.id}`)
+        axios.get<{ address: string | null; account?: { balance: number | string | null } }>(`/api/person/${party.id}`)
             .then((r) => {
                 if (cancelled) return;
                 const raw = r.data.account?.balance;

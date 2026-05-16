@@ -1,7 +1,7 @@
 /**
  * buildCandidates — Progressive customer identification scoring.
  *
- * Takes a list of people matches (from /api/people?lookup=), a list of
+ * Takes a list of people matches (from /api/person?lookup=), a list of
  * pre-loaded tickets (from /api/tickets), and the user's space-separated
  * query terms. Returns a deduplicated, scored list of customer candidates
  * where each candidate carries an *evidence trail* of what made them
@@ -25,7 +25,7 @@ export type EvidenceTag =
     | { kind: "problem"; snippet: string; ticketId: string };
 
 export interface CustomerCandidate {
-    /** null for ticket-only candidates (customer found via device history but no /api/people hit). */
+    /** null for ticket-only candidates (customer found via device history but no /api/person hit). */
     personId: number | null;
     accountId: number | null;
     name: string;
@@ -55,7 +55,7 @@ export interface TicketRow {
     } | null;
 }
 
-/** Shape this function reads from a /api/people lookup hit. PartyHit is a superset. */
+/** Shape this function reads from a /api/person lookup hit. PartyHit is a superset. */
 export interface PartyHitInput {
     id: number;
     name: string;
@@ -91,7 +91,7 @@ function snippetAround(text: string, lowerText: string, term: string): string {
 // ── Public API ────────────────────────────────────────────────────────────
 
 /**
- * @param peopleHits  raw hits from usePartySearch (already-debounced /api/people)
+ * @param peopleHits  raw hits from usePartySearch (already-debounced /api/person)
  * @param allTickets  the full ticket list (loaded once on mount in UniversalHelperSearch)
  * @param queryTerms  the user's query split on whitespace, lowercased, length >= 2
  */
@@ -136,7 +136,7 @@ export function buildCandidates(
         }
         candidate.matchScore = candidate.termsCovered.size;
 
-        // De-dup: if /api/people returned the same person twice (shouldn't, but safe), keep the higher-scored.
+        // De-dup: if /api/person returned the same person twice (shouldn't, but safe), keep the higher-scored.
         const existing = map.get(key);
         if (!existing || candidate.matchScore > existing.matchScore) {
             map.set(key, candidate);
@@ -180,7 +180,7 @@ export function buildCandidates(
         const problemText     = dev.problem ?? "";
         const problemHaystack = problemText.toLowerCase();
 
-        // Account name also a clue (e.g. typed "peter" but no /api/people hit found him yet)
+        // Account name also a clue (e.g. typed "peter" but no /api/person hit found him yet)
         const accNameLower = (acc.name ?? "").toLowerCase();
 
         for (const term of queryTerms) {

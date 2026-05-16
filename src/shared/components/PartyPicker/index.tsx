@@ -98,7 +98,7 @@ export function PartyPicker({
         if (q.length < 2) { setResults([]); return; }
         setSearching(true);
         try {
-            const { data } = await axios.get<PartyResult[]>(`/api/people?phone=${encodeURIComponent(q)}`);
+            const { data } = await axios.get<PartyResult[]>(`/api/person?phone=${encodeURIComponent(q)}`);
             setResults(data);
         } catch {
             setResults([]);
@@ -143,7 +143,7 @@ export function PartyPicker({
     async function onCreate(data: CreateFormData) {
         setCreating(true);
         try {
-            const endpoint = createAsCompany ? "/api/companies" : "/api/people";
+            const endpoint = createAsCompany ? "/api/companies" : "/api/person";
             const { data: created } = await axios.post<{ id: number; account?: { id: number } }>(endpoint, {
                 name: data.name,
                 phones: data.phone ? [data.phone] : [],

@@ -28,8 +28,8 @@ export default async function CrmLeadDetailPage({ params }: { params: Promise<{ 
         include: {
             ticketStatus: { select: { id: true, label: true, color: true } },
             owner: { select: { id: true, name: true } },
-            person: { select: { id: true, name: true } },
-            company: { select: { id: true, name: true } },
+            person: { select: { id: true, name: true, account: { select: { id: true } } } },
+            company: { select: { id: true, name: true, account: { select: { id: true } } } },
             createdBy: { select: { id: true, name: true } },
         },
     });
@@ -83,15 +83,23 @@ export default async function CrmLeadDetailPage({ params }: { params: Promise<{ 
                 <div className="text-sm border-2 border-border bg-muted/30 p-3">
                     <span className="text-muted-foreground">Linked: </span>
                     {lead.person && (
-                        <Link className="text-primary hover:underline" href={`/office/customers/${lead.person.id}`}>
-                            {lead.person.name}
-                        </Link>
+                        lead.person.account ? (
+                            <Link className="text-primary hover:underline" href={`/office/customers/${lead.person.account.id}`}>
+                                {lead.person.name}
+                            </Link>
+                        ) : (
+                            <span>{lead.person.name}</span>
+                        )
                     )}
                     {lead.person && lead.company && " · "}
                     {lead.company && (
-                        <Link className="text-primary hover:underline" href={`/office/customers/companies/${lead.company.id}`}>
-                            {lead.company.name}
-                        </Link>
+                        lead.company.account ? (
+                            <Link className="text-primary hover:underline" href={`/office/customers/${lead.company.account.id}`}>
+                                {lead.company.name}
+                            </Link>
+                        ) : (
+                            <span>{lead.company.name}</span>
+                        )
                     )}
                 </div>
             )}

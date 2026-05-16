@@ -5,7 +5,7 @@ import { ContactConflictError, contactValueSchema, createEmail } from "@/modules
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
-// POST /api/people/[id]/emails — add an email to a person
+// POST /api/person/[id]/emails — add an email to a person
 export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> },

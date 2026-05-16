@@ -120,7 +120,7 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
     ].slice(0, 8);
 }
 
-// GET /api/people?phone=...&q=...&lookup=...&group=Sundry+Debtors|Sundry+Creditors
+// GET /api/person?phone=...&q=...&lookup=...&group=Sundry+Debtors|Sundry+Creditors
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -175,7 +175,7 @@ export async function GET(req: Request) {
     }
 }
 
-// POST /api/people — create person + auto-create ledger account + contact rows
+// POST /api/person — create person + auto-create ledger account + contact rows
 export async function POST(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;

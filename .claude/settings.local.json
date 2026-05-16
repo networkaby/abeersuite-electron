@@ -113,7 +113,11 @@
       "Bash(git checkout *)",
       "Bash(Get-Content \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--our-own-website-service-mgmt-experiment\\\\36a45e8b-f1c3-4464-9483-50a5278c9085\\\\tasks\\\\bg13g4weh.output\" -Tail 30)",
       "mcp__plugin_figma_figma__create_new_file",
-      "mcp__plugin_figma_figma__use_figma"
+      "mcp__plugin_figma_figma__use_figma",
+      "Bash(ls \"src/app/\\(protected\\)/office/customers/companies/[id]/\" && rmdir \"src/app/\\(protected\\)/office/customers/companies/[id]\")",
+      "Bash(cp -r \"src/app/api/people\" \"src/app/api/person\")",
+      "Bash(cp -r \"src/app/\\(protected\\)/office/customers/people\" \"src/app/\\(protected\\)/office/customers/person\")",
+      "Bash(xargs sed -i 's|/office/customers/people|/office/customers/person|g')"
     ]
   }
 }

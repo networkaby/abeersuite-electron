@@ -60,7 +60,7 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
 
         setSaving(true);
         try {
-            await axios.post("/api/people", {
+            await axios.post("/api/person", {
                 name: form.name,
                 phones: form.phone ? [form.phone] : [],
                 emails: form.email ? [form.email] : [],

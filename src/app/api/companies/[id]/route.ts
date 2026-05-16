@@ -48,6 +48,7 @@ export async function GET(
                             id: true,
                             name: true,
                             phones: selectPrimaryPhone,
+                            account: { select: { id: true } },
                         },
                     },
                 },
@@ -65,6 +66,7 @@ export async function GET(
         id: link.id,
         customer: {
             id: link.person.id,
+            accountId: link.person.account!.id,
             name: link.person.name,
             phone: link.person.phones[0]?.phone ?? null,
         },
@@ -72,7 +74,8 @@ export async function GET(
 
     return NextResponse.json({
         ...company,
-        devices: company.account?.devices ?? [],
+        accountId: company.account!.id,
+        devices: company.account!.devices,
         customers: linkedCustomers,
         phone: contacts.phones[0]?.value ?? contacts.derivedPhones[0]?.value ?? null,
         email: contacts.emails[0]?.value ?? contacts.derivedEmails[0]?.value ?? null,

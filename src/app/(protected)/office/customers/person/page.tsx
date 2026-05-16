@@ -58,13 +58,14 @@ interface Device {
 
 interface CustomerDetail {
     id: number;
+    accountId: number;
     name: string;
     phone: string | null;
     email: string | null;
     address: string | null;
     createdAt: string;
     devices: Device[];
-    companies: { id: number; company: { id: number; name: string; phone: string | null } }[];
+    companies: { id: number; company: { id: number; name: string; phone: string | null; accountId: number } }[];
 }
 
 type Tab = "tickets" | "devices" | "companies" | "transactions";
@@ -102,7 +103,7 @@ export default function CustomersPage() {
 
     const loadList = useCallback(async () => {
         try {
-            const response = await axios.get<CustomerListItem[]>("/api/people");
+            const response = await axios.get<CustomerListItem[]>("/api/person");
             setCustomers(response.data);
         } catch {
             toast.error("Failed to load customers");
@@ -118,7 +119,7 @@ export default function CustomersPage() {
         }
         setDetailLoading(true);
         setTransactions(null);
-        axios.get<CustomerDetail>(`/api/people/${selectedId}`)
+        axios.get<CustomerDetail>(`/api/person/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
                 setTab("tickets");
@@ -131,7 +132,7 @@ export default function CustomersPage() {
         setTab(next);
         if (next === "transactions" && !transactions && selectedId) {
             setTxLoading(true);
-            axios.get<CustomerTransactions>(`/api/people/${selectedId}/transactions`)
+            axios.get<CustomerTransactions>(`/api/person/${selectedId}/transactions`)
                 .then((r) => setTransactions(r.data))
                 .catch(() => toast.error("Failed to load transactions"))
                 .finally(() => setTxLoading(false));
@@ -146,7 +147,7 @@ export default function CustomersPage() {
         }
         setSaving(true);
         try {
-            const response = await axios.post<CustomerListItem>("/api/people", {
+            const response = await axios.post<CustomerListItem>("/api/person", {
                 name: form.name,
                 phones: form.phone ? [form.phone] : [],
                 emails: form.email ? [form.email] : [],
@@ -179,12 +180,12 @@ export default function CustomersPage() {
         if (!detail) return;
         setEditSaving(true);
         try {
-            await axios.put(`/api/people/${detail.id}`, editForm);
+            await axios.put(`/api/person/${detail.id}`, editForm);
             toast.success("Saved");
             setEditing(false);
             const [listResponse, detailResponse] = await Promise.all([
-                axios.get<CustomerListItem[]>("/api/people"),
-                axios.get<CustomerDetail>(`/api/people/${detail.id}`),
+                axios.get<CustomerListItem[]>("/api/person"),
+                axios.get<CustomerDetail>(`/api/person/${detail.id}`),
             ]);
             setCustomers(listResponse.data);
             setDetail(detailResponse.data);
@@ -210,7 +211,7 @@ export default function CustomersPage() {
     return (
         <div className="-m-8 flex h-screen">
             <EntityListPanel
-                title="Customers"
+                title="Person"
                 icon={<User size={16} className="text-primary" />}
                 count={customers.length}
                 search={search}
@@ -309,7 +310,7 @@ export default function CustomersPage() {
                                                 <Pencil size={14} />
                                             </Button>
                                             <Button asChild type="button" variant="outline" size="icon-sm">
-                                                <Link href={`/office/customers/${detail.id}`} title="Open full page">
+                                                <Link href={`/office/customers/${detail.accountId}`} title="Open full page">
                                                     <ExternalLink size={14} />
                                                 </Link>
                                             </Button>
@@ -427,7 +428,7 @@ export default function CustomersPage() {
                                                         </div>
                                                     </div>
                                                     <Button asChild variant="link" size="sm">
-                                                        <Link href={`/office/customers/companies/${companyLink.company.id}`}>View</Link>
+                                                        <Link href={`/office/customers/${companyLink.company.accountId}`}>View</Link>
                                                     </Button>
                                                 </CardContent>
                                             </Card>

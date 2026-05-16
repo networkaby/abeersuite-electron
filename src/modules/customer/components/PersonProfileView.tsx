@@ -1,25 +1,30 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, User, Building2, Smartphone, Eye } from "lucide-react";
 import { formatDate } from "@/shared/lib/format/formatDate";
-import { ArrowLeft, Building2, User, Smartphone, Eye } from "lucide-react";
-import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
-import { getCompanyContacts } from "@/modules/customer/lib/companyContacts";
+import { auth } from "@/auth";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
+import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
 
-export default async function CompanyDetailPage({
-    params,
-}: {
-    params: Promise<{ id: string }>;
-}) {
-    const { id } = await params;
-    const companyId = Number(id);
+type Props = {
+    personId: number;
+    backHref?: string;
+};
 
-    const company = await prisma.company.findUnique({
-        where: { id: companyId },
+export default async function PersonProfileView({ personId, backHref = "/office/customers" }: Props) {
+    const session = await auth();
+    const permissions = ((session?.user as { permissions?: string[] } | undefined)?.permissions ?? []);
+    const canEmergencyReset = permissions.includes(PERMISSIONS.USERS_MANAGE) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+
+    const person = await prisma.person.findUnique({
+        where: { id: personId },
         include: {
+            phones: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
+            emails: { orderBy: [{ isPrimary: "desc" }, { id: "asc" }] },
             account: {
-                select: { id: true },
                 include: {
                     devices: {
                         include: {
@@ -34,14 +39,15 @@ export default async function CompanyDetailPage({
                     },
                 },
             },
-            persons: {
+            companies: {
                 where: { unlinkedAt: null },
                 include: {
-                    person: {
+                    company: {
                         select: {
                             id: true,
                             name: true,
                             phones: selectPrimaryPhone,
+                            account: { select: { id: true } },
                         },
                     },
                 },
@@ -49,133 +55,102 @@ export default async function CompanyDetailPage({
         },
     });
 
-    if (!company || !company.isActive) notFound();
-
-    const contacts = await getCompanyContacts(companyId);
+    if (!person || !person.isActive) notFound();
 
     return (
         <div>
             <div className="flex items-center gap-3 mb-6">
-                <Link href="/office/customers/companies" className="text-muted-foreground hover:text-foreground">
+                <Link href={backHref} className="text-muted-foreground hover:text-foreground">
                     <ArrowLeft size={20} />
                 </Link>
                 <div className="flex items-center gap-3">
-                    <Building2 size={22} className="text-primary" />
+                    <User size={22} className="text-primary" />
                     <div>
-                        <h1 className="text-2xl font-bold">{company.name}</h1>
-                        <p className="text-muted-foreground text-sm">Company #{company.id}</p>
+                        <h1 className="text-2xl font-bold">{person.name}</h1>
+                        <p className="text-muted-foreground text-sm">Customer #{person.id}</p>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Info */}
                 <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow">
-                    <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">Company Info</h2>
+                    <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">Contact Info</h2>
                     <div className="space-y-2 text-sm">
-                        {contacts.phones.length > 0 && (
+                        {person.phones.length > 0 && (
                             <div>
                                 <span className="text-muted-foreground block mb-1">Phones</span>
                                 <ul className="space-y-1">
-                                    {contacts.phones.map(p => (
-                                        <li key={p.id} className="flex items-center justify-between">
-                                            <span className="font-medium">{p.value}</span>
-                                            {p.isPrimary && <span className="text-[10px] uppercase text-muted-foreground">primary</span>}
+                                    {person.phones.map(p => (
+                                        <li key={p.id} className="flex items-center justify-between gap-2">
+                                            <span className="font-medium">{p.phone}</span>
+                                            {p.isPrimary && (
+                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">primary</span>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>
                             </div>
                         )}
-                        {contacts.emails.length > 0 && (
+                        {person.emails.length > 0 && (
                             <div>
                                 <span className="text-muted-foreground block mb-1">Emails</span>
                                 <ul className="space-y-1">
-                                    {contacts.emails.map(e => (
-                                        <li key={e.id} className="flex items-center justify-between">
-                                            <span className="font-medium">{e.value}</span>
-                                            {e.isPrimary && <span className="text-[10px] uppercase text-muted-foreground">primary</span>}
+                                    {person.emails.map(e => (
+                                        <li key={e.id} className="flex items-center justify-between gap-2">
+                                            <span className="font-medium">{e.email}</span>
+                                            {e.isPrimary && (
+                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">primary</span>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>
                             </div>
                         )}
-                        {(contacts.derivedPhones.length > 0 || contacts.derivedEmails.length > 0) && (
-                            <div className="pt-2 border-t border-border">
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground block mb-1">From linked people</span>
-                                <ul className="space-y-1 text-xs">
-                                    {contacts.derivedPhones.map(p => (
-                                        <li key={`p${p.id}`} className="flex items-center justify-between">
-                                            <span>{p.value}</span>
-                                            <span className="text-muted-foreground">{p.fromPersonName}</span>
-                                        </li>
-                                    ))}
-                                    {contacts.derivedEmails.map(e => (
-                                        <li key={`e${e.id}`} className="flex items-center justify-between">
-                                            <span>{e.value}</span>
-                                            <span className="text-muted-foreground">{e.fromPersonName}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                        {company.address && (
+                        {person.address && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Address</span>
-                                <span className="font-medium text-right max-w-[200px]">{company.address}</span>
-                            </div>
-                        )}
-                        {company.companyReg && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Company Reg</span>
-                                <span className="font-medium">{company.companyReg}</span>
-                            </div>
-                        )}
-                        {company.taxId && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Tax / VAT</span>
-                                <span className="font-medium">{company.taxId}</span>
+                                <span className="font-medium text-right max-w-[200px]">{person.address}</span>
                             </div>
                         )}
                         <div className="flex justify-between">
-                            <span className="text-muted-foreground">Created</span>
-                            <span className="font-medium">{formatDate(company.createdAt.toISOString())}</span>
+                            <span className="text-muted-foreground">Customer since</span>
+                            <span className="font-medium">{formatDate(person.createdAt.toISOString())}</span>
                         </div>
-                        {company.account && (
+                        {person.account && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Account #</span>
-                                <span className="font-medium text-muted-foreground">{company.account.id}</span>
+                                <span className="font-medium text-muted-foreground">{person.account.id}</span>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Linked Contacts */}
                 <div className="rounded-lg border border-border bg-card p-5 shadow">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2">
-                            <User size={14} /> Linked Contacts
+                            <Building2 size={14} /> Linked Companies
                         </h2>
                     </div>
-                    <CompanyLinkPanel companyId={company.id} initialLinks={company.persons.map(cc => ({
+                    <CustomerLinkPanel customerId={person.id} initialLinks={person.companies.map(cc => ({
                         id: cc.id,
-                        customer: {
-                            id: cc.person.id,
-                            name: cc.person.name,
-                            phone: cc.person.phones[0]?.phone ?? null,
+                        company: {
+                            id: cc.company.id,
+                            accountId: cc.company.account!.id,
+                            name: cc.company.name,
+                            phone: cc.company.phones[0]?.phone ?? null,
                         },
                     }))} />
                 </div>
 
-                {/* Devices & Tickets */}
                 <div className="rounded-lg border border-border bg-card p-5 shadow">
                     <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
                         <Smartphone size={14} /> Devices &amp; Tickets
                     </h2>
-                    {(company.account?.devices ?? []).length === 0 ? (
+                    {(person.account?.devices ?? []).length === 0 ? (
                         <p className="text-sm text-muted-foreground">No devices yet.</p>
                     ) : (
                         <div className="space-y-4">
-                            {(company.account?.devices ?? []).map(d => (
+                            {(person.account?.devices ?? []).map(d => (
                                 <div key={d.id} className="rounded-md border border-border p-3">
                                     <p className="font-medium text-sm">{d.brand} {d.model}</p>
                                     <p className="text-xs text-muted-foreground">{d.type}</p>
@@ -201,6 +176,11 @@ export default async function CompanyDetailPage({
                     )}
                 </div>
             </div>
+            {canEmergencyReset ? (
+                <div className="mt-6">
+                    <CustomerEmergencyPasswordResetCard customerId={person.id} />
+                </div>
+            ) : null}
         </div>
     );
 }

@@ -95,7 +95,7 @@ function partyHitToPicked(p: PartyHit): PickedParty {
 
 /**
  * Adapter — CustomerContextPanel still expects PartyHit. For ticket-only
- * candidates (no /api/people hit), personId is null → use id: 0 which the
+ * candidates (no /api/person hit), personId is null → use id: 0 which the
  * panel's people-detail fetch handles gracefully (404 → just shows the
  * name/phone strip from props).
  */
@@ -144,7 +144,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
  * Universal helper search — persistent Google-style list, not a dropdown.
  *
  * Three parallel result streams:
- *   1. Customer name / phone  (debounced /api/people?lookup=)
+ *   1. Customer name / phone  (debounced /api/person?lookup=)
  *   2. Device & repairs        (client-side filter on /api/tickets loaded once)
  *   3. Products                (client-side filter on /api/inventory/products/lookup)
  *
@@ -203,7 +203,7 @@ export default function UniversalHelperSearch() {
     }, [q, products, hasQuery]);
 
     /**
-     * Unified customer candidates — merges /api/people hits with ticket-derived
+     * Unified customer candidates — merges /api/person hits with ticket-derived
      * customer info, scoring by how many distinct query terms have evidence
      * across name/phone/device/problem. See `buildCandidates` for the algorithm.
      * Don't run when the query is a ticket ID — the dedicated "Open ticket" row

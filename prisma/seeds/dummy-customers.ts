@@ -30,8 +30,27 @@ const COMPANIES = [
     { name: "Sunrise Office Supplies",     phone: "01140000003", email: "billing@sunrise.example.com", gstin: null },
 ];
 
+async function ensureAccount(entityId: number, name: string, field: "personId" | "companyId", groupId: number | null) {
+    const existing = await pool.query<{ id: number }>(
+        `SELECT id FROM "Account" WHERE "${field}" = $1 LIMIT 1`,
+        [entityId],
+    );
+    if (existing.rows[0]) return;
+    await pool.query(
+        `INSERT INTO "Account" (name, "${field}", "groupId", balance, "createdAt")
+         VALUES ($1, $2, $3, 0, NOW())`,
+        [name, entityId, groupId],
+    );
+}
+
 async function main() {
     console.log("\n⚠️  DUMMY DATA — sample Persons + Companies. Removed by pnpm seed:hard-clean.\n");
+
+    // Resolve Sundry Debtors group id (used for all customer ledger accounts).
+    const groupRow = await pool.query<{ id: number }>(
+        `SELECT id FROM "AccountGroup" WHERE name = 'Sundry Debtors' LIMIT 1`,
+    );
+    const sundryDebtorsId: number | null = groupRow.rows[0]?.id ?? null;
 
     // ── Persons ──────────────────────────────────────────────────────────
     console.log(`[1/2] Persons (${PERSONS.length})`);
@@ -44,6 +63,8 @@ async function main() {
             [p.phone],
         );
         if (existing.rows[0]) {
+            const personId = existing.rows[0].id;
+            await ensureAccount(personId, p.name, "personId", sundryDebtorsId);
             console.log(`      ~ ${p.name} (already exists)`);
             continue;
         }
@@ -63,6 +84,7 @@ async function main() {
              VALUES ($1, $2, true, NOW())`,
             [p.email, personId],
         );
+        await ensureAccount(personId, p.name, "personId", sundryDebtorsId);
         console.log(`      + ${p.name} (${p.phone})`);
     }
 
@@ -74,6 +96,8 @@ async function main() {
             [c.name],
         );
         if (existing.rows[0]) {
+            const companyId = existing.rows[0].id;
+            await ensureAccount(companyId, c.name, "companyId", sundryDebtorsId);
             console.log(`      ~ ${c.name} (already exists)`);
             continue;
         }
@@ -93,6 +117,7 @@ async function main() {
              VALUES ($1, $2, true, NOW())`,
             [c.email, companyId],
         );
+        await ensureAccount(companyId, c.name, "companyId", sundryDebtorsId);
         console.log(`      + ${c.name} (${c.phone})`);
     }
 

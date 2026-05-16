@@ -168,7 +168,7 @@ export default function CustomerContextPanel({
         const detailUrl =
             party.type === "company"
                 ? `/api/companies/${party.id}`
-                : `/api/people/${party.id}`;
+                : `/api/person/${party.id}`;
         tasks.push(
             axios
                 .get<PartyDetail>(detailUrl)
@@ -180,7 +180,7 @@ export default function CustomerContextPanel({
         if (party.type === "customer") {
             tasks.push(
                 axios
-                    .get<{ invoices: Invoice[] }>(`/api/people/${party.id}/transactions`)
+                    .get<{ invoices: Invoice[] }>(`/api/person/${party.id}/transactions`)
                     .then((r) => setInvoices(r.data.invoices ?? []))
                     .catch(() => {})
             );
@@ -215,7 +215,7 @@ export default function CustomerContextPanel({
     const profileUrl =
         party.type === "company"
             ? `/office/customers/companies`
-            : `/office/customers/people`;
+            : `/office/customers/person`;
 
     return (
         <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card shadow-md">

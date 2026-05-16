@@ -152,15 +152,15 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Users,
         key: "customers",
         dashboardHref: "/office/customers",
-        // pathPrefixes: ["/office/customers/people", "/office/customers/companies", "/office/customers/all", "/office/customers"],
+        // pathPrefixes: ["/office/customers/person", "/office/customers/companies", "/office/customers/all", "/office/customers"],
         pathPrefixes: ["/office/customers"],
         createActions: [
-            { label: "People +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:view" },
+            { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:view" },
             { label: "Companies +", subtitle: "Create a new company", icon: Building2, variant: "outline", action: "new-company", permission: "customers:view" },
         ],
         children: [
             { label: "All Customers", href: "/office/customers/all", icon: Users, permission: "customers:view" },
-            { label: "People", href: "/office/customers/people", icon: Users, permission: "customers:view" },
+            { label: "Person", href: "/office/customers/person", icon: Users, permission: "customers:view" },
             { label: "Companies", href: "/office/customers/companies", icon: Building2, permission: "customers:view" },
         ],
     },

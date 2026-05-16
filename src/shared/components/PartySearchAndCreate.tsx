@@ -3,7 +3,7 @@
 /**
  * Shared "search a party or create one" surface used by POS and the
  * QuickTicket dialog. Owns:
- *  - debounced /api/people?lookup= search with arrow-key / enter navigation
+ *  - debounced /api/person?lookup= search with arrow-key / enter navigation
  *  - a hit dropdown with a "New customer: {q}" CTA
  *  - the create dialog (Person + optional Company with state / PIN / GSTIN,
  *    smart focus, address mirroring, Indian + intl phone / email / PIN validation)
@@ -273,7 +273,7 @@ export const PartySearchAndCreate = forwardRef<
             try {
                 const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
                 const { data } = await axios.get<PartyHit[]>(
-                    `/api/people?lookup=${encodeURIComponent(q)}${groupSuffix}`,
+                    `/api/person?lookup=${encodeURIComponent(q)}${groupSuffix}`,
                 );
                 if (data.length > 0) {
                     pickHit(data[0]);
@@ -313,7 +313,7 @@ export const PartySearchAndCreate = forwardRef<
             try {
                 const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
                 const { data } = await axios.get<PartyHit[]>(
-                    `/api/people?lookup=${encodeURIComponent(query)}${groupSuffix}`,
+                    `/api/person?lookup=${encodeURIComponent(query)}${groupSuffix}`,
                 );
                 if (data.length > 0) {
                     pickHit(data[0]);
@@ -364,7 +364,7 @@ export const PartySearchAndCreate = forwardRef<
                     name: string;
                     phone?: string | null;
                     account?: { id: number } | null;
-                }>("/api/people", {
+                }>("/api/person", {
                     name: newParty.name.trim(),
                     phones: newParty.phone.trim() ? [newParty.phone.trim()] : [],
                     emails: newParty.email.trim() ? [newParty.email.trim()] : [],

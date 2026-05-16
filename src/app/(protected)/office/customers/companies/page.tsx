@@ -58,6 +58,7 @@ interface Device {
 
 interface CompanyDetail {
     id: number;
+    accountId: number;
     name: string;
     phone: string | null;
     email: string | null;
@@ -66,7 +67,7 @@ interface CompanyDetail {
     taxId: string | null;
     createdAt: string;
     devices: Device[];
-    customers: { id: number; customer: { id: number; name: string; phone: string | null } }[];
+    customers: { id: number; customer: { id: number; accountId: number; name: string; phone: string | null } }[];
 }
 
 type Tab = "contacts" | "devices" | "transactions";
@@ -313,7 +314,7 @@ export default function CompaniesPage() {
                                                 <Pencil size={14} />
                                             </Button>
                                             <Button asChild type="button" variant="outline" size="icon-sm">
-                                                <Link href={`/office/customers/companies/${detail.id}`}>
+                                                <Link href={`/office/customers/${detail.accountId}`}>
                                                     <ExternalLink size={14} />
                                                 </Link>
                                             </Button>
@@ -363,6 +364,9 @@ export default function CompaniesPage() {
                                                             {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
                                                         </div>
                                                     </div>
+                                                    <Button asChild variant="link" size="sm">
+                                                        <Link href={`/office/customers/${companyContact.customer.accountId}`}>View</Link>
+                                                    </Button>
                                                 </CardContent>
                                             </Card>
                                         ))}

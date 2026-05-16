@@ -39,17 +39,19 @@ type CombinedListItem =
 
 type PersonDetail = {
     id: number;
+    accountId: number;
     name: string;
     phone: string | null;
     email: string | null;
     address: string | null;
     createdAt: string;
     devices: PersonDevice[];
-    companies: { id: number; company: { id: number; name: string; phone: string | null } }[];
+    companies: { id: number; company: { id: number; name: string; phone: string | null; accountId: number } }[];
 };
 
 type CompanyDetail = {
     id: number;
+    accountId: number;
     name: string;
     phone: string | null;
     email: string | null;
@@ -58,7 +60,7 @@ type CompanyDetail = {
     taxId: string | null;
     createdAt: string;
     devices: CompanyDevice[];
-    customers: { id: number; customer: { id: number; name: string; phone: string | null } }[];
+    customers: { id: number; customer: { id: number; accountId: number; name: string; phone: string | null } }[];
 };
 
 type SelectedItem = { kind: "person" | "company"; id: number };
@@ -106,7 +108,7 @@ export default function AllCustomersPage() {
     const [txLoading, setTxLoading] = useState(false);
 
     useEffect(() => {
-        axios.get<PersonRow[]>("/api/people").then((res) => setPeople(res.data)).catch(() => setPeople([]));
+        axios.get<PersonRow[]>("/api/person").then((res) => setPeople(res.data)).catch(() => setPeople([]));
         axios.get<CompanyRow[]>("/api/companies").then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
     }, []);
 
@@ -130,7 +132,7 @@ export default function AllCustomersPage() {
 
             if (selected.kind === "person") {
                 axios
-                    .get<PersonDetail>(`/api/people/${selected.id}`)
+                    .get<PersonDetail>(`/api/person/${selected.id}`)
                     .then((res) => {
                         if (cancelled) return;
                         setPersonDetail(res.data);
@@ -175,7 +177,7 @@ export default function AllCustomersPage() {
         setTxLoading(true);
         const url =
             selected.kind === "person"
-                ? `/api/people/${selected.id}/transactions`
+                ? `/api/person/${selected.id}/transactions`
                 : `/api/companies/${selected.id}/transactions`;
 
         axios
@@ -284,7 +286,7 @@ export default function AllCustomersPage() {
                                     </div>
                                 </div>
                                 <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/customers/${personDetail.id}`} title="Open full page">
+                                    <Link href={`/office/customers/${personDetail.accountId}`} title="Open full page">
                                         <ExternalLink size={14} />
                                     </Link>
                                 </Button>
@@ -425,7 +427,7 @@ export default function AllCustomersPage() {
                                     </div>
                                 </div>
                                 <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/customers/companies/${companyDetail.id}`}>
+                                    <Link href={`/office/customers/${companyDetail.accountId}`}>
                                         <ExternalLink size={14} />
                                     </Link>
                                 </Button>
@@ -465,6 +467,9 @@ export default function AllCustomersPage() {
                                                             {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
                                                         </div>
                                                     </div>
+                                                    <Button asChild variant="link" size="sm">
+                                                        <Link href={`/office/customers/${companyContact.customer.accountId}`}>View</Link>
+                                                    </Button>
                                                 </CardContent>
                                             </Card>
                                         ))}

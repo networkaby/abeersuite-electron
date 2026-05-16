@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 
 /**
- * Result row from `/api/people?lookup=…`. Shared by `PartyCombobox` and `PosScreen`.
+ * Result row from `/api/person?lookup=…`. Shared by `PartyCombobox` and `PosScreen`.
  */
 export type PartyHit = {
     id: number;
@@ -19,7 +19,7 @@ export type PartyHit = {
 };
 
 /**
- * Debounced lookup against `/api/people?lookup=…`. Empty / whitespace-only queries
+ * Debounced lookup against `/api/person?lookup=…`. Empty / whitespace-only queries
  * short-circuit to an empty result. Aborts and clears on unmount.
  *
  * `enabled` lets callers turn the search off without unmounting (e.g. while a
@@ -56,7 +56,7 @@ export function usePartySearch(
         let cancelled = false;
         const timer = setTimeout(() => {
             setLoading(true);
-            const url = `/api/people?lookup=${encodeURIComponent(trimmed)}`
+            const url = `/api/person?lookup=${encodeURIComponent(trimmed)}`
                 + (group ? `&group=${encodeURIComponent(group)}` : "");
             axios
                 .get<PartyHit[]>(url)
