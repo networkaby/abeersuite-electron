@@ -17,8 +17,8 @@ export const orgDefaultsUpdateSchema = z.object({
     defaultGstRate:             z.number().min(0).max(100).nullable().optional(),
     defaultHsnCode:             trimToNullable(32).optional(),
     defaultTaxability:          z.enum(TAXABILITY).nullable().optional(),
-    defaultSalePaymentTerm:     trimToNullable(64).optional(),
-    defaultPurchasePaymentTerm: trimToNullable(64).optional(),
+    defaultSaleCreditPeriod:     z.number().int().min(0).nullable().optional(),
+    defaultPurchaseCreditPeriod: z.number().int().min(0).nullable().optional(),
     defaultCurrencySymbol:      z.string().trim().min(1).max(8).optional(),
 });
 

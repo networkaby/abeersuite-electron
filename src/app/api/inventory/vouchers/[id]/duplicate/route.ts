@@ -50,8 +50,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     partyAddress:     source.partyAddress,
                     paymentMode:      source.paymentMode,
                     paymentAccountId: source.paymentAccountId,
-                    paymentTerms:     source.paymentTerms,
-                    dueDate:          null,           // recompute when user saves
+                    creditPeriodDays: source.creditPeriodDays,
                     placeOfSupply:    source.placeOfSupply,
                     discountPct:      source.discountPct,
                     discountAmt:      source.discountAmt,

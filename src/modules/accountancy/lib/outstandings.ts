@@ -191,6 +191,7 @@ async function loadOpenBills(
             id: true, type: true, reference: true, date: true,
             totalAmount: true, amountReceived: true,
             partyType: true, partyId: true, journalEntryId: true,
+            creditPeriodDays: true,
         },
     });
 
@@ -266,7 +267,7 @@ async function loadOpenBills(
                 : null;
         if (accountId === null) continue;
         const due = new Date(v.date);
-        due.setDate(due.getDate() + DEFAULT_DUE_DAYS);
+        due.setDate(due.getDate() + (v.creditPeriodDays ?? DEFAULT_DUE_DAYS));
         const total = Number(v.totalAmount);
         // Paid = up-front cash recorded on the voucher + any later receipts
         // allocated against the linked GL journal entry.

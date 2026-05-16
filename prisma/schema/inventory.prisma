@@ -270,11 +270,8 @@ model InvVoucher {
   refVoucherId     Int?
   refVoucher       InvVoucher?    @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
   refReturns       InvVoucher[]   @relation("InvVoucherRef")
-  /// Credit-sale payment terms (free-form label, e.g. "Net 30", "Due on Receipt").
-  /// Only meaningful when paymentMode = "CREDIT".
-  paymentTerms     String?
-  /// Computed due date for credit sales — date + payment-term days. User-overridable.
-  dueDate          DateTime?      @db.Date
+  /// Number of days from voucher date until payment is due. Only for CREDIT mode.
+  creditPeriodDays Int?
   /// State code where the supply happens — drives intra/inter-state GST split.
   /// Defaults to the company's state code when unset.
   placeOfSupply    String?

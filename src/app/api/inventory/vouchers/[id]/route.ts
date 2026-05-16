@@ -88,8 +88,7 @@ export async function PATCH(req: Request, { params }: Params) {
         partyAddress,
         paymentMode,
         paymentAccountId,
-        paymentTerms,
-        dueDate,
+        creditPeriodDays,
         refNumber,
         refDate,
         refVoucherId,
@@ -110,8 +109,7 @@ export async function PATCH(req: Request, { params }: Params) {
         partyAddress?:     string;
         paymentMode?:      string;
         paymentAccountId?: number | null;
-        paymentTerms?:     string;
-        dueDate?:          string;
+        creditPeriodDays?: number | null;
         refNumber?:        string;
         refDate?:          string;
         /// Parent voucher (e.g. PO for a GRN); null clears the link.
@@ -293,9 +291,8 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(partyPhone       !== undefined ? { partyPhone:       partyPhone       || null } : {}),
                     ...(partyAddress     !== undefined ? { partyAddress:     partyAddress     || null } : {}),
                     ...(paymentMode      !== undefined ? { paymentMode:      paymentMode      || null } : {}),
-                    ...(paymentAccountId !== undefined ? { paymentAccountId: paymentAccountId ?? null } : {}),
-                    ...(paymentTerms     !== undefined ? { paymentTerms:     paymentTerms     || null } : {}),
-                    ...(dueDate          !== undefined ? { dueDate:          dueDate ? new Date(dueDate) : null } : {}),
+                    ...(paymentAccountId  !== undefined ? { paymentAccountId:  paymentAccountId ?? null } : {}),
+                    ...(creditPeriodDays  !== undefined ? { creditPeriodDays:  creditPeriodDays ?? null } : {}),
                     ...(refNumber        !== undefined ? { refNumber:        refNumber        || null } : {}),
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
                     ...(refVoucherId     !== undefined ? { refVoucherId:     refVoucherId ?? null } : {}),

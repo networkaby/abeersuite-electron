@@ -45,9 +45,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
@@ -119,19 +116,6 @@ function calcLine(l: LineState, opts: CalcOpts = {}) {
     return { gross, discAmt, taxAmt, amount: taxable + taxAmt };
 }
 
-const PAYMENT_TERMS: { label: string; days: number | null }[] = [
-    { label: "Due on Receipt", days: 0 },
-    { label: "Net 15", days: 15 },
-    { label: "Net 30", days: 30 },
-    { label: "Net 45", days: 45 },
-    { label: "Net 60", days: 60 },
-    { label: "Custom", days: null },
-];
-function addDays(isoDate: string, days: number): string {
-    const d = new Date(isoDate);
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-}
 
 // Numeric input sanitizers — type="text" lets us avoid the awful native
 // number-spinner UI; we filter keystrokes to digits + a single decimal
@@ -549,10 +533,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         // Blank by default — user fills as needed. Pre-zeroes were noisy.
         discountPct: "",
         discountAmt: "",
-        // Payment Terms / Due Date are unselected on open (CREDIT only); when
-        // the user picks a term preset, the due date auto-fills from date+days.
-        paymentTerms: "",
-        dueDate: "",
+        creditPeriodDays: "",
         // Bill / original-invoice reference — used by PURCHASE, SALE_RETURN,
         // PURCHASE_RETURN. SALE doesn't render the field, leaves these blank.
         refNumber: "",
@@ -570,21 +551,16 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
 
-    // Pre-fill payment terms from OrgDefaults on new vouchers (create mode only).
+    // Pre-fill credit period from OrgDefaults on new vouchers (create mode only).
     useEffect(() => {
         if (isEditing || !copy.showPaymentTerms) return;
         getOrgDefaults()
             .then((d) => {
-                const term = kind === "PURCHASE"
-                    ? d.defaultPurchasePaymentTerm
-                    : d.defaultSalePaymentTerm;
-                if (!term) return;
-                const preset = PAYMENT_TERMS.find((t) => t.label === term);
-                setHeader((h) => ({
-                    ...h,
-                    paymentTerms: term,
-                    dueDate: preset && preset.days != null ? addDays(h.date, preset.days) : h.dueDate,
-                }));
+                const days = kind === "PURCHASE"
+                    ? d.defaultPurchaseCreditPeriod
+                    : d.defaultSaleCreditPeriod;
+                if (days == null) return;
+                setHeader((h) => ({ ...h, creditPeriodDays: String(days) }));
             })
             .catch(() => {/* silent — defaults are optional */});
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -612,8 +588,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             partyAddress: string | null;
             paymentMode: string | null;
             paymentAccountId: number | null;
-            paymentTerms: string | null;
-            dueDate: string | null;
+            creditPeriodDays: number | null;
             refNumber: string | null;
             refDate: string | null;
             refVoucherId: number | null;
@@ -719,8 +694,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     received: Number(v.amountReceived ?? 0) > 0 ? String(Number(v.amountReceived)) : "",
                     discountPct: overallDiscPct > 0 ? String(overallDiscPct) : "",
                     discountAmt: overallDiscAmt > 0 ? String(overallDiscAmt) : "",
-                    paymentTerms: v.paymentTerms ?? "",
-                    dueDate: v.dueDate ? v.dueDate.slice(0, 10) : "",
+                    creditPeriodDays: v.creditPeriodDays != null ? String(v.creditPeriodDays) : "",
                     refNumber: v.refNumber ?? "",
                     refDate: v.refDate ? v.refDate.slice(0, 10) : "",
                 });
@@ -987,16 +961,6 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         const pct = lineSubtotal > 0 ? (a / lineSubtotal) * 100 : 0;
         setHeader((h) => ({ ...h, discountAmt: amt, discountPct: pct > 0 ? pct.toFixed(2) : "" }));
     };
-    // Payment Terms is a dummy preset picker — when a Net-N preset is chosen
-    // the due date auto-fills from header.date + N days. The "Custom" preset
-    // (and the blank default) leaves the due date free for the user to set.
-    const handlePaymentTermsChange = (term: string) => {
-        const preset = PAYMENT_TERMS.find((t) => t.label === term);
-        setHeader((h) => ({
-            ...h, paymentTerms: term,
-            dueDate: preset && preset.days != null ? addDays(h.date, preset.days) : h.dueDate,
-        }));
-    };
 
     // Live profit
     const lineProfits = lines.map((l) => {
@@ -1028,7 +992,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         setHeader({
             date: t, description: "", shippingAmt: "", roundOff: "", received: "",
             discountPct: "", discountAmt: "",
-            paymentTerms: "", dueDate: "",
+            creditPeriodDays: "",
             refNumber: "", refDate: "",
         });
         setShowProfit(false);
@@ -1090,8 +1054,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     ? paymentAccount?.id
                     : undefined,
                 ...(copy.showPaymentTerms && payMode === "CREDIT" ? {
-                    paymentTerms: header.paymentTerms || undefined,
-                    dueDate: header.dueDate || undefined,
+                    creditPeriodDays: header.creditPeriodDays ? Number(header.creditPeriodDays) : undefined,
                 } : {}),
                 // Bill / original-invoice ref (only rendered for kinds with refLabel
                 // — Purchase, Sale Return, Purchase Return).
@@ -1401,26 +1364,13 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
 
                         {copy.showPaymentTerms && payMode === "CREDIT" && (
                             <>
-                                <label className="text-xs text-muted-foreground text-right">Payment Terms</label>
-                                <Select value={header.paymentTerms || undefined} onValueChange={handlePaymentTermsChange}>
-                                    <SelectTrigger className="h-9 text-xs">
-                                        <SelectValue placeholder="Select term…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {PAYMENT_TERMS.map((t) => (
-                                            <SelectItem key={t.label} value={t.label} className="text-xs">
-                                                {t.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                <label className="text-xs text-muted-foreground text-right">Due Date</label>
+                                <label className="text-xs text-muted-foreground text-right">Credit Period (days)</label>
                                 <Input
-                                    type="date"
-                                    value={header.dueDate}
-                                    onChange={(e) => setHeader((h) => ({ ...h, dueDate: e.target.value }))}
-                                    className="h-9 text-xs"
+                                    type="text"
+                                    className="h-9 text-xs w-24"
+                                    placeholder="e.g. 30"
+                                    value={header.creditPeriodDays}
+                                    onChange={(e) => setHeader((h) => ({ ...h, creditPeriodDays: e.target.value.replace(/\D/g, "") }))}
                                 />
                             </>
                         )}

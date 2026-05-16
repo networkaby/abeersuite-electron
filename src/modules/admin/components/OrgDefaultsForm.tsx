@@ -29,8 +29,8 @@ interface OrgDefaults {
     defaultGstRate: string | null;
     defaultHsnCode: string | null;
     defaultTaxability: string | null;
-    defaultSalePaymentTerm: string | null;
-    defaultPurchasePaymentTerm: string | null;
+    defaultSaleCreditPeriod: number | null;
+    defaultPurchaseCreditPeriod: number | null;
     defaultCurrencySymbol: string;
 }
 
@@ -73,8 +73,8 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 defaultGstRate: draft.defaultGstRate !== null ? Number(draft.defaultGstRate) : null,
                 defaultHsnCode: draft.defaultHsnCode,
                 defaultTaxability: draft.defaultTaxability,
-                defaultSalePaymentTerm: draft.defaultSalePaymentTerm,
-                defaultPurchasePaymentTerm: draft.defaultPurchasePaymentTerm,
+                defaultSaleCreditPeriod: draft.defaultSaleCreditPeriod,
+                defaultPurchaseCreditPeriod: draft.defaultPurchaseCreditPeriod,
                 defaultCurrencySymbol: draft.defaultCurrencySymbol,
             };
             const { data: saved } = await axios.patch<OrgDefaults>("/api/settings/org-defaults", payload);
@@ -179,30 +179,36 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
             {/* Voucher defaults */}
             <section className="rounded-lg border bg-card p-4 space-y-4">
                 <div>
-                    <h2 className="text-sm font-semibold">Payment term defaults</h2>
-                    <p className="text-xs text-muted-foreground">Pre-filled on credit vouchers.</p>
+                    <h2 className="text-sm font-semibold">Credit period defaults</h2>
+                    <p className="text-xs text-muted-foreground">Number of days until payment is due on credit vouchers.</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-1">
-                        <Label className="text-xs">Sale payment term</Label>
+                        <Label className="text-xs">Sale credit period (days)</Label>
                         <Input
+                            type="text"
                             className="h-9"
-                            placeholder="e.g. Net 30"
-                            maxLength={64}
-                            value={draft.defaultSalePaymentTerm ?? ""}
-                            onChange={(e) => set("defaultSalePaymentTerm", e.target.value || null)}
+                            placeholder="e.g. 30"
+                            value={draft.defaultSaleCreditPeriod ?? ""}
+                            onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, "");
+                                set("defaultSaleCreditPeriod", v === "" ? null : Number(v));
+                            }}
                         />
                     </div>
 
                     <div className="space-y-1">
-                        <Label className="text-xs">Purchase payment term</Label>
+                        <Label className="text-xs">Purchase credit period (days)</Label>
                         <Input
+                            type="text"
                             className="h-9"
-                            placeholder="e.g. Net 45"
-                            maxLength={64}
-                            value={draft.defaultPurchasePaymentTerm ?? ""}
-                            onChange={(e) => set("defaultPurchasePaymentTerm", e.target.value || null)}
+                            placeholder="e.g. 45"
+                            value={draft.defaultPurchaseCreditPeriod ?? ""}
+                            onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, "");
+                                set("defaultPurchaseCreditPeriod", v === "" ? null : Number(v));
+                            }}
                         />
                     </div>
                 </div>

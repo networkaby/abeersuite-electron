@@ -69,8 +69,7 @@ export async function POST(req: NextRequest) {
         partyAddress,
         paymentMode,
         paymentAccountId,
-        paymentTerms,
-        dueDate,
+        creditPeriodDays,
         refNumber,
         refDate,
         refVoucherId,
@@ -95,10 +94,8 @@ export async function POST(req: NextRequest) {
         /// Cash / bank Account that received the money — drives postInvVoucher's
         /// cash-leg ledger selection. Null falls back to the name-based lookup.
         paymentAccountId?: number;
-        /// Credit-sale payment terms label (e.g. "Net 30")
-        paymentTerms?:   string;
-        /// Computed due date for the credit voucher (ISO yyyy-mm-dd)
-        dueDate?:        string;
+        /// Number of days from voucher date until payment is due (CREDIT mode only).
+        creditPeriodDays?: number;
         /// Supplier-issued bill number on PURCHASE; original invoice / bill
         /// number on SALE_RETURN / PURCHASE_RETURN.
         refNumber?:      string;
@@ -200,8 +197,7 @@ export async function POST(req: NextRequest) {
                 partyAddress: partyAddress || null,
                 paymentMode:     paymentMode || null,
                 paymentAccountId: paymentAccountId ?? null,
-                paymentTerms:    paymentTerms || null,
-                dueDate:         dueDate ? new Date(dueDate) : null,
+                creditPeriodDays: creditPeriodDays ?? null,
                 refNumber:       refNumber || null,
                 refDate:         refDate ? new Date(refDate) : null,
                 refVoucherId:    refVoucherId ?? null,

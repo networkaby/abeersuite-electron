@@ -6,8 +6,8 @@ export interface OrgDefaultsData {
     defaultGstRate: string | null;
     defaultHsnCode: string | null;
     defaultTaxability: string | null;
-    defaultSalePaymentTerm: string | null;
-    defaultPurchasePaymentTerm: string | null;
+    defaultSaleCreditPeriod: number | null;
+    defaultPurchaseCreditPeriod: number | null;
     defaultCurrencySymbol: string;
 }
 
