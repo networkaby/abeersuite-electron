@@ -52,7 +52,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
 
     const { sidebarMode, setSidebarMode, toggleSidebarVisible } = usePanelStore();
     const collapsed = sidebarMode === "collapsed";
-    const isHidden  = sidebarMode === "hidden";
+    const isHidden = sidebarMode === "hidden";
 
     // Persist mode to localStorage
     useEffect(() => {
@@ -64,7 +64,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             if (stored === "expanded" || stored === "collapsed" || stored === "hidden")
                 setSidebarMode(stored);
         } catch { /* ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const {
@@ -279,24 +279,24 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                         <span className="truncate">{child.label}</span>
                                     </a>
                                 ) : (
-                                <Link
-                                    href={href}
-                                    className={[
-                                        "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                        isActiveChild
-                                            ? "bg-primary text-primary-foreground"
-                                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                        child.disabled ? "pointer-events-none opacity-40" : "",
-                                    ].join(" ")}
-                                >
-                                    <CIcon size={15} className="shrink-0" />
-                                    <span className="truncate">{child.label}</span>
-                                    {child.disabled && (
-                                        <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                                            Soon
-                                        </Badge>
-                                    )}
-                                </Link>
+                                    <Link
+                                        href={href}
+                                        className={[
+                                            "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                            isActiveChild
+                                                ? "bg-primary text-primary-foreground"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                            child.disabled ? "pointer-events-none opacity-40" : "",
+                                        ].join(" ")}
+                                    >
+                                        <CIcon size={15} className="shrink-0" />
+                                        <span className="truncate">{child.label}</span>
+                                        {child.disabled && (
+                                            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                                Soon
+                                            </Badge>
+                                        )}
+                                    </Link>
                                 )}
                                 {hasSubChildren && (
                                     <Button
@@ -418,82 +418,82 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 }}
             >
 
-            {/* Brand */}
-            <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
-                {collapsed ? (
-                    <div className="flex flex-col items-center gap-2">
-                        <button
-                            type="button"
-                            title="Expand sidebar"
-                            onClick={() => setSidebarMode("expanded")}
-                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        >
-                            <PanelLeftOpen size={15} />
-                        </button>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-                            S
-                        </div>
-                        {user?.name && (
-                            <Link href={user.id ? `/office/social/users/${user.id}` : "/office/admin/users"}>
-                                <UserAvatar
-                                    avatarUrl={liveAvatar !== undefined ? liveAvatar : user.avatarUrl}
-                                    name={user.name}
-                                    role={user.role}
-                                    sizePx={28}
-                                />
-                            </Link>
-                        )}
-                    </div>
-                ) : (
-                    <div className="space-y-2.5">
-                        <div className="flex items-center justify-between">
-                            <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                {/* Brand */}
+                <div className={`border-b border-border p-4 ${collapsed ? "px-3" : ""}`}>
+                    {collapsed ? (
+                        <div className="flex flex-col items-center gap-2">
                             <button
                                 type="button"
-                                title="Collapse sidebar"
-                                onClick={() => setSidebarMode("collapsed")}
-                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                                title="Expand sidebar"
+                                onClick={() => setSidebarMode("expanded")}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                             >
-                                <PanelLeftClose size={14} />
+                                <PanelLeftOpen size={15} />
                             </button>
-                        </div>
-                        <Link
-                            href={user?.id ? `/office/social/users/${user.id}` : "/office/admin/users"}
-                            className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
-                        >
-                            <UserAvatar
-                                avatarUrl={liveAvatar !== undefined ? liveAvatar : user?.avatarUrl}
-                                name={user?.name ?? "?"}
-                                role={user?.role}
-                                sizePx={32}
-                                className="shrink-0"
-                            />
-                            <div className="flex-1 min-w-0">
-                                <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
-                                    {user?.name ?? ""}
-                                </p>
-                                {user?.roleLabel && (
-                                    <Badge className={`mt-0.5 h-4 px-1.5 text-[10px] ${user.roleColor ?? ""}`}>
-                                        {user.roleLabel}
-                                    </Badge>
-                                )}
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+                                S
                             </div>
-                            <NotificationBell />
-                        </Link>
-                    </div>
-                )}
-            </div>
+                            {user?.name && (
+                                <Link href={user.id ? `/office/social/users/${user.id}` : "/office/admin/users"}>
+                                    <UserAvatar
+                                        avatarUrl={liveAvatar !== undefined ? liveAvatar : user.avatarUrl}
+                                        name={user.name}
+                                        role={user.role}
+                                        sizePx={28}
+                                    />
+                                </Link>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <h1 className="truncate text-base font-bold text-primary">ServiceMgmt</h1>
+                                <button
+                                    type="button"
+                                    title="Collapse sidebar"
+                                    onClick={() => setSidebarMode("collapsed")}
+                                    className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                                >
+                                    <PanelLeftClose size={14} />
+                                </button>
+                            </div>
+                            <Link
+                                href={user?.id ? `/office/social/users/${user.id}` : "/office/admin/users"}
+                                className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
+                            >
+                                <UserAvatar
+                                    avatarUrl={liveAvatar !== undefined ? liveAvatar : user?.avatarUrl}
+                                    name={user?.name ?? "?"}
+                                    role={user?.role}
+                                    sizePx={32}
+                                    className="shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
+                                        {user?.name ?? ""}
+                                    </p>
+                                    {user?.roleLabel && (
+                                        <Badge className={`mt-0.5 h-4 px-1.5 text-[10px] ${user.roleColor ?? ""}`}>
+                                            {user.roleLabel}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <NotificationBell />
+                            </Link>
+                        </div>
+                    )}
+                </div>
 
 
 
-            {/* Nav */}
-            <ScrollArea className="flex-1 overflow-hidden">
-                <div className="space-y-4 p-2">
+                {/* Nav */}
+                <ScrollArea className="flex-1 overflow-hidden">
+                    <div className="space-y-4 p-2">
 
-                    {/* <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-2"> */}
+                        {/* <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-2"> */}
 
-                    {/* Inbox */}
-                    <section>
+                        {/* Inbox */}
+                        {/* <section>
                         <Link href="/office/message/inbox" className={linkClass("/office/message/inbox")} title={collapsed ? "Inbox" : ""}>
                             <Bell size={17} className="shrink-0" />
                             {!collapsed && (
@@ -507,328 +507,328 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 </>
                             )}
                         </Link>
-                    </section>
+                    </section> */}
 
-                    {/* Workspace */}
-                    <section>
-                        {!collapsed && (
-                            <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                                Workspace
-                            </p>
-                        )}
-                        <div className="space-y-0.5">
-                            {WORKSPACE_NAV.filter(canViewNavItem).map((item) => {
-                                const Icon = item.icon;
-                                const hasChildren = !!item.children?.length;
-                                const visibleChildren = item.children?.filter(canViewNavItem) ?? [];
-                                const isOpen = workspaceOpen[item.label.toLowerCase()] ?? false;
-                                const hasActiveChild = visibleChildren.some((child) => isWorkspaceChildActive(child.href, visibleChildren));
-                                const isActiveParent = pathname.startsWith(item.href) || hasActiveChild;
+                        {/* Workspace */}
+                        <section>
+                            {!collapsed && (
+                                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                                    Workspace
+                                </p>
+                            )}
+                            <div className="space-y-0.5">
+                                {WORKSPACE_NAV.filter(canViewNavItem).map((item) => {
+                                    const Icon = item.icon;
+                                    const hasChildren = !!item.children?.length;
+                                    const visibleChildren = item.children?.filter(canViewNavItem) ?? [];
+                                    const isOpen = workspaceOpen[item.label.toLowerCase()] ?? false;
+                                    const hasActiveChild = visibleChildren.some((child) => isWorkspaceChildActive(child.href, visibleChildren));
+                                    const isActiveParent = pathname.startsWith(item.href) || hasActiveChild;
 
-                                if (!hasChildren || visibleChildren.length === 0 || collapsed) {
+                                    if (!hasChildren || visibleChildren.length === 0 || collapsed) {
+                                        return (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                className={linkClass(item.href)}
+                                                title={collapsed ? item.label : ""}
+                                            >
+                                                <Icon size={17} className="shrink-0" />
+                                                {!collapsed && <span className="truncate">{item.label}</span>}
+                                            </Link>
+                                        );
+                                    }
+
                                     return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            className={linkClass(item.href)}
-                                            title={collapsed ? item.label : ""}
-                                        >
-                                            <Icon size={17} className="shrink-0" />
-                                            {!collapsed && <span className="truncate">{item.label}</span>}
-                                        </Link>
-                                    );
-                                }
+                                        <div key={item.href}>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() =>
+                                                    setWorkspaceOpen((prev) => ({
+                                                        ...prev,
+                                                        [item.label.toLowerCase()]: !prev[item.label.toLowerCase()],
+                                                    }))
+                                                }
+                                                className={[
+                                                    "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                    isActiveParent
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                ].join(" ")}
+                                            >
+                                                <Icon size={17} className="shrink-0" />
+                                                <span className="flex-1 truncate text-left">{item.label}</span>
+                                                <ChevronDown
+                                                    size={13}
+                                                    className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                                />
+                                            </Button>
 
-                                return (
-                                    <div key={item.href}>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() =>
-                                                setWorkspaceOpen((prev) => ({
-                                                    ...prev,
-                                                    [item.label.toLowerCase()]: !prev[item.label.toLowerCase()],
-                                                }))
-                                            }
-                                            className={[
-                                                "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                                isActiveParent
-                                                    ? "bg-primary text-primary-foreground"
-                                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                            ].join(" ")}
-                                        >
-                                            <Icon size={17} className="shrink-0" />
-                                            <span className="flex-1 truncate text-left">{item.label}</span>
-                                            <ChevronDown
-                                                size={13}
-                                                className={`shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                                            />
-                                        </Button>
-
-                                        {isOpen && (
-                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                                {visibleChildren.map((child) => {
-                                                    return (
-                                                        <Link
-                                                            key={`${item.href}-${child.href}`}
-                                                            href={child.href}
-                                                            className={[
-                                                                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                                                isWorkspaceChildActive(child.href, visibleChildren)
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                                            ].join(" ")}
-                                                        >
-                                                            <child.icon size={15} className="shrink-0" />
-                                                            <span className="truncate">{child.label}</span>
-                                                        </Link>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </section>
-
-                    {/* Modules */}
-                    <section>
-                        {!collapsed && (
-                            <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                                Modules
-                            </p>
-                        )}
-                        <div className="space-y-0.5">
-                            {MODULE_SECTIONS.filter((mod) => !mod.permission || isAdmin || permissions.includes(mod.permission)).map((mod) => {
-                                const Icon = mod.icon;
-                                const isOpen = moduleOpen[mod.key] ?? false;
-
-                                return (
-                                    <div key={mod.key}>
-                                        {collapsed ? (
-                                            mod.disabled || !mod.dashboardHref ? (
-                                                <div
-                                                    title={mod.label}
-                                                    className={[
-                                                        "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
-                                                        mod.disabled
-                                                            ? "cursor-not-allowed text-muted-foreground/30"
-                                                            : "text-muted-foreground",
-                                                    ].join(" ")}
-                                                >
-                                                    <Icon size={17} />
+                                            {isOpen && (
+                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                                    {visibleChildren.map((child) => {
+                                                        return (
+                                                            <Link
+                                                                key={`${item.href}-${child.href}`}
+                                                                href={child.href}
+                                                                className={[
+                                                                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                    isWorkspaceChildActive(child.href, visibleChildren)
+                                                                        ? "bg-primary text-primary-foreground"
+                                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                                ].join(" ")}
+                                                            >
+                                                                <child.icon size={15} className="shrink-0" />
+                                                                <span className="truncate">{child.label}</span>
+                                                            </Link>
+                                                        );
+                                                    })}
                                                 </div>
-                                            ) : (
-                                                <Link
-                                                    href={mod.dashboardHref}
-                                                    title={mod.label}
-                                                    className={[
-                                                        "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
-                                                        pathname.startsWith(mod.dashboardHref)
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "text-muted-foreground hover:bg-muted",
-                                                    ].join(" ")}
-                                                >
-                                                    <Icon size={17} />
-                                                </Link>
-                                            )
-                                        ) : (
-                                            <>
-                                                {mod.disabled || !mod.dashboardHref ? (
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        {/* Modules */}
+                        <section>
+                            {!collapsed && (
+                                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                                    Modules
+                                </p>
+                            )}
+                            <div className="space-y-0.5">
+                                {MODULE_SECTIONS.filter((mod) => !mod.permission || isAdmin || permissions.includes(mod.permission)).map((mod) => {
+                                    const Icon = mod.icon;
+                                    const isOpen = moduleOpen[mod.key] ?? false;
+
+                                    return (
+                                        <div key={mod.key}>
+                                            {collapsed ? (
+                                                mod.disabled || !mod.dashboardHref ? (
                                                     <div
+                                                        title={mod.label}
                                                         className={[
-                                                            "flex h-auto w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                                                            "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
                                                             mod.disabled
                                                                 ? "cursor-not-allowed text-muted-foreground/30"
                                                                 : "text-muted-foreground",
                                                         ].join(" ")}
                                                     >
-                                                        <Icon size={17} className="shrink-0" />
-                                                        <span className="flex-1 truncate text-left">{mod.label}</span>
-                                                        {mod.disabled && (
-                                                            <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                                                                Soon
-                                                            </Badge>
-                                                        )}
+                                                        <Icon size={17} />
                                                     </div>
                                                 ) : (
-                                                    <div className="flex w-full items-stretch gap-0.5">
-                                                        <Link
-                                                            href={mod.dashboardHref}
-                                                            onClick={() =>
-                                                                setModuleOpen((prev) => ({
-                                                                    ...prev,
-                                                                    [mod.key]: true,
-                                                                }))
-                                                            }
+                                                    <Link
+                                                        href={mod.dashboardHref}
+                                                        title={mod.label}
+                                                        className={[
+                                                            "flex h-auto w-full items-center justify-center rounded-lg px-2 py-2 transition-colors",
+                                                            pathname.startsWith(mod.dashboardHref)
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "text-muted-foreground hover:bg-muted",
+                                                        ].join(" ")}
+                                                    >
+                                                        <Icon size={17} />
+                                                    </Link>
+                                                )
+                                            ) : (
+                                                <>
+                                                    {mod.disabled || !mod.dashboardHref ? (
+                                                        <div
                                                             className={[
-                                                                "flex h-auto flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                                                                pathname.startsWith(mod.dashboardHref)
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                                "flex h-auto w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                                                                mod.disabled
+                                                                    ? "cursor-not-allowed text-muted-foreground/30"
+                                                                    : "text-muted-foreground",
                                                             ].join(" ")}
                                                         >
                                                             <Icon size={17} className="shrink-0" />
                                                             <span className="flex-1 truncate text-left">{mod.label}</span>
-                                                        </Link>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            aria-label={isOpen ? `Collapse ${mod.label}` : `Expand ${mod.label}`}
-                                                            onClick={() =>
-                                                                setModuleOpen((prev) => ({
-                                                                    ...prev,
-                                                                    [mod.key]: !prev[mod.key],
-                                                                }))
-                                                            }
-                                                            className="h-auto shrink-0 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                                        >
-                                                            <ChevronDown
-                                                                size={13}
-                                                                className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                                                            />
-                                                        </Button>
-                                                    </div>
-                                                )}
+                                                            {mod.disabled && (
+                                                                <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                                                                    Soon
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex w-full items-stretch gap-0.5">
+                                                            <Link
+                                                                href={mod.dashboardHref}
+                                                                onClick={() =>
+                                                                    setModuleOpen((prev) => ({
+                                                                        ...prev,
+                                                                        [mod.key]: true,
+                                                                    }))
+                                                                }
+                                                                className={[
+                                                                    "flex h-auto flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                                    pathname.startsWith(mod.dashboardHref)
+                                                                        ? "bg-primary text-primary-foreground"
+                                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                                ].join(" ")}
+                                                            >
+                                                                <Icon size={17} className="shrink-0" />
+                                                                <span className="flex-1 truncate text-left">{mod.label}</span>
+                                                            </Link>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label={isOpen ? `Collapse ${mod.label}` : `Expand ${mod.label}`}
+                                                                onClick={() =>
+                                                                    setModuleOpen((prev) => ({
+                                                                        ...prev,
+                                                                        [mod.key]: !prev[mod.key],
+                                                                    }))
+                                                                }
+                                                                className="h-auto shrink-0 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                            >
+                                                                <ChevronDown
+                                                                    size={13}
+                                                                    className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                                                                />
+                                                            </Button>
+                                                        </div>
+                                                    )}
 
-                                                {isOpen && (
-                                                    <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                                        {renderModuleChildren(mod.children)}
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </section>
-                    <section>
-                        <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                            Admin Only
-                        </p>
-                        <div className="space-y-0.5">
-                            {/* Admin */}
-                            {visibleAdmin.length > 0 && (
-                                <section>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => !collapsed && setAdminOpen((o) => !o)}
-                                        className={linkClass("/office/admin/users")}
-                                        title={collapsed ? "Admin" : ""}
-                                    >
-                                        <ShieldCheck size={17} className="shrink-0" />
-                                        {!collapsed && (
-                                            <>
-                                                <span className="flex-1 truncate text-left">Admin</span>
-                                                <ChevronDown
-                                                    size={13}
-                                                    className={`shrink-0 transition-transform duration-200 ${adminOpen ? "rotate-180" : ""}`}
-                                                />
-                                            </>
-                                        )}
-                                    </Button>
-
-                                    {adminOpen && !collapsed && (
-                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                            {visibleAdmin.map(({ label, href, icon: Icon }) => (
-                                                <Link key={href} href={href} className={linkClass(href)}>
-                                                    <Icon size={15} className="shrink-0" />
-                                                    <span className="truncate">{label}</span>
-                                                </Link>
-                                            ))}
+                                                    {isOpen && (
+                                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                                            {renderModuleChildren(mod.children)}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
-                                    )}
-                                </section>
-                            )}
+                                    );
+                                })}
+                            </div>
+                        </section>
+                        <section>
+                            <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                                Admin Only
+                            </p>
+                            <div className="space-y-0.5">
+                                {/* Admin */}
+                                {visibleAdmin.length > 0 && (
+                                    <section>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => !collapsed && setAdminOpen((o) => !o)}
+                                            className={linkClass("/office/admin/users")}
+                                            title={collapsed ? "Admin" : ""}
+                                        >
+                                            <ShieldCheck size={17} className="shrink-0" />
+                                            {!collapsed && (
+                                                <>
+                                                    <span className="flex-1 truncate text-left">Admin</span>
+                                                    <ChevronDown
+                                                        size={13}
+                                                        className={`shrink-0 transition-transform duration-200 ${adminOpen ? "rotate-180" : ""}`}
+                                                    />
+                                                </>
+                                            )}
+                                        </Button>
 
-                            {/* Settings */}
-                            {visibleSettings.length > 0 && (
-                                <section>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => !collapsed && setSettingsOpen((o) => !o)}
-                                        className={linkClass("/office/settings")}
-                                        title={collapsed ? "Settings" : ""}
-                                    >
-                                        <Settings size={17} className="shrink-0" />
-                                        {!collapsed && (
-                                            <>
-                                                <span className="flex-1 truncate text-left">Settings</span>
-                                                <ChevronDown
-                                                    size={13}
-                                                    className={`shrink-0 transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`}
-                                                />
-                                            </>
+                                        {adminOpen && !collapsed && (
+                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                                {visibleAdmin.map(({ label, href, icon: Icon }) => (
+                                                    <Link key={href} href={href} className={linkClass(href)}>
+                                                        <Icon size={15} className="shrink-0" />
+                                                        <span className="truncate">{label}</span>
+                                                    </Link>
+                                                ))}
+                                            </div>
                                         )}
-                                    </Button>
+                                    </section>
+                                )}
 
-                                    {settingsOpen && !collapsed && (
-                                        <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
-                                            {visibleSettings.map(({ label, href, icon: Icon }) => (
-                                                <Link key={href} href={href} className={linkClass(href)}>
-                                                    <Icon size={15} className="shrink-0" />
-                                                    <span className="truncate">{label}</span>
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    )}
-                                </section>
-                            )}
-                        </div>
-                    </section>
-                    {/* </nav> */}
+                                {/* Settings */}
+                                {visibleSettings.length > 0 && (
+                                    <section>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => !collapsed && setSettingsOpen((o) => !o)}
+                                            className={linkClass("/office/settings")}
+                                            title={collapsed ? "Settings" : ""}
+                                        >
+                                            <Settings size={17} className="shrink-0" />
+                                            {!collapsed && (
+                                                <>
+                                                    <span className="flex-1 truncate text-left">Settings</span>
+                                                    <ChevronDown
+                                                        size={13}
+                                                        className={`shrink-0 transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`}
+                                                    />
+                                                </>
+                                            )}
+                                        </Button>
 
+                                        {settingsOpen && !collapsed && (
+                                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                                                {visibleSettings.map(({ label, href, icon: Icon }) => (
+                                                    <Link key={href} href={href} className={linkClass(href)}>
+                                                        <Icon size={15} className="shrink-0" />
+                                                        <span className="truncate">{label}</span>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </section>
+                                )}
+                            </div>
+                        </section>
+                        {/* </nav> */}
+
+                    </div>
+                    <ScrollBar orientation="vertical" />
+                </ScrollArea>
+
+
+
+
+                {/* Bottom — theme toggle + sign out */}
+                <div className="border-t border-border p-2 space-y-1">
+                    {/* Theme toggle */}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                        title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                        className={[
+                            "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground",
+                            collapsed ? "justify-center px-2" : "",
+                        ].join(" ")}
+                    >
+                        {resolvedTheme === "dark"
+                            ? <Sun size={17} className="shrink-0" />
+                            : <Moon size={17} className="shrink-0" />
+                        }
+                        {!collapsed && (
+                            <span className="truncate">
+                                {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                            </span>
+                        )}
+                    </Button>
+
+                    {/* Sign out */}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => signOut({ callbackUrl: "/staff/login" })}
+                        title={collapsed ? "Sign Out" : ""}
+                        className={[
+                            "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",
+                            collapsed ? "justify-center px-2" : "",
+                        ].join(" ")}
+                    >
+                        <LogOut size={17} className="shrink-0" />
+                        {!collapsed && <span className="truncate">Sign Out</span>}
+                    </Button>
                 </div>
-                <ScrollBar orientation="vertical" />
-            </ScrollArea>
-
-
-
-
-            {/* Bottom — theme toggle + sign out */}
-            <div className="border-t border-border p-2 space-y-1">
-                {/* Theme toggle */}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-                    title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                    className={[
-                        "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground",
-                        collapsed ? "justify-center px-2" : "",
-                    ].join(" ")}
-                >
-                    {resolvedTheme === "dark"
-                        ? <Sun size={17} className="shrink-0" />
-                        : <Moon size={17} className="shrink-0" />
-                    }
-                    {!collapsed && (
-                        <span className="truncate">
-                            {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
-                        </span>
-                    )}
-                </Button>
-
-                {/* Sign out */}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => signOut({ callbackUrl: "/staff/login" })}
-                    title={collapsed ? "Sign Out" : ""}
-                    className={[
-                        "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",
-                        collapsed ? "justify-center px-2" : "",
-                    ].join(" ")}
-                >
-                    <LogOut size={17} className="shrink-0" />
-                    {!collapsed && <span className="truncate">Sign Out</span>}
-                </Button>
-            </div>
 
             </div>{/* end slide wrapper */}
         </aside>
