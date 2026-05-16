@@ -195,8 +195,9 @@ export const PartySearchAndCreate = forwardRef<
         return () => { cancelled = true; };
     }, [isFocused, query, locked, partyGroup]);
 
-    // activeHits: use browse list when focused+empty, search results otherwise
-    const activeHits = isFocused && !query.trim() ? browseHits : hits;
+    // activeHits: use browse list when query is empty, search results otherwise.
+    // browseHits is cleared in the blur handler (with delay) so clicks complete first.
+    const activeHits = query.trim() ? hits : browseHits;
 
     // Reset highlight when active hits change
     useEffect(() => { setHighlightedHit(0); }, [activeHits]);
@@ -531,7 +532,7 @@ export const PartySearchAndCreate = forwardRef<
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={onSearchKeyDown}
                     onFocus={() => setIsFocused(true)}
-                    onBlur={() => setIsFocused(false)}
+                    onBlur={() => setTimeout(() => { setIsFocused(false); setBrowseHits([]); }, 150)}
                     placeholder={placeholder ?? "Search person or company by name / phone / email · ↵ to pick · ↵ on no-result to create"}
                     className={`pl-9 ${locked ? "bg-muted/50 cursor-default" : ""}`}
                     readOnly={locked}
