@@ -13,7 +13,8 @@
     "seed:dummy-shop": "tsx prisma/seeds/dummy-shop.ts",
     "seed:dummy-customers": "tsx prisma/seeds/dummy-customers.ts",
     "seed:dummy-vouchers": "tsx prisma/seeds/dummy-vouchers.ts",
-    "seed:dummy-all": "pnpm seed:dummy-customers && pnpm seed:dummy-users && pnpm seed:dummy-shop && pnpm seed:dummy-vouchers",
+    "seed:dummy-brands": "tsx prisma/seeds/dummy-brands.ts",
+    "seed:dummy-all": "pnpm seed:dummy-customers && pnpm seed:dummy-users && pnpm seed:dummy-shop && pnpm seed:dummy-brands && pnpm seed:dummy-vouchers",
     "seed:purge-vouchers": "tsx prisma/seeds/purge-vouchers.ts",
     "seed:hard-clean": "tsx prisma/seeds/hard-clean.ts"
   },
@@ -60,7 +61,8 @@
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   },
   "packageManager": "pnpm@10.33.1+sha512.05ba3c1d5d1c18f68df06470d74055e62d41fc110a0c660db1b2dfb2785327f04cf0f68345d4609bc52089e7fa0343c31593b2f9594e2c5d5da426230acc9820"
 }
