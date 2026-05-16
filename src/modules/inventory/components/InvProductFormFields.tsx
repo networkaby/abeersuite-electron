@@ -140,6 +140,8 @@ function taxSourceLabel(src: EffectiveTax["gstSource"]): string {
     return String(src);
 }
 
+export type InvProductFormTab = "basics" | "pricing" | "stock" | "tax" | "opening" | "online";
+
 export function InvProductFormFields({
     form,
     setForm,
@@ -155,6 +157,7 @@ export function InvProductFormFields({
     attrMasters = [],
     /** true = edit mode; all dirty flags start true so existing values aren't clobbered. */
     isEditMode = false,
+    defaultTab = "basics",
 }: {
     form: InvProductFormState;
     setForm: React.Dispatch<React.SetStateAction<InvProductFormState>>;
@@ -170,6 +173,9 @@ export function InvProductFormFields({
     namingConfig?: NamingConfigShape | null;
     attrMasters?: AttrMasterRow[];
     isEditMode?: boolean;
+    /** Initial tab. Callers that deep-link into a specific concern (e.g. Tax
+     * Classification report → pencil) pass "tax" so the dialog opens on it. */
+    defaultTab?: InvProductFormTab;
 }) {
     const label = (o: Opt) => o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
 
@@ -239,7 +245,7 @@ export function InvProductFormFields({
     const tabPanel = "mt-4 min-h-[380px]";
 
     return (
-        <Tabs defaultValue="basics" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
             {/* Horizontal scroll on narrow viewports so all 5 tab labels stay
                 fully readable; on desktop they fit comfortably side-by-side. */}
             <TabsList className="flex w-full justify-start overflow-x-auto whitespace-nowrap">

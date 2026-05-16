@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, ArrowDownRight, FileText, Hash, Construction } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, FileText, Hash, Construction, Tags } from "lucide-react";
 
 const SECTIONS = [
     {
@@ -31,6 +31,13 @@ const SECTIONS = [
         description: "HSN-wise rollup of taxable value + tax — the table you copy into GSTR-1 § 12.",
         icon: Hash,
         color: "from-amber-500/10 to-amber-500/0 text-amber-700",
+    },
+    {
+        title: "Tax Classification",
+        href: "/office/accountancy/reports/gst/classification",
+        description: "Master view — rate-wise / HSN-wise / group hierarchy / item-wise with cascade source, plus inline edit.",
+        icon: Tags,
+        color: "from-cyan-500/10 to-cyan-500/0 text-cyan-700",
     },
 ];
 

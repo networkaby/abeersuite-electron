@@ -26,6 +26,7 @@ import {
     type EffectiveTax,
     type GstRateOpt,
     type InvProductFormState,
+    type InvProductFormTab,
 } from "@/modules/inventory/components/InvProductFormFields";
 import { generateSku } from "@/modules/inventory/lib/sku";
 import {
@@ -149,9 +150,11 @@ interface Props {
     onSaved?: () => void;
     /** Fired after a successful CREATE with the raw API response. Edit saves do NOT fire this. */
     onCreatedProduct?: (product: InvProductCreatedRow) => void;
+    /** Initial tab — e.g. "tax" when opened from the Tax Classification report. */
+    defaultTab?: InvProductFormTab;
 }
 
-export function InvProductDialog({ open, onOpenChange, editId, defaultValues, onSaved, onCreatedProduct }: Props) {
+export function InvProductDialog({ open, onOpenChange, editId, defaultValues, onSaved, onCreatedProduct, defaultTab }: Props) {
     const [form, setForm] = useState<InvProductFormState>(emptyInvProductForm);
     const [units, setUnits] = useState<Opt[]>([]);
     const [categories, setCategories] = useState<Opt[]>([]);
@@ -308,6 +311,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         namingConfig={namingConfig}
                         attrMasters={attrMasters}
                         isEditMode={editId != null}
+                        defaultTab={defaultTab}
                     />
                 </div>
                 <div className="flex justify-end gap-2 border-t bg-muted/30 px-6 py-3">

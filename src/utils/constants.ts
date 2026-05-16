@@ -46,6 +46,10 @@ import {
     ListOrdered,
     PlayCircle,
     Receipt,
+    ArrowUpRight,
+    ArrowDownRight,
+    Hash,
+    Tags,
     FolderTree,
     PackageCheck,
     PackageX,
@@ -140,6 +144,7 @@ export type ButtonBarAction = {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 export const WORKSPACE_NAV: NavItem[] = [
+    { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
     { label: "My Assignments", href: "/office/core/assignments", icon: ClipboardList, permission: null },
     { label: "CallLog", href: "/office/core/call-log", icon: PhoneCall, permission: null },
     { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
@@ -221,6 +226,18 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
             { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
             { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
+            {
+                label: "GST Reports",
+                icon: BadgePercent,
+                href: "/office/accountancy/reports/gst",
+                children: [
+                    { label: "Outward Supplies", icon: ArrowUpRight, href: "/office/accountancy/reports/gst/outward-supplies" },
+                    { label: "Inward Supplies", icon: ArrowDownRight, href: "/office/accountancy/reports/gst/inward-supplies" },
+                    { label: "Net GST Liability", icon: FileText, href: "/office/accountancy/reports/gst/liability" },
+                    { label: "HSN Summary", icon: Hash, href: "/office/accountancy/reports/gst/hsn-summary" },
+                    { label: "Tax Classification", icon: Tags, href: "/office/accountancy/reports/gst/classification" },
+                ],
+            },
 
             // { label: "Estimates", icon: ScrollText, href: "/vouchers/estimates" },
 

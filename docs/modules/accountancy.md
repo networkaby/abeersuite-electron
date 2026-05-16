@@ -11,9 +11,12 @@
 - `/office/accountancy/payments`, `/receipts`, `/contras`, `/credit-notes`, `/debit-notes`, `/estimates`
 - `/office/accountancy/journal-entries`, `/invoices`, `/ledgers`, `/groups`, `/chart-of-accounts`, `/opening-balance`, `/account/[id]`
 - `/office/accountancy/reports/{balance-sheet,profit-loss,trial-balance,day-book,cash-book,bank-book,receivables,payables,cash-flow,fund-flow,ratio-analysis,statistics,bank-reconciliation,ledger-outstandings/[ledgerId]}`
-- `/office/accountancy/reports/gst/{liability,outward-supplies,inward-supplies,hsn-summary}`
+- `/office/accountancy/reports/gst/{liability,outward-supplies,inward-supplies,hsn-summary,classification}`
+- `/office/accountancy/reports/gst/classification` — **Tax Classification** master view. Four tabs: **Rate-wise** (every GstRate slab + "Unresolved" bucket with product counts; click → drills to Item-wise filtered by that rate), **HSN-wise** (products grouped by resolved HSN × rate; master-derived complement to HSN Summary, which is transaction-derived), **Group hierarchy** (InvProductGroup tree with inline-editable own GST/HSN/Taxability + "own" / "grp" / "org" source chips), **Item-wise** (every product with own + cascaded effective tax, inline-editable cells, pencil opens `InvProductDialog` directly on the Tax tab via the new `defaultTab` prop). Filters: search SKU/name, group, source ("own only" / "inherited from group" / "inherited from org default" / "unresolved"). Edit gated by `inventory:manage`.
 
 Legacy `/office/tally/*` URLs 307-redirect to `/office/accountancy/*` via `next.config.ts`.
+
+**Staff sidebar** (`MODULE_SECTIONS` in [src/utils/constants.ts](../../src/utils/constants.ts), rendered by [Sidebar.tsx](../../src/shared/components/Sidebar.tsx)): Accountancy expands to include **GST Reports** (hub `/office/accountancy/reports/gst`) with nested links — Outward Supplies, Inward Supplies, Net GST Liability, HSN Summary, Tax Classification. Visible to anyone with `accountancy:view:org` along with the rest of Accountancy.
 
 ### Full-page voucher creation pages (outside accountancy layout gate)
 
@@ -49,6 +52,7 @@ These routes live under `src/app/(protected)/vouchers/` — each opens in a new 
 ### API routes (all under `src/app/api/finance/`)
 - List/read endpoints (~30 files) gated by `requirePermission("accountancy:view:org")` — invoices, journal-entries, vouchers, ledgers, gl-accounts, account-groups, opening-balance, allocations, all `reports/*`.
 - Operation endpoints (cancel/delete/post/restore) keep their fine-grained `finance:*:*` keys (e.g. `finance:invoice:cancel`, `finance:voucher:post`).
+- `GET /api/accountancy/reports/gst-classification` — single batched payload for the Tax Classification page. Returns `{ rates[], groups[], products[], orgDefaults, summary }` with every product + group cascade-resolved in one round-trip via `resolveProductTaxBatch`. Permission: `accountancy:view:org`.
 
 API folder is still `/api/finance/*` — rename deferred to Step 5 (route restructure).
 
@@ -149,4 +153,6 @@ These are the **single source of truth** for every balance/value calculation in 
 
 - **2026-05-13 — Full-page GL voucher routes (team-approved)**: `MoneyFlowVoucherPage` and `JournalVoucherPage` are now permanently mounted at `/vouchers/{payment,receipt,contra,credit-note,debit-note,journal}` and `/vouchers/estimate`. They share a single `layout.tsx` via the `(gl)` route group. Button bar entries for all 7 kinds now `window.open()` those routes instead of triggering the legacy dialogs. The old dialog components (`MoneyFlowDialog`, `JournalVoucherDialog`, `EstimateDialog`, etc.) remain mounted in `office/layout.tsx` and reachable via `/office/accountancy/{payments,receipts,contras,credit-notes,debit-notes,estimates}/new` — they are not deleted, just no longer the primary entry point.
 
-_Last updated: 2026-05-14 — added `postContra(tx, ...)` helper for system-generated Contras (used by POS shift open/close); POS sales now create a cash-receipt JE that closes AR same-transaction._
+- **2026-05-16 — Tax Classification report shipped**: new master-data view at `/office/accountancy/reports/gst/classification` with four tabs (Rate-wise / HSN-wise / Group hierarchy / Item-wise). All four read from a single new endpoint `GET /api/accountancy/reports/gst-classification` that returns the entire catalog cascade-resolved in 3 SQL queries (products + groups + orgDefaults) via `resolveProductTaxBatch` in `gstResolver.ts`. Inline-edit cells on Group hierarchy + Item-wise tabs PATCH directly to `/api/inventory/product-groups/[id]` and `/api/inventory/products/[id]` (gated by `inventory:manage`). Per-row pencil on Item-wise opens the full `InvProductDialog` directly on the Tax tab via new `defaultTab` prop (also threaded into `InvProductFormFields`). Page added as a 5th card on the GST hub.
+
+_Last updated: 2026-05-16 — Sidebar: Accountancy includes **GST Reports** submenu (`MODULE_SECTIONS` in `constants.ts`) linking hub + outward/inward liability + HSN Summary + Tax Classification. Previously: Tax Classification report shipped (master-derived complement to HSN Summary). Earlier: added `postContra(tx, ...)` helper for system-generated Contras (used by POS shift open/close); POS sales now create a cash-receipt JE that closes AR same-transaction._
