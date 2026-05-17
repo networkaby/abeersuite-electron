@@ -67,6 +67,8 @@ const EDIT_FORM_URLS: Record<string, string> = {
     CHALLAN:         "/vouchers/challans/new",
     REJECTION_IN:    "/vouchers/rejections-in/new",
     REJECTION_OUT:   "/vouchers/rejections-out/new",
+    PHYSICAL_STOCK:        "/vouchers/physical-stock/new",
+    MANUFACTURING_JOURNAL: "/vouchers/manufacturing-journals/new",
 };
 
 export function editFormUrl(type: string, id: number): string | null {

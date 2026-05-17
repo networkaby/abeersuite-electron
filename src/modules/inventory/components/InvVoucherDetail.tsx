@@ -62,7 +62,17 @@ const TYPE_ROUTE: Record<string, string> = {
     PURCHASE:        "/office/inventory/purchases",
 };
 
-export function InvVoucherDetail({ basePath, label }: { basePath: string; label: string }) {
+export function InvVoucherDetail({ basePath, label, formPath }: {
+    /** Register list URL — Lifecycle hard-delete + refVoucher fallback land here. */
+    basePath: string;
+    label:    string;
+    /** Editable form URL prefix. Edit drills into `${formPath}?voucherId=<id>`.
+     *  Defaults to `${basePath}/new` for the legacy single-tree pattern. New
+     *  vouchers split the register (under accountancy) from the form (under
+     *  /vouchers/), so they pass both. */
+    formPath?: string;
+}) {
+    const editPath = formPath ?? `${basePath}/new`;
     const { id } = useParams<{ id: string }>();
     const router = useRouter();
     const { data: session } = useSession();
@@ -133,7 +143,7 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
                     {voucher.status !== "CANCELLED" && !voucher.deletedAt && (
                         <Button
                             variant="outline"
-                            onClick={() => router.push(`${basePath}/new?voucherId=${voucher.id}`)}
+                            onClick={() => router.push(`${editPath}?voucherId=${voucher.id}`)}
                             title="Edit voucher in the rich form"
                         >
                             <Pencil size={14} /> Edit

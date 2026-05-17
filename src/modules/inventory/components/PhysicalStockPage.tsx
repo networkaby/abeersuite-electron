@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Trash2, Building2, ClipboardCheck, Plus, Minus } from "lucide-react";
+import { Loader2, Trash2, Building2, ClipboardCheck, Plus, Minus, X } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +74,16 @@ export function PhysicalStockPage() {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(editing);
     const [voucherRef, setVoucherRef] = useState<string | null>(null);
+
+    // Close / Cancel — smart back-nav (matches SaleVoucherPage):
+    //   • Same-tab open → router.back() returns to wherever the operator came from.
+    //   • New-tab open (window.open from ButtonBar) → window.close() shuts the tab.
+    //   • Manually-typed URL → window.close() silently fails. Acceptable.
+    const closeForm = useCallback(() => {
+        if (typeof window === "undefined") return;
+        if (window.history.length > 1) router.back();
+        else window.close();
+    }, [router]);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(activeBranchId);
 
@@ -250,7 +260,13 @@ export function PhysicalStockPage() {
             } else {
                 toast.success("Physical Stock saved as draft");
             }
-            router.push("/vouchers/physical-stock");
+            if (editing) {
+                // Edit done — return to wherever the operator came from.
+                closeForm();
+            } else {
+                // Create mode — reset for the next count session (cashier rhythm).
+                setForm((f) => ({ ...f, lines: [] }));
+            }
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
             toast.error(msg ?? "Failed");
@@ -280,29 +296,34 @@ export function PhysicalStockPage() {
                         same date <span className="font-medium">combine (sum)</span> — useful for counting in batches across the day.
                     </p>
                 </div>
-                {branches.length > 1 ? (
-                    <div className="space-y-1">
-                        <Label className="text-[11px] text-muted-foreground">Branch</Label>
-                        <Select value={selectedBranchId ?? ""} onValueChange={(v) => setSelectedBranchId(v)}>
-                            <SelectTrigger className="h-8 w-[200px] text-xs">
-                                <div className="flex items-center gap-1.5">
-                                    <Building2 size={12} className="shrink-0 text-muted-foreground" />
-                                    <SelectValue placeholder="Pick a branch" />
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {branches.map((b) => (
-                                    <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                ) : branches.length === 1 ? (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
-                        <Building2 size={12} className="shrink-0" />
-                        <span>{branches[0]!.name}</span>
-                    </div>
-                ) : null}
+                <div className="flex items-end gap-2">
+                    {branches.length > 1 ? (
+                        <div className="space-y-1">
+                            <Label className="text-[11px] text-muted-foreground">Branch</Label>
+                            <Select value={selectedBranchId ?? ""} onValueChange={(v) => setSelectedBranchId(v)}>
+                                <SelectTrigger className="h-8 w-[200px] text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                        <Building2 size={12} className="shrink-0 text-muted-foreground" />
+                                        <SelectValue placeholder="Pick a branch" />
+                                    </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {branches.map((b) => (
+                                        <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    ) : branches.length === 1 ? (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
+                            <Building2 size={12} className="shrink-0" />
+                            <span>{branches[0]!.name}</span>
+                        </div>
+                    ) : null}
+                    <Button variant="ghost" size="icon" onClick={closeForm} title="Close" aria-label="Close">
+                        <X size={18} />
+                    </Button>
+                </div>
             </div>
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-4">
@@ -411,7 +432,7 @@ export function PhysicalStockPage() {
                 </div>
 
                 <div className="flex items-center justify-end gap-2">
-                    <Button variant="outline" onClick={() => router.push("/vouchers/physical-stock")}>Cancel</Button>
+                    <Button variant="outline" onClick={closeForm}>Cancel</Button>
                     <Button onClick={() => submit(false)} variant="outline" disabled={saving}>
                         {saving && <Loader2 size={14} className="animate-spin" />} Save Draft
                     </Button>

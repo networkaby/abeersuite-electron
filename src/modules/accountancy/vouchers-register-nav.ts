@@ -75,8 +75,8 @@ export const VOUCHERS_REGISTER_NAV_GROUPS: VoucherRegisterNavGroup[] = [
             { label: "Goods Receipts", href: `${BASE}/goods-receipts`, icon: PackageCheck, permission: PERMISSIONS.FINANCE_VOUCHER_CREATE },
             { label: "Issues", href: `${BASE}/issues`, icon: ArrowUpRight, permission: PERMISSIONS.FINANCE_VOUCHER_CREATE },
             { label: "Adjustments", href: `${BASE}/adjustments`, icon: ArrowLeftRight, permission: PERMISSIONS.FINANCE_VOUCHER_CREATE },
-            { label: "Manufacturing Journals", href: `/vouchers/manufacturing-journals`, icon: ArrowLeftRight, permission: PERMISSIONS.INVENTORY_MANAGE },
-            { label: "Physical Stock", href: `/vouchers/physical-stock`, icon: ClipboardCheck, permission: PERMISSIONS.INVENTORY_MANAGE },
+            { label: "Manufacturing Journals", href: `${BASE}/manufacturing-journals`, icon: ArrowLeftRight, permission: PERMISSIONS.INVENTORY_MANAGE },
+            { label: "Physical Stock", href: `${BASE}/physical-stock`, icon: ClipboardCheck, permission: PERMISSIONS.INVENTORY_MANAGE },
         ],
     },
 ];

@@ -1,13 +1,13 @@
 "use client";
 import { InvVoucherList } from "@/modules/inventory/components/InvVoucherForm";
 
-export default function PhysicalStockPage() {
+export default function Page() {
     return (
         <InvVoucherList
             type="PHYSICAL_STOCK"
             title="Physical Stock"
-            subtitle="Physical-count adjustments — quantity entered is the new on-hand value; the delta is ledgered automatically"
-            basePath="/vouchers/physical-stock"
+            subtitle="Counted opening qty per date — multiple vouchers on the same date combine (sum). No GL post."
+            basePath="/office/accountancy/vouchers-registers/physical-stock"
             newPath="/vouchers/physical-stock/new"
         />
     );

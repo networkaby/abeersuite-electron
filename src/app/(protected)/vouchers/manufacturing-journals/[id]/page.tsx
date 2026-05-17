@@ -2,5 +2,11 @@
 import { InvVoucherDetail } from "@/modules/inventory/components/InvVoucherDetail";
 
 export default function ManufacturingJournalDetailPage() {
-    return <InvVoucherDetail basePath="/vouchers/manufacturing-journals" label="Manufacturing Journal" />;
+    return (
+        <InvVoucherDetail
+            basePath="/office/accountancy/vouchers-registers/manufacturing-journals"
+            formPath="/vouchers/manufacturing-journals/new"
+            label="Manufacturing Journal"
+        />
+    );
 }
