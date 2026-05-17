@@ -92,6 +92,7 @@ export async function PATCH(req: Request, { params }: Params) {
         refNumber,
         refDate,
         refVoucherId,
+        bomId,
         showPrices,
         shippingAmt,
         roundOff,
@@ -99,6 +100,7 @@ export async function PATCH(req: Request, { params }: Params) {
         discountAmt,
         amountReceived,
         lines,
+        expenseLines,
     } = body as {
         date?:             string;
         description?:      string;
@@ -114,6 +116,8 @@ export async function PATCH(req: Request, { params }: Params) {
         refDate?:          string;
         /// Parent voucher (e.g. PO for a GRN); null clears the link.
         refVoucherId?:     number | null;
+        /// MANUFACTURING_JOURNAL only — optional FK to InvBom.
+        bomId?:            number | null;
         /// Challan-only: persist print-price visibility.
         showPrices?:       boolean;
         shippingAmt?:      number;
@@ -126,32 +130,49 @@ export async function PATCH(req: Request, { params }: Params) {
             description?: string;
             quantity:     number;
             freeQty?:     number;
-            rate:         number;
+            rate?:        number;
             /// MRP in paise — stored on the line; used to update InvProduct.mrpPaise on post.
             mrpPaise?:    number;
             discountPct?: number;
             discountAmt?: number;
             taxRate?:     number;
+            direction?:   "CONSUME" | "PRODUCE";
+        }[];
+        expenseLines?: {
+            accountId:    number;
+            description?: string;
+            amount:       number;
         }[];
     };
+
+    const isPhysicalStock = existing.type === "PHYSICAL_STOCK";
+    const isManufacturingJournal = existing.type === "MANUFACTURING_JOURNAL";
 
     // Recompute totals if lines provided.
     let totals: { subtotal: number; taxAmount: number; totalAmount: number } | undefined;
     let computedLines: ({
         productId: number; description?: string; quantity: number; freeQty?: number; rate: number;
         mrpPaise?: number; discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
+        direction?: "CONSUME" | "PRODUCE";
     })[] | undefined;
 
     if (lines?.length) {
         computedLines = lines.map((l) => {
+            const rate = l.rate ?? 0;
+            if (isPhysicalStock) {
+                return { ...l, rate: 0, discountAmt: 0, taxAmount: 0, amount: 0 };
+            }
+            if (isManufacturingJournal) {
+                return { ...l, rate, discountAmt: 0, taxAmount: 0, amount: l.quantity * rate };
+            }
             const { discountAmt: lineDiscountAmt, taxAmount, amount } = calcLineTotals({
                 quantity:    l.quantity,
-                rate:        l.rate,
+                rate,
                 discountPct: l.discountPct ?? 0,
                 discountAmt: l.discountAmt ?? 0,
                 taxRate:     l.taxRate    ?? 0,
             });
-            return { ...l, discountAmt: lineDiscountAmt, taxAmount, amount };
+            return { ...l, rate, discountAmt: lineDiscountAmt, taxAmount, amount };
         });
         totals = calcVoucherTotals(
             computedLines,
@@ -163,6 +184,16 @@ export async function PATCH(req: Request, { params }: Params) {
 
     const wasPosted = existing.status === "POSTED";
     const userId = user!.id;
+
+    // POSTED edits on PHYSICAL_STOCK / MANUFACTURING_JOURNAL aren't supported
+    // yet — Phase-1 reversal + Phase-3 re-post code paths below only cover
+    // trading vouchers. Direct the user to cancel + create a new draft.
+    if (wasPosted && (isPhysicalStock || isManufacturingJournal)) {
+        return NextResponse.json(
+            { error: `Cannot edit a posted ${isPhysicalStock ? "Physical Stock" : "Manufacturing Journal"} voucher. Cancel it and create a new one instead.` },
+            { status: 409 },
+        );
+    }
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
@@ -278,6 +309,12 @@ export async function PATCH(req: Request, { params }: Params) {
             if (computedLines) {
                 await tx.invVoucherLine.deleteMany({ where: { voucherId: id } });
             }
+            // Manufacturing Journal Charges: if `expenseLines` is provided
+            // (even as an empty array, signalling "I want no charges now"),
+            // replace them in full.
+            if (expenseLines !== undefined) {
+                await tx.invVoucherExpenseLine.deleteMany({ where: { voucherId: id } });
+            }
             // Status stays POSTED for posted edits; the re-post below sets a
             // fresh journalEntryId. For draft edits the row is unchanged.
             await tx.invVoucher.update({
@@ -296,6 +333,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(refNumber        !== undefined ? { refNumber:        refNumber        || null } : {}),
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
                     ...(refVoucherId     !== undefined ? { refVoucherId:     refVoucherId ?? null } : {}),
+                    ...(bomId            !== undefined ? { bomId:            bomId ?? null } : {}),
                     ...(showPrices       !== undefined ? { showPrices }                              : {}),
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
                     ...(roundOff         !== undefined ? { roundOff }        : {}),
@@ -310,6 +348,7 @@ export async function PATCH(req: Request, { params }: Params) {
                             create: computedLines.map((l) => ({
                                 productId:   l.productId,
                                 description: l.description || null,
+                                direction:   isManufacturingJournal ? l.direction ?? null : null,
                                 quantity:    l.quantity,
                                 freeQty:     l.freeQty ?? null,
                                 rate:        l.rate,
@@ -319,6 +358,15 @@ export async function PATCH(req: Request, { params }: Params) {
                                 taxRate:     l.taxRate    ?? 0,
                                 taxAmount:   l.taxAmount,
                                 amount:      l.amount,
+                            })),
+                        },
+                    } : {}),
+                    ...(expenseLines && expenseLines.length > 0 ? {
+                        expenseLines: {
+                            create: expenseLines.map((e) => ({
+                                accountId:   e.accountId,
+                                description: e.description?.trim() || null,
+                                amount:      e.amount,
                             })),
                         },
                     } : {}),

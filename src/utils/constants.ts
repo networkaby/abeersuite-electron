@@ -59,6 +59,8 @@ import {
     ListChecks,
     Percent,
     Printer,
+    Factory,
+    Workflow,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -101,7 +103,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-stock-journal" | "new-physical-stock" | "new-rejection-in" | "new-rejection-out";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-rejection-in" | "new-rejection-out";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -214,7 +216,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", action: "new-purchase-order", permission: "inventory:manage" },
             { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", action: "new-grn", permission: "inventory:manage" },
             { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", action: "new-challan", permission: "inventory:manage" },
-            { label: "Stock Journal +", subtitle: "New stock journal", icon: ArrowLeftRight, variant: "outline", action: "new-stock-journal", permission: "inventory:manage" },
+            { label: "Manufacturing Journal +", subtitle: "New manufacturing journal", icon: Factory, variant: "outline", action: "new-manufacturing-journal", permission: "inventory:manage" },
             { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", action: "new-physical-stock", permission: "inventory:manage" },
             { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", action: "new-rejection-in", permission: "inventory:manage" },
             { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out", permission: "inventory:manage" },
@@ -325,7 +327,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Box,
         key: "inventory",
         dashboardHref: "/office/inventory",
-        pathPrefixes: ["/office/inventory"],
+        pathPrefixes: ["/office/inventory", "/vouchers/manufacturing-journals", "/vouchers/physical-stock"],
         createActions: [
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
@@ -342,7 +344,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Purchase Order +", subtitle: "New purchase order", icon: ClipboardList, variant: "outline", action: "new-purchase-order", permission: "inventory:manage" },
             { label: "GRN +", subtitle: "New goods receipt", icon: PackageCheck, variant: "outline", action: "new-grn", permission: "inventory:manage" },
             { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", action: "new-challan", permission: "inventory:manage" },
-            { label: "Stock Journal +", subtitle: "New stock journal", icon: ArrowLeftRight, variant: "outline", action: "new-stock-journal", permission: "inventory:manage" },
+            { label: "Manufacturing Journal +", subtitle: "New manufacturing journal", icon: Factory, variant: "outline", action: "new-manufacturing-journal", permission: "inventory:manage" },
             { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", action: "new-physical-stock", permission: "inventory:manage" },
             { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", action: "new-rejection-in", permission: "inventory:manage" },
             { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out", permission: "inventory:manage" },
@@ -355,8 +357,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Purchase Orders", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/purchase-orders", permission: "inventory:manage" },
             { label: "GRN", icon: PackageCheck, href: "/office/accountancy/vouchers-registers/grn", permission: "inventory:manage" },
             { label: "Challans", icon: Truck, href: "/office/accountancy/vouchers-registers/challans", permission: "inventory:manage" },
-            { label: "Stock Journals", icon: ArrowLeftRight, href: "/office/accountancy/vouchers-registers/stock-journals", permission: "inventory:manage" },
-            { label: "Physical Stock", icon: ClipboardCheck, href: "/office/accountancy/vouchers-registers/physical-stock", permission: "inventory:manage" },
+            { label: "Manufacturing Journal", icon: Factory, href: "/vouchers/manufacturing-journals", permission: "inventory:manage" },
+            { label: "Physical Stock", icon: ClipboardCheck, href: "/vouchers/physical-stock", permission: "inventory:manage" },
             { label: "Rejections In", icon: PackageX, href: "/office/accountancy/vouchers-registers/rejections-in", permission: "inventory:manage" },
             { label: "Rejections Out", icon: PackageX, href: "/office/accountancy/vouchers-registers/rejections-out", permission: "inventory:manage" },
             { label: "Optional Vouchers", icon: ClipboardList, href: "/office/accountancy/reports/optional-vouchers", permission: "inventory:manage" },
@@ -382,6 +384,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                     { label: "Warranty Terms", icon: ShieldCheck, href: "/office/inventory/masters/warranty-terms", permission: "inventory:manage" },
                     { label: "Attribute Masters", icon: ListChecks, href: "/office/inventory/masters/attribute-masters", permission: "inventory:manage" },
                     { label: "GST Rates", icon: Percent, href: "/office/inventory/masters/gst-rates", permission: "inventory:manage" },
+                    { label: "BOMs", icon: Workflow, href: "/office/inventory/masters/boms", permission: "inventory:manage" },
                 ]
             },
             // {

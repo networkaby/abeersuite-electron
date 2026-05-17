@@ -72,10 +72,10 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             window.open("/vouchers/grn/new", "_blank", "noopener");
         } else if (action.action === "new-challan") {
             window.open("/vouchers/challans/new", "_blank", "noopener");
-        } else if (action.action === "new-stock-journal") {
-            window.open("/office/inventory/stock-journals/new", "_blank", "noopener");
+        } else if (action.action === "new-manufacturing-journal") {
+            window.open("/vouchers/manufacturing-journals/new", "_blank", "noopener");
         } else if (action.action === "new-physical-stock") {
-            window.open("/office/inventory/physical-stock/new", "_blank", "noopener");
+            window.open("/vouchers/physical-stock/new", "_blank", "noopener");
         } else if (action.action === "new-rejection-in") {
             window.open("/vouchers/rejections-in/new", "_blank", "noopener");
         } else if (action.action === "new-rejection-out") {

@@ -8,7 +8,7 @@
 // (Sales / Purchase ledgers). Create-only.
 //
 // Backend: POST /api/accountancy/journal-vouchers (same endpoint the dialog
-// uses — writes Voucher + JournalEntry + optional STOCK_JOURNAL InvVoucher
+// uses — writes Voucher + JournalEntry + optional MANUFACTURING_JOURNAL InvVoucher
 // in one transaction).
 
 import { useEffect, useRef, useState } from "react";

@@ -26,7 +26,7 @@ const PREFIX: Record<InvVoucherType, string> = {
     RECEIPT:          "RV",
     ISSUE:            "IV",
     ADJUSTMENT:       "AV",
-    STOCK_JOURNAL:    "SJ",
+    MANUFACTURING_JOURNAL: "MJ",
     PHYSICAL_STOCK:   "PS",
     GRN:              "GRN",
     CHALLAN:          "DC",

@@ -9,8 +9,8 @@ model InvUnit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products       InvProduct[]
-  orgDefaultFor  OrgDefaults[]
+  products      InvProduct[]
+  orgDefaultFor OrgDefaults[]
 }
 
 model GstRate {
@@ -22,9 +22,9 @@ model GstRate {
   isActive    Boolean @default(true)
 
   // Back-relations for cascading GST lookup (product → group → org-default).
-  products       InvProduct[]      @relation("InvProductGst")
-  productGroups  InvProductGroup[] @relation("InvProductGroupGst")
-  orgDefaults    OrgDefaults[]     @relation("OrgDefaultsGst")
+  products      InvProduct[]      @relation("InvProductGst")
+  productGroups InvProductGroup[] @relation("InvProductGroupGst")
+  orgDefaults   OrgDefaults[]     @relation("OrgDefaultsGst")
 }
 
 model InvCategory {
@@ -54,15 +54,15 @@ model InvProductGroup {
   // ── Hierarchy ──────────────────────────────────────────────────────────────
   // Self-referential parent chain drives the GST / HSN / Taxability cascade
   // on InvProduct: product → group → parent group → … → OrgDefaults.
-  parentId  Int?
-  parent    InvProductGroup?  @relation("InvProductGroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children  InvProductGroup[] @relation("InvProductGroupHierarchy")
+  parentId Int?
+  parent   InvProductGroup?  @relation("InvProductGroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children InvProductGroup[] @relation("InvProductGroupHierarchy")
 
   // ── GST / HSN classification (optional — inherited from parent when null) ──
-  gstRateId   Int?
-  gstRate     GstRate?    @relation("InvProductGroupGst", fields: [gstRateId], references: [id], onDelete: SetNull)
-  hsnCode     String?
-  taxability  Taxability?
+  gstRateId  Int?
+  gstRate    GstRate?    @relation("InvProductGroupGst", fields: [gstRateId], references: [id], onDelete: SetNull)
+  hsnCode    String?
+  taxability Taxability?
 
   products InvProduct[]
 
@@ -232,11 +232,13 @@ model InvProduct {
   brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
-  orderLines    ShopOrderLine[]
-  voucherLines  InvVoucherLine[]
-  invoiceLines  InvoiceLine[]    @relation("InvoiceLineProduct")
-  stockEntries  InvStockLedger[]
-  branchStocks  InvProductBranch[]
+  orderLines   ShopOrderLine[]
+  voucherLines InvVoucherLine[]
+  invoiceLines InvoiceLine[]      @relation("InvoiceLineProduct")
+  stockEntries InvStockLedger[]
+  branchStocks InvProductBranch[]
+  bomOutputs   InvBom[]           @relation("BomOutput")
+  bomConsume   InvBomLine[]       @relation("BomConsume")
 
   @@index([unitId])
   @@index([categoryId])
@@ -320,6 +322,10 @@ model InvVoucher {
   postedAt         DateTime?
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
   showPrices       Boolean        @default(true)
+  /// Optional FK to InvBom — only set for MANUFACTURING_JOURNAL vouchers
+  /// generated from a recipe (stamped for audit / reporting).
+  bomId            Int?
+  bom              InvBom?        @relation(fields: [bomId], references: [id])
 
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?
@@ -330,13 +336,14 @@ model InvVoucher {
   deleteReason  String?
 
   createdById  Int
-  createdBy    User             @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
-  cancelledBy  User?            @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
-  deletedBy    User?            @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
+  createdBy    User                    @relation("InvVoucherCreatedBy", fields: [createdById], references: [id])
+  cancelledBy  User?                   @relation("InvVoucherCancelledBy", fields: [cancelledById], references: [id])
+  deletedBy    User?                   @relation("InvVoucherDeletedBy", fields: [deletedById], references: [id])
   lines        InvVoucherLine[]
+  expenseLines InvVoucherExpenseLine[]
   stockEntries InvStockLedger[]
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
 
   @@index([type, status])
   @@index([date])
@@ -368,6 +375,9 @@ model InvVoucherLine {
   productId   Int
   product     InvProduct @relation(fields: [productId], references: [id])
   description String?
+  /// "CONSUME" | "PRODUCE" for MANUFACTURING_JOURNAL lines; null for every
+  /// other voucher type. Drives the stock IN/OUT direction on post.
+  direction   String?
   quantity    Decimal    @db.Decimal(10, 3)
   /// Free / complimentary quantity — flows out of stock alongside `quantity`
   /// but contributes ₹ 0 to revenue (line.amount). Used for "buy 2 get 1 free"
@@ -410,4 +420,66 @@ model InvStockLedger {
   @@index([productId, date])
   @@index([voucherId])
   @@index([productId, branchId, date])
+}
+
+// ── Bill of Materials (recipes for Manufacturing Journal) ────────────────────
+//
+// Each InvBom defines: "to produce <outputQty> of <outputProduct>, consume
+// these line items." When the Manufacturing Journal form picks a BOM and
+// sets a target output qty, consumption + production lines are auto-populated
+// (consumption is scaled proportionally). The voucher remembers which BOM
+// drove it via InvVoucher.bomId for audit / reporting.
+
+model InvBom {
+  id              Int          @id @default(autoincrement())
+  name            String
+  outputProductId Int
+  outputProduct   InvProduct   @relation("BomOutput", fields: [outputProductId], references: [id])
+  /// Reference output qty for the recipe (e.g. "5 kg flour produces 10 loaves" → outputQty = 10).
+  outputQty       Decimal      @db.Decimal(10, 3)
+  description     String?
+  isActive        Boolean      @default(true)
+  lines           InvBomLine[]
+  vouchers        InvVoucher[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([outputProductId])
+  @@index([isActive])
+}
+
+model InvBomLine {
+  id        Int        @id @default(autoincrement())
+  bomId     Int
+  bom       InvBom     @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  productId Int
+  product   InvProduct @relation("BomConsume", fields: [productId], references: [id])
+  /// Qty consumed per the BOM's reference outputQty. Scaled proportionally
+  /// when the journal's target output qty differs from the BOM's default.
+  qty       Decimal    @db.Decimal(10, 3)
+
+  @@index([bomId])
+  @@index([productId])
+}
+
+// ── Manufacturing Journal Charges (GL allocation rows) ───────────────────────
+//
+// Optional expense lines attached to a MANUFACTURING_JOURNAL voucher —
+// labour wages, electricity, machine hire, etc. On post, each row becomes
+// a debit to the chosen expense Account; the matching single credit lands
+// on InvVoucher.paymentAccountId (cash / bank / sundry-creditors).
+
+model InvVoucherExpenseLine {
+  id          Int        @id @default(autoincrement())
+  voucherId   Int
+  voucher     InvVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  /// Debit-side expense Account. Must resolve to a ledger whose group type
+  /// is EXPENSE (validated server-side on POST / post-time).
+  accountId   Int
+  account     Account    @relation("InvVoucherExpenseLineAccount", fields: [accountId], references: [id])
+  description String?
+  amount      Decimal    @db.Decimal(14, 2)
+
+  @@index([voucherId])
+  @@index([accountId])
 }

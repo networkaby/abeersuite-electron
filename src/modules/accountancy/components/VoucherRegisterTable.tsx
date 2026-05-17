@@ -39,7 +39,7 @@ const KIND_BADGE: Record<string, string> = {
     RECEIPT:         "bg-violet-100 text-violet-700",
     ISSUE:           "bg-orange-50 text-orange-700",
     ADJUSTMENT:      "bg-orange-100 text-orange-700",
-    STOCK_JOURNAL:   "bg-yellow-50 text-yellow-700",
+    MANUFACTURING_JOURNAL: "bg-yellow-50 text-yellow-700",
     PHYSICAL_STOCK:  "bg-yellow-100 text-yellow-700",
     PAYMENT:         "bg-red-50 text-red-700",
     CONTRA:          "bg-slate-100 text-slate-700",

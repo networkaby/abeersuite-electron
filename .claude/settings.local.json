@@ -126,7 +126,12 @@
       "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
       "Bash(cat src/app/api/inventory/vouchers/\\\\\\\\[id\\\\\\\\]/route.ts)",
       "Bash(Get-ChildItem -Path \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\accountancy\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\inventory\\\\stock-journals\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\vouchers\" -Recurse -Name)",
+      "Bash(Sort-Object)",
+      "Bash(rm \"D:/our-own-website/service-mgmt-experiment/src/app/\\(protected\\)/office/inventory/physical-stock/page.tsx\" \\\\ *)"
     ]
   }
 }

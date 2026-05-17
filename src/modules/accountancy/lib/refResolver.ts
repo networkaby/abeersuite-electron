@@ -21,7 +21,7 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
     RECEIPT:          "purchases",
     ISSUE:            "sales",
     ADJUSTMENT:       "sales",
-    STOCK_JOURNAL:    "stock-journals",
+    MANUFACTURING_JOURNAL: "manufacturing-journals",
     PHYSICAL_STOCK:   "physical-stock",
     GRN:              "grn",
     CHALLAN:          "challans",
@@ -29,6 +29,11 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
     REJECTION_OUT:    "rejections-out",
     SALES_ORDER:      "sales-orders",
     PURCHASE_ORDER:   "purchase-orders",
+};
+
+const VOUCHER_BASE: Partial<Record<InvVoucherType, string>> = {
+    MANUFACTURING_JOURNAL: "/vouchers",
+    PHYSICAL_STOCK:        "/vouchers",
 };
 
 /** Single-record resolver — returns SourceDoc for one journal entry id, or null. */
@@ -39,11 +44,12 @@ export async function resolveSource(journalEntryId: number, reference?: string):
     });
     if (v) {
         const seg = VOUCHER_SEG[v.type];
+        const base = VOUCHER_BASE[v.type] ?? "/office/accountancy";
         const kind: SourceDoc["kind"] =
             v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
-        return { kind, id: v.id, reference: v.reference, url: `/office/accountancy/${seg}/${v.id}` };
+        return { kind, id: v.id, reference: v.reference, url: `${base}/${seg}/${v.id}` };
     }
     if (reference?.startsWith("INV-")) {
         const inv = await prisma.invoice.findFirst({
@@ -66,12 +72,13 @@ export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map
     for (const v of vouchers) {
         if (v.journalEntryId === null) continue;
         const seg = VOUCHER_SEG[v.type];
+        const base = VOUCHER_BASE[v.type] ?? "/office/accountancy";
         const kind: SourceDoc["kind"] =
             v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
         out.set(v.journalEntryId, {
-            kind, id: v.id, reference: v.reference, url: `/office/accountancy/${seg}/${v.id}`,
+            kind, id: v.id, reference: v.reference, url: `${base}/${seg}/${v.id}`,
         });
     }
     return out;

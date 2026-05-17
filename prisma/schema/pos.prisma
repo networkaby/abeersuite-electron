@@ -22,14 +22,14 @@
 // ── POS Counter (physical billing station) ────────────────────────────────────
 
 model PosCounter {
-  id                Int       @id @default(autoincrement())
-  branchId          String
-  branch            Branch    @relation("BranchCounters", fields: [branchId], references: [id])
-  name              String    // "Counter 1", "Billing Desk", "Service Counter"
-  tillAccountId     Int       @unique
-  tillAccount       Account   @relation("CounterTill", fields: [tillAccountId], references: [id])
-  isActive          Boolean   @default(true)
-  shifts            PosShift[]
+  id            Int        @id @default(autoincrement())
+  branchId      String
+  branch        Branch     @relation("BranchCounters", fields: [branchId], references: [id])
+  name          String // "Counter 1", "Billing Desk", "Service Counter"
+  tillAccountId Int        @unique
+  tillAccount   Account    @relation("CounterTill", fields: [tillAccountId], references: [id])
+  isActive      Boolean    @default(true)
+  shifts        PosShift[]
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -39,18 +39,18 @@ model PosCounter {
 // ── POS Shift (one cashier's session at one counter) ─────────────────────────
 
 model PosShift {
-  id        Int            @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // Who & where
   userId    Int
-  user      User           @relation("PosShiftUser", fields: [userId], references: [id])
+  user      User       @relation("PosShiftUser", fields: [userId], references: [id])
   counterId Int
-  counter   PosCounter     @relation(fields: [counterId], references: [id])
+  counter   PosCounter @relation(fields: [counterId], references: [id])
   // branchId duplicated from counter for indexed lookups (avoids join on hot paths)
   branchId  String
-  branch    Branch         @relation("PosShiftBranch", fields: [branchId], references: [id])
+  branch    Branch     @relation("PosShiftBranch", fields: [branchId], references: [id])
 
-  status    PosShiftStatus @default(OPEN)
+  status PosShiftStatus @default(OPEN)
 
   // ── Open ──────────────────────────────────────────────────────────────────
   openedAt               DateTime @default(now())
@@ -60,19 +60,19 @@ model PosShift {
   openingFloatPaise      BigInt   @default(0)
   carryOverFloatPaise    BigInt   @default(0) // already in counter from previous close
   vaultTopUpPaise        BigInt   @default(0) // fresh draw from vault (Contra posted)
-  openingContraVoucherId Int?                 // null when vaultTopUpPaise = 0
+  openingContraVoucherId Int? // null when vaultTopUpPaise = 0
   openingContraVoucher   Voucher? @relation("PosShiftOpeningContra", fields: [openingContraVoucherId], references: [id])
 
   // ── Close ─────────────────────────────────────────────────────────────────
   closedAt               DateTime?
   closedById             Int?
   closedBy               User?         @relation("PosShiftClosedBy", fields: [closedById], references: [id])
-  declaredCashPaise      BigInt?       // what the closer physically counted
-  expectedCashPaise      BigInt?       // opening + cash sales − drops (computed at close)
-  variancePaise          BigInt?       // declared − expected; +ve = over, −ve = short
-  carryOverNextPaise     BigInt?       // float left in counter for next shift
-  toVaultPaise           BigInt?       // amount swept to vault (declared − carryOverNext)
-  closingContraVoucherId Int?          // null when toVaultPaise = 0
+  declaredCashPaise      BigInt? // what the closer physically counted
+  expectedCashPaise      BigInt? // opening + cash sales − drops (computed at close)
+  variancePaise          BigInt? // declared − expected; +ve = over, −ve = short
+  carryOverNextPaise     BigInt? // float left in counter for next shift
+  toVaultPaise           BigInt? // amount swept to vault (declared − carryOverNext)
+  closingContraVoucherId Int? // null when toVaultPaise = 0
   closingContraVoucher   Voucher?      @relation("PosShiftClosingContra", fields: [closingContraVoucherId], references: [id])
   varianceJournalEntryId Int?
   varianceJournalEntry   JournalEntry? @relation("PosShiftVarianceJe", fields: [varianceJournalEntryId], references: [id])
@@ -80,8 +80,8 @@ model PosShift {
   // ── Handover chain ────────────────────────────────────────────────────────
   // Set when A's AWAITING_HANDOVER shift is accepted by B: points to B's shift.
   handoverToShiftId  Int?
-  handoverToShift    PosShift?   @relation("ShiftHandover", fields: [handoverToShiftId], references: [id])
-  handoverFromShifts PosShift[]  @relation("ShiftHandover")
+  handoverToShift    PosShift?    @relation("ShiftHandover", fields: [handoverToShiftId], references: [id])
+  handoverFromShifts PosShift[]   @relation("ShiftHandover")
   // The pending handover record (only exists during AWAITING_HANDOVER state).
   handover           PosHandover? @relation("HandoverFromShift")
   // If this shift was opened via handover acceptance, link back.
@@ -131,27 +131,27 @@ model PosCashDrop {
 // Any discrepancy between A's declared and B's count hits A's shift variance.
 
 model PosHandover {
-  id               Int               @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  fromShiftId      Int               @unique
-  fromShift        PosShift          @relation("HandoverFromShift", fields: [fromShiftId], references: [id])
+  fromShiftId Int      @unique
+  fromShift   PosShift @relation("HandoverFromShift", fields: [fromShiftId], references: [id])
 
-  toUserId         Int
-  toUser           User              @relation("HandoverToUser", fields: [toUserId], references: [id])
+  toUserId Int
+  toUser   User @relation("HandoverToUser", fields: [toUserId], references: [id])
 
   // Filled when B accepts — points to B's new shift.
-  toShiftId        Int?              @unique
-  toShift          PosShift?         @relation("HandoverToShift", fields: [toShiftId], references: [id])
+  toShiftId Int?      @unique
+  toShift   PosShift? @relation("HandoverToShift", fields: [toShiftId], references: [id])
 
-  status           PosHandoverStatus @default(PENDING)
+  status PosHandoverStatus @default(PENDING)
 
-  declaredByAPaise BigInt            // what A declared (pre-filled from A's declared count)
-  countedByBPaise  BigInt?           // what B counted on acceptance
-  carryOverPaise   BigInt            @default(0) // carry-over float for B's shift
+  declaredByAPaise BigInt // what A declared (pre-filled from A's declared count)
+  countedByBPaise  BigInt? // what B counted on acceptance
+  carryOverPaise   BigInt  @default(0) // carry-over float for B's shift
   notes            String?
 
-  initiatedAt      DateTime          @default(now())
-  acceptedAt       DateTime?
+  initiatedAt DateTime  @default(now())
+  acceptedAt  DateTime?
 
   @@map("pos_handovers")
 }

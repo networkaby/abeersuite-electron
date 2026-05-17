@@ -30,7 +30,7 @@ const VOUCHER_LABEL: Record<string, string> = {
 const INV_VOUCHER_LABEL: Record<string, string> = {
     PURCHASE: "Purchase", SALE: "Sale", ESTIMATE: "Estimate",
     RECEIPT: "Receipt Note (GRN)", ISSUE: "Issue", ADJUSTMENT: "Adjustment",
-    STOCK_JOURNAL: "Stock Journal", PHYSICAL_STOCK: "Physical Stock",
+    MANUFACTURING_JOURNAL: "Manufacturing Journal", PHYSICAL_STOCK: "Physical Stock",
     GRN: "GRN", CHALLAN: "Delivery Challan",
     REJECTION_IN: "Rejection In", REJECTION_OUT: "Rejection Out",
     SALES_ORDER: "Sales Order", PURCHASE_ORDER: "Purchase Order",

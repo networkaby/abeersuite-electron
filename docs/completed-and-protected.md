@@ -22,6 +22,8 @@ Purpose: keep critical completed features stable. Any agent/human touching these
 - [x] Full-page Purchase Invoice route (`/purchase`) — replaces PurchaseDialog; do not revert to dialog flow
 - [x] Sale Return voucher flow (`/sale-return`) — inventory IN, GL Dr Sales Returns / Cr party
 - [x] Purchase Return voucher flow (`/purchase-return`) — inventory OUT, GL Dr party / Cr Purchase Returns
+- [x] Physical Stock voucher flow (`/vouchers/physical-stock`) — counted qty = opening balance for `voucher.date`; post handler writes one InvStockLedger row at start-of-date with delta vs pre-date running stock (2026-05-18). No GL post.
+- [x] Manufacturing Journal voucher flow (`/vouchers/manufacturing-journals`) — renamed from Stock Journal 2026-05-18. Consumption + Production stock movement via `InvVoucherLine.direction`; optional `bomId` audit link; Charges (`InvVoucherExpenseLine`) post one JE with N expense debits + one credit to `paymentAccountId` for the total.
 
 ## Guardrails before changing any protected surface
 

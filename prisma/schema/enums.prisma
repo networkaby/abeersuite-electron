@@ -125,8 +125,8 @@ enum InvVoucherType {
   RECEIPT
   ISSUE
   ADJUSTMENT
-  STOCK_JOURNAL // inter-godown / manufacturing
-  PHYSICAL_STOCK // physical count adjustment
+  MANUFACTURING_JOURNAL // consume raw materials to produce finished goods (optional BOM-driven, optional GL-posting "Charges")
+  PHYSICAL_STOCK // counted opening qty for the voucher's date; ledger gets a start-of-day delta entry
   GRN // goods-received-note (against PO)
   CHALLAN // delivery challan (against SO)
   REJECTION_IN

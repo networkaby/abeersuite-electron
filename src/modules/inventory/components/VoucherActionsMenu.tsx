@@ -40,8 +40,8 @@ export const VOUCHER_URLS: Record<string, string> = {
     CHALLAN:         "/vouchers/challans",
     REJECTION_IN:    "/vouchers/rejections-in",
     REJECTION_OUT:   "/vouchers/rejections-out",
-    PHYSICAL_STOCK:  "/office/inventory/physical-stock",
-    STOCK_JOURNAL:   "/office/inventory/stock-journals",
+    PHYSICAL_STOCK:  "/vouchers/physical-stock",
+    MANUFACTURING_JOURNAL: "/vouchers/manufacturing-journals",
 };
 
 export function voucherUrl(type: string, id: number): string | null {

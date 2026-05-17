@@ -24,6 +24,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } },
                 },
             },
+            // Manufacturing Journal Charges → GL allocation on post.
+            expenseLines: {
+                include: {
+                    account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
+                },
+            },
             // Resolved cash/bank Account picked at save time — postInvVoucher
             // uses this in preference to the legacy name-based lookup so the
             // GL JE lands on the ledger the cashier actually chose.
@@ -46,45 +52,80 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     //                   (sale return: customer returns goods → stock back in)
     //   outgoing stock: SALE, ISSUE, CHALLAN, REJECTION_OUT, PURCHASE_RETURN
     //                   (purchase return: we return to supplier → stock back out)
-    //   no stock:      ESTIMATE, ADJUSTMENT, STOCK_JOURNAL, PHYSICAL_STOCK, SALES_ORDER, PURCHASE_ORDER
-    //                  (Stock Journal and Physical Stock have explicit per-line in/out quantities;
-    //                   handled separately below)
+    //   per-line direction: MANUFACTURING_JOURNAL (line.direction "CONSUME"|"PRODUCE")
+    //   start-of-day reset: PHYSICAL_STOCK (line.quantity = counted opening qty)
     //   commitments:   SALES_ORDER, PURCHASE_ORDER — no stock movement at all on POST.
     const isPurchase = ["PURCHASE", "RECEIPT", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(voucher.type);
     const isSale     = ["SALE", "ISSUE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
     const isCommitment = voucher.type === "SALES_ORDER" || voucher.type === "PURCHASE_ORDER";
     const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
-    const isStockJournal = voucher.type === "STOCK_JOURNAL";
+    const isManufacturingJournal = voucher.type === "MANUFACTURING_JOURNAL";
 
     try {
         const { result, notes } = await prisma.$transaction(async (tx) => {
             // ── 1. Stock ledger + cached InvProduct.stock ─────────────────
-            // Commitments (SO / PO) skip stock entirely. Physical Stock writes the
-            // delta needed to reach the recorded count. Stock Journal currently
-            // treats positive amount as IN and negative as OUT; richer per-line
-            // direction can be added when the form supports it.
+            // Commitments (SO / PO) skip stock entirely. Trading vouchers
+            // (SALE/PURCHASE/etc.) use a fixed direction. Manufacturing
+            // Journal uses per-line `direction` to decide IN vs OUT.
+            // Physical Stock is a stock-take override: the entered qty is
+            // the OPENING for voucher.date. We insert one adjustment row at
+            // start-of-day = (counted_qty − running_stock_pre_date), so any
+            // same-date sales/purchases that already exist still apply on
+            // top of the new opening when the running stock is recomputed.
             if (!isCommitment) {
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
-                    // Free / complimentary qty moves out of stock the same way
-                    // as the billed qty — it just doesn't show up in revenue.
                     const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
                     const totalQty = qty + freeQty;
                     let inQty = 0, outQty = 0;
+
                     if (isPurchase)         inQty = totalQty;
                     else if (isSale)        outQty = totalQty;
-                    else if (isPhysicalStock) {
-                        // Quantity here is interpreted as the new on-hand value.
-                        // The delta (qty - product.stock) is what we ledger.
-                        const current = line.product.stock ?? 0;
-                        const delta = qty - current;
-                        if (delta >= 0) inQty = delta;
-                        else            outQty = -delta;
+                    else if (isManufacturingJournal) {
+                        // Per-line direction drives stock movement. Free qty
+                        // doesn't apply on this voucher type.
+                        if (line.direction === "CONSUME")      outQty = qty;
+                        else if (line.direction === "PRODUCE") inQty = qty;
+                        else continue;   // direction missing → skip; defensive
                     }
-                    else if (isStockJournal) {
-                        // Sign of line.amount drives direction (positive = IN, negative = OUT).
-                        if (toNumber(line.amount) >= 0) inQty = qty;
-                        else                            outQty = qty;
+                    else if (isPhysicalStock) {
+                        // "Combine sum" semantics: multiple Physical Stock
+                        // vouchers on the same (product, branch, date) add up.
+                        // - The FIRST PS voucher of the date sets absolute
+                        //   opening: delta = counted_qty − pre_date_running.
+                        // - Each subsequent PS voucher just adds its counted
+                        //   qty on top (delta = counted_qty).
+                        // We detect "first" by checking whether any earlier
+                        //   POSTED PS voucher exists for this (product, branch,
+                        //   date). voucher.id is excluded so re-running on the
+                        //   same DRAFT is idempotent.
+                        const priorSameDay = await tx.invVoucher.count({
+                            where: {
+                                type:     "PHYSICAL_STOCK",
+                                status:   "POSTED",
+                                branchId: voucher.branchId,
+                                date:     voucher.date,
+                                id:       { not: voucher.id },
+                                lines:    { some: { productId: line.productId } },
+                            },
+                        });
+                        if (priorSameDay === 0) {
+                            // First PS of the day for this product → absolute reset.
+                            const priorEntries = await tx.invStockLedger.findMany({
+                                where: { productId: line.productId, branchId: voucher.branchId, date: { lt: voucher.date } },
+                                select: { inQty: true, outQty: true },
+                            });
+                            const priorRunning = priorEntries.reduce(
+                                (s, e) => s + toNumber(e.inQty) - toNumber(e.outQty),
+                                0,
+                            );
+                            const delta = qty - priorRunning;
+                            if (delta >= 0) inQty  = delta;
+                            else            outQty = -delta;
+                        } else {
+                            // Subsequent PS voucher of the day → additive.
+                            inQty = qty;
+                        }
                     }
 
                     if (inQty > 0 || outQty > 0) {
@@ -106,6 +147,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         // delta. Keeps the closing-stock valuation accurate.
                         const startsAtNull = line.product.stock === null;
                         const delta = inQty > 0 ? Math.round(inQty) : -Math.round(outQty);
+                        // Update cost basis on inwards:
+                        //  • Purchase-family vouchers update costPaise from the
+                        //    supplier rate (existing behaviour).
+                        //  • Manufacturing Journal PRODUCE lines also update
+                        //    costPaise — the rate the operator entered (cost
+                        //    basis = consumed materials + overhead share) is
+                        //    the new cost price for the produced finished good.
+                        const updateCost = isPurchase
+                            || (isManufacturingJournal && line.direction === "PRODUCE" && toNumber(line.rate) > 0);
                         await tx.invProduct.update({
                             where: { id: line.productId },
                             data:  {
@@ -114,7 +164,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                     : delta > 0
                                         ? { increment: delta }
                                         : { decrement: -delta },
-                                ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100), ...(line.mrpPaise != null ? { mrpPaise: line.mrpPaise } : {}) } : {}),
+                                ...(updateCost ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
+                                ...(isPurchase && line.mrpPaise != null ? { mrpPaise: line.mrpPaise } : {}),
                             },
                         });
                         // Per-branch balance — upsert so first transaction for a
@@ -129,11 +180,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 }
             }
 
-            // ── 2. Auto-post to GL (only the two accounting voucher types) ────
-            // Other types (GRN, Challan, Rejections, Stock Journal, Physical
-            // Stock, Sales Order, Purchase Order) intentionally don't touch GL
-            // on POST — they get linked to a separate Sales/Purchase invoice
-            // (or stay non-accounting per Tally convention).
+            // ── 2. Auto-post to GL ────────────────────────────────────────
+            // Trading vouchers (SALE / PURCHASE / SALE_RETURN / PURCHASE_RETURN)
+            // flow through postInvVoucherToGl with their full AR/AP/Revenue/etc.
+            // chart. Manufacturing Journal posts a much simpler JE only when
+            // the voucher has expense (Charges) lines — one debit per expense
+            // account + a single credit to paymentAccountId for the total.
+            // Other types (GRN, Challan, Rejections, Physical Stock, Sales/
+            // Purchase Order) intentionally don't touch GL on POST.
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
             if (["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type)) {
@@ -144,6 +198,71 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 });
                 journalEntryId = out.journalEntryId;
                 postNotes.push(...out.notes);
+            } else if (isManufacturingJournal && voucher.expenseLines.length > 0) {
+                // Build the JE: N expense debits + 1 payment-account credit.
+                const totalCharges = voucher.expenseLines.reduce(
+                    (s, e) => s + toNumber(e.amount),
+                    0,
+                );
+                if (totalCharges <= 0) {
+                    postNotes.push("Manufacturing Journal has expense lines but total charges = 0; skipping JE.");
+                } else if (!voucher.paymentAccountId) {
+                    throw new Error("Manufacturing Journal with Charges requires a payment account (cash / bank / sundry creditors).");
+                } else {
+                    // Validate each expense account is an EXPENSE-type ledger.
+                    for (const e of voucher.expenseLines) {
+                        if (e.account?.group?.type !== "EXPENSE") {
+                            throw new Error(`Charge line account "${e.account?.name ?? e.accountId}" must be an EXPENSE-type ledger.`);
+                        }
+                    }
+                    const year  = new Date().getFullYear();
+                    const start = `JE-${year}-`;
+                    const cnt   = await tx.journalEntry.count({ where: { reference: { startsWith: start } } });
+                    const jeRef = `${start}${String(cnt + 1).padStart(4, "0")}`;
+                    const je = await tx.journalEntry.create({
+                        data: {
+                            date:        voucher.date,
+                            reference:   jeRef,
+                            description: `Manufacturing Charges for ${voucher.reference}`,
+                            status:      "POSTED",
+                            postedAt:    new Date(),
+                            createdById: userId,
+                            lines: {
+                                create: [
+                                    ...voucher.expenseLines.map((e) => ({
+                                        accountId: e.accountId,
+                                        type:      "DEBIT" as const,
+                                        amount:    toNumber(e.amount),
+                                        description: e.description ?? `Manufacturing charge: ${e.account?.name ?? ""}`.trim(),
+                                    })),
+                                    {
+                                        accountId: voucher.paymentAccountId,
+                                        type:      "CREDIT" as const,
+                                        amount:    totalCharges,
+                                        description: `Charges paid for ${voucher.reference}`,
+                                    },
+                                ],
+                            },
+                        },
+                    });
+                    journalEntryId = je.id;
+
+                    // Apply balance deltas. Each ledger's balance direction
+                    // follows normalBalance: a DEBIT line increments DEBIT-
+                    // normal accounts and decrements CREDIT-normal ones.
+                    for (const e of voucher.expenseLines) {
+                        const acct = e.account!;
+                        const debitDelta = toNumber(e.amount);
+                        const delta = acct.normalBalance === "DEBIT" ? debitDelta : -debitDelta;
+                        await tx.account.update({ where: { id: acct.id }, data: { balance: { increment: delta } } });
+                    }
+                    if (voucher.paymentAccount) {
+                        const credit = totalCharges;
+                        const delta = voucher.paymentAccount.normalBalance === "CREDIT" ? credit : -credit;
+                        await tx.account.update({ where: { id: voucher.paymentAccount.id }, data: { balance: { increment: delta } } });
+                    }
+                    postNotes.push(`Posted JE ${jeRef}: ${voucher.expenseLines.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${voucher.paymentAccount?.name ?? "payment account"}.`);
+                }
             }
 
             // ── 3. Mark voucher as POSTED ─────────────────────────────────

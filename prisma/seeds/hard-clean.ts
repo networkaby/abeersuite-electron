@@ -48,7 +48,7 @@ const TRANSACTION_TABLES = [
     "VoucherAllocation", "VoucherLine", "Voucher", "VoucherAudit",
     "Payment", "PaymentAudit",
     "InvoiceLine", "Invoice", "InvoiceAudit",
-    "InvStockLedger", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
+    "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
     "ShopOrderLine", "ShopOrder",
     "TicketLog", "TicketParticipant", "Ticket", "Device",
     "CrmLead", "WallPost",
@@ -58,7 +58,8 @@ const TRANSACTION_TABLES = [
 
 // Phase 5 — inventory masters (all dummy data; bootstrap doesn't touch them)
 const INVENTORY_MASTERS = [
-    "InvStockLedger", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
+    "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
+    "InvBomLine", "InvBom",
     "inv_product_branches",
     "InvProduct",
     "InvAttributeMaster",

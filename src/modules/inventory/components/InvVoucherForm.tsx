@@ -21,7 +21,7 @@ import { InvProductPicker } from "@/modules/inventory/components/InvProductPicke
 export type InvVoucherKind =
     | "SALES_ORDER" | "PURCHASE_ORDER"
     | "GRN" | "CHALLAN"
-    | "STOCK_JOURNAL" | "PHYSICAL_STOCK"
+    | "MANUFACTURING_JOURNAL" | "PHYSICAL_STOCK"
     | "REJECTION_IN" | "REJECTION_OUT";
 
 // All inventory voucher types — superset of InvVoucherKind, includes the
@@ -35,7 +35,7 @@ const TITLES: Record<InvVoucherKind, string> = {
     PURCHASE_ORDER: "Purchase Order",
     GRN:            "Goods Received Note",
     CHALLAN:        "Delivery Challan",
-    STOCK_JOURNAL:  "Stock Journal",
+    MANUFACTURING_JOURNAL:  "Manufacturing Journal",
     PHYSICAL_STOCK: "Physical Stock",
     REJECTION_IN:   "Rejection In",
     REJECTION_OUT:  "Rejection Out",
@@ -46,7 +46,7 @@ const PARTY_LABEL: Record<InvVoucherKind, string> = {
     PURCHASE_ORDER: "Supplier",
     GRN:            "Supplier",
     CHALLAN:        "Customer",
-    STOCK_JOURNAL:  "Counterparty (optional)",
+    MANUFACTURING_JOURNAL:  "Counterparty (optional)",
     PHYSICAL_STOCK: "Location (optional)",
     REJECTION_IN:   "Customer (returning)",
     REJECTION_OUT:  "Supplier (receiving)",
@@ -57,7 +57,7 @@ const NARRATION: Record<InvVoucherKind, string> = {
     PURCHASE_ORDER: "e.g. PO raised against supplier XYZ for stock replenishment",
     GRN:            "e.g. Goods received against PO-2026-0042",
     CHALLAN:        "e.g. Delivered against SO-2026-0017; payment pending",
-    STOCK_JOURNAL:  "e.g. Inter-godown transfer / production output",
+    MANUFACTURING_JOURNAL:  "e.g. Manufacturing run — consume raw materials, produce finished goods",
     PHYSICAL_STOCK: "Counted on quarterly stock-take. Enter actual on-hand qty per line.",
     REJECTION_IN:   "e.g. Customer returned defective item — see RMA-2026-0008",
     REJECTION_OUT:  "e.g. Returned to supplier — wrong model shipped",
@@ -215,7 +215,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min={type === "STOCK_JOURNAL" ? undefined : "0"} step="0.001"
+                                            <input type="number" min={type === "MANUFACTURING_JOURNAL" ? undefined : "0"} step="0.001"
                                                 value={line.quantity}
                                                 onChange={(e) => updateLine(i, { quantity: e.target.value })}
                                                 className={`${cell} text-right`} />

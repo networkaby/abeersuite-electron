@@ -18,9 +18,9 @@ model Branch {
 
   // POS — per-branch vault account where end-of-day surplus lands
   vaultAccountId Int?
-  vaultAccount   Account?      @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
-  posCounters    PosCounter[]  @relation("BranchCounters")
-  posShifts      PosShift[]    @relation("PosShiftBranch")
+  vaultAccount   Account?     @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
+  posCounters    PosCounter[] @relation("BranchCounters")
+  posShifts      PosShift[]   @relation("PosShiftBranch")
 }
 
 model Department {
@@ -77,12 +77,12 @@ model OrgDefaults {
 
   // Product defaults — final fallback in the GST/HSN cascade
   // (product → group → parent group → … → here).
-  defaultUnitId      Int?
-  defaultUnit        InvUnit?    @relation(fields: [defaultUnitId], references: [id], onDelete: SetNull)
-  defaultGstRateId   Int?
-  defaultGstRate     GstRate?    @relation("OrgDefaultsGst", fields: [defaultGstRateId], references: [id], onDelete: SetNull)
-  defaultHsnCode     String?
-  defaultTaxability  Taxability?
+  defaultUnitId     Int?
+  defaultUnit       InvUnit?    @relation(fields: [defaultUnitId], references: [id], onDelete: SetNull)
+  defaultGstRateId  Int?
+  defaultGstRate    GstRate?    @relation("OrgDefaultsGst", fields: [defaultGstRateId], references: [id], onDelete: SetNull)
+  defaultHsnCode    String?
+  defaultTaxability Taxability?
 
   // Voucher defaults
   defaultSaleCreditPeriod     Int?

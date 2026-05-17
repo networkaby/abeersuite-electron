@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
         refNumber,
         refDate,
         refVoucherId,
+        bomId,
         shippingAmt    = 0,
         roundOff       = 0,
         amountReceived = 0,
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
         discountAmt,
         showPrices,
         lines = [],
+        expenseLines = [],
     } = body as {
         type:         InvVoucherType;
         date:         string;
@@ -114,6 +116,8 @@ export async function POST(req: NextRequest) {
         refDate?:        string;
         /// Optional FK to the source InvVoucher being returned against.
         refVoucherId?:   number;
+        /// MANUFACTURING_JOURNAL only — optional FK to InvBom this voucher was generated from.
+        bomId?:          number;
         shippingAmt?:    number;
         roundOff?:       number;
         amountReceived?: number;
@@ -128,19 +132,35 @@ export async function POST(req: NextRequest) {
             quantity:    number;
             /// Free / complimentary qty — flows out of stock, ₹0 revenue
             freeQty?:    number;
-            rate:        number;
+            /// Optional for PHYSICAL_STOCK / MANUFACTURING_JOURNAL — defaults to 0
+            rate?:       number;
             /// MRP in paise — stored on the line; used to update InvProduct.mrpPaise on post.
             mrpPaise?:   number;
             discountPct?: number;
             discountAmt?: number;
             taxRate?:    number;
+            /// "CONSUME" | "PRODUCE" — required for MANUFACTURING_JOURNAL lines.
+            direction?:  "CONSUME" | "PRODUCE";
+        }[];
+        /// MANUFACTURING_JOURNAL Charges — expense allocation rows.
+        expenseLines?: {
+            accountId:    number;
+            description?: string;
+            amount:       number;
         }[];
     };
 
     if (!type || !date || !description?.trim()) {
         return NextResponse.json({ error: "type, date, description required" }, { status: 400 });
     }
-    if (!lines.length) {
+
+    const isPhysicalStock = type === "PHYSICAL_STOCK";
+    const isManufacturingJournal = type === "MANUFACTURING_JOURNAL";
+
+    // Manufacturing Journal is allowed to have zero stock lines IF it has at
+    // least one expense (Charges) line — covers pure-overhead allocations.
+    // Every other type requires at least one line.
+    if (!lines.length && !(isManufacturingJournal && expenseLines.length > 0)) {
         return NextResponse.json({ error: "At least one line item required" }, { status: 400 });
     }
 
@@ -159,18 +179,43 @@ export async function POST(req: NextRequest) {
         if (!l.productId || l.quantity <= 0) {
             return NextResponse.json({ error: "Each line needs a product and quantity > 0" }, { status: 400 });
         }
+        if (isManufacturingJournal && l.direction !== "CONSUME" && l.direction !== "PRODUCE") {
+            return NextResponse.json({ error: "Manufacturing Journal lines need a direction (CONSUME or PRODUCE)" }, { status: 400 });
+        }
     }
 
-    // Compute line totals
+    if (isManufacturingJournal && expenseLines.length > 0 && !paymentAccountId) {
+        return NextResponse.json({ error: "Manufacturing Journal Charges require a payment account" }, { status: 400 });
+    }
+    for (const e of expenseLines) {
+        if (!e.accountId || !(e.amount > 0)) {
+            return NextResponse.json({ error: "Each charge line needs an expense account and amount > 0" }, { status: 400 });
+        }
+    }
+
+    // Compute line totals.
+    //  • Physical Stock is purely qty-based — no rate / no amount.
+    //  • Manufacturing Journal carries a per-line rate (seeded from each
+    //    product's cost basis) so consumption + production show their
+    //    rupee value and the operator can see probable P/L. No tax /
+    //    discount on these lines — amount = qty × rate.
+    //  • Trading vouchers go through the full calcLineTotals path.
     const computedLines = lines.map((l) => {
+        const rate = l.rate ?? 0;
+        if (isPhysicalStock) {
+            return { ...l, rate: 0, discountAmt: 0, taxAmount: 0, amount: 0 };
+        }
+        if (isManufacturingJournal) {
+            return { ...l, rate, discountAmt: 0, taxAmount: 0, amount: l.quantity * rate };
+        }
         const { discountAmt, taxAmount, amount } = calcLineTotals({
             quantity:    l.quantity,
-            rate:        l.rate,
+            rate,
             discountPct: l.discountPct ?? 0,
             discountAmt: l.discountAmt ?? 0,
             taxRate:     l.taxRate    ?? 0,
         });
-        return { ...l, discountAmt, taxAmount, amount };
+        return { ...l, rate, discountAmt, taxAmount, amount };
     });
 
     // Resolve voucher-level discount. Either pct or amt may be supplied; the
@@ -212,6 +257,7 @@ export async function POST(req: NextRequest) {
                 refNumber:       refNumber || null,
                 refDate:         refDate ? new Date(refDate) : null,
                 refVoucherId:    refVoucherId ?? null,
+                bomId:           isManufacturingJournal && bomId ? bomId : null,
                 shippingAmt,
                 roundOff,
                 amountReceived,
@@ -226,6 +272,7 @@ export async function POST(req: NextRequest) {
                     create: computedLines.map((l) => ({
                         productId:   l.productId,
                         description: l.description || null,
+                        direction:   isManufacturingJournal ? l.direction ?? null : null,
                         quantity:    l.quantity,
                         freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
                         rate:        l.rate,
@@ -237,6 +284,15 @@ export async function POST(req: NextRequest) {
                         amount:      l.amount,
                     })),
                 },
+                ...(isManufacturingJournal && expenseLines.length > 0 ? {
+                    expenseLines: {
+                        create: expenseLines.map((e) => ({
+                            accountId:   e.accountId,
+                            description: e.description?.trim() || null,
+                            amount:      e.amount,
+                        })),
+                    },
+                } : {}),
             },
             include: {
                 lines: { include: { product: { select: { id: true, sku: true, name: true } } } },

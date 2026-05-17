@@ -21,7 +21,7 @@ import { auth } from "@/auth";
 //   JournalEntry + JournalLine     (mirror, audit)
 //   Account.balance                (per-line delta)
 // And, if any stockItems:
-//   InvVoucher (type=STOCK_JOURNAL) + InvVoucherLine  ← carrier for FK on InvStockLedger
+//   InvVoucher (type=MANUFACTURING_JOURNAL) + InvVoucherLine  ← carrier for FK on InvStockLedger
 //   InvStockLedger                 (inQty for Dr-side items, outQty for Cr-side items)
 //   InvProduct.stock               (cached running balance)
 //
@@ -185,10 +185,10 @@ export async function POST(req: NextRequest) {
                 );
 
                 // Carrier InvVoucher so InvStockLedger.voucherId FK is satisfied.
-                const sjRef = await invNextRef(tx, "STOCK_JOURNAL");
+                const sjRef = await invNextRef(tx, "MANUFACTURING_JOURNAL");
                 const carrier = await tx.invVoucher.create({
                     data: {
-                        type:        "STOCK_JOURNAL",
+                        type:        "MANUFACTURING_JOURNAL",
                         reference:   sjRef,
                         branchId:    activeBranchId,
                         date:        new Date(body.date),

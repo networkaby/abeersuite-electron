@@ -7,8 +7,8 @@ export default function PhysicalStockPage() {
             type="PHYSICAL_STOCK"
             title="Physical Stock"
             subtitle="Physical-count adjustments — quantity entered is the new on-hand value; the delta is ledgered automatically"
-            basePath="/office/inventory/physical-stock"
-            newPath="/office/inventory/physical-stock/new"
+            basePath="/vouchers/physical-stock"
+            newPath="/vouchers/physical-stock/new"
         />
     );
 }

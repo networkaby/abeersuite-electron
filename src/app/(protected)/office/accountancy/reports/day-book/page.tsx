@@ -68,7 +68,7 @@ const KIND_BADGE: Record<string, string> = {
     REJECTION_OUT: "bg-rose-100 text-rose-700",
     ISSUE: "bg-orange-50 text-orange-600",
     ADJUSTMENT: "bg-orange-100 text-orange-700",
-    STOCK_JOURNAL: "bg-yellow-50 text-yellow-600",
+    MANUFACTURING_JOURNAL: "bg-yellow-50 text-yellow-600",
     PHYSICAL_STOCK: "bg-yellow-100 text-yellow-700",
     PAYMENT: "bg-red-50 text-red-700",
     RECEIPT: "bg-violet-100 text-violet-700",
@@ -82,7 +82,7 @@ const KIND_BADGE: Record<string, string> = {
 const OPTIONAL_KINDS = new Set([
     "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER",
     "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",
-    "STOCK_JOURNAL", "PHYSICAL_STOCK", "ISSUE", "ADJUSTMENT",
+    "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "ISSUE", "ADJUSTMENT",
 ]);
 
 // ── Source appearance ──────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ export default function DayBookPage() {
         // Optional = no direct stock/GL impact (documents/orders)
         const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
         // Inventory-only = pure stock ops
-        const INV_SET = new Set(["PHYSICAL_STOCK","STOCK_JOURNAL","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
+        const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
             if (from && d < from) return false;
@@ -289,7 +289,7 @@ export default function DayBookPage() {
                                 <SelectLabel>Inventory Ops</SelectLabel>
                                 <SelectItem value="ISSUE">Issue</SelectItem>
                                 <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
-                                <SelectItem value="STOCK_JOURNAL">Stock Journal</SelectItem>
+                                <SelectItem value="MANUFACTURING_JOURNAL">Manufacturing Journal</SelectItem>
                                 <SelectItem value="PHYSICAL_STOCK">Physical Stock</SelectItem>
                             </SelectGroup>
                             <SelectGroup>
