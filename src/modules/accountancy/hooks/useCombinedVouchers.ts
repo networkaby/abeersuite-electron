@@ -14,6 +14,8 @@ export type CombinedSource = "inv" | "gl" | "je";
 export type CombinedRow = {
     /** Stable React key: `${source}-${rawId}` (raw IDs may collide across sources). */
     id:          string;
+    /** Numeric ID of the underlying record — used for API calls and expand fetches. */
+    rawId:       number;
     source:      CombinedSource;
     /** Voucher kind — InvVoucherType, GL VoucherType, or "JOURNAL". */
     kind:        string;
@@ -98,6 +100,7 @@ export function useCombinedVouchers() {
                 if (cancelled) return;
                 const inv: CombinedRow[] = (invRes.data ?? []).map((v) => ({
                     id:          `inv-${v.id}`,
+                    rawId:       v.id,
                     source:      "inv",
                     kind:        v.type,
                     reference:   v.reference,
@@ -111,6 +114,7 @@ export function useCombinedVouchers() {
                 }));
                 const gl: CombinedRow[] = (glRes.data ?? []).map((v) => ({
                     id:          `gl-${v.id}`,
+                    rawId:       v.id,
                     source:      "gl",
                     kind:        v.type,
                     reference:   v.reference,
@@ -124,6 +128,7 @@ export function useCombinedVouchers() {
                 }));
                 const je: CombinedRow[] = (jeRes.data ?? []).map((e) => ({
                     id:          `je-${e.id}`,
+                    rawId:       Number(e.id),
                     source:      "je",
                     kind:        "JOURNAL",
                     reference:   e.reference,

@@ -65,7 +65,7 @@ const EDIT_FORM_URLS: Record<string, string> = {
     REJECTION_OUT:   "/vouchers/rejections-out",
 };
 
-function editFormUrl(type: string, id: number): string | null {
+export function editFormUrl(type: string, id: number): string | null {
     const base = EDIT_FORM_URLS[type];
     if (base) return `${base}?voucherId=${id}`;
     return voucherUrl(type, id);

@@ -1,10 +1,11 @@
 "use client";
 // Day Book — chronological view of every voucher across all sources.
-// Phase 1: amount-only. Ledger Dr/Cr lines deferred to phase 2.
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,9 +15,26 @@ import {
     SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
-import { StatusBadge } from "@/shared/components/StatusBadge";
 import { useCombinedVouchers, type CombinedRow } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+
+// ── Expand line types ─────────────────────────────────────────────────────
+// GL and JE lines have an 'account' field; inventory lines have a 'product'.
+
+type GlLine = {
+    account: { id?: number; code: string; name: string; normalBalance?: string };
+    type: "DEBIT" | "CREDIT";
+    amount: number;
+};
+type InvLine = {
+    product: { id: number; sku: string; name: string; unit?: { code: string; label: string } | null };
+    quantity: number;
+    rate: number;
+    amount: number;
+};
+type Line = GlLine | InvLine;
 
 // ── Date preset helpers ───────────────────────────────────────────────────
 
@@ -88,11 +106,27 @@ function matchKind(kind: string, filter: string): boolean {
     }
 }
 
+// ── Reference click URL ───────────────────────────────────────────────────
+
+function referenceHref(
+    source: CombinedRow["source"],
+    rawId: number,
+    kind: string,
+    detailHref: string,
+): string | null {
+    switch (source) {
+        case "inv": return editFormUrl(kind, rawId);
+        case "gl":  return detailHref || null;
+        case "je":  return `/office/accountancy/journal-entries/${rawId}`;
+    }
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 const today = formatDateInput(new Date());
 
 export default function DayBookPage() {
+    const router = useRouter();
     const { rows, loading, error, reload } = useCombinedVouchers();
 
     const [preset, setPreset] = useState<DatePreset>("today");
@@ -114,6 +148,37 @@ export default function DayBookPage() {
     const [statuses, setStatuses] = useState<Set<string>>(new Set());
     const toggleStatus = (s: string) =>
         setStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+
+    // Expand state: which row ids are open + lazy-fetched line cache (keyed by CombinedRow.id)
+    const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
+    const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
+
+    const toggleExpand = (r: CombinedRow) => {
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(r.id)) {
+                next.delete(r.id);
+            } else {
+                next.add(r.id);
+                // Lazy-fetch on first open only
+                if (!lineCache.has(r.id)) {
+                    setLineCache((c) => new Map(c).set(r.id, "loading"));
+                    const url =
+                        r.source === "inv" ? `/api/inventory/vouchers/${r.rawId}` :
+                        r.source === "gl"  ? `/api/accountancy/vouchers/${r.rawId}` :
+                                              `/api/accountancy/journal-entries/${r.rawId}`;
+                    axios.get<{ lines: Line[] }>(url)
+                        .then((res) => setLineCache((c) => new Map(c).set(r.id, res.data.lines ?? [])))
+                        .catch(() => setLineCache((c) => new Map(c).set(r.id, "error")));
+                }
+            }
+            return next;
+        });
+    };
+
+    const handleRowClick = (r: CombinedRow) => {
+        if (r.detailHref) router.push(r.detailHref);
+    };
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -343,17 +408,16 @@ export default function DayBookPage() {
                     <table className="w-full text-sm">
                         <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                             <tr>
-                                {/* accent stripe */}
+                                {/* accent stripe — no header */}
                                 <th className="w-1 p-0" />
                                 <th className="px-3 py-3 text-left font-medium">Date</th>
-                                <th className="px-3 py-3 text-left font-medium">Kind</th>
-                                <th className="px-3 py-3 text-left font-medium">Src</th>
+                                <th className="px-3 py-3 text-left font-medium">Type</th>
                                 <th className="px-3 py-3 text-left font-medium">Reference</th>
                                 <th className="px-3 py-3 text-left font-medium">Party</th>
                                 <th className="px-3 py-3 text-left font-medium">Narration</th>
-                                <th className="px-3 py-3 text-right font-medium">Amount</th>
-                                <th className="px-3 py-3 text-center font-medium">Status</th>
-                                <th className="px-3 py-3" />
+                                <th className="px-3 py-3 text-right font-medium">Total</th>
+                                {/* actions — no header */}
+                                <th className="w-10 p-0" />
                             </tr>
                         </thead>
                         <tbody>
@@ -363,89 +427,176 @@ export default function DayBookPage() {
                                 const isDraft = r.status === "DRAFT";
                                 const isCancelled = r.status === "CANCELLED";
                                 const isPosted = r.status === "POSTED";
+                                const isExpanded = expanded.has(r.id);
+                                const lines = lineCache.get(r.id);
+                                const href = referenceHref(r.source, r.rawId, r.kind, r.detailHref);
 
                                 return (
-                                    <tr
-                                        key={r.id}
-                                        className={[
-                                            "border-b last:border-0 hover:bg-muted/30 transition-opacity",
-                                            isDraft ? "opacity-50" : "",
-                                            isCancelled ? "opacity-30" : "",
-                                            isOpt ? "bg-muted/10" : "",
-                                        ].join(" ")}
-                                    >
-                                        {/* coloured source stripe */}
-                                        <td className={`w-1 p-0 ${src.accent}`} />
+                                    <React.Fragment key={r.id}>
+                                        {/* ── Main row ─────────────────────────────── */}
+                                        <tr
+                                            className={[
+                                                "border-b last:border-0 hover:bg-muted/40 transition-opacity",
+                                                r.detailHref ? "cursor-pointer" : "",
+                                                isDraft ? "opacity-50" : "",
+                                                isCancelled ? "opacity-30" : "",
+                                                isOpt ? "bg-muted/10" : "",
+                                            ].join(" ")}
+                                            title="Left-click to open · Right-click to peek at Dr/Cr lines"
+                                            onClick={() => handleRowClick(r)}
+                                            onContextMenu={(e) => { e.preventDefault(); toggleExpand(r); }}
+                                        >
+                                            {/* Coloured source stripe */}
+                                            <td className={`w-1 p-0 ${src.accent}`} />
 
-                                        {/* Date */}
-                                        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                            {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
-                                        </td>
+                                            {/* Date */}
+                                            <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                                                {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                            </td>
 
-                                        {/* Kind badge */}
-                                        <td className="px-3 py-2.5">
-                                            <span className={[
-                                                "text-xs px-2 py-0.5 font-medium rounded-sm",
-                                                isOpt ? "ring-1 opacity-80" : "",
-                                                KIND_BADGE[r.kind] ?? "bg-muted text-muted-foreground",
-                                            ].join(" ")}>
-                                                <span className={isOpt ? "italic" : ""}>
-                                                    {r.kind.replace(/_/g, " ")}
+                                            {/* Type badge */}
+                                            <td className="px-3 py-2.5">
+                                                <span className={[
+                                                    "text-xs px-2 py-0.5 font-medium rounded-sm",
+                                                    isOpt ? "ring-1 opacity-80" : "",
+                                                    KIND_BADGE[r.kind] ?? "bg-muted text-muted-foreground",
+                                                ].join(" ")}>
+                                                    <span className={isOpt ? "italic" : ""}>
+                                                        {r.kind.replace(/_/g, " ")}
+                                                    </span>
                                                 </span>
-                                            </span>
-                                        </td>
+                                            </td>
 
-                                        {/* Source badge */}
-                                        <td className="px-3 py-2.5">
-                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${src.badge}`}>
-                                                {src.label}
-                                            </span>
-                                        </td>
+                                            {/* Reference — clickable edit link */}
+                                            <td
+                                                className={[
+                                                    "px-3 py-2.5 font-mono text-xs",
+                                                    isPosted ? "text-foreground font-semibold" : "text-primary",
+                                                    isCancelled ? "line-through text-muted-foreground" : "",
+                                                ].join(" ")}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {href ? (
+                                                    <Link href={href} className="hover:underline underline-offset-2">
+                                                        {r.reference}
+                                                    </Link>
+                                                ) : (
+                                                    r.reference
+                                                )}
+                                            </td>
 
-                                        {/* Reference */}
-                                        <td className={[
-                                            "px-3 py-2.5 font-mono text-xs",
-                                            isPosted ? "text-foreground font-semibold" : "text-primary",
-                                            isCancelled ? "line-through text-muted-foreground" : "",
-                                        ].join(" ")}>
-                                            {r.reference}
-                                        </td>
+                                            {/* Party */}
+                                            <td className={`px-3 py-2.5 text-sm ${isOpt ? "italic text-muted-foreground" : ""}`}>
+                                                {r.party ?? <span className="text-muted-foreground/40">—</span>}
+                                            </td>
 
-                                        {/* Party */}
-                                        <td className={`px-3 py-2.5 text-sm ${isOpt ? "italic text-muted-foreground" : ""}`}>
-                                            {r.party ?? <span className="text-muted-foreground/40">—</span>}
-                                        </td>
+                                            {/* Narration */}
+                                            <td className={[
+                                                "px-3 py-2.5 text-xs max-w-[200px] truncate",
+                                                isOpt ? "italic text-muted-foreground" : "text-muted-foreground",
+                                            ].join(" ")}>
+                                                {r.narration ?? "—"}
+                                            </td>
 
-                                        {/* Narration */}
-                                        <td className={[
-                                            "px-3 py-2.5 text-xs max-w-[200px] truncate",
-                                            isOpt ? "italic text-muted-foreground" : "text-muted-foreground",
-                                        ].join(" ")}>
-                                            {r.narration ?? "—"}
-                                        </td>
+                                            {/* Total */}
+                                            <td className={[
+                                                "px-3 py-2.5 text-right font-mono text-sm",
+                                                isPosted ? "font-semibold text-foreground" : "text-muted-foreground",
+                                            ].join(" ")}>
+                                                ₹ {fmt(r.totalAmount)}
+                                            </td>
 
-                                        {/* Amount */}
-                                        <td className={[
-                                            "px-3 py-2.5 text-right font-mono text-sm",
-                                            isPosted ? "font-semibold text-foreground" : "text-muted-foreground",
-                                        ].join(" ")}>
-                                            ₹ {fmt(r.totalAmount)}
-                                        </td>
+                                            {/* 3-dot actions menu */}
+                                            <td
+                                                className="px-2 py-2.5 text-right"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <DayBookActionsMenu
+                                                    rawId={r.rawId}
+                                                    source={r.source}
+                                                    kind={r.kind}
+                                                    reference={r.reference}
+                                                    detailHref={r.detailHref}
+                                                    onChanged={reload}
+                                                />
+                                            </td>
+                                        </tr>
 
-                                        {/* Status */}
-                                        <td className="px-3 py-2.5 text-center">
-                                            <StatusBadge kind="journal" value={r.status} />
-                                        </td>
-
-                                        {/* Link */}
-                                        <td className="px-3 py-2.5 text-right">
-                                            {r.detailHref ? (
-                                                <Link href={r.detailHref} className="text-muted-foreground/40 hover:text-primary">
-                                                    <ChevronRight size={15} />
-                                                </Link>
-                                            ) : null}
-                                        </td>
-                                    </tr>
+                                        {/* ── Expand rows: one <tr> per Dr/Cr line ─── */}
+                                        {isExpanded && lines === "loading" && (
+                                            <tr className="bg-muted/20 border-b last:border-0">
+                                                <td colSpan={8} className="px-6 py-2 text-xs text-muted-foreground">
+                                                    <Loader2 className="animate-spin size-3 inline mr-1.5" />
+                                                    Loading lines…
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {isExpanded && lines === "error" && (
+                                            <tr className="bg-muted/20 border-b last:border-0">
+                                                <td colSpan={8} className="px-6 py-2 text-xs text-destructive">
+                                                    Failed to load lines.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {isExpanded && Array.isArray(lines) && lines.length === 0 && (
+                                            <tr className="bg-muted/20 border-b last:border-0">
+                                                <td colSpan={8} className="px-6 py-2 text-xs text-muted-foreground">
+                                                    No lines found.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {isExpanded && Array.isArray(lines) && lines.map((l, i) => {
+                                            const isGl = "account" in l;
+                                            return (
+                                                <tr key={`${r.id}-line-${i}`} className="bg-muted/20 border-b last:border-0">
+                                                    {/* accent stripe — faded parent colour */}
+                                                    <td className={`w-1 p-0 ${src.accent} opacity-30`} />
+                                                    {/* Date col — blank */}
+                                                    <td />
+                                                    {/* Type col — Dr/Cr badge (GL) or "item" badge (inv) */}
+                                                    <td className="px-3 py-1">
+                                                        {isGl ? (
+                                                            <span className={[
+                                                                "text-[10px] px-1.5 py-0.5 rounded font-semibold",
+                                                                l.type === "DEBIT"
+                                                                    ? "bg-blue-50 text-blue-600"
+                                                                    : "bg-violet-50 text-violet-600",
+                                                            ].join(" ")}>
+                                                                {l.type === "DEBIT" ? "Dr" : "Cr"}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-muted text-muted-foreground">
+                                                                item
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    {/* Reference col — account code (GL) or product SKU (inv) */}
+                                                    <td className="px-3 py-1 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+                                                        {isGl ? l.account.code : l.product.sku}
+                                                    </td>
+                                                    {/* Party + Narration cols */}
+                                                    {isGl ? (
+                                                        <td colSpan={2} className="px-3 py-1 text-xs text-foreground">
+                                                            {l.account.name}
+                                                        </td>
+                                                    ) : (
+                                                        <>
+                                                            <td className="px-3 py-1 text-xs text-foreground">{l.product.name}</td>
+                                                            <td className="px-3 py-1 text-xs text-muted-foreground font-mono">
+                                                                {l.quantity} × ₹{fmt(Number(l.rate))}
+                                                            </td>
+                                                        </>
+                                                    )}
+                                                    {/* Total col */}
+                                                    <td className="px-3 py-1 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                                                        ₹ {fmt(Number(l.amount))}
+                                                    </td>
+                                                    {/* Actions col — blank */}
+                                                    <td />
+                                                </tr>
+                                            );
+                                        })}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>
