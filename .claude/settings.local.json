@@ -124,7 +124,9 @@
       "PowerShell(cd \"D:\\\\our-own-website\\\\service-mgmt-experiment\"; tree /F /L 3 src\\\\app\\\\\\(protected\\)\\\\office\\\\inventory | head -80)",
       "Bash(pnpm next *)",
       "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
-      "Bash(cat src/app/api/inventory/vouchers/\\\\\\\\[id\\\\\\\\]/route.ts)"
+      "Bash(cat src/app/api/inventory/vouchers/\\\\\\\\[id\\\\\\\\]/route.ts)",
+      "Bash(Get-ChildItem -Path \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\accountancy\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

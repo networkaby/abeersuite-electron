@@ -48,21 +48,23 @@ export function voucherUrl(type: string, id: number): string | null {
     return base ? `${base}/${id}` : null;
 }
 
-// Trading types have full-page EDITABLE forms at top-level routes. Edit drills
-// here with `?voucherId=` so the form prefills + PATCHes on save. The other
-// voucher types still use the read-only detail page (no editable equivalent
-// yet — Edit falls back to VOUCHER_URLS for them).
+// Trading types have full-page EDITABLE forms. Edit drills here with
+// `?voucherId=` so the form prefills + PATCHes on save. The other voucher
+// types still use the read-only detail page (no editable equivalent yet —
+// Edit falls back to VOUCHER_URLS for them).
+// NOTE: SALE/PURCHASE/etc. live under the (gl) route-group which is URL-
+// transparent, so the actual paths use the plural directory names.
 const EDIT_FORM_URLS: Record<string, string> = {
-    SALE:            "/vouchers/sale",
-    PURCHASE:        "/vouchers/purchase",
-    SALE_RETURN:     "/vouchers/sale-return",
-    PURCHASE_RETURN: "/vouchers/purchase-return",
-    SALES_ORDER:     "/vouchers/sales-orders",
-    PURCHASE_ORDER:  "/vouchers/purchase-orders",
-    GRN:             "/vouchers/grn",
-    CHALLAN:         "/vouchers/challans",
-    REJECTION_IN:    "/vouchers/rejections-in",
-    REJECTION_OUT:   "/vouchers/rejections-out",
+    SALE:            "/vouchers/sales/new",
+    PURCHASE:        "/vouchers/purchases/new",
+    SALE_RETURN:     "/vouchers/sale-returns/new",
+    PURCHASE_RETURN: "/vouchers/purchase-returns/new",
+    SALES_ORDER:     "/vouchers/sales-orders/new",
+    PURCHASE_ORDER:  "/vouchers/purchase-orders/new",
+    GRN:             "/vouchers/grn/new",
+    CHALLAN:         "/vouchers/challans/new",
+    REJECTION_IN:    "/vouchers/rejections-in/new",
+    REJECTION_OUT:   "/vouchers/rejections-out/new",
 };
 
 export function editFormUrl(type: string, id: number): string | null {

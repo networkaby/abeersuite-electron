@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { isBalanced } from "@/modules/accountancy/lib/balance";
+import { isBalanced, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -40,20 +40,32 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json(entry);
 }
 
-// PATCH /api/accountancy/journal-entries/[id] — update DRAFT only
+// PATCH /api/accountancy/journal-entries/[id]
+//
+//   • DRAFT  → swap lines + update header. No GL impact.
+//   • POSTED → atomic reversal of old line impact + re-apply of new impact,
+//              mirroring the cancel route's reversal logic minus the
+//              counter-entry/status-flip. Reference + POSTED status stay.
+//   • CANCELLED / deleted → 409.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { id } = await params;
-    const existing = await prisma.journalEntry.findUnique({ where: { id: Number(id) } });
+    const entryId = Number(id);
+    const existing = await prisma.journalEntry.findUnique({
+        where:   { id: entryId },
+        include: { lines: { include: { account: { select: { normalBalance: true } } } } },
+    });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (existing.status !== "DRAFT") {
-        return NextResponse.json({ error: "Only DRAFT entries can be edited" }, { status: 409 });
+    if (existing.deletedAt) {
+        return NextResponse.json({ error: "Entry is deleted — restore it first" }, { status: 409 });
+    }
+    if (existing.status === "CANCELLED") {
+        return NextResponse.json({ error: "Cancelled entries cannot be edited" }, { status: 409 });
     }
 
     const { data, error } = await validateRequest(req, updateSchema);
-
     if (error) return error;
     const body = data;
 
@@ -63,20 +75,53 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
+            // ── POSTED: reverse the old GL impact first ─────────────────
+            if (existing.status === "POSTED" && body.lines) {
+                for (const line of existing.lines) {
+                    const delta = balanceDelta(
+                        line.account.normalBalance!,
+                        line.type,
+                        toNumber(line.amount),
+                    );
+                    await tx.account.update({
+                        where: { id: line.accountId },
+                        data:  { balance: { decrement: delta } },
+                    });
+                }
+            }
+
+            // Swap lines if provided
             if (body.lines) {
-                await tx.journalLine.deleteMany({ where: { journalEntryId: Number(id) } });
+                await tx.journalLine.deleteMany({ where: { journalEntryId: entryId } });
                 await tx.journalLine.createMany({
                     data: body.lines.map((l) => ({
-                        journalEntryId: Number(id),
-                        accountId: l.accountId,
-                        type: l.type,
-                        amount: l.amount,
-                        description: l.description ?? null,
+                        journalEntryId: entryId,
+                        accountId:      l.accountId,
+                        type:           l.type,
+                        amount:         l.amount,
+                        description:    l.description ?? null,
                     })),
                 });
             }
+
+            // ── POSTED: apply the new GL impact ─────────────────────────
+            if (existing.status === "POSTED" && body.lines) {
+                for (const line of body.lines) {
+                    const acct = await tx.account.findUnique({
+                        where:  { id: line.accountId },
+                        select: { normalBalance: true },
+                    });
+                    if (!acct?.normalBalance) continue;
+                    const delta = balanceDelta(acct.normalBalance, line.type, line.amount);
+                    await tx.account.update({
+                        where: { id: line.accountId },
+                        data:  { balance: { increment: delta } },
+                    });
+                }
+            }
+
             return tx.journalEntry.update({
-                where: { id: Number(id) },
+                where: { id: entryId },
                 data: {
                     ...(body.date ? { date: new Date(body.date) } : {}),
                     ...(body.description ? { description: body.description } : {}),

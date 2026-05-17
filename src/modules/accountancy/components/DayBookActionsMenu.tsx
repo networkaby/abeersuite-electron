@@ -38,17 +38,27 @@ function apiBase(source: CombinedSource, rawId: number): string {
 }
 
 // ── Edit navigation URL per source ────────────────────────────────────────
+// Mirrors the Day Book referenceHref so left-click on the reference and
+// "Edit" in the ⋮ menu land on the same form.
+
+const GL_EDIT_BASE: Record<string, string> = {
+    PAYMENT:     "/vouchers/payments",
+    RECEIPT:     "/vouchers/receipts",
+    CONTRA:      "/vouchers/contras",
+    CREDIT_NOTE: "/vouchers/credit-notes",
+    DEBIT_NOTE:  "/vouchers/debit-notes",
+};
 
 function editUrl(
     source: CombinedSource,
     rawId: number,
     kind: string,
-    detailHref: string,
+    _detailHref: string,
 ): string | null {
     switch (source) {
         case "inv": return editFormUrl(kind, rawId);
-        case "gl":  return detailHref || null;
-        case "je":  return `/office/accountancy/journal-entries/${rawId}`;
+        case "gl":  return GL_EDIT_BASE[kind] ? `${GL_EDIT_BASE[kind]}/${rawId}` : null;
+        case "je":  return `/vouchers/journal-entries/${rawId}`;
     }
 }
 

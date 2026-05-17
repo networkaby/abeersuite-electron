@@ -11,7 +11,7 @@
 // uses — writes Voucher + JournalEntry + optional STOCK_JOURNAL InvVoucher
 // in one transaction).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,13 +21,64 @@ import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt } from "@/utils/constants";
+import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { GlAccountCombobox } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
+
+// ── Loaded JE shape (edit mode) ─────────────────────────────────────────────
+
+type LoadedJeLine = {
+    accountId:   number;
+    type:        "DEBIT" | "CREDIT";
+    amount:      number | string;
+    description: string | null;
+};
+
+type LoadedJe = {
+    id:          number;
+    reference:   string;
+    date:        string;
+    description: string | null;
+    status:      "DRAFT" | "POSTED" | "CANCELLED";
+    lines:       LoadedJeLine[];
+};
+
+// Normalized line for dirty-check comparison.
+type SnapLine = { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description: string };
+type Snapshot = { date: string; narration: string; lines: SnapLine[] };
+
+function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description?: string | null }[]): SnapLine[] {
+    return lines
+        .map((l) => ({
+            accountId:   l.accountId,
+            type:        l.type,
+            amount:      Math.round(l.amount * 100) / 100,
+            description: (l.description ?? "").trim(),
+        }))
+        .sort((a, b) =>
+            a.accountId - b.accountId
+            || a.type.localeCompare(b.type)
+            || a.amount - b.amount,
+        );
+}
+
+function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
+    if (a.date !== b.date) return false;
+    if (a.narration !== b.narration) return false;
+    if (a.lines.length !== b.lines.length) return false;
+    for (let i = 0; i < a.lines.length; i++) {
+        const x = a.lines[i], y = b.lines[i];
+        if (x.accountId !== y.accountId) return false;
+        if (x.type !== y.type) return false;
+        if (Math.abs(x.amount - y.amount) > 0.005) return false;
+        if (x.description !== y.description) return false;
+    }
+    return true;
+}
 
 type Side = "DEBIT" | "CREDIT";
 
@@ -76,11 +127,15 @@ const lineAmount = (l: Line) =>
 
 const listPath = "/office/accountancy/vouchers-registers/journal-entries";
 
-export function JournalVoucherPage() {
+export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     const router = useRouter();
+    const isEditing = voucherId != null && Number.isFinite(voucherId);
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [nextRef, setNextRef]   = useState<string>("");
     const [saving, setSaving]     = useState(false);
+    const [loading, setLoading]   = useState(isEditing);
+    const [loadedJe, setLoadedJe] = useState<LoadedJe | null>(null);
+    const originalSnapshotRef     = useRef<Snapshot | null>(null);
 
     const [date, setDate]           = useState(() => new Date().toISOString().slice(0, 10));
     const [narration, setNarration] = useState("");
@@ -90,10 +145,56 @@ export function JournalVoucherPage() {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
-        axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=JOURNAL`)
-            .then((r) => setNextRef(r.data.reference))
-            .catch(() => setNextRef(""));
-    }, []);
+        if (!isEditing) {
+            axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=JOURNAL`)
+                .then((r) => setNextRef(r.data.reference))
+                .catch(() => setNextRef(""));
+        }
+    }, [isEditing]);
+
+    // ── Prefill in edit mode ────────────────────────────────────────────────
+    useEffect(() => {
+        if (!isEditing || voucherId == null) return;
+        let cancelled = false;
+        setLoading(true);
+        axios.get<LoadedJe>(`/api/accountancy/journal-entries/${voucherId}`)
+            .then((r) => {
+                if (cancelled) return;
+                const v = r.data;
+                setLoadedJe(v);
+                setDate(v.date.slice(0, 10));
+                setNarration(v.description ?? "");
+
+                // Map lines — stock-item reconstruction from descriptions is
+                // out of scope (v1); editing a stock-tagged JE strips the
+                // inventory links but keeps the GL amounts intact.
+                setLines(
+                    v.lines.length > 0
+                        ? v.lines.map((l) => ({
+                            id:         ++lineSeq,
+                            side:       l.type,
+                            accountId:  l.accountId,
+                            amount:     String(Number(l.amount)),
+                            stockItems: [],
+                        }))
+                        : [newLine("DEBIT"), newLine("CREDIT")],
+                );
+
+                originalSnapshotRef.current = {
+                    date:      v.date.slice(0, 10),
+                    narration: (v.description ?? "").trim(),
+                    lines:     normalizeLines(v.lines.map((l) => ({
+                        accountId:   l.accountId,
+                        type:        l.type,
+                        amount:      Number(l.amount),
+                        description: l.description,
+                    }))),
+                };
+            })
+            .catch(() => toast.error("Failed to load journal entry"))
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [isEditing, voucherId]);
 
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const eligibleByAccountId = new Map<number, boolean>(
@@ -179,30 +280,70 @@ export function JournalVoucherPage() {
             toast.error("Inventory items need a positive qty"); return;
         }
 
+        const payloadLines = lines.map((l) => {
+            const desc = l.stockItems.length > 0
+                ? l.stockItems
+                    .map((s) => `${s.productName} × ${s.qty}${s.unitCode ? " " + s.unitCode : ""} @ ₹${s.rate}`)
+                    .join(" | ")
+                : undefined;
+            const stockItems = l.stockItems.length > 0
+                ? l.stockItems.map((s) => ({
+                    productId: s.productId!,
+                    qty:       parseFloat(s.qty) || 0,
+                    rate:      parseFloat(s.rate) || 0,
+                }))
+                : undefined;
+            return {
+                accountId:   l.accountId,
+                type:        l.side,
+                amount:      lineAmount(l),
+                description: desc,
+                stockItems,
+            };
+        });
+
+        // ── Edit mode: dirty-check then PATCH the JE ────────────────────────
+        if (isEditing && voucherId != null) {
+            const current: Snapshot = {
+                date,
+                narration: narration.trim(),
+                lines:     normalizeLines(payloadLines),
+            };
+            const original = originalSnapshotRef.current;
+            if (original && snapshotsEqual(original, current)) {
+                toast("No changes to save");
+                router.push(listPath);
+                return;
+            }
+
+            setSaving(true);
+            try {
+                // JE PATCH endpoint doesn't accept stockItems — strip them.
+                const apiLines = payloadLines.map((l) => ({
+                    accountId:   l.accountId,
+                    type:        l.type,
+                    amount:      l.amount,
+                    description: l.description,
+                }));
+                await axios.patch(`/api/accountancy/journal-entries/${voucherId}`, {
+                    date,
+                    description: narration.trim() || undefined,
+                    lines:       apiLines,
+                });
+                toast.success(`Journal voucher ${loadedJe?.reference ?? ""} updated`);
+                router.push(listPath);
+            } catch (err: unknown) {
+                const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
+                toast.error(msg ?? "Save failed");
+            } finally {
+                setSaving(false);
+            }
+            return;
+        }
+
+        // ── Create mode: POST as today ─────────────────────────────────────
         setSaving(true);
         try {
-            const payloadLines = lines.map((l) => {
-                const desc = l.stockItems.length > 0
-                    ? l.stockItems
-                        .map((s) => `${s.productName} × ${s.qty}${s.unitCode ? " " + s.unitCode : ""} @ ₹${s.rate}`)
-                        .join(" | ")
-                    : undefined;
-                const stockItems = l.stockItems.length > 0
-                    ? l.stockItems.map((s) => ({
-                        productId: s.productId!,
-                        qty:       parseFloat(s.qty) || 0,
-                        rate:      parseFloat(s.rate) || 0,
-                    }))
-                    : undefined;
-                return {
-                    accountId:   l.accountId,
-                    type:        l.side,
-                    amount:      lineAmount(l),
-                    description: desc,
-                    stockItems,
-                };
-            });
-
             const res = await axios.post<{ voucherId: number; reference: string; posted: boolean }>(
                 "/api/accountancy/journal-vouchers",
                 {
@@ -232,13 +373,24 @@ export function JournalVoucherPage() {
                     <Button variant="ghost" size="icon-sm" onClick={() => router.push(listPath)} aria-label="Back">
                         <ArrowLeft size={16} />
                     </Button>
-                    <h1 className="text-base font-semibold">Journal Voucher</h1>
+                    <h1 className="text-base font-semibold">
+                        {isEditing ? "Edit Journal Voucher" : "Journal Voucher"}
+                    </h1>
+                    {isEditing && loadedJe && (
+                        <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[loadedJe.status]}`}
+                        >
+                            {loadedJe.status}
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-6 text-xs">
                     <div className="flex items-center gap-2">
                         <label className="text-muted-foreground uppercase tracking-wide">No.</label>
                         <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
-                            {nextRef || "Generating…"}
+                            {isEditing
+                                ? (loadedJe?.reference ?? (loading ? "Loading…" : "—"))
+                                : (nextRef || "Generating…")}
                         </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -447,12 +599,20 @@ export function JournalVoucherPage() {
 
             {/* Sticky action bar */}
             <div className="border-t border-border bg-card px-6 py-3 flex items-center justify-end gap-2 shrink-0">
+                {isEditing && loadedJe?.status === "POSTED" && (
+                    <span className="text-[11px] text-amber-600 mr-auto italic">
+                        Will reverse + re-post on save (reference preserved)
+                    </span>
+                )}
                 <Button variant="ghost" onClick={() => router.push(listPath)}>Cancel</Button>
-                <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
-                </Button>
-                <Button onClick={() => submit(true)} disabled={saving || !balanced}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save
+                {!isEditing && (
+                    <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
+                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
+                    </Button>
+                )}
+                <Button onClick={() => submit(true)} disabled={saving || !balanced || loading}>
+                    {saving && <Loader2 size={13} className="animate-spin mr-1" />}
+                    {isEditing ? "Save Changes" : "Save"}
                 </Button>
             </div>
         </div>

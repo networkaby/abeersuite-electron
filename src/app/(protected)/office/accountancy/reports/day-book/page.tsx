@@ -107,17 +107,28 @@ function matchKind(kind: string, filter: string): boolean {
 }
 
 // ── Reference click URL ───────────────────────────────────────────────────
+// Each click navigates to the voucher's CREATION form, prefilled with its
+// data for editing. GL/JE use the [id] route under /vouchers/(gl)/<kind>/[id];
+// inventory reuses the existing editFormUrl pattern.
+
+const GL_EDIT_BASE: Record<string, string> = {
+    PAYMENT:     "/vouchers/payments",
+    RECEIPT:     "/vouchers/receipts",
+    CONTRA:      "/vouchers/contras",
+    CREDIT_NOTE: "/vouchers/credit-notes",
+    DEBIT_NOTE:  "/vouchers/debit-notes",
+};
 
 function referenceHref(
     source: CombinedRow["source"],
     rawId: number,
     kind: string,
-    detailHref: string,
+    _detailHref: string,
 ): string | null {
     switch (source) {
         case "inv": return editFormUrl(kind, rawId);
-        case "gl":  return detailHref || null;
-        case "je":  return `/office/accountancy/journal-entries/${rawId}`;
+        case "gl":  return GL_EDIT_BASE[kind] ? `${GL_EDIT_BASE[kind]}/${rawId}` : null;
+        case "je":  return `/vouchers/journal-entries/${rawId}`;
     }
 }
 

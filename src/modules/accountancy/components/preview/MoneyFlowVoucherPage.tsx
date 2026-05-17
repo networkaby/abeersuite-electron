@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fmt } from "@/utils/constants";
+import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -25,6 +25,59 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
+
+// ── Loaded voucher shape (used in edit mode) ────────────────────────────────
+
+type LoadedLine = {
+    accountId:   number;
+    type:        "DEBIT" | "CREDIT";
+    amount:      number | string;
+    description: string | null;
+};
+
+type LoadedVoucher = {
+    id:             number;
+    reference:      string;
+    date:           string;
+    narration:      string | null;
+    status:         "DRAFT" | "POSTED" | "CANCELLED";
+    partyAccountId: number | null;
+    partyAccount:   { id: number; code: string | null; name: string } | null;
+    lines:          LoadedLine[];
+};
+
+// Normalized line for dirty-check comparison.
+type SnapLine = { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description: string };
+type Snapshot = { date: string; narration: string; lines: SnapLine[] };
+
+function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description?: string | null }[]): SnapLine[] {
+    return lines
+        .map((l) => ({
+            accountId:   l.accountId,
+            type:        l.type,
+            amount:      Math.round(l.amount * 100) / 100,
+            description: (l.description ?? "").trim(),
+        }))
+        .sort((a, b) =>
+            a.accountId - b.accountId
+            || a.type.localeCompare(b.type)
+            || a.amount - b.amount,
+        );
+}
+
+function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
+    if (a.date !== b.date) return false;
+    if (a.narration !== b.narration) return false;
+    if (a.lines.length !== b.lines.length) return false;
+    for (let i = 0; i < a.lines.length; i++) {
+        const x = a.lines[i], y = b.lines[i];
+        if (x.accountId !== y.accountId) return false;
+        if (x.type !== y.type) return false;
+        if (Math.abs(x.amount - y.amount) > 0.005) return false;
+        if (x.description !== y.description) return false;
+    }
+    return true;
+}
 
 // ── Kind + COPY config ──────────────────────────────────────────────────────
 // CONTRA folds into the same Kind union as a 5th voucher — same data shape
@@ -147,15 +200,19 @@ const newRow = (): Row => ({ id: ++rowSeq, accountId: null, amount: "", note: ""
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
+export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; voucherId?: number }) {
     const router = useRouter();
     const copy = PER_KIND[kind];
+    const isEditing = voucherId != null && Number.isFinite(voucherId);
 
     // Accounts loaded once on mount; particulars combobox picks from rowFilter,
     // top picker from topFilter.
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [nextRef, setNextRef] = useState<string>("");
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(isEditing);
+    const [loadedVoucher, setLoadedVoucher] = useState<LoadedVoucher | null>(null);
+    const originalSnapshotRef = useRef<Snapshot | null>(null);
     const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [narration, setNarration] = useState("");
 
@@ -164,8 +221,11 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
     const [topLedgerId, setTopLedgerId] = useState<number | null>(null);
     const [topParty, setTopParty] = useState<PickedParty | null>(null);
     const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
-    const effectiveTopAccountId: number | null =
-        copy.topPickerKind === "party" ? (topParty?.accountId ?? null) : topLedgerId;
+    // In edit mode we always read from topLedgerId so the prefilled party
+    // account flows through without us needing a fully-built PickedParty.
+    const effectiveTopAccountId: number | null = isEditing
+        ? topLedgerId
+        : copy.topPickerKind === "party" ? (topParty?.accountId ?? null) : topLedgerId;
 
     const [rows, setRows] = useState<Row[]>([newRow()]);
 
@@ -186,10 +246,60 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=true")
             .then((r) => setAccounts(r.data))
             .catch(() => toast.error("Failed to load accounts"));
-        axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=${kind}`)
-            .then((r) => setNextRef(r.data.reference))
-            .catch(() => setNextRef(""));
-    }, [kind]);
+        // Skip the next-ref fetch in edit mode — we'll show the loaded reference.
+        if (!isEditing) {
+            axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=${kind}`)
+                .then((r) => setNextRef(r.data.reference))
+                .catch(() => setNextRef(""));
+        }
+    }, [kind, isEditing]);
+
+    // ── Prefill in edit mode ────────────────────────────────────────────────
+    useEffect(() => {
+        if (!isEditing || voucherId == null) return;
+        let cancelled = false;
+        setLoading(true);
+        axios.get<LoadedVoucher>(`/api/accountancy/vouchers/${voucherId}`)
+            .then((r) => {
+                if (cancelled) return;
+                const v = r.data;
+                setLoadedVoucher(v);
+                setDate(v.date.slice(0, 10));
+                setNarration(v.narration ?? "");
+
+                // Split lines using PER_KIND[kind] — first topSide line is the
+                // "top" account; remaining rowSide lines become the particulars.
+                const topLine = v.lines.find((l) => l.type === copy.topSide);
+                const rowLines = v.lines.filter((l) => l.type === copy.rowSide);
+
+                if (topLine) setTopLedgerId(topLine.accountId);
+                setRows(
+                    rowLines.length > 0
+                        ? rowLines.map((l) => ({
+                            id:        ++rowSeq,
+                            accountId: l.accountId,
+                            amount:    String(Number(l.amount)),
+                            note:      l.description ?? "",
+                        }))
+                        : [newRow()],
+                );
+
+                // Snapshot original for dirty-check
+                originalSnapshotRef.current = {
+                    date:      v.date.slice(0, 10),
+                    narration: (v.narration ?? "").trim(),
+                    lines:     normalizeLines(v.lines.map((l) => ({
+                        accountId:   l.accountId,
+                        type:        l.type,
+                        amount:      Number(l.amount),
+                        description: l.description,
+                    }))),
+                };
+            })
+            .catch(() => toast.error("Failed to load voucher"))
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [isEditing, voucherId, copy.topSide, copy.rowSide]);
 
     const updateRow = (id: number, patch: Partial<Row>) =>
         setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -201,27 +311,62 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
             toast.error("Pick the top account and at least one particulars row with an amount.");
             return;
         }
+
+        const topLine = {
+            accountId: effectiveTopAccountId!,
+            type:      copy.topSide,
+            amount:    rowsTotal,
+        };
+        const rowLines = rows.map((r) => ({
+            accountId:   r.accountId!,
+            type:        copy.rowSide,
+            amount:      parseAmount(r.amount),
+            description: r.note.trim() || undefined,
+        }));
+        const allLines = [topLine, ...rowLines];
+
+        // ── Edit mode: dirty-check then PATCH ───────────────────────────────
+        if (isEditing && voucherId != null) {
+            const current: Snapshot = {
+                date,
+                narration: narration.trim(),
+                lines:     normalizeLines(allLines),
+            };
+            const original = originalSnapshotRef.current;
+            if (original && snapshotsEqual(original, current)) {
+                toast("No changes to save");
+                router.push(copy.listPath);
+                return;
+            }
+
+            setSaving(true);
+            try {
+                await axios.patch(`/api/accountancy/vouchers/${voucherId}`, {
+                    date,
+                    narration: narration.trim() || undefined,
+                    lines:     allLines,
+                });
+                toast.success(`${copy.title} ${loadedVoucher?.reference ?? ""} updated`);
+                router.push(copy.listPath);
+            } catch (err: unknown) {
+                const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
+                toast.error(msg ?? "Save failed");
+            } finally {
+                setSaving(false);
+            }
+            return;
+        }
+
+        // ── Create mode: POST (+ optional post) ─────────────────────────────
         setSaving(true);
         try {
-            const topLine = {
-                accountId: effectiveTopAccountId!,
-                type:      copy.topSide,
-                amount:    rowsTotal,
-            };
-            const rowLines = rows.map((r) => ({
-                accountId:   r.accountId!,
-                type:        copy.rowSide,
-                amount:      parseAmount(r.amount),
-                description: r.note.trim() || undefined,
-            }));
-
             const created = await axios.post<{ id: number; reference: string }>(
                 "/api/accountancy/vouchers",
                 {
                     type:      kind,
                     date,
                     narration: narration.trim() || undefined,
-                    lines:     [topLine, ...rowLines],
+                    lines:     allLines,
                 },
             );
             if (postAfterSave) {
@@ -247,13 +392,24 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
                     <Button variant="ghost" size="icon-sm" onClick={() => router.push(copy.listPath)} aria-label="Back">
                         <ArrowLeft size={16} />
                     </Button>
-                    <h1 className="text-base font-semibold">{copy.title}</h1>
+                    <h1 className="text-base font-semibold">
+                        {isEditing ? `Edit ${copy.title}` : copy.title}
+                    </h1>
+                    {isEditing && loadedVoucher && (
+                        <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[loadedVoucher.status]}`}
+                        >
+                            {loadedVoucher.status}
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-6 text-xs">
                     <div className="flex items-center gap-2">
                         <label className="text-muted-foreground uppercase tracking-wide">No.</label>
                         <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
-                            {nextRef || "Generating…"}
+                            {isEditing
+                                ? (loadedVoucher?.reference ?? (loading ? "Loading…" : "—"))
+                                : (nextRef || "Generating…")}
                         </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -289,7 +445,7 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
                             </span>
                             <div>
                                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">{copy.topLabel}</p>
-                                {copy.topPickerKind === "party" ? (
+                                {copy.topPickerKind === "party" && !isEditing ? (
                                     <>
                                         <PartySearchAndCreate
                                             ref={partyPickerRef}
@@ -309,6 +465,12 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
                                             </button>
                                         )}
                                     </>
+                                ) : copy.topPickerKind === "party" && isEditing ? (
+                                    // Edit mode for CREDIT_NOTE / DEBIT_NOTE — party is locked, show as read-only.
+                                    <div className="h-9 px-3 flex items-center rounded border border-border bg-muted/30 text-sm">
+                                        {topAccount?.name ?? loadedVoucher?.partyAccount?.name ?? "—"}
+                                        <span className="ml-auto text-[10px] text-muted-foreground uppercase">Locked</span>
+                                    </div>
                                 ) : (
                                     <GlAccountCombobox
                                         value={topLedgerId}
@@ -442,12 +604,20 @@ export function MoneyFlowVoucherPage({ kind }: { kind: MoneyFlowKind }) {
 
             {/* Sticky action bar */}
             <div className="border-t border-border bg-card px-6 py-3 flex items-center justify-end gap-2 shrink-0">
+                {isEditing && loadedVoucher?.status === "POSTED" && (
+                    <span className="text-[11px] text-amber-600 mr-auto italic">
+                        Will reverse + re-post on save (reference preserved)
+                    </span>
+                )}
                 <Button variant="ghost" onClick={() => router.push(copy.listPath)}>Cancel</Button>
-                <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
-                </Button>
-                <Button onClick={() => submit(true)} disabled={saving || !balanced}>
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save
+                {!isEditing && (
+                    <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
+                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
+                    </Button>
+                )}
+                <Button onClick={() => submit(true)} disabled={saving || !balanced || loading}>
+                    {saving && <Loader2 size={13} className="animate-spin mr-1" />}
+                    {isEditing ? "Save Changes" : "Save"}
                 </Button>
             </div>
         </div>
