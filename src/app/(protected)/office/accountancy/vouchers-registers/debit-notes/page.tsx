@@ -1,12 +1,11 @@
-"use client";
 import { VoucherList } from "@/modules/accountancy/components/VoucherList";
 
-export default function DebitNotesPage() {
+export default function Page() {
     return (
         <VoucherList
             type="DEBIT_NOTE"
             title="Debit Notes"
-            subtitle="Purchase returns and supplier debits"
+            subtitle="Adjustments raised against suppliers — reduces creditor balance"
             basePath="/office/accountancy/debit-notes"
             newPath="/vouchers/debit-notes/new"
         />

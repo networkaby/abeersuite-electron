@@ -6,7 +6,7 @@ export default function Page() {
             type="CREDIT_NOTE"
             title="Credit Notes"
             subtitle="Allowances granted to customers — reduces debtor balance"
-            basePath="/vouchers/credit-notes"
+            basePath="/office/accountancy/credit-notes"
             newPath="/vouchers/credit-notes/new"
         />
     );

@@ -1,12 +1,11 @@
-"use client";
 import { VoucherList } from "@/modules/accountancy/components/VoucherList";
 
-export default function ContrasPage() {
+export default function Page() {
     return (
         <VoucherList
             type="CONTRA"
             title="Contras"
-            subtitle="Cash ↔ bank and inter-account transfers"
+            subtitle="Inter-account transfers between cash and bank accounts"
             basePath="/office/accountancy/contras"
             newPath="/vouchers/contras/new"
         />

@@ -1,12 +1,12 @@
 "use client";
 import { InvVoucherList } from "@/modules/inventory/components/InvVoucherForm";
 
-export default function RejectionsOutPage() {
+export default function Page() {
     return (
         <InvVoucherList
             type="REJECTION_OUT"
             title="Rejections Out"
-            subtitle="Returns to supplier — removes stock; GL posted via Debit Note"
+            subtitle="Stock returned to supplier — converts to Purchase Return on settlement"
             basePath="/vouchers/rejections-out"
             newPath="/vouchers/rejections-out/new"
         />

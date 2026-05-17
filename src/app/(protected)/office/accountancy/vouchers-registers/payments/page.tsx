@@ -1,7 +1,6 @@
-"use client";
 import { VoucherList } from "@/modules/accountancy/components/VoucherList";
 
-export default function PaymentsPage() {
+export default function Page() {
     return (
         <VoucherList
             type="PAYMENT"

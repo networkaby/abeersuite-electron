@@ -1,7 +1,7 @@
 "use client";
 import { InvVoucherList } from "@/modules/inventory/components/InvVoucherForm";
 
-export default function GrnPage() {
+export default function Page() {
     return (
         <InvVoucherList
             type="GRN"

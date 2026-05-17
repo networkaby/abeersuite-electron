@@ -24,6 +24,12 @@ export type InvVoucherKind =
     | "STOCK_JOURNAL" | "PHYSICAL_STOCK"
     | "REJECTION_IN" | "REJECTION_OUT";
 
+// All inventory voucher types — superset of InvVoucherKind, includes the
+// three read-only stock kinds (RECEIPT-as-goods, ISSUE, ADJUSTMENT) that
+// have no dedicated form. Used by InvVoucherList so it can serve every kind
+// the inventory API recognises.
+export type InvVoucherListKind = InvVoucherKind | "RECEIPT" | "ISSUE" | "ADJUSTMENT";
+
 const TITLES: Record<InvVoucherKind, string> = {
     SALES_ORDER:    "Sales Order",
     PURCHASE_ORDER: "Purchase Order",
@@ -288,11 +294,13 @@ type ListRow = {
 export function InvVoucherList({
     type, title, subtitle, basePath, newPath,
 }: {
-    type:     InvVoucherKind;
+    type:     InvVoucherListKind;
     title:    string;
     subtitle: string;
+    /** Empty string disables the per-row chevron link (read-only registers). */
     basePath: string;
-    newPath:  string;
+    /** Omit to hide the "New" button (read-only registers). */
+    newPath?: string;
 }) {
     const [rows, setRows] = useState<ListRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -315,9 +323,11 @@ export function InvVoucherList({
                     <h1 className="text-2xl font-bold">{title}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
                 </div>
-                <Link href={newPath}>
-                    <Button><Plus size={16} /> New {title.replace(/s$/, "")}</Button>
-                </Link>
+                {newPath && (
+                    <Link href={newPath}>
+                        <Button><Plus size={16} /> New {title.replace(/s$/, "")}</Button>
+                    </Link>
+                )}
             </div>
 
             <div className="flex gap-1">
@@ -337,7 +347,10 @@ export function InvVoucherList({
                 </div>
             ) : rows.length === 0 ? (
                 <div className="rounded-lg border border-border bg-card text-center py-16 text-muted-foreground">
-                    No {title.toLowerCase()} yet. <Link href={newPath} className="text-primary hover:underline">Create one</Link>
+                    No {title.toLowerCase()} yet.
+                    {newPath && (
+                        <> <Link href={newPath} className="text-primary hover:underline">Create one</Link></>
+                    )}
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
@@ -352,7 +365,7 @@ export function InvVoucherList({
                                 <th className="px-5 py-3 text-center font-medium w-16">Items</th>
                                 <th className="px-5 py-3 text-right font-medium">Total</th>
                                 <th className="px-5 py-3 text-center font-medium">Status</th>
-                                <th className="px-5 py-3" />
+                                {basePath && <th className="px-5 py-3" />}
                             </tr>
                         </thead>
                         <tbody>
@@ -375,11 +388,13 @@ export function InvVoucherList({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-5 py-3 text-right">
-                                        <Link href={`${basePath}/${r.id}`} className="text-muted-foreground/40 hover:text-primary">
-                                            <ChevronRight size={16} />
-                                        </Link>
-                                    </td>
+                                    {basePath && (
+                                        <td className="px-5 py-3 text-right">
+                                            <Link href={`${basePath}/${r.id}`} className="text-muted-foreground/40 hover:text-primary">
+                                                <ChevronRight size={16} />
+                                            </Link>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>

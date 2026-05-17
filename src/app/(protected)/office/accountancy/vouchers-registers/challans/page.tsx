@@ -1,7 +1,7 @@
 "use client";
 import { InvVoucherList } from "@/modules/inventory/components/InvVoucherForm";
 
-export default function ChallansPage() {
+export default function Page() {
     return (
         <InvVoucherList
             type="CHALLAN"
