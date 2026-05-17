@@ -21,27 +21,27 @@ import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/li
 // ── Kind configuration ─────────────────────────────────────────────────────
 
 const KIND_BADGE: Record<string, string> = {
-    SALE:            "bg-emerald-100 text-emerald-700",
-    PURCHASE:        "bg-blue-100 text-blue-700",
-    SALE_RETURN:     "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200",
+    SALE: "bg-emerald-100 text-emerald-700",
+    PURCHASE: "bg-blue-100 text-blue-700",
+    SALE_RETURN: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200",
     PURCHASE_RETURN: "bg-blue-50 text-blue-600 ring-1 ring-blue-200",
-    ESTIMATE:        "bg-amber-50 text-amber-600 ring-1 ring-amber-200",
-    SALES_ORDER:     "bg-teal-100 text-teal-700",
-    PURCHASE_ORDER:  "bg-cyan-100 text-cyan-700",
-    GRN:             "bg-cyan-50 text-cyan-600",
-    CHALLAN:         "bg-indigo-50 text-indigo-600",
-    REJECTION_IN:    "bg-rose-50 text-rose-600",
-    REJECTION_OUT:   "bg-rose-100 text-rose-700",
-    ISSUE:           "bg-orange-50 text-orange-600",
-    ADJUSTMENT:      "bg-orange-100 text-orange-700",
-    STOCK_JOURNAL:   "bg-yellow-50 text-yellow-600",
-    PHYSICAL_STOCK:  "bg-yellow-100 text-yellow-700",
-    PAYMENT:         "bg-red-50 text-red-700",
-    RECEIPT:         "bg-violet-100 text-violet-700",
-    CONTRA:          "bg-slate-100 text-slate-700",
-    CREDIT_NOTE:     "bg-purple-50 text-purple-700",
-    DEBIT_NOTE:      "bg-purple-100 text-purple-700",
-    JOURNAL:         "bg-gray-100 text-gray-700",
+    ESTIMATE: "bg-amber-50 text-amber-600 ring-1 ring-amber-200",
+    SALES_ORDER: "bg-teal-100 text-teal-700",
+    PURCHASE_ORDER: "bg-cyan-100 text-cyan-700",
+    GRN: "bg-cyan-50 text-cyan-600",
+    CHALLAN: "bg-indigo-50 text-indigo-600",
+    REJECTION_IN: "bg-rose-50 text-rose-600",
+    REJECTION_OUT: "bg-rose-100 text-rose-700",
+    ISSUE: "bg-orange-50 text-orange-600",
+    ADJUSTMENT: "bg-orange-100 text-orange-700",
+    STOCK_JOURNAL: "bg-yellow-50 text-yellow-600",
+    PHYSICAL_STOCK: "bg-yellow-100 text-yellow-700",
+    PAYMENT: "bg-red-50 text-red-700",
+    RECEIPT: "bg-violet-100 text-violet-700",
+    CONTRA: "bg-slate-100 text-slate-700",
+    CREDIT_NOTE: "bg-purple-50 text-purple-700",
+    DEBIT_NOTE: "bg-purple-100 text-purple-700",
+    JOURNAL: "bg-gray-100 text-gray-700",
 };
 
 // These vouchers are operational/documentary — not direct accounting entries.
@@ -54,20 +54,20 @@ const OPTIONAL_KINDS = new Set([
 // ── Source appearance ──────────────────────────────────────────────────────
 
 const SOURCE_CONFIG: Record<CombinedRow["source"], { label: string; badge: string; accent: string }> = {
-    inv: { label: "Inv", badge: "bg-blue-50 text-blue-600",   accent: "bg-blue-400" },
-    gl:  { label: "GL",  badge: "bg-violet-50 text-violet-600", accent: "bg-violet-400" },
-    je:  { label: "JE",  badge: "bg-amber-50 text-amber-600", accent: "bg-amber-400" },
+    inv: { label: "Inv", badge: "bg-blue-50 text-blue-600", accent: "bg-blue-400" },
+    gl: { label: "GL", badge: "bg-violet-50 text-violet-600", accent: "bg-violet-400" },
+    je: { label: "JE", badge: "bg-amber-50 text-amber-600", accent: "bg-amber-400" },
 };
 
 // ── Kind dropdown ─────────────────────────────────────────────────────────
 
 function matchKind(kind: string, filter: string): boolean {
     switch (filter) {
-        case "__all__":       return true;
-        case "__sale_all__":  return kind === "SALE" || kind === "SALE_RETURN";
-        case "__buy_all__":   return kind === "PURCHASE" || kind === "PURCHASE_RETURN";
-        case "__pay_all__":   return ["PAYMENT", "RECEIPT", "CONTRA", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind);
-        default:              return kind === filter;
+        case "__all__": return true;
+        case "__sale_all__": return kind === "SALE" || kind === "SALE_RETURN";
+        case "__buy_all__": return kind === "PURCHASE" || kind === "PURCHASE_RETURN";
+        case "__pay_all__": return ["PAYMENT", "RECEIPT", "CONTRA", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind);
+        default: return kind === filter;
     }
 }
 
@@ -78,10 +78,10 @@ const today = formatDateInput(new Date());
 export default function DayBookPage() {
     const { rows, loading, error, reload } = useCombinedVouchers();
 
-    const [from,   setFrom]   = useState(formatDateInput(indianFiscalYearStart()));
-    const [to,     setTo]     = useState(today);
+    const [from, setFrom] = useState(formatDateInput(indianFiscalYearStart()));
+    const [to, setTo] = useState(today);
     const [search, setSearch] = useState("");
-    const [kind,   setKind]   = useState("__all__");
+    const [kind, setKind] = useState("__all__");
 
     // Status checkboxes — empty Set means "show all"
     const [statuses, setStatuses] = useState<Set<string>>(new Set());
@@ -93,12 +93,12 @@ export default function DayBookPage() {
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
             if (from && d < from) return false;
-            if (to   && d > to)   return false;
+            if (to && d > to) return false;
             if (statuses.size > 0 && !statuses.has(r.status)) return false;
             if (!matchKind(r.kind, kind)) return false;
             if (q && !r.reference.toLowerCase().includes(q)
-                  && !(r.narration ?? "").toLowerCase().includes(q)
-                  && !(r.party     ?? "").toLowerCase().includes(q)) return false;
+                && !(r.narration ?? "").toLowerCase().includes(q)
+                && !(r.party ?? "").toLowerCase().includes(q)) return false;
             return true;
         });
     }, [rows, from, to, statuses, kind, search]);
@@ -108,10 +108,10 @@ export default function DayBookPage() {
         .reduce((s, r) => s + r.totalAmount, 0);
 
     return (
-        <div className="max-w-7xl mx-auto space-y-5">
+        <div className="-m-8 space-y-0">
 
             {/* Header */}
-            <div className="flex items-center justify-between">
+            {/* <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Day Book</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
@@ -119,10 +119,10 @@ export default function DayBookPage() {
                     </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={reload}>Reload</Button>
-            </div>
+            </div> */}
 
             {/* Filters */}
-            <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-lg border border-border bg-card p-4">
+            <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-t-lg border border-border border-b-0 bg-card p-4">
 
                 {/* Date range */}
                 <div className="flex items-end gap-2">
@@ -237,10 +237,11 @@ export default function DayBookPage() {
                     <div className="text-xs text-muted-foreground">{filtered.length} of {rows.length} rows</div>
                     <div className="text-sm font-mono font-medium">Posted ₹ {fmt(postedTotal)}</div>
                 </div>
+                <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
+            {/* <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
                 {Object.entries(SOURCE_CONFIG).map(([src, cfg]) => (
                     <span key={src} className="flex items-center gap-1.5">
                         <span className={`inline-block w-2.5 h-2.5 rounded-sm ${cfg.accent}`} />
@@ -248,7 +249,7 @@ export default function DayBookPage() {
                     </span>
                 ))}
                 <span className="ml-2 opacity-50">Faded = Draft &nbsp;·&nbsp; <span className="italic">Italic</span> = Optional / non-financial</span>
-            </div>
+            </div> */}
 
             {error && (
                 <div className="rounded border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
@@ -259,11 +260,11 @@ export default function DayBookPage() {
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="rounded-lg border border-border bg-card text-center py-16 text-muted-foreground">
+                <div className="rounded-b-lg border border-border bg-card text-center py-16 text-muted-foreground">
                     No vouchers match the current filters.
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+                <div className="overflow-hidden rounded-b-lg border border-border bg-card">
                     <table className="w-full text-sm">
                         <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                             <tr>
@@ -282,20 +283,20 @@ export default function DayBookPage() {
                         </thead>
                         <tbody>
                             {filtered.map((r) => {
-                                const src    = SOURCE_CONFIG[r.source];
-                                const isOpt  = OPTIONAL_KINDS.has(r.kind);
-                                const isDraft     = r.status === "DRAFT";
+                                const src = SOURCE_CONFIG[r.source];
+                                const isOpt = OPTIONAL_KINDS.has(r.kind);
+                                const isDraft = r.status === "DRAFT";
                                 const isCancelled = r.status === "CANCELLED";
-                                const isPosted    = r.status === "POSTED";
+                                const isPosted = r.status === "POSTED";
 
                                 return (
                                     <tr
                                         key={r.id}
                                         className={[
                                             "border-b last:border-0 hover:bg-muted/30 transition-opacity",
-                                            isDraft     ? "opacity-50"                    : "",
-                                            isCancelled ? "opacity-30"                    : "",
-                                            isOpt       ? "bg-muted/10"                   : "",
+                                            isDraft ? "opacity-50" : "",
+                                            isCancelled ? "opacity-30" : "",
+                                            isOpt ? "bg-muted/10" : "",
                                         ].join(" ")}
                                     >
                                         {/* coloured source stripe */}
@@ -329,7 +330,7 @@ export default function DayBookPage() {
                                         {/* Reference */}
                                         <td className={[
                                             "px-3 py-2.5 font-mono text-xs",
-                                            isPosted    ? "text-foreground font-semibold"   : "text-primary",
+                                            isPosted ? "text-foreground font-semibold" : "text-primary",
                                             isCancelled ? "line-through text-muted-foreground" : "",
                                         ].join(" ")}>
                                             {r.reference}
