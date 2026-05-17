@@ -25,36 +25,18 @@ export type CombinedRow = {
     narration:   string | null;
     totalAmount: number;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
-    /** Empty string when no detail page exists for that source+kind. */
-    detailHref:  string;
+    /** ISO timestamp when the row was soft-deleted, or null. Surfaced so the
+     *  shared register table can show Restore + Hard-Delete in the row menu. */
+    deletedAt:   string | null;
+    cancelledAt: string | null;
     createdBy:   string | null;
 };
 
-// Detail-page map. Empty string = no detail route, chevron is hidden.
-function invDetailHref(kind: string, id: number): string {
-    switch (kind) {
-        case "SALE":           return `/office/accountancy/sales/${id}`;
-        case "PURCHASE":       return `/office/accountancy/purchases/${id}`;
-        case "ESTIMATE":       return `/office/accountancy/estimates/${id}`;
-        case "SALES_ORDER":    return `/vouchers/sales-orders/${id}`;
-        case "PURCHASE_ORDER": return `/vouchers/purchase-orders/${id}`;
-        case "GRN":            return `/vouchers/grn/${id}`;
-        case "CHALLAN":        return `/vouchers/challans/${id}`;
-        case "REJECTION_IN":   return `/vouchers/rejections-in/${id}`;
-        case "REJECTION_OUT":  return `/vouchers/rejections-out/${id}`;
-        default:               return "";  // sale-return, purchase-return, the 5 unused kinds
-    }
-}
-
-function glDetailHref(kind: string, id: number): string {
-    switch (kind) {
-        case "PAYMENT":     return `/office/accountancy/payments/${id}`;
-        case "RECEIPT":     return `/office/accountancy/receipts/${id}`;
-        case "CONTRA":      return `/office/accountancy/contras/${id}`;
-        case "CREDIT_NOTE": return `/office/accountancy/credit-notes/${id}`;
-        case "DEBIT_NOTE":  return `/office/accountancy/debit-notes/${id}`;
-        default:            return "";
-    }
+interface UseCombinedVouchersOptions {
+    /** When true, fetches with `includeDeleted=1` on all three endpoints so
+     *  soft-deleted rows are returned in addition to live ones. The caller is
+     *  responsible for client-side filtering (e.g. "show only deleted"). */
+    includeDeleted?: boolean;
 }
 
 // Raw shapes as returned by each endpoint — only the fields we read.
@@ -62,6 +44,7 @@ type RawInv = {
     id: number; type: string; reference: string; date: string;
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     partyName: string | null; totalAmount: number | string;
+    deletedAt?: string | null; cancelledAt?: string | null;
     createdBy?: { name: string } | null;
 };
 type RawGl = {
@@ -69,16 +52,19 @@ type RawGl = {
     narration: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     partyAccount?: { name: string } | null;
     totalAmount: number | string;
+    deletedAt?: string | null; cancelledAt?: string | null;
     createdBy?: { name: string } | null;
 };
 type RawJe = {
     id: number | string; reference: string; date: string;
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     totalDebit?: number | string; totalAmount?: number | string;
+    deletedAt?: string | null; cancelledAt?: string | null;
     createdBy?: { name: string } | null;
 };
 
-export function useCombinedVouchers() {
+export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
+    const { includeDeleted = false } = options;
     const [rows,    setRows]    = useState<CombinedRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState<string | null>(null);
@@ -91,10 +77,12 @@ export function useCombinedVouchers() {
         setLoading(true);
         setError(null);
 
+        const qs = includeDeleted ? "?includeDeleted=1" : "";
+
         Promise.all([
-            axios.get<RawInv[]>("/api/inventory/vouchers"),
-            axios.get<RawGl[]>("/api/accountancy/vouchers"),
-            axios.get<RawJe[]>("/api/accountancy/journal-entries"),
+            axios.get<RawInv[]>(`/api/inventory/vouchers${qs}`),
+            axios.get<RawGl[]>(`/api/accountancy/vouchers${qs}`),
+            axios.get<RawJe[]>(`/api/accountancy/journal-entries${qs}`),
         ])
             .then(([invRes, glRes, jeRes]) => {
                 if (cancelled) return;
@@ -109,7 +97,8 @@ export function useCombinedVouchers() {
                     narration:   v.description,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
-                    detailHref:  invDetailHref(v.type, v.id),
+                    deletedAt:   v.deletedAt ?? null,
+                    cancelledAt: v.cancelledAt ?? null,
                     createdBy:   v.createdBy?.name ?? null,
                 }));
                 const gl: CombinedRow[] = (glRes.data ?? []).map((v) => ({
@@ -123,7 +112,8 @@ export function useCombinedVouchers() {
                     narration:   v.narration,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
-                    detailHref:  glDetailHref(v.type, v.id),
+                    deletedAt:   v.deletedAt ?? null,
+                    cancelledAt: v.cancelledAt ?? null,
                     createdBy:   v.createdBy?.name ?? null,
                 }));
                 const je: CombinedRow[] = (jeRes.data ?? []).map((e) => ({
@@ -137,7 +127,8 @@ export function useCombinedVouchers() {
                     narration:   e.description,
                     totalAmount: Number(e.totalDebit ?? e.totalAmount ?? 0),
                     status:      e.status,
-                    detailHref:  `/office/accountancy/journal-entries/${e.id}`,
+                    deletedAt:   e.deletedAt ?? null,
+                    cancelledAt: e.cancelledAt ?? null,
                     createdBy:   e.createdBy?.name ?? null,
                 }));
 
@@ -152,7 +143,7 @@ export function useCombinedVouchers() {
             .finally(() => { if (!cancelled) setLoading(false); });
 
         return () => { cancelled = true; };
-    }, [tick]);
+    }, [tick, includeDeleted]);
 
     return { rows, loading, error, reload };
 }

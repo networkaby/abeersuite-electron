@@ -1,57 +1,95 @@
 "use client";
 
 // Reusable Sales register — used by /vouchers/sales and /office/accountancy/sales (backward compat).
-// Detail pages live at /office/accountancy/sales/[id].
+// Renders via the canonical <VoucherRegisterTable> so every register inherits
+// identical row markup, click-to-edit Reference, 3-dot ⋮ action menu, and
+// Restore + Hard-Delete UX on soft-deleted rows.  SALE-specific columns
+// (Payment Mode, Items count, Balance due) are injected via `extraColumns`.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, Loader2, ChevronRight } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
-
-const STATUS_COLORS: Record<string, string> = {
-    DRAFT:     "bg-yellow-100 text-yellow-700",
-    POSTED:    "bg-green-100 text-green-700",
-    CANCELLED: "bg-muted text-muted-foreground",
-};
+import {
+    VoucherRegisterTable,
+    type VoucherRegisterRow,
+} from "@/modules/accountancy/components/VoucherRegisterTable";
 
 const PAY_MODE_COLORS: Record<string, string> = {
     CASH:   "bg-blue-50 text-blue-700",
     CREDIT: "bg-purple-50 text-purple-700",
 };
 
-interface Voucher {
+interface RawVoucher {
     id:             number;
+    type:           string;
     reference:      string;
     date:           string;
     description:    string;
     status:         "DRAFT" | "POSTED" | "CANCELLED";
     partyName:      string | null;
     paymentMode:    string | null;
-    totalAmount:    number;
-    amountReceived: number;
+    totalAmount:    number | string;
+    amountReceived: number | string;
+    deletedAt?:     string | null;
+    cancelledAt?:   string | null;
     _count:         { lines: number };
     createdBy:      { name: string };
 }
 
-export function SalesRegister() {
-    const [vouchers, setVouchers] = useState<Voucher[]>([]);
-    const [loading,  setLoading]  = useState(true);
-    const [status,   setStatus]   = useState("");
+interface Row extends VoucherRegisterRow {
+    paymentMode:    string | null;
+    lineCount:      number;
+    amountReceived: number;
+}
 
-    const load = () => {
+type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
+const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
+
+export function SalesRegister() {
+    const [rows, setRows]         = useState<Row[]>([]);
+    const [loading, setLoading]   = useState(true);
+    const [status, setStatus]     = useState<StatusFilter>("");
+    const [tick, setTick]         = useState(0);
+    const reload = useCallback(() => setTick((t) => t + 1), []);
+    const showDeleted = status === "DELETED";
+
+    useEffect(() => {
         setLoading(true);
-        const q = new URLSearchParams({ type: "SALE", ...(status && { status }) });
-        axios.get<Voucher[]>(`/api/inventory/vouchers?${q}`)
-            .then((r) => setVouchers(r.data))
+        const params = new URLSearchParams({ type: "SALE" });
+        if (status && status !== "DELETED") params.set("status", status);
+        if (showDeleted) params.set("includeDeleted", "1");
+
+        axios.get<RawVoucher[]>(`/api/inventory/vouchers?${params}`)
+            .then((r) => {
+                const mapped: Row[] = (r.data ?? [])
+                    .filter((v) => showDeleted ? !!v.deletedAt : !v.deletedAt)
+                    .map((v) => ({
+                        id:             `inv-${v.id}`,
+                        rawId:          v.id,
+                        source:         "inv",
+                        kind:           "SALE",
+                        reference:      v.reference,
+                        date:           v.date,
+                        party:          v.partyName,
+                        narration:      v.description,
+                        totalAmount:    Number(v.totalAmount),
+                        amountReceived: Number(v.amountReceived),
+                        paymentMode:    v.paymentMode,
+                        lineCount:      v._count?.lines ?? 0,
+                        status:         v.status,
+                        deletedAt:      v.deletedAt ?? null,
+                        cancelledAt:    v.cancelledAt ?? null,
+                        createdBy:      v.createdBy?.name ?? null,
+                    }));
+                setRows(mapped);
+            })
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
-    };
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(load, [status]);
+    }, [status, showDeleted, tick]);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">
@@ -65,9 +103,8 @@ export function SalesRegister() {
                 </Link>
             </div>
 
-            {/* Status tabs */}
             <div className="flex gap-1">
-                {(["", "DRAFT", "POSTED", "CANCELLED"] as const).map((s) => (
+                {STATUSES.map((s) => (
                     <Button
                         key={s}
                         onClick={() => setStatus(s)}
@@ -75,7 +112,9 @@ export function SalesRegister() {
                         size="xs"
                         className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
                             status === s
-                                ? "border-primary bg-primary text-primary-foreground"
+                                ? (s === "DELETED"
+                                    ? "border-rose-600 bg-rose-600 text-white"
+                                    : "border-primary bg-primary text-primary-foreground")
                                 : "border-border bg-card text-muted-foreground hover:bg-muted"
                         }`}
                     >
@@ -89,72 +128,43 @@ export function SalesRegister() {
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
-                    {vouchers.length === 0 ? (
-                        <div className="text-center py-16 text-muted-foreground">
-                            No sale vouchers yet.{" "}
-                            <Link href="/vouchers/sales/new" className="text-primary hover:underline">
-                                Create one
-                            </Link>
-                        </div>
-                    ) : (
-                        <table className="w-full text-sm">
-                            <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
-                                <tr>
-                                    <th className="px-5 py-3 text-left font-medium">Reference</th>
-                                    <th className="px-5 py-3 text-left font-medium">Date</th>
-                                    <th className="px-5 py-3 text-left font-medium">Customer</th>
-                                    <th className="px-5 py-3 text-left font-medium">Narration</th>
-                                    <th className="px-5 py-3 text-center font-medium">Mode</th>
-                                    <th className="px-5 py-3 text-center font-medium w-16">Items</th>
-                                    <th className="px-5 py-3 text-right font-medium">Total</th>
-                                    <th className="px-5 py-3 text-right font-medium">Balance</th>
-                                    <th className="px-5 py-3 text-center font-medium">Status</th>
-                                    <th className="px-5 py-3 text-left font-medium text-xs">By</th>
-                                    <th className="px-3 py-3" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {vouchers.map((v) => {
-                                    const bal = Number(v.totalAmount) - Number(v.amountReceived);
-                                    return (
-                                        <tr key={v.id} className="border-b last:border-0 hover:bg-muted/40">
-                                            <td className="px-5 py-3 font-mono text-primary text-xs">{v.reference}</td>
-                                            <td className="px-5 py-3 text-muted-foreground text-xs">
-                                                {new Date(v.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                                            </td>
-                                            <td className="px-5 py-3 text-foreground">{v.partyName ?? <span className="text-muted-foreground/50">—</span>}</td>
-                                            <td className="px-5 py-3 text-muted-foreground max-w-[180px] truncate">{v.description}</td>
-                                            <td className="px-5 py-3 text-center">
-                                                {v.paymentMode && (
-                                                    <span className={`text-xs px-1.5 py-0.5 font-medium rounded-sm ${PAY_MODE_COLORS[v.paymentMode] ?? ""}`}>
-                                                        {v.paymentMode}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-5 py-3 text-center text-muted-foreground">{v._count.lines}</td>
-                                            <td className="px-5 py-3 text-right font-mono font-medium">₹ {fmt(Number(v.totalAmount))}</td>
-                                            <td className={`px-5 py-3 text-right font-mono text-xs font-medium ${bal > 0.005 ? "text-destructive" : "text-green-600"}`}>
-                                                {bal > 0.005 ? `₹ ${fmt(bal)}` : "Paid"}
-                                            </td>
-                                            <td className="px-5 py-3 text-center">
-                                                <span className={`text-xs px-2 py-0.5 font-medium rounded-sm ${STATUS_COLORS[v.status]}`}>
-                                                    {v.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-5 py-3 text-muted-foreground text-xs">{v.createdBy.name}</td>
-                                            <td className="px-3 py-3 text-right">
-                                                <Link href={`/office/accountancy/sales/${v.id}`} className="text-muted-foreground/40 hover:text-primary">
-                                                    <ChevronRight size={16} />
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                <VoucherRegisterTable
+                    rows={rows}
+                    onChanged={reload}
+                    hideKind
+                    extraColumns={[
+                        {
+                            header:    "Mode",
+                            className: "px-4 py-3 text-center text-xs font-medium",
+                            cell:      (r) => {
+                                const row = r as Row;
+                                return row.paymentMode
+                                    ? <span className={`text-xs px-1.5 py-0.5 font-medium rounded-sm ${PAY_MODE_COLORS[row.paymentMode] ?? ""}`}>{row.paymentMode}</span>
+                                    : null;
+                            },
+                        },
+                        {
+                            header:    "Items",
+                            className: "px-4 py-3 text-center text-xs font-medium",
+                            cell:      (r) => <span className="text-muted-foreground">{(r as Row).lineCount}</span>,
+                        },
+                        {
+                            header:    "Balance",
+                            className: "px-4 py-3 text-right text-xs font-medium",
+                            cell:      (r) => {
+                                const bal = r.totalAmount - (r as Row).amountReceived;
+                                return bal > 0.005
+                                    ? <span className="font-mono text-destructive">₹ {fmt(bal)}</span>
+                                    : <span className="text-green-600">Paid</span>;
+                            },
+                        },
+                    ]}
+                    emptyMessage={
+                        showDeleted
+                            ? "No deleted sale vouchers."
+                            : "No sale vouchers yet."
+                    }
+                />
             )}
         </div>
     );

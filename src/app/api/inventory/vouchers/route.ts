@@ -5,10 +5,11 @@ import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/invento
 import { InvVoucherType } from "@/generated/prisma/client";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
+// GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all&includeDeleted=1
 export async function GET(req: NextRequest) {
-    const { response } = await requireAuth();
+    const { response, user } = await requireAuth();
     if (response) return response;
 
     const session = await auth();
@@ -16,6 +17,15 @@ export async function GET(req: NextRequest) {
     const type   = searchParams.get("type")   as InvVoucherType | null;
     const status = searchParams.get("status") as "DRAFT" | "POSTED" | "CANCELLED" | null;
     const branchParam = searchParams.get("branchId");
+    // includeDeleted is opt-in and gated on the delete permission so casual
+    // viewers don't see soft-deleted rows. The All Vouchers register passes
+    // includeDeleted=1 when the user ticks the "Deleted" status filter.
+    const includeDeletedParam = searchParams.get("includeDeleted") === "1";
+    const canSeeDeleted =
+        !!user
+        && (user.permissions.includes(PERMISSIONS.ADMIN_BYPASS)
+            || user.permissions.includes(PERMISSIONS.INVENTORY_VOUCHER_DELETE));
+    const includeDeleted = includeDeletedParam && canSeeDeleted;
 
     let branchFilter: { branchId?: string } = {};
     if (branchParam === "all") {
@@ -37,6 +47,7 @@ export async function GET(req: NextRequest) {
         where: {
             ...(type   ? { type }   : {}),
             ...(status ? { status } : {}),
+            ...(includeDeleted ? {} : { deletedAt: null }),
             ...branchFilter,
         },
         orderBy: [{ date: "desc" }, { id: "desc" }],

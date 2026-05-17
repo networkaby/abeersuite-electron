@@ -272,24 +272,36 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
     );
 }
 
-// Shared list view for the new inventory voucher types.
+// Shared list view for the new inventory voucher types — renders via the
+// canonical <VoucherRegisterTable> so every register inherits identical row
+// markup, click-to-edit Reference link, ⋮ action menu, and Restore +
+// Hard-Delete UX on soft-deleted rows.
 import Link from "next/link";
-import { Plus, ChevronRight } from "lucide-react";
-import { JOURNAL_STATUS_COLORS } from "@/utils/constants";
+import { useCallback } from "react";
+import { Plus } from "lucide-react";
+import {
+    VoucherRegisterTable,
+    type VoucherRegisterRow,
+} from "@/modules/accountancy/components/VoucherRegisterTable";
 
 type ListRow = {
-    id:          number;
-    reference:   string;
-    date:        string;
-    description: string;
-    partyName:   string | null;
-    totalAmount: number;
-    status:      "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:   string | null;
-    branch?:     { name: string } | null;
-    _count:      { lines: number };
-    createdBy:   { name: string };
+    id:           number;
+    type?:        string;          // backend always echoes this back
+    reference:    string;
+    date:         string;
+    description:  string;
+    partyName:    string | null;
+    totalAmount:  number;
+    status:       "DRAFT" | "POSTED" | "CANCELLED";
+    deletedAt:    string | null;
+    cancelledAt?: string | null;
+    branch?:      { name: string } | null;
+    _count:       { lines: number };
+    createdBy:    { name: string };
 };
+
+type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
+const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
 
 export function InvVoucherList({
     type, title, subtitle, basePath, newPath,
@@ -297,24 +309,50 @@ export function InvVoucherList({
     type:     InvVoucherListKind;
     title:    string;
     subtitle: string;
-    /** Empty string disables the per-row chevron link (read-only registers). */
+    /** Unused — kept for backward compatibility with existing callers. The
+     *  shared table builds the reference link via referenceHref() now. */
     basePath: string;
     /** Omit to hide the "New" button (read-only registers). */
     newPath?: string;
 }) {
-    const [rows, setRows] = useState<ListRow[]>([]);
+    void basePath;
+    const [rows, setRows] = useState<VoucherRegisterRow[]>([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState("");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+    const [tick, setTick] = useState(0);
+    const reload = useCallback(() => setTick((t) => t + 1), []);
+    const showDeleted = statusFilter === "DELETED";
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
-        const q = new URLSearchParams({ type, ...(statusFilter && { status: statusFilter }) });
-        axios.get<ListRow[]>(`/api/inventory/vouchers?${q}`)
-            .then((r) => setRows(r.data))
+        const params = new URLSearchParams({ type });
+        if (statusFilter && statusFilter !== "DELETED") params.set("status", statusFilter);
+        if (showDeleted) params.set("includeDeleted", "1");
+
+        axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
+            .then((r) => {
+                const mapped: VoucherRegisterRow[] = (r.data ?? [])
+                    .filter((v) => showDeleted ? !!v.deletedAt : !v.deletedAt)
+                    .map((v) => ({
+                        id:          `inv-${v.id}`,
+                        rawId:       v.id,
+                        source:      "inv",
+                        kind:        v.type ?? type,
+                        reference:   v.reference,
+                        date:        v.date,
+                        party:       v.partyName,
+                        narration:   v.description,
+                        totalAmount: Number(v.totalAmount),
+                        status:      v.status,
+                        deletedAt:   v.deletedAt ?? null,
+                        cancelledAt: v.cancelledAt ?? null,
+                        createdBy:   v.createdBy?.name ?? null,
+                    }));
+                setRows(mapped);
+            })
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
-    }, [type, statusFilter]);
+    }, [type, statusFilter, showDeleted, tick]);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">
@@ -331,10 +369,19 @@ export function InvVoucherList({
             </div>
 
             <div className="flex gap-1">
-                {(["", "DRAFT", "POSTED", "CANCELLED"] as const).map((s) => (
-                    <Button key={s} variant="outline" size="xs"
+                {STATUSES.map((s) => (
+                    <Button
+                        key={s}
+                        variant="outline"
+                        size="xs"
                         onClick={() => setStatusFilter(s)}
-                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
+                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
+                            statusFilter === s
+                                ? (s === "DELETED"
+                                    ? "border-rose-600 bg-rose-600 text-white"
+                                    : "border-primary bg-primary text-primary-foreground")
+                                : "border-border bg-card text-muted-foreground hover:bg-muted"
+                        }`}
                     >
                         {s || "All"}
                     </Button>
@@ -345,61 +392,17 @@ export function InvVoucherList({
                 <div className="flex justify-center py-12">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
-            ) : rows.length === 0 ? (
-                <div className="rounded-lg border border-border bg-card text-center py-16 text-muted-foreground">
-                    No {title.toLowerCase()} yet.
-                    {newPath && (
-                        <> <Link href={newPath} className="text-primary hover:underline">Create one</Link></>
-                    )}
-                </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
-                            <tr>
-                                <th className="px-5 py-3 text-left font-medium">Reference</th>
-                                <th className="px-5 py-3 text-left font-medium">Date</th>
-                                <th className="px-5 py-3 text-left font-medium">Branch</th>
-                                <th className="px-5 py-3 text-left font-medium">Party</th>
-                                <th className="px-5 py-3 text-left font-medium">Narration</th>
-                                <th className="px-5 py-3 text-center font-medium w-16">Items</th>
-                                <th className="px-5 py-3 text-right font-medium">Total</th>
-                                <th className="px-5 py-3 text-center font-medium">Status</th>
-                                {basePath && <th className="px-5 py-3" />}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((r) => (
-                                <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/40 ${r.deletedAt ? "opacity-60" : ""}`}>
-                                    <td className="px-5 py-3 font-mono text-primary text-xs">{r.reference}</td>
-                                    <td className="px-5 py-3 text-muted-foreground text-xs">
-                                        {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                                    </td>
-                                    <td className="px-5 py-3 text-xs text-muted-foreground">{r.branch?.name ?? <span className="opacity-40">—</span>}</td>
-                                    <td className="px-5 py-3">{r.partyName ?? <span className="text-muted-foreground/50">—</span>}</td>
-                                    <td className="px-5 py-3 text-muted-foreground max-w-[200px] truncate">{r.description}</td>
-                                    <td className="px-5 py-3 text-center text-muted-foreground">{r._count.lines}</td>
-                                    <td className="px-5 py-3 text-right font-mono">₹ {fmt(Number(r.totalAmount))}</td>
-                                    <td className="px-5 py-3 text-center">
-                                        <span className={`text-xs px-2 py-0.5 font-medium ${JOURNAL_STATUS_COLORS[r.status]}`}>{r.status}</span>
-                                        {r.deletedAt && (
-                                            <span className="ml-2 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-destructive">
-                                                <Trash2 size={10} /> deleted
-                                            </span>
-                                        )}
-                                    </td>
-                                    {basePath && (
-                                        <td className="px-5 py-3 text-right">
-                                            <Link href={`${basePath}/${r.id}`} className="text-muted-foreground/40 hover:text-primary">
-                                                <ChevronRight size={16} />
-                                            </Link>
-                                        </td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <VoucherRegisterTable
+                    rows={rows}
+                    onChanged={reload}
+                    hideKind
+                    emptyMessage={
+                        showDeleted
+                            ? `No deleted ${title.toLowerCase()}.`
+                            : `No ${title.toLowerCase()} yet.`
+                    }
+                />
             )}
         </div>
     );

@@ -1,68 +1,58 @@
 "use client";
 // Unified register that lists every voucher across the three voucher tables
-// (InvVoucher / Voucher / JournalEntry). Filters are client-side — see
-// useCombinedVouchers for the limits.
+// (InvVoucher / Voucher / JournalEntry).
+//
+// This is the **canonical surface for soft-deleted vouchers** — the "Deleted"
+// status filter opts the user into `includeDeleted=1` on all three list APIs
+// and the row menu (DayBookActionsMenu) automatically swaps to Restore +
+// Hard Delete for those rows.
+//
+// All row layout / lifecycle behaviour lives in <VoucherRegisterTable>; this
+// page only owns the filter chrome.
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import { Loader2, ChevronRight } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fmt } from "@/utils/constants";
-import { StatusBadge } from "@/shared/components/StatusBadge";
-import { useCombinedVouchers, type CombinedRow } from "@/modules/accountancy/hooks/useCombinedVouchers";
+import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
+import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 
-const KIND_BADGE: Record<string, string> = {
-    SALE:            "bg-emerald-100 text-emerald-700",
-    PURCHASE:        "bg-blue-100 text-blue-700",
-    SALE_RETURN:     "bg-emerald-50 text-emerald-700",
-    PURCHASE_RETURN: "bg-blue-50 text-blue-700",
-    ESTIMATE:        "bg-amber-100 text-amber-700",
-    SALES_ORDER:     "bg-teal-100 text-teal-700",
-    PURCHASE_ORDER:  "bg-cyan-100 text-cyan-700",
-    GRN:             "bg-cyan-50 text-cyan-700",
-    CHALLAN:         "bg-indigo-50 text-indigo-700",
-    REJECTION_IN:    "bg-rose-50 text-rose-700",
-    REJECTION_OUT:   "bg-rose-100 text-rose-700",
-    RECEIPT:         "bg-violet-100 text-violet-700",
-    ISSUE:           "bg-orange-50 text-orange-700",
-    ADJUSTMENT:      "bg-orange-100 text-orange-700",
-    STOCK_JOURNAL:   "bg-yellow-50 text-yellow-700",
-    PHYSICAL_STOCK:  "bg-yellow-100 text-yellow-700",
-    PAYMENT:         "bg-red-50 text-red-700",
-    CONTRA:          "bg-slate-100 text-slate-700",
-    CREDIT_NOTE:     "bg-purple-50 text-purple-700",
-    DEBIT_NOTE:      "bg-purple-100 text-purple-700",
-    JOURNAL:         "bg-gray-100 text-gray-700",
-};
-
-const SOURCE_LABEL: Record<CombinedRow["source"], string> = {
-    inv: "Inventory",
-    gl:  "GL",
-    je:  "Journal",
-};
-
-const STATUSES = ["", "DRAFT", "POSTED", "CANCELLED"] as const;
+type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
+const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
 
 export default function AllVouchersPage() {
-    const { rows, loading, error, reload } = useCombinedVouchers();
-    const [status, setStatus] = useState<(typeof STATUSES)[number]>("");
-    const [from, setFrom] = useState("");
-    const [to, setTo] = useState("");
+    const [status, setStatus]       = useState<StatusFilter>("");
+    const [from, setFrom]           = useState("");
+    const [to, setTo]               = useState("");
     const [kindQuery, setKindQuery] = useState("");
+
+    // Fetch with deleted rows included whenever the user picks the Deleted
+    // filter — otherwise the three APIs strip them out by default.
+    const showDeleted = status === "DELETED";
+    const { rows, loading, error, reload } = useCombinedVouchers({ includeDeleted: showDeleted });
 
     const filtered = useMemo(() => {
         return rows.filter((r) => {
-            if (status && r.status !== status) return false;
+            const isDeleted = !!r.deletedAt;
+            if (showDeleted) {
+                // "Deleted" filter: only show deleted rows.
+                if (!isDeleted) return false;
+            } else {
+                // Any other filter excludes deleted rows (defence in depth —
+                // the API already strips them, but a stale cache could leak).
+                if (isDeleted) return false;
+                if (status && r.status !== status) return false;
+            }
             if (from && r.date < from) return false;
             if (to && r.date > to) return false;
             if (kindQuery && !r.kind.toLowerCase().includes(kindQuery.toLowerCase())) return false;
             return true;
         });
-    }, [rows, status, from, to, kindQuery]);
+    }, [rows, status, showDeleted, from, to, kindQuery]);
 
     const totalDebit = filtered
-        .filter((r) => r.status === "POSTED")
+        .filter((r) => r.status === "POSTED" && !r.deletedAt)
         .reduce((s, r) => s + r.totalAmount, 0);
 
     return (
@@ -94,9 +84,18 @@ export default function AllVouchersPage() {
                     <label className="text-xs font-medium text-muted-foreground">Status</label>
                     <div className="flex gap-1">
                         {STATUSES.map((s) => (
-                            <Button key={s} variant="outline" size="xs"
+                            <Button
+                                key={s}
+                                variant="outline"
+                                size="xs"
                                 onClick={() => setStatus(s)}
-                                className={`h-8 px-3 text-xs font-medium ${status === s ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
+                                className={`h-8 px-3 text-xs font-medium ${
+                                    status === s
+                                        ? (s === "DELETED"
+                                            ? "border-rose-600 bg-rose-600 text-white"
+                                            : "border-primary bg-primary text-primary-foreground")
+                                        : "border-border bg-card text-muted-foreground hover:bg-muted"
+                                }`}
                             >
                                 {s || "All"}
                             </Button>
@@ -117,55 +116,17 @@ export default function AllVouchersPage() {
                 <div className="flex justify-center py-12">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
-            ) : filtered.length === 0 ? (
-                <div className="rounded-lg border border-border bg-card text-center py-16 text-muted-foreground">
-                    No vouchers match the current filters.
-                </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
-                            <tr>
-                                <th className="px-4 py-3 text-left font-medium">Kind</th>
-                                <th className="px-4 py-3 text-left font-medium">Source</th>
-                                <th className="px-4 py-3 text-left font-medium">Reference</th>
-                                <th className="px-4 py-3 text-left font-medium">Date</th>
-                                <th className="px-4 py-3 text-left font-medium">Party</th>
-                                <th className="px-4 py-3 text-left font-medium">Narration</th>
-                                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                                <th className="px-4 py-3 text-center font-medium">Status</th>
-                                <th className="px-4 py-3" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map((r) => (
-                                <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
-                                    <td className="px-4 py-3">
-                                        <span className={`text-xs px-2 py-0.5 font-medium rounded-sm ${KIND_BADGE[r.kind] ?? "bg-muted text-muted-foreground"}`}>
-                                            {r.kind.replace(/_/g, " ")}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-xs text-muted-foreground">{SOURCE_LABEL[r.source]}</td>
-                                    <td className="px-4 py-3 font-mono text-primary text-xs">{r.reference}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs">
-                                        {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                                    </td>
-                                    <td className="px-4 py-3">{r.party ?? <span className="text-muted-foreground/50">—</span>}</td>
-                                    <td className="px-4 py-3 text-muted-foreground max-w-[220px] truncate">{r.narration ?? "—"}</td>
-                                    <td className="px-4 py-3 text-right font-mono">₹ {fmt(r.totalAmount)}</td>
-                                    <td className="px-4 py-3 text-center"><StatusBadge kind="journal" value={r.status} /></td>
-                                    <td className="px-4 py-3 text-right">
-                                        {r.detailHref ? (
-                                            <Link href={r.detailHref} className="text-muted-foreground/40 hover:text-primary">
-                                                <ChevronRight size={16} />
-                                            </Link>
-                                        ) : null}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <VoucherRegisterTable
+                    rows={filtered}
+                    showSource
+                    onChanged={reload}
+                    emptyMessage={
+                        showDeleted
+                            ? "No deleted vouchers."
+                            : "No vouchers match the current filters."
+                    }
+                />
             )}
         </div>
     );

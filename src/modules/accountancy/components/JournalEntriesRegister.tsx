@@ -1,38 +1,78 @@
 "use client";
 
-// Reusable Journal Entries register — used by /vouchers/journal-entries and /office/accountancy/journal-entries.
-// Detail pages live at /office/accountancy/journal-entries/[id].
-// API endpoint is /api/accountancy/journal-entries (different from InvVoucher / Voucher endpoints).
+// Reusable Journal Entries register — used by /vouchers/journal-entries.
+// Renders via the canonical <VoucherRegisterTable> for uniform behaviour.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, Loader2, ChevronRight } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/utils/constants";
-import { StatusBadge } from "@/shared/components/StatusBadge";
+import {
+    VoucherRegisterTable,
+    type VoucherRegisterRow,
+} from "@/modules/accountancy/components/VoucherRegisterTable";
 
-type JournalEntryRow = {
-    id:          string;
-    reference:   string;
-    date:        string;
-    description: string | null;
-    totalAmount: number;
-    status:      "DRAFT" | "POSTED" | "CANCELLED";
-    createdBy:   { name: string };
-};
+interface RawEntry {
+    id:           number | string;
+    reference:    string;
+    date:         string;
+    description:  string | null;
+    status:       "DRAFT" | "POSTED" | "CANCELLED";
+    totalAmount?: number | string;
+    totalDebit?:  number | string;
+    deletedAt?:   string | null;
+    cancelledAt?: string | null;
+    createdBy:    { name: string };
+}
+
+type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
+const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
 
 export function JournalEntriesRegister() {
-    const [rows,    setRows]    = useState<JournalEntryRow[]>([]);
+    const [rows, setRows]       = useState<VoucherRegisterRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [status, setStatus]   = useState<StatusFilter>("");
+    const [tick, setTick]       = useState(0);
+    const reload = useCallback(() => setTick((t) => t + 1), []);
+    const showDeleted = status === "DELETED";
 
     useEffect(() => {
-        axios.get<{ rows: JournalEntryRow[] }>("/api/accountancy/journal-entries")
-            .then((r) => setRows(r.data.rows || []))
+        setLoading(true);
+        const params = new URLSearchParams();
+        if (status && status !== "DELETED") params.set("status", status);
+        if (showDeleted) params.set("includeDeleted", "1");
+
+        // The journal-entries endpoint returns a plain array; the older shape
+        // wrapping in { rows } is from a different endpoint.
+        axios.get<RawEntry[] | { rows: RawEntry[] }>(`/api/accountancy/journal-entries?${params}`)
+            .then((r) => {
+                const arr: RawEntry[] = Array.isArray(r.data)
+                    ? r.data
+                    : (r.data as { rows: RawEntry[] }).rows ?? [];
+                const mapped: VoucherRegisterRow[] = arr
+                    .filter((e) => showDeleted ? !!e.deletedAt : !e.deletedAt)
+                    .map((e) => ({
+                        id:          `je-${e.id}`,
+                        rawId:       Number(e.id),
+                        source:      "je",
+                        kind:        "JOURNAL",
+                        reference:   e.reference,
+                        date:        e.date,
+                        party:       null,
+                        narration:   e.description,
+                        totalAmount: Number(e.totalDebit ?? e.totalAmount ?? 0),
+                        status:      e.status,
+                        deletedAt:   e.deletedAt ?? null,
+                        cancelledAt: e.cancelledAt ?? null,
+                        createdBy:   e.createdBy?.name ?? null,
+                    }));
+                setRows(mapped);
+            })
             .catch(() => toast.error("Failed to load journal entries"))
             .finally(() => setLoading(false));
-    }, []);
+    }, [status, showDeleted, tick]);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">
@@ -48,54 +88,41 @@ export function JournalEntriesRegister() {
                 </Link>
             </div>
 
+            <div className="flex gap-1">
+                {STATUSES.map((s) => (
+                    <Button
+                        key={s}
+                        onClick={() => setStatus(s)}
+                        variant="outline"
+                        size="xs"
+                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
+                            status === s
+                                ? (s === "DELETED"
+                                    ? "border-rose-600 bg-rose-600 text-white"
+                                    : "border-primary bg-primary text-primary-foreground")
+                                : "border-border bg-card text-muted-foreground hover:bg-muted"
+                        }`}
+                    >
+                        {s || "All"}
+                    </Button>
+                ))}
+            </div>
+
             {loading ? (
                 <div className="flex justify-center py-12">
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
-            ) : rows.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 py-16 text-center text-muted-foreground">
-                    No journal entries yet.{" "}
-                    <Link href="/vouchers/journal-entries/new" className="text-primary hover:underline">
-                        Create one
-                    </Link>
-                </div>
             ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
-                            <tr>
-                                <th className="px-5 py-3 text-left font-medium">Reference</th>
-                                <th className="px-5 py-3 text-left font-medium">Date</th>
-                                <th className="px-5 py-3 text-left font-medium">Description</th>
-                                <th className="px-5 py-3 text-right font-medium">Amount</th>
-                                <th className="px-5 py-3 text-center font-medium">Status</th>
-                                <th className="px-5 py-3 text-left font-medium text-xs">By</th>
-                                <th className="px-3 py-3" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((r) => (
-                                <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
-                                    <td className="px-5 py-3 font-mono text-primary text-xs">{r.reference}</td>
-                                    <td className="px-5 py-3 text-muted-foreground text-xs">
-                                        {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                                    </td>
-                                    <td className="px-5 py-3 text-muted-foreground max-w-[240px] truncate">{r.description || "—"}</td>
-                                    <td className="px-5 py-3 text-right font-mono tabular-nums">₹ {fmt(Number(r.totalAmount))}</td>
-                                    <td className="px-5 py-3 text-center">
-                                        <StatusBadge kind="journal" value={r.status} />
-                                    </td>
-                                    <td className="px-5 py-3 text-muted-foreground text-xs">{r.createdBy.name}</td>
-                                    <td className="px-3 py-3 text-right">
-                                        <Link href={`/office/accountancy/journal-entries/${r.id}`} className="text-muted-foreground/40 hover:text-primary">
-                                            <ChevronRight size={16} />
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <VoucherRegisterTable
+                    rows={rows}
+                    onChanged={reload}
+                    hideKind
+                    emptyMessage={
+                        showDeleted
+                            ? "No deleted journal entries."
+                            : "No journal entries yet."
+                    }
+                />
             )}
         </div>
     );

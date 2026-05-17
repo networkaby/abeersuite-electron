@@ -1,19 +1,26 @@
 "use client";
 
-// 3-dot dropdown for a Day Book row. Works across all three voucher sources
-// (inv / gl / je) by branching on the `source` prop.
+// Cross-source 3-dot row menu — used by the Day Book, the All Vouchers
+// register, and (after the DRY migration) every per-kind voucher register.
 //
-// Actions:
-//   • Edit       — navigate to the appropriate edit/detail page
-//   • Cancel     — POST /<api-base>/<id>/cancel  (reason required)
-//   • Delete     — POST /<api-base>/<id>/delete  (reason required)
-//   • Duplicate  — POST /api/inventory/vouchers/<id>/duplicate → navigate (inv only)
+// The menu shape depends on whether the row is soft-deleted:
+//
+//   • LIVE row (deletedAt == null):
+//       Edit · Cancel · Delete · (Duplicate, all sources via client-side preload)
+//
+//   • DELETED row (deletedAt != null):
+//       Restore · Hard Delete
+//
+// All four lifecycle actions hit `${apiBase}/<verb>` on the source's API
+// (see voucherUrls.ts).  Duplicate is purely client-side: it stashes a
+// payload in sessionStorage and navigates to the matching `/new` form —
+// no DB row is created until the user explicitly hits Save.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { MoreVertical, Pencil, Ban, Trash2, Copy } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Undo2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,42 +32,8 @@ import {
     DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import type { CombinedSource } from "@/modules/accountancy/hooks/useCombinedVouchers";
-import { editFormUrl, voucherUrl } from "@/modules/inventory/components/VoucherActionsMenu";
-
-// ── API base per source ────────────────────────────────────────────────────
-
-function apiBase(source: CombinedSource, rawId: number): string {
-    switch (source) {
-        case "inv": return `/api/inventory/vouchers/${rawId}`;
-        case "gl":  return `/api/accountancy/vouchers/${rawId}`;
-        case "je":  return `/api/accountancy/journal-entries/${rawId}`;
-    }
-}
-
-// ── Edit navigation URL per source ────────────────────────────────────────
-// Mirrors the Day Book referenceHref so left-click on the reference and
-// "Edit" in the ⋮ menu land on the same form.
-
-const GL_EDIT_BASE: Record<string, string> = {
-    PAYMENT:     "/vouchers/payments",
-    RECEIPT:     "/vouchers/receipts",
-    CONTRA:      "/vouchers/contras",
-    CREDIT_NOTE: "/vouchers/credit-notes",
-    DEBIT_NOTE:  "/vouchers/debit-notes",
-};
-
-function editUrl(
-    source: CombinedSource,
-    rawId: number,
-    kind: string,
-    _detailHref: string,
-): string | null {
-    switch (source) {
-        case "inv": return editFormUrl(kind, rawId);
-        case "gl":  return GL_EDIT_BASE[kind] ? `${GL_EDIT_BASE[kind]}/${rawId}` : null;
-        case "je":  return `/vouchers/journal-entries/${rawId}`;
-    }
-}
+import { apiBase, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
+import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -69,41 +42,51 @@ interface Props {
     source:     CombinedSource;
     kind:       string;
     reference:  string;
-    detailHref: string;
-    /** Fired after cancel / delete so the caller can reload. */
+    /** Soft-deleted? When set, the menu offers Restore + Hard Delete instead
+     *  of Edit / Cancel / Delete / Duplicate. */
+    deletedAt?: string | null;
+    /** Fired after any successful action so the caller can reload. */
     onChanged?: () => void;
 }
 
-type ConfirmAction = "cancel" | "delete" | null;
+type ConfirmAction = "cancel" | "delete" | "hard-delete" | null;
 
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function DayBookActionsMenu({
-    rawId, source, kind, reference, detailHref, onChanged,
+    rawId, source, kind, reference, deletedAt, onChanged,
 }: Props) {
     const router = useRouter();
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
 
+    const isDeleted = !!deletedAt;
+    const base = apiBase(source, rawId);
+
+    // ── Edit ────────────────────────────────────────────────────────────────
     const goEdit = () => {
-        const url = editUrl(source, rawId, kind, detailHref);
+        const url = referenceHref(source, rawId, kind);
         if (url) router.push(url);
         else toast.error(`No edit page for ${source} ${kind}`);
     };
 
-    const startCancel = () => { setReason(""); setConfirmAction("cancel"); };
-    const startDelete = () => { setReason(""); setConfirmAction("delete"); };
+    // ── Cancel / Delete / Hard-Delete (reason dialog) ──────────────────────
+    const startCancel     = () => { setReason(""); setConfirmAction("cancel"); };
+    const startDelete     = () => { setReason(""); setConfirmAction("delete"); };
+    const startHardDelete = () => { setReason(""); setConfirmAction("hard-delete"); };
 
     const submitConfirm = async () => {
         if (!confirmAction) return;
         if (!reason.trim()) return;
         setBusy(true);
         try {
-            await axios.post(`${apiBase(source, rawId)}/${confirmAction}`, {
-                reason: reason.trim(),
-            });
-            toast.success(confirmAction === "cancel" ? "Voucher cancelled" : "Voucher deleted");
+            await axios.post(`${base}/${confirmAction}`, { reason: reason.trim() });
+            toast.success(
+                confirmAction === "cancel"     ? "Voucher cancelled"
+              : confirmAction === "delete"     ? "Voucher deleted"
+              : "Voucher permanently deleted",
+            );
             setConfirmAction(null);
             onChanged?.();
         } catch (e: unknown) {
@@ -114,15 +97,67 @@ export function DayBookActionsMenu({
         }
     };
 
+    // ── Restore (no reason needed) ─────────────────────────────────────────
+    const restore = async () => {
+        setBusy(true);
+        try {
+            await axios.post(`${base}/restore`);
+            toast.success("Voucher restored");
+            onChanged?.();
+        } catch (e: unknown) {
+            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
+            toast.error(msg ?? "Failed to restore");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // ── Duplicate (client-side preload, no DB write) ───────────────────────
+    // Fetches the source voucher, strips identity fields, stashes the rest
+    // in sessionStorage, and navigates to the matching /new form.  The form
+    // hydrates from the stash on mount.  Reference is allocated only when
+    // the user saves; abandoning the form = zero side effects.
     const duplicate = async () => {
         setBusy(true);
         try {
-            const { data } = await axios.post<{ id: number; type: string; reference: string }>(
-                `/api/inventory/vouchers/${rawId}/duplicate`,
-            );
-            const url = voucherUrl(data.type, data.id);
-            toast.success(`Duplicated as ${data.reference}`);
-            if (url) router.push(url);
+            // Fetch the source's GET payload (it's the same one the edit form
+            // reads on mount).
+            const { data } = await axios.get<{
+                kind?:           string;
+                type?:           string;
+                narration?:      string | null;
+                description?:    string | null;
+                partyAccountId?: number | null;
+                partyName?:      string | null;
+                partyType?:      string | null;
+                partyId?:        number | null;
+                partyPhone?:     string | null;
+                partyAddress?:   string | null;
+                lines:           DuplicateLine[];
+            }>(base);
+
+            stashDuplicate({
+                kind,
+                date:           todayLocalISO(),
+                narration:      data.narration ?? data.description ?? null,
+                partyAccountId: data.partyAccountId ?? null,
+                party: data.partyName != null ? {
+                    name:    data.partyName,
+                    type:    data.partyType ?? null,
+                    id:      data.partyId ?? null,
+                    phone:   data.partyPhone ?? null,
+                    address: data.partyAddress ?? null,
+                } : undefined,
+                lines: data.lines ?? [],
+            });
+
+            const url = referenceHref(source, rawId, kind);
+            // referenceHref points at the source's own [id] edit URL; we want
+            // the /new path instead.  Translate by trimming the trailing /<id>
+            // (works for both /vouchers/payments/123 and ?voucherId= URLs).
+            const newUrl = newFormUrl(url, kind);
+            if (newUrl) router.push(newUrl);
+            else toast.error(`No create form for ${kind}`);
         } catch (e: unknown) {
             const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
             toast.error(msg ?? "Failed to duplicate");
@@ -131,12 +166,34 @@ export function DayBookActionsMenu({
         }
     };
 
-    const isCancel = confirmAction === "cancel";
-    const title = isCancel ? `Cancel ${reference}?` : `Delete ${reference}?`;
-    const description = isCancel
-        ? "Stock and GL impact will be reversed via a counter-entry. The voucher remains visible but is marked CANCELLED."
-        : "Soft-delete — stock and GL impact are reversed and the row is hidden. Recoverable from the audit log.";
-    const confirmLabel = isCancel ? "Confirm cancel" : "Confirm delete";
+    // ── Reason-dialog copy ──────────────────────────────────────────────────
+    const dialogCopy = (() => {
+        switch (confirmAction) {
+            case "cancel":
+                return {
+                    title:       `Cancel ${reference}?`,
+                    description: "Reverses GL impact via a counter-entry. The voucher remains visible but is marked CANCELLED.",
+                    label:       "Confirm cancel",
+                    variant:     "default" as const,
+                };
+            case "delete":
+                return {
+                    title:       `Delete ${reference}?`,
+                    description: "Soft-delete — stock and GL impact are reversed and the row is hidden. Recoverable from the Deleted filter in the All Vouchers register.",
+                    label:       "Confirm delete",
+                    variant:     "destructive" as const,
+                };
+            case "hard-delete":
+                return {
+                    title:       `Permanently delete ${reference}?`,
+                    description: "Removes the row from the database. An audit snapshot is kept. This action cannot be undone.",
+                    label:       "Permanently delete",
+                    variant:     "destructive" as const,
+                };
+            default:
+                return null;
+        }
+    })();
 
     return (
         <>
@@ -153,17 +210,27 @@ export function DayBookActionsMenu({
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                    <DropdownMenuItem onSelect={goEdit} disabled={busy}>
-                        <Pencil className="size-4" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={startCancel} disabled={busy}>
-                        <Ban className="size-4" /> Cancel
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" onSelect={startDelete} disabled={busy}>
-                        <Trash2 className="size-4" /> Delete
-                    </DropdownMenuItem>
-                    {source === "inv" && (
+                    {isDeleted ? (
                         <>
+                            <DropdownMenuItem onSelect={() => void restore()} disabled={busy}>
+                                <Undo2 className="size-4" /> Restore
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
+                                <AlertTriangle className="size-4" /> Hard Delete
+                            </DropdownMenuItem>
+                        </>
+                    ) : (
+                        <>
+                            <DropdownMenuItem onSelect={goEdit} disabled={busy}>
+                                <Pencil className="size-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={startCancel} disabled={busy}>
+                                <Ban className="size-4" /> Cancel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onSelect={startDelete} disabled={busy}>
+                                <Trash2 className="size-4" /> Delete
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onSelect={() => void duplicate()} disabled={busy}>
                                 <Copy className="size-4" /> Duplicate
@@ -179,8 +246,8 @@ export function DayBookActionsMenu({
             >
                 <DialogContent className="!max-w-md">
                     <DialogHeader>
-                        <DialogTitle>{title}</DialogTitle>
-                        <DialogDescription>{description}</DialogDescription>
+                        <DialogTitle>{dialogCopy?.title}</DialogTitle>
+                        <DialogDescription>{dialogCopy?.description}</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2 py-2">
                         <Label htmlFor="day-book-action-reason">Reason</Label>
@@ -206,15 +273,29 @@ export function DayBookActionsMenu({
                         </Button>
                         <Button
                             type="button"
-                            variant={isCancel ? "default" : "destructive"}
+                            variant={dialogCopy?.variant ?? "default"}
                             onClick={() => void submitConfirm()}
                             disabled={busy || !reason.trim()}
                         >
-                            {busy ? "Working…" : confirmLabel}
+                            {busy ? "Working…" : (dialogCopy?.label ?? "Confirm")}
                         </Button>
                     </div>
                 </DialogContent>
             </Dialog>
         </>
     );
+}
+
+// Given an edit URL (e.g. /vouchers/payments/12 or /vouchers/sales/new?voucherId=12),
+// return the corresponding fresh-create URL.  Used by Duplicate so the
+// preloaded form opens at /new rather than /<id>.
+function newFormUrl(editUrl: string | null, _kind: string): string | null {
+    if (!editUrl) return null;
+    // GL/JE pattern: /vouchers/<plural>/<id>  →  /vouchers/<plural>/new
+    const glMatch = editUrl.match(/^(\/vouchers\/[^/?]+)\/\d+$/);
+    if (glMatch) return `${glMatch[1]}/new`;
+    // Inventory pattern: /vouchers/<plural>/new?voucherId=<id>  →  /vouchers/<plural>/new
+    const invMatch = editUrl.match(/^(\/vouchers\/[^/?]+\/new)(\?.*)?$/);
+    if (invMatch) return invMatch[1];
+    return null;
 }
