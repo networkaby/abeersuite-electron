@@ -71,7 +71,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topPickerKind:        "ledger",
         topFilter:            isCashOrBank,
         rowFilter:            () => true,
-        listPath:             "/vouchers/payments",
+        listPath:             "/office/accountancy/vouchers-registers/payments",
     },
     RECEIPT: {
         title:                "Receipt Voucher",
@@ -85,7 +85,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topPickerKind:        "ledger",
         topFilter:            isCashOrBank,
         rowFilter:            () => true,
-        listPath:             "/vouchers/receipts",
+        listPath:             "/office/accountancy/vouchers-registers/receipts",
     },
     CONTRA: {
         title:                "Contra Voucher",
@@ -99,7 +99,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topPickerKind:        "ledger",
         topFilter:            isCashOrBank,
         rowFilter:            isCashOrBank,
-        listPath:             "/vouchers/contras",
+        listPath:             "/office/accountancy/vouchers-registers/contras",
     },
     CREDIT_NOTE: {
         title:                "Credit Note",
@@ -114,7 +114,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topFilter:            isSundryDebtor,
         rowFilter:            () => true,
         partyGroup:           ACCOUNT_GROUPS.SUNDRY_DEBTORS,
-        listPath:             "/vouchers/credit-notes",
+        listPath:             "/office/accountancy/vouchers-registers/credit-notes",
     },
     DEBIT_NOTE: {
         title:                "Debit Note",
@@ -129,7 +129,7 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
         topFilter:            isSundryCreditor,
         rowFilter:            () => true,
         partyGroup:           ACCOUNT_GROUPS.SUNDRY_CREDITORS,
-        listPath:             "/vouchers/debit-notes",
+        listPath:             "/office/accountancy/vouchers-registers/debit-notes",
     },
 };
 
