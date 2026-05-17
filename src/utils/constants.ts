@@ -268,23 +268,23 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
             {
                 label: "Vouchers Register", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/all", permission: "finance:voucher:create",
-                children: [
-                    { label: "All Vouchers", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/all" },
-                    { label: "Sales", icon: Receipt, href: "/office/accountancy/vouchers-registers/sales" },
-                    { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/vouchers-registers/purchases" },
-                    { label: "Sale Returns", icon: Receipt, href: "/office/accountancy/vouchers-registers/sale-returns" },
-                    { label: "Purchase Returns", icon: ShoppingCart, href: "/office/accountancy/vouchers-registers/purchase-returns" },
-                    { label: "Payments", icon: Wallet, href: "/office/accountancy/vouchers-registers/payments", permission: "finance:voucher:create" },
-                    { label: "Receipts", icon: Wallet, href: "/office/accountancy/vouchers-registers/receipts", permission: "finance:voucher:create" },
-                    { label: "Contras", icon: Wallet, href: "/office/accountancy/vouchers-registers/contras", permission: "finance:voucher:create" },
-                    { label: "Credit Notes", icon: FileText, href: "/office/accountancy/vouchers-registers/credit-notes", permission: "finance:voucher:create" },
-                    { label: "Debit Notes", icon: FileText, href: "/office/accountancy/vouchers-registers/debit-notes", permission: "finance:voucher:create" },
-                    { label: "Journal Entries", icon: FileText, href: "/office/accountancy/vouchers-registers/journal-entries", permission: "finance:voucher:create" },
-                    { label: "Estimates", icon: ScrollText, href: "/office/accountancy/vouchers-registers/estimates", permission: "finance:voucher:create" },
-                    { label: "Goods Receipts", icon: PackageCheck, href: "/office/accountancy/vouchers-registers/goods-receipts", permission: "finance:voucher:create" },
-                    { label: "Issues", icon: ArrowUpRight, href: "/office/accountancy/vouchers-registers/issues", permission: "finance:voucher:create" },
-                    { label: "Adjustments", icon: ArrowLeftRight, href: "/office/accountancy/vouchers-registers/adjustments", permission: "finance:voucher:create" },
-                ]
+                // children: [
+                //     { label: "All Vouchers", icon: ClipboardList, href: "/office/accountancy/vouchers-registers/all" },
+                //     { label: "Sales", icon: Receipt, href: "/office/accountancy/vouchers-registers/sales" },
+                //     { label: "Purchases", icon: ShoppingCart, href: "/office/accountancy/vouchers-registers/purchases" },
+                //     { label: "Sale Returns", icon: Receipt, href: "/office/accountancy/vouchers-registers/sale-returns" },
+                //     { label: "Purchase Returns", icon: ShoppingCart, href: "/office/accountancy/vouchers-registers/purchase-returns" },
+                //     { label: "Payments", icon: Wallet, href: "/office/accountancy/vouchers-registers/payments", permission: "finance:voucher:create" },
+                //     { label: "Receipts", icon: Wallet, href: "/office/accountancy/vouchers-registers/receipts", permission: "finance:voucher:create" },
+                //     { label: "Contras", icon: Wallet, href: "/office/accountancy/vouchers-registers/contras", permission: "finance:voucher:create" },
+                //     { label: "Credit Notes", icon: FileText, href: "/office/accountancy/vouchers-registers/credit-notes", permission: "finance:voucher:create" },
+                //     { label: "Debit Notes", icon: FileText, href: "/office/accountancy/vouchers-registers/debit-notes", permission: "finance:voucher:create" },
+                //     { label: "Journal Entries", icon: FileText, href: "/office/accountancy/vouchers-registers/journal-entries", permission: "finance:voucher:create" },
+                //     { label: "Estimates", icon: ScrollText, href: "/office/accountancy/vouchers-registers/estimates", permission: "finance:voucher:create" },
+                //     { label: "Goods Receipts", icon: PackageCheck, href: "/office/accountancy/vouchers-registers/goods-receipts", permission: "finance:voucher:create" },
+                //     { label: "Issues", icon: ArrowUpRight, href: "/office/accountancy/vouchers-registers/issues", permission: "finance:voucher:create" },
+                //     { label: "Adjustments", icon: ArrowLeftRight, href: "/office/accountancy/vouchers-registers/adjustments", permission: "finance:voucher:create" },
+                // ]
 
             },
 
