@@ -18,6 +18,23 @@ import { StatusBadge } from "@/shared/components/StatusBadge";
 import { useCombinedVouchers, type CombinedRow } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 
+// ── Date preset helpers ───────────────────────────────────────────────────
+
+type DatePreset = "today" | "yesterday" | "last7" | "thisMonth" | "thisFY" | "custom";
+
+function presetRange(p: DatePreset): { from: string; to: string } {
+    const t = new Date();
+    const f = (d: Date) => formatDateInput(d);
+    switch (p) {
+        case "today":     return { from: f(t), to: f(t) };
+        case "yesterday": { const d = new Date(t); d.setDate(d.getDate() - 1); return { from: f(d), to: f(d) }; }
+        case "last7":     { const d = new Date(t); d.setDate(d.getDate() - 6); return { from: f(d), to: f(t) }; }
+        case "thisMonth": return { from: f(new Date(t.getFullYear(), t.getMonth(), 1)), to: f(t) };
+        case "thisFY":    return { from: formatDateInput(indianFiscalYearStart()), to: f(t) };
+        default:          return { from: "", to: "" };
+    }
+}
+
 // ── Kind configuration ─────────────────────────────────────────────────────
 
 const KIND_BADGE: Record<string, string> = {
@@ -78,10 +95,20 @@ const today = formatDateInput(new Date());
 export default function DayBookPage() {
     const { rows, loading, error, reload } = useCombinedVouchers();
 
-    const [from, setFrom] = useState(formatDateInput(indianFiscalYearStart()));
-    const [to, setTo] = useState(today);
-    const [search, setSearch] = useState("");
-    const [kind, setKind] = useState("__all__");
+    const [preset, setPreset] = useState<DatePreset>("today");
+    const [from,   setFrom]   = useState(presetRange("today").from);
+    const [to,     setTo]     = useState(presetRange("today").to);
+
+    const applyPreset = (p: DatePreset) => {
+        setPreset(p);
+        if (p !== "custom") { const r = presetRange(p); setFrom(r.from); setTo(r.to); }
+    };
+    const handleFrom = (v: string) => { setFrom(v); setPreset("custom"); };
+    const handleTo   = (v: string) => { setTo(v);   setPreset("custom"); };
+    const [search,       setSearch]       = useState("");
+    const [kind,         setKind]         = useState("__all__");
+    const [optionalOnly, setOptionalOnly] = useState(false);
+    const [inventoryOnly,setInventoryOnly]= useState(false);
 
     // Status checkboxes — empty Set means "show all"
     const [statuses, setStatuses] = useState<Set<string>>(new Set());
@@ -90,18 +117,27 @@ export default function DayBookPage() {
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
+        // Optional = no direct stock/GL impact (documents/orders)
+        const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
+        // Inventory-only = pure stock ops
+        const INV_SET = new Set(["PHYSICAL_STOCK","STOCK_JOURNAL","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
             if (from && d < from) return false;
-            if (to && d > to) return false;
+            if (to   && d > to)   return false;
             if (statuses.size > 0 && !statuses.has(r.status)) return false;
             if (!matchKind(r.kind, kind)) return false;
+            if (optionalOnly || inventoryOnly) {
+                const isOpt = optionalOnly && OPT_SET.has(r.kind);
+                const isInv = inventoryOnly && INV_SET.has(r.kind);
+                if (!isOpt && !isInv) return false;
+            }
             if (q && !r.reference.toLowerCase().includes(q)
-                && !(r.narration ?? "").toLowerCase().includes(q)
-                && !(r.party ?? "").toLowerCase().includes(q)) return false;
+                  && !(r.narration ?? "").toLowerCase().includes(q)
+                  && !(r.party     ?? "").toLowerCase().includes(q)) return false;
             return true;
         });
-    }, [rows, from, to, statuses, kind, search]);
+    }, [rows, from, to, statuses, kind, search, optionalOnly, inventoryOnly]);
 
     const postedTotal = filtered
         .filter((r) => r.status === "POSTED")
@@ -124,16 +160,32 @@ export default function DayBookPage() {
             {/* Filters */}
             <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-t-lg border border-border border-b-0 bg-card p-4">
 
-                {/* Date range */}
+                {/* Date preset + custom range */}
                 <div className="flex items-end gap-2">
                     <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-muted-foreground">Period</label>
+                        <Select value={preset} onValueChange={(v) => applyPreset(v as DatePreset)}>
+                            <SelectTrigger className="h-8 w-36">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="today">Today</SelectItem>
+                                <SelectItem value="yesterday">Yesterday</SelectItem>
+                                <SelectItem value="last7">Last 7 days</SelectItem>
+                                <SelectItem value="thisMonth">This month</SelectItem>
+                                <SelectItem value="thisFY">This FY</SelectItem>
+                                <SelectItem value="custom">Custom</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">From</label>
-                        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-38" />
+                        <Input type="date" value={from} onChange={(e) => handleFrom(e.target.value)} className="h-8 w-36" />
                     </div>
                     <span className="pb-1.5 text-muted-foreground text-xs">→</span>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">To</label>
-                        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-38" />
+                        <Input type="date" value={to} onChange={(e) => handleTo(e.target.value)} className="h-8 w-36" />
                     </div>
                 </div>
 
@@ -229,6 +281,29 @@ export default function DayBookPage() {
                                 </Label>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                {/* Category quick-filters */}
+                <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Category</span>
+                    <div className="flex items-center gap-4 h-8">
+                        <div className="flex items-center gap-1.5">
+                            <Checkbox
+                                id="cat-optional"
+                                checked={optionalOnly}
+                                onCheckedChange={(v) => { setOptionalOnly(!!v); if (v) setInventoryOnly(false); }}
+                            />
+                            <Label htmlFor="cat-optional" className="text-xs cursor-pointer italic">Optional only</Label>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <Checkbox
+                                id="cat-inventory"
+                                checked={inventoryOnly}
+                                onCheckedChange={(v) => { setInventoryOnly(!!v); if (v) setOptionalOnly(false); }}
+                            />
+                            <Label htmlFor="cat-inventory" className="text-xs cursor-pointer">Inventory only</Label>
+                        </div>
                     </div>
                 </div>
 
