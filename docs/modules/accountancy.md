@@ -12,7 +12,7 @@
 - `/office/accountancy/payments/new`, `/office/accountancy/payments/[id]`, and same shape for `/receipts`, `/contras`, `/credit-notes`, `/debit-notes`, `/estimates`, `/journal-entries`
 - `/office/accountancy/invoices`, `/ledgers`, `/groups`, `/chart-of-accounts`, `/opening-balance`, `/account/[id]`
 - **Vouchers Registers** (consolidated 2026-05-17) — `/office/accountancy/vouchers-registers/{all,sales,purchases,sale-returns,purchase-returns,estimates,payments,receipts,contras,credit-notes,debit-notes,journal-entries,sales-orders,purchase-orders,grn,challans,rejections-in,rejections-out,goods-receipts,issues,adjustments,stock-journals,physical-stock}`. `/all` renders the unified register via `useCombinedVouchers`; per-kind pages thin-wrap `VoucherList` / `InvVoucherList` / bespoke `*Register` components. The 5 read-only registers (goods-receipts/issues/adjustments/stock-journals/physical-stock) have no creation flow.
-- `/office/accountancy/reports/{balance-sheet,profit-loss,trial-balance,day-book,cash-book,bank-book,receivables,payables,cash-flow,fund-flow,ratio-analysis,statistics,bank-reconciliation,ledger-outstandings/[ledgerId],optional-vouchers,pending-chalans}`
+- `/office/accountancy/reports/{balance-sheet,profit-loss,trial-balance,day-book,cash-book,bank-book,receivables,payables,cash-flow,fund-flow,ratio-analysis,statistics,bank-reconciliation,ledger-outstandings/[ledgerId],optional-vouchers,pending-vouchers}`
 - `/office/accountancy/reports/gst/{liability,outward-supplies,inward-supplies,hsn-summary,classification}`
 - `/office/accountancy/reports/gst/classification` — **Tax Classification** master view. Four tabs: **Rate-wise** (every GstRate slab + "Unresolved" bucket with product counts; click → drills to Item-wise filtered by that rate), **HSN-wise** (products grouped by resolved HSN × rate; master-derived complement to HSN Summary, which is transaction-derived), **Group hierarchy** (InvProductGroup tree with inline-editable own GST/HSN/Taxability + "own" / "grp" / "org" source chips), **Item-wise** (every product with own + cascaded effective tax, inline-editable cells, pencil opens `InvProductDialog` directly on the Tax tab via the new `defaultTab` prop). Filters: search SKU/name, group, source ("own only" / "inherited from group" / "inherited from org default" / "unresolved"). Edit gated by `inventory:manage`.
 
@@ -67,6 +67,53 @@ API folder is still `/api/finance/*` — rename deferred to Step 5 (route restru
 - `finance:voucher:create` / `post` / `cancel` / `delete` / `hard-delete` — Tally-style voucher lifecycle (Contra / Payment / Receipt / Credit Note / Debit Note).
 - `finance:allocation:manage` — bill-wise allocation (links any voucher to any other for outstandings + aging).
 - `finance:opening-balance:manage` — edit per-account opening balances at books-beginning date.
+
+## Voucher taxonomy (canonical)
+
+Every voucher in the system falls into exactly one of four classes. Day Book, Optional Vouchers, and Pending Vouchers reports all share this mental model.
+
+### 1. Optional — no stock, no GL impact
+Pure documents / commitments. Belongs to CRM / planning.
+- `ESTIMATE`, `SALES_ORDER`, `PURCHASE_ORDER`
+- Quotation, Proforma Invoice (when added)
+- **Any voucher in DRAFT status** — regardless of `type`, drafts never post.
+
+### 2a. Inventory-only, complete cycle — moves stock, no GL, self-contained
+No follow-up needed.
+- `ADJUSTMENT`, `STOCK_JOURNAL`, `PHYSICAL_STOCK`
+
+### 2b. Inventory-only, in-flight — moves stock, no GL, **needs settlement**
+Surfaced by the Pending Vouchers report. Settled only via another inventory-moving voucher (category 2b or 4); GL-only adjustments (CREDIT_NOTE / DEBIT_NOTE) do **not** settle these:
+
+| Voucher | Settled by |
+|---|---|
+| `CHALLAN`       | `SALE` or `REJECTION_IN` |
+| `GRN`           | `PURCHASE` or `REJECTION_OUT` |
+| `REJECTION_IN`  | `CHALLAN` (replacement out) or `SALE_RETURN` |
+| `REJECTION_OUT` | `GRN` (replacement in) or `PURCHASE_RETURN` |
+
+Settlement is detected via the `InvVoucher.refReturns` back-relation (downstream voucher sets `refVoucherId = source.id`). `ISSUE` is currently unused.
+
+### 3. GL-only — moves ledger money, no stock
+Writes to `Voucher` model only.
+- `PAYMENT`, `RECEIPT`, `CONTRA`
+- `CREDIT_NOTE` — price/refund adjustment for customer (no stock)
+- `DEBIT_NOTE` — price/claim adjustment for supplier (no stock)
+- `JOURNAL` (`JournalEntry` model) — generic GL entry: depreciation, accruals, opening balances
+
+### 4. Full voucher — moves stock **and** posts to GL in one step
+Writes both `InvVoucher` and `Voucher`. Self-contained.
+- `SALE` — via `/vouchers/(gl)/sales/new` (regular invoice) or `/vouchers/pos/new` (POS fast-path; same `type=SALE`, requires open shift)
+- `PURCHASE`, `SALE_RETURN`, `PURCHASE_RETURN`
+
+### Often-confused pairs
+
+| Pair | Stock | GL | When to use |
+|---|---|---|---|
+| `SALE_RETURN` (full)        | Stock IN  | Reverses revenue / AR | Customer returned physical goods |
+| `CREDIT_NOTE` (GL-only)     | —         | Credits customer      | Price correction / discount / refund without goods change |
+| `PURCHASE_RETURN` (full)    | Stock OUT | Reverses expense / AP | We returned physical goods to supplier |
+| `DEBIT_NOTE` (GL-only)      | —         | Debits supplier       | Claim / price correction without goods movement |
 
 ## Prisma models (file: `prisma/schema/finance.prisma`)
 

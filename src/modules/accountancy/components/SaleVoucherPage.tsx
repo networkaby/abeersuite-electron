@@ -220,7 +220,10 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showVoucherDate: true,
         showPaymentTerms: true,
         showPaymentBlock: true,
-        linkParentType: null, linkParentLabel: null,
+        // When a Sale is raised against a Challan, picking the Challan here sets
+        // refVoucherId = challanId → the Challan is marked as settled in the
+        // Pending Vouchers report. Optional — direct (non-Challan) sales leave blank.
+        linkParentType: "CHALLAN", linkParentLabel: "Convert from Challan (optional)",
         showShowPricesToggle: false,
     },
     PURCHASE: {
@@ -247,7 +250,10 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         showPaymentTerms: true,   // credit purchases still need terms / due date
         showPaymentBlock: true,
         receivedLabel: "Paid",
-        linkParentType: null, linkParentLabel: null,
+        // When a Purchase is raised against a GRN, picking the GRN here sets
+        // refVoucherId = grnId → the GRN is marked as settled in the
+        // Pending Vouchers report. Optional — direct (non-GRN) purchases leave blank.
+        linkParentType: "GRN", linkParentLabel: "Convert from GRN (optional)",
         showShowPricesToggle: false,
     },
     SALE_RETURN: {
