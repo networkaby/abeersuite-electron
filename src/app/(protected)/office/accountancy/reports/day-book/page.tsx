@@ -3,7 +3,6 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,11 +13,11 @@ import {
     Select, SelectContent, SelectGroup, SelectItem, SelectLabel,
     SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt } from "@/utils/constants";
+import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { useCombinedVouchers, type CombinedRow } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
-import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 
 // ── Expand line types ─────────────────────────────────────────────────────
 // GL and JE lines have an 'account' field; inventory lines have a 'product'.
@@ -106,38 +105,11 @@ function matchKind(kind: string, filter: string): boolean {
     }
 }
 
-// ── Reference click URL ───────────────────────────────────────────────────
-// Each click navigates to the voucher's CREATION form, prefilled with its
-// data for editing. GL/JE use the [id] route under /vouchers/(gl)/<kind>/[id];
-// inventory reuses the existing editFormUrl pattern.
-
-const GL_EDIT_BASE: Record<string, string> = {
-    PAYMENT:     "/vouchers/payments",
-    RECEIPT:     "/vouchers/receipts",
-    CONTRA:      "/vouchers/contras",
-    CREDIT_NOTE: "/vouchers/credit-notes",
-    DEBIT_NOTE:  "/vouchers/debit-notes",
-};
-
-function referenceHref(
-    source: CombinedRow["source"],
-    rawId: number,
-    kind: string,
-    _detailHref: string,
-): string | null {
-    switch (source) {
-        case "inv": return editFormUrl(kind, rawId);
-        case "gl":  return GL_EDIT_BASE[kind] ? `${GL_EDIT_BASE[kind]}/${rawId}` : null;
-        case "je":  return `/vouchers/journal-entries/${rawId}`;
-    }
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────
 
 const today = formatDateInput(new Date());
 
 export default function DayBookPage() {
-    const router = useRouter();
     const { rows, loading, error, reload } = useCombinedVouchers();
 
     const [preset, setPreset] = useState<DatePreset>("today");
@@ -185,10 +157,6 @@ export default function DayBookPage() {
             }
             return next;
         });
-    };
-
-    const handleRowClick = (r: CombinedRow) => {
-        if (r.detailHref) router.push(r.detailHref);
     };
 
     const filtered = useMemo(() => {
@@ -440,22 +408,20 @@ export default function DayBookPage() {
                                 const isPosted = r.status === "POSTED";
                                 const isExpanded = expanded.has(r.id);
                                 const lines = lineCache.get(r.id);
-                                const href = referenceHref(r.source, r.rawId, r.kind, r.detailHref);
+                                const href = referenceHref(r.source, r.rawId, r.kind);
 
                                 return (
                                     <React.Fragment key={r.id}>
                                         {/* ── Main row ─────────────────────────────── */}
                                         <tr
                                             className={[
-                                                "border-b last:border-0 hover:bg-muted/40 transition-opacity",
-                                                r.detailHref ? "cursor-pointer" : "",
+                                                "border-b last:border-0 hover:bg-muted/40 transition-opacity cursor-pointer",
                                                 isDraft ? "opacity-50" : "",
                                                 isCancelled ? "opacity-30" : "",
                                                 isOpt ? "bg-muted/10" : "",
                                             ].join(" ")}
-                                            title="Left-click to open · Right-click to peek at Dr/Cr lines"
-                                            onClick={() => handleRowClick(r)}
-                                            onContextMenu={(e) => { e.preventDefault(); toggleExpand(r); }}
+                                            title="Click row to expand Dr/Cr lines · Click the reference to edit"
+                                            onClick={() => toggleExpand(r)}
                                         >
                                             {/* Coloured source stripe */}
                                             <td className={`w-1 p-0 ${src.accent}`} />
@@ -465,17 +431,24 @@ export default function DayBookPage() {
                                                 {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
                                             </td>
 
-                                            {/* Type badge */}
+                                            {/* Type badge + status pill */}
                                             <td className="px-3 py-2.5">
-                                                <span className={[
-                                                    "text-xs px-2 py-0.5 font-medium rounded-sm",
-                                                    isOpt ? "ring-1 opacity-80" : "",
-                                                    KIND_BADGE[r.kind] ?? "bg-muted text-muted-foreground",
-                                                ].join(" ")}>
-                                                    <span className={isOpt ? "italic" : ""}>
-                                                        {r.kind.replace(/_/g, " ")}
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={[
+                                                        "text-xs px-2 py-0.5 font-medium rounded-sm",
+                                                        isOpt ? "ring-1 opacity-80" : "",
+                                                        KIND_BADGE[r.kind] ?? "bg-muted text-muted-foreground",
+                                                    ].join(" ")}>
+                                                        <span className={isOpt ? "italic" : ""}>
+                                                            {r.kind.replace(/_/g, " ")}
+                                                        </span>
                                                     </span>
-                                                </span>
+                                                    {!isPosted && (
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[r.status] ?? "bg-muted text-muted-foreground"}`}>
+                                                            {r.status.toLowerCase()}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
 
                                             {/* Reference — clickable edit link */}
@@ -527,7 +500,7 @@ export default function DayBookPage() {
                                                     source={r.source}
                                                     kind={r.kind}
                                                     reference={r.reference}
-                                                    detailHref={r.detailHref}
+                                                    deletedAt={r.deletedAt}
                                                     onChanged={reload}
                                                 />
                                             </td>

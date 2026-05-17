@@ -71,6 +71,22 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
     const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
+    // Close / back behaviour:
+    //   • Same-tab navigation (e.g. Day Book → detail): router.back() returns
+    //     to the caller without disturbing any other view.
+    //   • New-tab open (opened via window.open or link target=_blank):
+    //     history.length === 1, so router.back() is a silent no-op.
+    //     window.close() closes the script-opened tab in Chrome/Firefox.
+    //   • Manually-typed URL: window.close() silently fails — acceptable.
+    const closeDetail = () => {
+        if (typeof window === "undefined") return;
+        if (window.history.length > 1) {
+            router.back();
+        } else {
+            window.close();
+        }
+    };
+
     const [voucher, setVoucher] = useState<Voucher | null>(null);
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
@@ -101,7 +117,7 @@ export function InvVoucherDetail({ basePath, label }: { basePath: string; label:
     return (
         <div className="space-y-6 max-w-4xl">
             <div className="flex items-center gap-3 flex-wrap">
-                <Button variant="ghost" size="icon-sm" onClick={() => router.push(basePath)} aria-label="Back">
+                <Button variant="ghost" size="icon-sm" onClick={closeDetail} aria-label="Back">
                     <ArrowLeft size={16} />
                 </Button>
                 <div className="flex-1">

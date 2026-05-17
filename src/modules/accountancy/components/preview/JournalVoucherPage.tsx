@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, CheckCircle2, X, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,8 +24,11 @@ import {
 } from "@/components/ui/select";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
+import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
@@ -44,6 +48,8 @@ type LoadedJe = {
     date:        string;
     description: string | null;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
+    cancelledAt: string | null;
+    deletedAt:   string | null;
     lines:       LoadedJeLine[];
 };
 
@@ -129,12 +135,36 @@ const listPath = "/office/accountancy/vouchers-registers/journal-entries";
 
 export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     const router = useRouter();
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "finance:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "finance:voucher:hard-delete");
+
+    // Close / Cancel / Back — go back if there's tab history, otherwise fall
+    // Close / back behaviour:
+    //   • Same-tab navigation (e.g. Day Book → form): router.back() returns
+    //     to the caller without disturbing any other view.
+    //   • New-tab open (ButtonBar uses window.open("…", "_blank")):
+    //     history.length === 1, so router.back() is a silent no-op.
+    //     window.close() closes the script-opened tab in Chrome/Firefox.
+    //   • Manually-typed URL: window.close() silently fails — acceptable.
+    const closeForm = () => {
+        if (typeof window === "undefined") return;
+        if (window.history.length > 1) {
+            router.back();
+        } else {
+            window.close();
+        }
+    };
+
     const isEditing = voucherId != null && Number.isFinite(voucherId);
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [nextRef, setNextRef]   = useState<string>("");
     const [saving, setSaving]     = useState(false);
     const [loading, setLoading]   = useState(isEditing);
     const [loadedJe, setLoadedJe] = useState<LoadedJe | null>(null);
+    const [reloadCounter, setReloadCounter] = useState(0);
     const originalSnapshotRef     = useRef<Snapshot | null>(null);
 
     const [date, setDate]           = useState(() => new Date().toISOString().slice(0, 10));
@@ -151,6 +181,30 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                 .catch(() => setNextRef(""));
         }
     }, [isEditing]);
+
+    // ── Duplicate hydration ────────────────────────────────────────────────
+    // ⋮ → Duplicate on a JE stashes a payload + navigates here; we consume +
+    // clear on mount so a refresh starts blank.  Reference is allocated only
+    // when the user explicitly Saves.
+    useEffect(() => {
+        if (isEditing) return;
+        const dup = consumeDuplicate("JOURNAL");
+        if (!dup) return;
+        setDate(dup.date);
+        setNarration(dup.narration ?? "");
+        const srcLines = dup.lines as { accountId?: number | null; type?: "DEBIT" | "CREDIT"; amount?: number | string }[];
+        if (srcLines.length > 0) {
+            setLines(srcLines.map((l) => ({
+                id:         ++lineSeq,
+                side:       (l.type ?? "DEBIT") as Side,
+                accountId:  l.accountId ?? 0,
+                amount:     l.amount != null ? String(Number(l.amount)) : "",
+                stockItems: [] as StockItem[],
+            })));
+        }
+        toast.success("Duplicated — review and Save to create a new journal entry");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Prefill in edit mode ────────────────────────────────────────────────
     useEffect(() => {
@@ -194,7 +248,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             .catch(() => toast.error("Failed to load journal entry"))
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [isEditing, voucherId]);
+    }, [isEditing, voucherId, reloadCounter]);
 
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const eligibleByAccountId = new Map<number, boolean>(
@@ -312,7 +366,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             const original = originalSnapshotRef.current;
             if (original && snapshotsEqual(original, current)) {
                 toast("No changes to save");
-                router.push(listPath);
+                closeForm();
                 return;
             }
 
@@ -331,7 +385,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                     lines:       apiLines,
                 });
                 toast.success(`Journal voucher ${loadedJe?.reference ?? ""} updated`);
-                router.push(listPath);
+                closeForm();
             } catch (err: unknown) {
                 const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
                 toast.error(msg ?? "Save failed");
@@ -370,7 +424,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
             {/* Top strip */}
             <header className="border-b border-border px-6 py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon-sm" onClick={() => router.push(listPath)} aria-label="Back">
+                    <Button variant="ghost" size="icon-sm" onClick={closeForm} aria-label="Back">
                         <ArrowLeft size={16} />
                     </Button>
                     <h1 className="text-base font-semibold">
@@ -405,7 +459,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => router.push(listPath)}
+                        onClick={closeForm}
                         title="Close"
                         className="text-muted-foreground hover:text-foreground"
                     >
@@ -599,18 +653,38 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
 
             {/* Sticky action bar */}
             <div className="border-t border-border bg-card px-6 py-3 flex items-center justify-end gap-2 shrink-0">
-                {isEditing && loadedJe?.status === "POSTED" && (
-                    <span className="text-[11px] text-amber-600 mr-auto italic">
-                        Will reverse + re-post on save (reference preserved)
-                    </span>
+                {isEditing && loadedJe && (
+                    <div className="mr-auto flex items-center gap-3">
+                        <LifecycleActions
+                            voucher={loadedJe}
+                            apiBasePath={`/api/accountancy/journal-entries/${voucherId}`}
+                            listPath={listPath}
+                            label="Journal Voucher"
+                            canCancel={canCancel}
+                            canDelete={canDelete}
+                            canHardDelete={canHardDelete}
+                            onChanged={() => setReloadCounter((c) => c + 1)}
+                        />
+                        {loadedJe.status === "POSTED" && !loadedJe.deletedAt && !loadedJe.cancelledAt && (
+                            <span className="text-[11px] text-amber-600 italic">
+                                Will reverse + re-post on save (reference preserved)
+                            </span>
+                        )}
+                    </div>
                 )}
-                <Button variant="ghost" onClick={() => router.push(listPath)}>Cancel</Button>
+                <Button variant="ghost" onClick={closeForm}>Cancel</Button>
                 {!isEditing && (
                     <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
                         {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
                     </Button>
                 )}
-                <Button onClick={() => submit(true)} disabled={saving || !balanced || loading}>
+                <Button
+                    onClick={() => submit(true)}
+                    disabled={
+                        saving || !balanced || loading
+                        || (isEditing && (loadedJe?.status === "CANCELLED" || !!loadedJe?.deletedAt))
+                    }
+                >
                     {saving && <Loader2 size={13} className="animate-spin mr-1" />}
                     {isEditing ? "Save Changes" : "Save"}
                 </Button>

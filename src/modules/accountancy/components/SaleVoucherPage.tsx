@@ -57,6 +57,7 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -494,6 +495,23 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
     const today = new Date().toISOString().slice(0, 10);
 
+    // Close / Cancel / Back — go back if there's tab history, otherwise fall
+    // Close / back behaviour:
+    //   • Same-tab navigation (e.g. Day Book → form): router.back() returns
+    //     to the caller without disturbing any other view.
+    //   • New-tab open (ButtonBar uses window.open("…", "_blank")):
+    //     history.length === 1, so router.back() is a silent no-op.
+    //     window.close() closes the script-opened tab in Chrome/Firefox.
+    //   • Manually-typed URL: window.close() silently fails — acceptable.
+    const closeForm = () => {
+        if (typeof window === "undefined") return;
+        if (window.history.length > 1) {
+            router.back();
+        } else {
+            window.close();
+        }
+    };
+
     // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
     // PATCH on save. Set once on mount and locked in; subsequent param
     // changes do not retrigger the fetch (would discard user edits).
@@ -562,6 +580,84 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             .catch(() => setNextRef(""));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
+
+    // ── Duplicate hydration ────────────────────────────────────────────────
+    // ⋮ → Duplicate on a sibling voucher stashes the source's data in
+    // sessionStorage and navigates here.  We consume + clear it on mount so a
+    // refresh starts blank.  Reference is allocated only when the user
+    // explicitly Saves; abandoning the form leaves zero side effects.
+    useEffect(() => {
+        if (isEditing) return;
+        const dup = consumeDuplicate(kind);
+        if (!dup) return;
+
+        // Header: date + description.  Other header fields keep their defaults.
+        setHeader((h) => ({
+            ...h,
+            date:        dup.date,
+            description: dup.narration ?? "",
+        }));
+
+        // Lines: map the source's rich line records into LineState.
+        type SrcLine = {
+            productId?:   number;
+            quantity?:    number | string;
+            rate?:        number | string;
+            freeQty?:     number | string | null;
+            discountPct?: number | string;
+            discountAmt?: number | string;
+            taxRate?:     number | string;
+            taxAmount?:   number | string;
+            description?: string | null;
+            product?:     { id: number; sku: string; name: string; unit?: { code: string; label: string } };
+        };
+        const srcLines = dup.lines as SrcLine[];
+        const fmtNum = (x: number | string | null | undefined): string => {
+            if (x == null) return "";
+            const n = typeof x === "string" ? parseFloat(x) : x;
+            if (!Number.isFinite(n) || n === 0) return "";
+            return String(n);
+        };
+        if (srcLines.length > 0) {
+            setLines(srcLines
+                .filter((l) => l.product != null)
+                .map((l) => ({
+                    id: ++lineSeq,
+                    product: {
+                        id:       l.product!.id,
+                        sku:      l.product!.sku,
+                        name:     l.product!.name,
+                        unitCode: l.product!.unit?.code ?? "",
+                        stock:     null,
+                        salePrice: null,
+                        costPrice: null,
+                        mrp:       null,
+                    },
+                    quantity:        l.quantity != null ? String(typeof l.quantity === "string" ? parseFloat(l.quantity) : l.quantity) : "1",
+                    freeQty:         fmtNum(l.freeQty ?? null),
+                    rate:            l.rate != null ? String(typeof l.rate === "string" ? parseFloat(l.rate) : l.rate) : "",
+                    mrpRupees:       "",
+                    discountPct:     fmtNum(l.discountPct),
+                    discountAmt:     fmtNum(l.discountAmt),
+                    taxRate:         fmtNum(l.taxRate),
+                    taxAmount:       fmtNum(l.taxAmount),
+                    amountInput:     "",
+                    description:     l.description ?? "",
+                    showDescription: !!l.description,
+                })));
+        }
+
+        // Party: leave the picker empty so the user re-confirms — pre-fill the
+        // walk-in name field as a hint if the source had a free-form party.
+        const stashedParty = dup.party;
+        if (stashedParty?.name) {
+            setWalkInName(stashedParty.name);
+            if (stashedParty.phone) setWalkInPhone(stashedParty.phone);
+        }
+
+        toast.success("Duplicated — review and Save to create a new voucher");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Pre-fill credit period from OrgDefaults on new vouchers (create mode only).
     useEffect(() => {
@@ -1313,7 +1409,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => router.push(copy.listPath)}
+                        onClick={closeForm}
                         title="Close"
                     >
                         <X size={18} />
@@ -2081,7 +2177,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     <Link2 size={14} /> Link Payment
                 </Button>
                 <div className="ml-auto flex items-center gap-2">
-                    <Button variant="ghost" onClick={() => router.push(copy.listPath)}>
+                    <Button variant="ghost" onClick={closeForm}>
                         Cancel
                     </Button>
                     {copy.showProfit && (

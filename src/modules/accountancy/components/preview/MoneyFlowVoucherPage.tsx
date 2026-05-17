@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,11 @@ import { Input } from "@/components/ui/input";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
+import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import {
     PartySearchAndCreate,
     type PartySearchAndCreateHandle,
@@ -41,6 +45,8 @@ type LoadedVoucher = {
     date:           string;
     narration:      string | null;
     status:         "DRAFT" | "POSTED" | "CANCELLED";
+    cancelledAt:    string | null;
+    deletedAt:      string | null;
     partyAccountId: number | null;
     partyAccount:   { id: number; code: string | null; name: string } | null;
     lines:          LoadedLine[];
@@ -202,8 +208,34 @@ const newRow = (): Row => ({ id: ++rowSeq, accountId: null, amount: "", note: ""
 
 export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; voucherId?: number }) {
     const router = useRouter();
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "finance:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "finance:voucher:hard-delete");
+
     const copy = PER_KIND[kind];
     const isEditing = voucherId != null && Number.isFinite(voucherId);
+
+    // Close / Cancel / Back — go back if there's tab history, otherwise fall
+    // Close / back behaviour:
+    //   • Same-tab navigation (e.g. Day Book → form): router.back() returns
+    //     to the caller without disturbing any other view.
+    //   • New-tab open (ButtonBar uses window.open("…", "_blank")):
+    //     history.length === 1, so router.back() is a silent no-op.
+    //     window.close() closes the script-opened tab in Chrome/Firefox.
+    //   • Manually-typed URL (history.length === 1, no opener):
+    //     window.close() also silently fails — acceptable, user can Ctrl+W.
+    //   We deliberately do NOT fall back to router.push(listPath) so we
+    //   never hijack the user's attention by opening the register.
+    const closeForm = () => {
+        if (typeof window === "undefined") return;
+        if (window.history.length > 1) {
+            router.back();
+        } else {
+            window.close();
+        }
+    };
 
     // Accounts loaded once on mount; particulars combobox picks from rowFilter,
     // top picker from topFilter.
@@ -212,6 +244,8 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(isEditing);
     const [loadedVoucher, setLoadedVoucher] = useState<LoadedVoucher | null>(null);
+    // Bumped after any lifecycle action so the prefill effect re-runs.
+    const [reloadCounter, setReloadCounter] = useState(0);
     const originalSnapshotRef = useRef<Snapshot | null>(null);
     const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [narration, setNarration] = useState("");
@@ -253,6 +287,36 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
                 .catch(() => setNextRef(""));
         }
     }, [kind, isEditing]);
+
+    // ── Duplicate hydration ────────────────────────────────────────────────
+    // When the ⋮ → Duplicate flow lands on this /new page, it stashes a
+    // payload in sessionStorage.  We consume + clear it on mount so a manual
+    // refresh starts blank.  Pure UI: no DB write happens until Save.
+    useEffect(() => {
+        if (isEditing) return;
+        const dup = consumeDuplicate(kind);
+        if (!dup) return;
+        setDate(dup.date);
+        setNarration(dup.narration ?? "");
+        if (dup.partyAccountId != null) setTopLedgerId(dup.partyAccountId);
+        // Map source lines back into top + particulars rows (same shape as
+        // the edit-mode prefill).
+        const sourceLines = dup.lines as { accountId?: number | null; type?: "DEBIT" | "CREDIT"; amount?: number | string; description?: string | null }[];
+        const topLine    = sourceLines.find((l) => l.type === copy.topSide && l.accountId != null);
+        const rowLines   = sourceLines.filter((l) => l.type === copy.rowSide);
+        if (topLine?.accountId != null) setTopLedgerId(topLine.accountId);
+        if (rowLines.length > 0) {
+            setRows(rowLines.map((l) => ({
+                id:        ++rowSeq,
+                accountId: l.accountId ?? null,
+                amount:    l.amount != null ? String(Number(l.amount)) : "",
+                note:      l.description ?? "",
+            })));
+        }
+        toast.success("Duplicated — review and Save to create a new voucher");
+        // Run once on mount; intentionally not in deps.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Prefill in edit mode ────────────────────────────────────────────────
     useEffect(() => {
@@ -299,7 +363,7 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
             .catch(() => toast.error("Failed to load voucher"))
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [isEditing, voucherId, copy.topSide, copy.rowSide]);
+    }, [isEditing, voucherId, copy.topSide, copy.rowSide, reloadCounter]);
 
     const updateRow = (id: number, patch: Partial<Row>) =>
         setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -335,7 +399,7 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
             const original = originalSnapshotRef.current;
             if (original && snapshotsEqual(original, current)) {
                 toast("No changes to save");
-                router.push(copy.listPath);
+                closeForm();
                 return;
             }
 
@@ -347,7 +411,7 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
                     lines:     allLines,
                 });
                 toast.success(`${copy.title} ${loadedVoucher?.reference ?? ""} updated`);
-                router.push(copy.listPath);
+                closeForm();
             } catch (err: unknown) {
                 const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Save failed";
                 toast.error(msg ?? "Save failed");
@@ -389,7 +453,7 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
             {/* Top strip — title + ref + date. Compact, no big tabs. */}
             <header className="border-b border-border px-6 py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon-sm" onClick={() => router.push(copy.listPath)} aria-label="Back">
+                    <Button variant="ghost" size="icon-sm" onClick={closeForm} aria-label="Back">
                         <ArrowLeft size={16} />
                     </Button>
                     <h1 className="text-base font-semibold">
@@ -424,7 +488,7 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => router.push(copy.listPath)}
+                        onClick={closeForm}
                         title="Close"
                         className="text-muted-foreground hover:text-foreground"
                     >
@@ -604,18 +668,38 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
 
             {/* Sticky action bar */}
             <div className="border-t border-border bg-card px-6 py-3 flex items-center justify-end gap-2 shrink-0">
-                {isEditing && loadedVoucher?.status === "POSTED" && (
-                    <span className="text-[11px] text-amber-600 mr-auto italic">
-                        Will reverse + re-post on save (reference preserved)
-                    </span>
+                {isEditing && loadedVoucher && (
+                    <div className="mr-auto flex items-center gap-3">
+                        <LifecycleActions
+                            voucher={loadedVoucher}
+                            apiBasePath={`/api/accountancy/vouchers/${voucherId}`}
+                            listPath={copy.listPath}
+                            label={copy.title}
+                            canCancel={canCancel}
+                            canDelete={canDelete}
+                            canHardDelete={canHardDelete}
+                            onChanged={() => setReloadCounter((c) => c + 1)}
+                        />
+                        {loadedVoucher.status === "POSTED" && !loadedVoucher.deletedAt && !loadedVoucher.cancelledAt && (
+                            <span className="text-[11px] text-amber-600 italic">
+                                Will reverse + re-post on save (reference preserved)
+                            </span>
+                        )}
+                    </div>
                 )}
-                <Button variant="ghost" onClick={() => router.push(copy.listPath)}>Cancel</Button>
+                <Button variant="ghost" onClick={closeForm}>Cancel</Button>
                 {!isEditing && (
                     <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
                         {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
                     </Button>
                 )}
-                <Button onClick={() => submit(true)} disabled={saving || !balanced || loading}>
+                <Button
+                    onClick={() => submit(true)}
+                    disabled={
+                        saving || !balanced || loading
+                        || (isEditing && (loadedVoucher?.status === "CANCELLED" || !!loadedVoucher?.deletedAt))
+                    }
+                >
                     {saving && <Loader2 size={13} className="animate-spin mr-1" />}
                     {isEditing ? "Save Changes" : "Save"}
                 </Button>
