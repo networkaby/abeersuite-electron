@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
-import { ArrowLeft, ExternalLink, Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -178,8 +178,6 @@ export default function DayBookPage() {
     // Expand state: which row ids are open + lazy-fetched line cache (keyed by CombinedRow.id)
     const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
     const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
-    const [selectedRow, setSelectedRow] = useState<CombinedRow | null>(null);
-
     const router = useRouter();
 
     const fetchLines = (r: CombinedRow) => {
@@ -208,12 +206,11 @@ export default function DayBookPage() {
             const t = e.target as HTMLElement | null;
             if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
             if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (selectedRow !== null) setSelectedRow(null);
-            else router.back();
+            router.back();
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [router, selectedRow]);
+    }, [router]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -243,24 +240,16 @@ export default function DayBookPage() {
         .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
 
-    const panelLines = selectedRow ? lineCache.get(selectedRow.id) : undefined;
-
     return (
         <div className="-m-8 flex h-screen flex-col overflow-hidden">
 
-            {/* Breadcrumb */}
-            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
-                <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
-                    <ArrowLeft size={15} />
-                </Button>
-                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Link href="/office/accountancy" className="transition-colors hover:text-foreground">Accountancy</Link>
-                    <span>/</span>
-                    <Link href="/office/accountancy/reports" className="transition-colors hover:text-foreground">Reports</Link>
-                    <span>/</span>
-                    <span className="font-medium text-foreground">Day Book</span>
-                </nav>
-            </header>
+            {/* Title */}
+            <div className="flex shrink-0 items-end justify-between gap-3 flex-wrap px-4 pt-4 pb-2">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">Day Book</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">Chronological view of every voucher</p>
+                </div>
+            </div>
 
             {/* Filters */}
             <div className="flex shrink-0 flex-wrap items-end gap-x-4 gap-y-3 border-b bg-card p-4">
@@ -517,26 +506,11 @@ export default function DayBookPage() {
                                                 onClick={(e) => e.stopPropagation()}
                                             >
                                                 {href ? (
-                                                    <Link
-                                                        href={href}
-                                                        className="hover:underline underline-offset-2"
-                                                        onClick={(e) => {
-                                                            if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-                                                            e.preventDefault();
-                                                            setSelectedRow(r);
-                                                            fetchLines(r);
-                                                        }}
-                                                    >
+                                                    <Link href={href} className="hover:underline underline-offset-2">
                                                         {r.reference}
                                                     </Link>
                                                 ) : (
-                                                    <button
-                                                        type="button"
-                                                        className="hover:underline underline-offset-2"
-                                                        onClick={() => { setSelectedRow(r); fetchLines(r); }}
-                                                    >
-                                                        {r.reference}
-                                                    </button>
+                                                    <span>{r.reference}</span>
                                                 )}
                                             </td>
 
@@ -672,106 +646,6 @@ export default function DayBookPage() {
             )}
             </div>{/* end scrollable table column */}
 
-            {/* Detail panel */}
-            {selectedRow && (
-                <aside className="w-[420px] shrink-0 overflow-y-auto border-l bg-card">
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
-                        <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className={`rounded-sm px-2 py-0.5 text-xs font-medium ${KIND_BADGE[selectedRow.kind] ?? "bg-muted text-muted-foreground"}`}>
-                                    {selectedRow.kind.replace(/_/g, " ")}
-                                </span>
-                                <span className={`font-mono text-sm font-semibold ${selectedRow.status === "CANCELLED" ? "line-through text-muted-foreground" : ""}`}>
-                                    {selectedRow.reference}
-                                </span>
-                            </div>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>{new Date(selectedRow.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                                {selectedRow.status !== "POSTED" && (
-                                    <span className={`rounded px-1.5 py-0.5 font-medium ${JOURNAL_STATUS_COLORS[selectedRow.status] ?? "bg-muted text-muted-foreground"}`}>
-                                        {selectedRow.status.toLowerCase()}
-                                    </span>
-                                )}
-                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_CONFIG[selectedRow.source].badge}`}>
-                                    {SOURCE_CONFIG[selectedRow.source].label}
-                                </span>
-                            </div>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => setSelectedRow(null)} title="Close (Esc)">
-                            <X size={14} />
-                        </Button>
-                    </div>
-
-                    {/* Meta */}
-                    <div className="space-y-1.5 border-b px-4 py-3">
-                        {selectedRow.party && (
-                            <p className="text-xs">
-                                <span className="text-muted-foreground">Party — </span>
-                                <span className="font-medium">{selectedRow.party}</span>
-                            </p>
-                        )}
-                        {selectedRow.narration && (
-                            <p className="text-xs text-muted-foreground">{selectedRow.narration}</p>
-                        )}
-                        <p className="font-mono text-lg font-semibold">₹ {fmt(selectedRow.totalAmount)}</p>
-                        {referenceHref(selectedRow.source, selectedRow.rawId, selectedRow.kind) && (
-                            <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-                                <Link href={referenceHref(selectedRow.source, selectedRow.rawId, selectedRow.kind)!}>
-                                    <ExternalLink size={12} className="mr-1.5" />
-                                    Open full page
-                                </Link>
-                            </Button>
-                        )}
-                    </div>
-
-                    {/* Lines */}
-                    <div className="px-4 py-3">
-                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Lines</p>
-                        {(!panelLines || panelLines === "loading") && (
-                            <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
-                                <Loader2 size={14} className="animate-spin" /> Loading…
-                            </div>
-                        )}
-                        {panelLines === "error" && (
-                            <p className="py-4 text-xs text-destructive">Failed to load lines.</p>
-                        )}
-                        {Array.isArray(panelLines) && panelLines.length === 0 && (
-                            <p className="py-4 text-xs text-muted-foreground">No lines found.</p>
-                        )}
-                        {Array.isArray(panelLines) && panelLines.length > 0 && (
-                            <div className="space-y-1">
-                                {panelLines.map((l, i) => {
-                                    const isGl = "account" in l;
-                                    return (
-                                        <div key={i} className="flex items-center gap-2 rounded-sm bg-muted/40 px-2 py-1.5 text-xs">
-                                            {isGl ? (
-                                                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${l.type === "DEBIT" ? "bg-blue-50 text-blue-600" : "bg-violet-50 text-violet-600"}`}>
-                                                    {l.type === "DEBIT" ? "Dr" : "Cr"}
-                                                </span>
-                                            ) : (
-                                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">item</span>
-                                            )}
-                                            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                                                {isGl ? l.account.code : l.product.sku}
-                                            </span>
-                                            <span className="min-w-0 flex-1 truncate text-foreground">
-                                                {isGl ? l.account.name : l.product.name}
-                                            </span>
-                                            {!isGl && (
-                                                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                                                    {l.quantity}×₹{fmt(Number(l.rate))}
-                                                </span>
-                                            )}
-                                            <span className="shrink-0 font-mono tabular-nums">₹ {fmt(Number(l.amount))}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </aside>
-            )}
 
             </div>{/* end flex flex-1 overflow-hidden */}
         </div>

@@ -515,6 +515,20 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         }
     };
 
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (typeof window !== "undefined") {
+                if (window.history.length > 1) router.back(); else window.close();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [router]);
+
     // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
     // PATCH on save. Set once on mount and locked in; subsequent param
     // changes do not retrigger the fetch (would discard user edits).

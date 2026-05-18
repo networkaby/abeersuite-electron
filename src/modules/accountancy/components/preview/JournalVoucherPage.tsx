@@ -158,6 +158,20 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
         }
     };
 
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (typeof window !== "undefined") {
+                if (window.history.length > 1) router.back(); else window.close();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [router]);
+
     const isEditing = voucherId != null && Number.isFinite(voucherId);
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [nextRef, setNextRef]   = useState<string>("");
