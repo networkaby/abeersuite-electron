@@ -52,7 +52,7 @@ export async function GET(req: Request) {
             orderBy: [{ date: "desc" }, { createdAt: "desc" }],
             include: {
                 createdBy:    { select: { id: true, name: true } },
-                partyAccount: { select: { id: true, code: true, name: true } },
+                partyAccount: { select: { id: true, code: true, name: true, personId: true, companyId: true } },
                 _count:       { select: { lines: true } },
             },
         });

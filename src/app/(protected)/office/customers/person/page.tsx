@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
     User, Phone, MapPin, Building2,
-    Smartphone, ExternalLink, Pencil, Loader2,
+    Smartphone, ExternalLink, Pencil, Loader2, ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -39,6 +40,7 @@ interface CustomerListItem {
     phone: string | null;
     email: string | null;
     _count: { companies: number; devices: number };
+    account: { id: number } | null;
 }
 
 interface Ticket {
@@ -101,6 +103,8 @@ export default function CustomersPage() {
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
 
+    const router = useRouter();
+
     const loadList = useCallback(async () => {
         try {
             const response = await axios.get<CustomerListItem[]>("/api/person");
@@ -127,6 +131,19 @@ export default function CustomersPage() {
             .catch(() => toast.error("Failed to load customer"))
             .finally(() => setDetailLoading(false));
     }, [selectedId]);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (selectedId !== null) setSelectedId(null);
+            else router.back();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [router, selectedId]);
 
     const handleTabChange = (next: Tab) => {
         setTab(next);
@@ -209,7 +226,18 @@ export default function CustomersPage() {
         : [];
 
     return (
-        <div className="-m-8 flex h-screen">
+        <div className="-m-8 flex h-screen flex-col">
+            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
+                    <ArrowLeft size={15} />
+                </Button>
+                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Link href="/office/customers" className="transition-colors hover:text-foreground">Customers</Link>
+                    <span>/</span>
+                    <span className="font-medium text-foreground">Persons</span>
+                </nav>
+            </header>
+            <div className="flex flex-1 overflow-hidden">
             <EntityListPanel
                 title="Person"
                 icon={<User size={16} className="text-primary" />}
@@ -224,23 +252,31 @@ export default function CustomersPage() {
                 {filtered.map((customer) => (
                     <Button
                         key={customer.id}
-                        type="button"
+                        asChild
                         variant="ghost"
                         className="h-auto w-full justify-start rounded-none border-b px-4 py-3"
-                        onClick={() => setSelectedId(customer.id)}
                     >
-                        <div className="flex w-full items-center gap-3 text-left">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                {initials(customer.name)}
+                        <Link
+                            href={`/office/customers/${customer.account?.id ?? "#"}`}
+                            onClick={(e) => {
+                                if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                                e.preventDefault();
+                                setSelectedId(customer.id);
+                            }}
+                        >
+                            <div className="flex w-full items-center gap-3 text-left">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                    {initials(customer.name)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{customer.name}</p>
+                                    <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
+                                </div>
+                                {customer._count.devices > 0 && (
+                                    <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
+                                )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium">{customer.name}</p>
-                                <p className="truncate text-xs text-muted-foreground">{customer.phone || "No phone"}</p>
-                            </div>
-                            {customer._count.devices > 0 && (
-                                <span className="text-xs text-muted-foreground">{customer._count.devices}d</span>
-                            )}
-                        </div>
+                        </Link>
                     </Button>
                 ))}
             </EntityListPanel>
@@ -450,6 +486,7 @@ export default function CustomersPage() {
                     </>
                 )}
             </section>
+            </div>
 
             <Dialog open={showCreate} onOpenChange={setShowCreate}>
                 <DialogContent className="sm:max-w-md">

@@ -1,10 +1,11 @@
 "use client";
 // Day Book — chronological view of every voucher across all sources.
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -114,9 +115,26 @@ const today = formatDateInput(new Date());
 export default function DayBookPage() {
     const { rows, loading, error, reload } = useCombinedVouchers();
 
-    const [preset, setPreset] = useState<DatePreset>("today");
-    const [from,   setFrom]   = useState(presetRange("today").from);
-    const [to,     setTo]     = useState(presetRange("today").to);
+    const [preset, setPreset] = useState<DatePreset>(() => {
+        try { return (localStorage.getItem("daybook:preset") as DatePreset) ?? "today"; }
+        catch { return "today"; }
+    });
+    const [from, setFrom] = useState(() => {
+        try {
+            const p = (localStorage.getItem("daybook:preset") as DatePreset) ?? "today";
+            return p === "custom"
+                ? (localStorage.getItem("daybook:from") ?? presetRange("today").from)
+                : presetRange(p).from;
+        } catch { return presetRange("today").from; }
+    });
+    const [to, setTo] = useState(() => {
+        try {
+            const p = (localStorage.getItem("daybook:preset") as DatePreset) ?? "today";
+            return p === "custom"
+                ? (localStorage.getItem("daybook:to") ?? presetRange("today").to)
+                : presetRange(p).to;
+        } catch { return presetRange("today").to; }
+    });
 
     const applyPreset = (p: DatePreset) => {
         setPreset(p);
@@ -124,42 +142,78 @@ export default function DayBookPage() {
     };
     const handleFrom = (v: string) => { setFrom(v); setPreset("custom"); };
     const handleTo   = (v: string) => { setTo(v);   setPreset("custom"); };
-    const [search,       setSearch]       = useState("");
-    const [kind,         setKind]         = useState("__all__");
-    const [optionalOnly, setOptionalOnly] = useState(false);
-    const [inventoryOnly,setInventoryOnly]= useState(false);
+    const [search, setSearch] = useState("");
+    const [kind, setKind] = useState(() => {
+        try { return localStorage.getItem("daybook:kind") ?? "__all__"; }
+        catch { return "__all__"; }
+    });
+    const [optionalOnly, setOptionalOnly] = useState(() => {
+        try { return localStorage.getItem("daybook:optionalOnly") === "true"; }
+        catch { return false; }
+    });
+    const [inventoryOnly, setInventoryOnly] = useState(() => {
+        try { return localStorage.getItem("daybook:inventoryOnly") === "true"; }
+        catch { return false; }
+    });
 
     // Status checkboxes — empty Set means "show all"
-    const [statuses, setStatuses] = useState<Set<string>>(new Set());
+    const [statuses, setStatuses] = useState<Set<string>>(() => {
+        try {
+            const saved = localStorage.getItem("daybook:statuses");
+            return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+        } catch { return new Set(); }
+    });
     const toggleStatus = (s: string) =>
         setStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+
+    // Persist filter state to localStorage
+    useEffect(() => { try { localStorage.setItem("daybook:preset", preset); } catch {} }, [preset]);
+    useEffect(() => { try { localStorage.setItem("daybook:from",   from);   } catch {} }, [from]);
+    useEffect(() => { try { localStorage.setItem("daybook:to",     to);     } catch {} }, [to]);
+    useEffect(() => { try { localStorage.setItem("daybook:kind",   kind);   } catch {} }, [kind]);
+    useEffect(() => { try { localStorage.setItem("daybook:statuses", JSON.stringify([...statuses])); } catch {} }, [statuses]);
+    useEffect(() => { try { localStorage.setItem("daybook:optionalOnly",  String(optionalOnly));  } catch {} }, [optionalOnly]);
+    useEffect(() => { try { localStorage.setItem("daybook:inventoryOnly", String(inventoryOnly)); } catch {} }, [inventoryOnly]);
 
     // Expand state: which row ids are open + lazy-fetched line cache (keyed by CombinedRow.id)
     const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
     const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
+    const [selectedRow, setSelectedRow] = useState<CombinedRow | null>(null);
+
+    const router = useRouter();
+
+    const fetchLines = (r: CombinedRow) => {
+        if (lineCache.has(r.id)) return;
+        setLineCache((c) => new Map(c).set(r.id, "loading"));
+        const url =
+            r.source === "inv" ? `/api/inventory/vouchers/${r.rawId}` :
+            r.source === "gl"  ? `/api/accountancy/vouchers/${r.rawId}` :
+                                  `/api/accountancy/journal-entries/${r.rawId}`;
+        axios.get<{ lines: Line[] }>(url)
+            .then((res) => setLineCache((c) => new Map(c).set(r.id, res.data.lines ?? [])))
+            .catch(() => setLineCache((c) => new Map(c).set(r.id, "error")));
+    };
 
     const toggleExpand = (r: CombinedRow) => {
         setExpanded((prev) => {
             const next = new Set(prev);
-            if (next.has(r.id)) {
-                next.delete(r.id);
-            } else {
-                next.add(r.id);
-                // Lazy-fetch on first open only
-                if (!lineCache.has(r.id)) {
-                    setLineCache((c) => new Map(c).set(r.id, "loading"));
-                    const url =
-                        r.source === "inv" ? `/api/inventory/vouchers/${r.rawId}` :
-                        r.source === "gl"  ? `/api/accountancy/vouchers/${r.rawId}` :
-                                              `/api/accountancy/journal-entries/${r.rawId}`;
-                    axios.get<{ lines: Line[] }>(url)
-                        .then((res) => setLineCache((c) => new Map(c).set(r.id, res.data.lines ?? [])))
-                        .catch(() => setLineCache((c) => new Map(c).set(r.id, "error")));
-                }
-            }
+            if (next.has(r.id)) { next.delete(r.id); } else { next.add(r.id); fetchLines(r); }
             return next;
         });
     };
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (selectedRow !== null) setSelectedRow(null);
+            else router.back();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [router, selectedRow]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -189,22 +243,27 @@ export default function DayBookPage() {
         .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
 
-    return (
-        <div className="-m-8 space-y-0">
+    const panelLines = selectedRow ? lineCache.get(selectedRow.id) : undefined;
 
-            {/* Header */}
-            {/* <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Day Book</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        Every voucher — inventory, GL &amp; journal — sorted by date
-                    </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={reload}>Reload</Button>
-            </div> */}
+    return (
+        <div className="-m-8 flex h-screen flex-col overflow-hidden">
+
+            {/* Breadcrumb */}
+            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
+                    <ArrowLeft size={15} />
+                </Button>
+                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Link href="/office/accountancy" className="transition-colors hover:text-foreground">Accountancy</Link>
+                    <span>/</span>
+                    <Link href="/office/accountancy/reports" className="transition-colors hover:text-foreground">Reports</Link>
+                    <span>/</span>
+                    <span className="font-medium text-foreground">Day Book</span>
+                </nav>
+            </header>
 
             {/* Filters */}
-            <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-t-lg border border-border border-b-0 bg-card p-4">
+            <div className="flex shrink-0 flex-wrap items-end gap-x-4 gap-y-3 border-b bg-card p-4">
 
                 {/* Date preset + custom range */}
                 <div className="flex items-end gap-2">
@@ -363,16 +422,9 @@ export default function DayBookPage() {
                 <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
             </div>
 
-            {/* Legend */}
-            {/* <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
-                {Object.entries(SOURCE_CONFIG).map(([src, cfg]) => (
-                    <span key={src} className="flex items-center gap-1.5">
-                        <span className={`inline-block w-2.5 h-2.5 rounded-sm ${cfg.accent}`} />
-                        {cfg.label === "Inv" ? "Inventory" : cfg.label === "GL" ? "GL Voucher" : "Journal Entry"}
-                    </span>
-                ))}
-                <span className="ml-2 opacity-50">Faded = Draft &nbsp;·&nbsp; <span className="italic">Italic</span> = Optional / non-financial</span>
-            </div> */}
+            {/* Table + detail panel */}
+            <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
 
             {error && (
                 <div className="rounded border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
@@ -383,11 +435,11 @@ export default function DayBookPage() {
                     <Loader2 className="animate-spin text-muted-foreground" size={28} />
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="rounded-b-lg border border-border bg-card text-center py-16 text-muted-foreground">
+                <div className="bg-card py-16 text-center text-muted-foreground">
                     No vouchers match the current filters.
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-b-lg border border-border bg-card">
+                <div className="overflow-hidden bg-card">
                     <table className="w-full text-sm">
                         <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                             <tr>
@@ -455,7 +507,7 @@ export default function DayBookPage() {
                                                 </div>
                                             </td>
 
-                                            {/* Reference — clickable edit link */}
+                                            {/* Reference — left-click opens panel; right/ctrl/cmd opens full page */}
                                             <td
                                                 className={[
                                                     "px-3 py-2.5 font-mono text-xs",
@@ -465,17 +517,44 @@ export default function DayBookPage() {
                                                 onClick={(e) => e.stopPropagation()}
                                             >
                                                 {href ? (
-                                                    <Link href={href} className="hover:underline underline-offset-2">
+                                                    <Link
+                                                        href={href}
+                                                        className="hover:underline underline-offset-2"
+                                                        onClick={(e) => {
+                                                            if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                                                            e.preventDefault();
+                                                            setSelectedRow(r);
+                                                            fetchLines(r);
+                                                        }}
+                                                    >
                                                         {r.reference}
                                                     </Link>
                                                 ) : (
-                                                    r.reference
+                                                    <button
+                                                        type="button"
+                                                        className="hover:underline underline-offset-2"
+                                                        onClick={() => { setSelectedRow(r); fetchLines(r); }}
+                                                    >
+                                                        {r.reference}
+                                                    </button>
                                                 )}
                                             </td>
 
-                                            {/* Party */}
-                                            <td className={`px-3 py-2.5 text-sm ${isOpt ? "italic text-muted-foreground" : ""}`}>
-                                                {r.party ?? <span className="text-muted-foreground/40">—</span>}
+                                            {/* Party — clickable link to All Customers with this row pre-selected */}
+                                            <td
+                                                className={`px-3 py-2.5 text-sm ${isOpt ? "italic text-muted-foreground" : ""}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {r.party
+                                                    ? (r.partyKind && r.partyEntityId
+                                                        ? <Link
+                                                              href={`/office/customers/all?${r.partyKind}Id=${r.partyEntityId}`}
+                                                              className="text-primary hover:underline underline-offset-2"
+                                                          >
+                                                              {r.party}
+                                                          </Link>
+                                                        : r.party)
+                                                    : <span className="text-muted-foreground/40">—</span>}
                                             </td>
 
                                             {/* Narration */}
@@ -591,6 +670,110 @@ export default function DayBookPage() {
                     </table>
                 </div>
             )}
+            </div>{/* end scrollable table column */}
+
+            {/* Detail panel */}
+            {selectedRow && (
+                <aside className="w-[420px] shrink-0 overflow-y-auto border-l bg-card">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className={`rounded-sm px-2 py-0.5 text-xs font-medium ${KIND_BADGE[selectedRow.kind] ?? "bg-muted text-muted-foreground"}`}>
+                                    {selectedRow.kind.replace(/_/g, " ")}
+                                </span>
+                                <span className={`font-mono text-sm font-semibold ${selectedRow.status === "CANCELLED" ? "line-through text-muted-foreground" : ""}`}>
+                                    {selectedRow.reference}
+                                </span>
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>{new Date(selectedRow.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                {selectedRow.status !== "POSTED" && (
+                                    <span className={`rounded px-1.5 py-0.5 font-medium ${JOURNAL_STATUS_COLORS[selectedRow.status] ?? "bg-muted text-muted-foreground"}`}>
+                                        {selectedRow.status.toLowerCase()}
+                                    </span>
+                                )}
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_CONFIG[selectedRow.source].badge}`}>
+                                    {SOURCE_CONFIG[selectedRow.source].label}
+                                </span>
+                            </div>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => setSelectedRow(null)} title="Close (Esc)">
+                            <X size={14} />
+                        </Button>
+                    </div>
+
+                    {/* Meta */}
+                    <div className="space-y-1.5 border-b px-4 py-3">
+                        {selectedRow.party && (
+                            <p className="text-xs">
+                                <span className="text-muted-foreground">Party — </span>
+                                <span className="font-medium">{selectedRow.party}</span>
+                            </p>
+                        )}
+                        {selectedRow.narration && (
+                            <p className="text-xs text-muted-foreground">{selectedRow.narration}</p>
+                        )}
+                        <p className="font-mono text-lg font-semibold">₹ {fmt(selectedRow.totalAmount)}</p>
+                        {referenceHref(selectedRow.source, selectedRow.rawId, selectedRow.kind) && (
+                            <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+                                <Link href={referenceHref(selectedRow.source, selectedRow.rawId, selectedRow.kind)!}>
+                                    <ExternalLink size={12} className="mr-1.5" />
+                                    Open full page
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
+
+                    {/* Lines */}
+                    <div className="px-4 py-3">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Lines</p>
+                        {(!panelLines || panelLines === "loading") && (
+                            <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+                                <Loader2 size={14} className="animate-spin" /> Loading…
+                            </div>
+                        )}
+                        {panelLines === "error" && (
+                            <p className="py-4 text-xs text-destructive">Failed to load lines.</p>
+                        )}
+                        {Array.isArray(panelLines) && panelLines.length === 0 && (
+                            <p className="py-4 text-xs text-muted-foreground">No lines found.</p>
+                        )}
+                        {Array.isArray(panelLines) && panelLines.length > 0 && (
+                            <div className="space-y-1">
+                                {panelLines.map((l, i) => {
+                                    const isGl = "account" in l;
+                                    return (
+                                        <div key={i} className="flex items-center gap-2 rounded-sm bg-muted/40 px-2 py-1.5 text-xs">
+                                            {isGl ? (
+                                                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${l.type === "DEBIT" ? "bg-blue-50 text-blue-600" : "bg-violet-50 text-violet-600"}`}>
+                                                    {l.type === "DEBIT" ? "Dr" : "Cr"}
+                                                </span>
+                                            ) : (
+                                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">item</span>
+                                            )}
+                                            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                                                {isGl ? l.account.code : l.product.sku}
+                                            </span>
+                                            <span className="min-w-0 flex-1 truncate text-foreground">
+                                                {isGl ? l.account.name : l.product.name}
+                                            </span>
+                                            {!isGl && (
+                                                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                                                    {l.quantity}×₹{fmt(Number(l.rate))}
+                                                </span>
+                                            )}
+                                            <span className="shrink-0 font-mono tabular-nums">₹ {fmt(Number(l.amount))}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </aside>
+            )}
+
+            </div>{/* end flex flex-1 overflow-hidden */}
         </div>
     );
 }

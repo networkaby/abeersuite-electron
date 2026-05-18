@@ -22,6 +22,20 @@ export type CombinedRow = {
     reference:   string;
     date:        string;
     party:       string | null;
+    /** Account id for the party, when the row has one resolved. Used to link
+     *  the Party cell to /office/customers/<accountId>. Inventory rows carry
+     *  it server-side (resolved from Person/Company id); GL rows source it
+     *  from partyAccount.id; JE rows have no party concept. Optional because
+     *  per-kind register components fetch their own data and don't always
+     *  surface this field. */
+    partyAccountId?: number | null;
+    /** Whether the party is a Person or a Company — needed so the Day Book
+     *  can route to /office/customers/all?personId= or ?companyId= and the
+     *  list page can pre-select the right tab. */
+    partyKind?:     "person" | "company" | null;
+    /** Person.id or Company.id (depending on partyKind) — the value the
+     *  customer-list page uses to setSelected. */
+    partyEntityId?: number | null;
     narration:   string | null;
     totalAmount: number;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
@@ -49,7 +63,11 @@ interface UseCombinedVouchersOptions {
 type RawInv = {
     id: number; type: string; reference: string; date: string;
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
-    partyName: string | null; totalAmount: number | string;
+    partyName: string | null;
+    partyAccountId?: number | null;
+    partyPersonId?:  number | null;
+    partyCompanyId?: number | null;
+    totalAmount: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
     createdBy?: { name: string } | null;
@@ -57,7 +75,7 @@ type RawInv = {
 type RawGl = {
     id: number; type: string; reference: string; date: string;
     narration: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
-    partyAccount?: { name: string } | null;
+    partyAccount?: { id: number; name: string; personId: number | null; companyId: number | null } | null;
     totalAmount: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
@@ -103,6 +121,9 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     reference:   v.reference,
                     date:        v.date,
                     party:       v.partyName,
+                    partyAccountId: v.partyAccountId ?? null,
+                    partyKind:     v.partyPersonId != null ? "person" : v.partyCompanyId != null ? "company" : null,
+                    partyEntityId: v.partyPersonId ?? v.partyCompanyId ?? null,
                     narration:   v.description,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
@@ -119,6 +140,11 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     reference:   v.reference,
                     date:        v.date,
                     party:       v.partyAccount?.name ?? null,
+                    partyAccountId: v.partyAccount?.id ?? null,
+                    partyKind:     v.partyAccount?.personId != null ? "person"
+                                  : v.partyAccount?.companyId != null ? "company"
+                                  : null,
+                    partyEntityId: v.partyAccount?.personId ?? v.partyAccount?.companyId ?? null,
                     narration:   v.narration,
                     totalAmount: Number(v.totalAmount),
                     status:      v.status,
@@ -135,6 +161,9 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     reference:   e.reference,
                     date:        e.date,
                     party:       null,
+                    partyAccountId: null,
+                    partyKind:     null,
+                    partyEntityId: null,
                     narration:   e.description,
                     totalAmount: Number(e.totalDebit ?? e.totalAmount ?? 0),
                     status:      e.status,

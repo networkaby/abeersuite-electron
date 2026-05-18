@@ -58,7 +58,50 @@ export async function GET(req: NextRequest) {
         },
     });
 
-    return NextResponse.json(vouchers);
+    // Resolve partyAccountId per row so the Day Book / register tables can
+    // link the Party cell to /office/customers/<accountId>. InvVoucher only
+    // stores `partyId` (a Person id), so we bulk-fetch the matching Accounts
+    // in one query and attach the id back.
+    const partyIds = [...new Set(
+        vouchers.map((v) => v.partyId).filter((id): id is number => id != null),
+    )];
+    const partyAccounts = partyIds.length > 0
+        ? await prisma.account.findMany({
+            where: {
+                OR: [
+                    { personId:  { in: partyIds } },
+                    { companyId: { in: partyIds } },
+                ],
+            },
+            select: { id: true, personId: true, companyId: true },
+        })
+        : [];
+    const personToAccount  = new Map<number, number>();
+    const companyToAccount = new Map<number, number>();
+    for (const a of partyAccounts) {
+        if (a.personId  != null) personToAccount.set(a.personId,  a.id);
+        if (a.companyId != null) companyToAccount.set(a.companyId, a.id);
+    }
+    const enriched = vouchers.map((v) => {
+        if (v.partyId == null) {
+            return { ...v, partyAccountId: null, partyPersonId: null, partyCompanyId: null };
+        }
+        // Same partyId may resolve as either a Person or a Company id depending
+        // on which lookup matches. Person wins when both are set (shouldn't
+        // happen in practice — Person.id and Company.id are independent
+        // sequences, so a collision is possible but the row's partyType
+        // disambiguates at write time).
+        const accFromPerson  = personToAccount.get(v.partyId);
+        const accFromCompany = companyToAccount.get(v.partyId);
+        return {
+            ...v,
+            partyAccountId:  accFromPerson ?? accFromCompany ?? null,
+            partyPersonId:   accFromPerson  != null ? v.partyId : null,
+            partyCompanyId:  accFromPerson  == null && accFromCompany != null ? v.partyId : null,
+        };
+    });
+
+    return NextResponse.json(enriched);
 }
 
 // POST /api/inventory/vouchers

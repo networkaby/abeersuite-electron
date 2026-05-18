@@ -31,6 +31,7 @@ interface RawVoucher {
     description:    string;
     status:         "DRAFT" | "POSTED" | "CANCELLED";
     partyName:      string | null;
+    partyAccountId: number | null;
     paymentMode:    string | null;
     totalAmount:    number | string;
     amountReceived: number | string;
@@ -75,6 +76,7 @@ export function SalesRegister() {
                         reference:      v.reference,
                         date:           v.date,
                         party:          v.partyName,
+                        partyAccountId: v.partyAccountId,
                         narration:      v.description,
                         totalAmount:    Number(v.totalAmount),
                         amountReceived: Number(v.amountReceived),

@@ -177,7 +177,17 @@ export function VoucherRegisterTable({
                                     )}
                                 </td>
                                 <td className="px-4 py-3">
-                                    {r.party ?? <span className="text-muted-foreground/50">—</span>}
+                                    {r.party
+                                        ? (r.partyKind && r.partyEntityId
+                                            ? <Link
+                                                  href={`/office/customers/all?${r.partyKind}Id=${r.partyEntityId}`}
+                                                  className="text-primary hover:underline"
+                                                  onClick={(e) => e.stopPropagation()}
+                                              >
+                                                  {r.party}
+                                              </Link>
+                                            : r.party)
+                                        : <span className="text-muted-foreground/50">—</span>}
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground max-w-[260px] truncate">
                                     {r.narration ?? "—"}

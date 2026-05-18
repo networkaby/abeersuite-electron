@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import {
+    ArrowLeft,
     Building2,
     ExternalLink,
     Loader2,
@@ -25,17 +27,19 @@ type PersonRow = {
     id: number;
     name: string;
     phone: string | null;
+    account: { id: number } | null;
 };
 
 type CompanyRow = {
     id: number;
     name: string;
     phone: string | null;
+    account: { id: number } | null;
 };
 
 type CombinedListItem =
-    | { kind: "person"; id: number; name: string; phone: string | null }
-    | { kind: "company"; id: number; name: string; phone: string | null };
+    | { kind: "person"; id: number; name: string; phone: string | null; accountId: number | null }
+    | { kind: "company"; id: number; name: string; phone: string | null; accountId: number | null };
 
 type PersonDetail = {
     id: number;
@@ -95,6 +99,7 @@ function initials(name: string) {
 }
 
 export default function AllCustomersPage() {
+    const router = useRouter();
     const [people, setPeople] = useState<PersonRow[]>([]);
     const [companies, setCompanies] = useState<CompanyRow[]>([]);
     const [search, setSearch] = useState("");
@@ -111,6 +116,21 @@ export default function AllCustomersPage() {
         axios.get<PersonRow[]>("/api/person").then((res) => setPeople(res.data)).catch(() => setPeople([]));
         axios.get<CompanyRow[]>("/api/companies").then((res) => setCompanies(res.data)).catch(() => setCompanies([]));
     }, []);
+
+    // Pre-select a row from URL query params on mount.  Day Book / register
+    // tables link here as /office/customers/all?personId=<id> or ?companyId=<id>
+    // so clicking a party in those views opens the same 3-column layout with
+    // the right customer already selected.
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        const personId  = searchParams.get("personId");
+        const companyId = searchParams.get("companyId");
+        if (personId)  setSelected({ kind: "person",  id: Number(personId) });
+        else if (companyId) setSelected({ kind: "company", id: Number(companyId) });
+        // Intentionally only react to query-param changes — list-click selection
+        // is owned by the existing onClick handler below.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     useEffect(() => {
         if (!selected) {
@@ -187,10 +207,23 @@ export default function AllCustomersPage() {
             .finally(() => setTxLoading(false));
     }, [selected, personTab, companyTab, transactions]);
 
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (selected !== null) setSelected(null);
+            else router.back();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [router, selected]);
+
     const merged = useMemo<CombinedListItem[]>(
         () => [
-            ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone })),
-            ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone })),
+            ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone, accountId: p.account?.id ?? null })),
+            ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, phone: c.phone, accountId: c.account?.id ?? null })),
         ],
         [people, companies]
     );
@@ -214,7 +247,18 @@ export default function AllCustomersPage() {
         : [];
 
     return (
-        <div className="-m-8 flex h-screen overflow-hidden bg-card">
+        <div className="-m-8 flex h-screen flex-col overflow-hidden bg-card">
+            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
+                    <ArrowLeft size={15} />
+                </Button>
+                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Link href="/office/customers" className="transition-colors hover:text-foreground">Customers</Link>
+                    <span>/</span>
+                    <span className="font-medium text-foreground">All</span>
+                </nav>
+            </header>
+            <div className="flex flex-1 overflow-hidden">
             <EntityListPanel
                 title="All Customers"
                 icon={<User size={15} className="text-primary" />}
@@ -231,24 +275,32 @@ export default function AllCustomersPage() {
                     return (
                         <Button
                             key={`${item.kind}-${item.id}`}
-                            type="button"
+                            asChild
                             variant="ghost"
                             className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${isActive ? "bg-muted" : ""}`}
-                            onClick={() => setSelected({ kind: item.kind, id: item.id })}
                         >
-                            <div className="flex w-full items-center gap-3 text-left">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                    {initials(item.name)}
+                            <Link
+                                href={`/office/customers/${item.accountId ?? "#"}`}
+                                onClick={(e) => {
+                                    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                                    e.preventDefault();
+                                    setSelected({ kind: item.kind, id: item.id });
+                                }}
+                            >
+                                <div className="flex w-full items-center gap-3 text-left">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                        {initials(item.name)}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium">{item.name}</p>
+                                        <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
+                                    </div>
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                        <Icon size={10} className="mr-1" />
+                                        {item.kind === "person" ? "Person" : "Company"}
+                                    </Badge>
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium">{item.name}</p>
-                                    <p className="truncate text-xs text-muted-foreground">{item.phone || "No phone"}</p>
-                                </div>
-                                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                    <Icon size={10} className="mr-1" />
-                                    {item.kind === "person" ? "Person" : "Company"}
-                                </Badge>
-                            </div>
+                            </Link>
                         </Button>
                     );
                 })}
@@ -526,6 +578,7 @@ export default function AllCustomersPage() {
                     </div>
                 )}
             </section>
+            </div>
         </div>
     );
 }

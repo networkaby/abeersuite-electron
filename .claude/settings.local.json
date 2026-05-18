@@ -131,7 +131,10 @@
       "Bash(Select-Object FullName)",
       "Bash(Get-ChildItem \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\vouchers\" -Recurse -Name)",
       "Bash(Sort-Object)",
-      "Bash(rm \"D:/our-own-website/service-mgmt-experiment/src/app/\\(protected\\)/office/inventory/physical-stock/page.tsx\" \\\\ *)"
+      "Bash(rm \"D:/our-own-website/service-mgmt-experiment/src/app/\\(protected\\)/office/inventory/physical-stock/page.tsx\" \\\\ *)",
+      "Bash(cd /d D:\\\\our-own-website\\\\service-mgmt-experiment)",
+      "Bash(powershell -Command \"Get-Content src/app/'\\(protected\\)'/office/accountancy/groups/'[id]'/page.tsx -TotalCount 200 | Select-Object -Last 120\")",
+      "Bash(Select-String -Pattern \"customers|day-book|Error\")"
     ]
   }
 }
