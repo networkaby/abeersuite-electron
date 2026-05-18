@@ -253,6 +253,12 @@ export default function AllCustomersPage() {
                     <ArrowLeft size={15} />
                 </Button>
                 <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    {searchParams.get("from") === "daybook" && (
+                        <>
+                            <Link href="/office/accountancy/reports/day-book" className="transition-colors hover:text-foreground">Day Book</Link>
+                            <span>/</span>
+                        </>
+                    )}
                     <Link href="/office/customers" className="transition-colors hover:text-foreground">Customers</Link>
                     <span>/</span>
                     <span className="font-medium text-foreground">All</span>
