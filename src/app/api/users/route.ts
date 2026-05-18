@@ -8,17 +8,18 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Identity-only user creation. Role / branches / departments are NOT accepted
+// here — they're granted by appointing the user to a Post on
+// /office/admin/posts. New users land in the R-GUEST role (zero permissions).
 const createUserSchema = z.object({
-    name:          z.string().trim().min(1, "Name is required"),
-    email:         z.string().trim().email("Valid email is required"),
-    password:      z.string().min(6, "Password must be at least 6 characters"),
-    role:          z.string().trim().optional(),
-    title:         z.string().trim().optional().nullable(),
-    scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
-    departmentIds: z.array(z.string()).optional(),
-    branchIds:     z.array(z.string()).optional(),
-    managerId:     z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    name:      z.string().trim().min(1, "Name is required"),
+    email:     z.string().trim().email("Valid email is required"),
+    password:  z.string().min(6, "Password must be at least 6 characters"),
+    title:     z.string().trim().optional().nullable(),
+    managerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
 });
+
+const GUEST_ROLE_ID = "R-GUEST";
 
 const USER_SELECT = {
     id:          true,
@@ -65,24 +66,22 @@ export async function POST(req: Request) {
             );
         }
 
-        let primaryRole = body.role;
-        if (!primaryRole) {
-            const firstRole = await prisma.role.findFirst({ orderBy: { id: "asc" } });
-            primaryRole = firstRole?.id || "R2";
+        // Always create with the Guest role. Operational authority is granted
+        // by appointing the user to a Post — see /office/admin/posts.
+        const guestRole = await prisma.role.findUnique({
+            where: { id: GUEST_ROLE_ID },
+            select: { id: true },
+        });
+        if (!guestRole) {
+            return NextResponse.json(
+                { error: "Guest role missing — run bootstrap-seed." },
+                { status: 500 }
+            );
         }
 
-        if (!caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
-            const [targetRole, callerRole] = await Promise.all([
-                prisma.role.findUnique({ where: { id: primaryRole }, select: { rank: true } }),
-                prisma.role.findUnique({ where: { id: caller.primaryRole }, select: { rank: true } }),
-            ]);
-            if (targetRole && callerRole && targetRole.rank >= callerRole.rank) {
-                return NextResponse.json(
-                    { error: "You cannot assign a role equal to or above your own rank" },
-                    { status: 403 }
-                );
-            }
-        }
+        // Silence unused caller (rank guard is no longer needed at creation
+        // because the Guest role has rank 0 and no permissions).
+        void caller;
 
         const password = await bcrypt.hash(body.password, 10);
         const user = await prisma.user.create({
@@ -90,15 +89,9 @@ export async function POST(req: Request) {
                 name:     body.name,
                 email:    body.email,
                 password,
-                role:     primaryRole,
+                role:     GUEST_ROLE_ID,
                 title:    body.title ?? null,
-                scope:    body.scope ?? "OWN",
-                departments: body.departmentIds?.length
-                    ? { connect: body.departmentIds.map(id => ({ id })) }
-                    : undefined,
-                branches: body.branchIds?.length
-                    ? { connect: body.branchIds.map(id => ({ id })) }
-                    : undefined,
+                scope:    "OWN",
                 ...(body.managerId ? { managerId: Number(body.managerId) } : {}),
             },
             select: USER_SELECT,

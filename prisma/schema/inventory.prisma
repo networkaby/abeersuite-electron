@@ -269,69 +269,69 @@ model InvProductBranch {
 // ── Stock Vouchers (Purchase / Sale) ─────────────────────────────────────────
 
 model InvVoucher {
-  id               Int            @id @default(autoincrement())
-  type             InvVoucherType
+  id                  Int            @id @default(autoincrement())
+  type                InvVoucherType
   /// Auto-generated: PV-2026-0001 for PURCHASE, SV-2026-0001 for SALE
-  reference        String         @unique
+  reference           String         @unique
   /// Branch where this voucher originates — drives per-branch stock balance,
   /// list filtering, and reporting. Required on every new voucher.
-  branchId         String
-  branch           Branch         @relation("InvVoucherBranch", fields: [branchId], references: [id])
-  date             DateTime       @db.Date
-  description      String
+  branchId            String
+  branch              Branch         @relation("InvVoucherBranch", fields: [branchId], references: [id])
+  date                DateTime       @db.Date
+  description         String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
-  status           VoucherStatus  @default(DRAFT)
-  partyName        String?
-  partyType        String? // "supplier" | "customer" | "account"
-  partyId          Int?
-  partyPhone       String?
-  partyAddress     String?
+  status              VoucherStatus  @default(DRAFT)
+  partyName           String?
+  partyType           String? // "supplier" | "customer" | "account"
+  partyId             Int?
+  partyPhone          String?
+  partyAddress        String?
   /// "CASH" or "CREDIT" — affects GL auto-post account selection
-  paymentMode      String?
+  paymentMode         String?
   /// Cash / bank ledger that received the payment (CASH sale or upfront
   /// received-amount on a CREDIT sale). FK to Account; null falls back to
   /// postInvVoucher.ts's legacy name-based lookup ("Cash-in-Hand").
-  paymentAccountId Int?
-  paymentAccount   Account?       @relation("InvVoucherPaymentAccount", fields: [paymentAccountId], references: [id])
+  paymentAccountId    Int?
+  paymentAccount      Account?       @relation("InvVoucherPaymentAccount", fields: [paymentAccountId], references: [id])
   /// Supplier-issued bill number on a PURCHASE (we don't generate it — the
   /// supplier does). Also reused as the "original invoice / bill number"
   /// on SALE_RETURN / PURCHASE_RETURN to back-reference the source voucher.
-  refNumber        String?
-  refDate          DateTime?      @db.Date
+  refNumber           String?
+  refDate             DateTime?      @db.Date
   /// Optional FK back to the source InvVoucher being returned against —
   /// lets a SALE_RETURN link to the original SALE (and PURCHASE_RETURN to
   /// the original PURCHASE) so the detail page can show the relationship.
-  refVoucherId     Int?
-  refVoucher       InvVoucher?    @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
-  refReturns       InvVoucher[]   @relation("InvVoucherRef")
+  refVoucherId        Int?
+  refVoucher          InvVoucher?    @relation("InvVoucherRef", fields: [refVoucherId], references: [id])
+  refReturns          InvVoucher[]   @relation("InvVoucherRef")
   /// Number of days from voucher date until payment is due. Only for CREDIT mode.
-  creditPeriodDays Int?
+  creditPeriodDays    Int?
   /// State code where the supply happens — drives intra/inter-state GST split.
   /// Defaults to the company's state code when unset.
-  placeOfSupply    String?
-  discountPct      Decimal?       @db.Decimal(5, 2)
-  discountAmt      Decimal?       @db.Decimal(14, 2)
-  shippingAmt      Decimal        @default(0) @db.Decimal(14, 2)
-  roundOff         Decimal        @default(0) @db.Decimal(14, 2)
-  subtotal         Decimal        @db.Decimal(14, 2)
-  taxAmount        Decimal        @default(0) @db.Decimal(14, 2)
-  totalAmount      Decimal        @db.Decimal(14, 2)
-  amountReceived   Decimal        @default(0) @db.Decimal(14, 2)
+  placeOfSupply       String?
+  discountPct         Decimal?       @db.Decimal(5, 2)
+  discountAmt         Decimal?       @db.Decimal(14, 2)
+  shippingAmt         Decimal        @default(0) @db.Decimal(14, 2)
+  roundOff            Decimal        @default(0) @db.Decimal(14, 2)
+  subtotal            Decimal        @db.Decimal(14, 2)
+  taxAmount           Decimal        @default(0) @db.Decimal(14, 2)
+  totalAmount         Decimal        @db.Decimal(14, 2)
+  amountReceived      Decimal        @default(0) @db.Decimal(14, 2)
   /// Linked GL journal entry — auto-created on post
-  journalEntryId   Int?
-  postedAt         DateTime?
+  journalEntryId      Int?
+  postedAt            DateTime?
   // Toggle on Challan vouchers — when false, printed challan hides rate/amount columns.
-  showPrices       Boolean        @default(true)
+  showPrices          Boolean        @default(true)
   /// Optional FK to InvBom — only set for MANUFACTURING_JOURNAL vouchers
   /// generated from a recipe (stamped for audit / reporting).
-  bomId            Int?
-  bom              InvBom?        @relation(fields: [bomId], references: [id])
+  bomId               Int?
+  bom                 InvBom?        @relation(fields: [bomId], references: [id])
   /// Destination branch — only set for BRANCH_TRANSFER. The source branch
   /// is the standard `branchId` field; this column carries the partner
   /// branch the stock is moving into. Two `InvStockLedger` rows are written
   /// per transfer line at post time (one OUT on source, one IN on dest).
   destinationBranchId String?
-  destinationBranch   Branch?     @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
+  destinationBranch   Branch?        @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
 
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?

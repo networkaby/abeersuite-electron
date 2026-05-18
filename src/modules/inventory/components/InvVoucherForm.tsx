@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { fmt } from "@/utils/constants";
 import { InvProductPicker } from "@/modules/inventory/components/InvProductPicker";
+import { http } from "@/shared/lib/http";
+import { BranchRequired } from "@/shared/components/BranchRequired";
 
 export type InvVoucherKind =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -106,7 +108,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
 
         setSaving(true);
         try {
-            const created = await axios.post<{ id: number }>("/api/inventory/vouchers", {
+            const created = await http.post<{ id: number }>("/api/inventory/vouchers", {
                 type,
                 branchId:     activeBranchId ?? undefined,
                 date:         form.date,
@@ -123,7 +125,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
                 })),
             });
             if (postAfterSave) {
-                await axios.post(`/api/inventory/vouchers/${created.data.id}/post`);
+                await http.post(`/api/inventory/vouchers/${created.data.id}/post`);
                 toast.success(`${TITLES[type]} saved & posted`);
             } else {
                 toast.success(`${TITLES[type]} saved as draft`);
@@ -138,6 +140,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
     };
 
     return (
+        <BranchRequired action={`post this ${TITLES[type].toLowerCase()}`}>
         <div className="max-w-4xl mx-auto space-y-5">
             <div className="flex items-start justify-between">
                 <div>
@@ -269,6 +272,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
                 </div>
             </div>
         </div>
+        </BranchRequired>
     );
 }
 
@@ -324,6 +328,7 @@ export function InvVoucherList({
     const showDeleted = statusFilter === "DELETED";
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const params = new URLSearchParams({ type });
         if (statusFilter && statusFilter !== "DELETED") params.set("status", statusFilter);

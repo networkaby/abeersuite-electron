@@ -55,10 +55,15 @@ const prisma = new PrismaClient({ adapter });
 // ════════════════════════════════════════════════════════════════════════════
 
 const ROLES = [
-    { id: "R1", label: "Admin",      color: "bg-red-100 text-red-600",      isSystem: true, rank: 100 },
-    { id: "R2", label: "Technician", color: "bg-blue-100 text-blue-600",    isSystem: true, rank: 70  },
-    { id: "R3", label: "Front Desk", color: "bg-green-100 text-green-600",  isSystem: true, rank: 20  },
+    { id: "R1", label: "Admin",      color: "bg-red-100 text-red-600",       isSystem: true, rank: 100 },
+    { id: "R2", label: "Technician", color: "bg-blue-100 text-blue-600",     isSystem: true, rank: 70  },
+    { id: "R3", label: "Front Desk", color: "bg-green-100 text-green-600",   isSystem: true, rank: 20  },
     { id: "R4", label: "Despatch",   color: "bg-purple-100 text-purple-600", isSystem: true, rank: 20  },
+    // Default role for newly-created users. Carries NO permissions — the user
+    // can log in and see their profile / the social wall, but every
+    // operational page is locked out until an admin assigns them to a Post
+    // (which carries the actual role/branch/department combination).
+    { id: "R-GUEST", label: "Guest", color: "bg-slate-100 text-slate-500",   isSystem: true, rank: 0   },
 ] as const;
 
 const PERMISSIONS = [
@@ -209,6 +214,10 @@ const PERMISSIONS = [
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     R1: (PERMISSIONS as readonly { id: string }[]).map((p) => p.id),
+    // R-GUEST = default for newly-created users. No permissions: they can log
+    // in and see their profile / social wall, but no operational pages. Grants
+    // arrive only via Post appointment.
+    "R-GUEST": [],
     R2: [
         "customers:view",
         "tickets:create", "tickets:status:set", "tickets:substatus:set",

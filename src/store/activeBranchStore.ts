@@ -5,6 +5,18 @@ import { create } from "zustand";
 const STORAGE_KEY = "app:active-branch";
 const COOKIE_NAME = "app:active-branch";
 
+/**
+ * Sentinel branch id meaning "all branches the user has access to."
+ * Reports use this to render a consolidated/union view. Transaction APIs
+ * reject it with `select_working_branch` because writes need a concrete
+ * operational branch.
+ */
+export const COMBINED_BRANCH = "__combined__";
+
+export function isCombined(id: string | null | undefined): boolean {
+    return id === COMBINED_BRANCH;
+}
+
 interface ActiveBranchStore {
     activeBranchId: string | null;
     setActiveBranchId: (id: string | null) => void;

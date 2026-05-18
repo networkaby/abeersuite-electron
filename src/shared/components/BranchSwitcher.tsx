@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Building2 } from "lucide-react";
+import { Building2, Globe2 } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -10,7 +10,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useActiveBranchStore } from "@/store/activeBranchStore";
+import { useActiveBranchStore, COMBINED_BRANCH } from "@/store/activeBranchStore";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type Branch = { id: string; name: string; isActive?: boolean };
@@ -36,11 +36,6 @@ export function BranchSwitcher() {
     }, []);
 
     useEffect(() => {
-        if (!user) return;
-        hydrate(userBranchIds[0] ?? null);
-    }, [user, hydrate, userBranchIds]);
-
-    useEffect(() => {
         let cancelled = false;
         async function load() {
             if (!user) return;
@@ -55,10 +50,11 @@ export function BranchSwitcher() {
                     visible = active.filter((b) => userBranchIds.includes(b.id));
                 }
                 setBranches(visible);
-                // Ensure a branch is always active in the cookie.
-                // hydrate() is a no-op if something is already stored — safe to call here.
-                // This covers admin users who have no branch assignments in the session.
-                hydrate(visible[0]?.id ?? null);
+                // Default selection rule: multi-branch users land in COMBINED ("My branches");
+                // single-branch users land on their one branch. hydrate() is a no-op if
+                // something is already stored, so persistent selection survives reload.
+                const fallback = visible.length >= 2 ? COMBINED_BRANCH : (visible[0]?.id ?? null);
+                hydrate(fallback);
             } catch {
                 /* ignore — fallback to empty list */
             }
@@ -67,7 +63,18 @@ export function BranchSwitcher() {
         return () => { cancelled = true; };
     }, [user, isAdmin, userBranchIds, hydrate]);
 
-    if (!user || branches.length === 0) return null;
+    if (!user) return null;
+
+    // No accessible branches — position-less user. Show an explicit badge so
+    // they know why the operational UI is locked out.
+    if (branches.length === 0) {
+        return (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400 border border-amber-300/60 dark:border-amber-700/60 rounded bg-amber-50/40 dark:bg-amber-950/20">
+                <Building2 size={12} className="shrink-0" />
+                <span className="truncate max-w-[160px]">No branch assigned</span>
+            </div>
+        );
+    }
 
     // Single-branch users see a static badge (no need to switch).
     if (branches.length === 1) {
@@ -79,7 +86,10 @@ export function BranchSwitcher() {
         );
     }
 
-    const current = activeBranchId ?? branches[0]!.id;
+    const current = activeBranchId ?? COMBINED_BRANCH;
+    const combinedLabel = isAdmin && branches.length === userBranchIds.length
+        ? "Consolidated"
+        : "My branches";
 
     return (
         <Select value={current} onValueChange={(v) => {
@@ -87,13 +97,21 @@ export function BranchSwitcher() {
             // Soft reload so server-side route handlers re-fetch with new branch.
             if (typeof window !== "undefined") window.location.reload();
         }}>
-            <SelectTrigger className="h-7 w-[180px] text-xs">
+            <SelectTrigger className="h-7 w-[200px] text-xs">
                 <div className="flex items-center gap-1.5">
-                    <Building2 size={12} className="shrink-0 text-muted-foreground" />
+                    {current === COMBINED_BRANCH
+                        ? <Globe2 size={12} className="shrink-0 text-muted-foreground" />
+                        : <Building2 size={12} className="shrink-0 text-muted-foreground" />}
                     <SelectValue placeholder="Branch" />
                 </div>
             </SelectTrigger>
             <SelectContent>
+                <SelectItem value={COMBINED_BRANCH} className="text-xs">
+                    <span className="flex items-center gap-1.5">
+                        <Globe2 size={12} className="opacity-70" />
+                        {combinedLabel}
+                    </span>
+                </SelectItem>
                 {branches.map((b) => (
                     <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
                 ))}

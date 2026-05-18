@@ -57,9 +57,15 @@ model JournalLine {
   type           EntryType
   amount         Decimal      @db.Decimal(14, 2)
   description    String?
+  // Branch context where this entry was posted. Nullable for legacy entries and
+  // rare org-wide adjustments. New entries stamp the active branch on POST.
+  branchId       String?
+  branch         Branch?      @relation("JournalLineBranch", fields: [branchId], references: [id])
 
   @@index([accountId])
   @@index([accountId, journalEntryId])
+  @@index([branchId, accountId])
+  @@index([accountId, branchId])
 }
 
 model Invoice {

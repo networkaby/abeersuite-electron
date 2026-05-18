@@ -29,15 +29,21 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 
 ---
 
-## Active branch — `src/store/` + `src/shared/lib/auth/`
+## Active branch — `src/store/` + `src/shared/lib/auth/` + `src/shared/lib/http.ts`
 
 | Symbol | File | Purpose |
 |---|---|---|
-| `useActiveBranchStore` | `src/store/activeBranchStore.ts` | Zustand store for the active branch workspace. State: `activeBranchId`, `setActiveBranchId`, `hydrate`. Persists to `localStorage` key `app:active-branch` and sets a same-name cookie for server reads. Use in any client component that creates/filters inventory data by branch. |
-| `resolveActiveBranchId(request, session)` | `src/shared/lib/auth/activeBranch.ts` | Server-side helper — reads `x-active-branch` header → `app:active-branch` cookie → `session.user.branchIds[0]`. Throw-safe; returns the first available branch or `null`. |
-| `requireBranchAccess(session, branchId)` | same | Throws `BranchAccessError` (403) if the given branchId is not in `session.user.branchIds` and the user does not have `admin:bypass`. |
-| `BranchAccessError` | same | Typed error with `code: "BRANCH_ACCESS_DENIED"` for API route 403 handling. |
-| `<BranchSwitcher />` | `src/shared/components/BranchSwitcher.tsx` | Header dropdown (or static badge for single-branch users) for switching the active branch. Fetches session via `/api/auth/session`, branches from `/api/branches`. On change: calls `setActiveBranchId` + `window.location.reload()`. Mounted in `FinanceTopBar` and `Topbar`. |
+| `useActiveBranchStore` | `src/store/activeBranchStore.ts` | Zustand store for the active branch workspace. State: `activeBranchId`, `setActiveBranchId`, `hydrate`. Persists to `localStorage` key `app:active-branch` and sets a same-name cookie for server reads. Use in any client component that creates/filters data by branch. |
+| `COMBINED_BRANCH` / `isCombined(id)` | `src/store/activeBranchStore.ts` | Sentinel value `"__combined__"` and predicate. Combined mode means "all branches the user has access to" — reports union over `branchIds`; writes are rejected with `select_working_branch`. Re-exported from `@/shared/lib/http` and `@/shared/lib/auth/activeBranch` for convenience. |
+| `resolveActiveBranchId(request, session)` | `src/shared/lib/auth/activeBranch.ts` | Server-side helper — reads `x-active-branch` header → `app:active-branch` cookie → `session.user.branchIds[0]`. Returns the sentinel as-is when present. Throws `no_active_branch` / `forbidden_branch`. |
+| `resolveActiveBranch(request, session)` | same | Preferred structured form. Returns `{ kind: "single", branchId }` or `{ kind: "combined", branchIds }`. |
+| `requireWritableBranchId(request, session)` | same | Use at the top of transaction-posting API routes. Throws `BranchAccessError("select_working_branch")` (HTTP 400) if the user is in combined mode. |
+| `requireBranchAccess(session, branchId)` | same | Throws `BranchAccessError("forbidden_branch")` if the given branchId is not in `session.user.branchIds` and the user lacks `admin:bypass`. |
+| `BranchAccessError` | same | Typed error with `code` field. Known codes: `no_active_branch`, `forbidden_branch`, `select_working_branch`. |
+| `http` (axios instance) | `src/shared/lib/http.ts` | Shared axios instance with two interceptors. Request: stamps `x-active-branch` header from the Zustand store. Response: surfaces the three branch-error codes as `toast.error()` so users see explicit "Select a working branch" feedback instead of generic save failures. Use for **all transactional writes**; bare `axios` is fine for read-only fetches. |
+| `<BranchSwitcher />` | `src/shared/components/BranchSwitcher.tsx` | Topbar dropdown. Renders one of three states: amber "No branch assigned" badge (0 branches), static branch name (1 branch), `Select` dropdown with `Globe2`-marked "My branches" / "Consolidated" option + per-branch entries (2+ branches). Multi-branch users default to combined; on change calls `setActiveBranchId` + `window.location.reload()`. Mounted in `FinanceTopBar`, `Topbar`, `LabTopBar`. |
+| `<BranchRequired action="…">` | `src/shared/components/BranchRequired.tsx` | Wrap operational form bodies. Renders an inline "Select a working branch" notice when `activeBranchId` is null or `COMBINED_BRANCH`; renders children otherwise. Pass `action` (e.g. `"post this sale"`) to phrase the notice. Reports must NOT use this — they're expected to operate in combined mode. |
+| `FREE_ROUTE_PREFIXES` / `isFreeRoute(path)` | `src/shared/lib/auth/freeRoutes.ts` | Routes a position-less user can reach (`/office/welcome`, `/office/social/*`). Use in the office layout to redirect users with no operational authority to `/office/welcome` while keeping their profile/wall accessible. |
 
 ---
 

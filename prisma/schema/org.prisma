@@ -12,16 +12,20 @@ model Branch {
   posts       Post[]
 
   // Multi-branch inventory back-relations
-  invVouchers      InvVoucher[]       @relation("InvVoucherBranch")
-  invVouchersAsDest InvVoucher[]      @relation("InvVoucherDestBranch")
-  invStockLedger   InvStockLedger[]   @relation("InvStockLedgerBranch")
-  invProductStock  InvProductBranch[]
+  invVouchers       InvVoucher[]       @relation("InvVoucherBranch")
+  invVouchersAsDest InvVoucher[]       @relation("InvVoucherDestBranch")
+  invStockLedger    InvStockLedger[]   @relation("InvStockLedgerBranch")
+  invProductStock   InvProductBranch[]
 
   // POS — per-branch vault account where end-of-day surplus lands
   vaultAccountId Int?
   vaultAccount   Account?     @relation("BranchVaultAccount", fields: [vaultAccountId], references: [id])
   posCounters    PosCounter[] @relation("BranchCounters")
   posShifts      PosShift[]   @relation("PosShiftBranch")
+
+  // GL branch-tag back-relation — each JournalLine optionally stamps a branch
+  // so branch reports can filter org-wide accounts (Sales, COGS, GST, etc.)
+  journalLines JournalLine[] @relation("JournalLineBranch")
 }
 
 model Department {

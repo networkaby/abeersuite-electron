@@ -23,9 +23,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { http } from "@/shared/lib/http";
+import { BranchRequired } from "@/shared/components/BranchRequired";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Trash2, Building2, ClipboardCheck, Plus, Minus, X } from "lucide-react";
+import { Loader2, Trash2, Building2, Plus, Minus } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -284,14 +286,14 @@ export function PhysicalStockPage() {
 
             let voucherId: number;
             if (editing) {
-                await axios.patch(`/api/inventory/vouchers/${voucherIdParam}`, payload);
+                await http.patch(`/api/inventory/vouchers/${voucherIdParam}`, payload);
                 voucherId = Number(voucherIdParam);
             } else {
-                const created = await axios.post<{ id: number }>("/api/inventory/vouchers", payload);
+                const created = await http.post<{ id: number }>("/api/inventory/vouchers", payload);
                 voucherId = created.data.id;
             }
             if (postAfterSave) {
-                await axios.post(`/api/inventory/vouchers/${voucherId}/post`);
+                await http.post(`/api/inventory/vouchers/${voucherId}/post`);
                 toast.success("Physical Stock posted");
             } else {
                 toast.success("Physical Stock saved as draft");
@@ -321,6 +323,7 @@ export function PhysicalStockPage() {
     }
 
     return (
+        <BranchRequired action="record physical stock">
         <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
@@ -491,5 +494,6 @@ export function PhysicalStockPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </BranchRequired>
     );
 }

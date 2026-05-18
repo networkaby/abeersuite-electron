@@ -14,9 +14,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { http } from "@/shared/lib/http";
+import { BranchRequired } from "@/shared/components/BranchRequired";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Trash2, Building2, Factory, Workflow, Plus, Minus, X } from "lucide-react";
+import { Loader2, Trash2, Building2, Workflow, Plus, Minus } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -419,14 +421,14 @@ export function ManufacturingJournalPage() {
             };
             let voucherId: number;
             if (editing) {
-                await axios.patch(`/api/inventory/vouchers/${voucherIdParam}`, payload);
+                await http.patch(`/api/inventory/vouchers/${voucherIdParam}`, payload);
                 voucherId = Number(voucherIdParam);
             } else {
-                const created = await axios.post<{ id: number }>("/api/inventory/vouchers", payload);
+                const created = await http.post<{ id: number }>("/api/inventory/vouchers", payload);
                 voucherId = created.data.id;
             }
             if (postAfterSave) {
-                await axios.post(`/api/inventory/vouchers/${voucherId}/post`);
+                await http.post(`/api/inventory/vouchers/${voucherId}/post`);
                 toast.success("Manufacturing Journal posted");
             } else {
                 toast.success("Manufacturing Journal saved as draft");
@@ -459,6 +461,7 @@ export function ManufacturingJournalPage() {
     const paymentAccounts = accounts.filter((a) => a.group?.type === "ASSET" || a.group?.type === "LIABILITY");
 
     return (
+        <BranchRequired action="post this manufacturing journal">
         <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
@@ -710,6 +713,7 @@ export function ManufacturingJournalPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </BranchRequired>
     );
 }
 
