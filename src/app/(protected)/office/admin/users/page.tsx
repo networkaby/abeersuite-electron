@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ShieldCheck, X, Loader2, AlertTriangle, Globe2 } from "lucide-react";
 import { toast } from "sonner";
 import UserForm from "@/shared/components/UserForm";
 import UserAvatar from "@/shared/components/UserAvatar";
@@ -27,10 +27,13 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
-const SCOPE_LABELS: Record<string, string> = {
-    OWN: "Own", TEAM: "Team", DEPARTMENT: "Dept",
-    BRANCH: "Branch", REGION: "Region", ORG: "Org",
-};
+interface Position {
+    id:           string;
+    title:        string;
+    branch:       { id: string; name: string } | null;
+    department:   { id: string; name: string } | null;
+    roleTemplate: { id: string; label: string; color: string } | null;
+}
 
 interface User {
     id: number;
@@ -41,10 +44,54 @@ interface User {
     scope: string;
     createdAt: string;
     managerId: number | null;
-    avatarUrl:   string | null;
-    userRole:    { label: string; color: string; rank: number };
-    departments: { id: string; name: string }[];
-    branches:    { id: string; name: string }[];
+    avatarUrl: string | null;
+    positions: Position[];
+}
+
+/**
+ * Compact chip showing a single position assignment.
+ *   ⬤ Branch Manager · Delhi · Sales
+ *   🌐 CEO · Org-wide
+ *
+ * - Left dot is coloured by the position's Role (falls back to neutral when null).
+ * - Branch label uses Globe2 + "Org-wide" when the position is org-wide
+ *   (branchId == null); otherwise the branch name.
+ * - Department appears when set; suppressed when null (dept-agnostic).
+ */
+function PositionChip({ position }: { position: Position }) {
+    const role = position.roleTemplate;
+    // Role.color is a multi-class Tailwind string like "bg-red-100 text-red-600".
+    // For the chip's leading dot we want just the bg colour.
+    const dotColor = role?.color
+        ? role.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground/40"
+        : "bg-muted-foreground/40";
+
+    const isOrgWide = position.branch === null;
+
+    return (
+        <div
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5 text-xs"
+            title={role?.label ? `Role: ${role.label}` : undefined}
+        >
+            <span className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
+            <span className="font-medium text-foreground">{position.title}</span>
+            <span className="text-muted-foreground">·</span>
+            {isOrgWide ? (
+                <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                    <Globe2 size={10} />
+                    Org-wide
+                </span>
+            ) : (
+                <span className="text-muted-foreground">{position.branch!.name}</span>
+            )}
+            {position.department && (
+                <>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-muted-foreground">{position.department.name}</span>
+                </>
+            )}
+        </div>
+    );
 }
 
 interface PermRow {
@@ -134,14 +181,12 @@ function PermissionsModal({ user, onClose }: { user: User; onClose: () => void }
                                         return (
                                             <div
                                                 key={p.id}
-                                                className={`flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted ${
-                                                    effective ? "opacity-100" : "opacity-50"
-                                                }`}
+                                                className={`flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted ${effective ? "opacity-100" : "opacity-50"
+                                                    }`}
                                                 onClick={() => toggle(p.id, displayOverride, p.roleGranted)}
                                             >
-                                                <div className={`flex h-4 w-4 shrink-0 items-center justify-center border ${
-                                                    effective ? "bg-primary border-primary" : "border-border"
-                                                }`}>
+                                                <div className={`flex h-4 w-4 shrink-0 items-center justify-center border ${effective ? "bg-primary border-primary" : "border-border"
+                                                    }`}>
                                                     {effective && <div className="w-2 h-2 bg-primary-foreground" />}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
@@ -240,10 +285,7 @@ export default function UsersPage() {
                                 <TableHead className="w-12">#</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Departments</TableHead>
-                                <TableHead>Branches</TableHead>
-                                <TableHead>Scope</TableHead>
+                                <TableHead>Positions</TableHead>
                                 <TableHead>Joined</TableHead>
                                 <TableHead>Actions</TableHead>
                             </TableRow>
@@ -263,21 +305,18 @@ export default function UsersPage() {
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                                     <TableCell>
-                                        <div><Badge className={u.userRole.color}>{u.userRole.label}</Badge></div>
-                                        <div className="text-xs text-muted-foreground mt-0.5">rank {u.userRole.rank}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {u.departments.length > 0
-                                            ? <div className="flex flex-wrap gap-1">{u.departments.map(d => <Badge key={d.id} className="bg-blue-50 text-blue-700 text-xs">{d.name}</Badge>)}</div>
-                                            : <span className="text-muted-foreground text-sm">—</span>}
-                                    </TableCell>
-                                    <TableCell>
-                                        {u.branches.length > 0
-                                            ? <div className="flex flex-wrap gap-1">{u.branches.map(b => <Badge key={b.id} className="bg-orange-50 text-orange-700 text-xs">{b.name}</Badge>)}</div>
-                                            : <span className="text-muted-foreground text-sm">—</span>}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge className="bg-muted text-muted-foreground text-xs">{SCOPE_LABELS[u.scope] ?? u.scope}</Badge>
+                                        {u.positions.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1.5 max-w-md">
+                                                {u.positions.map((p) => (
+                                                    <PositionChip key={p.id} position={p} />
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-xs gap-1">
+                                                <AlertTriangle size={11} />
+                                                No position assigned
+                                            </Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
                                     <TableCell>

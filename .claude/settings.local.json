@@ -137,7 +137,9 @@
       "Bash(Select-String -Pattern \"customers|day-book|Error\")",
       "Bash(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\PhysicalStockPage.tsx\")",
       "Bash(Measure-Object -Line)",
-      "PowerShell(\\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\PhysicalStockPage.tsx\"\\).Count; \\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\BranchTransferPage.tsx\"\\).Count; \\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\ManufacturingJournalPage.tsx\"\\).Count)"
+      "PowerShell(\\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\PhysicalStockPage.tsx\"\\).Count; \\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\BranchTransferPage.tsx\"\\).Count; \\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\ManufacturingJournalPage.tsx\"\\).Count)",
+      "Bash(pnpm seed:dummy-users)",
+      "Bash(pnpm seed:dummy-org-rich)"
     ]
   }
 }

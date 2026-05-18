@@ -144,20 +144,23 @@ export async function PUT(
             }
         }
 
+        // Build the update payload by only including fields the caller
+        // actually sent. The identity form sends just name/email/password;
+        // wiping every other profile field on each save would be a bug.
         const updateData: Parameters<typeof prisma.user.update>[0]["data"] = {
-            name:      body.name,
-            email:     body.email,
-            title:     body.title     ?? null,
-            avatarUrl: body.avatarUrl ?? null,
-            coverUrl:  body.coverUrl  ?? null,
-            phone:     body.phone     ?? null,
-            bio:       body.bio       ?? null,
-            linkedIn:  body.linkedIn  ?? null,
-            twitter:   body.twitter   ?? null,
-            instagram: body.instagram ?? null,
-            facebook:  body.facebook  ?? null,
-            birthday:  body.birthday  ? new Date(body.birthday) : null,
+            name:  body.name,
+            email: body.email,
         };
+        if (body.title     !== undefined) updateData.title     = body.title;
+        if (body.avatarUrl !== undefined) updateData.avatarUrl = body.avatarUrl;
+        if (body.coverUrl  !== undefined) updateData.coverUrl  = body.coverUrl;
+        if (body.phone     !== undefined) updateData.phone     = body.phone;
+        if (body.bio       !== undefined) updateData.bio       = body.bio;
+        if (body.linkedIn  !== undefined) updateData.linkedIn  = body.linkedIn;
+        if (body.twitter   !== undefined) updateData.twitter   = body.twitter;
+        if (body.instagram !== undefined) updateData.instagram = body.instagram;
+        if (body.facebook  !== undefined) updateData.facebook  = body.facebook;
+        if (body.birthday  !== undefined) updateData.birthday  = body.birthday ? new Date(body.birthday) : null;
 
         if (body.password) updateData.password = await bcrypt.hash(body.password, 10);
 

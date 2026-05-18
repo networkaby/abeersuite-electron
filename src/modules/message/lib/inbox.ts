@@ -266,7 +266,7 @@ export async function createSystemInboxNotifications({
     });
 
     for (const user of users) {
-        await ensureCoreRoomsForUser({ id: user.id, roles: [user.role] });
+        await ensureCoreRoomsForUser({ id: user.id, roles: user.role ? [user.role] : [] });
         const room = await prisma.chatRoom.findUnique({
             where: { key: ROOM_KEY.system(user.id) },
             select: { id: true },

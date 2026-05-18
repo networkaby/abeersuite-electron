@@ -8,18 +8,16 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-// Identity-only user creation. Role / branches / departments are NOT accepted
-// here — they're granted by appointing the user to a Post on
-// /office/admin/posts. New users land in the R-GUEST role (zero permissions).
+// Identity-only user creation. Role, branch, department, and reporting line
+// are NOT accepted — they all flow from Post appointments on
+// /office/admin/posts. New users have `role = null` (zero permissions).
+// Per-user permission overrides (punishment/reward) are managed via the
+// PermissionsModal on the users page.
 const createUserSchema = z.object({
-    name:      z.string().trim().min(1, "Name is required"),
-    email:     z.string().trim().email("Valid email is required"),
-    password:  z.string().min(6, "Password must be at least 6 characters"),
-    title:     z.string().trim().optional().nullable(),
-    managerId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    name:     z.string().trim().min(1, "Name is required"),
+    email:    z.string().trim().email("Valid email is required"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
 });
-
-const GUEST_ROLE_ID = "R-GUEST";
 
 const USER_SELECT = {
     id:          true,
@@ -35,6 +33,19 @@ const USER_SELECT = {
     manager:     { select: { id: true, name: true } },
     departments: { select: { id: true, name: true } },
     branches:    { select: { id: true, name: true } },
+    posts: {
+        select: {
+            post: {
+                select: {
+                    id:           true,
+                    title:        true,
+                    branch:       { select: { id: true, name: true } },
+                    department:   { select: { id: true, name: true } },
+                    roleTemplate: { select: { id: true, label: true, color: true } },
+                },
+            },
+        },
+    },
 } as const;
 
 export async function GET() {
@@ -45,7 +56,16 @@ export async function GET() {
             orderBy: { createdAt: "desc" },
             select: USER_SELECT,
         });
-        return NextResponse.json(users);
+        // Flatten the UserPost junction so the client gets `positions: [...]`
+        // directly (cleaner than `posts: [{ post: {...} }]`).
+        const shaped = users.map((u) => {
+            const { posts, ...rest } = u;
+            return {
+                ...rest,
+                positions: posts.map((up) => up.post),
+            };
+        });
+        return NextResponse.json(shaped);
     } catch (e) {
         return handleApiError(e, "Failed to fetch users");
     }
@@ -66,21 +86,8 @@ export async function POST(req: Request) {
             );
         }
 
-        // Always create with the Guest role. Operational authority is granted
-        // by appointing the user to a Post — see /office/admin/posts.
-        const guestRole = await prisma.role.findUnique({
-            where: { id: GUEST_ROLE_ID },
-            select: { id: true },
-        });
-        if (!guestRole) {
-            return NextResponse.json(
-                { error: "Guest role missing — run bootstrap-seed." },
-                { status: 500 }
-            );
-        }
-
-        // Silence unused caller (rank guard is no longer needed at creation
-        // because the Guest role has rank 0 and no permissions).
+        // Silence unused caller (rank guard isn't needed at creation —
+        // the new user has no role and no permissions until appointed).
         void caller;
 
         const password = await bcrypt.hash(body.password, 10);
@@ -89,10 +96,8 @@ export async function POST(req: Request) {
                 name:     body.name,
                 email:    body.email,
                 password,
-                role:     GUEST_ROLE_ID,
-                title:    body.title ?? null,
+                role:     null,
                 scope:    "OWN",
-                ...(body.managerId ? { managerId: Number(body.managerId) } : {}),
             },
             select: USER_SELECT,
         });

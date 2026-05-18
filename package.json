@@ -10,6 +10,7 @@
     "reconcile:shop-orders": "tsx src/scripts/reconcile-shop-order-accounts.ts",
     "validate:account-linked-flow": "tsx src/scripts/validate-account-linked-flow.ts",
     "seed:dummy-users": "tsx prisma/seeds/dummy-users.ts",
+    "seed:dummy-org-rich": "tsx prisma/seeds/dummy-org-rich.ts",
     "seed:dummy-shop": "tsx prisma/seeds/dummy-shop.ts",
     "seed:dummy-customers": "tsx prisma/seeds/dummy-customers.ts",
     "seed:dummy-vouchers": "tsx prisma/seeds/dummy-vouchers.ts",

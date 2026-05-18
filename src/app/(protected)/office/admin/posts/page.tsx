@@ -68,7 +68,9 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
                 </span>
             )}
             <span className="font-medium">{user.name}</span>
-            <Badge className={`${user.userRole.color} text-[9px] px-1 py-0`}>{user.userRole.label}</Badge>
+            {user.userRole && (
+                <Badge className={`${user.userRole.color} text-[9px] px-1 py-0`}>{user.userRole.label}</Badge>
+            )}
             {onRemove && (
                 <Button type="button" variant="ghost" size="icon-xs" onClick={onRemove} className="ml-0.5" title="Remove">
                     <X size={11} />
@@ -577,7 +579,7 @@ export default function PostsPage() {
                     {/* Per-branch groups */}
                     {branchPosts.map(({ branch, posts: bPosts }) => {
                         const deptGroups = departments
-                            .filter(d => d.branchId === branch.id)
+                            .filter(d => d.branchId === branch.id || d.branchId === null)
                             .map(d => ({ dept: d, posts: bPosts.filter(p => p.departmentId === d.id) }))
                             .filter(g => g.posts.length > 0);
                         const noDeptPosts = bPosts.filter(p => !p.departmentId);

@@ -3,142 +3,235 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Building2, Layers, Briefcase } from "lucide-react";
+import { Building2, Layers, Briefcase, Globe2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import type { PostNode } from "@/shared/types/orgChart";
+import type { PostNode, OrgStructure } from "@/shared/types/orgChart";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Avatar helpers ────────────────────────────────────────────────────────────
 
 function initials(name: string) {
     return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 const AVATAR_COLOR: Record<string, string> = {
-    R1: "bg-purple-100 text-purple-700", R2: "bg-blue-100 text-blue-700",
-    R3: "bg-green-100 text-green-700",   R4: "bg-orange-100 text-orange-700",
-    R5: "bg-pink-100 text-pink-700",
+    R1: "bg-purple-100 text-purple-700",
+    R2: "bg-blue-100 text-blue-700",
+    R3: "bg-green-100 text-green-700",
+    R4: "bg-orange-100 text-orange-700",
 };
 
-type HolderUser = PostNode["holders"][number]["user"];
-
-function HolderAvatar({ user }: { user: HolderUser }) {
+function HolderRow({ user }: { user: PostNode["holders"][number]["user"] }) {
     const [imgErr, setImgErr] = useState(false);
-    if (user.avatarUrl && !imgErr) {
-        return (
-            <div className="rounded-full overflow-hidden shrink-0 w-8 h-8 border-2 border-card">
-                <Image src={user.avatarUrl} alt={user.name} width={32} height={32}
-                    className="object-cover w-full h-full" onError={() => setImgErr(true)} />
-            </div>
-        );
-    }
     return (
-        <div className={`flex shrink-0 items-center justify-center rounded-full w-8 h-8 text-xs font-bold border-2 border-card ${AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600"}`}>
-            {initials(user.name)}
-        </div>
+        <Link
+            href={`/office/social/users/${user.id}`}
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+        >
+            {user.avatarUrl && !imgErr ? (
+                <Image
+                    src={user.avatarUrl} alt={user.name} width={22} height={22}
+                    className="rounded-full object-cover w-5 h-5 border border-card shrink-0"
+                    onError={() => setImgErr(true)}
+                />
+            ) : (
+                <div className={`flex shrink-0 items-center justify-center rounded-full w-5 h-5 text-[9px] font-bold border border-card ${user.role ? (AVATAR_COLOR[user.role] ?? "bg-gray-100 text-gray-600") : "bg-gray-100 text-gray-600"}`}>
+                    {initials(user.name)}
+                </div>
+            )}
+            <div className="text-left min-w-0">
+                <p className="text-[11px] font-medium truncate leading-none">{user.name}</p>
+                {user.userRole && (
+                    <Badge className={`${user.userRole.color} text-[9px] px-1 py-0 mt-0.5`}>
+                        {user.userRole.label}
+                    </Badge>
+                )}
+            </div>
+        </Link>
     );
 }
 
 // ── Post card ─────────────────────────────────────────────────────────────────
 
-function PostCard({ node }: { node: PostNode }) {
-    const [open, setOpen] = useState(true);
-    const hasChildren = node.children.length > 0;
-    const isOrgWide = !node.branchId;
-
+function PostCard({ node, orgWide }: { node: PostNode; orgWide?: boolean }) {
     return (
-        <div className="flex flex-col items-center">
-            <div
-                className={[
-                    "border-2 bg-card w-52 text-center px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md",
-                    isOrgWide ? "border-orange-400" : "border-border",
-                ].join(" ")}
-            >
-                {/* Post title */}
-                <p className="text-sm font-semibold leading-tight text-foreground">{node.title}</p>
-
-                {/* Scope badge */}
-                <div className="flex items-center justify-center gap-1 mt-1">
-                    {isOrgWide ? (
-                        <span className="text-[10px] text-orange-600 flex items-center gap-0.5"><Briefcase size={9} /> Executive Council</span>
-                    ) : node.department ? (
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Layers size={9} /> {node.department.name}</span>
-                    ) : (
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Building2 size={9} /> {node.branch?.name}</span>
-                    )}
-                </div>
-
-                {/* Holders */}
-                {node.holders.length === 0 ? (
-                    <p className="mt-2 text-[10px] text-muted-foreground italic">Vacant</p>
-                ) : (
-                    <div className="mt-2 space-y-1">
-                        {node.holders.map(h => (
-                            <Link
-                                key={h.user.id}
-                                href={`/office/social/users/${h.user.id}`}
-                                className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
-                                title={h.user.name}
-                            >
-                                <HolderAvatar user={h.user} />
-                                <div className="flex-1 min-w-0 text-left">
-                                    <p className="text-[11px] font-medium truncate">{h.user.name}</p>
-                                    <Badge className={`${h.user.userRole.color} text-[9px] px-1 py-0`}>{h.user.userRole.label}</Badge>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                )}
-
-                {/* Expand toggle */}
-                {hasChildren && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setOpen(o => !o)}
-                        className="mt-2 mx-auto h-auto items-center justify-center gap-0.5 p-0 text-[10px] text-muted-foreground hover:text-foreground"
-                    >
-                        {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                        {node.children.length} sub-post{node.children.length !== 1 ? "s" : ""}
-                    </Button>
-                )}
-            </div>
-
-            {/* Children */}
-            {hasChildren && open && (
-                <div className="mt-6 flex flex-col items-center">
-                    <div className="h-4 w-px bg-border" />
-                    {node.children.length === 1 ? (
-                        <PostCard node={node.children[0]} />
-                    ) : (
-                        <div className="flex flex-col items-center">
-                            <div className="h-px bg-border" style={{ width: `${node.children.length * 224}px` }} />
-                            <div className="flex gap-0">
-                                {node.children.map(child => (
-                                    <div key={child.id} className="flex flex-col items-center" style={{ width: "224px" }}>
-                                        <div className="h-4 w-px bg-border" />
-                                        <PostCard node={child} />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+        <div className={[
+            "border-2 bg-card w-44 text-center px-3 py-2.5 shadow-sm rounded-sm shrink-0",
+            orgWide ? "border-orange-400" : "border-border",
+        ].join(" ")}>
+            <p className="text-sm font-semibold leading-tight text-foreground">{node.title}</p>
+            {node.holders.length === 0 ? (
+                <p className="mt-2 text-[10px] text-muted-foreground italic">Vacant</p>
+            ) : (
+                <div className="mt-2 space-y-1">
+                    {node.holders.map(h => <HolderRow key={h.user.id} user={h.user} />)}
                 </div>
             )}
         </div>
     );
 }
 
+// ── Connector primitives ──────────────────────────────────────────────────────
+
+function VLine({ h = 20 }: { h?: number }) {
+    return <div className="w-px bg-border mx-auto" style={{ height: h }} />;
+}
+
+// Horizontal bar across N children, each `cellW` wide
+function HBar({ count, cellW }: { count: number; cellW: number }) {
+    if (count <= 1) return null;
+    const totalW = count * cellW;
+    const sideW  = cellW / 2;
+    return (
+        <div
+            className="bg-border mx-auto"
+            style={{ width: totalW - sideW * 2 + 1, height: 1, marginLeft: sideW - 0.5 }}
+        />
+    );
+}
+
+// ── Dept group card ───────────────────────────────────────────────────────────
+// Dept label → connector → post cards in a row
+
+const POST_CELL_W = 192; // px (w-44 = 176 + 16 gap)
+
+function DeptGroup({ dept, posts }: { dept: { id: string; name: string } | null; posts: PostNode[] }) {
+    if (posts.length === 0) return null;
+
+    const cellW  = POST_CELL_W;
+    const totalW = posts.length * cellW;
+
+    return (
+        <div className="flex flex-col items-center" style={{ width: totalW }}>
+            {/* Department label */}
+            {dept && (
+                <div className="flex items-center gap-1 border border-border bg-muted/60 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Layers size={9} />
+                    {dept.name}
+                </div>
+            )}
+            <VLine h={12} />
+            <HBar count={posts.length} cellW={cellW} />
+            <div className="flex">
+                {posts.map(p => (
+                    <div key={p.id} className="flex flex-col items-center" style={{ width: cellW }}>
+                        <VLine h={12} />
+                        <PostCard node={p} />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ── Branch node ───────────────────────────────────────────────────────────────
+
+function BranchNode({ branch, deptGroups }: OrgStructure["branches"][number]) {
+    const isEmpty = deptGroups.length === 0;
+
+    // Calculate total width for centering the branch card above its children
+    const totalPostCount = deptGroups.reduce((s, g) => s + g.posts.length, 0);
+    const contentW = Math.max(totalPostCount * POST_CELL_W, POST_CELL_W);
+
+    return (
+        <div className="flex flex-col items-center" style={{ width: contentW }}>
+            {/* Branch header card */}
+            <div className="flex items-center gap-1.5 border-2 border-primary/60 bg-primary/5 rounded px-4 py-2 shadow-sm">
+                <Building2 size={13} className="text-primary shrink-0" />
+                <p className="text-sm font-bold text-primary whitespace-nowrap">{branch.name}</p>
+            </div>
+
+            {isEmpty ? (
+                <p className="mt-3 text-[10px] text-muted-foreground italic">No posts</p>
+            ) : (
+                <>
+                    <VLine h={16} />
+                    {/* Dept groups side by side */}
+                    <HBar count={deptGroups.length} cellW={deptGroups.length > 1 ? contentW / deptGroups.length : contentW} />
+                    <div className="flex">
+                        {deptGroups.map((g, i) => (
+                            <DeptGroup key={g.dept?.id ?? `no-dept-${i}`} dept={g.dept} posts={g.posts} />
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
+// ── Org-wide (Executive Council) row ─────────────────────────────────────────
+
+function OrgWideRow({ posts }: { posts: PostNode[] }) {
+    const cellW  = POST_CELL_W;
+    const totalW = posts.length * cellW;
+
+    return (
+        <div className="flex flex-col items-center">
+            {/* Section label */}
+            <div className="flex items-center gap-1.5 mb-3">
+                <Globe2 size={12} className="text-orange-500" />
+                <span className="text-[11px] font-bold uppercase tracking-widest text-orange-500">
+                    Executive Council
+                </span>
+            </div>
+            <HBar count={posts.length} cellW={cellW} />
+            <div className="flex" style={{ width: totalW }}>
+                {posts.map(p => (
+                    <div key={p.id} className="flex flex-col items-center" style={{ width: cellW }}>
+                        <VLine h={posts.length > 1 ? 12 : 0} />
+                        <PostCard node={p} orgWide />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // ── Public component ──────────────────────────────────────────────────────────
 
-export default function StructureTree({ roots }: { roots: PostNode[] }) {
-    if (roots.length === 0) return null;
+export default function StructureTree({ structure }: { structure: OrgStructure }) {
+    const { orgWidePosts, branches } = structure;
+    const hasBranches = branches.length > 0;
+
+    if (orgWidePosts.length === 0 && !hasBranches) return null;
+
+    // Total width of the branches row for centering the org-wide section above
+    const totalPostsCount = branches.reduce(
+        (s, bg) => s + Math.max(bg.deptGroups.reduce((ss, g) => ss + g.posts.length, 0), 1),
+        0,
+    );
+    const branchRowW = Math.max(totalPostsCount * POST_CELL_W, POST_CELL_W);
+
     return (
         <div className="overflow-auto pb-12">
-            <div className="flex gap-16 min-w-max pt-4">
-                {roots.map(root => (
-                    <PostCard key={root.id} node={root} />
-                ))}
+            <div className="min-w-max pt-6 flex flex-col items-start">
+
+                {/* ── Level 1: Executive Council ───────────────────────── */}
+                {orgWidePosts.length > 0 && (
+                    <div style={{ width: branchRowW }}>
+                        <div className="flex justify-center">
+                            <OrgWideRow posts={orgWidePosts} />
+                        </div>
+                        {hasBranches && (
+                            <>
+                                <VLine h={20} />
+                                <div className="bg-border" style={{ height: 1, width: "100%" }} />
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {/* ── Level 2: Branches ────────────────────────────────── */}
+                {hasBranches && (
+                    <div className="flex gap-12 pt-0">
+                        {branches.map(bg => (
+                            <div key={bg.branch.id} className="flex flex-col items-center">
+                                <VLine h={20} />
+                                <BranchNode {...bg} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+
             </div>
         </div>
     );

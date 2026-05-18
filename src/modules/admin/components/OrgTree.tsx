@@ -22,8 +22,8 @@ const AVATAR_COLOR: Record<string, string> = {
     R5: "bg-pink-100 text-pink-700",
 };
 
-function avatarBg(role: string) {
-    return AVATAR_COLOR[role] ?? "bg-gray-100 text-gray-600";
+function avatarBg(role: string | null) {
+    return (role ? AVATAR_COLOR[role] : null) ?? "bg-gray-100 text-gray-600";
 }
 
 function containsHighlight(node: OrgNode, id: number): boolean {
@@ -101,9 +101,11 @@ function OrgNodeWrapper({
                             <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight">{node.title}</p>
                         )}
                     </div>
-                    <Badge className={`${node.userRole.color} text-[10px] px-1.5 py-0`}>
-                        {node.userRole.label}
-                    </Badge>
+                    {node.userRole && (
+                        <Badge className={`${node.userRole.color} text-[10px] px-1.5 py-0`}>
+                            {node.userRole.label}
+                        </Badge>
+                    )}
                     {(node.departments.length > 0 || node.branches.length > 0) && (
                         <div className="flex flex-wrap justify-center gap-1 mt-0.5">
                             {node.departments.map(d => (

@@ -54,16 +54,14 @@ const prisma = new PrismaClient({ adapter });
 // SECTION 1 — RBAC: Roles, Permissions, Role grants
 // ════════════════════════════════════════════════════════════════════════════
 
+// Roles are the *templates* that Posts inherit permissions from. Users do NOT
+// receive a role directly — `User.role` is null until a Post appointment
+// promotes them. See `Post.roleTemplateId` and `authorizeStaff.ts`.
 const ROLES = [
     { id: "R1", label: "Admin",      color: "bg-red-100 text-red-600",       isSystem: true, rank: 100 },
     { id: "R2", label: "Technician", color: "bg-blue-100 text-blue-600",     isSystem: true, rank: 70  },
     { id: "R3", label: "Front Desk", color: "bg-green-100 text-green-600",   isSystem: true, rank: 20  },
     { id: "R4", label: "Despatch",   color: "bg-purple-100 text-purple-600", isSystem: true, rank: 20  },
-    // Default role for newly-created users. Carries NO permissions — the user
-    // can log in and see their profile / the social wall, but every
-    // operational page is locked out until an admin assigns them to a Post
-    // (which carries the actual role/branch/department combination).
-    { id: "R-GUEST", label: "Guest", color: "bg-slate-100 text-slate-500",   isSystem: true, rank: 0   },
 ] as const;
 
 const PERMISSIONS = [
@@ -214,10 +212,6 @@ const PERMISSIONS = [
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     R1: (PERMISSIONS as readonly { id: string }[]).map((p) => p.id),
-    // R-GUEST = default for newly-created users. No permissions: they can log
-    // in and see their profile / social wall, but no operational pages. Grants
-    // arrive only via Post appointment.
-    "R-GUEST": [],
     R2: [
         "customers:view",
         "tickets:create", "tickets:status:set", "tickets:substatus:set",
@@ -881,12 +875,29 @@ async function main() {
     // ── Section 5: Admin user ──────────────────────────────────────────
     console.log("[5/7] Admin user");
     const password = await bcrypt.hash(ADMIN.password, 10);
-    await prisma.user.upsert({
+    const adminUser = await prisma.user.upsert({
         where:  { email: ADMIN.email },
         update: { name: ADMIN.name, role: ADMIN.role, password },
         create: { name: ADMIN.name, email: ADMIN.email, password, role: ADMIN.role },
+        select: { id: true },
     });
-    console.log(`      ✓ ${ADMIN.email} (role ${ADMIN.role})  password: ${ADMIN.password}\n`);
+
+    // Ensure the admin user holds a "System Administrator" Post (org-wide,
+    // branchId = null) backed by the R1 (Admin) role template. This guarantees
+    // that when User.role is eventually dropped in favour of Position-only
+    // authority, the admin account still inherits full permissions via the
+    // Position → Role → Permission chain rather than losing access.
+    await prisma.post.upsert({
+        where:  { id: "POST-SYSADMIN" },
+        update: { title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
+        create: { id: "POST-SYSADMIN", title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
+    });
+    await prisma.userPost.upsert({
+        where:  { userId_postId: { userId: adminUser.id, postId: "POST-SYSADMIN" } },
+        update: {},
+        create: { userId: adminUser.id, postId: "POST-SYSADMIN" },
+    });
+    console.log(`      ✓ ${ADMIN.email} (role ${ADMIN.role}) · Post: System Administrator (org-wide)  password: ${ADMIN.password}\n`);
 
     // ── Section 6: DB constraints ──────────────────────────────────────
     console.log("[6/7] DB constraints");

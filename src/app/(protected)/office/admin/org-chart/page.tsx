@@ -3,20 +3,24 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
-import { Users, Briefcase, Link as LinkIcon } from "lucide-react";
+import { Users, Briefcase, Link as LinkIcon, Sparkles, Network, Layers, Landmark } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import type { OrgNode, PostNode } from "@/shared/types/orgChart";
+import type { OrgNode, OrgStructure } from "@/shared/types/orgChart";
 import OrgTree from "@/modules/admin/components/OrgTree";
 import StructureTree from "@/modules/admin/components/StructureTree";
+import OrgExplorer from "@/modules/admin/components/OrgExplorer";
+import OrgHierarchy from "@/modules/admin/components/OrgHierarchy";
+import OrgLevels from "@/modules/admin/components/OrgLevels";
+import OrgRegions from "@/modules/admin/components/OrgRegions";
 
-type Tab = "people" | "structure";
+type Tab = "people" | "structure" | "explorer" | "hierarchy" | "levels" | "regions";
 
 export default function OrgChartPage() {
     const { data: session } = useSession();
-    const [tab, setTab]         = useState<Tab>("people");
-    const [roots, setRoots]     = useState<OrgNode[]>([]);
-    const [postRoots, setPostRoots] = useState<PostNode[]>([]);
+    const [tab, setTab] = useState<Tab>("people");
+    const [roots, setRoots] = useState<OrgNode[]>([]);
+    const [structure, setStructure] = useState<OrgStructure | null>(null);
     const [loading, setLoading] = useState(true);
     const [postLoading, setPostLoading] = useState(true);
 
@@ -31,14 +35,18 @@ export default function OrgChartPage() {
     }, []);
 
     useEffect(() => {
-        axios.get<PostNode[]>("/api/posts/structure")
-            .then(r => setPostRoots(r.data))
+        axios.get<OrgStructure>("/api/posts/structure")
+            .then(r => setStructure(r.data))
             .finally(() => setPostLoading(false));
     }, []);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-        { id: "people",    label: "People Chart",    icon: Users },
+        { id: "people",    label: "People Chart",     icon: Users },
         { id: "structure", label: "Structure Chart",  icon: Briefcase },
+        { id: "explorer",  label: "Explorer (beta)",   icon: Sparkles },
+        { id: "hierarchy", label: "Hierarchy (beta)",  icon: Network },
+        { id: "levels",    label: "Levels (beta)",     icon: Layers },
+        { id: "regions",   label: "Regions (beta)",    icon: Landmark },
     ];
 
     return (
@@ -49,10 +57,18 @@ export default function OrgChartPage() {
                     <p className="mt-1 text-sm text-muted-foreground">
                         {tab === "people"
                             ? "Reporting lines based on who manages whom."
-                            : "Position hierarchy — click a name to view their profile."}
+                            : tab === "structure"
+                                ? "Position hierarchy — click a name to view their profile."
+                                : tab === "explorer"
+                                    ? "Interactive explorer — search, filter, hover for details."
+                                    : tab === "hierarchy"
+                                        ? "True organizational hierarchy — root → branches → departments → positions."
+                                        : tab === "levels"
+                                            ? "Classic level-based chart — Board · Branches · Departments · Positions."
+                                            : "HQ + branches with nested boundaries — bordered containers for each region."}
                     </p>
                 </div>
-                {tab === "structure" && (
+                {tab !== "people" && (
                     <Link href="/office/admin/posts" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
                         <LinkIcon size={11} /> Manage posts
                     </Link>
@@ -102,7 +118,7 @@ export default function OrgChartPage() {
             {tab === "structure" && (
                 postLoading ? (
                     <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
-                ) : postRoots.length === 0 ? (
+                ) : !structure || (structure.orgWidePosts.length === 0 && structure.branches.every(b => b.deptGroups.length === 0)) ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                         <Briefcase size={36} className="opacity-20" />
                         <p className="text-sm">No posts defined yet.</p>
@@ -111,7 +127,63 @@ export default function OrgChartPage() {
                         </Link>
                     </div>
                 ) : (
-                    <StructureTree roots={postRoots} />
+                    <StructureTree structure={structure} />
+                )
+            )}
+
+            {/* Explorer (beta) — interactive dashboard view */}
+            {tab === "explorer" && (
+                postLoading ? (
+                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
+                ) : !structure ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                        <Sparkles size={36} className="opacity-20" />
+                        <p className="text-sm">No data to explore yet.</p>
+                    </div>
+                ) : (
+                    <OrgExplorer structure={structure} />
+                )
+            )}
+
+            {/* Hierarchy (beta) — true top-down org chart */}
+            {tab === "hierarchy" && (
+                postLoading ? (
+                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
+                ) : !structure ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                        <Network size={36} className="opacity-20" />
+                        <p className="text-sm">No org structure yet.</p>
+                    </div>
+                ) : (
+                    <OrgHierarchy structure={structure} />
+                )
+            )}
+
+            {/* Levels (beta) — classic level-based hierarchy chart */}
+            {tab === "levels" && (
+                postLoading ? (
+                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
+                ) : !structure ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                        <Layers size={36} className="opacity-20" />
+                        <p className="text-sm">No org structure yet.</p>
+                    </div>
+                ) : (
+                    <OrgLevels structure={structure} />
+                )
+            )}
+
+            {/* Regions (beta) — HQ + branches with nested bordered containers */}
+            {tab === "regions" && (
+                postLoading ? (
+                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
+                ) : !structure ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                        <Landmark size={36} className="opacity-20" />
+                        <p className="text-sm">No org structure yet.</p>
+                    </div>
+                ) : (
+                    <OrgRegions structure={structure} />
                 )
             )}
         </div>

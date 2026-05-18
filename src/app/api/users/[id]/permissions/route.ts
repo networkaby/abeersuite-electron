@@ -45,7 +45,7 @@ export async function GET(
 
         if (!userRecord) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-        const roleGranted = new Set(userRecord.userRole.permissions.map(p => p.permissionId));
+        const roleGranted = new Set(userRecord.userRole?.permissions.map(p => p.permissionId) ?? []);
         const overrideMap = new Map(userRecord.userPermissions.map(o => [o.permissionId, o]));
 
         const result = allPermissions.map(p => {

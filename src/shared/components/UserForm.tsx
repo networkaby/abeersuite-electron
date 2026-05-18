@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
@@ -14,25 +13,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-    Select, SelectContent, SelectItem,
-    SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { useEffect } from "react";
 
-// Identity-only user creation. Authority — role, branches, departments — is
-// granted by appointing the user to a Post (see /office/admin/posts).
-// New users land in the "Guest" role (no permissions) until appointment.
-
-type UserOption = { id: number; name: string };
-
-const NONE = "__none__";
+// Identity-only user creation.
+//
+// Job title, reporting hierarchy, role, branch, and department all flow from
+// Post appointments — see /office/admin/posts. Permission punishments /
+// rewards are layered on top via the per-user PermissionsModal (shield icon
+// in the users table).
 
 const schema = z.object({
-    name:      z.string().min(1, "Name is required"),
-    email:     z.string().email("Invalid email"),
-    title:     z.string().optional(),
-    managerId: z.string().optional(),
-    password:  z.string().optional(),
+    name:     z.string().min(1, "Name is required"),
+    email:    z.string().email("Invalid email"),
+    password: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -42,8 +35,6 @@ interface Props {
         id: number;
         name: string;
         email: string;
-        title?: string | null;
-        managerId?: number | null;
     };
     onClose: () => void;
 }
@@ -54,43 +45,20 @@ function FieldError({ message }: { message?: string }) {
 }
 
 export default function UserForm({ user, onClose }: Props) {
-    const [users, setUsers] = useState<UserOption[]>([]);
-
-    const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } =
-        useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { managerId: NONE } });
-
-    const managerValue = watch("managerId");
-
-    useEffect(() => {
-        axios.get<UserOption[]>("/api/users")
-            .then((r) => {
-                const others = r.data
-                    .filter((u: { id: number }) => u.id !== user?.id)
-                    .map((u: { id: number; name: string }) => ({ id: u.id, name: u.name }));
-                setUsers(others);
-            })
-            .catch(() => toast.error("Failed to load users"));
-    }, [user?.id]);
+    const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
+        useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: "", email: "", password: "" } });
 
     useEffect(() => {
         if (user) {
-            reset({
-                name:      user.name,
-                email:     user.email,
-                title:     user.title ?? "",
-                managerId: user.managerId ? String(user.managerId) : NONE,
-                password:  "",
-            });
+            reset({ name: user.name, email: user.email, password: "" });
         }
     }, [user, reset]);
 
     const onSubmit = async (data: FormData) => {
         try {
             const payload = {
-                name:      data.name,
-                email:     data.email,
-                title:     data.title || null,
-                managerId: data.managerId && data.managerId !== NONE ? Number(data.managerId) : null,
+                name:  data.name,
+                email: data.email,
                 ...(data.password ? { password: data.password } : {}),
             };
             if (user) {
@@ -114,14 +82,12 @@ export default function UserForm({ user, onClose }: Props) {
                     <DialogTitle>{user ? "Edit User" : "Add User"}</DialogTitle>
                     <DialogDescription>
                         {user
-                            ? "Update this user's identity. Role, branch, and department are managed via Posts."
+                            ? "Update this user's identity. Role, branch, department, and reporting line all come from Post appointments."
                             : "Create a staff account. Once created, appoint them to a Post to grant access."}
                     </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-
-                    {/* ── Identity ── */}
                     <div className="space-y-3">
                         <div className="space-y-1.5">
                             <Label>Full Name</Label>
@@ -133,23 +99,8 @@ export default function UserForm({ user, onClose }: Props) {
                             <Input {...register("email")} placeholder="ahmed@company.com" />
                             <FieldError message={errors.email?.message} />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label>Job Title <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Input {...register("title")} placeholder="e.g. Senior Technician" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Reports to <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Select value={managerValue ?? NONE} onValueChange={(v) => setValue("managerId", v)}>
-                                <SelectTrigger><SelectValue placeholder="— None —" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NONE}>— None —</SelectItem>
-                                    {users.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
                     </div>
 
-                    {/* ── Security ── */}
                     <div className="border-t border-border pt-3 space-y-1.5">
                         <Label>
                             Password{" "}
@@ -167,8 +118,9 @@ export default function UserForm({ user, onClose }: Props) {
                             <Info size={14} className="shrink-0 mt-0.5" />
                             <p>
                                 New users start with no operational access. After saving, open{" "}
-                                <span className="font-medium">Posts</span> and appoint them to one or
-                                more positions to grant role, branch, and department authority.
+                                <span className="font-medium">Posts</span> and appoint them to a
+                                position — that assigns their job title, branch, department, and
+                                reporting line all at once.
                             </p>
                         </div>
                     )}

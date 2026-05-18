@@ -5,7 +5,11 @@ model User {
   name                    String
   email                   String              @unique
   password                String
-  role                    String              @default("R2")
+  // Authority is granted via Post appointments — `role` is only populated when
+  // a user holds a Post whose roleTemplate matches. New users start with
+  // `role = null` (no operational permissions). The canonical source for
+  // effective permissions is `posts[].post.roleTemplate.permissions`.
+  role                    String?
   title                   String?
   scope                   UserScope           @default(OWN)
   createdAt               DateTime            @default(now())
@@ -26,7 +30,7 @@ model User {
   participantEntries      TicketParticipant[] @relation("ParticipantUser")
   manager                 User?               @relation("UserHierarchy", fields: [managerId], references: [id])
   reports                 User[]              @relation("UserHierarchy")
-  userRole                Role                @relation(fields: [role], references: [id])
+  userRole                Role?               @relation(fields: [role], references: [id])
   departments             Department[]
   branches                Branch[]
   journalEntries          JournalEntry[]      @relation("JournalCreatedBy")

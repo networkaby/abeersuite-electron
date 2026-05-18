@@ -20,10 +20,10 @@ type FlatUser = {
     id: number;
     name: string;
     title: string | null;
-    role: string;
+    role: string | null;
     avatarUrl: string | null;
     managerId: number | null;
-    userRole: { label: string; color: string; rank: number };
+    userRole: { label: string; color: string; rank: number } | null;
     departments: { id: string; name: string }[];
     branches: { id: string; name: string }[];
 };
@@ -44,7 +44,7 @@ function buildTree(users: FlatUser[]): OrgNode[] {
     }
     // Sort by rank desc (highest rank first), then alphabetically
     const sort = (nodes: OrgNode[]) => {
-        nodes.sort((a, b) => b.userRole.rank - a.userRole.rank || a.name.localeCompare(b.name));
+        nodes.sort((a, b) => (b.userRole?.rank ?? 0) - (a.userRole?.rank ?? 0) || a.name.localeCompare(b.name));
         nodes.forEach(n => sort(n.children));
     };
     sort(roots);

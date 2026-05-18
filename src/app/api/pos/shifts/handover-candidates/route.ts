@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 
         // Only include users who have pos:shift:open (via role or user-level grant).
         const eligible = candidates.filter((u) => {
-            const rolePerms    = u.userRole.permissions.map((p) => p.permissionId);
+            const rolePerms    = u.userRole?.permissions.map((p) => p.permissionId) ?? [];
             const userPerms    = u.userPermissions.map((p) => p.permissionId);
             const allPerms     = [...rolePerms, ...userPerms];
             return allPerms.includes(PERMISSIONS.POS_SHIFT_OPEN) || allPerms.includes(PERMISSIONS.ADMIN_BYPASS);
