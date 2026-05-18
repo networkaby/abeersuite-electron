@@ -34,6 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
+import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
+import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
@@ -278,17 +280,12 @@ export function BranchTransferPage() {
     return (
         <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
-            <header className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
-                <Button type="button" variant="ghost" size="icon-sm" onClick={handleClose} title="Back (Esc)">
-                    <ArrowLeft size={15} />
-                </Button>
-                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">Branch Transfer</span>
-                    {editing && voucherRef && (
-                        <span className="font-mono text-xs text-muted-foreground">{voucherRef}</span>
-                    )}
-                </nav>
-            </header>
+            <VoucherTopBar
+                title="Branch Transfer"
+                onClose={handleClose}
+                editingRef={editing && voucherRef ? voucherRef : undefined}
+                sticky
+            />
             <div className="max-w-5xl mx-auto w-full space-y-5 p-6">
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-4">
@@ -420,29 +417,25 @@ export function BranchTransferPage() {
                             placeholder="Free-form notes — e.g. carrier reference, packing list #"
                         />
                     </div>
-                    <div className="flex items-center justify-end gap-2 flex-wrap">
-                        {editing && loadedVoucher && (
-                            <div className="mr-auto">
-                                <LifecycleActions
-                                    voucher={loadedVoucher}
-                                    apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
-                                    listPath="/office/accountancy/vouchers-registers/branch-transfers"
-                                    label="Branch Transfer"
-                                    canCancel={canCancel}
-                                    canDelete={canDelete}
-                                    canHardDelete={canHardDelete}
-                                    onChanged={closeForm}
-                                />
-                            </div>
-                        )}
-                        <Button variant="outline" onClick={handleClose}>Cancel</Button>
-                        <Button onClick={() => submit(false)} variant="outline" disabled={saving}>
-                            {saving && <Loader2 size={14} className="animate-spin" />} Save Draft
-                        </Button>
-                        <Button onClick={() => submit(true)} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white border-green-600">
-                            {saving && <Loader2 size={14} className="animate-spin" />} Save &amp; Post
-                        </Button>
-                    </div>
+                    <VoucherInlineActions
+                        onCancel={handleClose}
+                        onSave={() => submit(true)}
+                        onSaveDraft={() => submit(false)}
+                        showSaveDraft
+                        saving={saving}
+                        leftContent={editing && loadedVoucher ? (
+                            <LifecycleActions
+                                voucher={loadedVoucher}
+                                apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
+                                listPath="/office/accountancy/vouchers-registers/branch-transfers"
+                                label="Branch Transfer"
+                                canCancel={canCancel}
+                                canDelete={canDelete}
+                                canHardDelete={canHardDelete}
+                                onChanged={closeForm}
+                            />
+                        ) : undefined}
+                    />
                 </div>
             </div>
             </div>
