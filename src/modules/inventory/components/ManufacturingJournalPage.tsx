@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Trash2, Building2, Factory, Workflow, Plus, Minus, X } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Building2, Factory, Workflow, Plus, Minus, X } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +104,17 @@ export function ManufacturingJournalPage() {
         if (window.history.length > 1) router.back();
         else window.close();
     }, [router]);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            closeForm();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [closeForm]);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(activeBranchId);
 
@@ -436,46 +447,42 @@ export function ManufacturingJournalPage() {
     const paymentAccounts = accounts.filter((a) => a.group?.type === "ASSET" || a.group?.type === "LIABILITY");
 
     return (
-        <div className="max-w-7xl mx-auto space-y-5">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h1 className="text-xl font-bold flex items-center gap-2">
-                        <Factory className="size-5" />
-                        {editing ? `Edit Manufacturing Journal ${voucherRef ? `(${voucherRef})` : ""}` : "New Manufacturing Journal"}
-                    </h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        Scan or pick raw materials (Consume) and finished goods (Produce). Each scan adds the item or +1s an existing row.
-                    </p>
-                </div>
-                <div className="flex items-end gap-2">
-                    {branches.length > 1 ? (
-                        <div className="space-y-1">
-                            <Label className="text-[11px] text-muted-foreground">Location</Label>
-                            <Select value={selectedBranchId ?? ""} onValueChange={(v) => setSelectedBranchId(v)}>
-                                <SelectTrigger className="h-8 w-[200px] text-xs">
-                                    <div className="flex items-center gap-1.5">
-                                        <Building2 size={12} className="shrink-0 text-muted-foreground" />
-                                        <SelectValue placeholder="Pick a location" />
-                                    </div>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {branches.map((b) => (
-                                        <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    ) : branches.length === 1 ? (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
-                            <Building2 size={12} className="shrink-0" />
-                            <span>{branches[0]!.name}</span>
-                        </div>
-                    ) : null}
-                    <Button variant="ghost" size="icon" onClick={closeForm} title="Close" aria-label="Close">
-                        <X size={18} />
+        <div className="flex flex-col min-h-screen bg-background">
+            {/* Breadcrumb bar */}
+            <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                        <ArrowLeft size={15} />
                     </Button>
+                    <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">Manufacturing Journal</span>
+                        {editing && voucherRef && (
+                            <span className="font-mono text-xs text-muted-foreground">{voucherRef}</span>
+                        )}
+                    </nav>
                 </div>
-            </div>
+                {branches.length > 1 ? (
+                    <Select value={selectedBranchId ?? ""} onValueChange={(v) => setSelectedBranchId(v)}>
+                        <SelectTrigger className="h-8 w-[180px] text-xs">
+                            <div className="flex items-center gap-1.5">
+                                <Building2 size={12} className="shrink-0 text-muted-foreground" />
+                                <SelectValue placeholder="Pick a location" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {branches.map((b) => (
+                                <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                ) : branches.length === 1 ? (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
+                        <Building2 size={12} className="shrink-0" />
+                        <span>{branches[0]!.name}</span>
+                    </div>
+                ) : null}
+            </header>
+            <div className="max-w-7xl mx-auto w-full space-y-5 p-6">
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-5">
                 {/* Header */}
@@ -686,6 +693,7 @@ export function ManufacturingJournalPage() {
                         </Button>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );

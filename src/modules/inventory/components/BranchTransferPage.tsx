@@ -20,7 +20,7 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Trash2, Building2, ArrowRightLeft, Plus, Minus, X } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Building2, ArrowRightLeft, Plus, Minus, X } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +95,17 @@ export function BranchTransferPage() {
         if (window.history.length > 1) router.back();
         else window.close();
     }, [router]);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            closeForm();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [closeForm]);
 
     // Load branches with the same RBAC filter as the global BranchSwitcher.
     useEffect(() => {
@@ -255,23 +266,20 @@ export function BranchTransferPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-5">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h1 className="text-xl font-bold flex items-center gap-2">
-                        <ArrowRightLeft className="size-5" />
-                        {editing ? `Edit Branch Transfer ${voucherRef ? `(${voucherRef})` : ""}` : "New Branch Transfer"}
-                    </h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        Move stock between locations. Two ledger rows per line — qty out at source, qty in at destination. No GL impact.
-                    </p>
-                </div>
-                <div className="flex items-end gap-2">
-                    <Button variant="ghost" size="icon" onClick={closeForm} title="Close" aria-label="Close">
-                        <X size={18} />
-                    </Button>
-                </div>
-            </div>
+        <div className="flex flex-col min-h-screen bg-background">
+            {/* Breadcrumb bar */}
+            <header className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+                <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                    <ArrowLeft size={15} />
+                </Button>
+                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">Branch Transfer</span>
+                    {editing && voucherRef && (
+                        <span className="font-mono text-xs text-muted-foreground">{voucherRef}</span>
+                    )}
+                </nav>
+            </header>
+            <div className="max-w-5xl mx-auto w-full space-y-5 p-6">
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-4">
                 {/* Source / Destination / Date */}
@@ -426,6 +434,7 @@ export function BranchTransferPage() {
                         </Button>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );
