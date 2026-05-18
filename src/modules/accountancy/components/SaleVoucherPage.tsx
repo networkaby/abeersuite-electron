@@ -67,6 +67,8 @@ import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
+import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
+import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
@@ -1388,26 +1390,12 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     return (
         <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
-            <header className="flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
-                <div className="flex items-center gap-2">
-                    <Button type="button" variant="ghost" size="icon-sm" onClick={handleClose} title="Back (Esc)">
-                        <ArrowLeft size={15} />
-                    </Button>
-                    <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">{copy.title}</span>
-                        {isEditing && editingRef && (
-                            <span className="font-mono text-xs text-muted-foreground">{editingRef}</span>
-                        )}
-                        {isEditing && editingWasPosted && (
-                            <span
-                                className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-medium"
-                                title="Saving will reverse this voucher's stock & GL impact and re-post with the new values. Reference number is preserved."
-                            >
-                                Posted — edit reposts on save
-                            </span>
-                        )}
-                    </nav>
-                    {/* CASH / CREDIT pill */}
+            <VoucherTopBar
+                title={copy.title}
+                onClose={handleClose}
+                editingRef={isEditing && editingRef ? editingRef : undefined}
+                postedWarning={isEditing && editingWasPosted}
+                leftExtras={<>
                     {copy.showPaymentBlock && (
                         <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
                             {(["CASH", "CREDIT"] as const).map((m) => (
@@ -1434,14 +1422,14 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     >
                         <CopyPlus size={14} /> {copy.newButtonLabel}
                     </Button>
-                </div>
-                {activeBranchId && (
+                </>}
+                rightContent={activeBranchId ? (
                     <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
                         <Building2 size={12} className="shrink-0" />
                         <span>{activeBranchId}</span>
                     </div>
-                )}
-            </header>
+                ) : undefined}
+            />
 
             {/* One page-wide ScrollArea wraps the form header, the item table
                 and the totals footer so they scroll together — the title bar
@@ -2189,60 +2177,60 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             </ScrollArea>
 
             {/* ── Sticky action bar ────────────────────────────────────── */}
-            <div className="border-t border-border bg-card px-6 py-3 flex items-center gap-2 shrink-0">
-                {/* Bill-wise details / link-payment — placeholder for the Tally-style
-                    "settle this bill against open receipts" flow. Real allocation
-                    UI lands in a follow-up; the button confirms the location. */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toast.info("Bill-wise details — coming soon. Will let you allocate this sale against the customer's open advance receipts.")}
-                    className="gap-1.5 text-muted-foreground hover:text-foreground"
-                    title="Link this sale to existing bills / advance receipts"
-                >
-                    <Link2 size={14} /> Link Payment
-                </Button>
-                {isEditing && editVoucherId != null && loadedLifecycle && (
-                    <div className="ml-2 mr-auto flex items-center gap-3">
-                        <LifecycleActions
-                            voucher={loadedLifecycle}
-                            apiBasePath={`/api/inventory/vouchers/${editVoucherId}`}
-                            listPath={copy.listPath}
-                            label={copy.title}
-                            canCancel={canCancel}
-                            canDelete={canDelete}
-                            canHardDelete={canHardDelete}
-                            onChanged={closeForm}
-                        />
-                        {editingWasPosted && (
-                            <span className="text-[11px] text-amber-600 italic">
-                                Will reverse + re-post on save (reference preserved)
-                            </span>
+            <VoucherActionBar
+                onCancel={closeForm}
+                onSave={() => submit(true)}
+                onSaveDraft={() => submit(false)}
+                showSaveDraft
+                saving={saving}
+                leftContent={
+                    <div className="mr-auto flex items-center gap-2">
+                        {/* Bill-wise details / link-payment — placeholder for the Tally-style
+                            "settle this bill against open receipts" flow. Real allocation
+                            UI lands in a follow-up; the button confirms the location. */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toast.info("Bill-wise details — coming soon. Will let you allocate this sale against the customer's open advance receipts.")}
+                            className="gap-1.5 text-muted-foreground hover:text-foreground"
+                            title="Link this sale to existing bills / advance receipts"
+                        >
+                            <Link2 size={14} /> Link Payment
+                        </Button>
+                        {isEditing && editVoucherId != null && loadedLifecycle && (
+                            <div className="ml-2 flex items-center gap-3">
+                                <LifecycleActions
+                                    voucher={loadedLifecycle}
+                                    apiBasePath={`/api/inventory/vouchers/${editVoucherId}`}
+                                    listPath={copy.listPath}
+                                    label={copy.title}
+                                    canCancel={canCancel}
+                                    canDelete={canDelete}
+                                    canHardDelete={canHardDelete}
+                                    onChanged={closeForm}
+                                />
+                                {editingWasPosted && (
+                                    <span className="text-[11px] text-amber-600 italic">
+                                        Will reverse + re-post on save (reference preserved)
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
-                )}
-                <div className="ml-auto flex items-center gap-2">
-                    <Button variant="ghost" onClick={closeForm}>
-                        Cancel
-                    </Button>
+                }
+                extraButtons={<>
                     {copy.showProfit && (
                         <Button variant="outline" onClick={() => setShowProfit((s) => !s)} title="Show estimated profit (live)">
                             {showProfit ? "Hide" : "Show"} Profit
                         </Button>
                     )}
-                    <Button variant="outline" onClick={() => submit(false)} disabled={saving}>
-                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
-                    </Button>
                     {copy.showPrint && (
                         <Button variant="outline" onClick={() => submit(true, true)} disabled={saving}>
-                            {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save &amp; Print
+                            Save &amp; Print
                         </Button>
                     )}
-                    <Button onClick={() => submit(true)} disabled={saving}>
-                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save
-                    </Button>
-                </div>
-            </div>
+                </>}
+            />
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 <DialogContent showCloseButton={false}>
                     <DialogHeader>

@@ -27,6 +27,8 @@ import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { BalanceHint } from "@/modules/accountancy/components/BalanceHint";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
+import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
+import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import {
     PartySearchAndCreate,
     type PartySearchAndCreateHandle,
@@ -475,40 +477,34 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
     return (
         <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
-            <header className="flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
-                <div className="flex items-center gap-2">
-                    <Button type="button" variant="ghost" size="icon-sm" onClick={handleClose} title="Back (Esc)">
-                        <ArrowLeft size={15} />
-                    </Button>
-                    <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">{copy.title}</span>
-                        {isEditing && loadedVoucher && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[loadedVoucher.status]}`}>
-                                {loadedVoucher.status}
+            <VoucherTopBar
+                title={copy.title}
+                onClose={handleClose}
+                statusBadge={isEditing && loadedVoucher
+                    ? { label: loadedVoucher.status, colorClass: JOURNAL_STATUS_COLORS[loadedVoucher.status] }
+                    : undefined}
+                rightContent={
+                    <div className="flex items-center gap-4 text-xs">
+                        <div className="flex items-center gap-2">
+                            <label className="text-muted-foreground uppercase tracking-wide">No.</label>
+                            <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
+                                {isEditing
+                                    ? (loadedVoucher?.reference ?? (loading ? "Loading…" : "—"))
+                                    : (nextRef || "Generating…")}
                             </span>
-                        )}
-                    </nav>
-                </div>
-                <div className="flex items-center gap-4 text-xs">
-                    <div className="flex items-center gap-2">
-                        <label className="text-muted-foreground uppercase tracking-wide">No.</label>
-                        <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
-                            {isEditing
-                                ? (loadedVoucher?.reference ?? (loading ? "Loading…" : "—"))
-                                : (nextRef || "Generating…")}
-                        </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-muted-foreground uppercase tracking-wide">Date</label>
+                            <Input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="h-8 w-40 text-xs"
+                            />
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-muted-foreground uppercase tracking-wide">Date</label>
-                        <Input
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="h-8 w-40 text-xs"
-                        />
-                    </div>
-                </div>
-            </header>
+                }
+            />
 
             {/* Body — Tally-finish: two columns (Particulars wide / Amount right) */}
             <div className="flex-1 overflow-y-auto px-8 py-6">
@@ -680,8 +676,16 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
             </div>
 
             {/* Sticky action bar */}
-            <div className="border-t border-border bg-card px-6 py-3 flex items-center justify-end gap-2 shrink-0">
-                {isEditing && loadedVoucher && (
+            <VoucherActionBar
+                onCancel={closeForm}
+                onSave={() => submit(true)}
+                saveLabel={isEditing ? "Save Changes" : "Save"}
+                saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED" || !!loadedVoucher?.deletedAt))}
+                onSaveDraft={() => submit(false)}
+                showSaveDraft={!isEditing}
+                saveDraftDisabled={saving || !balanced}
+                saving={saving}
+                leftContent={isEditing && loadedVoucher ? (
                     <div className="mr-auto flex items-center gap-3">
                         <LifecycleActions
                             voucher={loadedVoucher}
@@ -699,24 +703,8 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
                             </span>
                         )}
                     </div>
-                )}
-                <Button variant="ghost" onClick={closeForm}>Cancel</Button>
-                {!isEditing && (
-                    <Button variant="outline" onClick={() => submit(false)} disabled={saving || !balanced}>
-                        {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save Draft
-                    </Button>
-                )}
-                <Button
-                    onClick={() => submit(true)}
-                    disabled={
-                        saving || !balanced || loading
-                        || (isEditing && (loadedVoucher?.status === "CANCELLED" || !!loadedVoucher?.deletedAt))
-                    }
-                >
-                    {saving && <Loader2 size={13} className="animate-spin mr-1" />}
-                    {isEditing ? "Save Changes" : "Save"}
-                </Button>
-            </div>
+                ) : undefined}
+            />
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 <DialogContent showCloseButton={false}>
                     <DialogHeader>
