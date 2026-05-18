@@ -38,7 +38,7 @@ import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { toast } from "sonner";
 import {
-    Loader2, Trash2, Plus, StickyNote, Settings2, X,
+    ArrowLeft, Loader2, Trash2, Plus, StickyNote, Settings2, X,
     Image as ImageIcon, FileText, ScanLine, Link2, ExternalLink,
     CopyPlus, Building2,
 } from "lucide-react";
@@ -1377,24 +1377,27 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
 
     return (
         <div className="flex flex-col flex-1 min-h-0 bg-background">
-            {/* ── Title bar ─────────────────────────────────────────────── */}
-            <header className="border-b border-border bg-card px-6 py-2.5 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-base font-semibold">
-                        {isEditing ? `Edit ${copy.title}` : copy.title}
+            {/* Breadcrumb bar */}
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                        <ArrowLeft size={15} />
+                    </Button>
+                    <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">{copy.title}</span>
                         {isEditing && editingRef && (
-                            <span className="ml-2 font-mono text-xs text-muted-foreground">{editingRef}</span>
+                            <span className="font-mono text-xs text-muted-foreground">{editingRef}</span>
                         )}
-                    </h1>
-                    {isEditing && editingWasPosted && (
-                        <span
-                            className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-medium"
-                            title="Saving will reverse this voucher's stock & GL impact and re-post with the new values. Reference number is preserved."
-                        >
-                            Posted — edit reposts on save
-                        </span>
-                    )}
-                    {/* CASH / CREDIT pill — same shape as the dialog */}
+                        {isEditing && editingWasPosted && (
+                            <span
+                                className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 font-medium"
+                                title="Saving will reverse this voucher's stock & GL impact and re-post with the new values. Reference number is preserved."
+                            >
+                                Posted — edit reposts on save
+                            </span>
+                        )}
+                    </nav>
+                    {/* CASH / CREDIT pill */}
                     {copy.showPaymentBlock && (
                         <div className="flex rounded-md border border-border overflow-hidden text-xs font-semibold">
                             {(["CASH", "CREDIT"] as const).map((m) => (
@@ -1412,10 +1415,6 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                             ))}
                         </div>
                     )}
-                    {/* Spawn another Sale Invoice in a fresh window — lets the
-                        cashier work on parallel transactions without losing
-                        the current draft. window.open uses noopener so the
-                        new tab is independent. */}
                     <Button
                         variant="outline"
                         size="sm"
@@ -1423,26 +1422,15 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                         title={copy.closeRouteLabel}
                         className="gap-1.5 text-muted-foreground hover:text-foreground"
                     >
-                        {/* <ExternalLink size={14} /> */}
                         <CopyPlus size={14} /> {copy.newButtonLabel}
                     </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                    {activeBranchId && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
-                            <Building2 size={12} className="shrink-0" />
-                            <span>{activeBranchId}</span>
-                        </div>
-                    )}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={closeForm}
-                        title="Close"
-                    >
-                        <X size={18} />
-                    </Button>
-                </div>
+                {activeBranchId && (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
+                        <Building2 size={12} className="shrink-0" />
+                        <span>{activeBranchId}</span>
+                    </div>
+                )}
             </header>
 
             {/* One page-wide ScrollArea wraps the form header, the item table

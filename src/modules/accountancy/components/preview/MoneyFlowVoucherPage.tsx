@@ -464,24 +464,22 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
 
     return (
         <div className="flex flex-col flex-1 min-h-0 bg-background">
-            {/* Top strip — title + ref + date. Compact, no big tabs. */}
-            <header className="border-b border-border px-6 py-3 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon-sm" onClick={closeForm} aria-label="Back">
-                        <ArrowLeft size={16} />
+            {/* Breadcrumb bar */}
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                        <ArrowLeft size={15} />
                     </Button>
-                    <h1 className="text-base font-semibold">
-                        {isEditing ? `Edit ${copy.title}` : copy.title}
-                    </h1>
-                    {isEditing && loadedVoucher && (
-                        <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[loadedVoucher.status]}`}
-                        >
-                            {loadedVoucher.status}
-                        </span>
-                    )}
+                    <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">{copy.title}</span>
+                        {isEditing && loadedVoucher && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[loadedVoucher.status]}`}>
+                                {loadedVoucher.status}
+                            </span>
+                        )}
+                    </nav>
                 </div>
-                <div className="flex items-center gap-6 text-xs">
+                <div className="flex items-center gap-4 text-xs">
                     <div className="flex items-center gap-2">
                         <label className="text-muted-foreground uppercase tracking-wide">No.</label>
                         <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
@@ -499,15 +497,6 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
                             className="h-8 w-40 text-xs"
                         />
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={closeForm}
-                        title="Close"
-                        className="text-muted-foreground hover:text-foreground"
-                    >
-                        <X size={18} />
-                    </Button>
                 </div>
             </header>
 
