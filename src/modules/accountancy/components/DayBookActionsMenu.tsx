@@ -289,6 +289,7 @@ export function DayBookActionsMenu({
 // Given an edit URL (e.g. /vouchers/payments/12 or /vouchers/sales/new?voucherId=12),
 // return the corresponding fresh-create URL.  Used by Duplicate so the
 // preloaded form opens at /new rather than /<id>.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function newFormUrl(editUrl: string | null, _kind: string): string | null {
     if (!editUrl) return null;
     // GL/JE pattern: /vouchers/<plural>/<id>  →  /vouchers/<plural>/new

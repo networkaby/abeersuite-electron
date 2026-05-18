@@ -42,7 +42,8 @@ export default function CreatePersonDialog({ open, onOpenChange }: CreatePersonD
     const hasContact = !!(form.phone.trim() || form.email.trim());
 
     // Clear stale error the moment the user edits a field.
-    useEffect(() => { if (serverError) setServerError(null); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { if (serverError) setServerError(null); }, [form]);
     // Clear when the dialog re-opens.
     useEffect(() => { if (open) setServerError(null); }, [open]);
 

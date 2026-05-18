@@ -45,6 +45,7 @@ export function PurchasesRegister() {
     const showDeleted = status === "DELETED";
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const params = new URLSearchParams({ type: "PURCHASE" });
         if (status && status !== "DELETED") params.set("status", status);

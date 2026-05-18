@@ -17,7 +17,7 @@ import {
     Trash2,
     Check,
 } from "lucide-react";
-import { cn } from "@/shared/lib/format/utils";
+
 import { usePartySearch, type PartyHit } from "@/shared/hooks/usePartySearch";
 import CustomerContextPanel from "@/modules/lab/components/CustomerContextPanel";
 import QuickTicketDialog from "@/modules/lab/components/QuickTicketDialog";

@@ -13,7 +13,6 @@ export async function GET(req: Request) {
     // Accept either personId (preferred) or customerId (legacy alias) as filter
     const personId = searchParams.get("personId") ?? searchParams.get("customerId");
     const companyId = searchParams.get("companyId");
-    const filtered = Boolean(personId || companyId);
     const { take, page } = parsePagination(searchParams, { defaultLimit: 50, maxLimit: 500 });
 
     const accounts = await prisma.account.findMany({

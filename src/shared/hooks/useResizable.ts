@@ -95,7 +95,6 @@ export function useResizable({
             document.addEventListener("mousemove", onMove);
             document.addEventListener("mouseup", onUp);
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         [width, direction, minWidth, maxWidth, storageKey],
     );
 

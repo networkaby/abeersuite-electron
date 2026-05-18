@@ -6,7 +6,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import Link from "next/link";
 import { toast } from "sonner";
 import {
     Search, Loader2, Monitor, RotateCcw, ExternalLink,

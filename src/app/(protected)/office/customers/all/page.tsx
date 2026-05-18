@@ -125,11 +125,11 @@ export default function AllCustomersPage() {
     useEffect(() => {
         const personId  = searchParams.get("personId");
         const companyId = searchParams.get("companyId");
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (personId)  setSelected({ kind: "person",  id: Number(personId) });
         else if (companyId) setSelected({ kind: "company", id: Number(companyId) });
         // Intentionally only react to query-param changes — list-click selection
         // is owned by the existing onClick handler below.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
     useEffect(() => {
@@ -194,6 +194,7 @@ export default function AllCustomersPage() {
             || (selected.kind === "company" && companyTab === "transactions");
         if (!wantsTransactions || transactions) return;
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTxLoading(true);
         const url =
             selected.kind === "person"

@@ -159,7 +159,6 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     // `isSale` (legacy name) reused below as a shorthand for the "sale shape"
     // direction — counter Dr, body Cr. SALE and PURCHASE_RETURN both share it.
     const isSale     = isPositiveSale || isPurchaseReturn;
-    const isPurchase = isPositivePurchase || isSaleReturn;
     // `isDebtorParty` drives the no-party-linked fallback chain: SALE +
     // SALE_RETURN go against Sundry Debtors; PURCHASE + PURCHASE_RETURN
     // against Sundry Creditors.

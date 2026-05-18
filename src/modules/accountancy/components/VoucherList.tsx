@@ -55,6 +55,7 @@ export function VoucherList({
     const showDeleted = statusFilter === "DELETED";
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const params = new URLSearchParams({ type });
         if (statusFilter && statusFilter !== "DELETED") params.set("status", statusFilter);

@@ -157,6 +157,7 @@ export default function CustomerContextPanel({
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setDetail(null);
         setInvoices([]);
         setAccount(null);

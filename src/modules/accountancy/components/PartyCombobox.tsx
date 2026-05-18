@@ -262,7 +262,8 @@ function CreatePartyDialog({
     }, [open, seed.name, seed.phone]);
 
     // Clear the banner the moment the user touches any field.
-    useEffect(() => { if (serverError) setServerError(null); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { if (serverError) setServerError(null); }, [form]);
 
     const hasContact = !!(form.phone.trim() || form.email.trim());
     const canSubmit = form.name.trim().length > 0 && hasContact;

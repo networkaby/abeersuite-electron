@@ -6,11 +6,11 @@
 // is found, show HandoverAcceptDialog instead of ShiftOpenDialog.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     const { user, response } = await requireAuth();
     if (response) return response;
 

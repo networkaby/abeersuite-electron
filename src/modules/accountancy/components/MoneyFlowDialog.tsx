@@ -195,7 +195,6 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
     // Totals
     const partyTotal = partyRows.reduce((s, r) => s + parseAmount(r.amount), 0);
     const multiMoneyTotal = multiMoneyRows.reduce((s, r) => s + parseAmount(r.amount), 0);
-    const moneyTotal = activeMode === "single" ? partyTotal : multiMoneyTotal;
     const balanced =
         activeMode === "single"
             ? partyTotal > 0

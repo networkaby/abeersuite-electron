@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChartArea, Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, ListChecks, Wand2 } from "lucide-react";
+import { Box, Layers, LayoutGrid, Tag, ShieldCheck, Ruler, ListChecks, Wand2 } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const masterLinks = [

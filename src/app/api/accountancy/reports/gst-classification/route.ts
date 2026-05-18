@@ -206,10 +206,8 @@ export async function GET() {
 
         // ── Rate buckets (count products resolved to each rate) ───────────────
         const countByRateId = new Map<number, number>();
-        let unresolvedCount = 0;
         for (const p of productsOut) {
             if (p.resolved.gstRateId == null) {
-                unresolvedCount += 1;
                 continue;
             }
             countByRateId.set(

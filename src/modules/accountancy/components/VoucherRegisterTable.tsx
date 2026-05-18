@@ -80,7 +80,7 @@ const KIND_BADGE: Record<string, string> = {
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export interface VoucherRegisterRow extends CombinedRow {}
+export type VoucherRegisterRow = CombinedRow;
 
 export interface VoucherRegisterExtraColumn {
     header:     string;

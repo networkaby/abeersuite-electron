@@ -16,7 +16,7 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Plus, Trash2, CheckCircle2, X, Package } from "lucide-react";
+import { Plus, Trash2, CheckCircle2, X, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog, DialogContent, DialogDescription,

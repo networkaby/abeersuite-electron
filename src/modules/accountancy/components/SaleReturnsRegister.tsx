@@ -44,6 +44,7 @@ export function SaleReturnsRegister() {
     const showDeleted = status === "DELETED";
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const params = new URLSearchParams({ type: "SALE_RETURN" });
         if (status && status !== "DELETED") params.set("status", status);

@@ -117,7 +117,7 @@ export function ProductScanInput({
                 return a.name.localeCompare(b.name);
             })
             .slice(0, MAX_RESULTS);
-    }, [query, products]);
+    }, [query, products, browseAll]);
 
     // Close dropdown on outside click.
     useEffect(() => {

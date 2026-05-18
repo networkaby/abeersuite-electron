@@ -96,7 +96,6 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
 
     // Load all products once (cached in memory for fast typing)
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         axios.get<ProductOption[]>("/api/inventory/products/lookup")
             .then((r) => setProducts(r.data))
@@ -113,7 +112,6 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             setQuery("");
         }
     }, [selectedProduct, value]);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(syncQuery, [syncQuery]);
 
     const filtered = query.trim()

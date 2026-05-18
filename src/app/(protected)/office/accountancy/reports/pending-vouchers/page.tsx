@@ -287,7 +287,7 @@ function SettleDialog({
                 <div className="space-y-2 pt-3 border-t">
                     <p className="text-sm font-medium">Or create a new settling voucher</p>
                     <p className="text-xs text-muted-foreground">
-                        In the new form, use the <span className="font-medium">"Convert from {TYPE_LABEL[target.type]}"</span> picker to link it back automatically.
+                        In the new form, use the <span className="font-medium">&ldquo;Convert from {TYPE_LABEL[target.type]}&rdquo;</span> picker to link it back automatically.
                     </p>
                     <div className="flex gap-2 flex-wrap">
                         {settleTypes.map((t) => (
@@ -355,7 +355,8 @@ export default function PendingVouchersPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    useEffect(() => { load(1, "", "All", "", ""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { load(1, "", "All", "", ""); }, []);
 
     const handleSearch = (v: string) => {
         setSearch(v);

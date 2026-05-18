@@ -11,7 +11,7 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut,
-    PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck, Bell,
+    PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,8 +41,6 @@ type SidebarUser = {
 
 type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 
-type InboxRoom = { unreadCount: number };
-
 export default function Sidebar({ user }: { user?: SidebarUser }) {
     const pathname = usePathname();
     const { resolvedTheme, setTheme } = useTheme();
@@ -50,7 +48,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
 
-    const { sidebarMode, setSidebarMode, toggleSidebarVisible } = usePanelStore();
+    const { sidebarMode, setSidebarMode } = usePanelStore();
     const collapsed = sidebarMode === "collapsed";
     const isHidden = sidebarMode === "hidden";
 
@@ -88,7 +86,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [workspaceOpen, setWorkspaceOpen] = useState<Record<string, boolean>>({
         customers: pathname.startsWith("/office/customers") || pathname.startsWith("/office/customers/companies"),
     });
-    const [inboxRooms, setInboxRooms] = useState<InboxRoom[]>([]);
     const [moduleOpen, setModuleOpen] = useState<Record<string, boolean>>({
         customers:
             pathname.startsWith("/office/customers") ||
@@ -137,26 +134,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             .catch(() => { });
     }, []);
 
-    useEffect(() => {
-        axios
-            .get<InboxRoom[]>("/api/inbox/rooms")
-            .then((res) => setInboxRooms(res.data))
-            .catch(() => { });
-    }, []);
 
-    // Re-fetch inbox rooms whenever GlobalInboxListener signals a new message
-    useEffect(() => {
-        const handler = () => {
-            axios
-                .get<InboxRoom[]>("/api/inbox/rooms")
-                .then((res) => setInboxRooms(res.data))
-                .catch(() => { });
-        };
-        window.addEventListener("inbox:unread", handler);
-        return () => window.removeEventListener("inbox:unread", handler);
-    }, []);
-
-    const totalInboxUnread = inboxRooms.reduce((sum, r) => sum + r.unreadCount, 0);
 
 
     const linkClass = (href: string) => {

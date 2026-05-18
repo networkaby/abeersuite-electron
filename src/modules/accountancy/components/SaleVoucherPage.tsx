@@ -38,8 +38,8 @@ import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { toast } from "sonner";
 import {
-    ArrowLeft, Loader2, Trash2, Plus, StickyNote, Settings2, X,
-    Image as ImageIcon, FileText, ScanLine, Link2, ExternalLink,
+    Trash2, Plus, StickyNote, Settings2,
+    Image as ImageIcon, FileText, ScanLine, Link2,
     CopyPlus, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";

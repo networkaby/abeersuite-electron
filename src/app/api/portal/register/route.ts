@@ -24,13 +24,11 @@ export async function POST(req: Request) {
         const { mode, identifier, password, name } = data;
 
         let phoneRaw: string | null = null;
-        let emailRaw: string | null = null;
         let phoneNorm: string | null = null;
         let emailNorm: string | null = null;
 
         if (mode === "email" || isLikelyEmail(identifier)) {
             emailNorm = normalizePortalEmail(identifier);
-            emailRaw = emailNorm;
         } else {
             phoneNorm = normalizePortalPhone(identifier);
             if (!phoneNorm) {

@@ -18,7 +18,7 @@ interface PanelStore {
     toggleBarVisible: () => void;
 }
 
-export const usePanelStore = create<PanelStore>((set, get) => ({
+export const usePanelStore = create<PanelStore>((set) => ({
     sidebarMode: "expanded",
     barMode: "expanded",
     _sidebarLast: "expanded",

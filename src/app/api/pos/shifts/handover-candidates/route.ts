@@ -21,7 +21,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const counterIdParam = searchParams.get("counterId");
     if (!counterIdParam) return NextResponse.json({ error: "counterId required" }, { status: 400 });
-    const counterId = Number(counterIdParam);
 
     try {
         const session = await auth();
