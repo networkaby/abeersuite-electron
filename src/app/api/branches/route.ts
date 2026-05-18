@@ -18,11 +18,47 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
+        // We compute counts from Posts (the new model) rather than the legacy
+        // User.branches[] / Department.branchId direct relations. Reasoning:
+        //   • Users now belong to branches via Post appointments (UserPost →
+        //     Post.branchId). User.branches[] is only populated for legacy
+        //     accounts and would show 0 for new staff.
+        //   • Departments are typically seeded org-wide (branchId = null) and
+        //     are referenced by branch-scoped Posts. Counting by
+        //     Department.branchId would always return 0 for org-wide depts
+        //     even when positions at this branch use them.
+        // So we union both sources for backward-compat and accuracy.
         const branches = await prisma.branch.findMany({
             orderBy: { name: "asc" },
-            include: { _count: { select: { users: true, departments: true } } },
+            include: {
+                _count: { select: { users: true, departments: true } },
+                posts:  {
+                    select: {
+                        departmentId: true,
+                        holders:      { select: { userId: true } },
+                    },
+                },
+            },
         });
-        return NextResponse.json(branches);
+
+        const shaped = branches.map(b => {
+            // Union legacy User.branches + Post-derived users
+            const userIds = new Set<number>();
+            const deptIds = new Set<string>();
+            for (const p of b.posts) {
+                for (const h of p.holders) userIds.add(h.userId);
+                if (p.departmentId) deptIds.add(p.departmentId);
+            }
+            // Posts-based counts take precedence; fall back to legacy _count if zero.
+            const userCount = userIds.size > 0 ? userIds.size : b._count.users;
+            const deptCount = deptIds.size > 0 ? deptIds.size : b._count.departments;
+
+            const { posts: _posts, _count: _legacy, ...rest } = b;
+            void _posts; void _legacy;
+            return { ...rest, _count: { users: userCount, departments: deptCount } };
+        });
+
+        return NextResponse.json(shaped);
     } catch (e) {
         return handleApiError(e, "Failed to fetch branches");
     }

@@ -22,7 +22,10 @@ interface Department {
     description: string | null;
     branchId: string | null;
     branch: Branch | null;
-    _count: { users: number };
+    // users = unique holders of any Post in this dept
+    // posts = total Posts referencing this dept
+    // branches = unique branches that have Posts in this dept (org-wide dept reach)
+    _count: { users: number; posts: number; branches: number };
 }
 
 type FormState = { id: string; name: string; description: string; branchId: string };
@@ -203,9 +206,16 @@ export default function DepartmentsPage() {
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
                                         <Badge className="bg-muted text-muted-foreground text-xs">
-                                            {d.branch ? d.branch.name : "All branches"}
+                                            {d.branch
+                                                ? d.branch.name
+                                                : d._count.branches > 0
+                                                    ? `Org-wide · used by ${d._count.branches} branch${d._count.branches !== 1 ? "es" : ""}`
+                                                    : "Org-wide"
+                                            }
                                         </Badge>
-                                        <span className="text-xs text-muted-foreground">{d._count.users} users</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            {d._count.posts} post{d._count.posts !== 1 ? "s" : ""} · {d._count.users} user{d._count.users !== 1 ? "s" : ""}
+                                        </span>
                                         <div className="flex gap-1">
                                             <Button variant="outline" size="icon-sm" onClick={() => startEdit(d)}><Pencil size={14} /></Button>
                                             <Button variant="destructive" size="icon-sm" onClick={() => handleDelete(d.id)}><Trash2 size={14} /></Button>
