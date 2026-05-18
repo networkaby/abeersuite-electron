@@ -14,6 +14,10 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription,
+    DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
@@ -243,6 +247,7 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
             const t = e.target as HTMLElement | null;
             if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
             if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
             if (typeof window !== "undefined") {
                 if (window.history.length > 1) router.back(); else window.close();
             }
@@ -250,6 +255,11 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [router]);
+    const isDirtyRef = useRef(false);
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = () => {
+        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
+    };
 
     // Accounts loaded once on mount; particulars combobox picks from rowFilter,
     // top picker from topFilter.
@@ -463,11 +473,11 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background">
+        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <header className="flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={handleClose} title="Back (Esc)">
                         <ArrowLeft size={15} />
                     </Button>
                     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -707,6 +717,19 @@ export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind;
                     {isEditing ? "Save Changes" : "Save"}
                 </Button>
             </div>
+            <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+                <DialogContent showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>Unsaved changes</DialogTitle>
+                        <DialogDescription>You have unsaved changes that will be lost if you leave now.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

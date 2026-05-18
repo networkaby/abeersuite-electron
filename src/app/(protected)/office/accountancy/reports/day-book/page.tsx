@@ -241,7 +241,7 @@ export default function DayBookPage() {
         .reduce((s, r) => s + r.totalAmount, 0);
 
     return (
-        <div className="-m-8 flex h-screen flex-col overflow-hidden">
+        <div className="-m-8 flex h-full flex-col overflow-hidden">
 
             {/* Breadcrumb */}
             <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
@@ -430,9 +430,9 @@ export default function DayBookPage() {
                     No vouchers match the current filters.
                 </div>
             ) : (
-                <div className="overflow-hidden bg-card">
+                <div className="bg-card">
                     <table className="w-full text-sm">
-                        <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
+                        <thead className="sticky top-0 z-10 border-b border-border bg-muted text-xs text-muted-foreground">
                             <tr>
                                 {/* accent stripe — no header */}
                                 <th className="w-1 p-0" />

@@ -21,13 +21,17 @@
 //     cached stock, counted qty (the running tally for this voucher), and
 //     variance (counted − current).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Trash2, Building2, ClipboardCheck, Plus, Minus, X } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription,
+    DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -103,10 +107,15 @@ export function PhysicalStockPage() {
             const t = e.target as HTMLElement | null;
             if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
             if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            closeForm();
+            if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
+    }, [closeForm]);
+    const isDirtyRef = useRef(false);
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = useCallback(() => {
+        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     }, [closeForm]);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(activeBranchId);
@@ -291,6 +300,7 @@ export function PhysicalStockPage() {
             } else {
                 // Create mode — reset for the next count session (cashier rhythm).
                 setForm((f) => ({ ...f, lines: [] }));
+                isDirtyRef.current = false;
             }
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -309,11 +319,11 @@ export function PhysicalStockPage() {
     }
 
     return (
-        <div className="flex flex-col min-h-screen bg-background">
+        <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={handleClose} title="Back (Esc)">
                         <ArrowLeft size={15} />
                     </Button>
                     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -466,7 +476,7 @@ export function PhysicalStockPage() {
                             />
                         </div>
                     )}
-                    <Button variant="outline" onClick={closeForm}>Cancel</Button>
+                    <Button variant="outline" onClick={handleClose}>Cancel</Button>
                     <Button onClick={() => submit(false)} variant="outline" disabled={saving}>
                         {saving && <Loader2 size={14} className="animate-spin" />} Save Draft
                     </Button>
@@ -476,6 +486,19 @@ export function PhysicalStockPage() {
                 </div>
             </div>
             </div>
+            <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+                <DialogContent showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>Unsaved changes</DialogTitle>
+                        <DialogDescription>You have unsaved changes that will be lost if you leave now.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

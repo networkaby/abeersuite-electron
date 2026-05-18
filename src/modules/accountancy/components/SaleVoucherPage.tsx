@@ -43,6 +43,10 @@ import {
     CopyPlus, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription,
+    DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -521,6 +525,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             const t = e.target as HTMLElement | null;
             if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
             if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
             if (typeof window !== "undefined") {
                 if (window.history.length > 1) router.back(); else window.close();
             }
@@ -528,6 +533,11 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [router]);
+    const isDirtyRef = useRef(false);
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = () => {
+        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
+    };
 
     // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
     // PATCH on save. Set once on mount and locked in; subsequent param
@@ -1376,11 +1386,11 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const cell = "bg-transparent border-0 outline-none text-sm text-right w-full focus:bg-accent/40 rounded px-1 tabular-nums";
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background">
+        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <header className="flex shrink-0 items-center justify-between gap-4 border-b bg-card px-4 py-2">
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="ghost" size="icon-sm" onClick={closeForm} title="Back (Esc)">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={handleClose} title="Back (Esc)">
                         <ArrowLeft size={15} />
                     </Button>
                     <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -2233,6 +2243,19 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     </Button>
                 </div>
             </div>
+            <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+                <DialogContent showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>Unsaved changes</DialogTitle>
+                        <DialogDescription>You have unsaved changes that will be lost if you leave now.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
