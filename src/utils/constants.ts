@@ -103,7 +103,7 @@ export type ModuleCreateAction = {
     href?: string;
     /** Open the href in a new browser tab. */
     newTab?: boolean;
-    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-rejection-in" | "new-rejection-out";
+    action?: "new-ticket" | "new-person" | "new-company" | "new-journal-voucher" | "new-debit-note" | "new-contra" | "new-payment" | "new-receipt" | "new-credit-note" | "new-sale" | "new-purchase" | "new-sale-return" | "new-purchase-return" | "new-estimate" | "new-sales-order" | "new-purchase-order" | "new-grn" | "new-challan" | "new-manufacturing-journal" | "new-physical-stock" | "new-branch-transfer" | "new-rejection-in" | "new-rejection-out";
     pipelineRef?: "default";
     permission?: string | null;
     disabled?: boolean;
@@ -218,6 +218,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", action: "new-challan", permission: "inventory:manage" },
             { label: "Manufacturing Journal +", subtitle: "New manufacturing journal", icon: Factory, variant: "outline", action: "new-manufacturing-journal", permission: "inventory:manage" },
             { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", action: "new-physical-stock", permission: "inventory:manage" },
+            { label: "Branch Transfer +", subtitle: "Move stock between locations", icon: ArrowLeftRight, variant: "outline", action: "new-branch-transfer", permission: "inventory:manage" },
             { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", action: "new-rejection-in", permission: "inventory:manage" },
             { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out", permission: "inventory:manage" },
 
@@ -331,8 +332,10 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             "/office/inventory",
             "/vouchers/manufacturing-journals",
             "/vouchers/physical-stock",
+            "/vouchers/branch-transfers",
             "/office/accountancy/vouchers-registers/manufacturing-journals",
             "/office/accountancy/vouchers-registers/physical-stock",
+            "/office/accountancy/vouchers-registers/branch-transfers",
         ],
         createActions: [
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
@@ -352,6 +355,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Challan +", subtitle: "New challan", icon: Truck, variant: "outline", action: "new-challan", permission: "inventory:manage" },
             { label: "Manufacturing Journal +", subtitle: "New manufacturing journal", icon: Factory, variant: "outline", action: "new-manufacturing-journal", permission: "inventory:manage" },
             { label: "Physical Stock +", subtitle: "New physical stock", icon: ClipboardCheck, variant: "outline", action: "new-physical-stock", permission: "inventory:manage" },
+            { label: "Branch Transfer +", subtitle: "Move stock between locations", icon: ArrowLeftRight, variant: "outline", action: "new-branch-transfer", permission: "inventory:manage" },
             { label: "Rejection In +", subtitle: "New rejection in", icon: PackageX, variant: "outline", action: "new-rejection-in", permission: "inventory:manage" },
             { label: "Rejection Out +", subtitle: "New rejection out", icon: PackageX, variant: "outline", action: "new-rejection-out", permission: "inventory:manage" },
 
@@ -365,6 +369,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Challans", icon: Truck, href: "/office/accountancy/vouchers-registers/challans", permission: "inventory:manage" },
             { label: "Manufacturing Journal", icon: Factory, href: "/office/accountancy/vouchers-registers/manufacturing-journals", permission: "inventory:manage" },
             { label: "Physical Stock", icon: ClipboardCheck, href: "/office/accountancy/vouchers-registers/physical-stock", permission: "inventory:manage" },
+            { label: "Branch Transfer", icon: ArrowLeftRight, href: "/office/accountancy/vouchers-registers/branch-transfers", permission: "inventory:manage" },
             { label: "Rejections In", icon: PackageX, href: "/office/accountancy/vouchers-registers/rejections-in", permission: "inventory:manage" },
             { label: "Rejections Out", icon: PackageX, href: "/office/accountancy/vouchers-registers/rejections-out", permission: "inventory:manage" },
             { label: "Optional Vouchers", icon: ClipboardList, href: "/office/accountancy/reports/optional-vouchers", permission: "inventory:manage" },

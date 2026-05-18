@@ -8,6 +8,7 @@ import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 // Anything not listed here falls through to the legacy calendar-year scheme.
 const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     SALE:             "SALE",
+    POS:              "POS",
     PURCHASE:         "PURCHASE",
     ESTIMATE:         "ESTIMATE",
     SALE_RETURN:      "SALE_RETURN",
@@ -20,6 +21,7 @@ const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
 const PREFIX: Record<InvVoucherType, string> = {
     PURCHASE:         "PV",
     SALE:             "SV",
+    POS:              "POS",
     ESTIMATE:         "EV",
     SALE_RETURN:      "SR",
     PURCHASE_RETURN:  "PR",
@@ -28,6 +30,7 @@ const PREFIX: Record<InvVoucherType, string> = {
     ADJUSTMENT:       "AV",
     MANUFACTURING_JOURNAL: "MJ",
     PHYSICAL_STOCK:   "PS",
+    BRANCH_TRANSFER:  "BT",
     GRN:              "GRN",
     CHALLAN:          "DC",
     REJECTION_IN:     "RIN",

@@ -76,6 +76,8 @@ export default function AllCreateActionsDialog({ open, onOpenChange, permissions
             window.open("/vouchers/manufacturing-journals/new", "_blank", "noopener");
         } else if (action.action === "new-physical-stock") {
             window.open("/vouchers/physical-stock/new", "_blank", "noopener");
+        } else if (action.action === "new-branch-transfer") {
+            window.open("/vouchers/branch-transfers/new", "_blank", "noopener");
         } else if (action.action === "new-rejection-in") {
             window.open("/vouchers/rejections-in/new", "_blank", "noopener");
         } else if (action.action === "new-rejection-out") {

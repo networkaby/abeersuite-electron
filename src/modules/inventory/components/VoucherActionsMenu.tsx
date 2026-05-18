@@ -31,6 +31,7 @@ import {
 export const VOUCHER_URLS: Record<string, string> = {
     PURCHASE:        "/office/inventory/purchases",
     SALE:            "/office/inventory/sales",
+    POS:             "/vouchers/pos",
     SALE_RETURN:     "/office/inventory/sale-returns",
     PURCHASE_RETURN: "/office/inventory/purchase-returns",
     ESTIMATE:        "/vouchers/estimates",
@@ -42,6 +43,7 @@ export const VOUCHER_URLS: Record<string, string> = {
     REJECTION_OUT:   "/vouchers/rejections-out",
     PHYSICAL_STOCK:  "/vouchers/physical-stock",
     MANUFACTURING_JOURNAL: "/vouchers/manufacturing-journals",
+    BRANCH_TRANSFER: "/vouchers/branch-transfers",
 };
 
 export function voucherUrl(type: string, id: number): string | null {
@@ -69,6 +71,7 @@ const EDIT_FORM_URLS: Record<string, string> = {
     REJECTION_OUT:   "/vouchers/rejections-out/new",
     PHYSICAL_STOCK:        "/vouchers/physical-stock/new",
     MANUFACTURING_JOURNAL: "/vouchers/manufacturing-journals/new",
+    BRANCH_TRANSFER:       "/vouchers/branch-transfers/new",
 };
 
 export function editFormUrl(type: string, id: number): string | null {

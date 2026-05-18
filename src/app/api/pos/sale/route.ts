@@ -160,11 +160,11 @@ export async function POST(req: Request) {
                 date:              receiptDate,
             });
 
-            // ── 3. InvVoucher (type=SALE) + lines + stock ledger + cached stock ─
-            const voucherRef = await invNextRef(tx, "SALE");
+            // ── 3. InvVoucher (type=POS) + lines + stock ledger + cached stock ─
+            const voucherRef = await invNextRef(tx, "POS");
             const voucher = await tx.invVoucher.create({
                 data: {
-                    type:           "SALE",
+                    type:           "POS",
                     reference:      voucherRef,
                     branchId:       activeBranchId,
                     date:           new Date(body.issueDate),

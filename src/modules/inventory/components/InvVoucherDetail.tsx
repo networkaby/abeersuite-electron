@@ -58,7 +58,11 @@ const TYPE_ROUTE: Record<string, string> = {
     CHALLAN:         "/vouchers/challans",
     REJECTION_IN:    "/vouchers/rejections-in",
     REJECTION_OUT:   "/vouchers/rejections-out",
+    BRANCH_TRANSFER: "/vouchers/branch-transfers",
+    PHYSICAL_STOCK:  "/vouchers/physical-stock",
+    MANUFACTURING_JOURNAL: "/vouchers/manufacturing-journals",
     SALE:            "/office/inventory/sales",
+    POS:             "/vouchers/pos",
     PURCHASE:        "/office/inventory/purchases",
 };
 

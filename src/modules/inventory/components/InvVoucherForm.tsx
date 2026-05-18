@@ -28,7 +28,7 @@ export type InvVoucherKind =
 // three read-only stock kinds (RECEIPT-as-goods, ISSUE, ADJUSTMENT) that
 // have no dedicated form. Used by InvVoucherList so it can serve every kind
 // the inventory API recognises.
-export type InvVoucherListKind = InvVoucherKind | "RECEIPT" | "ISSUE" | "ADJUSTMENT";
+export type InvVoucherListKind = InvVoucherKind | "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "BRANCH_TRANSFER";
 
 const TITLES: Record<InvVoucherKind, string> = {
     SALES_ORDER:    "Sales Order",

@@ -115,7 +115,7 @@ export async function POST(req: Request) {
         // ── Find original InvVoucher for stock reference ───────────────────────
         const originalVoucher = await prisma.invVoucher.findFirst({
             where: {
-                type:        "SALE",
+                type:        "POS",
                 description: { contains: original.number },
                 status:      "POSTED",
             },

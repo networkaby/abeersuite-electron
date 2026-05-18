@@ -1,6 +1,6 @@
 // GET /api/pos/sales
 //
-// Paginated list of POS sales — InvVouchers with type=SALE, most recent first.
+// Paginated list of POS sales — InvVouchers with type=POS, most recent first.
 //
 // Query params (all optional):
 //   ?limit=50    — page size (max 200, default 50)
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     try {
         const where = {
-            type:   "SALE" as const,
+            type:   "POS" as const,
             status: "POSTED" as const,
             ...(q ? {
                 OR: [

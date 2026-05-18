@@ -28,6 +28,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const isPurchase = voucher.type === "PURCHASE" || voucher.type === "RECEIPT" || voucher.type === "GRN";
     const isSale     = voucher.type === "SALE"     || voucher.type === "ISSUE"   || voucher.type === "CHALLAN";
+    const isBranchTransfer = voucher.type === "BRANCH_TRANSFER";
+    const isLedgerMirror = voucher.type === "PHYSICAL_STOCK" || voucher.type === "MANUFACTURING_JOURNAL";
 
     try {
         ensureDeletable(voucher);
@@ -35,6 +37,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await prisma.$transaction(async (tx) => {
             if (isPosted(voucher)) {
                 // Reverse stock + cached balance — same shape as cancel, but no counter-entry written.
+                if (isLedgerMirror) {
+                    // Mirror the original ledger rows in reverse; patch both
+                    // InvProductBranch.stock and InvProduct.stock by the
+                    // opposite of the original delta.
+                    const origRows = await tx.invStockLedger.findMany({
+                        where:  { voucherId: voucher.id, amount: { gte: 0 } },
+                        select: { id: true, productId: true, branchId: true, inQty: true, outQty: true, rate: true, amount: true },
+                    });
+                    for (const row of origRows) {
+                        const inN  = toNumber(row.inQty);
+                        const outN = toNumber(row.outQty);
+                        await tx.invStockLedger.create({
+                            data: {
+                                productId: row.productId,
+                                voucherId: voucher.id,
+                                branchId:  row.branchId,
+                                date:      new Date(),
+                                inQty:     outN,
+                                outQty:    inN,
+                                rate:      row.rate,
+                                amount:    -toNumber(row.amount),
+                            },
+                        });
+                        const originalDelta = Math.round(inN - outN);
+                        if (originalDelta !== 0) {
+                            const reverseDelta = -originalDelta;
+                            await tx.invProductBranch.upsert({
+                                where:  { productId_branchId: { productId: row.productId, branchId: row.branchId } },
+                                create: { productId: row.productId, branchId: row.branchId, stock: reverseDelta },
+                                update: { stock: reverseDelta > 0 ? { increment: reverseDelta } : { decrement: -reverseDelta } },
+                            });
+                            await tx.invProduct.update({
+                                where: { id: row.productId },
+                                data:  { stock: reverseDelta > 0 ? { increment: reverseDelta } : { decrement: -reverseDelta } },
+                            });
+                        }
+                    }
+                } else if (isBranchTransfer && voucher.destinationBranchId) {
+                    for (const line of voucher.lines) {
+                        const qty = toNumber(line.quantity);
+                        if (!(qty > 0)) continue;
+                        const qInt = Math.round(qty);
+                        await tx.invStockLedger.create({
+                            data: { productId: line.productId, voucherId: voucher.id, branchId: voucher.branchId, date: new Date(), inQty: qty, outQty: 0, rate: line.rate, amount: -toNumber(line.amount) },
+                        });
+                        await tx.invProductBranch.upsert({
+                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
+                            create: { productId: line.productId, branchId: voucher.branchId, stock: qInt },
+                            update: { stock: { increment: qInt } },
+                        });
+                        await tx.invStockLedger.create({
+                            data: { productId: line.productId, voucherId: voucher.id, branchId: voucher.destinationBranchId, date: new Date(), inQty: 0, outQty: qty, rate: line.rate, amount: -toNumber(line.amount) },
+                        });
+                        await tx.invProductBranch.upsert({
+                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.destinationBranchId } },
+                            create: { productId: line.productId, branchId: voucher.destinationBranchId, stock: -qInt },
+                            update: { stock: { decrement: qInt } },
+                        });
+                    }
+                } else {
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
                     await tx.invStockLedger.create({
@@ -66,6 +128,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                             update: { stock: isPurchase ? { decrement: Math.round(qty) } : { increment: Math.round(qty) } },
                         });
                     }
+                }
                 }
 
                 if (voucher.journalEntryId) {

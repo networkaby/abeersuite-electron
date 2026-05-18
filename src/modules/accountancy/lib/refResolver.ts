@@ -15,6 +15,7 @@ import type { InvVoucherType } from "@/generated/prisma/client";
 const VOUCHER_SEG: Record<InvVoucherType, string> = {
     PURCHASE:         "purchases",
     SALE:             "sales",
+    POS:              "pos",
     ESTIMATE:         "estimates",
     SALE_RETURN:      "sale-returns",
     PURCHASE_RETURN:  "purchase-returns",
@@ -23,6 +24,7 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
     ADJUSTMENT:       "sales",
     MANUFACTURING_JOURNAL: "manufacturing-journals",
     PHYSICAL_STOCK:   "physical-stock",
+    BRANCH_TRANSFER:  "branch-transfers",
     GRN:              "grn",
     CHALLAN:          "challans",
     REJECTION_IN:     "rejections-in",
@@ -32,8 +34,10 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
 };
 
 const VOUCHER_BASE: Partial<Record<InvVoucherType, string>> = {
+    POS:                   "/vouchers",
     MANUFACTURING_JOURNAL: "/vouchers",
     PHYSICAL_STOCK:        "/vouchers",
+    BRANCH_TRANSFER:       "/vouchers",
 };
 
 /** Single-record resolver — returns SourceDoc for one journal entry id, or null. */

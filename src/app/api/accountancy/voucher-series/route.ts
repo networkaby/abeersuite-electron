@@ -28,7 +28,7 @@ export async function GET() {
         const ORDER = [
             "CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE",
             "INVOICE", "JOURNAL",
-            "SALE", "PURCHASE", "ESTIMATE",
+            "SALE", "POS", "PURCHASE", "ESTIMATE",
             "SALE_RETURN", "PURCHASE_RETURN",
         ];
         series.sort((a: { kind: string }, b: { kind: string }) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));

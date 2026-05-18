@@ -62,6 +62,9 @@ import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVouche
 import { Switch } from "@/components/ui/switch";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { fmt } from "@/utils/constants";
+import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 // ── Per-line state ─────────────────────────────────────────────────────────
 
@@ -524,6 +527,16 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     // "saving will reverse + re-post" warning and skips the explicit POST
     // /post step on Save (server's PATCH already re-posts atomically).
     const [editingWasPosted, setEditingWasPosted] = useState(false);
+    // Loaded voucher's lifecycle fields — handed to the inline LifecycleActions
+    // bar in the footer when editing a posted voucher.
+    const [loadedLifecycle, setLoadedLifecycle] = useState<{ status: string; deletedAt: string | null; cancelledAt: string | null } | null>(null);
+
+    // Inline lifecycle bar permissions — same rules as the row 3-dot menu.
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
     // Voucher's saved paymentAccountId — paired with cashBankAccounts via a
     // dedicated effect so the picker resolves once both have loaded.
     const [pendingPaymentAccountId, setPendingPaymentAccountId] = useState<number | null>(null);
@@ -732,6 +745,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                 }
                 setEditingRef(v.reference);
                 setEditingWasPosted(v.status === "POSTED");
+                setLoadedLifecycle({ status: v.status, deletedAt: (v as { deletedAt?: string | null }).deletedAt ?? null, cancelledAt: (v as { cancelledAt?: string | null }).cancelledAt ?? null });
 
                 // Lines → LineState mapping. Stub salePrice / costPrice as
                 // null on the SelectedProduct stub; rate auto-fill only
@@ -2176,6 +2190,25 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                 >
                     <Link2 size={14} /> Link Payment
                 </Button>
+                {isEditing && editVoucherId != null && loadedLifecycle && (
+                    <div className="ml-2 mr-auto flex items-center gap-3">
+                        <LifecycleActions
+                            voucher={loadedLifecycle}
+                            apiBasePath={`/api/inventory/vouchers/${editVoucherId}`}
+                            listPath={copy.listPath}
+                            label={copy.title}
+                            canCancel={canCancel}
+                            canDelete={canDelete}
+                            canHardDelete={canHardDelete}
+                            onChanged={closeForm}
+                        />
+                        {editingWasPosted && (
+                            <span className="text-[11px] text-amber-600 italic">
+                                Will reverse + re-post on save (reference preserved)
+                            </span>
+                        )}
+                    </div>
+                )}
                 <div className="ml-auto flex items-center gap-2">
                     <Button variant="ghost" onClick={closeForm}>
                         Cancel

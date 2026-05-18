@@ -26,6 +26,7 @@ import type { CombinedRow } from "@/modules/accountancy/hooks/useCombinedVoucher
 
 const KIND_BADGE: Record<string, string> = {
     SALE:            "bg-emerald-100 text-emerald-700",
+    POS:             "bg-emerald-200 text-emerald-800",
     PURCHASE:        "bg-blue-100 text-blue-700",
     SALE_RETURN:     "bg-emerald-50 text-emerald-700",
     PURCHASE_RETURN: "bg-blue-50 text-blue-700",
@@ -41,6 +42,7 @@ const KIND_BADGE: Record<string, string> = {
     ADJUSTMENT:      "bg-orange-100 text-orange-700",
     MANUFACTURING_JOURNAL: "bg-yellow-50 text-yellow-700",
     PHYSICAL_STOCK:  "bg-yellow-100 text-yellow-700",
+    BRANCH_TRANSFER: "bg-sky-100 text-sky-700",
     PAYMENT:         "bg-red-50 text-red-700",
     CONTRA:          "bg-slate-100 text-slate-700",
     CREDIT_NOTE:     "bg-purple-50 text-purple-700",

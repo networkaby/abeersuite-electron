@@ -93,6 +93,8 @@ export async function PATCH(req: Request, { params }: Params) {
         refDate,
         refVoucherId,
         bomId,
+        destinationBranchId,
+        branchId: bodyBranchId,
         showPrices,
         shippingAmt,
         roundOff,
@@ -118,6 +120,10 @@ export async function PATCH(req: Request, { params }: Params) {
         refVoucherId?:     number | null;
         /// MANUFACTURING_JOURNAL only — optional FK to InvBom.
         bomId?:            number | null;
+        /// BRANCH_TRANSFER only — destination branch.
+        destinationBranchId?: string | null;
+        /// Source branch (read-only for posted edits; only DRAFT allows change).
+        branchId?:         string;
         /// Challan-only: persist print-price visibility.
         showPrices?:       boolean;
         shippingAmt?:      number;
@@ -147,6 +153,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
     const isPhysicalStock = existing.type === "PHYSICAL_STOCK";
     const isManufacturingJournal = existing.type === "MANUFACTURING_JOURNAL";
+    const isBranchTransfer = existing.type === "BRANCH_TRANSFER";
 
     // Recompute totals if lines provided.
     let totals: { subtotal: number; taxAmount: number; totalAmount: number } | undefined;
@@ -159,7 +166,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (lines?.length) {
         computedLines = lines.map((l) => {
             const rate = l.rate ?? 0;
-            if (isPhysicalStock) {
+            if (isPhysicalStock || isBranchTransfer) {
                 return { ...l, rate: 0, discountAmt: 0, taxAmount: 0, amount: 0 };
             }
             if (isManufacturingJournal) {
@@ -188,9 +195,12 @@ export async function PATCH(req: Request, { params }: Params) {
     // POSTED edits on PHYSICAL_STOCK / MANUFACTURING_JOURNAL aren't supported
     // yet — Phase-1 reversal + Phase-3 re-post code paths below only cover
     // trading vouchers. Direct the user to cancel + create a new draft.
-    if (wasPosted && (isPhysicalStock || isManufacturingJournal)) {
+    if (wasPosted && (isPhysicalStock || isManufacturingJournal || isBranchTransfer)) {
+        const niceLabel = isPhysicalStock ? "Physical Stock"
+            : isManufacturingJournal ? "Manufacturing Journal"
+            : "Branch Transfer";
         return NextResponse.json(
-            { error: `Cannot edit a posted ${isPhysicalStock ? "Physical Stock" : "Manufacturing Journal"} voucher. Cancel it and create a new one instead.` },
+            { error: `Cannot edit a posted ${niceLabel} voucher. Cancel it and create a new one instead.` },
             { status: 409 },
         );
     }
@@ -334,6 +344,8 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
                     ...(refVoucherId     !== undefined ? { refVoucherId:     refVoucherId ?? null } : {}),
                     ...(bomId            !== undefined ? { bomId:            bomId ?? null } : {}),
+                    ...(bodyBranchId     !== undefined && !wasPosted ? { branchId:  bodyBranchId } : {}),
+                    ...(destinationBranchId !== undefined ? { destinationBranchId: destinationBranchId ?? null } : {}),
                     ...(showPrices       !== undefined ? { showPrices }                              : {}),
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
                     ...(roundOff         !== undefined ? { roundOff }        : {}),

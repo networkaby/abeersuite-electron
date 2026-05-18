@@ -326,6 +326,12 @@ model InvVoucher {
   /// generated from a recipe (stamped for audit / reporting).
   bomId            Int?
   bom              InvBom?        @relation(fields: [bomId], references: [id])
+  /// Destination branch — only set for BRANCH_TRANSFER. The source branch
+  /// is the standard `branchId` field; this column carries the partner
+  /// branch the stock is moving into. Two `InvStockLedger` rows are written
+  /// per transfer line at post time (one OUT on source, one IN on dest).
+  destinationBranchId String?
+  destinationBranch   Branch?     @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
 
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?

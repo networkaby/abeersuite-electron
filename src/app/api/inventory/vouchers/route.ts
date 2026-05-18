@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
         refDate,
         refVoucherId,
         bomId,
+        destinationBranchId,
         shippingAmt    = 0,
         roundOff       = 0,
         amountReceived = 0,
@@ -118,6 +119,8 @@ export async function POST(req: NextRequest) {
         refVoucherId?:   number;
         /// MANUFACTURING_JOURNAL only — optional FK to InvBom this voucher was generated from.
         bomId?:          number;
+        /// BRANCH_TRANSFER only — destination branch (source is `branchId`).
+        destinationBranchId?: string;
         shippingAmt?:    number;
         roundOff?:       number;
         amountReceived?: number;
@@ -156,6 +159,13 @@ export async function POST(req: NextRequest) {
 
     const isPhysicalStock = type === "PHYSICAL_STOCK";
     const isManufacturingJournal = type === "MANUFACTURING_JOURNAL";
+    const isBranchTransfer = type === "BRANCH_TRANSFER";
+
+    if (isBranchTransfer) {
+        if (!destinationBranchId) {
+            return NextResponse.json({ error: "Branch Transfer needs a destination branch" }, { status: 400 });
+        }
+    }
 
     // Manufacturing Journal is allowed to have zero stock lines IF it has at
     // least one expense (Charges) line — covers pure-overhead allocations.
@@ -174,6 +184,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: e.message }, { status: e.code === "forbidden_branch" ? 403 : 400 });
         }
         throw e;
+    }
+    if (isBranchTransfer && destinationBranchId === branchId) {
+        return NextResponse.json({ error: "Source and destination branches must differ." }, { status: 400 });
     }
     for (const l of lines) {
         if (!l.productId || l.quantity <= 0) {
@@ -202,7 +215,7 @@ export async function POST(req: NextRequest) {
     //  • Trading vouchers go through the full calcLineTotals path.
     const computedLines = lines.map((l) => {
         const rate = l.rate ?? 0;
-        if (isPhysicalStock) {
+        if (isPhysicalStock || isBranchTransfer) {
             return { ...l, rate: 0, discountAmt: 0, taxAmount: 0, amount: 0 };
         }
         if (isManufacturingJournal) {
@@ -258,6 +271,7 @@ export async function POST(req: NextRequest) {
                 refDate:         refDate ? new Date(refDate) : null,
                 refVoucherId:    refVoucherId ?? null,
                 bomId:           isManufacturingJournal && bomId ? bomId : null,
+                destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
                 shippingAmt,
                 roundOff,
                 amountReceived,

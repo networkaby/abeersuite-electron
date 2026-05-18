@@ -119,6 +119,7 @@ enum AllocationSourceType {
 enum InvVoucherType {
   PURCHASE
   SALE
+  POS // POS sale — same stock OUT + GL impact as SALE, but created at the counter via /vouchers/pos and immediately POSTED. Distinguished so Day Book / registers can badge it separately.
   ESTIMATE
   SALE_RETURN // stock IN — reverses a SALE (customer returns goods, "Credit Note" in accounting)
   PURCHASE_RETURN // stock OUT — reverses a PURCHASE (we return to supplier, "Debit Note" in accounting)
@@ -127,6 +128,7 @@ enum InvVoucherType {
   ADJUSTMENT
   MANUFACTURING_JOURNAL // consume raw materials to produce finished goods (optional BOM-driven, optional GL-posting "Charges")
   PHYSICAL_STOCK // counted opening qty for the voucher's date; ledger gets a start-of-day delta entry
+  BRANCH_TRANSFER // stock moves from voucher.branchId (source) to destinationBranchId (destination); two ledger rows per line, no GL impact
   GRN // goods-received-note (against PO)
   CHALLAN // delivery challan (against SO)
   REJECTION_IN

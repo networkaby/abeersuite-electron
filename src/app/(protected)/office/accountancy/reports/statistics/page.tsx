@@ -31,6 +31,7 @@ const INV_VOUCHER_LABEL: Record<string, string> = {
     PURCHASE: "Purchase", SALE: "Sale", ESTIMATE: "Estimate",
     RECEIPT: "Receipt Note (GRN)", ISSUE: "Issue", ADJUSTMENT: "Adjustment",
     MANUFACTURING_JOURNAL: "Manufacturing Journal", PHYSICAL_STOCK: "Physical Stock",
+    BRANCH_TRANSFER: "Branch Transfer",
     GRN: "GRN", CHALLAN: "Delivery Challan",
     REJECTION_IN: "Rejection In", REJECTION_OUT: "Rejection Out",
     SALES_ORDER: "Sales Order", PURCHASE_ORDER: "Purchase Order",

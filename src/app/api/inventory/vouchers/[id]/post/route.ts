@@ -60,6 +60,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const isCommitment = voucher.type === "SALES_ORDER" || voucher.type === "PURCHASE_ORDER";
     const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
     const isManufacturingJournal = voucher.type === "MANUFACTURING_JOURNAL";
+    const isBranchTransfer = voucher.type === "BRANCH_TRANSFER";
+
+    if (isBranchTransfer && !voucher.destinationBranchId) {
+        return NextResponse.json({ error: "Branch Transfer is missing a destination branch — edit the draft and pick one." }, { status: 422 });
+    }
+    if (isBranchTransfer && voucher.destinationBranchId === voucher.branchId) {
+        return NextResponse.json({ error: "Source and destination branches must differ." }, { status: 422 });
+    }
 
     try {
         const { result, notes } = await prisma.$transaction(async (tx) => {
@@ -72,7 +80,57 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             // start-of-day = (counted_qty − running_stock_pre_date), so any
             // same-date sales/purchases that already exist still apply on
             // top of the new opening when the running stock is recomputed.
-            if (!isCommitment) {
+            if (isBranchTransfer) {
+                // Branch Transfer: same product, just moved between branches.
+                //   • Two InvStockLedger rows per line — qty- on source, qty+ on destination.
+                //   • InvProductBranch[source].stock −=, InvProductBranch[dest].stock +=.
+                //   • InvProduct.stock (org-wide cache) is UNCHANGED — the org still
+                //     owns the same units.
+                const destBranchId = voucher.destinationBranchId!;
+                for (const line of voucher.lines) {
+                    const qty = toNumber(line.quantity);
+                    if (!(qty > 0)) continue;
+                    const qInt = Math.round(qty);
+
+                    // Source side: OUT
+                    await tx.invStockLedger.create({
+                        data: {
+                            productId: line.productId,
+                            voucherId: voucher.id,
+                            branchId:  voucher.branchId,
+                            date:      voucher.date,
+                            inQty:     0,
+                            outQty:    qty,
+                            rate:      line.rate,
+                            amount:    line.amount,
+                        },
+                    });
+                    await tx.invProductBranch.upsert({
+                        where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
+                        create: { productId: line.productId, branchId: voucher.branchId, stock: -qInt },
+                        update: { stock: { decrement: qInt } },
+                    });
+
+                    // Destination side: IN
+                    await tx.invStockLedger.create({
+                        data: {
+                            productId: line.productId,
+                            voucherId: voucher.id,
+                            branchId:  destBranchId,
+                            date:      voucher.date,
+                            inQty:     qty,
+                            outQty:    0,
+                            rate:      line.rate,
+                            amount:    line.amount,
+                        },
+                    });
+                    await tx.invProductBranch.upsert({
+                        where:  { productId_branchId: { productId: line.productId, branchId: destBranchId } },
+                        create: { productId: line.productId, branchId: destBranchId, stock: qInt },
+                        update: { stock: { increment: qInt } },
+                    });
+                }
+            } else if (!isCommitment) {
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
                     const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
@@ -111,8 +169,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         });
                         if (priorSameDay === 0) {
                             // First PS of the day for this product → absolute reset.
+                            // IMPORTANT: only sum ledger rows whose source voucher
+                            // is still POSTED (and not soft-deleted). Cancelled
+                            // vouchers leave their original entry in place with a
+                            // counter-entry dated when the cancel happened — that
+                            // counter-entry is often outside the < voucher.date
+                            // window, which would double-count the original. The
+                            // join via voucher.status guarantees we only see the
+                            // true pre-date balance.
                             const priorEntries = await tx.invStockLedger.findMany({
-                                where: { productId: line.productId, branchId: voucher.branchId, date: { lt: voucher.date } },
+                                where: {
+                                    productId: line.productId,
+                                    branchId:  voucher.branchId,
+                                    date:      { lt: voucher.date },
+                                    voucher:   { status: "POSTED", deletedAt: null },
+                                },
                                 select: { inQty: true, outQty: true },
                             });
                             const priorRunning = priorEntries.reduce(

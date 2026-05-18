@@ -29,6 +29,9 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { scaleBomLines } from "@/modules/inventory/lib/bom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 type Branch = { id: string; name: string; isActive?: boolean };
 type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
@@ -53,6 +56,9 @@ type ExistingVoucher = {
     type:             string;
     date:             string;
     description:      string;
+    status:           "DRAFT" | "POSTED" | "CANCELLED";
+    deletedAt:        string | null;
+    cancelledAt:      string | null;
     branchId:         string;
     paymentAccountId: number | null;
     bomId:            number | null;
@@ -83,7 +89,14 @@ export function ManufacturingJournalPage() {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(editing);
     const [voucherRef, setVoucherRef] = useState<string | null>(null);
+    const [loadedVoucher, setLoadedVoucher] = useState<LifecycleVoucher | null>(null);
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
+
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
     // Close / Cancel — smart back-nav (matches SaleVoucherPage).
     const closeForm = useCallback(() => {
@@ -146,6 +159,7 @@ export function ManufacturingJournalPage() {
             .then((r) => {
                 const v = r.data;
                 setVoucherRef(v.reference);
+                setLoadedVoucher({ status: v.status, deletedAt: v.deletedAt, cancelledAt: v.cancelledAt });
                 if (v.branchId) setSelectedBranchId(v.branchId);
                 const toForm = (l: ExistingVoucher["lines"][number]): LineForm => ({
                     productId: l.productId,
@@ -648,7 +662,21 @@ export function ManufacturingJournalPage() {
                             placeholder="Free-form notes — e.g. operator on duty, batch reference"
                         />
                     </div>
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                        {editing && loadedVoucher && (
+                            <div className="mr-auto">
+                                <LifecycleActions
+                                    voucher={loadedVoucher}
+                                    apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
+                                    listPath="/office/accountancy/vouchers-registers/manufacturing-journals"
+                                    label="Manufacturing Journal"
+                                    canCancel={canCancel}
+                                    canDelete={canDelete}
+                                    canHardDelete={canHardDelete}
+                                    onChanged={closeForm}
+                                />
+                            </div>
+                        )}
                         <Button variant="outline" onClick={closeForm}>Cancel</Button>
                         <Button onClick={() => submit(false)} variant="outline" disabled={saving}>
                             {saving && <Loader2 size={14} className="animate-spin" />} Save Draft

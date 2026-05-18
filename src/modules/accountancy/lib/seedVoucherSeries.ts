@@ -31,6 +31,7 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     // Inventory voucher counts — needed for new-install continuity so the next
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
     const saleCount     = await prisma.invVoucher.count({ where: { type: "SALE" } });
+    const posCount      = await prisma.invVoucher.count({ where: { type: "POS" } });
     const purchaseCount = await prisma.invVoucher.count({ where: { type: "PURCHASE" } });
     const estimateCount = await prisma.invVoucher.count({ where: { type: "ESTIMATE" } });
     const saleReturnCount     = await prisma.invVoucher.count({ where: { type: "SALE_RETURN" } });
@@ -48,8 +49,9 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         // Inventory vouchers — same FY-aware convention managed from
         // /office/admin/year-ending. invNextRef() routes through nextRefFromSeries
         // to read these rows on every save.
-        { kind: "SALE",     label: "Sale Invoice",     typeValue: "SV", nextSeq: saleCount },
-        { kind: "PURCHASE", label: "Purchase Invoice", typeValue: "PV", nextSeq: purchaseCount },
+        { kind: "SALE",     label: "Sale Invoice",     typeValue: "SV",  nextSeq: saleCount },
+        { kind: "POS",      label: "POS Sale",         typeValue: "POS", nextSeq: posCount },
+        { kind: "PURCHASE", label: "Purchase Invoice", typeValue: "PV",  nextSeq: purchaseCount },
         { kind: "ESTIMATE", label: "Estimate",         typeValue: "EV", nextSeq: estimateCount },
         { kind: "SALE_RETURN",     label: "Sale Return",     typeValue: "SR", nextSeq: saleReturnCount },
         { kind: "PURCHASE_RETURN", label: "Purchase Return", typeValue: "PR", nextSeq: purchaseReturnCount },

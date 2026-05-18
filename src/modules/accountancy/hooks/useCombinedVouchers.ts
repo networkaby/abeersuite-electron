@@ -29,6 +29,12 @@ export type CombinedRow = {
      *  shared register table can show Restore + Hard-Delete in the row menu. */
     deletedAt:   string | null;
     cancelledAt: string | null;
+    /** ISO timestamp when the row was created — used as the secondary sort
+     *  key in the Day Book so rows on the same date stay in true creation
+     *  order regardless of source (no inv/gl/je grouping). Optional because
+     *  per-kind register components fetch their own data and don't always
+     *  surface this field. */
+    createdAt?:  string;
     createdBy:   string | null;
 };
 
@@ -45,6 +51,7 @@ type RawInv = {
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     partyName: string | null; totalAmount: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
+    createdAt: string;
     createdBy?: { name: string } | null;
 };
 type RawGl = {
@@ -53,6 +60,7 @@ type RawGl = {
     partyAccount?: { name: string } | null;
     totalAmount: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
+    createdAt: string;
     createdBy?: { name: string } | null;
 };
 type RawJe = {
@@ -60,6 +68,7 @@ type RawJe = {
     description: string | null; status: "DRAFT" | "POSTED" | "CANCELLED";
     totalDebit?: number | string; totalAmount?: number | string;
     deletedAt?: string | null; cancelledAt?: string | null;
+    createdAt: string;
     createdBy?: { name: string } | null;
 };
 
@@ -99,6 +108,7 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     status:      v.status,
                     deletedAt:   v.deletedAt ?? null,
                     cancelledAt: v.cancelledAt ?? null,
+                    createdAt:   v.createdAt,
                     createdBy:   v.createdBy?.name ?? null,
                 }));
                 const gl: CombinedRow[] = (glRes.data ?? []).map((v) => ({
@@ -114,6 +124,7 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     status:      v.status,
                     deletedAt:   v.deletedAt ?? null,
                     cancelledAt: v.cancelledAt ?? null,
+                    createdAt:   v.createdAt,
                     createdBy:   v.createdBy?.name ?? null,
                 }));
                 const je: CombinedRow[] = (jeRes.data ?? []).map((e) => ({
@@ -129,13 +140,19 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     status:      e.status,
                     deletedAt:   e.deletedAt ?? null,
                     cancelledAt: e.cancelledAt ?? null,
+                    createdAt:   e.createdAt,
                     createdBy:   e.createdBy?.name ?? null,
                 }));
 
+                // Age-wise sort: newest date first, then newest creation time
+                // first within the same date.  createdAt (not the source-prefixed
+                // id) is used as the tie-breaker so rows are NOT grouped by
+                // source (inv/gl/je) — the Day Book interleaves all sources
+                // chronologically.
                 const merged = [...inv, ...gl, ...je].sort((a, b) => {
                     const dd = b.date.localeCompare(a.date);
                     if (dd !== 0) return dd;
-                    return b.id.localeCompare(a.id);
+                    return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
                 });
                 setRows(merged);
             })

@@ -56,6 +56,7 @@ function presetRange(p: DatePreset): { from: string; to: string } {
 
 const KIND_BADGE: Record<string, string> = {
     SALE: "bg-emerald-100 text-emerald-700",
+    POS: "bg-emerald-200 text-emerald-800",
     PURCHASE: "bg-blue-100 text-blue-700",
     SALE_RETURN: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200",
     PURCHASE_RETURN: "bg-blue-50 text-blue-600 ring-1 ring-blue-200",
@@ -70,6 +71,7 @@ const KIND_BADGE: Record<string, string> = {
     ADJUSTMENT: "bg-orange-100 text-orange-700",
     MANUFACTURING_JOURNAL: "bg-yellow-50 text-yellow-600",
     PHYSICAL_STOCK: "bg-yellow-100 text-yellow-700",
+    BRANCH_TRANSFER: "bg-sky-100 text-sky-700",
     PAYMENT: "bg-red-50 text-red-700",
     RECEIPT: "bg-violet-100 text-violet-700",
     CONTRA: "bg-slate-100 text-slate-700",
@@ -82,7 +84,7 @@ const KIND_BADGE: Record<string, string> = {
 const OPTIONAL_KINDS = new Set([
     "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER",
     "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",
-    "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "ISSUE", "ADJUSTMENT",
+    "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER", "ISSUE", "ADJUSTMENT",
 ]);
 
 // ── Source appearance ──────────────────────────────────────────────────────
@@ -98,7 +100,7 @@ const SOURCE_CONFIG: Record<CombinedRow["source"], { label: string; badge: strin
 function matchKind(kind: string, filter: string): boolean {
     switch (filter) {
         case "__all__": return true;
-        case "__sale_all__": return kind === "SALE" || kind === "SALE_RETURN";
+        case "__sale_all__": return kind === "SALE" || kind === "POS" || kind === "SALE_RETURN";
         case "__buy_all__": return kind === "PURCHASE" || kind === "PURCHASE_RETURN";
         case "__pay_all__": return ["PAYMENT", "RECEIPT", "CONTRA", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind);
         default: return kind === filter;
@@ -164,7 +166,7 @@ export default function DayBookPage() {
         // Optional = no direct stock/GL impact (documents/orders)
         const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
         // Inventory-only = pure stock ops
-        const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
+        const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","BRANCH_TRANSFER","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
             if (from && d < from) return false;
@@ -258,6 +260,7 @@ export default function DayBookPage() {
                                 <SelectLabel>Sales</SelectLabel>
                                 <SelectItem value="__sale_all__">All Sale</SelectItem>
                                 <SelectItem value="SALE">Sale</SelectItem>
+                                <SelectItem value="POS">POS</SelectItem>
                                 <SelectItem value="SALE_RETURN">Sale Return</SelectItem>
                             </SelectGroup>
                             <SelectGroup>
@@ -290,6 +293,7 @@ export default function DayBookPage() {
                                 <SelectItem value="ISSUE">Issue</SelectItem>
                                 <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
                                 <SelectItem value="MANUFACTURING_JOURNAL">Manufacturing Journal</SelectItem>
+                                <SelectItem value="BRANCH_TRANSFER">Branch Transfer</SelectItem>
                                 <SelectItem value="PHYSICAL_STOCK">Physical Stock</SelectItem>
                             </SelectGroup>
                             <SelectGroup>

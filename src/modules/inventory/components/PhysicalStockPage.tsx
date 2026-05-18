@@ -34,6 +34,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 type Branch = { id: string; name: string; isActive?: boolean };
 type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
@@ -54,6 +57,8 @@ type ExistingVoucher = {
     date:         string;
     description:  string;
     status:       "DRAFT" | "POSTED" | "CANCELLED";
+    deletedAt:    string | null;
+    cancelledAt:  string | null;
     branchId:     string;
     branch?:      { id: string; name: string };
     lines: {
@@ -74,6 +79,14 @@ export function PhysicalStockPage() {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(editing);
     const [voucherRef, setVoucherRef] = useState<string | null>(null);
+    const [loadedVoucher, setLoadedVoucher] = useState<LifecycleVoucher | null>(null);
+
+    // Permissions for the inline lifecycle bar — same rules as the row 3-dot menu.
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCancel     = hasPermissionWithScope(permissions, "inventory:voucher:cancel");
+    const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
+    const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
     // Close / Cancel — smart back-nav (matches SaleVoucherPage):
     //   • Same-tab open → router.back() returns to wherever the operator came from.
@@ -130,6 +143,7 @@ export function PhysicalStockPage() {
             .then((r) => {
                 const v = r.data;
                 setVoucherRef(v.reference);
+                setLoadedVoucher({ status: v.status, deletedAt: v.deletedAt, cancelledAt: v.cancelledAt });
                 if (v.branchId) setSelectedBranchId(v.branchId);
                 setForm({
                     date: v.date.slice(0, 10),
@@ -431,7 +445,21 @@ export function PhysicalStockPage() {
                     </table>
                 </div>
 
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-2 flex-wrap">
+                    {editing && loadedVoucher && (
+                        <div className="mr-auto">
+                            <LifecycleActions
+                                voucher={loadedVoucher}
+                                apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
+                                listPath="/office/accountancy/vouchers-registers/physical-stock"
+                                label="Physical Stock"
+                                canCancel={canCancel}
+                                canDelete={canDelete}
+                                canHardDelete={canHardDelete}
+                                onChanged={closeForm}
+                            />
+                        </div>
+                    )}
                     <Button variant="outline" onClick={closeForm}>Cancel</Button>
                     <Button onClick={() => submit(false)} variant="outline" disabled={saving}>
                         {saving && <Loader2 size={14} className="animate-spin" />} Save Draft

@@ -12,9 +12,10 @@ model Branch {
   posts       Post[]
 
   // Multi-branch inventory back-relations
-  invVouchers     InvVoucher[]       @relation("InvVoucherBranch")
-  invStockLedger  InvStockLedger[]   @relation("InvStockLedgerBranch")
-  invProductStock InvProductBranch[]
+  invVouchers      InvVoucher[]       @relation("InvVoucherBranch")
+  invVouchersAsDest InvVoucher[]      @relation("InvVoucherDestBranch")
+  invStockLedger   InvStockLedger[]   @relation("InvStockLedgerBranch")
+  invProductStock  InvProductBranch[]
 
   // POS — per-branch vault account where end-of-day surplus lands
   vaultAccountId Int?
