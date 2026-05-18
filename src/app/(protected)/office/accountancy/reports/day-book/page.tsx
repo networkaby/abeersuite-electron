@@ -3,8 +3,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import axios from "axios";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,27 +12,10 @@ import {
     Select, SelectContent, SelectGroup, SelectItem, SelectLabel,
     SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
-import { useCombinedVouchers, type CombinedRow } from "@/modules/accountancy/hooks/useCombinedVouchers";
+import { fmt } from "@/utils/constants";
+import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
-import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
-import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
-
-// ── Expand line types ─────────────────────────────────────────────────────
-// GL and JE lines have an 'account' field; inventory lines have a 'product'.
-
-type GlLine = {
-    account: { id?: number; code: string; name: string; normalBalance?: string };
-    type: "DEBIT" | "CREDIT";
-    amount: number;
-};
-type InvLine = {
-    product: { id: number; sku: string; name: string; unit?: { code: string; label: string } | null };
-    quantity: number;
-    rate: number;
-    amount: number;
-};
-type Line = GlLine | InvLine;
+import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 
 // ── Date preset helpers ───────────────────────────────────────────────────
 
@@ -53,68 +34,34 @@ function presetRange(p: DatePreset): { from: string; to: string } {
     }
 }
 
-// ── Kind configuration ─────────────────────────────────────────────────────
+// ── Kind filter helper ────────────────────────────────────────────────────
 
-const KIND_BADGE: Record<string, string> = {
-    SALE: "bg-emerald-100 text-emerald-700",
-    POS: "bg-emerald-200 text-emerald-800",
-    PURCHASE: "bg-blue-100 text-blue-700",
-    SALE_RETURN: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200",
-    PURCHASE_RETURN: "bg-blue-50 text-blue-600 ring-1 ring-blue-200",
-    ESTIMATE: "bg-amber-50 text-amber-600 ring-1 ring-amber-200",
-    SALES_ORDER: "bg-teal-100 text-teal-700",
-    PURCHASE_ORDER: "bg-cyan-100 text-cyan-700",
-    GRN: "bg-cyan-50 text-cyan-600",
-    CHALLAN: "bg-indigo-50 text-indigo-600",
-    REJECTION_IN: "bg-rose-50 text-rose-600",
-    REJECTION_OUT: "bg-rose-100 text-rose-700",
-    ISSUE: "bg-orange-50 text-orange-600",
-    ADJUSTMENT: "bg-orange-100 text-orange-700",
-    MANUFACTURING_JOURNAL: "bg-yellow-50 text-yellow-600",
-    PHYSICAL_STOCK: "bg-yellow-100 text-yellow-700",
-    BRANCH_TRANSFER: "bg-sky-100 text-sky-700",
-    PAYMENT: "bg-red-50 text-red-700",
-    RECEIPT: "bg-violet-100 text-violet-700",
-    CONTRA: "bg-slate-100 text-slate-700",
-    CREDIT_NOTE: "bg-purple-50 text-purple-700",
-    DEBIT_NOTE: "bg-purple-100 text-purple-700",
-    JOURNAL: "bg-gray-100 text-gray-700",
-};
+function matchKind(kind: string, filter: string): boolean {
+    switch (filter) {
+        case "__all__":      return true;
+        case "__sale_all__": return kind === "SALE" || kind === "POS" || kind === "SALE_RETURN";
+        case "__buy_all__":  return kind === "PURCHASE" || kind === "PURCHASE_RETURN";
+        case "__pay_all__":  return ["PAYMENT", "RECEIPT", "CONTRA", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind);
+        default:             return kind === filter;
+    }
+}
 
-// These vouchers are operational/documentary — not direct accounting entries.
+// ── Optional / documentary voucher kinds ─────────────────────────────────
+// Rendered with subtle dimming — they don't create direct accounting entries.
+
 const OPTIONAL_KINDS = new Set([
     "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER",
     "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",
     "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER", "ISSUE", "ADJUSTMENT",
 ]);
 
-// ── Source appearance ──────────────────────────────────────────────────────
-
-const SOURCE_CONFIG: Record<CombinedRow["source"], { label: string; badge: string; accent: string }> = {
-    inv: { label: "Inv", badge: "bg-blue-50 text-blue-600", accent: "bg-blue-400" },
-    gl: { label: "GL", badge: "bg-violet-50 text-violet-600", accent: "bg-violet-400" },
-    je: { label: "JE", badge: "bg-amber-50 text-amber-600", accent: "bg-amber-400" },
-};
-
-// ── Kind dropdown ─────────────────────────────────────────────────────────
-
-function matchKind(kind: string, filter: string): boolean {
-    switch (filter) {
-        case "__all__": return true;
-        case "__sale_all__": return kind === "SALE" || kind === "POS" || kind === "SALE_RETURN";
-        case "__buy_all__": return kind === "PURCHASE" || kind === "PURCHASE_RETURN";
-        case "__pay_all__": return ["PAYMENT", "RECEIPT", "CONTRA", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind);
-        default: return kind === filter;
-    }
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────
-
-const today = formatDateInput(new Date());
 
 export default function DayBookPage() {
     const { rows, loading, error, reload } = useCombinedVouchers();
+    const router = useRouter();
 
+    // ── Filter state (persisted to localStorage) ──────────────────────────
     const [preset, setPreset] = useState<DatePreset>(() => {
         try { return (localStorage.getItem("daybook:preset") as DatePreset) ?? "today"; }
         catch { return "today"; }
@@ -142,6 +89,7 @@ export default function DayBookPage() {
     };
     const handleFrom = (v: string) => { setFrom(v); setPreset("custom"); };
     const handleTo   = (v: string) => { setTo(v);   setPreset("custom"); };
+
     const [search, setSearch] = useState("");
     const [kind, setKind] = useState(() => {
         try { return localStorage.getItem("daybook:kind") ?? "__all__"; }
@@ -156,7 +104,6 @@ export default function DayBookPage() {
         catch { return false; }
     });
 
-    // Status checkboxes — empty Set means "show all"
     const [statuses, setStatuses] = useState<Set<string>>(() => {
         try {
             const saved = localStorage.getItem("daybook:statuses");
@@ -166,40 +113,16 @@ export default function DayBookPage() {
     const toggleStatus = (s: string) =>
         setStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
 
-    // Persist filter state to localStorage
-    useEffect(() => { try { localStorage.setItem("daybook:preset", preset); } catch {} }, [preset]);
-    useEffect(() => { try { localStorage.setItem("daybook:from",   from);   } catch {} }, [from]);
-    useEffect(() => { try { localStorage.setItem("daybook:to",     to);     } catch {} }, [to]);
-    useEffect(() => { try { localStorage.setItem("daybook:kind",   kind);   } catch {} }, [kind]);
-    useEffect(() => { try { localStorage.setItem("daybook:statuses", JSON.stringify([...statuses])); } catch {} }, [statuses]);
-    useEffect(() => { try { localStorage.setItem("daybook:optionalOnly",  String(optionalOnly));  } catch {} }, [optionalOnly]);
-    useEffect(() => { try { localStorage.setItem("daybook:inventoryOnly", String(inventoryOnly)); } catch {} }, [inventoryOnly]);
+    // Persist filters
+    useEffect(() => { try { localStorage.setItem("daybook:preset",        preset);                        } catch {} }, [preset]);
+    useEffect(() => { try { localStorage.setItem("daybook:from",          from);                          } catch {} }, [from]);
+    useEffect(() => { try { localStorage.setItem("daybook:to",            to);                            } catch {} }, [to]);
+    useEffect(() => { try { localStorage.setItem("daybook:kind",          kind);                          } catch {} }, [kind]);
+    useEffect(() => { try { localStorage.setItem("daybook:statuses",      JSON.stringify([...statuses])); } catch {} }, [statuses]);
+    useEffect(() => { try { localStorage.setItem("daybook:optionalOnly",  String(optionalOnly));          } catch {} }, [optionalOnly]);
+    useEffect(() => { try { localStorage.setItem("daybook:inventoryOnly", String(inventoryOnly));         } catch {} }, [inventoryOnly]);
 
-    // Expand state: which row ids are open + lazy-fetched line cache (keyed by CombinedRow.id)
-    const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
-    const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
-    const router = useRouter();
-
-    const fetchLines = (r: CombinedRow) => {
-        if (lineCache.has(r.id)) return;
-        setLineCache((c) => new Map(c).set(r.id, "loading"));
-        const url =
-            r.source === "inv" ? `/api/inventory/vouchers/${r.rawId}` :
-            r.source === "gl"  ? `/api/accountancy/vouchers/${r.rawId}` :
-                                  `/api/accountancy/journal-entries/${r.rawId}`;
-        axios.get<{ lines: Line[] }>(url)
-            .then((res) => setLineCache((c) => new Map(c).set(r.id, res.data.lines ?? [])))
-            .catch(() => setLineCache((c) => new Map(c).set(r.id, "error")));
-    };
-
-    const toggleExpand = (r: CombinedRow) => {
-        setExpanded((prev) => {
-            const next = new Set(prev);
-            if (next.has(r.id)) { next.delete(r.id); } else { next.add(r.id); fetchLines(r); }
-            return next;
-        });
-    };
-
+    // Escape → back
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
@@ -212,11 +135,10 @@ export default function DayBookPage() {
         return () => window.removeEventListener("keydown", onKey);
     }, [router]);
 
+    // ── Filtering ─────────────────────────────────────────────────────────
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
-        // Optional = no direct stock/GL impact (documents/orders)
         const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
-        // Inventory-only = pure stock ops
         const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","BRANCH_TRANSFER","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
@@ -240,6 +162,7 @@ export default function DayBookPage() {
         .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
 
+    // ── Render ────────────────────────────────────────────────────────────
     return (
         <div className="-m-8 flex h-full flex-col overflow-hidden">
 
@@ -358,7 +281,6 @@ export default function DayBookPage() {
                 <div className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-muted-foreground">Status</span>
                     <div className="flex items-center gap-4 h-8">
-                        {/* All — checked when no individual filter is active */}
                         <div className="flex items-center gap-1.5">
                             <Checkbox
                                 id="status-all"
@@ -413,243 +335,28 @@ export default function DayBookPage() {
                 <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
             </div>
 
-            {/* Table + detail panel */}
+            {/* Table */}
             <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-
-            {error && (
-                <div className="rounded border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-            )}
-
-            {loading ? (
-                <div className="flex justify-center py-12">
-                    <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                <div className="flex-1 overflow-y-auto">
+                    {error && (
+                        <div className="rounded border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+                    )}
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-muted-foreground" size={28} />
+                        </div>
+                    ) : (
+                        <VoucherRegisterTable
+                            rows={filtered}
+                            onChanged={reload}
+                            stickyHead={true}
+                            statusInline={true}
+                            accentBySource={true}
+                            optionalKinds={OPTIONAL_KINDS}
+                        />
+                    )}
                 </div>
-            ) : filtered.length === 0 ? (
-                <div className="bg-card py-16 text-center text-muted-foreground">
-                    No vouchers match the current filters.
-                </div>
-            ) : (
-                <div className="bg-card">
-                    <table className="w-full text-sm">
-                        <thead className="sticky top-0 z-10 border-b border-border bg-muted text-xs text-muted-foreground">
-                            <tr>
-                                {/* accent stripe — no header */}
-                                <th className="w-1 p-0" />
-                                <th className="px-3 py-3 text-left font-medium">Date</th>
-                                <th className="px-3 py-3 text-left font-medium">Type</th>
-                                <th className="px-3 py-3 text-left font-medium">Reference</th>
-                                <th className="px-3 py-3 text-left font-medium">Party</th>
-                                <th className="px-3 py-3 text-left font-medium">Narration</th>
-                                <th className="px-3 py-3 text-right font-medium">Total</th>
-                                {/* actions — no header */}
-                                <th className="w-10 p-0" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map((r) => {
-                                const src = SOURCE_CONFIG[r.source];
-                                const isOpt = OPTIONAL_KINDS.has(r.kind);
-                                const isDraft = r.status === "DRAFT";
-                                const isCancelled = r.status === "CANCELLED";
-                                const isPosted = r.status === "POSTED";
-                                const isExpanded = expanded.has(r.id);
-                                const lines = lineCache.get(r.id);
-                                const href = referenceHref(r.source, r.rawId, r.kind);
-
-                                return (
-                                    <React.Fragment key={r.id}>
-                                        {/* ── Main row ─────────────────────────────── */}
-                                        <tr
-                                            className={[
-                                                "border-b last:border-0 hover:bg-muted/40 transition-opacity cursor-pointer",
-                                                isDraft ? "opacity-50" : "",
-                                                isCancelled ? "opacity-30" : "",
-                                                isOpt ? "bg-muted/10" : "",
-                                            ].join(" ")}
-                                            title="Click row to expand Dr/Cr lines · Click the reference to edit"
-                                            onClick={() => toggleExpand(r)}
-                                        >
-                                            {/* Coloured source stripe */}
-                                            <td className={`w-1 p-0 ${src.accent}`} />
-
-                                            {/* Date */}
-                                            <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
-                                            </td>
-
-                                            {/* Type badge + status pill */}
-                                            <td className="px-3 py-2.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className={[
-                                                        "text-xs px-2 py-0.5 font-medium rounded-sm",
-                                                        isOpt ? "ring-1 opacity-80" : "",
-                                                        KIND_BADGE[r.kind] ?? "bg-muted text-muted-foreground",
-                                                    ].join(" ")}>
-                                                        <span className={isOpt ? "italic" : ""}>
-                                                            {r.kind.replace(/_/g, " ")}
-                                                        </span>
-                                                    </span>
-                                                    {!isPosted && (
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${JOURNAL_STATUS_COLORS[r.status] ?? "bg-muted text-muted-foreground"}`}>
-                                                            {r.status.toLowerCase()}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            {/* Reference — left-click opens panel; right/ctrl/cmd opens full page */}
-                                            <td
-                                                className={[
-                                                    "px-3 py-2.5 font-mono text-xs",
-                                                    isPosted ? "text-foreground font-semibold" : "text-primary",
-                                                    isCancelled ? "line-through text-muted-foreground" : "",
-                                                ].join(" ")}
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {href ? (
-                                                    <Link href={href} className="hover:underline underline-offset-2">
-                                                        {r.reference}
-                                                    </Link>
-                                                ) : (
-                                                    <span>{r.reference}</span>
-                                                )}
-                                            </td>
-
-                                            {/* Party — clickable link to All Customers with this row pre-selected */}
-                                            <td
-                                                className={`px-3 py-2.5 text-sm ${isOpt ? "italic text-muted-foreground" : ""}`}
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {r.party
-                                                    ? (r.partyKind && r.partyEntityId
-                                                        ? <Link
-                                                              href={`/office/customers/all?${r.partyKind}Id=${r.partyEntityId}&from=daybook`}
-                                                              className="text-primary hover:underline underline-offset-2"
-                                                          >
-                                                              {r.party}
-                                                          </Link>
-                                                        : r.party)
-                                                    : <span className="text-muted-foreground/40">—</span>}
-                                            </td>
-
-                                            {/* Narration */}
-                                            <td className={[
-                                                "px-3 py-2.5 text-xs max-w-[200px] truncate",
-                                                isOpt ? "italic text-muted-foreground" : "text-muted-foreground",
-                                            ].join(" ")}>
-                                                {r.narration ?? "—"}
-                                            </td>
-
-                                            {/* Total */}
-                                            <td className={[
-                                                "px-3 py-2.5 text-right font-mono text-sm",
-                                                isPosted ? "font-semibold text-foreground" : "text-muted-foreground",
-                                            ].join(" ")}>
-                                                ₹ {fmt(r.totalAmount)}
-                                            </td>
-
-                                            {/* 3-dot actions menu */}
-                                            <td
-                                                className="px-2 py-2.5 text-right"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <DayBookActionsMenu
-                                                    rawId={r.rawId}
-                                                    source={r.source}
-                                                    kind={r.kind}
-                                                    reference={r.reference}
-                                                    deletedAt={r.deletedAt}
-                                                    onChanged={reload}
-                                                />
-                                            </td>
-                                        </tr>
-
-                                        {/* ── Expand rows: one <tr> per Dr/Cr line ─── */}
-                                        {isExpanded && lines === "loading" && (
-                                            <tr className="bg-muted/20 border-b last:border-0">
-                                                <td colSpan={8} className="px-6 py-2 text-xs text-muted-foreground">
-                                                    <Loader2 className="animate-spin size-3 inline mr-1.5" />
-                                                    Loading lines…
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {isExpanded && lines === "error" && (
-                                            <tr className="bg-muted/20 border-b last:border-0">
-                                                <td colSpan={8} className="px-6 py-2 text-xs text-destructive">
-                                                    Failed to load lines.
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {isExpanded && Array.isArray(lines) && lines.length === 0 && (
-                                            <tr className="bg-muted/20 border-b last:border-0">
-                                                <td colSpan={8} className="px-6 py-2 text-xs text-muted-foreground">
-                                                    No lines found.
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {isExpanded && Array.isArray(lines) && lines.map((l, i) => {
-                                            const isGl = "account" in l;
-                                            return (
-                                                <tr key={`${r.id}-line-${i}`} className="bg-muted/20 border-b last:border-0">
-                                                    {/* accent stripe — faded parent colour */}
-                                                    <td className={`w-1 p-0 ${src.accent} opacity-30`} />
-                                                    {/* Date col — blank */}
-                                                    <td />
-                                                    {/* Type col — Dr/Cr badge (GL) or "item" badge (inv) */}
-                                                    <td className="px-3 py-1">
-                                                        {isGl ? (
-                                                            <span className={[
-                                                                "text-[10px] px-1.5 py-0.5 rounded font-semibold",
-                                                                l.type === "DEBIT"
-                                                                    ? "bg-blue-50 text-blue-600"
-                                                                    : "bg-violet-50 text-violet-600",
-                                                            ].join(" ")}>
-                                                                {l.type === "DEBIT" ? "Dr" : "Cr"}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-muted text-muted-foreground">
-                                                                item
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    {/* Reference col — account code (GL) or product SKU (inv) */}
-                                                    <td className="px-3 py-1 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-                                                        {isGl ? l.account.code : l.product.sku}
-                                                    </td>
-                                                    {/* Party + Narration cols */}
-                                                    {isGl ? (
-                                                        <td colSpan={2} className="px-3 py-1 text-xs text-foreground">
-                                                            {l.account.name}
-                                                        </td>
-                                                    ) : (
-                                                        <>
-                                                            <td className="px-3 py-1 text-xs text-foreground">{l.product.name}</td>
-                                                            <td className="px-3 py-1 text-xs text-muted-foreground font-mono">
-                                                                {l.quantity} × ₹{fmt(Number(l.rate))}
-                                                            </td>
-                                                        </>
-                                                    )}
-                                                    {/* Total col */}
-                                                    <td className="px-3 py-1 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                                                        ₹ {fmt(Number(l.amount))}
-                                                    </td>
-                                                    {/* Actions col — blank */}
-                                                    <td />
-                                                </tr>
-                                            );
-                                        })}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-            </div>{/* end scrollable table column */}
-
-
-            </div>{/* end flex flex-1 overflow-hidden */}
+            </div>
         </div>
     );
 }
