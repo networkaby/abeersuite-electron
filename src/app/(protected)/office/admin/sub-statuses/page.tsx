@@ -323,7 +323,8 @@ function SubStatusFormModal({
                     <div className="space-y-2">
                         <Label>Order</Label>
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             value={form.order}
                             onChange={(e) => setForm({ ...form, order: e.target.value })}
                             placeholder="Auto-assigned if blank"
@@ -830,7 +831,7 @@ export default function SubStatusesPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Order</Label>
-                            <Input type="number" value={groupCreateOrder} onChange={(e) => setGroupCreateOrder(e.target.value)} placeholder="Auto-assigned if blank" />
+                            <Input type="text" inputMode="numeric" value={groupCreateOrder} onChange={(e) => setGroupCreateOrder(e.target.value)} placeholder="Auto-assigned if blank" />
                         </div>
                     </div>
                     <DialogFooter>
@@ -856,7 +857,7 @@ export default function SubStatusesPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Order</Label>
-                            <Input type="number" value={groupEditOrder} onChange={(e) => setGroupEditOrder(e.target.value)} />
+                            <Input type="text" inputMode="numeric" value={groupEditOrder} onChange={(e) => setGroupEditOrder(e.target.value)} />
                         </div>
                     </div>
                     <DialogFooter>

@@ -228,9 +228,8 @@ export default function YearEndingPage() {
                             <div className="space-y-1">
                                 <Label className="text-xs">Day</Label>
                                 <Input
-                                    type="number"
-                                    min={1}
-                                    max={31}
+                                    type="text"
+                                    inputMode="numeric"
                                     className="h-9 w-20"
                                     value={configDraft.restartDay}
                                     onChange={(e) =>
@@ -379,9 +378,8 @@ export default function YearEndingPage() {
                                         <div className="space-y-1">
                                             <Label className="text-xs">Max width</Label>
                                             <Input
-                                                type="number"
-                                                min={1}
-                                                max={10}
+                                                type="text"
+                                                inputMode="numeric"
                                                 className="h-8"
                                                 value={draft.userMaxWidth}
                                                 onChange={(e) =>
@@ -432,8 +430,8 @@ export default function YearEndingPage() {
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Start</Label>
                                                 <Input
-                                                    type="number"
-                                                    min={1}
+                                                    type="text"
+                                                    inputMode="numeric"
                                                     className="h-8"
                                                     value={draft.startFrom}
                                                     onChange={(e) =>
@@ -444,9 +442,8 @@ export default function YearEndingPage() {
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Width</Label>
                                                 <Input
-                                                    type="number"
-                                                    min={1}
-                                                    max={10}
+                                                    type="text"
+                                                    inputMode="numeric"
                                                     className="h-8"
                                                     value={draft.padWidth}
                                                     onChange={(e) =>

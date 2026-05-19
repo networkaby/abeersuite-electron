@@ -165,8 +165,7 @@ export function BillAllocationDrawer({
                                                 <td className="px-3 py-2 text-right font-mono text-xs text-orange-600">{fmt(bill.outstanding)}</td>
                                                 <td className="px-3 py-2">
                                                     <Input
-                                                        type="number" min="0" step="0.01"
-                                                        max={bill.outstanding}
+                                                        type="text" inputMode="decimal"
                                                         value={existing?.amount ?? ""}
                                                         placeholder="0.00"
                                                         onChange={(e) => {

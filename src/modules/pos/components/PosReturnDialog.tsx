@@ -694,9 +694,8 @@ export function PosReturnDialog({
                                                         <div>
                                                             <Label className="text-[10px] text-muted-foreground">Qty</Label>
                                                             <Input
-                                                                type="number"
-                                                                min={0.01}
-                                                                step={0.01}
+                                                                type="text"
+                                                                inputMode="decimal"
                                                                 className="h-7 text-xs px-1.5"
                                                                 value={l.qty}
                                                                 onChange={(e) =>
@@ -707,9 +706,8 @@ export function PosReturnDialog({
                                                         <div>
                                                             <Label className="text-[10px] text-muted-foreground">Unit ₹</Label>
                                                             <Input
-                                                                type="number"
-                                                                min={0}
-                                                                step={0.01}
+                                                                type="text"
+                                                                inputMode="decimal"
                                                                 className="h-7 text-xs px-1.5"
                                                                 value={l.unitPrice}
                                                                 onChange={(e) =>
@@ -720,10 +718,8 @@ export function PosReturnDialog({
                                                         <div>
                                                             <Label className="text-[10px] text-muted-foreground">Tax %</Label>
                                                             <Input
-                                                                type="number"
-                                                                min={0}
-                                                                max={100}
-                                                                step={0.01}
+                                                                type="text"
+                                                                inputMode="decimal"
                                                                 className="h-7 text-xs px-1.5"
                                                                 value={l.taxRate}
                                                                 onChange={(e) =>

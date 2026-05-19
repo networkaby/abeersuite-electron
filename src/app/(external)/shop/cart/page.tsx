@@ -95,9 +95,8 @@ export default function ShopCartPage() {
                                                         </label>
                                                         <Input
                                                             id={`qty-${l.productId}`}
-                                                            type="number"
-                                                            min={1}
-                                                            max={99}
+                                                            type="text"
+                                                            inputMode="numeric"
                                                             className="h-9 w-16 text-center tabular-nums"
                                                             value={l.quantity}
                                                             onChange={(e) =>

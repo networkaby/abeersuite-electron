@@ -763,9 +763,8 @@ function RoleFields({
                     Rank
                 </label>
                 <Input
-                    type="number"
-                    min={0}
-                    max={100}
+                    type="text"
+                    inputMode="numeric"
                     value={form.rank}
                     onChange={(event) => onChange((prev) => ({ ...prev, rank: Number(event.target.value) }))}
                     className="h-7 text-xs"

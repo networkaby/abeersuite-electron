@@ -375,7 +375,7 @@ export default function NamingConventionPage() {
                     <div className="space-y-1">
                         <Label className="text-xs">Max length</Label>
                         <Input
-                            type="number" min={0} max={255}
+                            type="text" inputMode="numeric"
                             className="w-24"
                             value={cfg.slugMaxLength}
                             onChange={(e) => setCfg({ ...cfg, slugMaxLength: Number(e.target.value) || 0 })}

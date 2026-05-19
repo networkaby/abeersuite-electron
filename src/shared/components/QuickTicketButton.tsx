@@ -425,7 +425,7 @@ export default function QuickTicketButton() {
                                 </div>
                                 <div className="space-y-2">
                                     <FieldLabel>Estimated Cost</FieldLabel>
-                                    <Input {...ticketForm.register("estimatedCost")} type="number" placeholder="0.00" />
+                                    <Input {...ticketForm.register("estimatedCost")} type="text" inputMode="decimal" placeholder="0.00" />
                                 </div>
                             </div>
 

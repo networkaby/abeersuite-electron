@@ -481,7 +481,7 @@ export function InvProductFormFields({
                     <div className="space-y-2">
                         <Label>Cost price (₹)</Label>
                         <Input
-                            type="number" min="0" step="0.01" inputMode="decimal"
+                            type="text" inputMode="decimal"
                             value={form.costRupees}
                             onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))}
                             placeholder="0.00"
@@ -491,7 +491,7 @@ export function InvProductFormFields({
                     <div className="space-y-2">
                         <Label>Sale price (₹)</Label>
                         <Input
-                            type="number" min="0" step="0.01" inputMode="decimal"
+                            type="text" inputMode="decimal"
                             value={form.priceRupees}
                             onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))}
                             placeholder="0.00"
@@ -501,7 +501,7 @@ export function InvProductFormFields({
                     <div className="space-y-2">
                         <Label>MRP (₹)</Label>
                         <Input
-                            type="number" min="0" step="0.01" inputMode="decimal"
+                            type="text" inputMode="decimal"
                             value={form.mrpRupees}
                             onChange={(e) => setForm((f) => ({ ...f, mrpRupees: e.target.value }))}
                             placeholder="0.00"
@@ -680,7 +680,7 @@ export function InvProductFormFields({
                     <div className="space-y-2">
                         <Label>Opening qty</Label>
                         <Input
-                            type="number" min="0" step="0.001" inputMode="decimal"
+                            type="text" inputMode="decimal"
                             value={form.openingQty}
                             onChange={(e) => setForm((f) => ({ ...f, openingQty: e.target.value }))}
                             placeholder="0"
@@ -690,7 +690,7 @@ export function InvProductFormFields({
                     <div className="space-y-2">
                         <Label>Opening rate (₹)</Label>
                         <Input
-                            type="number" min="0" step="0.01" inputMode="decimal"
+                            type="text" inputMode="decimal"
                             value={form.openingRate}
                             onChange={(e) => setForm((f) => ({ ...f, openingRate: e.target.value }))}
                             placeholder="0.00"

@@ -272,7 +272,7 @@ function AccountOpeningSection({
                     </div>
                     <div className="space-y-1.5">
                         <Label>Amount</Label>
-                        <Input type="number" min="0" step="0.01" value={form.amount}
+                        <Input type="text" inputMode="decimal" value={form.amount}
                             onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                             placeholder="0 to clear" />
                     </div>
@@ -458,13 +458,13 @@ function ProductOpeningSection({
                     </div>
                     <div className="space-y-1.5">
                         <Label>Qty</Label>
-                        <Input type="number" min="0" step="0.001" value={form.qty}
+                        <Input type="text" inputMode="decimal" value={form.qty}
                             onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))}
                             placeholder="0 to clear" />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Rate</Label>
-                        <Input type="number" min="0" step="0.01" value={form.rate}
+                        <Input type="text" inputMode="decimal" value={form.rate}
                             onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
                             placeholder="0.00" />
                     </div>
@@ -642,7 +642,7 @@ function QuickCreateAccountDialog({
                             <div className="space-y-1">
                                 <Label className="text-xs">Amount (₹)</Label>
                                 <Input
-                                    type="number" min="0" step="0.01"
+                                    type="text" inputMode="decimal"
                                     value={form.openingAmount}
                                     onChange={(e) => setForm((f) => ({ ...f, openingAmount: e.target.value }))}
                                     placeholder="0.00"
@@ -773,12 +773,12 @@ function QuickCreateProductDialog({
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Cost (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
-                            <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.costRupees}
+                            <Input type="text" inputMode="decimal" value={form.costRupees}
                                 onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))} placeholder="0.00" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Sale price (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
-                            <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.priceRupees}
+                            <Input type="text" inputMode="decimal" value={form.priceRupees}
                                 onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))} placeholder="0.00" />
                         </div>
                     </div>
@@ -789,7 +789,7 @@ function QuickCreateProductDialog({
                             <div className="space-y-1">
                                 <Label className="text-xs">Qty</Label>
                                 <Input
-                                    type="number" min="0" step="0.001"
+                                    type="text" inputMode="decimal"
                                     value={form.openingQty}
                                     onChange={(e) => setForm((f) => ({ ...f, openingQty: e.target.value }))}
                                     placeholder="0"
@@ -798,7 +798,7 @@ function QuickCreateProductDialog({
                             <div className="space-y-1">
                                 <Label className="text-xs">Rate (₹)</Label>
                                 <Input
-                                    type="number" min="0" step="0.01"
+                                    type="text" inputMode="decimal"
                                     value={form.openingRate}
                                     onChange={(e) => setForm((f) => ({ ...f, openingRate: e.target.value }))}
                                     placeholder="0.00"

@@ -86,9 +86,8 @@ export default function ProductPurchasePanel({ product }: { product: ShopProduct
                             <Minus className="size-4" />
                         </Button>
                         <Input
-                            type="number"
-                            min={1}
-                            max={99}
+                            type="text"
+                            inputMode="numeric"
                             value={qty}
                             onChange={(e) => setQty(Math.min(99, Math.max(1, parseInt(e.target.value, 10) || 1)))}
                             className="w-14 border-0 bg-transparent text-center tabular-nums shadow-none focus-visible:ring-0"

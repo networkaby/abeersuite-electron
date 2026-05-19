@@ -210,22 +210,22 @@ export default function PurchasesPage() {
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0.001" step="0.001" value={line.quantity}
+                                            <input type="text" inputMode="decimal" value={line.quantity}
                                                 onChange={(e) => updateLine(i, { quantity: e.target.value })}
                                                 className={`${cell} text-right`} />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" step="0.01" value={line.rate}
+                                            <input type="text" inputMode="decimal" value={line.rate}
                                                 onChange={(e) => updateLine(i, { rate: e.target.value })}
                                                 className={`${cell} text-right`} placeholder="0.00" />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" max="100" step="0.01" value={line.discountPct}
+                                            <input type="text" inputMode="decimal" value={line.discountPct}
                                                 onChange={(e) => updateLine(i, { discountPct: e.target.value })}
                                                 className={`${cell} text-right`} />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" max="100" step="0.01" value={line.taxRate}
+                                            <input type="text" inputMode="decimal" value={line.taxRate}
                                                 onChange={(e) => updateLine(i, { taxRate: e.target.value })}
                                                 className={`${cell} text-right`} />
                                         </td>
@@ -256,12 +256,12 @@ export default function PurchasesPage() {
                         <div className="grid grid-cols-2 gap-3 text-sm">
                             <div className="space-y-1">
                                 <Label>Shipping (₹)</Label>
-                                <Input type="number" min="0" step="0.01" value={form.shippingAmt}
+                                <Input type="text" inputMode="decimal" value={form.shippingAmt}
                                     onChange={(e) => setForm((f) => ({ ...f, shippingAmt: e.target.value }))} className="w-28" />
                             </div>
                             <div className="space-y-1">
                                 <Label>Round Off (₹)</Label>
-                                <Input type="number" step="0.01" value={form.roundOff}
+                                <Input type="text" inputMode="decimal" value={form.roundOff}
                                     onChange={(e) => setForm((f) => ({ ...f, roundOff: e.target.value }))} className="w-28" />
                             </div>
                         </div>

@@ -262,7 +262,7 @@ export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redir
                                     </td>
                                     <td className="px-3 py-2">
                                         <Input
-                                            type="number" min="0" step="0.01"
+                                            type="text" inputMode="decimal"
                                             value={line.amount}
                                             onChange={(e) => updateLine(i, { amount: e.target.value })}
                                             className={`${cell} text-right`}

@@ -239,7 +239,7 @@ export default function AccountGroupsPage() {
                         </div>
                         <div className="space-y-1.5">
                             <Label>Sort Order</Label>
-                            <Input type="number" value={newSort} onChange={(e) => setNewSort(e.target.value)} placeholder="0" />
+                            <Input type="text" inputMode="numeric" value={newSort} onChange={(e) => setNewSort(e.target.value)} placeholder="0" />
                         </div>
                     </div>
                     <div className="flex gap-2 justify-end">
@@ -329,7 +329,8 @@ export default function AccountGroupsPage() {
                                     <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">
                                         {isEditing ? (
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputMode="numeric"
                                                 value={editSort}
                                                 onChange={(e) => setEditSort(e.target.value)}
                                                 className={`${cellClass} w-20 text-right`}

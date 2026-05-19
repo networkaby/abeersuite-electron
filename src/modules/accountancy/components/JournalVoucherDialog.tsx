@@ -478,14 +478,14 @@ export function JournalVoucherDialog() {
                                                     placeholder="Search item…"
                                                 />
                                                 <Input
-                                                    type="number" min="0" step="0.001"
+                                                    type="text" inputMode="decimal"
                                                     value={item.qty}
                                                     onChange={(e) => updateStockItem(line.id, item.id, { qty: e.target.value })}
                                                     className={`${cell} text-right tabular-nums`}
                                                     placeholder="qty"
                                                 />
                                                 <Input
-                                                    type="number" min="0" step="0.01"
+                                                    type="text" inputMode="decimal"
                                                     value={item.rate}
                                                     onChange={(e) => updateStockItem(line.id, item.id, { rate: e.target.value })}
                                                     className={`${cell} text-right tabular-nums`}

@@ -344,7 +344,8 @@ export default function StatusesPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <Input
-                                                        type="number"
+                                                        type="text"
+                                                        inputMode="numeric"
                                                         value={editValues.order}
                                                         onChange={(e) => setEditValues((prev) => ({ ...prev, order: Number(e.target.value) }))}
                                                         className="w-20"

@@ -267,8 +267,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                 <div className="flex items-center gap-2">
                                     <span>Valid</span>
                                     <Input
-                                        type="number"
-                                        min="1"
+                                        type="text"
+                                        inputMode="numeric"
                                         value={header.validDays}
                                         onChange={(e) => setHeader((h) => ({ ...h, validDays: e.target.value }))}
                                         className="h-7 w-16 text-xs text-right"
@@ -359,9 +359,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                     </td>
                                     <td className="px-3 py-1.5">
                                         <input
-                                            type="number"
-                                            min="0.001"
-                                            step="0.001"
+                                            type="text"
+                                            inputMode="decimal"
                                             value={line.quantity}
                                             onChange={(e) => updateLine(line.id, { quantity: e.target.value })}
                                             className={cell}
@@ -372,9 +371,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                     </td>
                                     <td className="px-3 py-1.5">
                                         <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
+                                            type="text"
+                                            inputMode="decimal"
                                             value={line.rate}
                                             onChange={(e) => updateLine(line.id, { rate: e.target.value })}
                                             className={cell}
@@ -383,10 +381,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                     </td>
                                     <td className="px-3 py-1.5">
                                         <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            step="0.01"
+                                            type="text"
+                                            inputMode="decimal"
                                             value={line.discountPct}
                                             onChange={(e) => updateLine(line.id, { discountPct: e.target.value })}
                                             className={cell}
@@ -394,10 +390,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                                     </td>
                                     <td className="px-3 py-1.5">
                                         <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            step="0.01"
+                                            type="text"
+                                            inputMode="decimal"
                                             value={line.taxRate}
                                             onChange={(e) => updateLine(line.id, { taxRate: e.target.value })}
                                             className={cell}
@@ -445,9 +439,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                         <div className="space-y-1">
                             <label className="text-xs text-muted-foreground">Shipping (₹)</label>
                             <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={header.shippingAmt}
                                 onChange={(e) => setHeader((h) => ({ ...h, shippingAmt: e.target.value }))}
                                 className="h-7 w-24 text-xs text-right"
@@ -457,8 +450,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                         <div className="space-y-1">
                             <label className="text-xs text-muted-foreground">Round Off</label>
                             <Input
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={header.roundOff}
                                 onChange={(e) => setHeader((h) => ({ ...h, roundOff: e.target.value }))}
                                 className="h-7 w-20 text-xs text-right"
@@ -476,9 +469,8 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                             <div className="space-y-1">
                                 <label className="text-xs text-muted-foreground">Received (₹)</label>
                                 <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={header.received}
                                     onChange={(e) => setHeader((h) => ({ ...h, received: e.target.value }))}
                                     className="h-7 w-28 text-xs text-right"

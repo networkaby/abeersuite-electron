@@ -189,11 +189,11 @@ export default function ProductForm({
                 <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                         <Label>Price (₹)</Label>
-                        <Input type="number" step="0.01" min="0" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value)} />
+                        <Input type="text" inputMode="decimal" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value)} />
                     </div>
                     <div className="grid gap-2">
                         <Label>MRP (₹)</Label>
-                        <Input type="number" step="0.01" min="0" value={mrpRupees} onChange={(e) => setMrpRupees(e.target.value)} />
+                        <Input type="text" inputMode="decimal" value={mrpRupees} onChange={(e) => setMrpRupees(e.target.value)} />
                     </div>
                 </div>
                 <div className="grid gap-2">

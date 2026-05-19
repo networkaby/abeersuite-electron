@@ -218,13 +218,13 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
                                             />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min={type === "MANUFACTURING_JOURNAL" ? undefined : "0"} step="0.001"
+                                            <input type="text" inputMode="decimal"
                                                 value={line.quantity}
                                                 onChange={(e) => updateLine(i, { quantity: e.target.value })}
                                                 className={`${cell} text-right`} />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="0" step="0.01" value={line.rate}
+                                            <input type="text" inputMode="decimal" value={line.rate}
                                                 onChange={(e) => updateLine(i, { rate: e.target.value })}
                                                 className={`${cell} text-right`} />
                                         </td>

@@ -67,7 +67,7 @@ Users with multiple departments see all their briefings stacked. Users with zero
 
 ## Recent decisions / gotchas
 
-- **CrmLead as generic pipeline item**: the same `CrmLead` model works for P2, P4, and P6. It has a `pipelineId` FK to `Pipeline`. The `POST /api/quick-log` uses `requireAuth()` (not `requirePermission(CRM_MANAGE)`) because this intake is staff-universal.
+- **CrmLead as generic pipeline item**: the same `CrmLead` model works for P2, P4, and P6. It has a `pipelineId` FK to `Pipeline`. The `POST /api/quick-log` uses `requireAuth()` (not `requirePermission(CRM_MANAGE)`) because this intake is staff-universal. Validation in the route was unified onto the shared zod-error pattern in commit `496f01d` (no public API change).
 - **Department.id as stable key**: departments use stable IDs (`DEP-REPAIR`, `DEP-SALES`, etc.) — no `slug` field was added. The home resolver does a `switch(id)` on these string values. Do not change department IDs after data is in production.
 - **ShowroomBriefing POS filter**: walk-in (POS) invoices = Invoice with `shopOrderId: null, ticketId: null, status != "VOID", deletedAt: null`. If a separate POS invoice model is ever added, update `ShowroomBriefing`.
 - **Repair full dashboard**: the full repair module dashboard (TechnicianDashboard, FrontDeskDashboard, etc.) remains at `/office/repairing/`. The home page shows a lightweight briefing (counts + links) to avoid duplicating heavy data-fetch logic.
@@ -77,4 +77,4 @@ Users with multiple departments see all their briefings stacked. Users with zero
 - Multi-department tab strip (planned): when a user has multiple departments, currently all briefings are stacked vertically. A tab strip allowing switching between them is deferred.
 - Position-level button permissions within briefings: currently `hasPermission()` guards are on individual module pages. Future iterations can add them inside briefing components too.
 
-_Last updated: 2026-05-15 — covers initial four-layer home page implementation._
+_Last updated: 2026-05-20 — covers initial four-layer home page implementation + quick-log validation refactor._

@@ -191,7 +191,7 @@ export default function AttributeMastersPage() {
                         <div className="space-y-2 w-20">
                             <Label>Order</Label>
                             <Input
-                                type="number" min="0"
+                                type="text" inputMode="numeric"
                                 value={form.sortOrder}
                                 onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
                             />
