@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { OrgDefaultsForm } from "@/modules/admin/components/OrgDefaultsForm";
+import { OrgDefaultsForm } from "@/modules/settings/components/OrgDefaultsForm";
 
 export const metadata = { title: "Org Defaults" };
 

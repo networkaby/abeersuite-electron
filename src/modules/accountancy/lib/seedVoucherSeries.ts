@@ -47,7 +47,7 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         { kind: "JOURNAL", label: "Journal Entry", typeValue: "JE",  nextSeq: jeCount },
         { kind: "INVOICE", label: "Sales Invoice", typeValue: "INV", nextSeq: invCount },
         // Inventory vouchers — same FY-aware convention managed from
-        // /office/admin/year-ending. invNextRef() routes through nextRefFromSeries
+        // /office/settings/year-ending. invNextRef() routes through nextRefFromSeries
         // to read these rows on every save.
         { kind: "SALE",     label: "Sale Invoice",     typeValue: "SV",  nextSeq: saleCount },
         { kind: "POS",      label: "POS Sale",         typeValue: "POS", nextSeq: posCount },

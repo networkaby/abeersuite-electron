@@ -581,13 +581,13 @@ export const ADMIN_NAV: SettingsNavItem[] = [
 ];
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
-    { label: "Org Defaults", href: "/office/admin/org-defaults", icon: Settings, permission: "settings:manage" },
-    { label: "Statuses", href: "/office/admin/statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Sub-Statuses", href: "/office/admin/sub-statuses", icon: Settings, permission: "settings:statuses" },
-    { label: "Pipelines", href: "/office/admin/pipelines", icon: GitBranch, permission: "settings:pipelines" },
-    { label: "Naming Convention", icon: ClipboardList, href: "/office/admin/naming-convention", permission: "inventory:manage" },
-    { label: "Year Ending", href: "/office/admin/year-ending", icon: Calendar, permission: "settings:manage" },
-    { label: "Thermal Printer", href: "/office/admin/printer-settings", icon: Printer, permission: "settings:manage" },
+    { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
+    { label: "Statuses", href: "/office/settings/statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Sub-Statuses", href: "/office/settings/sub-statuses", icon: Settings, permission: "settings:statuses" },
+    { label: "Pipelines", href: "/office/settings/pipelines", icon: GitBranch, permission: "settings:pipelines" },
+    { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:manage" },
+    { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
+    { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

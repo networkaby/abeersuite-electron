@@ -7,7 +7,7 @@ import { InvVoucherType } from "@/generated/prisma/client";
 // GET /api/inventory/vouchers/next-ref?type=SALE|PURCHASE|ESTIMATE
 //
 // Preview-only — reads the configured VoucherSeries row (managed at
-// /office/admin/year-ending) and assembles the *next* reference WITHOUT
+// /office/settings/year-ending) and assembles the *next* reference WITHOUT
 // incrementing the counter. The actual reference is generated atomically
 // at save time via invNextRef() inside the transaction; if two users save
 // concurrently the live reference may differ by ±1 from this preview.

@@ -3,4 +3,5 @@
 ## Completed list
 
 - [x] Day Book V1 (`/office/accountancy/reports/day-book`) (2026-05-18 13:13:20 IST)
-- [x] Admin module V1 (`/office/admin/*` — users, roles/matrix, branches, departments, posts, org-chart, pipelines, statuses, sub-statuses, org-defaults, year-ending, counters, naming-convention, printer-settings) (2026-05-19)
+- [x] Admin module V1 (`/office/admin/*` — users, roles/matrix, branches, departments, posts, org-chart, counters) (2026-05-19; 2026-05-20 — settings pages carved out, see next entry)
+- [x] Settings module V1 (`/office/settings/*` — pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings) extracted from Admin module on 2026-05-20. Same maturity as the V1 Admin pages it replaced — preserve-first.

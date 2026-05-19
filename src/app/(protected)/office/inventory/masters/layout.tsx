@@ -15,7 +15,7 @@ const masterLinks = [
 ] as const;
 
 const configLinks = [
-    { href: "/office/admin/naming-convention", label: "Naming convention", icon: Wand2 },
+    { href: "/office/settings/naming-convention", label: "Naming convention", icon: Wand2 },
 ] as const;
 
 export default async function InventoryLayout({ children }: { children: React.ReactNode }) {

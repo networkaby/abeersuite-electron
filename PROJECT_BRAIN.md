@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.2.3 (App Router, Turbopack), React 19, PostgreSQL (Supabase), Prisma 7.7.0 (split schema), NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Zustand 5, Sonner, Axios, React Hook Form, Zod, Razorpay, Cloudinary, Sentry.
 **Repo:** `D:\our-own-website\service-mgmt-experiment` — branch `dev`.
 **Started:** 2026-04-17.
-**Last updated:** 2026-05-19.
+**Last updated:** 2026-05-20.
 
 This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). For the authoritative history, read `git log`.
 
@@ -27,7 +27,7 @@ Replace paper/spreadsheets across the whole business with one app:
 
 ## 🔄 In flight
 
-_None._ Last batch (Admin V1 + Day Book V1 + voucher registers) shipped through 2026-05-19. Pick the next item from §"Next up" below.
+_None._ Last batch (Settings module extraction 2026-05-20; Admin V1 + Day Book V1 + voucher registers through 2026-05-19). Pick the next item from §"Next up" below.
 
 ---
 
@@ -35,6 +35,7 @@ _None._ Last batch (Admin V1 + Day Book V1 + voucher registers) shipped through 
 
 Older history lives in `git log`. This section is trimmed; don't grow it past ~10 entries.
 
+- **2026-05-20 — Settings module extracted from Admin**: 7 pages (pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings) + `OrgDefaultsForm` moved to `/office/settings/*` and `src/modules/settings/`. New [docs/modules/settings.md](docs/modules/settings.md). Hard cut, no compat redirects from old `/office/admin/<page>` URLs. `next.config.ts` cleaned up to avoid hijacking the new `/office/settings/*` paths.
 - **2026-05-19 — Admin module V1**: branches/departments/posts/org-chart terminology cleanup, ID labels, dummy-org seeding. Commits `bb4dfd3`, `2d3f455`, `03826b2`, `e4ae844`.
 - **2026-05-18 — Auth + welcome**: `BranchRequired` gate, welcome page; removed thermal-relay tools. `71e5c67`.
 - **2026-05-18 — Voucher top-bar / action-bar**: `VoucherTopBar`, `VoucherActionBar`, `VoucherInlineActions` wired across inventory + finance voucher pages. `93576f2`, `9bfe84c`.

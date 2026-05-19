@@ -12,7 +12,7 @@ const masterCards = [
 ] as const;
 
 const configCards = [
-    { title: "Naming convention", href: "/office/admin/naming-convention", description: "Auto-generate product name + online slug from masters.", icon: Wand2 },
+    { title: "Naming convention", href: "/office/settings/naming-convention", description: "Auto-generate product name + online slug from masters.", icon: Wand2 },
 ] as const;
 
 function CardGrid({ cards }: { cards: readonly { title: string; href: string; description: string; icon: React.ElementType }[] }) {
