@@ -101,11 +101,11 @@ function PostFormFields({
         <div className="grid grid-cols-2 gap-3">
             {addingNew && (
                 <div>
-                    <label className="text-xs font-medium text-muted-foreground">ID (e.g. POS-CEO) *</label>
+                    <label className="text-xs font-medium text-muted-foreground">ID (e.g. POST-CEO) *</label>
                     <Input
                         value={form.id}
                         onChange={e => onChange({ ...form, id: e.target.value.toUpperCase() })}
-                        placeholder="POS-BM-DEL"
+                        placeholder="POST-BM-DEL"
                         className="mt-1 font-mono uppercase"
                     />
                 </div>
