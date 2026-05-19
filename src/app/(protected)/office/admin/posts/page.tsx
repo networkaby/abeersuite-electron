@@ -101,11 +101,11 @@ function PostFormFields({
         <div className="grid grid-cols-2 gap-3">
             {addingNew && (
                 <div>
-                    <label className="text-xs font-medium text-muted-foreground">ID (e.g. POST-CEO) *</label>
+                    <label className="text-xs font-medium text-muted-foreground">ID (e.g. POS-CEO) *</label>
                     <Input
                         value={form.id}
                         onChange={e => onChange({ ...form, id: e.target.value.toUpperCase() })}
-                        placeholder="POST-BM-DEL"
+                        placeholder="POS-BM-DEL"
                         className="mt-1 font-mono uppercase"
                     />
                 </div>
@@ -158,7 +158,7 @@ function PostFormFields({
                 </Select>
             </div>
             <div className="col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Reports to (parent post) <span className="font-normal">(optional)</span></label>
+                <label className="text-xs font-medium text-muted-foreground">Reports to (parent position) <span className="font-normal">(optional)</span></label>
                 <Select value={form.parentPostId || "top-level"} onValueChange={(value) => onChange({ ...form, parentPostId: value === "top-level" ? "" : value })}>
                     <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Top level" />
@@ -342,7 +342,7 @@ function PostRow({
                                     </span>
                                 )}
                                 {post._count.children > 0 && (
-                                    <span className="text-[11px] text-muted-foreground">{post._count.children} sub-post{post._count.children !== 1 ? "s" : ""}</span>
+                                    <span className="text-[11px] text-muted-foreground">{post._count.children} sub-position{post._count.children !== 1 ? "s" : ""}</span>
                                 )}
                             </div>
                         </div>
@@ -423,33 +423,33 @@ export default function PostsPage() {
                 parentPostId: form.parentPostId || null,
                 roleTemplateId: form.roleTemplateId || null,
             });
-            toast.success("Post created");
+            toast.success("Position created");
             setForm(EMPTY); setAddingNew(false);
             loadAll();
         } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to create post");
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to create position");
         } finally { setSaving(false); }
     };
 
     const handleSave = async (id: string, data: object) => {
         try {
             await axios.patch(`/api/posts/${id}`, data);
-            toast.success("Post updated");
+            toast.success("Position updated");
             loadAll();
         } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to update post");
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to update position");
             throw e; // re-throw so PostRow keeps edit panel open
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Delete this post? Holders will be unassigned.")) return;
+        if (!confirm("Delete this position? Holders will be unassigned.")) return;
         try {
             await axios.delete(`/api/posts/${id}`);
-            toast.success("Post deleted");
+            toast.success("Position deleted");
             loadAll();
         } catch (e: unknown) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to delete post");
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to delete position");
         }
     };
 
@@ -466,7 +466,7 @@ export default function PostsPage() {
     const handleUnassign = async (postId: string, userId: number) => {
         try {
             await axios.delete(`/api/posts/${postId}/holders/${userId}`);
-            toast.success("User removed from post");
+            toast.success("User removed from position");
             loadAll();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Failed to remove user");
@@ -489,14 +489,14 @@ export default function PostsPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold flex items-center gap-2">
-                        <Briefcase size={28} /> Posts
+                        <Briefcase size={28} /> Positions
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Define positions in your organisation. Appoint one or more people to each post.
+                        Define positions in your organisation. Appoint one or more people to each position.
                     </p>
                 </div>
                 <Button onClick={() => { setForm(EMPTY); setAddingNew(true); }} disabled={addingNew}>
-                    <Plus size={16} /> New Post
+                    <Plus size={16} /> New Position
                 </Button>
             </div>
 
@@ -537,7 +537,7 @@ export default function PostsPage() {
             {/* New post form */}
             {addingNew && (
                 <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
-                    <p className="text-sm font-semibold">New Post</p>
+                    <p className="text-sm font-semibold">New Position</p>
                     <PostFormFields
                         addingNew={true} form={form} branches={branches}
                         departments={departments} allPosts={posts} roleOptions={roleOptions} onChange={setForm}
@@ -553,7 +553,7 @@ export default function PostsPage() {
                 <p className="text-sm text-muted-foreground">Loading…</p>
             ) : posts.length === 0 && !addingNew ? (
                 <p className="border-dashed text-sm text-muted-foreground py-12 text-center border border-border">
-                    No posts yet. Create your first position above.
+                    No positions yet. Create your first one above.
                 </p>
             ) : (
                 <div className="space-y-6">

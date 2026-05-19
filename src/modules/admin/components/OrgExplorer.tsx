@@ -184,7 +184,7 @@ function BranchPanel({
                     <h3 className={`text-sm font-bold uppercase tracking-wider ${titleCls}`}>{branch.name}</h3>
                     {!isEmpty && (
                         <Badge className="bg-card text-foreground border border-border text-[10px] ml-1">
-                            {allPosts.length} post{allPosts.length !== 1 ? "s" : ""}
+                            {allPosts.length} position{allPosts.length !== 1 ? "s" : ""}
                         </Badge>
                     )}
                     {query && matchedCount < allPosts.length && (
@@ -231,7 +231,7 @@ function BranchPanel({
                                             {g.dept.name}
                                         </span>
                                         <span className="text-[10px] text-muted-foreground">
-                                            · {g.posts.length} post{g.posts.length !== 1 ? "s" : ""}
+                                            · {g.posts.length} position{g.posts.length !== 1 ? "s" : ""}
                                         </span>
                                     </div>
                                 )}

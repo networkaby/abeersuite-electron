@@ -576,7 +576,7 @@ export const ADMIN_NAV: SettingsNavItem[] = [
     { label: "Role", href: "/office/admin/role", icon: ShieldCheck, permission: "roles:manage" },
     { label: "Branches", href: "/office/admin/branches", icon: Building2, permission: "settings:manage" },
     { label: "Departments", href: "/office/admin/departments", icon: Users, permission: "settings:manage" },
-    { label: "Posts", href: "/office/admin/posts", icon: Briefcase, permission: "settings:manage" },
+    { label: "Positions", href: "/office/admin/posts", icon: Briefcase, permission: "settings:manage" },
     { label: "POS Counters", href: "/office/admin/counters", icon: Monitor, permission: "settings:manage" },
 ];
 

@@ -122,10 +122,53 @@ export async function authorizeStaffCredentials(
         roleColor = best?.color;
     }
 
-    // Branches + departments come from User M2M today; Post-derived widening
-    // will replace these once the model migrates fully.
-    const branchIds = user.branches.map((b) => b.id);
-    const departmentIds = user.departments.map((d) => d.id);
+    // ── Derive branch access from Post appointments ───────────────────────────
+    // Org-wide posts (branchId = null, e.g. CEO, CFO) grant access to every
+    // active branch. Branch-specific posts contribute their branchId to the
+    // union. Legacy User.branches relation is merged for backward compat.
+    const postBranchIds: string[] = [];
+    let hasOrgWidePost = false;
+    for (const up of user.posts) {
+        if (up.post.branchId === null) {
+            hasOrgWidePost = true;
+        } else {
+            postBranchIds.push(up.post.branchId);
+        }
+    }
+
+    let branchIds: string[];
+    if (hasOrgWidePost) {
+        const allBranches = await prisma.branch.findMany({
+            where: { isActive: true },
+            select: { id: true },
+        });
+        branchIds = allBranches.map((b) => b.id);
+    } else {
+        const legacyBranchIds = user.branches.map((b) => b.id);
+        branchIds = [...new Set([...postBranchIds, ...legacyBranchIds])];
+    }
+
+    // ── Derive department access from Post appointments ──────────────────────
+    // Dept-agnostic posts (departmentId = null) grant access to all departments.
+    // Otherwise union Post-derived dept IDs with legacy User.departments.
+    const postDeptIds: string[] = [];
+    let hasAllDeptPost = false;
+    for (const up of user.posts) {
+        if (up.post.departmentId === null) {
+            hasAllDeptPost = true;
+        } else {
+            postDeptIds.push(up.post.departmentId);
+        }
+    }
+
+    let departmentIds: string[];
+    if (hasAllDeptPost) {
+        const allDepts = await prisma.department.findMany({ select: { id: true } });
+        departmentIds = allDepts.map((d) => d.id);
+    } else {
+        const legacyDeptIds = user.departments.map((d) => d.id);
+        departmentIds = [...new Set([...postDeptIds, ...legacyDeptIds])];
+    }
 
     return {
         id: String(user.id),

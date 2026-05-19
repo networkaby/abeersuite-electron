@@ -225,7 +225,7 @@ function HQContainer({
                     </div>
                 </div>
                 <p className="text-[11px] text-amber-700/60 dark:text-amber-300/60 italic">
-                    No HQ positions yet — create org-wide posts (branchId = null) or assign positions to {hqBranchName}
+                    No HQ positions yet — create org-wide positions (branchId = null) or assign positions to {hqBranchName}
                 </p>
             </div>
         );

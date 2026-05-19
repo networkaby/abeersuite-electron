@@ -24,8 +24,16 @@ interface ActiveBranchStore {
     hydrate: (fallback: string | null) => void;
 }
 
+/** Read stored branch from localStorage at store-creation time so components
+ * like BranchRequired don't flash a "no branch" gate before the BranchSwitcher
+ * effect fires. This runs client-side only (window guard). */
+function readStoredBranch(): string | null {
+    if (typeof window === "undefined") return null;
+    try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
+}
+
 export const useActiveBranchStore = create<ActiveBranchStore>((set, get) => ({
-    activeBranchId: null,
+    activeBranchId: readStoredBranch(),
     setActiveBranchId: (id) => {
         if (typeof window !== "undefined") {
             try {

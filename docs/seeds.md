@@ -7,7 +7,8 @@ prisma/seeds/
 ├─ bootstrap-seed.ts     PRODUCTION — single source of truth for setup
 ├─ hard-clean.ts         CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts     OPS — wipes only vouchers/JEs/invoices/payments
-├─ dummy-users.ts        DEV — 3 demo non-admin staff logins
+├─ dummy-users.ts        DEV — 3 demo non-admin staff logins + basic Posts
+├─ dummy-org-rich.ts     DEV — 36 users, 36 posts, 5 branches, 10 depts (org chart demo)
 ├─ dummy-customers.ts    DEV — demo customers + companies
 ├─ dummy-shop.ts         DEV — demo product catalog (consumes data/demoCatalogSeed.ts)
 ├─ dummy-vouchers.ts     DEV — demo vouchers + journal entries
@@ -46,7 +47,8 @@ Manual, idempotent, **never** auto-run by Prisma. Use for demos, screenshots, lo
 
 | Script | Purpose |
 |---|---|
-| `pnpm seed:dummy-users` | 3 demo logins (`tech@`, `front@`, `des@networkservice.in`) with predictable passwords |
+| `pnpm seed:dummy-users` | 3 demo logins (`tech@`, `front@`, `des@networkservice.in`) with predictable passwords + 3 basic Posts (Tech HQ, Front HQ, Despatch HQ) |
+| `pnpm seed:dummy-org-rich` | Full org chart demo: 36 users, 36 posts, 5 branches (BR-HQ + 4 regional), 10 departments — Board/CEO/C-Level/Central + 4 regional branch managers + staff. Stand-alone; does **not** conflict with dummy-users (different emails). |
 | `pnpm seed:dummy-customers` | Demo persons + companies with phones/emails + party-linked Account ledgers |
 | `pnpm seed:dummy-shop` | Demo product catalog (laptops, desktops, etc.) — reads from `data/demoCatalogSeed.ts` |
 | `pnpm seed:dummy-vouchers` | Demo invoices, payments, journal entries |

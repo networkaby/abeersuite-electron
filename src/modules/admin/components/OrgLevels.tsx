@@ -210,7 +210,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                         <LevelCard
                             icon={<Crown size={22} className="text-amber-300" />}
                             name="Board of Directors"
-                            title="No org-wide posts yet"
+                            title="No org-wide positions yet"
                             accent="l1"
                             delay={0}
                         />

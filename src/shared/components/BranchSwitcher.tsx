@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Building2, Globe2 } from "lucide-react";
 import {
@@ -17,6 +18,7 @@ type Branch = { id: string; name: string; isActive?: boolean };
 type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
 
 export function BranchSwitcher() {
+    const router = useRouter();
     const { activeBranchId, setActiveBranchId, hydrate } = useActiveBranchStore();
     const [branches, setBranches] = useState<Branch[]>([]);
     const [user, setUser] = useState<SessionUser>(null);
@@ -87,15 +89,15 @@ export function BranchSwitcher() {
     }
 
     const current = activeBranchId ?? COMBINED_BRANCH;
-    const combinedLabel = isAdmin && branches.length === userBranchIds.length
-        ? "Consolidated"
-        : "My branches";
+    // Admins see the whole org → label as "Consolidated".
+    // Multi-branch non-admin users (incl. org-wide post holders like CEO) see "My branches".
+    const combinedLabel = isAdmin ? "Consolidated" : "My branches";
 
     return (
         <Select value={current} onValueChange={(v) => {
             setActiveBranchId(v);
-            // Soft reload so server-side route handlers re-fetch with new branch.
-            if (typeof window !== "undefined") window.location.reload();
+            // Refresh server components so they re-fetch with the new branch cookie.
+            router.refresh();
         }}>
             <SelectTrigger className="h-7 w-[200px] text-xs">
                 <div className="flex items-center gap-1.5">

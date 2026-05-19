@@ -99,6 +99,7 @@ Code goes in `src/shared/` only when it has importers from **two or more modules
 |---|---|---|
 | `InvProductFull`, `InvProductDb`, `invProductDb` | `inventoryTypes.ts` | Typed `InvProduct` shapes used by inventory + ecommerce + shop |
 | `OrgNode`, `PostNode` | `orgChart.ts` | Tree-node shapes returned by `/api/org-chart` and `/api/posts/structure`. Consumed by `OrgTree`, `StructureTree`, and the admin org-chart / social profile pages. Keep the route's response shape and this type in sync. |
+| `DeptGroup`, `BranchGroup`, `OrgStructure` | `orgChart.ts` | Grouped structure shape `{ orgWidePosts; branches[{ branch; deptGroups[{ dept; posts }] }] }` returned by `/api/posts/structure`. Consumed by all 5 non-People-Chart org tabs (StructureTree, OrgExplorer, OrgHierarchy, OrgLevels, OrgRegions). |
 
 ## Shared UI — `src/shared/components/`
 
