@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { Users, Briefcase, Link as LinkIcon, Sparkles, Network, Layers, Landmark } from "lucide-react";
@@ -28,17 +28,22 @@ export default function OrgChartPage() {
         ? Number((session.user as { id?: string }).id)
         : undefined;
 
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canManage   = permissions.includes("settings:manage");
+
     useEffect(() => {
         axios.get<OrgNode[]>("/api/org-chart")
             .then(r => setRoots(r.data))
             .finally(() => setLoading(false));
     }, []);
 
-    useEffect(() => {
+    const loadStructure = useCallback(() => {
         axios.get<OrgStructure>("/api/positions/structure")
             .then(r => setStructure(r.data))
             .finally(() => setPostLoading(false));
     }, []);
+
+    useEffect(() => { loadStructure(); }, [loadStructure]);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
         { id: "people",    label: "People Chart",     icon: Users },
@@ -183,7 +188,7 @@ export default function OrgChartPage() {
                         <p className="text-sm">No org structure yet.</p>
                     </div>
                 ) : (
-                    <OrgRegions structure={structure} />
+                    <OrgRegions structure={structure} canManage={canManage} onMutated={loadStructure} />
                 )
             )}
         </div>

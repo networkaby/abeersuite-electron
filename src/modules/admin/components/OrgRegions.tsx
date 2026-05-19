@@ -15,12 +15,18 @@
 //
 // The HQ container is identified as the branch with id === "BR-HQ" (the
 // bootstrap-seeded Headquarters branch). All other branches are regional.
+//
+// When `canManage` is true, contextual "+" buttons appear inside HQ, each
+// branch card, each dept box, and a top-level "Add Branch" pill — opening
+// OrgRegionsCreateDialog with the right pre-filled scope.
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark, Plus } from "lucide-react";
 import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
+import { Button } from "@/components/ui/button";
+import OrgRegionsCreateDialog, { type Intent } from "./OrgRegionsCreateDialog";
 
 // Branch ID that maps to "Headquarters" — bootstrap seeds this one.
 // All posts at this branch + all org-wide posts go inside the HQ container.
@@ -124,14 +130,51 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
+// ── Small "+" affordance ─────────────────────────────────────────────────────
+
+function PlusIconButton({
+    onClick, title, className = "",
+}: { onClick: () => void; title: string; className?: string }) {
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClick}
+            title={title}
+            className={`h-5 w-5 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30 ${className}`}
+        >
+            <Plus size={12} />
+        </Button>
+    );
+}
+
 // ── Dept sub-container ───────────────────────────────────────────────────────
 
-function DeptBox({ name, posts }: { name: string; posts: PositionNode[] }) {
+function DeptBox({
+    name, posts, branchId, deptId, canManage, onAddPosition,
+}: {
+    name: string;
+    posts: PositionNode[];
+    branchId: string | null;
+    deptId: string;
+    canManage: boolean;
+    onAddPosition: (branchId: string | null, departmentId: string) => void;
+}) {
     return (
         <div className="rounded-md border border-emerald-300 dark:border-emerald-700/50 bg-emerald-50/40 dark:bg-emerald-950/15 px-1.5 py-1.5">
-            <p className="text-[9px] uppercase tracking-wider text-center font-bold mb-1 text-emerald-700 dark:text-emerald-300">
-                {name}
-            </p>
+            <div className="flex items-center justify-center gap-1 mb-1">
+                <p className="text-[9px] uppercase tracking-wider text-center font-bold text-emerald-700 dark:text-emerald-300">
+                    {name}
+                </p>
+                {canManage && (
+                    <PlusIconButton
+                        onClick={() => onAddPosition(branchId, deptId)}
+                        title={`Add position to ${name}`}
+                        className="h-4 w-4"
+                    />
+                )}
+            </div>
             <div className="flex flex-wrap justify-center gap-1">
                 {posts.map(p => <PosCard key={p.id} position={p} accent="green" compact />)}
             </div>
@@ -141,7 +184,14 @@ function DeptBox({ name, posts }: { name: string; posts: PositionNode[] }) {
 
 // ── Branch container ─────────────────────────────────────────────────────────
 
-function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
+function BranchContainer({
+    bg, canManage, onAddDepartment, onAddPosition,
+}: {
+    bg: OrgStructure["branches"][number];
+    canManage: boolean;
+    onAddDepartment: (branchId: string) => void;
+    onAddPosition: (branchId: string | null, departmentId?: string | null) => void;
+}) {
     const allPositions = bg.deptGroups.flatMap(g => g.positions);
     const branchManagerPosition = allPositions.find((p: PositionNode) =>
         p.title.toLowerCase().includes("manager") || p.title.toLowerCase().includes("incharge"),
@@ -156,10 +206,24 @@ function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
         <div className="relative rounded-lg border border-emerald-400 dark:border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 px-2.5 pt-5 pb-2.5 w-[210px] shadow-sm">
             {/* Branch name pill */}
             <div className="flex justify-center -mt-7 mb-2">
-                <div className="rounded border border-emerald-500 dark:border-emerald-600 bg-card px-2 py-0.5 shadow-sm">
+                <div className="flex items-center gap-1 rounded border border-emerald-500 dark:border-emerald-600 bg-card px-2 py-0.5 shadow-sm">
                     <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                         <Building2 size={9} /> {bg.branch.name}
                     </p>
+                    {canManage && (
+                        <>
+                            <PlusIconButton
+                                onClick={() => onAddDepartment(bg.branch.id)}
+                                title={`Add department to ${bg.branch.name}`}
+                                className="h-4 w-4"
+                            />
+                            <PlusIconButton
+                                onClick={() => onAddPosition(bg.branch.id, null)}
+                                title={`Add position to ${bg.branch.name}`}
+                                className="h-4 w-4"
+                            />
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -188,7 +252,15 @@ function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
                     {otherDeptGroups
                         .filter(g => g.dept)
                         .map((g, i) => (
-                            <DeptBox key={g.dept!.id + i} name={g.dept!.name} posts={g.positions} />
+                            <DeptBox
+                                key={g.dept!.id + i}
+                                name={g.dept!.name}
+                                posts={g.positions}
+                                branchId={bg.branch.id}
+                                deptId={g.dept!.id}
+                                canManage={canManage}
+                                onAddPosition={(brId, dpId) => onAddPosition(brId, dpId)}
+                            />
                         ))}
                 </div>
             )}
@@ -206,24 +278,46 @@ function HQContainer({
     orgWidePosts,
     hqBranchPosts,
     hqBranchName,
+    canManage,
+    onAddPosition,
+    onAddDepartment,
 }: {
     orgWidePosts: PositionNode[];
     hqBranchPosts: PositionNode[];
     hqBranchName: string;
+    canManage: boolean;
+    onAddPosition: () => void;
+    onAddDepartment: () => void;
 }) {
     // Merge org-wide + HQ-branch posts so the HQ container holds everything
     const allHqPosts = [...orgWidePosts, ...hqBranchPosts];
 
+    const headerPill = (
+        <div className="flex justify-center -mt-9 mb-2">
+            <div className="flex items-center gap-1.5 rounded-lg border border-amber-500 bg-card px-4 py-1 shadow-md">
+                <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
+                    <Landmark size={12} /> {hqBranchName}
+                </p>
+                {canManage && (
+                    <>
+                        <PlusIconButton
+                            onClick={onAddDepartment}
+                            title="Add HQ department"
+                        />
+                        <PlusIconButton
+                            onClick={onAddPosition}
+                            title="Add HQ position"
+                        />
+                    </>
+                )}
+            </div>
+        </div>
+    );
+
     if (allHqPosts.length === 0) {
         return (
             <div className="relative rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 p-6 min-w-[400px] text-center shadow-sm">
-                <div className="flex justify-center -mt-9 mb-3">
-                    <div className="rounded-lg border border-amber-500 bg-card px-4 py-1 shadow-md">
-                        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
-                            <Landmark size={12} /> {hqBranchName}
-                        </p>
-                    </div>
-                </div>
+                {headerPill}
                 <p className="text-[11px] text-amber-700/60 dark:text-amber-300/60 italic">
                     No HQ positions yet — create org-wide positions (branchId = null) or assign positions to {hqBranchName}
                 </p>
@@ -255,14 +349,7 @@ function HQContainer({
 
     return (
         <div className="relative rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 p-5 min-w-[400px] shadow-sm">
-            {/* Header pill */}
-            <div className="flex justify-center -mt-9 mb-2">
-                <div className="rounded-lg border border-amber-500 bg-card px-4 py-1 shadow-md">
-                    <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
-                        <Landmark size={12} /> {hqBranchName}
-                    </p>
-                </div>
-            </div>
+            {headerPill}
 
             {singleSection && (
                 <>
@@ -343,7 +430,15 @@ function BranchTopStem() {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export default function OrgRegions({ structure }: { structure: OrgStructure }) {
+export default function OrgRegions({
+    structure, canManage = false, onMutated,
+}: {
+    structure: OrgStructure;
+    canManage?: boolean;
+    onMutated?: () => void;
+}) {
+    const [intent, setIntent] = useState<Intent | null>(null);
+
     // Separate the HQ branch (BR-HQ) from regional branches
     const hqBranch = structure.branches.find(b => b.branch.id === HQ_BRANCH_ID);
     const regionalBranches = structure.branches.filter(b => b.branch.id !== HQ_BRANCH_ID);
@@ -352,6 +447,23 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
         ? hqBranch.deptGroups.flatMap(g => g.positions)
         : [];
     const hqBranchName = hqBranch?.branch.name ?? "Headquarters";
+
+    // Flatten branches & departments so the dialog has dropdowns populated.
+    const flatBranches = useMemo(
+        () => structure.branches.map(b => ({ id: b.branch.id, name: b.branch.name })),
+        [structure],
+    );
+    const flatDepartments = useMemo(() => {
+        const seen = new Map<string, { id: string; name: string; branchId: string | null }>();
+        for (const b of structure.branches) {
+            for (const g of b.deptGroups) {
+                if (g.dept && !seen.has(g.dept.id)) {
+                    seen.set(g.dept.id, { id: g.dept.id, name: g.dept.name, branchId: b.branch.id });
+                }
+            }
+        }
+        return Array.from(seen.values());
+    }, [structure]);
 
     return (
         <div className="rounded-xl bg-gradient-to-br from-amber-50/40 via-card to-emerald-50/40 dark:from-amber-950/10 dark:via-card dark:to-emerald-950/10 p-6 sm:p-10 overflow-x-auto border border-border">
@@ -371,6 +483,9 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
                     orgWidePosts={structure.orgWidePositions}
                     hqBranchPosts={hqBranchPosts}
                     hqBranchName={hqBranchName}
+                    canManage={canManage}
+                    onAddPosition={() => setIntent({ mode: "position", branchId: HQ_BRANCH_ID })}
+                    onAddDepartment={() => setIntent({ mode: "department", branchId: HQ_BRANCH_ID })}
                 />
             </div>
 
@@ -380,19 +495,40 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
             )}
 
             {/* ── REGIONAL BRANCHES ────────────────────────────────────── */}
-            {regionalBranches.length > 0 && (
+            {(regionalBranches.length > 0 || canManage) && (
                 <div className="mt-0">
-                    <div className="flex flex-wrap justify-center items-start gap-3">
-                        {regionalBranches.map(bg => (
-                            <div key={bg.branch.id} className="flex flex-col items-center">
-                                <BranchTopStem />
-                                <BranchContainer bg={bg} />
-                            </div>
-                        ))}
+                    {regionalBranches.length > 0 && (
+                        <div className="flex flex-wrap justify-center items-start gap-3">
+                            {regionalBranches.map(bg => (
+                                <div key={bg.branch.id} className="flex flex-col items-center">
+                                    <BranchTopStem />
+                                    <BranchContainer
+                                        bg={bg}
+                                        canManage={canManage}
+                                        onAddDepartment={(brId) => setIntent({ mode: "department", branchId: brId })}
+                                        onAddPosition={(brId, dpId) => setIntent({ mode: "position", branchId: brId, departmentId: dpId ?? null })}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex items-center justify-center gap-3 mt-6">
+                        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                            Regional Branches
+                        </p>
+                        {canManage && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIntent({ mode: "branch" })}
+                                className="h-7 px-2 text-[11px] border-emerald-400 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                            >
+                                <Plus size={12} className="mr-1" />
+                                Add branch
+                            </Button>
+                        )}
                     </div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center mt-6">
-                        Regional Branches
-                    </p>
                 </div>
             )}
 
@@ -411,6 +547,14 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
                     {structure.branches.reduce((s, b) => s + b.deptGroups.reduce((ss, g) => ss + g.positions.length, 0), 0) + structure.orgWidePositions.length} total positions
                 </span>
             </div>
+
+            <OrgRegionsCreateDialog
+                intent={intent}
+                branches={flatBranches}
+                departments={flatDepartments}
+                onClose={() => setIntent(null)}
+                onCreated={() => onMutated?.()}
+            />
         </div>
     );
 }
