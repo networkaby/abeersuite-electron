@@ -11,28 +11,33 @@
 //                                  │   ← vertical connector
 //          ┌───────────────┬───────┴───────┬───────────────┐
 //      [Branch 1]      [Branch 2]      [Branch 3]      [Branch 4]
-//      (regional branches — BR-HQ excluded since it's the HQ)
 //
-// The HQ container is identified as the branch with id === "BR-HQ" (the
-// bootstrap-seeded Headquarters branch). All other branches are regional.
+// The HQ container is identified as the branch with id === "BR-HQ".
 //
-// When `canManage` is true, contextual "+" buttons appear inside HQ, each
-// branch card, each dept box, and a top-level "Add Branch" pill — opening
-// OrgRegionsCreateDialog with the right pre-filled scope.
+// When `canManage` is true:
+//  • "+" buttons open OrgRegionsCreateDialog at the matching scope.
+//  • Trash buttons next to pills/dept-headers DELETE via guarded endpoints.
+//  • Right-click ANY card (HQ pill, branch pill, dept box, position card)
+//    opens a small contextual menu with Delete + relevant Add actions —
+//    so deletion is discoverable on every node, not just the ones with
+//    visible trash icons.
+//  • If no BR-HQ exists, a dashed "Create HQ" CTA replaces the HQ panel.
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark, Plus, Trash2, UserPlus, UserMinus, ArrowRightLeft } from "lucide-react";
 import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
 import { Button } from "@/components/ui/button";
 import OrgRegionsCreateDialog, { type Intent } from "./OrgRegionsCreateDialog";
+import OrgAppointDialog from "./OrgAppointDialog";
+import OrgTransferDialog from "./OrgTransferDialog";
 
-// Branch ID that maps to "Headquarters" — bootstrap seeds this one.
-// All posts at this branch + all org-wide posts go inside the HQ container.
 const HQ_BRANCH_ID = "BR-HQ";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Avatar / helpers ─────────────────────────────────────────────────────────
 
 function initials(name: string) {
     return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -68,11 +73,94 @@ function Avatar({ user, size = 32 }: { user: PositionNode["holders"][number]["us
     );
 }
 
+// ── Context-menu primitive (hand-rolled, no new deps) ────────────────────────
+
+interface MenuItem {
+    label: string;
+    onClick: () => void;
+    danger?: boolean;
+    icon?: React.ReactNode;
+}
+
+type MenuEntry = MenuItem | { divider: true };
+
+interface MenuState {
+    x: number;
+    y: number;
+    items: MenuEntry[];
+}
+
+function isDivider(e: MenuEntry): e is { divider: true } {
+    return (e as { divider?: true }).divider === true;
+}
+
+function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose: () => void }) {
+    useEffect(() => {
+        if (!menu) return;
+        const onDocDown = (e: MouseEvent) => {
+            if ((e.target as HTMLElement).closest("[data-org-context-menu]")) return;
+            onClose();
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+        const onScroll = () => onClose();
+        document.addEventListener("mousedown", onDocDown);
+        document.addEventListener("keydown", onKey);
+        document.addEventListener("scroll", onScroll, true);
+        return () => {
+            document.removeEventListener("mousedown", onDocDown);
+            document.removeEventListener("keydown", onKey);
+            document.removeEventListener("scroll", onScroll, true);
+        };
+    }, [menu, onClose]);
+
+    if (!menu) return null;
+
+    // Keep within viewport
+    const maxX = window.innerWidth - 220;
+    const maxY = window.innerHeight - menu.items.length * 32 - 12;
+    const x = Math.min(menu.x, maxX);
+    const y = Math.min(menu.y, maxY);
+
+    return (
+        <div
+            data-org-context-menu
+            className="fixed z-50 min-w-[220px] rounded-md border border-border bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10 py-1"
+            style={{ left: x, top: y }}
+            onContextMenu={e => e.preventDefault()}
+        >
+            {menu.items.map((it, i) => {
+                if (isDivider(it)) {
+                    return <div key={`div-${i}`} className="my-1 h-px bg-border/70" />;
+                }
+                return (
+                    <button
+                        key={i}
+                        type="button"
+                        onClick={() => { it.onClick(); onClose(); }}
+                        className={[
+                            "w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px]",
+                            it.danger
+                                ? "text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                                : "text-foreground hover:bg-muted",
+                        ].join(" ")}
+                    >
+                        <span className="w-3.5 inline-flex items-center justify-center">{it.icon}</span>
+                        {it.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
 // ── Position card ────────────────────────────────────────────────────────────
 
 interface PosCardProps {
     position: PositionNode;
     accent: "gold" | "blue" | "green";
+    compact?: boolean;
+    canManage?: boolean;
+    onContextMenu?: (e: React.MouseEvent, position: PositionNode) => void;
 }
 
 const POS_CARD_STYLES: Record<PosCardProps["accent"], { card: string; name: string; title: string; avatar: string; icon: React.ReactNode }> = {
@@ -81,7 +169,7 @@ const POS_CARD_STYLES: Record<PosCardProps["accent"], { card: string; name: stri
     green: { card: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 hover:border-emerald-500", name: "text-emerald-900 dark:text-emerald-200", title: "text-emerald-700/70 dark:text-emerald-300/60", avatar: "bg-emerald-200 dark:bg-emerald-900/40", icon: <Briefcase size={18} className="text-emerald-600 dark:text-emerald-300" /> },
 };
 
-function PosCard({ position, accent, compact = false }: PosCardProps & { compact?: boolean }) {
+function PosCard({ position, accent, compact = false, canManage = false, onContextMenu }: PosCardProps) {
     const s = POS_CARD_STYLES[accent];
     const holder = position.holders[0];
     const vacant = !holder;
@@ -92,8 +180,17 @@ function PosCard({ position, accent, compact = false }: PosCardProps & { compact
     const avatarSize = compact ? 28 : 36;
     const nameSize = compact ? "text-[10px]" : "text-[11px]";
     const titleSize = compact ? "text-[8.5px]" : "text-[9px]";
-    const card = (
-        <div className={`flex flex-col items-center ${w} ${px} ${py} rounded-md border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${s.card}`}>
+
+    const handleContext = (e: React.MouseEvent) => {
+        if (!canManage || !onContextMenu) return;
+        onContextMenu(e, position);
+    };
+
+    const cardInner = (
+        <div
+            onContextMenu={handleContext}
+            className={`flex flex-col items-center ${w} ${px} ${py} rounded-md border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${s.card}`}
+        >
             <div className={`flex items-center justify-center ${avatarBox} rounded-full mb-1 ring-2 ring-white/60 ${s.avatar}`}>
                 {holder ? <Avatar user={holder.user} size={avatarSize} /> : s.icon}
             </div>
@@ -113,9 +210,12 @@ function PosCard({ position, accent, compact = false }: PosCardProps & { compact
             )}
         </div>
     );
+
     return holder ? (
-        <Link href={`/office/social/users/${holder.user.id}`} className="block">{card}</Link>
-    ) : card;
+        <Link href={`/office/social/users/${holder.user.id}`} className="block" onContextMenu={handleContext}>
+            {cardInner}
+        </Link>
+    ) : cardInner;
 }
 
 // ── Section label inside a container ─────────────────────────────────────────
@@ -130,53 +230,41 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
-// ── Small "+" affordance ─────────────────────────────────────────────────────
-
-function PlusIconButton({
-    onClick, title, className = "",
-}: { onClick: () => void; title: string; className?: string }) {
-    return (
-        <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={onClick}
-            title={title}
-            className={`h-5 w-5 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30 ${className}`}
-        >
-            <Plus size={12} />
-        </Button>
-    );
-}
-
 // ── Dept sub-container ───────────────────────────────────────────────────────
 
 function DeptBox({
-    name, posts, branchId, deptId, canManage, onAddPosition,
+    name, posts, branchId, deptId, canManage, onPosContext, onDeptContext,
 }: {
     name: string;
     posts: PositionNode[];
     branchId: string | null;
     deptId: string;
     canManage: boolean;
-    onAddPosition: (branchId: string | null, departmentId: string) => void;
+    onPosContext: (e: React.MouseEvent, position: PositionNode) => void;
+    onDeptContext: (e: React.MouseEvent, deptId: string, deptName: string, branchId: string | null) => void;
 }) {
     return (
-        <div className="rounded-md border border-emerald-300 dark:border-emerald-700/50 bg-emerald-50/40 dark:bg-emerald-950/15 px-1.5 py-1.5">
-            <div className="flex items-center justify-center gap-1 mb-1">
+        <div
+            className={`rounded-md border border-emerald-300 dark:border-emerald-700/50 bg-emerald-50/40 dark:bg-emerald-950/15 px-1.5 py-1.5 ${canManage ? "cursor-context-menu" : ""}`}
+            onContextMenu={(e) => canManage && onDeptContext(e, deptId, name, branchId)}
+            title={canManage ? "Right-click for actions" : undefined}
+        >
+            <div className="flex items-center justify-center mb-1">
                 <p className="text-[9px] uppercase tracking-wider text-center font-bold text-emerald-700 dark:text-emerald-300">
                     {name}
                 </p>
-                {canManage && (
-                    <PlusIconButton
-                        onClick={() => onAddPosition(branchId, deptId)}
-                        title={`Add position to ${name}`}
-                        className="h-4 w-4"
-                    />
-                )}
             </div>
             <div className="flex flex-wrap justify-center gap-1">
-                {posts.map(p => <PosCard key={p.id} position={p} accent="green" compact />)}
+                {posts.map(p => (
+                    <PosCard
+                        key={p.id}
+                        position={p}
+                        accent="green"
+                        compact
+                        canManage={canManage}
+                        onContextMenu={onPosContext}
+                    />
+                ))}
             </div>
         </div>
     );
@@ -185,12 +273,13 @@ function DeptBox({
 // ── Branch container ─────────────────────────────────────────────────────────
 
 function BranchContainer({
-    bg, canManage, onAddDepartment, onAddPosition,
+    bg, canManage, onPosContext, onDeptContext, onBranchContext,
 }: {
     bg: OrgStructure["branches"][number];
     canManage: boolean;
-    onAddDepartment: (branchId: string) => void;
-    onAddPosition: (branchId: string | null, departmentId?: string | null) => void;
+    onPosContext: (e: React.MouseEvent, position: PositionNode) => void;
+    onDeptContext: (e: React.MouseEvent, deptId: string, deptName: string, branchId: string | null) => void;
+    onBranchContext: (e: React.MouseEvent, branchId: string, branchName: string) => void;
 }) {
     const allPositions = bg.deptGroups.flatMap(g => g.positions);
     const branchManagerPosition = allPositions.find((p: PositionNode) =>
@@ -203,35 +292,30 @@ function BranchContainer({
         : [];
 
     return (
-        <div className="relative rounded-lg border border-emerald-400 dark:border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 px-2.5 pt-5 pb-2.5 w-[210px] shadow-sm">
+        <div
+            className="relative rounded-lg border border-emerald-400 dark:border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 px-2.5 pt-5 pb-2.5 w-[210px] shadow-sm"
+            onContextMenu={(e) => {
+                // Only fire for clicks on the branch chrome — not bubbled cards.
+                if ((e.target as HTMLElement).closest("[data-pos-card], [data-dept-box]")) return;
+                if (canManage) onBranchContext(e, bg.branch.id, bg.branch.name);
+            }}
+        >
             {/* Branch name pill */}
             <div className="flex justify-center -mt-7 mb-2">
-                <div className="flex items-center gap-1 rounded border border-emerald-500 dark:border-emerald-600 bg-card px-2 py-0.5 shadow-sm">
+                <div
+                    className="rounded border border-emerald-500 dark:border-emerald-600 bg-card px-2 py-0.5 shadow-sm"
+                    onContextMenu={(e) => { e.stopPropagation(); if (canManage) onBranchContext(e, bg.branch.id, bg.branch.name); }}
+                >
                     <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                         <Building2 size={9} /> {bg.branch.name}
                     </p>
-                    {canManage && (
-                        <>
-                            <PlusIconButton
-                                onClick={() => onAddDepartment(bg.branch.id)}
-                                title={`Add department to ${bg.branch.name}`}
-                                className="h-4 w-4"
-                            />
-                            <PlusIconButton
-                                onClick={() => onAddPosition(bg.branch.id, null)}
-                                title={`Add position to ${bg.branch.name}`}
-                                className="h-4 w-4"
-                            />
-                        </>
-                    )}
                 </div>
             </div>
 
-            {/* Branch Manager (highlighted at top) */}
             {branchManagerPosition && (
                 <>
                     <div className="flex justify-center mb-2">
-                        <PosCard position={branchManagerPosition} accent="green" compact />
+                        <PosCard position={branchManagerPosition} accent="green" compact canManage={canManage} onContextMenu={onPosContext} />
                     </div>
                     {(otherDeptGroups.length > 0 || restNonMgrInNoDept.length > 0) && (
                         <div className="h-px bg-emerald-300/60 dark:bg-emerald-700/40 my-1.5" />
@@ -239,16 +323,16 @@ function BranchContainer({
                 </>
             )}
 
-            {/* Branch-level posts (no dept) other than the manager */}
             {restNonMgrInNoDept.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-1 mb-2">
-                    {restNonMgrInNoDept.map(p => <PosCard key={p.id} position={p} accent="green" compact />)}
+                    {restNonMgrInNoDept.map(p => (
+                        <PosCard key={p.id} position={p} accent="green" compact canManage={canManage} onContextMenu={onPosContext} />
+                    ))}
                 </div>
             )}
 
-            {/* Dept sub-boxes */}
             {otherDeptGroups.filter(g => g.dept).length > 0 && (
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5" data-dept-box>
                     {otherDeptGroups
                         .filter(g => g.dept)
                         .map((g, i) => (
@@ -259,7 +343,8 @@ function BranchContainer({
                                 branchId={bg.branch.id}
                                 deptId={g.dept!.id}
                                 canManage={canManage}
-                                onAddPosition={(brId, dpId) => onAddPosition(brId, dpId)}
+                                onPosContext={onPosContext}
+                                onDeptContext={onDeptContext}
                             />
                         ))}
                 </div>
@@ -272,60 +357,77 @@ function BranchContainer({
     );
 }
 
-// ── HQ container (board + executives + central depts) ────────────────────────
+// ── HQ container ─────────────────────────────────────────────────────────────
 
 function HQContainer({
     orgWidePosts,
     hqBranchPosts,
     hqBranchName,
+    hqBranchExists,
     canManage,
-    onAddPosition,
-    onAddDepartment,
+    onCreateHQ,
+    onPosContext,
+    onBranchContext,
 }: {
     orgWidePosts: PositionNode[];
     hqBranchPosts: PositionNode[];
     hqBranchName: string;
+    hqBranchExists: boolean;
     canManage: boolean;
-    onAddPosition: () => void;
-    onAddDepartment: () => void;
+    onCreateHQ: () => void;
+    onPosContext: (e: React.MouseEvent, position: PositionNode) => void;
+    onBranchContext: (e: React.MouseEvent, branchId: string, branchName: string) => void;
 }) {
-    // Merge org-wide + HQ-branch posts so the HQ container holds everything
     const allHqPosts = [...orgWidePosts, ...hqBranchPosts];
 
     const headerPill = (
         <div className="flex justify-center -mt-9 mb-2">
-            <div className="flex items-center gap-1.5 rounded-lg border border-amber-500 bg-card px-4 py-1 shadow-md">
+            <div
+                className="rounded-lg border border-amber-500 bg-card px-4 py-1 shadow-md"
+                onContextMenu={(e) => { e.stopPropagation(); if (canManage && hqBranchExists) onBranchContext(e, HQ_BRANCH_ID, hqBranchName); }}
+            >
                 <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
                     <Landmark size={12} /> {hqBranchName}
                 </p>
-                {canManage && (
-                    <>
-                        <PlusIconButton
-                            onClick={onAddDepartment}
-                            title="Add HQ department"
-                        />
-                        <PlusIconButton
-                            onClick={onAddPosition}
-                            title="Add HQ position"
-                        />
-                    </>
-                )}
             </div>
         </div>
     );
+
+    if (!hqBranchExists && allHqPosts.length === 0) {
+        return (
+            <div className="relative rounded-xl border-2 border-dashed border-amber-400/70 dark:border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/15 p-8 min-w-[400px] text-center shadow-sm">
+                <Landmark size={28} className="mx-auto text-amber-400 dark:text-amber-300 mb-2" />
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">No Headquarters yet</p>
+                <p className="text-[11px] text-amber-700/70 dark:text-amber-300/70 mb-4 max-w-sm mx-auto">
+                    Set up your HQ branch to anchor org-wide leadership. We&apos;ll handle the internal id for you.
+                </p>
+                {canManage && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onCreateHQ}
+                        className="border-amber-400 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                    >
+                        <Plus size={12} className="mr-1" />
+                        Create HQ
+                    </Button>
+                )}
+            </div>
+        );
+    }
 
     if (allHqPosts.length === 0) {
         return (
             <div className="relative rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 p-6 min-w-[400px] text-center shadow-sm">
                 {headerPill}
                 <p className="text-[11px] text-amber-700/60 dark:text-amber-300/60 italic">
-                    No HQ positions yet — create org-wide positions (branchId = null) or assign positions to {hqBranchName}
+                    No HQ positions yet — right-click the HQ pill to add a department or position.
                 </p>
             </div>
         );
     }
 
-    // Classify posts by title patterns
     const boardPosts: PositionNode[] = [];
     const ceoPosts: PositionNode[]   = [];
     const cLevelPosts: PositionNode[] = [];
@@ -347,6 +449,17 @@ function HQContainer({
     const classifiedCount = boardPosts.length + ceoPosts.length + cLevelPosts.length;
     const singleSection = classifiedCount === 0;
 
+    const cardsWithMenu = (posts: PositionNode[], accent: "gold" | "blue") =>
+        posts.map(p => (
+            <PosCard
+                key={p.id}
+                position={p}
+                accent={accent}
+                canManage={canManage}
+                onContextMenu={onPosContext}
+            />
+        ));
+
     return (
         <div className="relative rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 p-5 min-w-[400px] shadow-sm">
             {headerPill}
@@ -355,7 +468,7 @@ function HQContainer({
                 <>
                     <SectionLabel>Executive Council</SectionLabel>
                     <div className="flex flex-wrap justify-center gap-2">
-                        {allHqPosts.map(p => <PosCard key={p.id} position={p} accent="gold" />)}
+                        {cardsWithMenu(allHqPosts, "gold")}
                     </div>
                 </>
             )}
@@ -366,7 +479,7 @@ function HQContainer({
                         <>
                             <SectionLabel>Board of Directors</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {boardPosts.map(p => <PosCard key={p.id} position={p} accent="gold" />)}
+                                {cardsWithMenu(boardPosts, "gold")}
                             </div>
                         </>
                     )}
@@ -374,7 +487,7 @@ function HQContainer({
                         <>
                             <SectionLabel>Chief Executive</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {ceoPosts.map(p => <PosCard key={p.id} position={p} accent="blue" />)}
+                                {cardsWithMenu(ceoPosts, "blue")}
                             </div>
                         </>
                     )}
@@ -382,7 +495,7 @@ function HQContainer({
                         <>
                             <SectionLabel>C-Level Executives</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {cLevelPosts.map(p => <PosCard key={p.id} position={p} accent="blue" />)}
+                                {cardsWithMenu(cLevelPosts, "blue")}
                             </div>
                         </>
                     )}
@@ -390,7 +503,7 @@ function HQContainer({
                         <>
                             <SectionLabel>HQ Central Departments</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {centralDeptPosts.map(p => <PosCard key={p.id} position={p} accent="gold" />)}
+                                {cardsWithMenu(centralDeptPosts, "gold")}
                             </div>
                         </>
                     )}
@@ -400,15 +513,13 @@ function HQContainer({
     );
 }
 
-// ── Connector lines (HQ → branches) ──────────────────────────────────────────
+// ── Connector lines ──────────────────────────────────────────────────────────
 
 function HQBranchConnector({ branchCount }: { branchCount: number }) {
     if (branchCount === 0) return null;
     return (
         <div className="flex flex-col items-center pointer-events-none">
-            {/* vertical stem from HQ down */}
             <div className="w-0.5 h-8 bg-gradient-to-b from-amber-500 via-amber-400 to-emerald-400" />
-            {/* horizontal bar across branches */}
             {branchCount > 1 && (
                 <div
                     className="bg-emerald-400 dark:bg-emerald-500"
@@ -423,7 +534,6 @@ function HQBranchConnector({ branchCount }: { branchCount: number }) {
     );
 }
 
-// Per-branch top connector (small vertical stem from horizontal bar down)
 function BranchTopStem() {
     return <div className="w-0.5 h-6 bg-emerald-400 dark:bg-emerald-500 mb-0" />;
 }
@@ -438,8 +548,12 @@ export default function OrgRegions({
     onMutated?: () => void;
 }) {
     const [intent, setIntent] = useState<Intent | null>(null);
+    const [menu, setMenu] = useState<MenuState | null>(null);
+    const [appointFor, setAppointFor] = useState<PositionNode | null>(null);
+    const [transferFor, setTransferFor] = useState<{
+        positionId: string; positionTitle: string; holderId: number; holderName: string;
+    } | null>(null);
 
-    // Separate the HQ branch (BR-HQ) from regional branches
     const hqBranch = structure.branches.find(b => b.branch.id === HQ_BRANCH_ID);
     const regionalBranches = structure.branches.filter(b => b.branch.id !== HQ_BRANCH_ID);
 
@@ -448,7 +562,6 @@ export default function OrgRegions({
         : [];
     const hqBranchName = hqBranch?.branch.name ?? "Headquarters";
 
-    // Flatten branches & departments so the dialog has dropdowns populated.
     const flatBranches = useMemo(
         () => structure.branches.map(b => ({ id: b.branch.id, name: b.branch.name })),
         [structure],
@@ -465,6 +578,158 @@ export default function OrgRegions({
         return Array.from(seen.values());
     }, [structure]);
 
+    // Deduped suggestion lists for the create-dialog datalists.
+    const positionTitleSuggestions = useMemo(() => {
+        const set = new Set<string>();
+        for (const p of structure.orgWidePositions) set.add(p.title);
+        for (const b of structure.branches) {
+            for (const g of b.deptGroups) for (const p of g.positions) set.add(p.title);
+        }
+        return Array.from(set).sort();
+    }, [structure]);
+    const departmentNameSuggestions = useMemo(() => {
+        const set = new Set<string>();
+        for (const d of flatDepartments) set.add(d.name);
+        return Array.from(set).sort();
+    }, [flatDepartments]);
+
+    const handleDelete = useCallback(async (kind: "branch" | "dept" | "position", id: string, label: string) => {
+        const noun = kind === "branch" ? "branch" : kind === "dept" ? "department" : "position";
+        if (!window.confirm(`Delete ${noun} "${label}"?\n\nThis cannot be undone. The server will refuse if the ${noun} still has linked records (e.g. a position can't be deleted while a user still holds it).`)) return;
+        const endpoint = kind === "branch" ? "branches" : kind === "dept" ? "departments" : "positions";
+        try {
+            await axios.delete(`/api/${endpoint}/${encodeURIComponent(id)}`);
+            toast.success(`${noun.charAt(0).toUpperCase() + noun.slice(1)} ${label} deleted`);
+            onMutated?.();
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : `Failed to delete ${noun}`;
+            toast.error(msg);
+        }
+    }, [onMutated]);
+
+    // handleDelete is invoked directly from the context-menu builders below.
+
+    // ── Holder management (assign / unassign) ────────────────────────────────
+    const unassignHolder = useCallback(async (positionId: string, userId: number, userName: string, positionTitle: string) => {
+        if (!window.confirm(`Remove ${userName} from "${positionTitle}"?\n\nThe position stays; only the holder is detached.`)) return;
+        try {
+            await axios.delete(`/api/positions/${encodeURIComponent(positionId)}/holders/${userId}`);
+            toast.success(`${userName} removed from ${positionTitle}`);
+            onMutated?.();
+        } catch (err: unknown) {
+            const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to remove holder";
+            toast.error(msg);
+        }
+    }, [onMutated]);
+
+    // ── Context menu openers ────────────────────────────────────────────────
+
+    const openMenu = useCallback((x: number, y: number, items: MenuEntry[]) => {
+        setMenu({ x, y, items });
+    }, []);
+
+    const onPosContext = useCallback((e: React.MouseEvent, position: PositionNode) => {
+        if (!canManage) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const items: MenuEntry[] = [];
+
+        // Group 1 — profile links (per holder)
+        for (const h of position.holders) {
+            items.push({
+                label: `Open ${h.user.name}'s profile`,
+                icon: <Users size={12} />,
+                onClick: () => { window.location.href = `/office/social/users/${h.user.id}`; },
+            });
+        }
+
+        // Group 2 — appoint
+        if (items.length > 0) items.push({ divider: true });
+        items.push({
+            label: "Appoint user…",
+            icon: <UserPlus size={12} />,
+            onClick: () => setAppointFor(position),
+        });
+
+        // Group 3 — per-holder move/remove
+        if (position.holders.length > 0) {
+            items.push({ divider: true });
+            for (const h of position.holders) {
+                items.push({
+                    label: `Transfer / Promote ${h.user.name}…`,
+                    icon: <ArrowRightLeft size={12} />,
+                    onClick: () => setTransferFor({
+                        positionId: position.id, positionTitle: position.title,
+                        holderId: h.user.id, holderName: h.user.name,
+                    }),
+                });
+                items.push({
+                    label: `Remove ${h.user.name} (keep position)`,
+                    icon: <UserMinus size={12} />,
+                    onClick: () => unassignHolder(position.id, h.user.id, h.user.name, position.title),
+                });
+            }
+        }
+
+        // Group 4 — destructive
+        items.push({ divider: true });
+        items.push({
+            label: position.holders.length > 0 ? "Delete position (unassign holders first)" : "Delete position",
+            icon: <Trash2 size={12} />,
+            danger: true,
+            onClick: () => handleDelete("position", position.id, position.title),
+        });
+        openMenu(e.clientX, e.clientY, items);
+    }, [canManage, handleDelete, openMenu, unassignHolder]);
+
+    const onDeptContext = useCallback((
+        e: React.MouseEvent, deptId: string, deptName: string, branchId: string | null,
+    ) => {
+        if (!canManage) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openMenu(e.clientX, e.clientY, [
+            {
+                label: "Add position to this department",
+                icon: <Plus size={12} />,
+                onClick: () => setIntent({ mode: "position", branchId, departmentId: deptId }),
+            },
+            { divider: true },
+            {
+                label: "Delete department",
+                icon: <Trash2 size={12} />,
+                danger: true,
+                onClick: () => handleDelete("dept", deptId, deptName),
+            },
+        ]);
+    }, [canManage, handleDelete, openMenu]);
+
+    const onBranchContext = useCallback((e: React.MouseEvent, branchId: string, branchName: string) => {
+        if (!canManage) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const isHq = branchId === HQ_BRANCH_ID;
+        openMenu(e.clientX, e.clientY, [
+            {
+                label: "Add department to this branch",
+                icon: <Plus size={12} />,
+                onClick: () => setIntent({ mode: "department", branchId }),
+            },
+            {
+                label: "Add position to this branch",
+                icon: <Plus size={12} />,
+                onClick: () => setIntent({ mode: "position", branchId, departmentId: null }),
+            },
+            { divider: true },
+            {
+                label: isHq ? "Delete HQ branch" : "Delete branch",
+                icon: <Trash2 size={12} />,
+                danger: true,
+                onClick: () => handleDelete("branch", branchId, branchName),
+            },
+        ]);
+    }, [canManage, handleDelete, openMenu]);
+
     return (
         <div className="rounded-xl bg-gradient-to-br from-amber-50/40 via-card to-emerald-50/40 dark:from-amber-950/10 dark:via-card dark:to-emerald-950/10 p-6 sm:p-10 overflow-x-auto border border-border">
             {/* Legend bar */}
@@ -476,25 +741,31 @@ export default function OrgRegions({
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Branch Manager / Staff</span>
             </div>
 
-            {/* ── HEADQUARTERS region ──────────────────────────────────── */}
+            {canManage && (
+                <p className="text-center text-[10px] text-muted-foreground mb-3 italic">
+                    Tip: right-click any card for actions — Add · Appoint · Transfer · Remove · Delete.
+                </p>
+            )}
+
+            {/* HEADQUARTERS region */}
             <div className="flex flex-col items-center mb-0">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Headquarters</p>
                 <HQContainer
                     orgWidePosts={structure.orgWidePositions}
                     hqBranchPosts={hqBranchPosts}
                     hqBranchName={hqBranchName}
+                    hqBranchExists={!!hqBranch}
                     canManage={canManage}
-                    onAddPosition={() => setIntent({ mode: "position", branchId: HQ_BRANCH_ID })}
-                    onAddDepartment={() => setIntent({ mode: "department", branchId: HQ_BRANCH_ID })}
+                    onCreateHQ={() => setIntent({ mode: "branch", forceId: HQ_BRANCH_ID, isHq: true })}
+                    onPosContext={onPosContext}
+                    onBranchContext={onBranchContext}
                 />
             </div>
 
-            {/* ── CONNECTOR LINES HQ → Branches ────────────────────────── */}
             {regionalBranches.length > 0 && (
                 <HQBranchConnector branchCount={regionalBranches.length} />
             )}
 
-            {/* ── REGIONAL BRANCHES ────────────────────────────────────── */}
             {(regionalBranches.length > 0 || canManage) && (
                 <div className="mt-0">
                     {regionalBranches.length > 0 && (
@@ -505,8 +776,9 @@ export default function OrgRegions({
                                     <BranchContainer
                                         bg={bg}
                                         canManage={canManage}
-                                        onAddDepartment={(brId) => setIntent({ mode: "department", branchId: brId })}
-                                        onAddPosition={(brId, dpId) => setIntent({ mode: "position", branchId: brId, departmentId: dpId ?? null })}
+                                        onPosContext={onPosContext}
+                                        onDeptContext={onDeptContext}
+                                        onBranchContext={onBranchContext}
                                     />
                                 </div>
                             ))}
@@ -532,7 +804,6 @@ export default function OrgRegions({
                 </div>
             )}
 
-            {/* Footer stats */}
             <div className="mt-10 pt-6 border-t border-border/60 flex justify-center flex-wrap gap-6 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                     <Landmark size={11} className="text-amber-500" />
@@ -552,8 +823,31 @@ export default function OrgRegions({
                 intent={intent}
                 branches={flatBranches}
                 departments={flatDepartments}
+                positionTitles={positionTitleSuggestions}
+                departmentNames={departmentNameSuggestions}
                 onClose={() => setIntent(null)}
                 onCreated={() => onMutated?.()}
+            />
+
+            <ContextMenu menu={menu} onClose={() => setMenu(null)} />
+
+            <OrgTransferDialog
+                open={transferFor !== null}
+                sourcePositionId={transferFor?.positionId ?? null}
+                sourceTitle={transferFor?.positionTitle ?? null}
+                holderUserId={transferFor?.holderId ?? null}
+                holderName={transferFor?.holderName ?? null}
+                onClose={() => setTransferFor(null)}
+                onTransferred={() => onMutated?.()}
+            />
+
+            <OrgAppointDialog
+                open={appointFor !== null}
+                positionId={appointFor?.id ?? null}
+                positionTitle={appointFor?.title ?? null}
+                existingHolderIds={appointFor?.holders.map(h => h.user.id) ?? []}
+                onClose={() => setAppointFor(null)}
+                onAppointed={() => onMutated?.()}
             />
         </div>
     );

@@ -4,12 +4,16 @@
 // Hosted by OrgRegions.tsx — opens with a pre-filled scope (branch / dept)
 // and POSTs to existing endpoints:
 //   /api/branches | /api/departments | /api/positions
-// Advanced fields (parentPositionId, roleTemplateId) stay on /office/admin/positions.
+//
+// IDs are generated client-side from the name (slug → prefix). On 409 the
+// client retries with `-2`, `-3`, … so duplicates auto-resolve. The user
+// never sees an ID field. Special case: when intent.forceId is set (used for
+// "Create HQ" which forces id = "BR-HQ"), that exact id is sent through.
 
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Building2, Layers, Briefcase } from "lucide-react";
+import { Building2, Layers, Briefcase, Landmark } from "lucide-react";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,7 +24,7 @@ import {
 } from "@/components/ui/select";
 
 export type Intent =
-    | { mode: "branch" }
+    | { mode: "branch"; forceId?: string; isHq?: boolean }
     | { mode: "department"; branchId?: string | null }
     | { mode: "position"; branchId?: string | null; departmentId?: string | null };
 
@@ -31,33 +35,77 @@ interface Props {
     intent: Intent | null;
     branches: Branch[];
     departments: Department[];
+    /** Existing position titles + dept names — used for type-ahead suggestions. */
+    positionTitles?: string[];
+    departmentNames?: string[];
     onClose: () => void;
     onCreated: () => void;
 }
 
+// ── ID generation ─────────────────────────────────────────────────────────────
+
+function slugify(s: string): string {
+    return s
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 24) || "X";
+}
+
+/** Try `id` then `id-2`, `id-3`, … on 409 collisions. Posts via `post(idAttempt)` per attempt. */
+async function postWithIdRetry<T>(
+    baseId: string,
+    post: (idAttempt: string) => Promise<T>,
+): Promise<T> {
+    let attempt = 1;
+    // Hard cap so we never spin forever.
+    while (attempt < 50) {
+        const idAttempt = attempt === 1 ? baseId : `${baseId}-${attempt}`;
+        try {
+            return await post(idAttempt);
+        } catch (err) {
+            if (axios.isAxiosError(err) && err.response?.status === 409) {
+                attempt += 1;
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw new Error("Could not find a unique ID after 50 attempts");
+}
+
 // ── Branch form ───────────────────────────────────────────────────────────────
 
-function BranchForm({ onDone }: { onDone: () => void }) {
-    const [id, setId]       = useState("");
-    const [name, setName]   = useState("");
+function BranchForm({
+    onDone, forceId, isHq,
+}: { onDone: () => void; forceId?: string; isHq?: boolean }) {
+    const [name, setName]   = useState(isHq ? "Head Office" : "");
     const [addr, setAddr]   = useState("");
     const [phone, setPhone] = useState("");
     const [busy, setBusy]   = useState(false);
 
     async function submit() {
-        if (!id.trim() || !name.trim()) {
-            toast.error("ID and Name are required");
+        if (!name.trim()) {
+            toast.error("Name is required");
             return;
         }
         setBusy(true);
         try {
-            await axios.post("/api/branches", {
-                id: id.trim().toUpperCase(),
+            const payload = {
                 name: name.trim(),
                 address: addr.trim() || null,
                 phone: phone.trim() || null,
-            });
-            toast.success(`Branch ${name} created`);
+            };
+            if (forceId) {
+                // No retry — HQ must be exactly the forced id.
+                await axios.post("/api/branches", { id: forceId, ...payload });
+            } else {
+                const baseId = `BR-${slugify(name)}`;
+                await postWithIdRetry(baseId, idAttempt =>
+                    axios.post("/api/branches", { id: idAttempt, ...payload }),
+                );
+            }
+            toast.success(`${isHq ? "HQ" : "Branch"} ${name} created`);
             onDone();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : "Failed to create branch";
@@ -70,22 +118,21 @@ function BranchForm({ onDone }: { onDone: () => void }) {
     return (
         <div className="space-y-3">
             <div>
-                <label className="text-xs font-medium text-muted-foreground">Branch ID *</label>
-                <Input
-                    value={id}
-                    onChange={e => setId(e.target.value.toUpperCase())}
-                    placeholder="BR-DEL"
-                    className="mt-1 font-mono uppercase"
-                />
-            </div>
-            <div>
-                <label className="text-xs font-medium text-muted-foreground">Name *</label>
+                <label className="text-xs font-medium text-muted-foreground">
+                    {isHq ? "HQ name *" : "Name *"}
+                </label>
                 <Input
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="Delhi Branch"
+                    placeholder={isHq ? "Head Office" : "Delhi Branch"}
                     className="mt-1"
+                    autoFocus
                 />
+                {isHq && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                        Internal ID will be <span className="font-mono">BR-HQ</span> (fixed). Rename freely.
+                    </p>
+                )}
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Address</label>
@@ -108,7 +155,7 @@ function BranchForm({ onDone }: { onDone: () => void }) {
             </div>
             <DialogFooter showCloseButton>
                 <Button onClick={submit} disabled={busy}>
-                    {busy ? "Creating…" : "Create branch"}
+                    {busy ? "Creating…" : isHq ? "Create HQ" : "Create branch"}
                 </Button>
             </DialogFooter>
         </div>
@@ -118,31 +165,34 @@ function BranchForm({ onDone }: { onDone: () => void }) {
 // ── Department form ───────────────────────────────────────────────────────────
 
 function DepartmentForm({
-    branches, initialBranchId, onDone,
+    branches, initialBranchId, suggestions, onDone,
 }: {
     branches: Branch[];
     initialBranchId?: string | null;
+    suggestions: string[];
     onDone: () => void;
 }) {
-    const [id, setId]             = useState("");
     const [name, setName]         = useState("");
     const [desc, setDesc]         = useState("");
     const [branchId, setBranchId] = useState(initialBranchId ?? "");
     const [busy, setBusy]         = useState(false);
 
     async function submit() {
-        if (!id.trim() || !name.trim()) {
-            toast.error("ID and Name are required");
+        if (!name.trim()) {
+            toast.error("Name is required");
             return;
         }
         setBusy(true);
         try {
-            await axios.post("/api/departments", {
-                id: id.trim().toUpperCase(),
-                name: name.trim(),
-                description: desc.trim() || null,
-                branchId: branchId || null,
-            });
+            const baseId = `DEPT-${slugify(name)}`;
+            await postWithIdRetry(baseId, idAttempt =>
+                axios.post("/api/departments", {
+                    id: idAttempt,
+                    name: name.trim(),
+                    description: desc.trim() || null,
+                    branchId: branchId || null,
+                }),
+            );
             toast.success(`Department ${name} created`);
             onDone();
         } catch (err: unknown) {
@@ -156,22 +206,23 @@ function DepartmentForm({
     return (
         <div className="space-y-3">
             <div>
-                <label className="text-xs font-medium text-muted-foreground">Department ID *</label>
-                <Input
-                    value={id}
-                    onChange={e => setId(e.target.value.toUpperCase())}
-                    placeholder="DEPT-SVC"
-                    className="mt-1 font-mono uppercase"
-                />
-            </div>
-            <div>
                 <label className="text-xs font-medium text-muted-foreground">Name *</label>
                 <Input
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Service"
                     className="mt-1"
+                    autoFocus
+                    list="org-dept-name-suggestions"
                 />
+                <datalist id="org-dept-name-suggestions">
+                    {suggestions.map(s => <option key={s} value={s} />)}
+                </datalist>
+                {suggestions.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1 italic">
+                        Tip: start typing to pick an existing department name (e.g. Sales, Service) and avoid duplicates.
+                    </p>
+                )}
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Branch scope <span className="font-normal">(blank = org-wide)</span></label>
@@ -209,38 +260,40 @@ function DepartmentForm({
 // ── Position form ─────────────────────────────────────────────────────────────
 
 function PositionForm({
-    branches, departments, initialBranchId, initialDepartmentId, onDone,
+    branches, departments, initialBranchId, initialDepartmentId, suggestions, onDone,
 }: {
     branches: Branch[];
     departments: Department[];
     initialBranchId?: string | null;
     initialDepartmentId?: string | null;
+    suggestions: string[];
     onDone: () => void;
 }) {
-    const [id, setId]                 = useState("");
     const [title, setTitle]           = useState("");
     const [branchId, setBranchId]     = useState(initialBranchId ?? "");
     const [departmentId, setDeptId]   = useState(initialDepartmentId ?? "");
     const [busy, setBusy]             = useState(false);
 
-    // Departments shown depend on the selected branch (or all if org-wide).
     const filteredDepts = branchId
         ? departments.filter(d => !d.branchId || d.branchId === branchId)
         : departments;
 
     async function submit() {
-        if (!id.trim() || !title.trim()) {
-            toast.error("ID and Title are required");
+        if (!title.trim()) {
+            toast.error("Title is required");
             return;
         }
         setBusy(true);
         try {
-            await axios.post("/api/positions", {
-                id: id.trim().toUpperCase(),
-                title: title.trim(),
-                branchId: branchId || null,
-                departmentId: departmentId || null,
-            });
+            const baseId = `POS-${slugify(title)}`;
+            await postWithIdRetry(baseId, idAttempt =>
+                axios.post("/api/positions", {
+                    id: idAttempt,
+                    title: title.trim(),
+                    branchId: branchId || null,
+                    departmentId: departmentId || null,
+                }),
+            );
             toast.success(`Position ${title} created`);
             onDone();
         } catch (err: unknown) {
@@ -254,22 +307,23 @@ function PositionForm({
     return (
         <div className="space-y-3">
             <div>
-                <label className="text-xs font-medium text-muted-foreground">Position ID *</label>
-                <Input
-                    value={id}
-                    onChange={e => setId(e.target.value.toUpperCase())}
-                    placeholder="POS-BM-DEL"
-                    className="mt-1 font-mono uppercase"
-                />
-            </div>
-            <div>
                 <label className="text-xs font-medium text-muted-foreground">Title *</label>
                 <Input
                     value={title}
                     onChange={e => setTitle(e.target.value)}
                     placeholder="Branch Manager"
                     className="mt-1"
+                    autoFocus
+                    list="org-pos-title-suggestions"
                 />
+                <datalist id="org-pos-title-suggestions">
+                    {suggestions.map(s => <option key={s} value={s} />)}
+                </datalist>
+                {suggestions.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1 italic">
+                        Tip: start typing to pick an existing title (e.g. Branch Manager, Sales Executive) — same title in a different branch is fine.
+                    </p>
+                )}
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Branch scope <span className="font-normal">(blank = org-wide)</span></label>
@@ -320,7 +374,7 @@ function PositionForm({
 // ── Dialog shell ──────────────────────────────────────────────────────────────
 
 export default function OrgRegionsCreateDialog({
-    intent, branches, departments, onClose, onCreated,
+    intent, branches, departments, positionTitles = [], departmentNames = [], onClose, onCreated,
 }: Props) {
     // Re-mount the form whenever intent changes so initial values stick.
     const [key, setKey] = useState(0);
@@ -335,6 +389,13 @@ export default function OrgRegionsCreateDialog({
 
     const header = (() => {
         if (intent?.mode === "branch") {
+            if (intent.isHq) {
+                return {
+                    icon: <Landmark size={16} className="text-amber-600" />,
+                    title: "Create HQ",
+                    desc: "Sets up the Headquarters branch. The internal id is BR-HQ — choose any display name you like.",
+                };
+            }
             return {
                 icon: <Building2 size={16} className="text-emerald-600" />,
                 title: "Add branch",
@@ -366,13 +427,19 @@ export default function OrgRegionsCreateDialog({
                     <DialogDescription>{header.desc}</DialogDescription>
                 </DialogHeader>
                 {intent?.mode === "branch" && (
-                    <BranchForm key={key} onDone={handleDone} />
+                    <BranchForm
+                        key={key}
+                        forceId={intent.forceId}
+                        isHq={intent.isHq}
+                        onDone={handleDone}
+                    />
                 )}
                 {intent?.mode === "department" && (
                     <DepartmentForm
                         key={key}
                         branches={branches}
                         initialBranchId={intent.branchId ?? null}
+                        suggestions={departmentNames}
                         onDone={handleDone}
                     />
                 )}
@@ -383,6 +450,7 @@ export default function OrgRegionsCreateDialog({
                         departments={departments}
                         initialBranchId={intent.branchId ?? null}
                         initialDepartmentId={intent.departmentId ?? null}
+                        suggestions={positionTitles}
                         onDone={handleDone}
                     />
                 )}

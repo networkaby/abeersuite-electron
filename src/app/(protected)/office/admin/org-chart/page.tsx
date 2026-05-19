@@ -3,39 +3,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
-import { Users, Briefcase, Link as LinkIcon, Sparkles, Network, Layers, Landmark } from "lucide-react";
+import { Briefcase, Link as LinkIcon, Sparkles, Network, Landmark, Move } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import type { OrgNode, OrgStructure } from "@/shared/types/orgChart";
-import OrgTree from "@/modules/admin/components/OrgTree";
+import type { OrgStructure } from "@/shared/types/orgChart";
 import StructureTree from "@/modules/admin/components/StructureTree";
 import OrgExplorer from "@/modules/admin/components/OrgExplorer";
 import OrgHierarchy from "@/modules/admin/components/OrgHierarchy";
-import OrgLevels from "@/modules/admin/components/OrgLevels";
 import OrgRegions from "@/modules/admin/components/OrgRegions";
+import OrgCanvas from "@/modules/admin/components/OrgCanvas";
 
-type Tab = "people" | "structure" | "explorer" | "hierarchy" | "levels" | "regions";
+type Tab = "structure" | "explorer" | "hierarchy" | "regions" | "canvas";
 
 export default function OrgChartPage() {
     const { data: session } = useSession();
-    const [tab, setTab] = useState<Tab>("people");
-    const [roots, setRoots] = useState<OrgNode[]>([]);
+    const [tab, setTab] = useState<Tab>("structure");
     const [structure, setStructure] = useState<OrgStructure | null>(null);
-    const [loading, setLoading] = useState(true);
     const [postLoading, setPostLoading] = useState(true);
-
-    const currentUserId = session?.user
-        ? Number((session.user as { id?: string }).id)
-        : undefined;
 
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canManage   = permissions.includes("settings:manage");
-
-    useEffect(() => {
-        axios.get<OrgNode[]>("/api/org-chart")
-            .then(r => setRoots(r.data))
-            .finally(() => setLoading(false));
-    }, []);
 
     const loadStructure = useCallback(() => {
         axios.get<OrgStructure>("/api/positions/structure")
@@ -46,12 +33,11 @@ export default function OrgChartPage() {
     useEffect(() => { loadStructure(); }, [loadStructure]);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-        { id: "people",    label: "People Chart",     icon: Users },
         { id: "structure", label: "Structure Chart",  icon: Briefcase },
         { id: "explorer",  label: "Explorer (beta)",   icon: Sparkles },
         { id: "hierarchy", label: "Hierarchy (beta)",  icon: Network },
-        { id: "levels",    label: "Levels (beta)",     icon: Layers },
         { id: "regions",   label: "Regions (beta)",    icon: Landmark },
+        { id: "canvas",    label: "Canvas (beta)",     icon: Move },
     ];
 
     return (
@@ -60,24 +46,20 @@ export default function OrgChartPage() {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Org Chart</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {tab === "people"
-                            ? "Reporting lines based on who manages whom."
-                            : tab === "structure"
-                                ? "Position hierarchy — click a name to view their profile."
-                                : tab === "explorer"
-                                    ? "Interactive explorer — search, filter, hover for details."
-                                    : tab === "hierarchy"
-                                        ? "True organizational hierarchy — root → branches → departments → positions."
-                                        : tab === "levels"
-                                            ? "Classic level-based chart — Board · Branches · Departments · Positions."
-                                            : "HQ + branches with nested boundaries — bordered containers for each region."}
+                        {tab === "structure"
+                            ? "Position hierarchy — click a name to view their profile."
+                            : tab === "explorer"
+                                ? "Interactive explorer — search, filter, hover for details."
+                                : tab === "hierarchy"
+                                    ? "True organizational hierarchy — root → branches → departments → positions."
+                                    : tab === "regions"
+                                        ? "HQ + branches with nested boundaries — bordered containers for each region."
+                                        : "Free-form canvas — drag cards around, pan with space-drag, zoom with the wheel."}
                     </p>
                 </div>
-                {tab !== "people" && (
-                    <Link href="/office/admin/positions" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
-                        <LinkIcon size={11} /> Manage positions
-                    </Link>
-                )}
+                <Link href="/office/admin/positions" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
+                    <LinkIcon size={11} /> Manage positions
+                </Link>
             </div>
 
             {/* Tab bar */}
@@ -104,20 +86,6 @@ export default function OrgChartPage() {
                     );
                 })}
             </div>
-
-            {/* People chart */}
-            {tab === "people" && (
-                loading ? (
-                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
-                ) : roots.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-                        <Users size={36} className="opacity-20" />
-                        <p className="text-sm">No users yet. Add staff from the Users page.</p>
-                    </div>
-                ) : (
-                    <OrgTree roots={roots} highlightId={currentUserId} />
-                )
-            )}
 
             {/* Structure chart */}
             {tab === "structure" && (
@@ -164,20 +132,6 @@ export default function OrgChartPage() {
                 )
             )}
 
-            {/* Levels (beta) — classic level-based hierarchy chart */}
-            {tab === "levels" && (
-                postLoading ? (
-                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
-                ) : !structure ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-                        <Layers size={36} className="opacity-20" />
-                        <p className="text-sm">No org structure yet.</p>
-                    </div>
-                ) : (
-                    <OrgLevels structure={structure} />
-                )
-            )}
-
             {/* Regions (beta) — HQ + branches with nested bordered containers */}
             {tab === "regions" && (
                 postLoading ? (
@@ -189,6 +143,20 @@ export default function OrgChartPage() {
                     </div>
                 ) : (
                     <OrgRegions structure={structure} canManage={canManage} onMutated={loadStructure} />
+                )
+            )}
+
+            {/* Canvas (beta) — custom pan/zoom/drag visualization */}
+            {tab === "canvas" && (
+                postLoading ? (
+                    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
+                ) : !structure ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+                        <Move size={36} className="opacity-20" />
+                        <p className="text-sm">No org structure yet.</p>
+                    </div>
+                ) : (
+                    <OrgCanvas structure={structure} />
                 )
             )}
         </div>
