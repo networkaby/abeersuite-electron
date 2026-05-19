@@ -141,7 +141,9 @@ pnpm dev
 
 ## Documentation Map
 
-- `ARCHITECTURE.md` - current architecture and module boundaries
-- `PROJECT_BRAIN.md` - decision log, milestones, roadmap notes
-- `docs/customer-site-shared-imports.md` - cross-boundary import registry for `(external)/` surface
-- `AI_HANDOFF_SUMMARY.md` - historical context from earlier phases (may be missing)
+- `ARCHITECTURE.md` — current architecture and module boundaries (present-tense).
+- `PROJECT_BRAIN.md` — aim, what's in flight, recently shipped, next up, decisions, gotchas. **The only doc with status.**
+- `AGENTS.md` — contributor rules.
+- `docs/modules/<module>.md` — per-module reference (URLs, permissions, models, key components, gotchas).
+- `docs/completed-and-protected.md` — behaviour-guarded surfaces (accounting math, POS GL, BS/P&L/Day Book).
+- `docs/seeds.md` — seed lifecycle (bootstrap / dummy / hard-clean).

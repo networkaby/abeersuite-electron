@@ -17,24 +17,24 @@ Personal-user till accounts no longer exist. Tills belong to counters, not peopl
 ## URLs
 
 ### UI pages
-- `/office/pos` — single-page POS register. File: `src/app/(protected)/office/pos/page.tsx` + `src/modules/pos/components/PosScreen.tsx`.
+- `/vouchers/pos` — single-page POS register (standalone window, no office sidebar). File: `src/app/(protected)/vouchers/pos/page.tsx` + `src/modules/pos/components/PosScreen.tsx`.
 - `/office/pos/shifts` — shift report (manager/admin). Columns: counter, user, opening, declared, →vault, variance, status.
 - `/office/pos/shifts/[id]` — shift audit page. Shows carry-over, vault top-up, handover chain, drops, linked Contras + variance JE.
-- `/office/admin/counters` — POS counter management (admin). Create / rename / set default float / activate-deactivate / delete counters per branch. Auto-creates the till GL account under Cash-in-Hand.
+- `/office/admin/counters` — POS counter management (admin). Create / rename / activate-deactivate / delete counters per branch. Auto-creates the till GL account under Cash-in-Hand.
 
 ### API routes
 
 #### Counters
 - `GET /api/pos/counters` — active counters in the active branch with current till balance. Consumed by `ShiftOpenDialog`.
 - `GET /api/pos/counters?scope=all` — every counter in every branch (admin only). Consumed by `/office/admin/counters`.
-- `POST /api/pos/counters` — create a counter. Body: `{ branchId, name, defaultFloatPaise? }`. Auto-creates the till account `Cash – <name> – <branch>` under Cash-in-Hand. Requires `settings:manage`.
-- `PATCH /api/pos/counters/[id]` — rename / change default float / toggle active. Renaming also renames the till GL account. Blocks deactivation if a shift is OPEN or AWAITING_HANDOVER on it. Requires `settings:manage`.
+- `POST /api/pos/counters` — create a counter. Body: `{ branchId, name }`. Auto-creates the till account `Cash – <name> – <branch>` under Cash-in-Hand. Requires `settings:manage`.
+- `PATCH /api/pos/counters/[id]` — rename / toggle active. Renaming also renames the till GL account. Blocks deactivation if a shift is OPEN or AWAITING_HANDOVER on it. Requires `settings:manage`.
 - `DELETE /api/pos/counters/[id]` — delete a counter. Only allowed when (a) zero shifts ever used it and (b) till balance is zero. Till GL account is preserved for audit. Requires `settings:manage`.
 
 #### Shifts
 - `GET /api/pos/shifts/current` — current user's OPEN or AWAITING_HANDOVER shift in active branch, or null.
 - `GET /api/pos/shifts` — list shifts (`?branchId=`, `?counterId=`, `?userId=`, `?status=`, `?from=`, `?to=`).
-- `POST /api/pos/shifts` — open shift. Body: `{ counterId, vaultTopUpPaise, notes? }`. Posts Contra (Vault → Counter till) only for the top-up portion; carry-over stays.
+- `POST /api/pos/shifts` — open shift. Body: `{ counterId, vaultTopUpPaise, notes? }`. Posts Contra (Vault → Counter till) only for the top-up portion; carry-over stays. **Crash recovery**: if the same user already has an OPEN shift on the same counter (e.g. browser crashed mid-shift), the endpoint returns the existing shift with `{ resumed: true }` (HTTP 200) instead of 409. Same user + `AWAITING_HANDOVER` returns 409. Different user always returns 409 "Counter in use by another cashier".
 - `GET /api/pos/shifts/[id]` — full detail.
 - `POST /api/pos/shifts/[id]/drops` — mid-shift cash drop (log only, no GL).
 - `PATCH /api/pos/shifts/[id]/close` — close shift to vault. Body: `{ declaredCashPaise, carryOverNextPaise?, notes? }`. Posts variance JE + Contra (Counter → Vault) for surplus only.
@@ -63,7 +63,7 @@ Personal-user till accounts no longer exist. Tills belong to counters, not peopl
 - `pos:shift:manage` — force-close, cancel handover, override variance, close another user's shift.
 
 ## Prisma models
-- `PosCounter` (`prisma/schema/pos.prisma`) — physical billing station. Has `tillAccountId` (Account), `defaultFloatPaise`, `branchId`. Unique on `(branchId, name)`.
+- `PosCounter` (`prisma/schema/pos.prisma`) — physical billing station. Has `tillAccountId` (Account), `branchId`, `name`, `isActive`. Unique on `(branchId, name)`. (`defaultFloatPaise` was removed 2026-05-14 — operators decide opening float at shift-open time.)
 - `PosShift` — cashier session. Links `userId`, `counterId`, `branchId`. Status: OPEN → AWAITING_HANDOVER → CLOSED. Carries `carryOverFloatPaise`, `vaultTopUpPaise`, `carryOverNextPaise`, `toVaultPaise`. Self-relation `handoverToShiftId` for audit chain.
 - `PosCashDrop` — mid-shift log. No GL.
 - `PosHandover` — two-step handover record. `fromShiftId`, `toUserId`, `toShiftId` (filled on accept). Status: PENDING → ACCEPTED / CANCELLED. Carries `declaredByAPaise`, `countedByBPaise`, `carryOverPaise`.
@@ -88,7 +88,7 @@ Day start:
 
 End of day (A closes to vault):
   A declares ₹15,000 physical
-  Keep in counter: ₹2,000 (defaultFloatPaise)
+  A enters carry-over ₹2,000 (kept in counter overnight)
   → Variance JE if expected ≠ declared
   → Contra: Counter 1 → Vault ₹13,000
   Counter 1 overnight balance: ₹2,000 ✓
@@ -184,4 +184,4 @@ Walk-ins (no customer account) are blocked on all tiers — `customerAccountId` 
 - Multiple partial-return guard: currently caps per-line at original qty but does not subtract qty already returned in prior return invoices.
 - Exchange as one atomic transaction (currently: issue credit note, then start new sale that draws down the advance).
 
-_Last updated: 2026-05-14 — sale return flow (three tiers), lost-invoice manager bypass, InvoiceLine.productId, Invoice.returnOfId._
+_Last updated: 2026-05-19 — `PosCounter.defaultFloatPaise` field removed (carry-over is per-shift, not per-counter); `POST /api/pos/shifts` documents crash-recovery `resumed: true` behaviour; thermal-relay removed in favour of direct ESC/POS (see accountancy.md)._

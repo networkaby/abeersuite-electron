@@ -1,218 +1,232 @@
 # Architecture Overview
 
-This document describes the current implementation architecture of
-`service-mgmt-experiment`.
+Current implementation architecture of `service-mgmt-experiment`. Present-tense only — no history, no roadmap. For status, plans, and decisions, see [PROJECT_BRAIN.md](PROJECT_BRAIN.md).
 
-## 1) Runtime Architecture
+## 1) Runtime architecture
 
-- **Framework**: Next.js App Router (`src/app`)
-- **Rendering model**: SSR-first pages, client components for interactive UI
-- **Auth middleware**: `src/proxy.ts`
-- **API layer**: route handlers under `src/app/api/*`
-- **Data layer**: Prisma + PostgreSQL
-- **Realtime layer**: Supabase Realtime for inbox updates
+- **Framework**: Next.js App Router (`src/app`).
+- **Rendering**: SSR-first pages, client components for interactive UI.
+- **Auth middleware**: `src/proxy.ts` (Next.js 16 rename — not `middleware.ts`).
+- **API layer**: route handlers under `src/app/api/*`.
+- **Data layer**: Prisma + PostgreSQL (Supabase).
+- **Realtime layer**: Supabase Realtime for inbox updates.
 
-## 2) Domain Boundaries
+## 2) Domain modules
 
-Core domain modules are in `src/modules`:
+Domain modules live in `src/modules/`:
 
-- `core` - shared business workflows (assignment-oriented pages/logic)
-- `customer` - customer/company/lead domain components and helpers
-- `message` - inbox and messaging domain
-- `repairing` - ticket lifecycle, repair workflow UI/domain
-- `tally` - finance and accounting features (`PartyCombobox`, `BookPage`, `GstSummaryView`, `lib/outstandings.ts`, `lib/openingBalance.ts`, `lib/aggregateLedger.ts`)
-- `inventory` - inventory master data + voucher UI (`InvProductCombobox`, `InvProductPicker`, `InvVoucherForm`, `InvVoucherDetail`)
-- `shared` - cross-domain reusable module-level pieces
-- `external` - customer-facing shop, store homepage, and portal UI components
+- `core` — shared business workflows (assignment-oriented pages/logic).
+- `customer` — customer / company / lead components and helpers.
+- `message` — inbox and messaging.
+- `repairing` — ticket lifecycle, repair workflow UI.
+- `accountancy` — finance and accounting (`PartyCombobox`, `BookPage`, `GstSummaryView`, voucher pages, `outstandings`, `openingBalance`, `aggregateLedger`).
+- `inventory` — inventory masters + voucher UI (`InvProductCombobox`, `InvProductPicker`, `InvVoucherForm`, `InvVoucherDetail`, `InvProductFormFields`).
+- `pos` — POS register UI (`PosScreen`, `ActiveShiftBar`, `ShiftOpenDialog`, `ShiftCloseDialog`, `HandoverAcceptDialog`, `CashDropDialog`, `PosReturnDialog`).
+- `admin` — admin pages (branches, departments, posts, org chart, roles, users, pipelines, counters, naming-convention, year-ending).
+- `ecommerce` — staff-side shop admin (products, orders, categories, coupons).
+- `external` — customer-facing shop, store homepage, portal UI.
+- `lab` — experimental Front Office / Back Office prototype (`/lab`). Not production.
 
-App-level cross-cutting components live in `src/components` (shadcn UI) and
-`src/modules/shared` (e.g. `Sidebar`, `QuickTicketButton`, `UniversalCreateMenu`).
+Cross-cutting code lives in `src/shared/`. App-level shadcn primitives live in `src/components/ui/`.
 
-### Tally Domain Note
+> **Tally legacy**: `src/modules/tally/` still co-exists with `src/modules/accountancy/`. The module was renamed on 2026-05-07; the folder removal is pending.
 
-The `(tally)` domain is inspired by standard Tally workflows but modeled for
-application clarity and long-term extensibility:
+## 3) Route groups
 
-- group/category semantics are represented through account hierarchy
-- ledger usage is represented as concrete account records used in entries
-- reporting is generated from journal/invoice/payment data, not from UI-only state
+### Staff app — `/office/*` (requires staff session)
 
-## 3) App Route Groups
+Every directory under `src/app/(protected)/office/` is a real URL segment — URLs mirror the source layout 1:1.
 
-### Staff app — protected (requires staff session)
+- `admin/` — users, role permission matrix, branches, departments, posts, org-chart, pipelines, statuses, sub-statuses, counters, naming-convention, year-ending.
+- `core/` — accounts, assignments, call-log, search-slno.
+- `customers/` — customers, companies, unified "all" view, transactions tab.
+- `crm/` — leads list + detail.
+- `message/inbox/` — staff inbox.
+- `repairing/` — dashboard, tickets, service centres.
+- `social/users/[id]/` — staff profile + wall.
+- `accountancy/` — chart of accounts, vouchers (sales / purchase / estimate / contra / payment / receipt / credit-note / debit-note / branch-transfer / manufacturing-journals / physical-stock), invoices, journal entries, ledgers, opening-balance, voucher registers, day book, pending vouchers, reports (cash book, bank book, bank reconciliation, cash flow, fund flow, ratio analysis, statistics, receivables, payables, ledger-outstandings, GST hub including tax-classification, balance sheet, P&L).
+- `ecommerce/` — staff shop admin.
+- `inventory/` — masters (units, categories, brands, product-groups, warranty-terms, attribute-masters, BOMs, gst-rates), products, stock transactions, stock summary, stock ledger.
+- `pos/shifts/` — shift reports. The POS register itself opens at `/vouchers/pos` (standalone window).
+- `home/` — role-aware four-layer landing.
+- `roadmap/[moduleKey]/` — placeholder hub for future modules.
 
-Staff UI lives under **`src/app/(protected)/office/`** and is served at URLs prefixed with **`/office`**. As of 2026-05-11, every directory under `office/` is a real URL segment (no parenthesised route groups remain): URLs mirror the source layout 1:1.
+Staff sign-in: `/staff/login`; post-login redirect to `/office/core/assignments` (see `src/proxy.ts`).
 
-- **`src/app/(protected)/layout.tsx`** — session gate, customer redirect to `/portal`, shared shell (sidebar, etc.)
-- **`src/app/(protected)/office/`** — real path segment **`/office`** in the browser
+`/office/tally/*` 307-redirects to `/office/accountancy/*` (legacy URL preservation).
 
-Subdirectories under `office/`:
+### External — public / customer-facing
 
-- `admin/` — users, role (permission matrix), branches, departments, org-chart, pipelines, posts, statuses, sub-statuses, year-ending
-- `core/` — accounts, assignments, call-log, search-slno
-- `customers/` — customers, companies, unified "all" view
-- `crm/` — CRM leads list + detail
-- `message/inbox/` — staff inbox (chat rooms + threads)
-- `repairing/` — dashboard, tickets, service centers
-- `social/users/[id]/` — staff profile pages with wall (distinct from `admin/users` admin list)
-- `accountancy/` — chart of accounts, vouchers (sales/purchase/estimate/contra/payment/receipt/credit-note/debit-note), invoices, journal-entries, ledgers, opening-balance, reports (cash-book, bank-book, bank-reconciliation, cash-flow, fund-flow, ratio-analysis, statistics, receivables, payables, ledger-outstandings, GST hub)
-- `ecommerce/` — staff shop admin (categories, coupons, orders, products)
-- `inventory/` — inventory masters (units, categories, brands, product-groups, warranty-terms, products) + stock transactions (sales, purchases, sales-orders, purchase-orders, challans, GRNs, physical stock, stock journals, rejections-in, rejections-out, stock-ledger)
-- `roadmap/[moduleKey]/` — placeholder hub for future modules (hrm, delivery, field-service, helpdesk, projects, intelligence, administration, retention, pricing-strategy)
+Grouped under `src/app/(external)`:
 
-Examples: `/office/repairing/tickets`, `/office/core/assignments`, `/office/customers/all`, `/office/crm/leads`, `/office/accountancy/invoices`, `/office/accountancy/reports/gst`, `/office/inventory/products`, `/office/admin/users`, `/office/social/users/42`.
+- `(store)/` — marketing storefront homepage (hero, deals, featured, brands).
+- `shop/` — listing, product detail, cart, wishlist, compare, checkout (Razorpay), order confirmation.
+- `portal/` — customer hub (register, tickets, orders, repairs, wallet, wishlist).
+- Customer sign-in: `/login` (the `(external)/login/` page). `/portal/login` redirects to `/login`.
 
-Staff sign-in: **`/staff/login`** (NextAuth `credentials-staff`); after login, `src/proxy.ts` sends staff to **`/office/core/assignments`** (or `callbackUrl` when present).
+### Experimental — `/lab`
 
-### External surface — public/customer-facing
+`/lab` hosts the Front Office / Back Office prototype (customer concierge, persistent search list, device search). Not gated, not production.
 
-Pages are grouped under `src/app/(external)`:
-
-- `(store)` - marketing store homepage (hero, deals, featured products, brands)
-- `shop/` - product listing, product detail, cart, wishlist, compare, checkout, order confirmation; uses Razorpay for payment
-- `portal/` - customer hub (register, ticket tracking, etc.). Customer sign-in UI lives at **`/login`** (not under `/portal`); **`/portal/login`** redirects to **`/login`** for bookmarks.
-
-Parentheses route groups do not add URL segments; public URLs stay **`/`**, **`/shop/*`**, **`/portal/*`** (separate from **`/office/*`**).
-
-## 4) API Topology
+## 4) API topology
 
 ### Staff API
 
-- `/api/tickets/*` - lifecycle, status/sub-status, notes, reopen, assign, transfer
-- `/api/ticket-statuses/*` and `/api/sub-statuses/*` - workflow configuration
-- `/api/sub-status-groups/*` - grouping for sub-statuses in settings UI
-- `/api/users/*` - CRUD + roles, permissions, activity, wall posts, password change
-- `/api/roles/*`, `/api/permissions` - RBAC
-- `/api/branches/*`, `/api/departments/*` - org structure
-- `/api/org-chart` - hierarchical org data
-- `/api/customers/*`, `/api/companies/*`, `/api/accounts/*` - customer/company domain (now returns GSTIN/state/regType for party-picker autofill)
-- `/api/crm/leads/*` - CRM lead pipeline CRUD
-- `/api/inbox/*` - room listing, read state, messages
-- `/api/finance/*` - account groups, ledgers, journal entries (with three-tier delete: void/soft/hard), invoices, vouchers (sales/purchases/estimates), opening balances + suspense
-- `/api/finance/reports/*` - cash-flow, fund-flow, ratio-analysis, statistics, gst-summary, gst-hsn-summary, payables, receivables, ledger-outstandings/[ledgerId]
-- `/api/call-logs/*` - inbound/outbound call record CRUD
-- `/api/notifications/*` - per-user notification list + mark-read
-- `/api/posts/*`, `/api/wall-posts/*` - staff notice board + user wall posts
-- `/api/search-slno/*` - device serial number search
-- `/api/upload-signature` - Cloudinary signed upload params
-- `/api/ecommerce/*` - staff-side product and order management (products come from unified `InvProduct`)
-- `/api/inventory/*` - inventory master CRUD (`units`, `categories`, `product-groups`, `brands`, `warranty-terms`, `products`) **plus** voucher CRUD (receipt/issue/transfer/adjust); requires `inventory:manage`.
+- `/api/tickets/*` — lifecycle, sub-status, notes, reopen, assign, transfer.
+- `/api/ticket-statuses/*`, `/api/sub-statuses/*`, `/api/sub-status-groups/*` — workflow config.
+- `/api/users/*` — CRUD, roles, permissions, activity, wall posts, password.
+- `/api/roles/*`, `/api/permissions/*` — RBAC.
+- `/api/branches/*`, `/api/departments/*`, `/api/posts/*`, `/api/org-chart/*` — org structure.
+- `/api/customers/*`, `/api/companies/*`, `/api/accounts/*` — customer/company domain (returns GSTIN/state/regType for `PartyCombobox` autofill).
+- `/api/crm/leads/*` — CRM lead pipeline.
+- `/api/inbox/*` — rooms, read state, messages.
+- `/api/accountancy/*` — account groups, ledgers, journal entries (three-tier delete: void/soft/hard), invoices, vouchers (sales/purchases/estimates/branch-transfer/manufacturing/physical-stock), opening balances + Suspense, voucher registers.
+- `/api/accountancy/reports/*` — cash-flow, fund-flow, ratio-analysis, statistics, gst-summary, gst-hsn-summary, gst-classification, payables, receivables, ledger-outstandings, pending-vouchers, day-book.
+- `/api/inventory/*` — master CRUD (units, categories, product-groups, brands, warranty-terms, attribute-masters, BOMs, gst-rates, products) + voucher CRUD.
+- `/api/pos/*` — sale, return (incl. lost-invoice), shifts, snapshots.
+- `/api/call-logs/*`, `/api/notifications/*`, `/api/wall-posts/*`, `/api/search-slno/*`, `/api/upload-signature/*`.
+- `/api/ecommerce/*` — staff shop admin (uses `InvProduct`).
 
 ### Customer-facing API
 
-- `/api/shop/products` + `/api/shop/products/[handle]` - public product catalog
-- `/api/shop/orders` + `/api/shop/orders/[id]/razorpay` - order creation + payment initiation
-- `/api/shop/razorpay/webhook` - Razorpay payment webhook (HMAC-verified)
-- `/api/portal/register` - customer self-registration
-- `/api/portal/tickets` - customer's own ticket list
+- `/api/shop/products`, `/api/shop/products/[handle]` — public catalogue.
+- `/api/shop/orders`, `/api/shop/orders/[id]/razorpay` — orders + payment init.
+- `/api/shop/razorpay/webhook` — HMAC-verified payment webhook.
+- `/api/portal/register`, `/api/portal/tickets` — customer self-service.
 
-Validation is Zod-driven across most write endpoints. Auth and authorization are
-enforced via guard helpers from `src/lib` (staff: `requirePermission`; portal: `requirePortalAuth`).
+Validation is Zod-driven on write endpoints. Auth uses guard helpers from `src/shared/lib/auth/` (`requirePermission` for staff, `requirePortalAuth` for portal).
 
-## 5) Auth and Authorization Model
+## 5) Auth and authorization
 
-### Staff auth
+### Staff
 
-- NextAuth config lives in `src/auth.ts` (`Credentials` provider + JWT strategy).
-- Staff credentials provider: `credentials-staff`; staff login page: **`/staff/login`** (`src/app/staff/login/page.tsx`). After successful staff login, navigation lands on **`/office/core/assignments`** (or `callbackUrl`) — see `src/proxy.ts`.
-- Sessions include role and permission context (rank, scope, branch, department) for server/UI decisions.
-- API endpoints use `requireAuth` for authenticated access and `requirePermission` for fine-grained authorization.
-- Current direction is permission-driven authorization rather than role-name checks.
+- NextAuth config in `src/auth.ts` (`Credentials` provider, JWT strategy).
+- Staff provider: `credentials-staff`. Login page: `/staff/login`. After login → `/office/core/assignments` (or `callbackUrl`) via `src/proxy.ts`.
+- Session carries role, permissions, rank, scope, branch, department.
+- API uses `requirePermission` for fine-grained authorization. Direction is permission-driven, not role-name checks.
 
-### Portal (customer) auth
+### Portal (customer)
 
 - Separate credential table: `CustomerPortalCredential` (linked to `Customer`).
-- Customer sign-in page: **`/login`** (`src/app/(external)/login/page.tsx`); NextAuth default `pages.signIn` in `src/auth.ts` is **`/login`**. Portal credentials use `credentials-portal`; validation in `src/shared/lib/auth/authorizePortal.ts`.
-- Portal routes are guarded by `src/shared/lib/auth/portalAuthGuard.ts` (`requirePortalAuth`).
-- Portal and staff sessions are completely independent — no crossover.
+- Sign-in page: `/login` (`src/app/(external)/login/page.tsx`). Provider: `credentials-portal`. Validation in `src/shared/lib/auth/authorizePortal.ts`.
+- Guard: `src/shared/lib/auth/portalAuthGuard.ts` (`requirePortalAuth`).
+- Portal and staff sessions are fully independent — no crossover.
 
-## 6) Data Model and Prisma Layout
+## 6) Data model
 
-Prisma uses split schema mode:
+Prisma split schema (`prisma.config.ts` → `prisma/schema/`):
 
-- `prisma.config.ts` points to `prisma/schema`
-- schema files include:
-  - `base.prisma` - core CRM: `Customer`, `Company`, `CustomerCompany` (with GST fields: `gstin`, `gstStateCode`, `gstRegType`, `financialYearFrom`, `booksBeginningFrom`)
-  - `users.prisma`, `rbac.prisma`, `org.prisma` - users, roles/permissions, branches/departments
-  - `pipeline.prisma`, `tickets.prisma`, `accounts.prisma` - ticket workflow + legacy accounts
-  - `finance.prisma` - `AccountType`, `AccountGroup`, `Ledger`, `JournalEntry` (with `VOID`/`SOFT_DELETED` status), `Invoice`, voucher records, opening balances
-  - `crm.prisma` - `CrmLead` (prospect → conversion to `Customer`)
-  - `inbox.prisma` - `ChatRoom`, `ChatMessage`
-  - `social.prisma` - `WallPost` (staff wall/profile posts)
-  - `shop.prisma` - `ShopOrder`, `ShopOrderLine` (prices in integer paise; **no `ShopProduct` — merged into `InvProduct` on 2026-05-04**)
-  - `inventory.prisma` - `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (now with `hsnCode`, `gstRate`, `taxability`; **single source of truth for shop + warehouse**) + voucher models (receipt/issue/transfer/adjust)
-  - `portal.prisma` - `CustomerPortalCredential`
-  - `enums.prisma` - shared enums (`GstRegType`, `Taxability`, …)
+- `base.prisma` — `Customer`, `Company`, `CustomerCompany` with GST fields (`gstin`, `gstStateCode`, `gstRegType`, `financialYearFrom`, `booksBeginningFrom`).
+- `users.prisma`, `rbac.prisma`, `org.prisma` — users, roles/permissions, branches/departments/posts, org chart.
+- `pipeline.prisma`, `tickets.prisma`, `accounts.prisma` — ticket workflow + legacy `Account` bridge.
+- `finance.prisma` — `AccountType`, `AccountGroup`, `Ledger`, `JournalEntry` (with `VOID` / `SOFT_DELETED` status), `Invoice` (with `returnOfId` self-FK), `InvoiceLine` (with `productId` FK), voucher records, opening balances.
+- `inventory.prisma` — `InvUnit`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvWarrantyTerm`, `InvProduct` (with `hsnCode`, `gstRate`, `taxability`, `attrsJson`, `namingConfig` — single source of truth for shop + warehouse), `InvProductBranch` (per-branch stock), `InvVoucher`, `InvVoucherLine`, `InvStockLedger` (with `branchId`), `InvAttribute`, `InvAttributeValue`, `InvBom`, `InvBomLine`, `InvGstRate`.
+- `pos.prisma` — `PosCounter`, `PosShift` (OPEN → AWAITING_HANDOVER → CLOSED), `PosCashDrop`, `PosHandover`.
+- `crm.prisma` — `CrmLead`.
+- `inbox.prisma` — `ChatRoom`, `ChatMessage`.
+- `social.prisma` — `WallPost`.
+- `shop.prisma` — `ShopOrder`, `ShopOrderLine` (prices in integer paise). No `ShopProduct` — merged into `InvProduct`.
+- `portal.prisma` — `CustomerPortalCredential`.
+- `enums.prisma` — shared enums (`GstRegType`, `Taxability`, `VoucherStatus`, `EntryType`, `NormalBalance`, …).
 
-This supports modular ownership of schema areas while sharing one datasource.
+> **Migration hygiene**: GST/HSN columns and naming-convention columns were added via `prisma db push` and have no migration recorded. Generate migrations before any production deploy.
 
-## 7) Important Design Decisions
+## 7) Design rules
 
-- Ticket workflow supports primary status + sub-status style handoffs.
-- Ownership model uses a primary owner plus participant helpers.
-- Pipeline model allows multiple business workflows (repair/sales/etc).
-- Customer and company are separated; account is retained as legacy bridge.
-- Finance follows a Tally-style mental model, normalized as `AccountType -> AccountGroup -> Ledger`.
-- GST identity (GSTIN, state code, registration type) lives on `Customer` and `Company` directly — no separate `Party` model. `PartyCombobox` autofills these on voucher entry.
-- HSN code and GST rate live on `InvProduct`, not per voucher line — single place to update when GST rates change.
-- `InvProduct` is the single product source of truth for both shop catalog and inventory vouchers (since 2026-05-04 `ShopProduct` merge).
-- Journal entries support a three-tier delete: **void** (preserves row, no GL impact), **soft-delete** (hides but retains audit), **hard-delete** (admin-only).
-- Opening-balance mismatches route into a system "Suspense" ledger so trial balance always balances during legacy-book imports.
-- `CrmLead` represents prospects only; conversion promotes a lead into a `Customer` row. Don't dual-write.
-- Composition GST parties (`Customer.gstRegType === 'COMPOSITION'`) skip GST lines on sales vouchers regardless of the product's `gstRate`.
-- Shop prices are stored as integer paise (₹1 = 100 paise) to avoid floating-point errors; use `src/shared/lib/format/moneyInr.ts` for display formatting.
-- Portal and staff auth are fully separate; `CustomerPortalCredential` is not connected to the NextAuth session.
-- Razorpay payment confirmation relies on the signed webhook, not the client-side payment response.
-- Client-side cart/wishlist/compare state is Zustand + localStorage (no DB until checkout).
+- Ticket workflow = primary status + sub-status handoffs.
+- Ownership = primary owner + participant helpers.
+- Pipeline model supports multiple workflows (repair, sales, etc.).
+- Customer and Company are separated; `Account` is a legacy bridge.
+- Finance follows `AccountType → AccountGroup → Ledger`; normalised, not Tally-name-driven.
+- GST identity (GSTIN, state code, reg type) lives on `Customer` / `Company`, not a separate `Party` model.
+- HSN code and GST rate live on `InvProduct`, not per voucher line.
+- `InvProduct` is the single source of truth for shop + warehouse + POS.
+- Journal entries support three-tier delete: void (preserve, no GL impact), soft (hide, retain audit), hard (admin only).
+- Opening-balance mismatches route into a system "Suspense" ledger so trial balance always balances.
+- `CrmLead` represents prospects only; conversion promotes a lead into a `Customer`. No dual write.
+- Composition GST parties skip GST lines on sales vouchers regardless of product `gstRate`.
+- Shop prices stored as integer paise. Display via `src/shared/lib/format/moneyInr.ts`.
+- Portal and staff auth are fully separate; `CustomerPortalCredential` is not on the NextAuth session.
+- Razorpay payment confirmation relies on the signed webhook, not the client response.
+- Client-side cart / wishlist / compare are Zustand + localStorage (no DB until checkout).
+- POS tills are **counter-based**, not user-based. Any cashier on any counter; variance lands on the counter account; human accountability comes from the shift report.
 
-## 8) External Module Structure (`src/modules/external/`)
+## 8) External module structure (`src/modules/external/`)
 
-The external module contains all UI components for the customer-facing surface.
-It is split into three sub-modules:
+- `shop/` — `ShopHeader`, `ShopFooter`, `ShopSearchBar`, `ProductCard`, `AddToCartButton`, `ShopCatalogClient`, `ProductDetailTabs`, `ProductGallery`, `ProductPurchasePanel`, `ShopPageBanner`, `ShopRemoteImage`.
+- `store/` — `HeroCarousel`, `DealOfTheDay`, `FeaturedRow`, `BrandStrip`, `TrustStrip`, `CategoryShowcase`, `PromoBanners`.
+- `portal/` — `PortalHeader`.
+- `ExternalRootShell.tsx` — root layout shell wrapping NextAuth `SessionProvider`.
 
-- `shop/` - `ShopHeader`, `ShopFooter`, `ShopSearchBar`, `ProductCard`, `AddToCartButton`, `ShopCatalogClient`, `ProductDetailTabs`, `ProductGallery`, `ProductPurchasePanel`, `ShopPageBanner`, `ShopRemoteImage`
-- `store/` - `HeroCarousel`, `DealOfTheDay`, `FeaturedRow`, `BrandStrip`, `TrustStrip`, `CategoryShowcase`, `PromoBanners`
-- `portal/` - `PortalHeader`
-- `ExternalRootShell.tsx` - root layout shell wrapping NextAuth `SessionProvider`
+Cross-boundary imports (external surface importing from staff-side `src/shared/`, `src/components/`, `src/lib/`, `src/store/`) are widespread; the main load-bearing categories are shadcn UI primitives (`@/components/ui/*`), money formatting (`@/shared/lib/format/moneyInr`), product helpers (`@/lib/shop/product-public`), brand constants (`@/utils/constants-company-details`), and zustand stores (`@/store/external/*`). If the customer surface is ever extracted into a separate app, these are the import categories to break.
 
-All cross-boundary imports (external importing from staff-side `src/shared/`, `src/components`, etc.)
-are tracked in `docs/customer-site-shared-imports.md` to make future extraction traceable.
-
-## 9) Shared Structure (`src/shared/`)
+## 9) Shared structure (`src/shared/`)
 
 Cross-cutting code lives under `src/shared/`. Single-module code lives under `src/modules/<m>/`.
 
 ```
 src/shared/
-├─ components/      cross-cutting UI (Sidebar, Topbar, PartyPicker, etc.)
-├─ hooks/           cross-cutting React hooks (added in Segment 09+)
-├─ types/           cross-cutting type defs (e.g., inventoryTypes.ts)
+├─ components/      cross-cutting UI (Sidebar, Topbar, PartyPicker, BranchSwitcher, etc.)
+├─ hooks/           cross-cutting React hooks (index.ts barrel)
+├─ types/           cross-cutting type defs (inventoryTypes.ts, orgChart.ts)
 └─ lib/
-   ├─ api/          (Segment 04+) validateRequest, parsePagination, prismaUniqueError, handleApiError, generateNextOpaqueId
-   ├─ schemas/      Zod schema fragments (inventorySchemas.ts; commonSchemas.ts in Segment 07)
-   ├─ constants/    (Segment 05+) PERMISSIONS, ACCOUNT_GROUPS
-   ├─ prisma/       prismaClient.ts (Prisma singleton); fragments.ts in Segment 06
-   ├─ auth/         permissions.ts, authGuard.ts, portalAuthGuard.ts, permissionScope.ts, makePermissionLayout.tsx, authorizeStaff.ts, authorizePortal.ts, portalIdentifier.ts, portalAccountContext.ts, staffEmailAllowlist.ts
-   ├─ format/       formatDate.ts, timeAgo.ts, moneyInr.ts, utils.ts (cn helper)
-   ├─ shop/         storeContent.ts (homepage content config), productPublic.ts (public product queries), demoReviews.ts (static UI fixtures), shopImagePlaceholder.ts (fallback image)
-   ├─ portal/       mockAdapters.ts (DTO + mock data for portal pages — replace as APIs land)
-   └─ supabase/     supabaseClient.ts (Supabase singleton for Realtime)
+   ├─ api/          validateRequest, parsePagination, prismaUniqueError, handleApiError, generateNextOpaqueId (index.ts barrel)
+   ├─ auth/         permissions, authGuard, portalAuthGuard, permissionScope, makePermissionLayout, authorizeStaff, authorizePortal, portalIdentifier, portalAccountContext, staffEmailAllowlist, activeBranch, freeRoutes
+   ├─ constants/    accounting.ts, permissions.ts
+   ├─ format/       formatDate, timeAgo, moneyInr, numberWords, slugify, utils (cn)
+   ├─ prisma/       prismaClient (singleton), fragments
+   ├─ portal/       mockAdapters (DTO + mock data — replace as APIs land)
+   ├─ schemas/      commonSchemas, inventorySchemas, bomSchemas, orgDefaultsSchemas
+   ├─ shop/         storeContent, productPublic, demoReviews, shopImagePlaceholder
+   ├─ supabase/     supabaseClient (Supabase singleton)
+   ├─ http.ts       fetch wrapper
+   └─ orgDefaults.ts
 ```
 
 **Boundary rule:** code goes in `src/shared/` only if imported by two or more modules (or from `src/app/`). Single-module code lives in `src/modules/<m>/{lib,hooks,components}/`. Promote later, don't speculate.
 
-**Naming rule:** components are `PascalCase.tsx`; hooks are `useFooBar.ts` (camelCase); utilities/schemas/constants are `camelCase.ts`; directories are `kebab-case`. See [AGENTS.md](AGENTS.md) and [docs/plans/00-segments-overview.md](docs/plans/00-segments-overview.md).
+**Naming:** components `PascalCase.tsx`; hooks `useFooBar.ts` (camelCase); utilities / schemas / constants `camelCase.ts`; directories `kebab-case`.
 
-## 10) Operational Notes
+**Lookup:** before adding a new shared helper, grep `src/shared/` for the keyword. If the folder has an `index.ts`, that's the public surface.
+
+## 10) Project layout
+
+```
+src/
+├─ app/                              Next.js routes
+│  ├─ (protected)/office/*           Staff UI (122 page.tsx files)
+│  ├─ (protected)/vouchers/pos/      Standalone POS register
+│  ├─ (external)/                    Customer-facing (shop, portal, store, login)
+│  ├─ api/*                          ~218 route handlers
+│  ├─ lab/                           Experimental Front/Back Office prototype
+│  └─ staff/login/                   Staff sign-in
+├─ modules/                          Domain modules (see §2)
+├─ components/                       App-level wrappers + shadcn UI primitives
+├─ shared/                           Cross-cutting (see §9)
+├─ store/                            Zustand stores (incl. store/external/* for shop)
+├─ utils/constants.ts                Sidebar module sections + general constants
+├─ auth.ts                           NextAuth config
+└─ proxy.ts                          Auth middleware (Next 16 rename)
+
+prisma/
+├─ schema/                           Split Prisma schema (see §6)
+├─ prisma.config.ts                  Datasource + seed command
+└─ seeds/
+   ├─ bootstrap-seed.ts              Production seed (RBAC, statuses, COA, etc.)
+   ├─ dummy-*.ts                     Manual demo seeds
+   ├─ helper-brands.ts               Real reference data
+   ├─ hard-clean.ts                  Reset to bootstrap state
+   ├─ backfill-multi-branch.ts
+   ├─ purge-vouchers.ts
+   └─ data/                          Fixture data
+```
+
+## 11) Operational notes
 
 - Use `pnpm`.
-- After Prisma schema updates, run `prisma generate` and restart dev server.
-- On Next.js 16, do not move auth middleware logic to `middleware.ts`; keep `src/proxy.ts`.
-- Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in `.env` for payment flows.
-
-## 11) Documentation Boundaries
-
-- Use this file for code-current architecture (including **`/office/*`** staff URLs).
-- Use `PROJECT_BRAIN.md` for milestones, decisions, and roadmap.
-- Use `docs/customer-site-shared-imports.md` to track cross-boundary imports from `(external)/`.
-- Use `AI_HANDOFF_SUMMARY.md` as historical context from earlier iterations (file may be missing).
+- After Prisma schema changes: `prisma generate` and **restart dev server** (Turbopack caches Prisma chunks).
+- On Next.js 16, keep auth middleware in `src/proxy.ts`; do not move to `middleware.ts`.
+- Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` in `.env`.
+- See `docs/seeds.md` for seed lifecycle (`bootstrap`, `dummy-*`, `hard-clean`).
+- See `docs/completed-and-protected.md` before touching protected surfaces (POS GL, BS, P&L, Day Book, accounting math).
+- For per-module URLs, permissions, models, key components, and gotchas, read `docs/modules/<module>.md`.

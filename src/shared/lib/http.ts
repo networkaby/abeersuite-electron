@@ -10,8 +10,6 @@
 // Migration: components doing transactional work should import `{ http }` from
 // this module instead of bare `axios`. Read-only fetches can stay on bare
 // `axios` — the cookie fallback continues to work.
-//
-// Registered in docs/reusables.md.
 
 import axios from "axios";
 import { toast } from "sonner";

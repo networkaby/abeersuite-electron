@@ -51,16 +51,16 @@ These routes live under `src/app/(protected)/vouchers/` — each opens in a new 
 | `/vouchers/debit-note` | `DEBIT_NOTE` / `MoneyFlowVoucherPage` | Party top via `PartySearchAndCreate` (Sundry Creditors). |
 | `/vouchers/journal` | — / `JournalVoucherPage` | Free-form Dr/Cr table; Save disabled until balanced. |
 
-### API routes (all under `src/app/api/finance/`)
+### API routes (all under `src/app/api/accountancy/`)
 - List/read endpoints (~30 files) gated by `requirePermission("accountancy:view:org")` — invoices, journal-entries, vouchers, ledgers, gl-accounts, account-groups, opening-balance, allocations, all `reports/*`.
 - Operation endpoints (cancel/delete/post/restore) keep their fine-grained `finance:*:*` keys (e.g. `finance:invoice:cancel`, `finance:voucher:post`).
 - `GET /api/accountancy/reports/gst-classification` — single batched payload for the Tax Classification page. Returns `{ rates[], groups[], products[], orgDefaults, summary }` with every product + group cascade-resolved in one round-trip via `resolveProductTaxBatch`. Permission: `accountancy:view:org`.
 
-API folder is still `/api/finance/*` — rename deferred to Step 5 (route restructure).
+> The accountancy API folder was previously `/api/finance/*` — renamed to `/api/accountancy/*`. Permission keys still use the `finance:` prefix (e.g. `finance:invoice:cancel`); only the URL folder was renamed.
 
 ## Permissions (gate keys)
 
-- `accountancy:view:org` — module-level gate. Hides sidebar section + redirects on direct nav + 403 on API. See [permission_matrix memory](../../memory/permission_matrix.md).
+- `accountancy:view:org` — module-level gate. Hides sidebar section + redirects on direct nav + 403 on API. See [permissions.md](./permissions.md).
 - `finance:invoice:cancel` / `delete` / `hard-delete` — three-tier invoice lifecycle.
 - `finance:journal:cancel` / `delete` / `hard-delete` — three-tier journal lifecycle.
 - `finance:payment:cancel` / `delete` / `hard-delete` — three-tier payment lifecycle.
@@ -121,7 +121,7 @@ Writes both `InvVoucher` and `Voucher`. Self-contained.
 - `Invoice` + `InvoiceLine` + `InvoiceAudit` — sales invoices. **`Invoice.ticketId`** is the new soft back-link to the repair ticket (added Step 4, 2026-05-07; replaces deprecated `TicketPart`).
 - `Voucher` + `VoucherLine` — Contra / Payment / Receipt / Credit Note / Debit Note.
 - `Payment` + `PaymentAllocation` — payments + bill-wise links.
-- `Account` (in `prisma/schema/customers.prisma`) — dual-purpose GL account + customer/company ledger.
+- `Account` (in `prisma/schema/accounts.prisma`) — dual-purpose GL account + customer/company ledger.
 - `OpeningBalance` — per-account books-beginning balances.
 
 ## Key components / library
@@ -172,20 +172,19 @@ These are the **single source of truth** for every balance/value calculation in 
 
 ## Common workflows (wiring)
 
-1. **Create sale invoice** — UI [src/app/(protected)/office/accountancy/sales/new/page.tsx](../../src/app/(protected)/office/accountancy/sales/new/page.tsx) → POST `/api/finance/invoices` → creates `Invoice` + `InvoiceLine[]` + (when status=SENT) auto-posts AR/Revenue `JournalEntry`.
+1. **Create sale invoice** — UI [src/app/(protected)/office/accountancy/sales/new/page.tsx](../../src/app/(protected)/office/accountancy/sales/new/page.tsx) → POST `/api/accountancy/invoices` → creates `Invoice` + `InvoiceLine[]` + (when status=SENT) auto-posts AR/Revenue `JournalEntry`.
 2. **Create voucher (e.g. payment)** — Button bar "Payment +" → `window.open("/vouchers/payment")` → `MoneyFlowVoucherPage` (Tally-finish full-page form) → POST `/api/accountancy/vouchers`. Legacy route `/office/accountancy/payments/new` still opens the old `MoneyFlowDialog`.
-3. **Bill-wise allocation** — POST `/api/finance/allocations` linking any source voucher to any target (full or partial).
-4. **Drill-down on ledger** — `/office/accountancy/ledgers/[id]` → reads from `/api/finance/reports/ledger/[accountId]`.
+3. **Bill-wise allocation** — POST `/api/accountancy/allocations` linking any source voucher to any target (full or partial).
+4. **Drill-down on ledger** — `/office/accountancy/ledgers/[id]` → reads from `/api/accountancy/reports/ledger/[accountId]`.
 5. **Tally-style journal voucher (with optional inventory)** — Button bar "Journal +" → `window.open("/vouchers/journal")` → `JournalVoucherPage` (Tally-finish full-page form) → POST `/api/accountancy/journal-vouchers` (atomic: Voucher + JE + Account.balance + optional STOCK_JOURNAL InvVoucher carrier + InvStockLedger). Inventory items are gated to INCOME/EXPENSE ledgers via `isStockEligibleAccount`. Legacy `JournalVoucherDialog` (opens via `useJournalVoucherStore`) still mounted in `office/layout.tsx`.
-6. **Set opening balance on master save** — POST/PATCH `/api/finance/gl-accounts` (writes `openingBalance/openingBalanceType/openingBalanceDate` directly) and POST/PATCH `/api/inventory/products` (also syncs `stock`/`costPaise` cache via `syncProductCacheFromOpening`). The `/office/accountancy/opening-balance` page exposes both inline + dedicated quick-create dialogs.
+6. **Set opening balance on master save** — POST/PATCH `/api/accountancy/gl-accounts` (writes `openingBalance/openingBalanceType/openingBalanceDate` directly) and POST/PATCH `/api/inventory/products` (also syncs `stock`/`costPaise` cache via `syncProductCacheFromOpening`). The `/office/accountancy/opening-balance` page exposes both inline + dedicated quick-create dialogs.
 7. **Create debit note** — Button bar "Debit Note +" → `window.open("/vouchers/debit-note")` → `MoneyFlowVoucherPage kind="DEBIT_NOTE"` → POST `/api/accountancy/vouchers`. Legacy `/office/accountancy/debit-notes/new` still opens `DebitNoteDialog`.
 8. **Create contra** — Button bar "Contra +" → `window.open("/vouchers/contra")` → `MoneyFlowVoucherPage kind="CONTRA"` — both sides restricted to Cash-in-Hand / Bank Accounts. Legacy `/office/accountancy/contras/new` still opens `ContraDialog`.
 9. **Trading voucher flow (all four kinds)** — Navigate to `/sale`, `/purchase`, `/sale-return`, or `/purchase-return`. Toggle CASH (free-text walk-in) / CREDIT (party via `PartySearchAndCreate`). Add items with qty, rate, line discount (% + ₹), tax (auto-computed). Optionally set payment terms (Net 15/30/45/60) or pick a cash/bank ledger. Save → POST `/api/inventory/vouchers`. Post GL + stock → POST `/api/inventory/vouchers/{id}/post` (calls `postInvVoucherToGl` + updates `InvProduct.stock` cache atomically). Optional auto-print redirects to `/receipt/invoice/{id}?autoprint=1`.
 
 ## Recent decisions / gotchas
 
-- **2026-05-07 rename**: was `tally` → now `accountancy`. Folder, URL, permission area all changed. Sidebar label too. Compat redirect handles `/office/tally/*`. See [simplification_roadmap memory](../../memory/simplification_roadmap.md).
-- **API folder still at `/api/finance/*`** — rename deferred to Step 5.
+- **2026-05-07 rename**: was `tally` → now `accountancy`. Folder, URL, sidebar label all changed. Compat redirect handles `/office/tally/*`. API folder was renamed `/api/finance/*` → `/api/accountancy/*` shortly after. Permission keys retain the `finance:` prefix.
 - **2026-05-09 — Account.balance ≠ closing balance**: `Account.balance` is a transaction-only running cache. Reports that read it raw under-report opening-only ledgers (Cash, Bank, Capital). Always wrap with `effectiveLedgerBalance(a)` (or use the bulk variant `loadGroupRolledUpBalances`). The chart-of-accounts list, group detail, account detail, and account-groups tree all wrap it now — new endpoints must too. See helpers registry above.
 - **2026-05-09 — Trading-aware netProfitLoss**: `netProfitLoss(from, to)` includes the closing-stock − opening-stock adjustment from `computeTradingStockAdjustment`. Both BS Equity and P&L net profit use it, so they always reconcile. Don't sum INCOME − EXPENSE journal lines yourself.
 - **2026-05-09 — Closing Stock injection**: BS API injects the live `closingStock.computed − postedToGl` value as a synthetic ledger (`id: -1`, name "Closing Stock (live)") inside the Stock-in-Hand group so the rolled-up totals flow naturally. `goLedger` short-circuits on negative ids — keep that guard if you copy the click handler elsewhere. The synthetic ledger row in the BS itself drills to `/office/inventory/stock-summary?ref=balance-sheet&asOf=…`.
@@ -195,66 +194,28 @@ These are the **single source of truth** for every balance/value calculation in 
 - **2026-05-09 — Stock-in-Hand has no GL children**: `bootstrap-seed.ts` creates the Stock-in-Hand account group but no ledgers under it. Live closing-stock value is injected as a synthetic ledger at report time (`balance-sheet/route.ts`). DO NOT add real Account rows under this group — they would double-count with the synthetic injection.
 - **2026-05-09 — Single bootstrap seed**: `pnpm prisma db seed` runs `bootstrap-seed.ts` (the only production seed). All other `dummy-*.ts` are dev-only and removed by `pnpm seed:hard-clean`. Schema changes must be mirrored in `bootstrap-seed.ts`.
 - **2026-05-09 — `Difference in Opening Balances` is synthetic**: there is no GL ledger by this name in the chart of accounts. The Balance Sheet auto-computes `assetsTotal − liabilitiesTotal` and shows the absolute value as a standalone "Difference in opening balances" row on whichever side is short (Liabilities when assets exceed; Assets when liabilities exceed). Once the user enters a balancing Capital / Loan opening, the row disappears. Don't add a real ledger by this name — `hard-clean.ts` deletes it from legacy DBs anyway.
-- **2026-05-10 — TODO: bill-wise allocation in JournalVoucherDialog**: the dialog at `src/modules/accountancy/components/JournalVoucherDialog.tsx` shows a "party ledger (bill-wise pending)" hint when the picked account is in `Sundry Debtors` / `Sundry Creditors`, but the actual `BillAllocationDrawer` integration (used by `VoucherForm.tsx` for Payment / Receipt) is not yet wired in. Wiring is straightforward — detect the party group, mount `<BillAllocationDrawer accountId={...} voucherAmount={...}>` under the line, persist allocations on submit by POSTing to `/api/finance/allocations` after the voucher creation succeeds.
+- **2026-05-10 — TODO: bill-wise allocation in JournalVoucherDialog**: the dialog at `src/modules/accountancy/components/JournalVoucherDialog.tsx` shows a "party ledger (bill-wise pending)" hint when the picked account is in `Sundry Debtors` / `Sundry Creditors`, but the actual `BillAllocationDrawer` integration (used by `VoucherForm.tsx` for Payment / Receipt) is not yet wired in. Wiring is straightforward — detect the party group, mount `<BillAllocationDrawer accountId={...} voucherAmount={...}>` under the line, persist allocations on submit by POSTing to `/api/accountancy/allocations` after the voucher creation succeeds.
 - **2026-05-11 — Inventory–ledger coupling rule**: inventory items (qty × rate) only attach to lines whose ledger sits under the **Sales Accounts** or **Purchase Accounts** group — *any* ledger under either group qualifies (Sales A/c, Parts Revenue, Sales Returns, Purchase A/c, Purchase Returns, …). The line total = Σ(qty × rate) and posts as the ledger amount. **Stock direction follows the line's Dr / Cr posting side, not the ledger identity:** an inventory line on Dr → stock IN, on Cr → stock OUT. That is what makes reversals natural — the same Sales A/c moves stock OUT on Cr (sale) and IN on Dr (sales reversal); a Purchase A/c moves stock IN on Dr (purchase) and OUT on Cr (purchase reversal). Returns ledgers behave the same way — the side is the source of truth. All other vouchers post pure money / liability flows. **Exceptions:** Stock Journal and Physical Stock vouchers — they move stock without a sales / purchase ledger. Enforced both client-side (`isStockEligibleAccount` gates the "+ Inventory item" button) and server-side (`/api/accountancy/journal-vouchers` rejects with 422 if a stock line lands on any other ledger).
 - **2026-05-12 — PurchaseDialog removed**: `src/store/purchaseDialogStore.ts` and its modal mount in `office/layout.tsx` were deleted. `/purchase` is now a standalone full-page route (same pattern as `/sale`). Any deep-link or "shortcut" that previously opened the dialog must point to `/purchase` instead. `/office/accountancy/purchases/new` redirects to `/purchase`.
 - **2026-05-12 — Trading voucher edit-in-place (preserves reference)**: All four trading voucher form pages (`/sale`, `/purchase`, `/sale-return`, `/purchase-return`) accept `?voucherId=<id>`. The form fetches + prefills the voucher and PATCHes on save. **The voucher reference number is preserved across edits** — same row, same `id`, same `reference`. Server-side PATCH handles both states: DRAFT edits are a plain update; **POSTED edits run reverse → apply → re-post in one transaction** (reverses original stock ledger + cached stock, posts a reversal JE + cancels the original JE for audit, replaces lines + header, then re-posts via `postInvVoucherToGl`). Cancelled / deleted vouchers return 409 ("use Duplicate to make a fresh copy"). The form shows an amber pill `"Posted — edit reposts on save"` when editing a POSTED voucher so the user knows the implications.
 
 ## Thermal print (voucher)
 
-Voucher detail pages (`VoucherDetail.tsx`) have a **Print** button that sends the voucher directly to a LAN thermal printer with no browser dialog.
+Voucher detail pages (`VoucherDetail.tsx`) have a **Print** button. Replaced the old LAN-relay script approach on 2026-05-16 (commit `e8ab923`); the `tools/thermal-relay/` folder was deleted on 2026-05-18 (commit `71e5c67`).
 
-### Architecture
-Because the Next.js app is cloud-hosted, the server cannot reach a local LAN printer. Printing is **client-initiated**: the browser calls a tiny local relay script running on the shop PC, which forwards ESC/POS commands to the printer over TCP.
+Current approach:
+- **POS receipts** print direct to an ESC/POS printer via `node-thermal-printer` from the server.
+- **Vouchers** use the browser's native print dialog as fallback (no LAN relay needed). Voucher detail renders a print-friendly stylesheet and triggers `window.print()`.
 
-```
-Browser → http://localhost:9191/print → tools/thermal-relay/relay.js → Printer IP:9100
-```
-
-### Setup (shop PC)
-1. Copy `tools/thermal-relay/` to the shop PC.
-2. Edit `config.json` — set `printerIp` to the printer's LAN IP.
-3. `npm install` (once), then `node relay.js` (or add to Windows startup via Task Scheduler / pm2).
-
-### Relay endpoints
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `http://localhost:9191/health` | Liveness check — called before every print job |
-| `POST` | `http://localhost:9191/print` | Accepts voucher JSON, builds ESC/POS, sends to printer |
-
-### Print payload (sent by browser)
-```jsonc
-{
-  "reference": "PV-2026-0001",
-  "date": "2026-05-17T...",
-  "type": "PAYMENT",
-  "party": "XYZ Ltd",          // null if no partyAccount
-  "narration": "...",           // null if absent
-  "lines": [
-    { "accountName": "Cash", "type": "CREDIT", "amount": 10000, "description": null }
-  ],
-  "totalDebit": 10000,
-  "totalCredit": 10000,
-  "status": "POSTED",
-  "createdBy": "Admin"
-}
-```
-
-### Files
-- `tools/thermal-relay/relay.js` — Express server, ESC/POS builder, TCP sender
-- `tools/thermal-relay/package.json` — deps: `express`, `cors`, `node-thermal-printer`
-- `tools/thermal-relay/config.json` — local config (gitignored; never commit printer IP)
-- `tools/thermal-relay/README.md` — full setup guide
-- `src/modules/accountancy/components/VoucherDetail.tsx` — Print button + `handlePrint`
+The `node-thermal-printer` package is still a dependency for the POS path. No local relay process required on the shop PC.
 
 ## Out of scope / deferred
 
-- GSTR returns, e-Invoice, RCM — deferred (see [tally_module_status memory](../../memory/tally_module_status.md)).
+- GSTR returns, e-Invoice, RCM — deferred (see `PROJECT_BRAIN.md` § Next up).
 - Cost centres / budgets / multi-currency — cut.
-- Renaming `/api/finance/*` to `/api/accountancy/*` — deferred to Step 5.
 
 - **2026-05-13 — Full-page GL voucher routes (team-approved)**: `MoneyFlowVoucherPage` and `JournalVoucherPage` are now permanently mounted at `/vouchers/{payment,receipt,contra,credit-note,debit-note,journal}` and `/vouchers/estimate`. They share a single `layout.tsx` via the `(gl)` route group. Button bar entries for all 7 kinds now `window.open()` those routes instead of triggering the legacy dialogs. The old dialog components (`MoneyFlowDialog`, `JournalVoucherDialog`, `EstimateDialog`, etc.) remain mounted in `office/layout.tsx` and reachable via `/office/accountancy/{payments,receipts,contras,credit-notes,debit-notes,estimates}/new` — they are not deleted, just no longer the primary entry point.
 
 - **2026-05-16 — Tax Classification report shipped**: new master-data view at `/office/accountancy/reports/gst/classification` with four tabs (Rate-wise / HSN-wise / Group hierarchy / Item-wise). All four read from a single new endpoint `GET /api/accountancy/reports/gst-classification` that returns the entire catalog cascade-resolved in 3 SQL queries (products + groups + orgDefaults) via `resolveProductTaxBatch` in `gstResolver.ts`. Inline-edit cells on Group hierarchy + Item-wise tabs PATCH directly to `/api/inventory/product-groups/[id]` and `/api/inventory/products/[id]` (gated by `inventory:manage`). Per-row pencil on Item-wise opens the full `InvProductDialog` directly on the Tax tab via new `defaultTab` prop (also threaded into `InvProductFormFields`). Page added as a 5th card on the GST hub.
 
-_Last updated: 2026-05-17 — Thermal print added: `VoucherDetail` now has a Print button that routes through a local relay script (`tools/thermal-relay/`) to an ESC/POS LAN printer — no browser dialog, no port forwarding. Previously (2026-05-16): Tax Classification report shipped; GST Reports submenu added to sidebar._
+_Last updated: 2026-05-19 — API folder rename complete (`/api/finance/*` → `/api/accountancy/*`); thermal-print LAN-relay replaced by direct ESC/POS for POS + browser fallback for vouchers (`tools/thermal-relay/` folder deleted); Account model file reference corrected (`accounts.prisma`, not `customers.prisma`). Previously (2026-05-16): Tax Classification report shipped; GST Reports submenu added to sidebar._

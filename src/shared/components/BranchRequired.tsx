@@ -17,8 +17,6 @@ interface BranchRequiredProps {
  *
  * Use on Sale / Purchase / Receipt / Payment / Branch Transfer / POS forms.
  * Reports must NOT use this — they're expected to operate in combined mode.
- *
- * Registered in docs/reusables.md.
  */
 export function BranchRequired({ action = "post this transaction", children }: BranchRequiredProps) {
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);

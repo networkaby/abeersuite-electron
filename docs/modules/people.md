@@ -54,9 +54,9 @@ The `customers:*` umbrella still gates Person and Company UI even though the mod
 - `src/shared/components/CreatePersonDialog.tsx` — small inline create dialog (POSTs to `/api/people`).
 - `src/shared/components/PartyPicker/` — searches `/api/people?phone=`; can create either a person (POST `/api/people`) or company (POST `/api/companies`).
 - `src/modules/accountancy/components/PartyCombobox.tsx` — accountancy-side picker; creates persons under "Sundry Debtors" or "Sundry Creditors" by default.
-- `src/lib/account-ledger.ts` — helpers for account-vs-ledger distinction.
-- `src/shared/lib/format/contactWrite.ts` — shared XOR-validating insert/update/delete helpers, translates Prisma `P2002` into a clean 409.
-- `src/shared/lib/format/companyContacts.ts` — `getCompanyContacts(companyId)` returns `{ phones, emails, derivedPhones, derivedEmails, primaryContactName }`.
+- `src/modules/customer/lib/contactWrite.ts` — XOR-validating insert/update/delete helpers for `Phone`/`Email` rows; translates Prisma `P2002` into a clean 409.
+- `src/modules/customer/lib/companyContacts.ts` — `getCompanyContacts(companyId)` returns `{ phones, emails, derivedPhones, derivedEmails, primaryContactName }`.
+- `src/modules/customer/lib/crmPipeline.ts` — name-based CRM-leads pipeline resolver and status validator.
 
 ## Common workflows (wiring)
 
@@ -65,8 +65,9 @@ The `customers:*` umbrella still gates Person and Company UI even though the mod
 3. **Add a phone/email to an existing party** — `POST /api/{people|companies}/[id]/{phones|emails}`. Returns 409 if the value is already used by anyone (including a different party type).
 4. **Person detail balance** — `/office/customers/people/[id]` → reads `/api/accounts/[id]/ledger` (the same endpoint chart-of-accounts uses for any account).
 5. **Company contact display** — `GET /api/companies/[id]` returns `phones` (own) and `derivedPhones` (union of linked persons' phones). The detail page shows them in two sections.
-6. **CRM lead → won → person** — `/office/customers/leads/[id]` → "Convert to customer" → POST `/api/people` linking back to the lead via metadata.
-7. **Phone auth for customer portal** — phone+password against `PersonPortalCredential`; lookup is via the normalised phone column on the credential table (no schema change to that column).
+6. **Transactions tab** — both `/office/customers/people/[id]` and `/office/customers/companies/[id]` carry a Transactions tab that lists the party's posted vouchers + invoices via `GET /api/accounts/[id]/ledger`. Backfilled for legacy parties via `a687684`.
+7. **CRM lead → won → person** — `/office/customers/leads/[id]` → "Convert to customer" → POST `/api/people` linking back to the lead via metadata.
+8. **Phone auth for customer portal** — phone+password against `PersonPortalCredential`; lookup is via the normalised phone column on the credential table (no schema change to that column).
 
 ## Uniqueness rules (recap)
 
@@ -86,7 +87,7 @@ Same rules apply to emails.
 - **Customer portal session shape** — the session token still uses `kind: "customer"` and `customerId: string` for back-compat with existing portal code; only the underlying Prisma model name changed.
 - **CrmLead reuses TicketStatus** — same status model, different consumer. Leads have no device, no `TicketLog`, no sub-statuses.
 - **GST drift** — `gstin`, `gstStateCode`, `gstRegType` were originally added via `db push`; same caveat as inventory GST fields.
-- **XOR CHECK constraint** — Prisma DSL can't express XOR; the constraint is added by `prisma/add-contact-xor-check.ts` (idempotent) which runs after `prisma db push` / migrations.
+- **XOR CHECK constraint** — Prisma DSL can't express XOR; the constraint is applied via raw SQL inside `prisma/seeds/bootstrap-seed.ts` (Section 6 — DB constraints), which is idempotent and re-runs after every `prisma db seed`.
 
 ## Out of scope / deferred
 
@@ -103,4 +104,4 @@ These are module-scoped (consumed only by `customer/` routes + components). Don'
 | `getCompanyContacts(companyId)` | `src/modules/customer/lib/companyContacts.ts` | Returns the company's own phones/emails + derived contacts from linked persons. |
 | `ContactConflictError`, `contactValueSchema`, `createPhone`, `updatePhone`, `deletePhone`, `createEmail`, `updateEmail`, `deleteEmail` | `src/modules/customer/lib/contactWrite.ts` | All write paths for the `Phone` / `Email` polymorphic-owner rows. Centralises uniqueness checking, isPrimary toggling, and the `ContactConflictError` shape that routes catch + map to a 409 with `{ error, field }`. |
 
-_Last updated: 2026-05-11._
+_Last updated: 2026-05-19 — added Transactions tab workflow (commits `db0fe45`, `7342b96`, `a687684`)._

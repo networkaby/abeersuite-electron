@@ -5,10 +5,11 @@
 ## URLs
 
 ### UI pages
-- `/office/message/inbox` — chat rooms list + unread counts
-- `/office/message/inbox/[roomId]` — message thread
-- `/office/me` — staff profile / wall view
-- `/(external)/customer/social` — customer-side social feed (privacy circles)
+- `/office/message/inbox` — chat rooms list + unread counts.
+- `/office/message/inbox/[roomId]` — message thread.
+- `/office/me` — staff profile / wall view.
+- `/office/social/users/[id]` — staff profile + wall page (also rendered from notifications).
+- `/portal/social` — customer-side social feed (privacy circles). See [customer-portal.md](./customer-portal.md).
 
 ### API routes
 - `/api/inbox/rooms[/[id]]` — room CRUD.
@@ -20,18 +21,18 @@
 
 ## Prisma models
 
-- `Room` — `kind` enum: `SYSTEM_INBOX` (broadcast), `PERSONAL`, `ROLE_GROUP` (everyone in role X), `DIRECT_MESSAGE`.
-- `RoomMember` — membership + lastReadAt for unread counting.
-- `Message` — body, attachments, timestamps.
+- `ChatRoom` (in `prisma/schema/inbox.prisma`) — `kind` enum: `SYSTEM_INBOX` (broadcast), `PERSONAL`, `ROLE_GROUP` (everyone in role X), `DIRECT_MESSAGE`.
+- `ChatRoomMember` — membership + `lastReadAt` for unread counting.
+- `ChatMessage` — body, attachments, timestamps.
 - `Notification` — bell items.
-- `Post` + `Comment` — staff wall.
-- `CustomerCircle` — inner / outer ring for customer privacy controls.
+- `Post` + `Comment` (in `prisma/schema/social.prisma`) — staff wall.
+- `WallPost` — see `social.prisma`; customer privacy circles modelled here.
 
 ## Key components / library
 
+- `src/modules/message/components/InboxModule.tsx` — Slack-style real-time chat UI mounted at `/office/message/inbox`.
 - `src/modules/message/components/NotificationBell.tsx` — bell with Supabase Realtime listener for live unread counts.
-- `src/modules/message/components/InboxRoomList.tsx`, `MessageThread.tsx`.
-- `src/modules/social/components/Wall.tsx`, `Profile.tsx`.
+- `src/modules/message/lib/inbox.ts` — room membership helpers (`listAccessibleRooms`, `markRoomRead`, etc.).
 
 ## Common workflows (wiring)
 
@@ -56,4 +57,4 @@
 |---|---|---|
 | `listAccessibleRooms(user)`, `getAccessibleRoom(user, id)`, `markRoomRead(userId, roomId, at?)`, plus room/membership helpers | `src/modules/message/lib/inbox.ts` | Everything room-scoped: filtering by membership, computing unread counts, marking read. Use these from any route that reads or mutates inbox rooms — don't reach into the Prisma `ChatRoom` / `ChatRoomMember` / `ChatMessage` tables directly. |
 
-_Last updated: 2026-05-11._
+_Last updated: 2026-05-19 — Prisma model names corrected (`ChatRoom`/`ChatRoomMember`/`ChatMessage` not `Room`/`RoomMember`/`Message`); customer social route corrected (`/portal/social` not `/(external)/customer/social`); added `InboxModule.tsx` component reference._

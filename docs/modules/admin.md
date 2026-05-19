@@ -64,7 +64,7 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
   - `PostNode` — post + holders shape (used by StructureTree / Explorer / Hierarchy / Levels / Regions).
   - `DeptGroup { dept; posts }`, `BranchGroup { branch; deptGroups }`, `OrgStructure { orgWidePosts; branches }` — grouped structure shape returned by `/api/posts/structure` and consumed by Tabs 2-6.
 - `src/shared/lib/schemas/orgDefaultsSchemas.ts` — `orgDefaultsUpdateSchema` (zod). Reusable for downstream wiring (product/voucher defaults).
-- `src/shared/lib/auth/authGuard.ts` — `requireAuth`, `requirePermission`, `requireRole`, `hasPermission`.
+- `src/shared/lib/auth/permissions.ts` — `requireAuth`, `requirePermission`, `requireRole`, `hasPermission`.
 - `src/shared/lib/auth/permissionScope.ts` — `hasPermissionWithScope` (handles `area:op:scope` lookup with widening).
 - `src/shared/lib/auth/makePermissionLayout.tsx` — `makePermissionLayout(permission)` — used by every `office/admin/<page>/layout.tsx`.
 - `src/shared/lib/auth/permissions.ts` — UI helpers.
@@ -80,7 +80,7 @@ Compatibility redirects in `next.config.ts`: `/office/repairing/settings/pipelin
 
 ## Recent decisions / gotchas
 
-- **2026-05-07 (Step 0)**: 4 demo users seeded with predictable passwords — see [permission_matrix memory](../../memory/permission_matrix.md) for the table.
+- **2026-05-07 (Step 0)**: 4 demo users seeded with predictable passwords — see the demo-logins table in [seeds.md](../seeds.md) and the role catalogue in [permissions.md](./permissions.md).
 - **2026-05-07 (Step 0)**: 10 new `accountancy:*` permission rows added. Admin (R1) gets them via `PERMISSIONS.map(p => p.id)`. Non-admin roles need explicit grant via the matrix.
 - **2026-05-07 (Step 2)**: Pipelines / statuses / sub-statuses moved from Repair settings to Admin (`/office/admin/pipelines` etc.).
 - **2026-05-19 (V1 complete)**: Settings module marked done in [completed-and-protected.md](../completed-and-protected.md). Treat permission matrix, user CRUD, org-shape masters, and pipeline/status machinery as preserve-first unless explicitly requested.

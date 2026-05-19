@@ -141,6 +141,15 @@ export const PERMISSIONS = {
 
     // Warranty
     WARRANTY_CONVERT:                   "warranty:convert",
+
+    // Auto-added by check-doc-sync --fix:
+    SERVICE_CENTERS_VIEW:                "service-centers:view",
+    SERVICE_CENTERS_MANAGE:              "service-centers:manage",
+    SERVICE_CENTERS_VIEW_BRANCH:         "service-centers:view:branch",
+    SERVICE_CENTERS_VIEW_ORG:            "service-centers:view:org",
+    SERVICE_CENTERS_CREATE:              "service-centers:create",
+    SERVICE_CENTERS_EDIT_ORG:            "service-centers:edit:org",
+    SERVICE_CENTERS_DELETE_ORG:          "service-centers:delete:org",
 } as const;
 
 export type PermissionId = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

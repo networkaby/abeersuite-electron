@@ -15,9 +15,13 @@
     "seed:dummy-customers": "tsx prisma/seeds/dummy-customers.ts",
     "seed:dummy-vouchers": "tsx prisma/seeds/dummy-vouchers.ts",
     "seed:helper-brands": "tsx prisma/seeds/helper-brands.ts",
-    "seed:dummy-all": "pnpm seed:dummy-customers && pnpm seed:dummy-users && pnpm seed:dummy-shop && pnpm seed:dummy-vouchers",
+    "seed:dummy-all": "pnpm seed:dummy-customers && pnpm seed:dummy-users && pnpm seed:dummy-shop && pnpm seed:dummy-vouchers && pnpm seed:check-docs",
     "seed:purge-vouchers": "tsx prisma/seeds/purge-vouchers.ts",
-    "seed:hard-clean": "tsx prisma/seeds/hard-clean.ts"
+    "seed:hard-clean": "tsx prisma/seeds/hard-clean.ts",
+    "seed:check-docs": "tsx scripts/check-doc-sync.ts",
+    "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
+    "precommit": "tsx scripts/check-doc-sync.ts --strict",
+    "install:git-hooks": "tsx scripts/install-git-hooks.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

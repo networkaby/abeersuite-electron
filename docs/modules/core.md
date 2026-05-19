@@ -23,15 +23,15 @@
 - No dedicated keys for the other pages; they fall back to `requireAuth()` (any logged-in staff).
 
 ## Prisma models
-- `Account` (file: `prisma/schema/finance.prisma`) — GL ledger row; linked to `Person` or `Company` (XOR) for party ledgers, or to a chart-of-accounts entry (GL).
-- `Device` (file: `prisma/schema/repair.prisma`) — serial-numbered hardware; surfaced via `/api/search-slno`.
-- `TicketLog` (file: `prisma/schema/repair.prisma`) — also surfaces call-log entries via `kind = "CALL"` (currently `/api/call-logs` keeps a separate table — see gotchas).
+- `Account` (file: `prisma/schema/accounts.prisma`) — GL ledger row; linked to `Person` or `Company` (XOR) for party ledgers, or to a chart-of-accounts entry (GL).
+- `Device` (file: `prisma/schema/tickets.prisma`) — serial-numbered hardware; surfaced via `/api/search-slno`.
+- `TicketLog` (file: `prisma/schema/tickets.prisma`) — ticket activity stream. (`CallLog` is a separate model — see gotchas.)
 
 ## Key components
-- The pages are largely self-contained — heavy `"use client"` files in `src/app/(protected)/office/core/`. Future extraction into `src/modules/core/components/` is planned (Segment 12) but hasn't run yet.
+- The pages are largely self-contained — heavy `"use client"` files in `src/app/(protected)/office/core/`. Future extraction into `src/modules/core/components/` is on the backlog.
 
 ## Library / helpers
-- None at present — `src/modules/core/` has no `lib/` (per Segment 10 audit, no domain logic to extract).
+- None at present — `src/modules/core/` has no `lib/`. No cross-page domain logic worth extracting yet.
 
 ## Common workflows (wiring)
 1. **Front-desk view assignments**: `/office/core/assignments` filters by `caller.scope` against ticket `branch`/`department`/`assigneeId` columns.
@@ -46,4 +46,4 @@
 - Voice-call recording / transcript ingestion (would attach to `CallLog`).
 - Cross-branch assignment routing (currently scope-based, manual).
 
-_Last updated: 2026-05-11 — covers state after Segment 14 (API path rename) and the office route-group promotion._
+_Last updated: 2026-05-19 — Prisma model file references corrected (`accounts.prisma` for `Account`, `tickets.prisma` for `Device`/`TicketLog`)._

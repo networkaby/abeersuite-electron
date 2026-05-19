@@ -139,7 +139,11 @@
       "Bash(Measure-Object -Line)",
       "PowerShell(\\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\PhysicalStockPage.tsx\"\\).Count; \\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\BranchTransferPage.tsx\"\\).Count; \\(Get-Content \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\inventory\\\\components\\\\ManufacturingJournalPage.tsx\"\\).Count)",
       "Bash(pnpm seed:dummy-users)",
-      "Bash(pnpm seed:dummy-org-rich)"
+      "Bash(pnpm seed:dummy-org-rich)",
+      "Bash(awk '{print $NF}')",
+      "Bash(awk '{print $1}')",
+      "Skill(anthropic-skills:project-brain)",
+      "Skill(anthropic-skills:project-brain:*)"
     ]
   }
 }
