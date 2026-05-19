@@ -54,9 +54,9 @@ const prisma = new PrismaClient({ adapter });
 // SECTION 1 — RBAC: Roles, Permissions, Role grants
 // ════════════════════════════════════════════════════════════════════════════
 
-// Roles are the *templates* that Posts inherit permissions from. Users do NOT
-// receive a role directly — `User.role` is null until a Post appointment
-// promotes them. See `Post.roleTemplateId` and `authorizeStaff.ts`.
+// Roles are the *templates* that Positions inherit permissions from. Users do NOT
+// receive a role directly — `User.role` is null until a Position appointment
+// promotes them. See `Position.roleTemplateId` and `authorizeStaff.ts`.
 const ROLES = [
     { id: "R1", label: "Admin",      color: "bg-red-100 text-red-600",       isSystem: true, rank: 100 },
     { id: "R2", label: "Technician", color: "bg-blue-100 text-blue-600",     isSystem: true, rank: 70  },
@@ -129,7 +129,7 @@ const PERMISSIONS = [
     // admin
     { id: "users:manage", label: "Manage users", module: "admin", description: "Create, edit, and delete user accounts." },
     { id: "roles:manage", label: "Manage roles", module: "admin", description: "Create and edit roles and their permission sets." },
-    { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Manage branches, departments, and posts." },
+    { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Manage branches, departments, and positions." },
     { id: "settings:statuses", label: "Manage statuses & sub-statuses", module: "admin", description: "Create, edit, and delete ticket statuses and sub-statuses." },
     { id: "settings:pipelines", label: "Manage pipelines", module: "admin", description: "Create, edit, and configure pipelines." },
     { id: "users:create", label: "Create users", module: "admin", description: "Create user accounts." },
@@ -882,22 +882,22 @@ async function main() {
         select: { id: true },
     });
 
-    // Ensure the admin user holds a "System Administrator" Post (org-wide,
+    // Ensure the admin user holds a "System Administrator" Position (org-wide,
     // branchId = null) backed by the R1 (Admin) role template. This guarantees
     // that when User.role is eventually dropped in favour of Position-only
     // authority, the admin account still inherits full permissions via the
     // Position → Role → Permission chain rather than losing access.
-    await prisma.post.upsert({
-        where:  { id: "POST-SYSADMIN" },
+    await prisma.position.upsert({
+        where:  { id: "POS-SYSADMIN" },
         update: { title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
-        create: { id: "POST-SYSADMIN", title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
+        create: { id: "POS-SYSADMIN", title: "System Administrator", branchId: null, departmentId: null, roleTemplateId: "R1" },
     });
-    await prisma.userPost.upsert({
-        where:  { userId_postId: { userId: adminUser.id, postId: "POST-SYSADMIN" } },
+    await prisma.userPosition.upsert({
+        where:  { userId_positionId: { userId: adminUser.id, positionId: "POS-SYSADMIN" } },
         update: {},
-        create: { userId: adminUser.id, postId: "POST-SYSADMIN" },
+        create: { userId: adminUser.id, positionId: "POS-SYSADMIN" },
     });
-    console.log(`      ✓ ${ADMIN.email} (role ${ADMIN.role}) · Post: System Administrator (org-wide)  password: ${ADMIN.password}\n`);
+    console.log(`      ✓ ${ADMIN.email} (role ${ADMIN.role}) · Position: System Administrator (org-wide)  password: ${ADMIN.password}\n`);
 
     // ── Section 6: DB constraints ──────────────────────────────────────
     console.log("[6/7] DB constraints");

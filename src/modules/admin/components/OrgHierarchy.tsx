@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { PostNode, OrgStructure } from "@/shared/types/orgChart";
+import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ const deptId   = (b: string, d: string | "no-dept") => `dept::${b}::${d}`;
 
 // ── Holder avatar ─────────────────────────────────────────────────────────────
 
-function HolderAvatar({ user, size = 22 }: { user: PostNode["holders"][number]["user"]; size?: number }) {
+function HolderAvatar({ user, size = 22 }: { user: PositionNode["holders"][number]["user"]; size?: number }) {
     const [imgErr, setImgErr] = useState(false);
     if (user.avatarUrl && !imgErr) {
         return (
@@ -145,7 +145,7 @@ function NodeCard({
 
 // ── Post card (specialised) ───────────────────────────────────────────────────
 
-function PostCard({ post, dim, focused, onClick }: { post: PostNode; dim: boolean; focused: boolean; onClick: () => void }) {
+function PostCard({ post, dim, focused, onClick }: { post: PositionNode; dim: boolean; focused: boolean; onClick: () => void }) {
     const vacant = post.holders.length === 0;
     return (
         <div
@@ -232,7 +232,7 @@ interface CtxProps {
 function PostsRow({
     posts, ctx, parentPath,
 }: {
-    posts: PostNode[];
+    posts: PositionNode[];
     ctx: CtxProps;
     parentPath: NodeId[];
 }) {
@@ -263,7 +263,7 @@ function DeptSubtree({
 }: {
     branchKey: string;
     dept: { id: string; name: string } | null;
-    posts: PostNode[];
+    posts: PositionNode[];
     ctx: CtxProps;
     parentPath: NodeId[];
 }) {
@@ -303,20 +303,20 @@ function BranchSubtree({
 }) {
     const id = branchId(bg.branch.id);
     const path = [...parentPath, id];
-    const allPostIds = bg.deptGroups.flatMap(g => g.posts.map(p => p.id));
+    const allPostIds = bg.deptGroups.flatMap(g => g.positions.map(p => p.id));
     const subtreeActive = ctx.focusedPath.has(id) || allPostIds.some(p => ctx.focusedPath.has(p))
         || bg.deptGroups.some((g, i) => ctx.focusedPath.has(deptId(bg.branch.id, g.dept?.id ?? `no-dept-${i}`)));
     const isCollapsed = ctx.collapsed.has(id);
     const dim = ctx.focusedId !== null && !subtreeActive;
 
     const allPostsCount = allPostIds.length;
-    const vacantCount = bg.deptGroups.flatMap(g => g.posts).filter(p => p.holders.length === 0).length;
-    const visibleDeptGroups = bg.deptGroups.filter(g => g.posts.length > 0);
+    const vacantCount = bg.deptGroups.flatMap(g => g.positions).filter(p => p.holders.length === 0).length;
+    const visibleDeptGroups = bg.deptGroups.filter(g => g.positions.length > 0);
 
     // Width needed for child row
     const childWidth = visibleDeptGroups.length === 0
         ? 0
-        : visibleDeptGroups.reduce((s, g) => s + (g.posts.length * POST_W + (g.posts.length - 1) * POST_GAP), 0)
+        : visibleDeptGroups.reduce((s, g) => s + (g.positions.length * POST_W + (g.positions.length - 1) * POST_GAP), 0)
             + (visibleDeptGroups.length - 1) * DEPT_COL_GAP;
 
     return (
@@ -336,19 +336,19 @@ function BranchSubtree({
                 <>
                     <VStem h={20} active={subtreeActive} />
                     {visibleDeptGroups.length > 1 && (
-                        <HBar widthPx={Math.max(childWidth - visibleDeptGroups[0].posts.length * POST_W / 2 - visibleDeptGroups[visibleDeptGroups.length - 1].posts.length * POST_W / 2, 100)} active={subtreeActive} />
+                        <HBar widthPx={Math.max(childWidth - visibleDeptGroups[0].positions.length * POST_W / 2 - visibleDeptGroups[visibleDeptGroups.length - 1].positions.length * POST_W / 2, 100)} active={subtreeActive} />
                     )}
                     <div className="flex items-start" style={{ gap: DEPT_COL_GAP }}>
                         {visibleDeptGroups.map((g, i) => (
                             <div key={g.dept?.id ?? `nd-${i}`} className="flex flex-col items-center">
                                 {visibleDeptGroups.length > 1 && (
                                     <VStem h={16} active={ctx.focusedPath.has(deptId(bg.branch.id, g.dept?.id ?? `no-dept-${i}`))
-                                        || g.posts.some(p => ctx.focusedPath.has(p.id))} />
+                                        || g.positions.some(p => ctx.focusedPath.has(p.id))} />
                                 )}
                                 <DeptSubtree
                                     branchKey={bg.branch.id}
                                     dept={g.dept}
-                                    posts={g.posts}
+                                    posts={g.positions}
                                     ctx={ctx}
                                     parentPath={path}
                                 />
@@ -392,8 +392,8 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
 
     const stats = useMemo(() => {
         const allPosts = [
-            ...structure.orgWidePosts,
-            ...structure.branches.flatMap(b => b.deptGroups.flatMap(g => g.posts)),
+            ...structure.orgWidePositions,
+            ...structure.branches.flatMap(b => b.deptGroups.flatMap(g => g.positions)),
         ];
         const holders = allPosts.reduce((s, p) => s + p.holders.length, 0);
         const vacant  = allPosts.filter(p => p.holders.length === 0).length;
@@ -478,13 +478,13 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
                         </div>
 
                         {/* Board members — org-wide posts shown inline */}
-                        {!boardCollapsed && structure.orgWidePosts.length > 0 && (
+                        {!boardCollapsed && structure.orgWidePositions.length > 0 && (
                             <div className="mt-3 pt-3 border-t border-amber-400/20">
                                 <p className="text-[9px] uppercase tracking-widest text-amber-400/60 mb-2">
-                                    Members · {structure.orgWidePosts.length} seat{structure.orgWidePosts.length !== 1 ? "s" : ""}
+                                    Members · {structure.orgWidePositions.length} seat{structure.orgWidePositions.length !== 1 ? "s" : ""}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
-                                    {structure.orgWidePosts.map(p => {
+                                    {structure.orgWidePositions.map(p => {
                                         const vacant = p.holders.length === 0;
                                         const pFocused = focusedId === p.id;
                                         const pDim = focusedId !== null && !focusedPath.has(p.id);
@@ -532,7 +532,7 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
                             </div>
                         )}
 
-                        {!boardCollapsed && structure.orgWidePosts.length === 0 && (
+                        {!boardCollapsed && structure.orgWidePositions.length === 0 && (
                             <p className="mt-3 pt-3 border-t border-amber-400/20 text-[10px] text-amber-400/60 italic text-center">
                                 No board seats defined yet — create an org-wide post (branchId=null) to populate
                             </p>
@@ -554,7 +554,7 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
                                         {branchCount > 1 && (
                                             <VStem h={16} active={
                                                 focusedPath.has(branchId(bg.branch.id))
-                                                || bg.deptGroups.some(g => g.posts.some(p => focusedPath.has(p.id)))
+                                                || bg.deptGroups.some(g => g.positions.some(p => focusedPath.has(p.id)))
                                             } />
                                         )}
                                         <BranchSubtree bg={bg} ctx={ctx} parentPath={[]} />

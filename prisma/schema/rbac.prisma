@@ -7,7 +7,7 @@ model Role {
   rank           Int              @default(0)
   isSystem       Boolean          @default(false)
   users          User[]
-  templatedPosts Post[]
+  templatedPositions Position[]
   permissions    RolePermission[]
   chatRooms      ChatRoom[]
 }

@@ -20,7 +20,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark } from "lucide-react";
-import type { OrgStructure, PostNode } from "@/shared/types/orgChart";
+import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
 
 // Branch ID that maps to "Headquarters" — bootstrap seeds this one.
 // All posts at this branch + all org-wide posts go inside the HQ container.
@@ -39,7 +39,7 @@ const AVATAR_COLOR: Record<string, string> = {
     R4: "bg-orange-100 text-orange-700",
 };
 
-function Avatar({ user, size = 32 }: { user: PostNode["holders"][number]["user"]; size?: number }) {
+function Avatar({ user, size = 32 }: { user: PositionNode["holders"][number]["user"]; size?: number }) {
     const [imgErr, setImgErr] = useState(false);
     if (user.avatarUrl && !imgErr) {
         return (
@@ -65,7 +65,7 @@ function Avatar({ user, size = 32 }: { user: PostNode["holders"][number]["user"]
 // ── Position card ────────────────────────────────────────────────────────────
 
 interface PosCardProps {
-    post: PostNode;
+    position: PositionNode;
     accent: "gold" | "blue" | "green";
 }
 
@@ -75,9 +75,9 @@ const POS_CARD_STYLES: Record<PosCardProps["accent"], { card: string; name: stri
     green: { card: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 hover:border-emerald-500", name: "text-emerald-900 dark:text-emerald-200", title: "text-emerald-700/70 dark:text-emerald-300/60", avatar: "bg-emerald-200 dark:bg-emerald-900/40", icon: <Briefcase size={18} className="text-emerald-600 dark:text-emerald-300" /> },
 };
 
-function PosCard({ post, accent, compact = false }: PosCardProps & { compact?: boolean }) {
+function PosCard({ position, accent, compact = false }: PosCardProps & { compact?: boolean }) {
     const s = POS_CARD_STYLES[accent];
-    const holder = post.holders[0];
+    const holder = position.holders[0];
     const vacant = !holder;
     const w = compact ? "w-[88px]" : "w-[120px]";
     const px = compact ? "px-1.5" : "px-2";
@@ -91,19 +91,19 @@ function PosCard({ post, accent, compact = false }: PosCardProps & { compact?: b
             <div className={`flex items-center justify-center ${avatarBox} rounded-full mb-1 ring-2 ring-white/60 ${s.avatar}`}>
                 {holder ? <Avatar user={holder.user} size={avatarSize} /> : s.icon}
             </div>
-            <p className={`${nameSize} font-bold text-center leading-tight ${s.name} truncate w-full`} title={holder?.user.name ?? post.title}>
-                {holder?.user.name ?? post.title}
+            <p className={`${nameSize} font-bold text-center leading-tight ${s.name} truncate w-full`} title={holder?.user.name ?? position.title}>
+                {holder?.user.name ?? position.title}
             </p>
-            <p className={`${titleSize} text-center mt-0.5 leading-tight ${s.title} truncate w-full`} title={holder ? post.title : "Vacant"}>
-                {holder ? post.title : "Vacant"}
+            <p className={`${titleSize} text-center mt-0.5 leading-tight ${s.title} truncate w-full`} title={holder ? position.title : "Vacant"}>
+                {holder ? position.title : "Vacant"}
             </p>
             {vacant && !compact && (
                 <span className="mt-1 inline-flex items-center gap-0.5 rounded bg-amber-200 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wider">
                     <AlertCircle size={8} /> Vacant
                 </span>
             )}
-            {!vacant && post.holders.length > 1 && (
-                <span className="mt-0.5 text-[9px] text-muted-foreground">+{post.holders.length - 1}</span>
+            {!vacant && position.holders.length > 1 && (
+                <span className="mt-0.5 text-[9px] text-muted-foreground">+{position.holders.length - 1}</span>
             )}
         </div>
     );
@@ -126,14 +126,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ── Dept sub-container ───────────────────────────────────────────────────────
 
-function DeptBox({ name, posts }: { name: string; posts: PostNode[] }) {
+function DeptBox({ name, posts }: { name: string; posts: PositionNode[] }) {
     return (
         <div className="rounded-md border border-emerald-300 dark:border-emerald-700/50 bg-emerald-50/40 dark:bg-emerald-950/15 px-1.5 py-1.5">
             <p className="text-[9px] uppercase tracking-wider text-center font-bold mb-1 text-emerald-700 dark:text-emerald-300">
                 {name}
             </p>
             <div className="flex flex-wrap justify-center gap-1">
-                {posts.map(p => <PosCard key={p.id} post={p} accent="green" compact />)}
+                {posts.map(p => <PosCard key={p.id} position={p} accent="green" compact />)}
             </div>
         </div>
     );
@@ -142,14 +142,14 @@ function DeptBox({ name, posts }: { name: string; posts: PostNode[] }) {
 // ── Branch container ─────────────────────────────────────────────────────────
 
 function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
-    const allPosts = bg.deptGroups.flatMap(g => g.posts);
-    const branchManagerPost = allPosts.find(p =>
+    const allPositions = bg.deptGroups.flatMap(g => g.positions);
+    const branchManagerPosition = allPositions.find((p: PositionNode) =>
         p.title.toLowerCase().includes("manager") || p.title.toLowerCase().includes("incharge"),
     );
-    const otherDeptGroups = bg.deptGroups.filter(g => !g.posts.some(p => p.id === branchManagerPost?.id));
+    const otherDeptGroups = bg.deptGroups.filter(g => !g.positions.some(p => p.id === branchManagerPosition?.id));
     const noDeptGroup = bg.deptGroups.find(g => !g.dept);
     const restNonMgrInNoDept = noDeptGroup
-        ? noDeptGroup.posts.filter(p => p.id !== branchManagerPost?.id)
+        ? noDeptGroup.positions.filter((p: PositionNode) => p.id !== branchManagerPosition?.id)
         : [];
 
     return (
@@ -164,10 +164,10 @@ function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
             </div>
 
             {/* Branch Manager (highlighted at top) */}
-            {branchManagerPost && (
+            {branchManagerPosition && (
                 <>
                     <div className="flex justify-center mb-2">
-                        <PosCard post={branchManagerPost} accent="green" compact />
+                        <PosCard position={branchManagerPosition} accent="green" compact />
                     </div>
                     {(otherDeptGroups.length > 0 || restNonMgrInNoDept.length > 0) && (
                         <div className="h-px bg-emerald-300/60 dark:bg-emerald-700/40 my-1.5" />
@@ -178,7 +178,7 @@ function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
             {/* Branch-level posts (no dept) other than the manager */}
             {restNonMgrInNoDept.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-1 mb-2">
-                    {restNonMgrInNoDept.map(p => <PosCard key={p.id} post={p} accent="green" compact />)}
+                    {restNonMgrInNoDept.map(p => <PosCard key={p.id} position={p} accent="green" compact />)}
                 </div>
             )}
 
@@ -188,12 +188,12 @@ function BranchContainer({ bg }: { bg: OrgStructure["branches"][number] }) {
                     {otherDeptGroups
                         .filter(g => g.dept)
                         .map((g, i) => (
-                            <DeptBox key={g.dept!.id + i} name={g.dept!.name} posts={g.posts} />
+                            <DeptBox key={g.dept!.id + i} name={g.dept!.name} posts={g.positions} />
                         ))}
                 </div>
             )}
 
-            {allPosts.length === 0 && (
+            {allPositions.length === 0 && (
                 <p className="text-[10px] text-muted-foreground italic text-center py-3">No positions</p>
             )}
         </div>
@@ -207,8 +207,8 @@ function HQContainer({
     hqBranchPosts,
     hqBranchName,
 }: {
-    orgWidePosts: PostNode[];
-    hqBranchPosts: PostNode[];
+    orgWidePosts: PositionNode[];
+    hqBranchPosts: PositionNode[];
     hqBranchName: string;
 }) {
     // Merge org-wide + HQ-branch posts so the HQ container holds everything
@@ -232,10 +232,10 @@ function HQContainer({
     }
 
     // Classify posts by title patterns
-    const boardPosts: PostNode[] = [];
-    const ceoPosts: PostNode[]   = [];
-    const cLevelPosts: PostNode[] = [];
-    const centralDeptPosts: PostNode[] = [];
+    const boardPosts: PositionNode[] = [];
+    const ceoPosts: PositionNode[]   = [];
+    const cLevelPosts: PositionNode[] = [];
+    const centralDeptPosts: PositionNode[] = [];
 
     for (const p of allHqPosts) {
         const t = p.title.toLowerCase();
@@ -268,7 +268,7 @@ function HQContainer({
                 <>
                     <SectionLabel>Executive Council</SectionLabel>
                     <div className="flex flex-wrap justify-center gap-2">
-                        {allHqPosts.map(p => <PosCard key={p.id} post={p} accent="gold" />)}
+                        {allHqPosts.map(p => <PosCard key={p.id} position={p} accent="gold" />)}
                     </div>
                 </>
             )}
@@ -279,7 +279,7 @@ function HQContainer({
                         <>
                             <SectionLabel>Board of Directors</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {boardPosts.map(p => <PosCard key={p.id} post={p} accent="gold" />)}
+                                {boardPosts.map(p => <PosCard key={p.id} position={p} accent="gold" />)}
                             </div>
                         </>
                     )}
@@ -287,7 +287,7 @@ function HQContainer({
                         <>
                             <SectionLabel>Chief Executive</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {ceoPosts.map(p => <PosCard key={p.id} post={p} accent="blue" />)}
+                                {ceoPosts.map(p => <PosCard key={p.id} position={p} accent="blue" />)}
                             </div>
                         </>
                     )}
@@ -295,7 +295,7 @@ function HQContainer({
                         <>
                             <SectionLabel>C-Level Executives</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {cLevelPosts.map(p => <PosCard key={p.id} post={p} accent="blue" />)}
+                                {cLevelPosts.map(p => <PosCard key={p.id} position={p} accent="blue" />)}
                             </div>
                         </>
                     )}
@@ -303,7 +303,7 @@ function HQContainer({
                         <>
                             <SectionLabel>HQ Central Departments</SectionLabel>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {centralDeptPosts.map(p => <PosCard key={p.id} post={p} accent="gold" />)}
+                                {centralDeptPosts.map(p => <PosCard key={p.id} position={p} accent="gold" />)}
                             </div>
                         </>
                     )}
@@ -349,7 +349,7 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
     const regionalBranches = structure.branches.filter(b => b.branch.id !== HQ_BRANCH_ID);
 
     const hqBranchPosts = hqBranch
-        ? hqBranch.deptGroups.flatMap(g => g.posts)
+        ? hqBranch.deptGroups.flatMap(g => g.positions)
         : [];
     const hqBranchName = hqBranch?.branch.name ?? "Headquarters";
 
@@ -368,7 +368,7 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
             <div className="flex flex-col items-center mb-0">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Headquarters</p>
                 <HQContainer
-                    orgWidePosts={structure.orgWidePosts}
+                    orgWidePosts={structure.orgWidePositions}
                     hqBranchPosts={hqBranchPosts}
                     hqBranchName={hqBranchName}
                 />
@@ -400,7 +400,7 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
             <div className="mt-10 pt-6 border-t border-border/60 flex justify-center flex-wrap gap-6 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                     <Landmark size={11} className="text-amber-500" />
-                    {structure.orgWidePosts.length + hqBranchPosts.length} HQ position{(structure.orgWidePosts.length + hqBranchPosts.length) !== 1 ? "s" : ""}
+                    {structure.orgWidePositions.length + hqBranchPosts.length} HQ position{(structure.orgWidePositions.length + hqBranchPosts.length) !== 1 ? "s" : ""}
                 </span>
                 <span className="flex items-center gap-1.5">
                     <Building2 size={11} className="text-emerald-500" />
@@ -408,7 +408,7 @@ export default function OrgRegions({ structure }: { structure: OrgStructure }) {
                 </span>
                 <span className="flex items-center gap-1.5">
                     <Users size={11} className="text-sky-500" />
-                    {structure.branches.reduce((s, b) => s + b.deptGroups.reduce((ss, g) => ss + g.posts.length, 0), 0) + structure.orgWidePosts.length} total positions
+                    {structure.branches.reduce((s, b) => s + b.deptGroups.reduce((ss, g) => ss + g.positions.length, 0), 0) + structure.orgWidePositions.length} total positions
                 </span>
             </div>
         </div>

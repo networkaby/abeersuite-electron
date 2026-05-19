@@ -7,15 +7,15 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const createSchema = z.object({
-    id:           z.string().trim().min(1, "ID is required").toUpperCase(),
-    title:        z.string().trim().min(1, "Title is required"),
-    branchId:     z.string().trim().optional().nullable(),
-    departmentId: z.string().trim().optional().nullable(),
-    parentPostId: z.string().trim().optional().nullable(),
-    roleTemplateId: z.string().trim().optional().nullable(),
+    id:               z.string().trim().min(1, "ID is required").toUpperCase(),
+    title:            z.string().trim().min(1, "Title is required"),
+    branchId:         z.string().trim().optional().nullable(),
+    departmentId:     z.string().trim().optional().nullable(),
+    parentPositionId: z.string().trim().optional().nullable(),
+    roleTemplateId:   z.string().trim().optional().nullable(),
 });
 
-const POST_INCLUDE = {
+const POSITION_INCLUDE = {
     branch:     { select: { id: true, name: true } },
     department: { select: { id: true, name: true } },
     parent:     { select: { id: true, title: true } },
@@ -33,13 +33,13 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const posts = await prisma.post.findMany({
+        const positions = await prisma.position.findMany({
             orderBy: [{ branchId: "asc" }, { departmentId: "asc" }, { title: "asc" }],
-            include: POST_INCLUDE,
+            include: POSITION_INCLUDE,
         });
-        return NextResponse.json(posts);
+        return NextResponse.json(positions);
     } catch (e) {
-        return handleApiError(e, "Failed to fetch posts");
+        return handleApiError(e, "Failed to fetch positions");
     }
 }
 
@@ -49,22 +49,22 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { id, title, branchId, departmentId, parentPostId, roleTemplateId } = data;
-        const existing = await prisma.post.findUnique({ where: { id } });
-        if (existing) return NextResponse.json({ error: "Post ID already exists" }, { status: 409 });
-        const post = await prisma.post.create({
+        const { id, title, branchId, departmentId, parentPositionId, roleTemplateId } = data;
+        const existing = await prisma.position.findUnique({ where: { id } });
+        if (existing) return NextResponse.json({ error: "Position ID already exists" }, { status: 409 });
+        const position = await prisma.position.create({
             data: {
                 id,
                 title,
                 branchId: branchId ?? null,
                 departmentId: departmentId ?? null,
-                parentPostId: parentPostId ?? null,
+                parentPositionId: parentPositionId ?? null,
                 roleTemplateId: roleTemplateId ?? null,
             },
-            include: POST_INCLUDE,
+            include: POSITION_INCLUDE,
         });
-        return NextResponse.json(post, { status: 201 });
+        return NextResponse.json(position, { status: 201 });
     } catch (e) {
-        return handleApiError(e, "Failed to create post");
+        return handleApiError(e, "Failed to create position");
     }
 }

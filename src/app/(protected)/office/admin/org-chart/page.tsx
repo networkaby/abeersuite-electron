@@ -35,7 +35,7 @@ export default function OrgChartPage() {
     }, []);
 
     useEffect(() => {
-        axios.get<OrgStructure>("/api/posts/structure")
+        axios.get<OrgStructure>("/api/positions/structure")
             .then(r => setStructure(r.data))
             .finally(() => setPostLoading(false));
     }, []);
@@ -69,8 +69,8 @@ export default function OrgChartPage() {
                     </p>
                 </div>
                 {tab !== "people" && (
-                    <Link href="/office/admin/posts" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
-                        <LinkIcon size={11} /> Manage posts
+                    <Link href="/office/admin/positions" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
+                        <LinkIcon size={11} /> Manage positions
                     </Link>
                 )}
             </div>
@@ -118,12 +118,12 @@ export default function OrgChartPage() {
             {tab === "structure" && (
                 postLoading ? (
                     <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading…</div>
-                ) : !structure || (structure.orgWidePosts.length === 0 && structure.branches.every(b => b.deptGroups.length === 0)) ? (
+                ) : !structure || (structure.orgWidePositions.length === 0 && structure.branches.every(b => b.deptGroups.length === 0)) ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                         <Briefcase size={36} className="opacity-20" />
-                        <p className="text-sm">No posts defined yet.</p>
-                        <Link href="/office/admin/posts" className="text-xs text-primary hover:underline">
-                            Create your first post →
+                        <p className="text-sm">No positions defined yet.</p>
+                        <Link href="/office/admin/positions" className="text-xs text-primary hover:underline">
+                            Create your first position →
                         </Link>
                     </div>
                 ) : (

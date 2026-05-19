@@ -11,10 +11,10 @@ export async function DELETE(
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
-        const { id: postId, userId: userIdStr } = await params;
+        const { id: positionId, userId: userIdStr } = await params;
         const userId = Number(userIdStr);
         if (isNaN(userId)) return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
-        await prisma.userPost.delete({ where: { userId_postId: { userId, postId } } });
+        await prisma.userPosition.delete({ where: { userId_positionId: { userId, positionId } } });
         return NextResponse.json({ success: true });
     } catch (e) {
         return handleApiError(e, "Failed to remove holder");

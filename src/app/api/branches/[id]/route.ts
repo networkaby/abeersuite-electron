@@ -34,11 +34,11 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         const { id } = await params;
         const branch = await prisma.branch.findUnique({
             where: { id },
-            include: { _count: { select: { users: true } } },
+            include: { _count: { select: { positions: true, departments: true } } },
         });
         if (!branch) return NextResponse.json({ error: "Branch not found" }, { status: 404 });
-        if (branch._count.users > 0) {
-            return NextResponse.json({ error: "Cannot delete branch with assigned users. Reassign users first." }, { status: 400 });
+        if (branch._count.positions > 0 || branch._count.departments > 0) {
+            return NextResponse.json({ error: "Cannot delete branch with assigned positions or departments. Reassign first." }, { status: 400 });
         }
         await prisma.branch.delete({ where: { id } });
         return NextResponse.json({ success: true });

@@ -26,7 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { PostNode, OrgStructure } from "@/shared/types/orgChart";
+import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,9 +41,9 @@ const AVATAR_COLOR: Record<string, string> = {
     R4: "bg-orange-100 text-orange-700 ring-orange-200",
 };
 
-type Holder = PostNode["holders"][number]["user"];
+type Holder = PositionNode["holders"][number]["user"];
 
-function matchesQuery(post: PostNode, q: string): boolean {
+function matchesQuery(post: PositionNode, q: string): boolean {
     if (!q) return true;
     const ql = q.toLowerCase();
     if (post.title.toLowerCase().includes(ql)) return true;
@@ -102,7 +102,7 @@ function Stat({ label, value, icon: Icon, accent }: {
 function PostCard({
     post, dimmed, focused, onHover, onClick,
 }: {
-    post: PostNode;
+    post: PositionNode;
     dimmed: boolean;
     focused: boolean;
     onHover: () => void;
@@ -159,11 +159,11 @@ function BranchPanel({
     orgWide?: boolean;
     query: string;
     focusedId: string | null;
-    onPostHover: (post: PostNode) => void;
-    onPostClick: (post: PostNode) => void;
+    onPostHover: (post: PositionNode) => void;
+    onPostClick: (post: PositionNode) => void;
 }) {
     const [collapsed, setCollapsed] = useState(false);
-    const allPosts = deptGroups.flatMap(g => g.posts);
+    const allPosts = deptGroups.flatMap(g => g.positions);
     const holderCount = allPosts.reduce((s, p) => s + p.holders.length, 0);
     const vacantCount = allPosts.filter(p => p.holders.length === 0).length;
     const matchedCount = allPosts.filter(p => matchesQuery(p, query)).length;
@@ -231,12 +231,12 @@ function BranchPanel({
                                             {g.dept.name}
                                         </span>
                                         <span className="text-[10px] text-muted-foreground">
-                                            · {g.posts.length} position{g.posts.length !== 1 ? "s" : ""}
+                                            · {g.positions.length} position{g.positions.length !== 1 ? "s" : ""}
                                         </span>
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                    {g.posts.map(p => (
+                                    {g.positions.map(p => (
                                         <PostCard
                                             key={p.id}
                                             post={p}
@@ -258,7 +258,7 @@ function BranchPanel({
 
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
-function DetailPanel({ post, pinned, onUnpin }: { post: PostNode | null; pinned: boolean; onUnpin: () => void }) {
+function DetailPanel({ post, pinned, onUnpin }: { post: PositionNode | null; pinned: boolean; onUnpin: () => void }) {
     if (!post) {
         return (
             <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center">
@@ -354,19 +354,19 @@ function DetailPanel({ post, pinned, onUnpin }: { post: PostNode | null; pinned:
 export default function OrgExplorer({ structure }: { structure: OrgStructure }) {
     const [query, setQuery]               = useState("");
     const [branchFilter, setBranchFilter] = useState<string | "all">("all");
-    const [hovered, setHovered]           = useState<PostNode | null>(null);
-    const [pinned, setPinned]             = useState<PostNode | null>(null);
+    const [hovered, setHovered]           = useState<PositionNode | null>(null);
+    const [pinned, setPinned]             = useState<PositionNode | null>(null);
 
     // ── Derived stats ────────────────────────────────────────────────────────
     const stats = useMemo(() => {
-        const allPosts: PostNode[] = [
-            ...structure.orgWidePosts,
-            ...structure.branches.flatMap(b => b.deptGroups.flatMap(g => g.posts)),
+        const allPosts: PositionNode[] = [
+            ...structure.orgWidePositions,
+            ...structure.branches.flatMap(b => b.deptGroups.flatMap(g => g.positions)),
         ];
         const holders = allPosts.reduce((s, p) => s + p.holders.length, 0);
         const vacant  = allPosts.filter(p => p.holders.length === 0).length;
         const branches = structure.branches.length;
-        const orgPlusBranches = (structure.orgWidePosts.length > 0 ? 1 : 0) + branches;
+        const orgPlusBranches = (structure.orgWidePositions.length > 0 ? 1 : 0) + branches;
         const depts = new Set(
             structure.branches.flatMap(b => b.deptGroups.map(g => g.dept?.id).filter(Boolean) as string[]),
         ).size;
@@ -375,7 +375,7 @@ export default function OrgExplorer({ structure }: { structure: OrgStructure }) 
     }, [structure]);
 
     // ── Filtering ────────────────────────────────────────────────────────────
-    const visibleOrgWide = structure.orgWidePosts;
+    const visibleOrgWide = structure.orgWidePositions;
     const visibleBranches = branchFilter === "all"
         ? structure.branches
         : structure.branches.filter(b => b.branch.id === branchFilter);
@@ -423,7 +423,7 @@ export default function OrgExplorer({ structure }: { structure: OrgStructure }) 
                     >
                         All
                     </Button>
-                    {structure.orgWidePosts.length > 0 && (
+                    {structure.orgWidePositions.length > 0 && (
                         <Button
                             type="button" variant="outline" size="xs"
                             onClick={() => setBranchFilter("__org")}
@@ -451,7 +451,7 @@ export default function OrgExplorer({ structure }: { structure: OrgStructure }) 
                         <BranchPanel
                             branch={{ id: "__org", name: "Executive Council" }}
                             orgWide
-                            deptGroups={[{ dept: null, posts: visibleOrgWide }]}
+                            deptGroups={[{ dept: null, positions: visibleOrgWide }]}
                             query={query}
                             focusedId={detail?.id ?? null}
                             onPostHover={p => !pinned && setHovered(p)}

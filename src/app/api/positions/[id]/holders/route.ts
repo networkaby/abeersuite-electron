@@ -12,13 +12,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     try {
-        const { id: postId } = await params;
+        const { id: positionId } = await params;
         const { data, error } = await validateRequest(req, assignSchema);
         if (error) return error;
         const { userId } = data;
-        const existing = await prisma.userPost.findUnique({ where: { userId_postId: { userId, postId } } });
-        if (existing) return NextResponse.json({ error: "User already holds this post" }, { status: 409 });
-        await prisma.userPost.create({ data: { userId, postId } });
+        const existing = await prisma.userPosition.findUnique({ where: { userId_positionId: { userId, positionId } } });
+        if (existing) return NextResponse.json({ error: "User already holds this position" }, { status: 409 });
+        await prisma.userPosition.create({ data: { userId, positionId } });
         return NextResponse.json({ success: true }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to assign holder");

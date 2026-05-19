@@ -30,8 +30,17 @@ const PROFILE_SELECT = {
     userRole:    { select: { id: true, label: true, color: true, rank: true, permissions: { select: { permission: true } } } },
     manager:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
     reports:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
-    departments: { select: { id: true, name: true } },
-    branches:    { select: { id: true, name: true } },
+    userPositions: {
+        select: {
+            position: {
+                select: {
+                    id: true, title: true,
+                    branch:     { select: { id: true, name: true } },
+                    department: { select: { id: true, name: true } },
+                },
+            },
+        },
+    },
 } as const;
 
 export async function GET(
@@ -46,10 +55,28 @@ export async function GET(
         if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
         const user = await prisma.user.findUnique({ where: { id: userId }, select: PROFILE_SELECT });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-        return NextResponse.json(user);
+        return NextResponse.json(shapeUser(user));
     } catch (e) {
         return handleApiError(e, "Failed to fetch user");
     }
+}
+
+// Flatten `userPositions` and derive `branches`/`departments` from the user's
+// Position assignments so the client UI keeps the legacy field shape.
+function shapeUser<T extends { userPositions: { position: { id: string; title: string; branch: { id: string; name: string } | null; department: { id: string; name: string } | null } }[] }>(u: T) {
+    const branchMap = new Map<string, { id: string; name: string }>();
+    const deptMap   = new Map<string, { id: string; name: string }>();
+    for (const up of u.userPositions) {
+        if (up.position.branch)     branchMap.set(up.position.branch.id, up.position.branch);
+        if (up.position.department) deptMap.set(up.position.department.id, up.position.department);
+    }
+    const { userPositions, ...rest } = u;
+    return {
+        ...rest,
+        positions:   userPositions.map(up => up.position),
+        branches:    [...branchMap.values()],
+        departments: [...deptMap.values()],
+    };
 }
 
 const userUpdateSchema = z.object({
@@ -70,8 +97,6 @@ const userUpdateSchema = z.object({
     // admin-only
     role:          z.string().trim().min(1).optional(),
     scope:         z.enum(["OWN", "TEAM", "DEPARTMENT", "BRANCH", "REGION", "ORG"]).optional(),
-    departmentIds: z.array(z.string()).optional(),
-    branchIds:     z.array(z.string()).optional(),
     managerId:     z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
 });
 
@@ -96,8 +121,17 @@ const PUT_SELECT = {
     userRole:    { select: { id: true, label: true, color: true, rank: true, permissions: { select: { permission: true } } } },
     manager:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
     reports:     { select: { id: true, name: true, title: true, role: true, avatarUrl: true, userRole: { select: { label: true, color: true } } } },
-    departments: { select: { id: true, name: true } },
-    branches:    { select: { id: true, name: true } },
+    userPositions: {
+        select: {
+            position: {
+                select: {
+                    id: true, title: true,
+                    branch:     { select: { id: true, name: true } },
+                    department: { select: { id: true, name: true } },
+                },
+            },
+        },
+    },
 } as const;
 
 export async function PUT(
@@ -169,12 +203,10 @@ export async function PUT(
             if (body.role      !== undefined) updateData.role      = body.role;
             if (body.scope     !== undefined) updateData.scope     = body.scope;
             if (body.managerId !== undefined) updateData.managerId = body.managerId ? Number(body.managerId) : null;
-            if (body.departmentIds !== undefined) updateData.departments = { set: body.departmentIds.map(id => ({ id })) };
-            if (body.branchIds    !== undefined) updateData.branches    = { set: body.branchIds.map(id => ({ id })) };
         }
 
         const user = await prisma.user.update({ where: { id: userId }, data: updateData, select: PUT_SELECT });
-        return NextResponse.json(user);
+        return NextResponse.json(shapeUser(user));
     } catch (e) {
         return handleApiError(e, "Failed to update user");
     }

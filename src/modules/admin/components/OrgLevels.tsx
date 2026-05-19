@@ -19,7 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { Crown, Building2, Layers, Briefcase, Users, AlertCircle } from "lucide-react";
-import type { OrgStructure, PostNode } from "@/shared/types/orgChart";
+import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ const AVATAR_COLOR: Record<string, string> = {
     R4: "bg-orange-200 text-orange-900",
 };
 
-function Avatar({ user, size = 32 }: { user: PostNode["holders"][number]["user"]; size?: number }) {
+function Avatar({ user, size = 32 }: { user: PositionNode["holders"][number]["user"]; size?: number }) {
     const [imgErr, setImgErr] = useState(false);
     if (user.avatarUrl && !imgErr) {
         return (
@@ -152,26 +152,26 @@ function EmptyLevel({ label }: { label: string }) {
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function OrgLevels({ structure }: { structure: OrgStructure }) {
-    const { orgWidePosts, branches } = structure;
+    const { orgWidePositions, branches } = structure;
 
     // Flatten data per level
-    const l1Posts = orgWidePosts;
+    const l1Positions = orgWidePositions;
     const l2Branches = branches.map(bg => ({
         ...bg.branch,
-        postCount: bg.deptGroups.reduce((s, g) => s + g.posts.length, 0),
+        positionCount: bg.deptGroups.reduce((s, g) => s + g.positions.length, 0),
     }));
-    const l3DeptsByBranch: { branchName: string; dept: { id: string; name: string } | null; postCount: number }[] = [];
+    const l3DeptsByBranch: { branchName: string; dept: { id: string; name: string } | null; positionCount: number }[] = [];
     branches.forEach(bg => {
         bg.deptGroups.forEach(g => {
-            l3DeptsByBranch.push({ branchName: bg.branch.name, dept: g.dept, postCount: g.posts.length });
+            l3DeptsByBranch.push({ branchName: bg.branch.name, dept: g.dept, positionCount: g.positions.length });
         });
     });
-    const l4Posts: { post: PostNode; context: string }[] = [];
+    const l4Positions: { position: PositionNode; context: string }[] = [];
     branches.forEach(bg => {
         bg.deptGroups.forEach(g => {
-            g.posts.forEach(p => {
-                l4Posts.push({
-                    post: p,
+            g.positions.forEach(p => {
+                l4Positions.push({
+                    position: p,
                     context: g.dept ? `${bg.branch.name} · ${g.dept.name}` : bg.branch.name,
                 });
             });
@@ -206,7 +206,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
 
                 {/* ── LEVEL 1 — Board / Executive Council ─────────────────── */}
                 <div className="flex justify-center flex-wrap gap-4">
-                    {l1Posts.length === 0 ? (
+                    {l1Positions.length === 0 ? (
                         <LevelCard
                             icon={<Crown size={22} className="text-amber-300" />}
                             name="Board of Directors"
@@ -215,7 +215,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                             delay={0}
                         />
                     ) : (
-                        l1Posts.map((p, i) => (
+                        l1Positions.map((p, i) => (
                             <LevelCard
                                 key={p.id}
                                 icon={<Crown size={22} className="text-amber-300" />}
@@ -240,7 +240,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                                 key={b.id}
                                 icon={<Building2 size={22} className="text-sky-300" />}
                                 name={b.name}
-                                title={`${b.postCount} position${b.postCount !== 1 ? "s" : ""}`}
+                                title={`${b.positionCount} position${b.positionCount !== 1 ? "s" : ""}`}
                                 accent="l2"
                                 delay={300 + i * 80}
                             />
@@ -258,7 +258,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                                 key={`${d.branchName}-${d.dept?.id ?? "no-dept"}-${i}`}
                                 icon={<Layers size={22} className="text-emerald-300" />}
                                 name={d.dept?.name ?? "Branch-level"}
-                                title={`${d.branchName} · ${d.postCount} pos`}
+                                title={`${d.branchName} · ${d.positionCount} pos`}
                                 accent="l3"
                                 delay={600 + i * 80}
                             />
@@ -266,22 +266,22 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                     </div>
                 )}
 
-                {l4Posts.length > 0 && <VConnector delay={800} />}
+                {l4Positions.length > 0 && <VConnector delay={800} />}
 
                 {/* ── LEVEL 4 — Positions (with holders) ──────────────────── */}
-                {l4Posts.length > 0 && (
+                {l4Positions.length > 0 && (
                     <div className="flex justify-center flex-wrap gap-4">
-                        {l4Posts.map(({ post, context }, i) => {
-                            const holder = post.holders[0];
+                        {l4Positions.map(({ position, context }, i) => {
+                            const holder = position.holders[0];
                             return (
                                 <LevelCard
-                                    key={post.id}
+                                    key={position.id}
                                     icon={holder
                                         ? <Avatar user={holder.user} size={44} />
                                         : <Briefcase size={22} className="text-violet-300" />
                                     }
-                                    name={holder?.user.name ?? post.title}
-                                    title={holder ? post.title : context}
+                                    name={holder?.user.name ?? position.title}
+                                    title={holder ? position.title : context}
                                     accent="l4"
                                     vacant={!holder}
                                     href={holder ? `/office/social/users/${holder.user.id}` : undefined}
@@ -292,7 +292,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                     </div>
                 )}
 
-                {l4Posts.length === 0 && l1Posts.length === 0 && (
+                {l4Positions.length === 0 && l1Positions.length === 0 && (
                     <p className="text-white/40 text-sm italic mt-6">No positions defined yet</p>
                 )}
             </div>

@@ -47,11 +47,13 @@ export async function GET(req: NextRequest) {
         const excludeIds = [...new Set([...busyUserIds, ...pendingRecipientIds, user!.id])];
 
         // Get branch users with pos:shift:open permission (via their role).
-        // Simplest: get all branch users and filter by whether their role has the permission.
+        // "Branch users" = anyone who holds a Position scoped to this branch,
+        // OR any org-wide Position (branchId = null), since org-wide holders
+        // have access to every branch.
         const candidates = await prisma.user.findMany({
             where: {
-                branches: { some: { id: branchId } },
-                id:       { notIn: excludeIds },
+                userPositions: { some: { position: { OR: [{ branchId }, { branchId: null }] } } },
+                id:            { notIn: excludeIds },
             },
             select: {
                 id:   true,

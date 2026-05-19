@@ -1,7 +1,7 @@
-// DUMMY DATA — demo staff Posts (positions) + 3 demo user appointments.
+// DUMMY DATA — demo staff Positions + 3 demo user appointments.
 // Admin is seeded by bootstrap-seed.ts (production), not here.
-// Run only in dev. `pnpm seed:hard-clean` removes the users (Posts + Branches
-// survive as structural data; UserPost records cascade-delete with the user).
+// Run only in dev. `pnpm seed:hard-clean` removes the users (Positions + Branches
+// survive as structural data; UserPosition records cascade-delete with the user).
 //
 // Run: pnpm seed:dummy-users  (npx tsx prisma/seeds/dummy-users.ts)
 //
@@ -23,31 +23,31 @@ const pool = new Pool({ connectionString: rawUrl, ssl: { rejectUnauthorized: fal
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-// ── Demo Posts — structural positions at HQ branch ───────────────────────────
-// Posts survive hard-clean (they're org structure, same as Branches/Departments).
-// UserPost appointments cascade-delete when the user is removed in Phase 4.
+// ── Demo Positions — structural seats at HQ branch ───────────────────────────
+// Positions survive hard-clean (they're org structure, same as Branches/Departments).
+// UserPosition appointments cascade-delete when the user is removed in Phase 4.
 // All three reference bootstrap branches (BR-HQ) and departments — ensure
 // bootstrap-seed.ts has run first.
-const DEMO_POSTS = [
-    { id: "POST-TECH-HQ",  title: "Repair Technician",  branchId: "BR-HQ", departmentId: "DEP-REPAIR", roleTemplateId: "R2" },
-    { id: "POST-FRONT-HQ", title: "Front Desk Officer",  branchId: "BR-HQ", departmentId: "DEP-DESK",   roleTemplateId: "R3" },
-    { id: "POST-DES-HQ",   title: "Despatch Officer",    branchId: "BR-HQ", departmentId: "DEP-DESP",   roleTemplateId: "R4" },
+const DEMO_POSITIONS = [
+    { id: "POS-TECH-HQ",  title: "Repair Technician",   branchId: "BR-HQ", departmentId: "DEP-REPAIR", roleTemplateId: "R2" },
+    { id: "POS-FRONT-HQ", title: "Front Desk Officer",  branchId: "BR-HQ", departmentId: "DEP-DESK",   roleTemplateId: "R3" },
+    { id: "POS-DES-HQ",   title: "Despatch Officer",    branchId: "BR-HQ", departmentId: "DEP-DESP",   roleTemplateId: "R4" },
 ] as const;
 
-// ── Demo Users — one per role, each appointed to a Post ──────────────────────
+// ── Demo Users — one per role, each appointed to a Position ──────────────────
 const DEMO_USERS = [
-    { email: "tech@networkservice.in",  name: "Technician", role: "R2", password: "tech123",  postId: "POST-TECH-HQ"  },
-    { email: "front@networkservice.in", name: "Front Desk", role: "R3", password: "front123", postId: "POST-FRONT-HQ" },
-    { email: "des@networkservice.in",   name: "Despatch",   role: "R4", password: "des123",   postId: "POST-DES-HQ"   },
+    { email: "tech@networkservice.in",  name: "Technician", role: "R2", password: "tech123",  positionId: "POS-TECH-HQ"  },
+    { email: "front@networkservice.in", name: "Front Desk", role: "R3", password: "front123", positionId: "POS-FRONT-HQ" },
+    { email: "des@networkservice.in",   name: "Despatch",   role: "R4", password: "des123",   positionId: "POS-DES-HQ"   },
 ] as const;
 
 async function main() {
     console.log("\n⚠️  DUMMY DATA — demo users with predictable passwords. DO NOT run in production.\n");
 
-    // ── Step 1: Upsert Posts ───────────────────────────────────────────────────
-    console.log("[1/2] Upserting demo Posts (positions at HQ)…");
-    for (const p of DEMO_POSTS) {
-        await prisma.post.upsert({
+    // ── Step 1: Upsert Positions ──────────────────────────────────────────────
+    console.log("[1/2] Upserting demo Positions at HQ…");
+    for (const p of DEMO_POSITIONS) {
+        await prisma.position.upsert({
             where:  { id: p.id },
             update: { title: p.title, branchId: p.branchId, departmentId: p.departmentId, roleTemplateId: p.roleTemplateId },
             create: { id: p.id, title: p.title, branchId: p.branchId, departmentId: p.departmentId, roleTemplateId: p.roleTemplateId },
@@ -55,8 +55,8 @@ async function main() {
         console.log(`  + ${p.id}: "${p.title}" @ ${p.branchId} · ${p.departmentId} (role ${p.roleTemplateId})`);
     }
 
-    // ── Step 2: Upsert Users + appoint each to their Post ────────────────────
-    console.log("\n[2/2] Upserting demo users + UserPost appointments…");
+    // ── Step 2: Upsert Users + appoint each to their Position ────────────────
+    console.log("\n[2/2] Upserting demo users + UserPosition appointments…");
     for (const u of DEMO_USERS) {
         const password = await bcrypt.hash(u.password, 10);
         const user = await prisma.user.upsert({
@@ -65,12 +65,12 @@ async function main() {
             create: { name: u.name, email: u.email, password, role: u.role },
             select: { id: true },
         });
-        await prisma.userPost.upsert({
-            where:  { userId_postId: { userId: user.id, postId: u.postId } },
+        await prisma.userPosition.upsert({
+            where:  { userId_positionId: { userId: user.id, positionId: u.positionId } },
             update: {},
-            create: { userId: user.id, postId: u.postId },
+            create: { userId: user.id, positionId: u.positionId },
         });
-        console.log(`  + ${u.email} (role ${u.role}) → ${u.postId}   password: ${u.password}`);
+        console.log(`  + ${u.email} (role ${u.role}) → ${u.positionId}   password: ${u.password}`);
     }
 
     console.log(`\n✅ Seeded ${DEMO_USERS.length} demo users with position assignments.`);

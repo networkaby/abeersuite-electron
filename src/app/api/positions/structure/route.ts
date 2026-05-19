@@ -2,21 +2,21 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import type { PostNode, OrgStructure } from "@/shared/types/orgChart";
+import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
 
 // Returns the org structure grouped as:
-//   { orgWidePosts, branches: [{ branch, deptGroups: [{ dept, posts }] }] }
+//   { orgWidePositions, branches: [{ branch, deptGroups: [{ dept, positions }] }] }
 // This drives the Structure Chart in the Org Chart page.
-// Unlike the old flat parentPostId tree, this groups by branch → department
+// Unlike the old flat parentPositionId tree, this groups by branch → department
 // so the chart always shows the correct 4-level hierarchy regardless of
-// whether Post.parentPostId chains are configured.
+// whether Position.parentPositionId chains are configured.
 
 export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const [posts, branches] = await Promise.all([
-            prisma.post.findMany({
+        const [positions, branches] = await Promise.all([
+            prisma.position.findMany({
                 include: {
                     branch:     { select: { id: true, name: true } },
                     department: { select: { id: true, name: true } },
@@ -41,35 +41,35 @@ export async function GET() {
             }),
         ]);
 
-        const toNode = (p: (typeof posts)[number]): PostNode => ({ ...p, children: [] });
+        const toNode = (p: (typeof positions)[number]): PositionNode => ({ ...p, children: [] });
 
-        // ── Org-wide posts (branchId = null) ──────────────────────────────────
-        const orgWidePosts: PostNode[] = posts
+        // ── Org-wide positions (branchId = null) ──────────────────────────────
+        const orgWidePositions: PositionNode[] = positions
             .filter(p => !p.branchId)
             .map(toNode);
 
         // ── Branch groups ─────────────────────────────────────────────────────
         const branchGroups: OrgStructure["branches"] = branches.map(b => {
-            const bPosts = posts.filter(p => p.branchId === b.id);
+            const bPositions = positions.filter(p => p.branchId === b.id);
 
             // Collect unique department keys in insertion order
             const deptIds: (string | null)[] = [];
-            for (const p of bPosts) {
+            for (const p of bPositions) {
                 if (!deptIds.includes(p.departmentId)) deptIds.push(p.departmentId);
             }
 
             const deptGroups: OrgStructure["branches"][number]["deptGroups"] = deptIds
                 .map(deptId => {
-                    const dPosts = bPosts.filter(p => p.departmentId === deptId);
-                    const dept   = dPosts[0]?.department ?? null;
-                    return { dept, posts: dPosts.map(toNode) };
+                    const dPositions = bPositions.filter(p => p.departmentId === deptId);
+                    const dept       = dPositions[0]?.department ?? null;
+                    return { dept, positions: dPositions.map(toNode) };
                 })
-                .filter(g => g.posts.length > 0);
+                .filter(g => g.positions.length > 0);
 
             return { branch: b, deptGroups };
         });
 
-        return NextResponse.json({ orgWidePosts, branches: branchGroups } satisfies OrgStructure);
+        return NextResponse.json({ orgWidePositions, branches: branchGroups } satisfies OrgStructure);
     } catch (e) {
         return handleApiError(e, "Failed to load structure");
     }

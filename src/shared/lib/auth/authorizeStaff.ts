@@ -6,8 +6,8 @@ export type StaffAuthUser = {
     id: string;
     name: string;
     email: string;
-    /** Primary role, derived from the highest-rank Post the user holds.
-     * Null when the user has no Post appointments (no operational authority). */
+    /** Primary role, derived from the highest-rank Position the user holds.
+     * Null when the user has no Position appointments (no operational authority). */
     role: string | null;
     roles: string[];
     permissions: string[];
@@ -37,9 +37,9 @@ export async function authorizeStaffCredentials(
                     permissions: { include: { permission: true } },
                 },
             },
-            posts: {
+            userPositions: {
                 include: {
-                    post: {
+                    position: {
                         include: {
                             roleTemplate: {
                                 include: {
@@ -50,8 +50,6 @@ export async function authorizeStaffCredentials(
                     },
                 },
             },
-            departments: { select: { id: true } },
-            branches: { select: { id: true } },
         },
     });
 
@@ -60,17 +58,17 @@ export async function authorizeStaffCredentials(
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) return null;
 
-    // Roles flow from Post appointments. `User.role` is a manual override / cache
-    // (e.g. promoted admins); it's included in the union when present.
-    const postRoleIds = user.posts
-        .map((up) => up.post.roleTemplateId)
+    // Roles flow from Position appointments. `User.role` is a manual override /
+    // cache (e.g. promoted admins); it's included in the union when present.
+    const positionRoleIds = user.userPositions
+        .map((up) => up.position.roleTemplateId)
         .filter((id): id is string => Boolean(id));
-    const allRoles = new Set<string>(postRoleIds);
+    const allRoles = new Set<string>(positionRoleIds);
     if (user.role) allRoles.add(user.role);
     const roles = [...allRoles];
 
     // Effective permissions = union of grants from User.role (if any) + every
-    // held Post's roleTemplate, then ±UserPermission overrides.
+    // held Position's roleTemplate, then ±UserPermission overrides.
     const effective = new Set<string>();
     if (user.userRole) {
         for (const rp of user.userRole.permissions) {
@@ -78,8 +76,8 @@ export async function authorizeStaffCredentials(
             if (permId) effective.add(permId);
         }
     }
-    for (const userPost of user.posts) {
-        const templatePerms = userPost.post.roleTemplate?.permissions ?? [];
+    for (const userPosition of user.userPositions) {
+        const templatePerms = userPosition.position.roleTemplate?.permissions ?? [];
         for (const rp of templatePerms) {
             const permId = rp.permission?.id;
             if (permId) effective.add(permId);
@@ -99,10 +97,10 @@ export async function authorizeStaffCredentials(
         else effective.delete(o.permissionId);
     }
 
-    // Rank = max rank across user's role + every held Post's roleTemplate.
+    // Rank = max rank across user's role + every held Position's roleTemplate.
     let rank = user.userRole?.rank ?? 0;
-    for (const up of user.posts) {
-        const r = up.post.roleTemplate?.rank ?? 0;
+    for (const up of user.userPositions) {
+        const r = up.position.roleTemplate?.rank ?? 0;
         if (r > rank) rank = r;
     }
 
@@ -110,10 +108,10 @@ export async function authorizeStaffCredentials(
     let roleLabel: string | undefined = user.userRole?.label;
     let roleColor: string | undefined = user.userRole?.color;
     if (!roleLabel) {
-        // No direct user role — pick the highest-rank Post role template.
+        // No direct user role — pick the highest-rank Position role template.
         let best: { rank: number; label?: string; color?: string } | null = null;
-        for (const up of user.posts) {
-            const rt = up.post.roleTemplate;
+        for (const up of user.userPositions) {
+            const rt = up.position.roleTemplate;
             if (rt && (!best || rt.rank > best.rank)) {
                 best = { rank: rt.rank, label: rt.label, color: rt.color };
             }
@@ -122,52 +120,50 @@ export async function authorizeStaffCredentials(
         roleColor = best?.color;
     }
 
-    // ── Derive branch access from Post appointments ───────────────────────────
-    // Org-wide posts (branchId = null, e.g. CEO, CFO) grant access to every
-    // active branch. Branch-specific posts contribute their branchId to the
-    // union. Legacy User.branches relation is merged for backward compat.
-    const postBranchIds: string[] = [];
-    let hasOrgWidePost = false;
-    for (const up of user.posts) {
-        if (up.post.branchId === null) {
-            hasOrgWidePost = true;
+    // ── Derive branch access from Position appointments ──────────────────────
+    // Org-wide positions (branchId = null, e.g. CEO, CFO) grant access to every
+    // active branch. Branch-specific positions contribute their branchId to the
+    // union.
+    const positionBranchIds: string[] = [];
+    let hasOrgWidePosition = false;
+    for (const up of user.userPositions) {
+        if (up.position.branchId === null) {
+            hasOrgWidePosition = true;
         } else {
-            postBranchIds.push(up.post.branchId);
+            positionBranchIds.push(up.position.branchId);
         }
     }
 
     let branchIds: string[];
-    if (hasOrgWidePost) {
+    if (hasOrgWidePosition) {
         const allBranches = await prisma.branch.findMany({
             where: { isActive: true },
             select: { id: true },
         });
         branchIds = allBranches.map((b) => b.id);
     } else {
-        const legacyBranchIds = user.branches.map((b) => b.id);
-        branchIds = [...new Set([...postBranchIds, ...legacyBranchIds])];
+        branchIds = [...new Set(positionBranchIds)];
     }
 
-    // ── Derive department access from Post appointments ──────────────────────
-    // Dept-agnostic posts (departmentId = null) grant access to all departments.
-    // Otherwise union Post-derived dept IDs with legacy User.departments.
-    const postDeptIds: string[] = [];
-    let hasAllDeptPost = false;
-    for (const up of user.posts) {
-        if (up.post.departmentId === null) {
-            hasAllDeptPost = true;
+    // ── Derive department access from Position appointments ──────────────────
+    // Dept-agnostic positions (departmentId = null) grant access to all
+    // departments. Otherwise union Position-derived dept IDs.
+    const positionDeptIds: string[] = [];
+    let hasAllDeptPosition = false;
+    for (const up of user.userPositions) {
+        if (up.position.departmentId === null) {
+            hasAllDeptPosition = true;
         } else {
-            postDeptIds.push(up.post.departmentId);
+            positionDeptIds.push(up.position.departmentId);
         }
     }
 
     let departmentIds: string[];
-    if (hasAllDeptPost) {
+    if (hasAllDeptPosition) {
         const allDepts = await prisma.department.findMany({ select: { id: true } });
         departmentIds = allDepts.map((d) => d.id);
     } else {
-        const legacyDeptIds = user.departments.map((d) => d.id);
-        departmentIds = [...new Set([...postDeptIds, ...legacyDeptIds])];
+        departmentIds = [...new Set(positionDeptIds)];
     }
 
     return {

@@ -12,8 +12,16 @@ const USER_SELECT = {
     avatarUrl:   true,
     managerId:   true,
     userRole:    { select: { label: true, color: true, rank: true } },
-    departments: { select: { id: true, name: true } },
-    branches:    { select: { id: true, name: true } },
+    userPositions: {
+        select: {
+            position: {
+                select: {
+                    branch:     { select: { id: true, name: true } },
+                    department: { select: { id: true, name: true } },
+                },
+            },
+        },
+    },
 } as const;
 
 type FlatUser = {
@@ -55,7 +63,21 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const users = await prisma.user.findMany({ select: USER_SELECT });
+        const raw = await prisma.user.findMany({ select: USER_SELECT });
+        // Derive branches/departments from the user's positions so the
+        // OrgNode shape (which still exposes these arrays for tree rendering)
+        // remains stable for consumers.
+        const users: FlatUser[] = raw.map(u => {
+            const branchMap = new Map<string, { id: string; name: string }>();
+            const deptMap   = new Map<string, { id: string; name: string }>();
+            for (const up of u.userPositions) {
+                if (up.position.branch)     branchMap.set(up.position.branch.id, up.position.branch);
+                if (up.position.department) deptMap.set(up.position.department.id, up.position.department);
+            }
+            const { userPositions: _up, ...rest } = u;
+            void _up;
+            return { ...rest, branches: [...branchMap.values()], departments: [...deptMap.values()] };
+        });
         return NextResponse.json(buildTree(users));
     } catch (e) {
         return handleApiError(e, "Failed to load org chart");

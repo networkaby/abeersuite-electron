@@ -18,8 +18,8 @@ import { useEffect } from "react";
 // Identity-only user creation.
 //
 // Job title, reporting hierarchy, role, branch, and department all flow from
-// Post appointments — see /office/admin/posts. Permission punishments /
-// rewards are layered on top via the per-user PermissionsModal (shield icon
+// Position appointments — see /office/admin/positions. Permission punishments
+// / rewards are layered on top via the per-user PermissionsModal (shield icon
 // in the users table).
 
 const schema = z.object({

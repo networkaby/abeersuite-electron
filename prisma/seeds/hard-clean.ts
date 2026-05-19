@@ -14,7 +14,7 @@
 // Preserves (everything bootstrap-seed.ts wrote, plus user-set config):
 //   • Admin user (admin@networkservice.in)
 //   • Roles, Permissions, RolePermissions
-//   • Branches, Departments, UserPosts
+//   • Branches, Departments, UserPositions
 //   • Pipelines, TicketStatus, TicketSubStatus, transitions
 //   • AccountGroup tree + pure-GL Account chart
 //   • Account.openingBalance / openingBalanceType / openingBalanceDate

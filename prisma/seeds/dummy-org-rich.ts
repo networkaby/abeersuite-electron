@@ -98,7 +98,7 @@ const USERS = [
     { email: "biki.kok@demo.in",       name: "Biki" },
 ];
 
-interface PostDef {
+interface PositionDef {
     id: string;
     title: string;
     branchId: string | null;
@@ -107,58 +107,58 @@ interface PostDef {
     holders: string[]; // user emails
 }
 
-const POSTS: PostDef[] = [
+const POSITIONS: PositionDef[] = [
     // ─────────────── HEADQUARTERS — Board of Directors ───────────────
-    { id: "POST-CHAIRMAN",     title: "Chairman",              branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["rajan.sharma@demo.in"] },
-    { id: "POST-BOARD-MEENA",  title: "Board Director",        branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["meena.agarwal@demo.in"] },
-    { id: "POST-BOARD-SURESH", title: "Board Director",        branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["suresh.verma@demo.in"] },
-    { id: "POST-BOARD-LATA",   title: "Independent Director",  branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["lata.bose@demo.in"] },
+    { id: "POS-CHAIRMAN",     title: "Chairman",              branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["rajan.sharma@demo.in"] },
+    { id: "POS-BOARD-MEENA",  title: "Board Director",        branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["meena.agarwal@demo.in"] },
+    { id: "POS-BOARD-SURESH", title: "Board Director",        branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["suresh.verma@demo.in"] },
+    { id: "POS-BOARD-LATA",   title: "Independent Director",  branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["lata.bose@demo.in"] },
 
     // ─────────────── HEADQUARTERS — Chief Executive ───────────────
-    { id: "POST-CEO",          title: "CEO",                   branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["anil.das@demo.in"] },
+    { id: "POS-CEO",          title: "CEO",                   branchId: null, departmentId: null,        roleTemplateId: "R1", holders: ["anil.das@demo.in"] },
 
     // ─────────────── HEADQUARTERS — C-Level Executives ───────────────
-    { id: "POST-CFO",          title: "CFO",                   branchId: null, departmentId: "DEP-FIN",   roleTemplateId: "R1", holders: ["priya.nair@demo.in"] },
-    { id: "POST-CTO",          title: "CTO",                   branchId: null, departmentId: "DEP-IT",    roleTemplateId: "R1", holders: ["sneha.roy@demo.in"] },
-    { id: "POST-CMO",          title: "CMO",                   branchId: null, departmentId: "DEP-MKT",   roleTemplateId: "R1", holders: ["farhan.ali@demo.in"] },
-    { id: "POST-COO",          title: "COO",                   branchId: null, departmentId: "DEP-OPS",   roleTemplateId: "R1", holders: ["kaberi.nath@demo.in"] },
-    { id: "POST-CIO",          title: "CIO",                   branchId: null, departmentId: "DEP-IT",    roleTemplateId: "R1", holders: ["nandita.sen@demo.in"] },
+    { id: "POS-CFO",          title: "CFO",                   branchId: null, departmentId: "DEP-FIN",   roleTemplateId: "R1", holders: ["priya.nair@demo.in"] },
+    { id: "POS-CTO",          title: "CTO",                   branchId: null, departmentId: "DEP-IT",    roleTemplateId: "R1", holders: ["sneha.roy@demo.in"] },
+    { id: "POS-CMO",          title: "CMO",                   branchId: null, departmentId: "DEP-MKT",   roleTemplateId: "R1", holders: ["farhan.ali@demo.in"] },
+    { id: "POS-COO",          title: "COO",                   branchId: null, departmentId: "DEP-OPS",   roleTemplateId: "R1", holders: ["kaberi.nath@demo.in"] },
+    { id: "POS-CIO",          title: "CIO",                   branchId: null, departmentId: "DEP-IT",    roleTemplateId: "R1", holders: ["nandita.sen@demo.in"] },
 
     // ─────────────── HEADQUARTERS — Central Department Heads ───────────────
-    { id: "POST-HEAD-FIN",     title: "Finance Head",          branchId: null, departmentId: "DEP-FIN",   roleTemplateId: "R3", holders: ["anita.bora@demo.in"] },
-    { id: "POST-HEAD-HR",      title: "HR Head",               branchId: null, departmentId: "DEP-HR",    roleTemplateId: "R3", holders: ["puja.das@demo.in"] },
-    { id: "POST-HEAD-IT",      title: "IT Head",               branchId: null, departmentId: "DEP-IT",    roleTemplateId: "R3", holders: ["amit.patgiri@demo.in"] },
-    { id: "POST-HEAD-MKT",     title: "Marketing Head",        branchId: null, departmentId: "DEP-MKT",   roleTemplateId: "R3", holders: ["smita.roy@demo.in"] },
-    { id: "POST-HEAD-LEGAL",   title: "Legal Head",            branchId: null, departmentId: "DEP-LEGAL", roleTemplateId: "R3", holders: ["ravi.soni@demo.in"] },
-    { id: "POST-HEAD-AUDIT",   title: "Audit Head",            branchId: null, departmentId: "DEP-AUDIT", roleTemplateId: "R3", holders: ["vinay.kohli@demo.in"] },
-    { id: "POST-HEAD-OPS",     title: "Operations Head",       branchId: null, departmentId: "DEP-OPS",   roleTemplateId: "R3", holders: ["dimal.hazra@demo.in"] },
+    { id: "POS-HEAD-FIN",     title: "Finance Head",          branchId: null, departmentId: "DEP-FIN",   roleTemplateId: "R3", holders: ["anita.bora@demo.in"] },
+    { id: "POS-HEAD-HR",      title: "HR Head",               branchId: null, departmentId: "DEP-HR",    roleTemplateId: "R3", holders: ["puja.das@demo.in"] },
+    { id: "POS-HEAD-IT",      title: "IT Head",               branchId: null, departmentId: "DEP-IT",    roleTemplateId: "R3", holders: ["amit.patgiri@demo.in"] },
+    { id: "POS-HEAD-MKT",     title: "Marketing Head",        branchId: null, departmentId: "DEP-MKT",   roleTemplateId: "R3", holders: ["smita.roy@demo.in"] },
+    { id: "POS-HEAD-LEGAL",   title: "Legal Head",            branchId: null, departmentId: "DEP-LEGAL", roleTemplateId: "R3", holders: ["ravi.soni@demo.in"] },
+    { id: "POS-HEAD-AUDIT",   title: "Audit Head",            branchId: null, departmentId: "DEP-AUDIT", roleTemplateId: "R3", holders: ["vinay.kohli@demo.in"] },
+    { id: "POS-HEAD-OPS",     title: "Operations Head",       branchId: null, departmentId: "DEP-OPS",   roleTemplateId: "R3", holders: ["dimal.hazra@demo.in"] },
 
     // ─────────────── GUWAHATI BRANCH ───────────────
-    { id: "POST-BM-GUW",       title: "Branch Manager",        branchId: "BR-GUWAHATI",   departmentId: null,         roleTemplateId: "R3", holders: ["pallabi.devi@demo.in"] },
-    { id: "POST-GUW-SALES-1",  title: "Sales Executive",       branchId: "BR-GUWAHATI",   departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["ritu.guw@demo.in"] },
-    { id: "POST-GUW-SALES-2",  title: "Sales Executive",       branchId: "BR-GUWAHATI",   departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["nayan.guw@demo.in"] },
-    { id: "POST-GUW-IT-1",     title: "IT Support",            branchId: "BR-GUWAHATI",   departmentId: "DEP-IT",     roleTemplateId: "R2", holders: ["rubul.guw@demo.in"] },
-    { id: "POST-GUW-ACC-1",    title: "Accountant",            branchId: "BR-GUWAHATI",   departmentId: "DEP-FIN",    roleTemplateId: "R3", holders: ["lina.guw@demo.in"] },
+    { id: "POS-BM-GUW",       title: "Branch Manager",        branchId: "BR-GUWAHATI",   departmentId: null,         roleTemplateId: "R3", holders: ["pallabi.devi@demo.in"] },
+    { id: "POS-GUW-SALES-1",  title: "Sales Executive",       branchId: "BR-GUWAHATI",   departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["ritu.guw@demo.in"] },
+    { id: "POS-GUW-SALES-2",  title: "Sales Executive",       branchId: "BR-GUWAHATI",   departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["nayan.guw@demo.in"] },
+    { id: "POS-GUW-IT-1",     title: "IT Support",            branchId: "BR-GUWAHATI",   departmentId: "DEP-IT",     roleTemplateId: "R2", holders: ["rubul.guw@demo.in"] },
+    { id: "POS-GUW-ACC-1",    title: "Accountant",            branchId: "BR-GUWAHATI",   departmentId: "DEP-FIN",    roleTemplateId: "R3", holders: ["lina.guw@demo.in"] },
 
     // ─────────────── ABHAYAPURI BRANCH ───────────────
-    { id: "POST-BM-ABH",       title: "Branch Manager",        branchId: "BR-ABHAYAPURI", departmentId: null,         roleTemplateId: "R3", holders: ["imran.hussain@demo.in"] },
-    { id: "POST-ABH-SALES-1",  title: "Sales Executive",       branchId: "BR-ABHAYAPURI", departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["komal.abh@demo.in"] },
-    { id: "POST-ABH-SALES-2",  title: "Sales Executive",       branchId: "BR-ABHAYAPURI", departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["hiran.abh@demo.in"] },
-    { id: "POST-ABH-SUP-1",    title: "Support Agent",         branchId: "BR-ABHAYAPURI", departmentId: "DEP-SUPPORT",roleTemplateId: "R2", holders: ["diva.abh@demo.in"] },
-    { id: "POST-ABH-STORE-1",  title: "Store Staff",           branchId: "BR-ABHAYAPURI", departmentId: "DEP-STORE",  roleTemplateId: "R4", holders: ["mausi.abh@demo.in"] },
+    { id: "POS-BM-ABH",       title: "Branch Manager",        branchId: "BR-ABHAYAPURI", departmentId: null,         roleTemplateId: "R3", holders: ["imran.hussain@demo.in"] },
+    { id: "POS-ABH-SALES-1",  title: "Sales Executive",       branchId: "BR-ABHAYAPURI", departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["komal.abh@demo.in"] },
+    { id: "POS-ABH-SALES-2",  title: "Sales Executive",       branchId: "BR-ABHAYAPURI", departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["hiran.abh@demo.in"] },
+    { id: "POS-ABH-SUP-1",    title: "Support Agent",         branchId: "BR-ABHAYAPURI", departmentId: "DEP-SUPPORT",roleTemplateId: "R2", holders: ["diva.abh@demo.in"] },
+    { id: "POS-ABH-STORE-1",  title: "Store Staff",           branchId: "BR-ABHAYAPURI", departmentId: "DEP-STORE",  roleTemplateId: "R4", holders: ["mausi.abh@demo.in"] },
 
     // ─────────────── BONGAIGAON BRANCH ───────────────
-    { id: "POST-BM-BON",       title: "Branch Manager",        branchId: "BR-BONGAIGAON", departmentId: null,         roleTemplateId: "R3", holders: ["jitu.baruah@demo.in"] },
-    { id: "POST-BON-SALES-1",  title: "Sales Executive",       branchId: "BR-BONGAIGAON", departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["sanju.bon@demo.in"] },
-    { id: "POST-BON-SUP-1",    title: "Support Agent",         branchId: "BR-BONGAIGAON", departmentId: "DEP-SUPPORT",roleTemplateId: "R2", holders: ["rohan.bon@demo.in"] },
-    { id: "POST-BON-ACC-1",    title: "Accountant",            branchId: "BR-BONGAIGAON", departmentId: "DEP-FIN",    roleTemplateId: "R3", holders: ["puja.bon@demo.in"] },
-    { id: "POST-BON-HR-1",     title: "HR Officer",            branchId: "BR-BONGAIGAON", departmentId: "DEP-HR",     roleTemplateId: "R3", holders: ["rekha.bon@demo.in"] },
+    { id: "POS-BM-BON",       title: "Branch Manager",        branchId: "BR-BONGAIGAON", departmentId: null,         roleTemplateId: "R3", holders: ["jitu.baruah@demo.in"] },
+    { id: "POS-BON-SALES-1",  title: "Sales Executive",       branchId: "BR-BONGAIGAON", departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["sanju.bon@demo.in"] },
+    { id: "POS-BON-SUP-1",    title: "Support Agent",         branchId: "BR-BONGAIGAON", departmentId: "DEP-SUPPORT",roleTemplateId: "R2", holders: ["rohan.bon@demo.in"] },
+    { id: "POS-BON-ACC-1",    title: "Accountant",            branchId: "BR-BONGAIGAON", departmentId: "DEP-FIN",    roleTemplateId: "R3", holders: ["puja.bon@demo.in"] },
+    { id: "POS-BON-HR-1",     title: "HR Officer",            branchId: "BR-BONGAIGAON", departmentId: "DEP-HR",     roleTemplateId: "R3", holders: ["rekha.bon@demo.in"] },
 
     // ─────────────── KOKRAJHAR BRANCH ───────────────
-    { id: "POST-BM-KOK",       title: "Branch Manager",        branchId: "BR-KOKRAJHAR",  departmentId: null,         roleTemplateId: "R3", holders: ["anita.boro@demo.in"] },
-    { id: "POST-KOK-SALES-1",  title: "Sales Executive",       branchId: "BR-KOKRAJHAR",  departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["dipak.kok@demo.in"] },
-    { id: "POST-KOK-SUP-1",    title: "Support Agent",         branchId: "BR-KOKRAJHAR",  departmentId: "DEP-SUPPORT",roleTemplateId: "R2", holders: ["prashant.kok@demo.in"] },
-    { id: "POST-KOK-IT-1",     title: "IT Support",            branchId: "BR-KOKRAJHAR",  departmentId: "DEP-IT",     roleTemplateId: "R2", holders: ["biki.kok@demo.in"] },
+    { id: "POS-BM-KOK",       title: "Branch Manager",        branchId: "BR-KOKRAJHAR",  departmentId: null,         roleTemplateId: "R3", holders: ["anita.boro@demo.in"] },
+    { id: "POS-KOK-SALES-1",  title: "Sales Executive",       branchId: "BR-KOKRAJHAR",  departmentId: "DEP-SALES",  roleTemplateId: "R3", holders: ["dipak.kok@demo.in"] },
+    { id: "POS-KOK-SUP-1",    title: "Support Agent",         branchId: "BR-KOKRAJHAR",  departmentId: "DEP-SUPPORT",roleTemplateId: "R2", holders: ["prashant.kok@demo.in"] },
+    { id: "POS-KOK-IT-1",     title: "IT Support",            branchId: "BR-KOKRAJHAR",  departmentId: "DEP-IT",     roleTemplateId: "R2", holders: ["biki.kok@demo.in"] },
 ];
 
 async function main() {
@@ -203,10 +203,10 @@ async function main() {
     }
     console.log(`  ✓ ${USERS.length} users (password: demo123)`);
 
-    // ── Step 4: Posts + UserPost appointments ────────────────────────────────
-    console.log("\n[4/4] Upserting posts + appointments…");
-    for (const p of POSTS) {
-        await prisma.post.upsert({
+    // ── Step 4: Positions + UserPosition appointments ────────────────────────
+    console.log("\n[4/4] Upserting positions + appointments…");
+    for (const p of POSITIONS) {
+        await prisma.position.upsert({
             where:  { id: p.id },
             update: { title: p.title, branchId: p.branchId, departmentId: p.departmentId, roleTemplateId: p.roleTemplateId },
             create: { id: p.id, title: p.title, branchId: p.branchId, departmentId: p.departmentId, roleTemplateId: p.roleTemplateId },
@@ -214,20 +214,20 @@ async function main() {
         for (const email of p.holders) {
             const userId = userIdByEmail.get(email);
             if (!userId) { console.warn(`    ⚠ user not found: ${email}`); continue; }
-            await prisma.userPost.upsert({
-                where:  { userId_postId: { userId, postId: p.id } },
+            await prisma.userPosition.upsert({
+                where:  { userId_positionId: { userId, positionId: p.id } },
                 update: {},
-                create: { userId, postId: p.id },
+                create: { userId, positionId: p.id },
             });
         }
     }
-    console.log(`  ✓ ${POSTS.length} posts with ${POSTS.reduce((s, p) => s + p.holders.length, 0)} appointments`);
+    console.log(`  ✓ ${POSITIONS.length} positions with ${POSITIONS.reduce((s, p) => s + p.holders.length, 0)} appointments`);
 
     // ── Summary ──────────────────────────────────────────────────────────────
-    const boardCount = POSTS.filter(p => !p.branchId && /(chairman|board|director)/i.test(p.title)).length;
-    const cLevelCount = POSTS.filter(p => !p.branchId && /^(ceo|cfo|cto|coo|cio|cmo|cso)\b/i.test(p.title)).length;
-    const headCount   = POSTS.filter(p => !p.branchId && /head/i.test(p.title)).length;
-    const branchPostCount = POSTS.filter(p => p.branchId).length;
+    const boardCount = POSITIONS.filter(p => !p.branchId && /(chairman|board|director)/i.test(p.title)).length;
+    const cLevelCount = POSITIONS.filter(p => !p.branchId && /^(ceo|cfo|cto|coo|cio|cmo|cso)\b/i.test(p.title)).length;
+    const headCount   = POSITIONS.filter(p => !p.branchId && /head/i.test(p.title)).length;
+    const branchPositionCount = POSITIONS.filter(p => p.branchId).length;
 
     console.log("\n✅ Rich org chart seeded:");
     console.log(`   • Headquarters (Mumbai):`);
@@ -235,7 +235,7 @@ async function main() {
     console.log(`       CEO + C-Level:         ${cLevelCount}`);
     console.log(`       Central Dept Heads:    ${headCount}`);
     console.log(`   • Regional Branches:       4 (Guwahati / Abhayapuri / Bongaigaon / Kokrajhar)`);
-    console.log(`       Total branch positions: ${branchPostCount}`);
+    console.log(`       Total branch positions: ${branchPositionCount}`);
     console.log(`\n   Open /office/admin/org-chart → try Regions / Hierarchy / Levels tabs.\n`);
 }
 

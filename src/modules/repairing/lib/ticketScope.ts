@@ -38,22 +38,26 @@ export function buildTicketReadScopeWhere(user: ResolvedUser): Prisma.TicketWher
 
     if (scope === "department") {
         if (user.departmentIds.length === 0) return own;
+        // Match users who hold a Position scoped to one of the caller's departments.
+        const inDept = { userPositions: { some: { position: { departmentId: { in: user.departmentIds } } } } };
         return {
             OR: [
                 own,
-                { primaryOwner: { departments: { some: { id: { in: user.departmentIds } } } } },
-                { participants: { some: { removedAt: null, user: { departments: { some: { id: { in: user.departmentIds } } } } } } },
+                { primaryOwner: inDept },
+                { participants: { some: { removedAt: null, user: inDept } } },
             ],
         };
     }
 
     // scope === "branch"
     if (user.branchIds.length === 0) return own;
+    // Match users who hold a Position scoped to one of the caller's branches.
+    const inBranch = { userPositions: { some: { position: { branchId: { in: user.branchIds } } } } };
     return {
         OR: [
             own,
-            { primaryOwner: { branches: { some: { id: { in: user.branchIds } } } } },
-            { participants: { some: { removedAt: null, user: { branches: { some: { id: { in: user.branchIds } } } } } } },
+            { primaryOwner: inBranch },
+            { participants: { some: { removedAt: null, user: inBranch } } },
         ],
     };
 }

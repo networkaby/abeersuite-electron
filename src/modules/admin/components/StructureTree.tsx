@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Building2, Layers, Briefcase, Globe2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { PostNode, OrgStructure } from "@/shared/types/orgChart";
+import type { PositionNode, OrgStructure } from "@/shared/types/orgChart";
 
 // ── Avatar helpers ────────────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ const AVATAR_COLOR: Record<string, string> = {
     R4: "bg-orange-100 text-orange-700",
 };
 
-function HolderRow({ user }: { user: PostNode["holders"][number]["user"] }) {
+function HolderRow({ user }: { user: PositionNode["holders"][number]["user"] }) {
     const [imgErr, setImgErr] = useState(false);
     return (
         <Link
@@ -50,9 +50,9 @@ function HolderRow({ user }: { user: PostNode["holders"][number]["user"] }) {
     );
 }
 
-// ── Post card ─────────────────────────────────────────────────────────────────
+// ── Position card ─────────────────────────────────────────────────────────────
 
-function PostCard({ node, orgWide }: { node: PostNode; orgWide?: boolean }) {
+function PositionCard({ node, orgWide }: { node: PositionNode; orgWide?: boolean }) {
     return (
         <div className={[
             "border-2 bg-card w-44 text-center px-3 py-2.5 shadow-sm rounded-sm shrink-0",
@@ -90,15 +90,15 @@ function HBar({ count, cellW }: { count: number; cellW: number }) {
 }
 
 // ── Dept group card ───────────────────────────────────────────────────────────
-// Dept label → connector → post cards in a row
+// Dept label → connector → position cards in a row
 
-const POST_CELL_W = 192; // px (w-44 = 176 + 16 gap)
+const POSITION_CELL_W = 192; // px (w-44 = 176 + 16 gap)
 
-function DeptGroup({ dept, posts }: { dept: { id: string; name: string } | null; posts: PostNode[] }) {
-    if (posts.length === 0) return null;
+function DeptGroup({ dept, positions }: { dept: { id: string; name: string } | null; positions: PositionNode[] }) {
+    if (positions.length === 0) return null;
 
-    const cellW  = POST_CELL_W;
-    const totalW = posts.length * cellW;
+    const cellW  = POSITION_CELL_W;
+    const totalW = positions.length * cellW;
 
     return (
         <div className="flex flex-col items-center" style={{ width: totalW }}>
@@ -110,12 +110,12 @@ function DeptGroup({ dept, posts }: { dept: { id: string; name: string } | null;
                 </div>
             )}
             <VLine h={12} />
-            <HBar count={posts.length} cellW={cellW} />
+            <HBar count={positions.length} cellW={cellW} />
             <div className="flex">
-                {posts.map(p => (
+                {positions.map(p => (
                     <div key={p.id} className="flex flex-col items-center" style={{ width: cellW }}>
                         <VLine h={12} />
-                        <PostCard node={p} />
+                        <PositionCard node={p} />
                     </div>
                 ))}
             </div>
@@ -129,8 +129,8 @@ function BranchNode({ branch, deptGroups }: OrgStructure["branches"][number]) {
     const isEmpty = deptGroups.length === 0;
 
     // Calculate total width for centering the branch card above its children
-    const totalPostCount = deptGroups.reduce((s, g) => s + g.posts.length, 0);
-    const contentW = Math.max(totalPostCount * POST_CELL_W, POST_CELL_W);
+    const totalPositionCount = deptGroups.reduce((s, g) => s + g.positions.length, 0);
+    const contentW = Math.max(totalPositionCount * POSITION_CELL_W, POSITION_CELL_W);
 
     return (
         <div className="flex flex-col items-center" style={{ width: contentW }}>
@@ -141,7 +141,7 @@ function BranchNode({ branch, deptGroups }: OrgStructure["branches"][number]) {
             </div>
 
             {isEmpty ? (
-                <p className="mt-3 text-[10px] text-muted-foreground italic">No posts</p>
+                <p className="mt-3 text-[10px] text-muted-foreground italic">No positions</p>
             ) : (
                 <>
                     <VLine h={16} />
@@ -149,7 +149,7 @@ function BranchNode({ branch, deptGroups }: OrgStructure["branches"][number]) {
                     <HBar count={deptGroups.length} cellW={deptGroups.length > 1 ? contentW / deptGroups.length : contentW} />
                     <div className="flex">
                         {deptGroups.map((g, i) => (
-                            <DeptGroup key={g.dept?.id ?? `no-dept-${i}`} dept={g.dept} posts={g.posts} />
+                            <DeptGroup key={g.dept?.id ?? `no-dept-${i}`} dept={g.dept} positions={g.positions} />
                         ))}
                     </div>
                 </>
@@ -160,9 +160,9 @@ function BranchNode({ branch, deptGroups }: OrgStructure["branches"][number]) {
 
 // ── Org-wide (Executive Council) row ─────────────────────────────────────────
 
-function OrgWideRow({ posts }: { posts: PostNode[] }) {
-    const cellW  = POST_CELL_W;
-    const totalW = posts.length * cellW;
+function OrgWideRow({ positions }: { positions: PositionNode[] }) {
+    const cellW  = POSITION_CELL_W;
+    const totalW = positions.length * cellW;
 
     return (
         <div className="flex flex-col items-center">
@@ -173,12 +173,12 @@ function OrgWideRow({ posts }: { posts: PostNode[] }) {
                     Executive Council
                 </span>
             </div>
-            <HBar count={posts.length} cellW={cellW} />
+            <HBar count={positions.length} cellW={cellW} />
             <div className="flex" style={{ width: totalW }}>
-                {posts.map(p => (
+                {positions.map(p => (
                     <div key={p.id} className="flex flex-col items-center" style={{ width: cellW }}>
-                        <VLine h={posts.length > 1 ? 12 : 0} />
-                        <PostCard node={p} orgWide />
+                        <VLine h={positions.length > 1 ? 12 : 0} />
+                        <PositionCard node={p} orgWide />
                     </div>
                 ))}
             </div>
@@ -189,27 +189,27 @@ function OrgWideRow({ posts }: { posts: PostNode[] }) {
 // ── Public component ──────────────────────────────────────────────────────────
 
 export default function StructureTree({ structure }: { structure: OrgStructure }) {
-    const { orgWidePosts, branches } = structure;
+    const { orgWidePositions, branches } = structure;
     const hasBranches = branches.length > 0;
 
-    if (orgWidePosts.length === 0 && !hasBranches) return null;
+    if (orgWidePositions.length === 0 && !hasBranches) return null;
 
     // Total width of the branches row for centering the org-wide section above
-    const totalPostsCount = branches.reduce(
-        (s, bg) => s + Math.max(bg.deptGroups.reduce((ss, g) => ss + g.posts.length, 0), 1),
+    const totalPositionsCount = branches.reduce(
+        (s, bg) => s + Math.max(bg.deptGroups.reduce((ss, g) => ss + g.positions.length, 0), 1),
         0,
     );
-    const branchRowW = Math.max(totalPostsCount * POST_CELL_W, POST_CELL_W);
+    const branchRowW = Math.max(totalPositionsCount * POSITION_CELL_W, POSITION_CELL_W);
 
     return (
         <div className="overflow-auto pb-12">
             <div className="min-w-max pt-6 flex flex-col items-start">
 
                 {/* ── Level 1: Executive Council ───────────────────────── */}
-                {orgWidePosts.length > 0 && (
+                {orgWidePositions.length > 0 && (
                     <div style={{ width: branchRowW }}>
                         <div className="flex justify-center">
-                            <OrgWideRow posts={orgWidePosts} />
+                            <OrgWideRow positions={orgWidePositions} />
                         </div>
                         {hasBranches && (
                             <>

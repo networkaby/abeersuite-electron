@@ -37,11 +37,11 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         const { id } = await params;
         const dept = await prisma.department.findUnique({
             where: { id },
-            include: { _count: { select: { users: true } } },
+            include: { _count: { select: { positions: true } } },
         });
         if (!dept) return NextResponse.json({ error: "Department not found" }, { status: 404 });
-        if (dept._count.users > 0) {
-            return NextResponse.json({ error: "Cannot delete department with assigned users. Reassign users first." }, { status: 400 });
+        if (dept._count.positions > 0) {
+            return NextResponse.json({ error: "Cannot delete department with assigned positions. Reassign first." }, { status: 400 });
         }
         await prisma.department.delete({ where: { id } });
         return NextResponse.json({ success: true });

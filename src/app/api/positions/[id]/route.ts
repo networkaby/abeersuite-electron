@@ -7,14 +7,14 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const updateSchema = z.object({
-    title:        z.string().trim().min(1, "Title is required").optional(),
-    branchId:     z.string().trim().optional().nullable(),
-    departmentId: z.string().trim().optional().nullable(),
-    parentPostId: z.string().trim().optional().nullable(),
-    roleTemplateId: z.string().trim().optional().nullable(),
+    title:            z.string().trim().min(1, "Title is required").optional(),
+    branchId:         z.string().trim().optional().nullable(),
+    departmentId:     z.string().trim().optional().nullable(),
+    parentPositionId: z.string().trim().optional().nullable(),
+    roleTemplateId:   z.string().trim().optional().nullable(),
 });
 
-const POST_INCLUDE = {
+const POSITION_INCLUDE = {
     branch:     { select: { id: true, name: true } },
     department: { select: { id: true, name: true } },
     parent:     { select: { id: true, title: true } },
@@ -33,11 +33,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (response) return response;
     try {
         const { id } = await params;
-        const post = await prisma.post.findUnique({ where: { id }, include: POST_INCLUDE });
-        if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-        return NextResponse.json(post);
+        const position = await prisma.position.findUnique({ where: { id }, include: POSITION_INCLUDE });
+        if (!position) return NextResponse.json({ error: "Position not found" }, { status: 404 });
+        return NextResponse.json(position);
     } catch (e) {
-        return handleApiError(e, "Failed to fetch post");
+        return handleApiError(e, "Failed to fetch position");
     }
 }
 
@@ -48,10 +48,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { id } = await params;
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
-        const post = await prisma.post.update({ where: { id }, data: data, include: POST_INCLUDE });
-        return NextResponse.json(post);
+        const position = await prisma.position.update({ where: { id }, data: data, include: POSITION_INCLUDE });
+        return NextResponse.json(position);
     } catch (e) {
-        return handleApiError(e, "Failed to update post");
+        return handleApiError(e, "Failed to update position");
     }
 }
 
@@ -60,17 +60,20 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (response) return response;
     try {
         const { id } = await params;
-        const post = await prisma.post.findUnique({
+        const position = await prisma.position.findUnique({
             where: { id },
             include: { _count: { select: { children: true, holders: true } } },
         });
-        if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-        if (post._count.children > 0) {
-            return NextResponse.json({ error: "Reassign or delete child posts first" }, { status: 400 });
+        if (!position) return NextResponse.json({ error: "Position not found" }, { status: 404 });
+        if (position._count.children > 0) {
+            return NextResponse.json({ error: "Reassign or delete child positions first" }, { status: 400 });
         }
-        await prisma.post.delete({ where: { id } });
+        if (position._count.holders > 0) {
+            return NextResponse.json({ error: "Cannot delete position with assigned holders. Remove holders first." }, { status: 400 });
+        }
+        await prisma.position.delete({ where: { id } });
         return NextResponse.json({ success: true });
     } catch (e) {
-        return handleApiError(e, "Failed to delete post");
+        return handleApiError(e, "Failed to delete position");
     }
 }

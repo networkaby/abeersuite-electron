@@ -9,8 +9,8 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Identity-only user creation. Role, branch, department, and reporting line
-// are NOT accepted — they all flow from Post appointments on
-// /office/admin/posts. New users have `role = null` (zero permissions).
+// are NOT accepted — they all flow from Position appointments on
+// /office/admin/positions. New users have `role = null` (zero permissions).
 // Per-user permission overrides (punishment/reward) are managed via the
 // PermissionsModal on the users page.
 const createUserSchema = z.object({
@@ -31,11 +31,9 @@ const USER_SELECT = {
     avatarUrl:   true,
     userRole:    { select: { id: true, label: true, color: true, rank: true } },
     manager:     { select: { id: true, name: true } },
-    departments: { select: { id: true, name: true } },
-    branches:    { select: { id: true, name: true } },
-    posts: {
+    userPositions: {
         select: {
-            post: {
+            position: {
                 select: {
                     id:           true,
                     title:        true,
@@ -56,13 +54,24 @@ export async function GET() {
             orderBy: { createdAt: "desc" },
             select: USER_SELECT,
         });
-        // Flatten the UserPost junction so the client gets `positions: [...]`
-        // directly (cleaner than `posts: [{ post: {...} }]`).
+        // Flatten the UserPosition junction so the client gets `positions: [...]`
+        // directly (cleaner than `userPositions: [{ position: {...} }]`).
+        // Derive `branches`/`departments` from the user's positions so callers
+        // that used to read these arrays off User keep working.
         const shaped = users.map((u) => {
-            const { posts, ...rest } = u;
+            const { userPositions, ...rest } = u;
+            const positions = userPositions.map((up) => up.position);
+            const branchMap = new Map<string, { id: string; name: string }>();
+            const deptMap   = new Map<string, { id: string; name: string }>();
+            for (const p of positions) {
+                if (p.branch)     branchMap.set(p.branch.id, p.branch);
+                if (p.department) deptMap.set(p.department.id, p.department);
+            }
             return {
                 ...rest,
-                positions: posts.map((up) => up.post),
+                positions,
+                branches:    [...branchMap.values()],
+                departments: [...deptMap.values()],
             };
         });
         return NextResponse.json(shaped);

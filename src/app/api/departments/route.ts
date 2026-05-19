@@ -17,21 +17,12 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        // Counts come from Posts (the new model) rather than the legacy
-        // User.departments[] direct relation. Reasoning:
-        //   • Users now belong to departments via Post appointments
-        //     (UserPost → Post.departmentId). User.departments[] is only
-        //     populated for legacy accounts and would show 0 for new staff.
-        //   • Departments are typically org-wide (branchId = null) and
-        //     referenced by Posts at any branch — counting "how many
-        //     branches use this dept" is more useful than counting
-        //     legacy direct assignments.
+        // Counts come from Positions (the org assignment model).
         const departments = await prisma.department.findMany({
             orderBy: { name: "asc" },
             include: {
                 branch: { select: { id: true, name: true } },
-                _count: { select: { users: true } },          // legacy fallback
-                posts:  {
+                positions: {
                     select: {
                         branchId: true,
                         holders:  { select: { userId: true } },
@@ -41,23 +32,20 @@ export async function GET() {
         });
 
         const shaped = departments.map(d => {
-            const userIds  = new Set<number>();
+            const userIds   = new Set<number>();
             const branchIds = new Set<string>();
-            for (const p of d.posts) {
+            for (const p of d.positions) {
                 for (const h of p.holders) userIds.add(h.userId);
                 if (p.branchId) branchIds.add(p.branchId);
             }
-            // Post-based count takes precedence; falls back to legacy if zero.
-            const userCount = userIds.size > 0 ? userIds.size : d._count.users;
 
-            const { posts, _count, ...rest } = d;
-            void _count;
+            const { positions, ...rest } = d;
             return {
                 ...rest,
                 _count: {
-                    users:    userCount,
-                    posts:    posts.length,
-                    branches: branchIds.size,
+                    users:     userIds.size,
+                    positions: positions.length,
+                    branches:  branchIds.size,
                 },
             };
         });

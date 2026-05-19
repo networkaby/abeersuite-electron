@@ -18,21 +18,15 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        // We compute counts from Posts (the new model) rather than the legacy
-        // User.branches[] / Department.branchId direct relations. Reasoning:
-        //   • Users now belong to branches via Post appointments (UserPost →
-        //     Post.branchId). User.branches[] is only populated for legacy
-        //     accounts and would show 0 for new staff.
-        //   • Departments are typically seeded org-wide (branchId = null) and
-        //     are referenced by branch-scoped Posts. Counting by
-        //     Department.branchId would always return 0 for org-wide depts
-        //     even when positions at this branch use them.
-        // So we union both sources for backward-compat and accuracy.
+        // Users belong to a branch via Position appointments
+        // (UserPosition → Position.branchId). Departments referenced at this
+        // branch include both Department.branchId (direct) and Position
+        // → Department links.
         const branches = await prisma.branch.findMany({
             orderBy: { name: "asc" },
             include: {
-                _count: { select: { users: true, departments: true } },
-                posts:  {
+                _count: { select: { departments: true } },
+                positions: {
                     select: {
                         departmentId: true,
                         holders:      { select: { userId: true } },
@@ -42,20 +36,17 @@ export async function GET() {
         });
 
         const shaped = branches.map(b => {
-            // Union legacy User.branches + Post-derived users
             const userIds = new Set<number>();
             const deptIds = new Set<string>();
-            for (const p of b.posts) {
+            for (const p of b.positions) {
                 for (const h of p.holders) userIds.add(h.userId);
                 if (p.departmentId) deptIds.add(p.departmentId);
             }
-            // Posts-based counts take precedence; fall back to legacy _count if zero.
-            const userCount = userIds.size > 0 ? userIds.size : b._count.users;
             const deptCount = deptIds.size > 0 ? deptIds.size : b._count.departments;
 
-            const { posts: _posts, _count: _legacy, ...rest } = b;
-            void _posts; void _legacy;
-            return { ...rest, _count: { users: userCount, departments: deptCount } };
+            const { positions: _positions, _count: _legacy, ...rest } = b;
+            void _positions; void _legacy;
+            return { ...rest, _count: { users: userIds.size, positions: b.positions.length, departments: deptCount } };
         });
 
         return NextResponse.json(shaped);
