@@ -4,6 +4,11 @@
 
 ## URLs
 
+### Layout / in-section nav
+- `office/admin/layout.tsx` — SSR shell; passes session permissions to `AdminNav`.
+- `office/admin/loading.tsx` — content-area skeleton; nav from the layout stays visible during navigation.
+- `src/modules/admin/components/AdminNav.tsx` — client grouped tab bar (People → Org structure → Access → POS). Items and permissions come from `ADMIN_NAV` in `src/utils/constants.ts`; groups are ordered via slug lists inside `AdminNav`.
+
 ### UI pages (all inside `office/admin/` — real URL segments, no route groups)
 - `/office/admin/users` — `office/admin/users/{layout,page}.tsx`
 - `/office/admin/role` — Roles UI (the **Enterprise Permission Matrix** lives here)
@@ -48,6 +53,9 @@
 
 ## Key components / library
 
+- `src/modules/admin/components/AdminNav.tsx` — in-section nav for all `/office/admin/*` pages (see Layout above). Mirrors the voucher-registers pattern (`VouchersRegistersNav`).
+- `ADMIN_NAV` in `src/utils/constants.ts` — single source of truth for admin tab labels, icons, hrefs, and permission keys consumed by `AdminNav` and the office sidebar.
+
 > `OrgDefaultsForm` now lives in [settings.md](./settings.md) (`src/modules/settings/components/OrgDefaultsForm.tsx`).
 
 - **Org chart tab views** (`/office/admin/org-chart` — 5 tabs; People Chart and Levels tabs removed):
@@ -83,7 +91,8 @@
 - **2026-05-07 (Step 0)**: 4 demo users seeded with predictable passwords — see the demo-logins table in [seeds.md](../seeds.md) and the role catalogue in [permissions.md](./permissions.md).
 - **2026-05-07 (Step 0)**: 10 new `accountancy:*` permission rows added. Admin (R1) gets them via `PERMISSIONS.map(p => p.id)`. Non-admin roles need explicit grant via the matrix.
 - **2026-05-07 (Step 2)**: Pipelines / statuses / sub-statuses moved from Repair settings to Admin (`/office/admin/pipelines` etc.).
-- **2026-05-19 (V1 complete)**: Admin module marked done in [completed-and-protected.md](../completed-and-protected.md). Treat permission matrix, user CRUD, org-shape masters, and pipeline/status machinery as preserve-first unless explicitly requested.
+- **2026-05-19 (V1 complete)**: Admin module marked done in [completed-and-protected.md](../completed-and-protected.md). Treat permission matrix, user CRUD, org-shape masters as preserve-first unless explicitly requested. Pipeline/status machinery is in [settings.md](./settings.md).
+- **2026-05-20 (V1.5 complete)**: `office/admin/layout.tsx` + `AdminNav` + `admin/loading.tsx`. Grouped in-section tabs replace hopping via sidebar only; `admin:bypass` or per-item permission gates visibility. Marked preserve-first in [completed-and-protected.md](../completed-and-protected.md).
 - **2026-05-20 — Settings extracted.** Pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings moved out to `/office/settings/*`; `OrgDefaultsForm` moved to `src/modules/settings/components/`. See [settings.md](./settings.md). Admin keeps users, roles, branches, departments, positions, org-chart, counters.
 - **2026-05-20 — Position rename + M2M drop.** `Post` → `Position`, `UserPost` → `UserPosition` (table rename via `prisma db push`, prior data dropped). Deprecated `User.branches` / `User.departments` many-to-many relations removed; admin no longer assigns branches/departments directly on a user — those access lists are derived from the user's Position assignments. Delete guards on `/api/branches/[id]`, `/api/departments/[id]`, and `/api/positions/[id]` were rewritten to count Position-derived relations (previously counted the empty M2M and silently orphaned children).
 - **2026-05-19 — Org chart restructure**: `/api/positions/structure` was rewritten from a `parentPositionId`-based flat tree to a `branch → dept` grouping (`OrgStructure`). `parentPositionId` is still stored in the schema but is no longer the primary rendering axis.
@@ -97,4 +106,4 @@
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-20 — Regions tab rebuilt as visual org builder (create/appoint/transfer via right-click); People Chart + Levels tabs removed; Canvas tab added; Executive Council above HQ; classification config extracted; branch ID now editable via PATCH with FK cascade._
+_Last updated: 2026-05-20 — V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._

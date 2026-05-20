@@ -27,7 +27,7 @@ Replace paper/spreadsheets across the whole business with one app:
 
 ## 🔄 In flight
 
-_None._ Last batch (Settings module extraction 2026-05-20; Admin V1 + Day Book V1 + voucher registers through 2026-05-19). Pick the next item from §"Next up" below.
+_None._ Last batch (Admin + Settings V1.5 in-section nav, 2026-05-20). Pick the next item from §"Next up" below.
 
 ---
 
@@ -35,6 +35,7 @@ _None._ Last batch (Settings module extraction 2026-05-20; Admin V1 + Day Book V
 
 Older history lives in `git log`. This section is trimmed; don't grow it past ~10 entries.
 
+- **2026-05-20 — Admin + Settings V1.5 (in-section nav)**: `office/admin/layout.tsx` + `AdminNav` and `office/settings/layout.tsx` + `SettingsNav` — permission-filtered grouped tab bars (same pattern as voucher registers), sourced from `ADMIN_NAV` / `SETTINGS_NAV` in `constants.ts`. Admin `loading.tsx` skeleton keeps nav visible while page content loads.
 - **2026-05-20 — Settings module extracted from Admin**: 7 pages (pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings) + `OrgDefaultsForm` moved to `/office/settings/*` and `src/modules/settings/`. New [docs/modules/settings.md](docs/modules/settings.md). Hard cut, no compat redirects from old `/office/admin/<page>` URLs. `next.config.ts` cleaned up to avoid hijacking the new `/office/settings/*` paths.
 - **2026-05-19 — Admin module V1**: branches/departments/posts/org-chart terminology cleanup, ID labels, dummy-org seeding. Commits `bb4dfd3`, `2d3f455`, `03826b2`, `e4ae844`.
 - **2026-05-18 — Auth + welcome**: `BranchRequired` gate, welcome page; removed thermal-relay tools. `71e5c67`.
@@ -46,8 +47,6 @@ Older history lives in `git log`. This section is trimmed; don't grow it past ~1
 - **2026-05-16 — Tax Classification report** (`/office/accountancy/reports/gst/classification`) with four tabs. `649781d`.
 - **2026-05-16 — Inventory GST/HSN cascade**: product → group chain → org default → null. `44d5327`.
 - **2026-05-16 — Thermal print**: direct ESC/POS for POS receipts, browser fallback for vouchers. `e8ab923`.
-- **2026-05-15 — `/lab` experiment**: Front Office / Back Office prototype, customer concierge, universal customer panel, persistent search list, device search. Prototype only, not production. `6207ed9`–`fd4c1b5`.
-- **2026-05-15 — Role-aware `/office` home** (4-layer, universal customer panel, department briefings). `1fd703f`, `152bd7e`.
 
 For the milestone log (M1–M26) prior to 2026-05-14, read `git log` or earlier revisions of this file.
 
