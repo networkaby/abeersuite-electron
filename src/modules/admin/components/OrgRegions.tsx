@@ -4,13 +4,16 @@
 // Light theme; uses theme tokens so it works in both light/dark mode.
 //
 // Structure:
-//   ┌── HEADQUARTERS (gold border) ────────────────────────┐
-//   │  Board · CEO · C-Level · Central Departments         │
-//   │  (combines org-wide posts AND posts at BR-HQ branch) │
-//   └──────────────────────────────┬───────────────────────┘
-//                                  │   ← vertical connector
-//          ┌───────────────┬───────┴───────┬───────────────┐
-//      [Branch 1]      [Branch 2]      [Branch 3]      [Branch 4]
+//   ┌── EXECUTIVE COUNCIL (sky border) ──────────────────────┐
+//   │  Board · CEO · C-Level  (org-wide, no branchId)        │
+//   └──────────────────────────┬─────────────────────────────┘
+//                              │  sky→amber gradient
+//   ┌── HEADQUARTERS (amber border) ─────────────────────────┐
+//   │  HQ-branch-scoped positions (branchId = BR-HQ)         │
+//   └──────────────────────────┬─────────────────────────────┘
+//                              │  amber→emerald gradient
+//          ┌───────────────┬───┴───────┬───────────────┐
+//      [Branch 1]      [Branch 2]  [Branch 3]      [Branch 4]
 //
 // The HQ container is identified as the branch with id === "BR-HQ".
 //
@@ -30,6 +33,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Crown, Building2, Briefcase, Users, AlertCircle, Landmark, Plus, Trash2, UserPlus, UserMinus, ArrowRightLeft } from "lucide-react";
 import type { OrgStructure, PositionNode } from "@/shared/types/orgChart";
+import { classifyPosition, SECTION_LABELS } from "@/modules/admin/lib/orgChartClassification";
 import { Button } from "@/components/ui/button";
 import OrgRegionsCreateDialog, { type Intent } from "./OrgRegionsCreateDialog";
 import OrgAppointDialog from "./OrgAppointDialog";
@@ -360,7 +364,6 @@ function BranchContainer({
 // ── HQ container ─────────────────────────────────────────────────────────────
 
 function HQContainer({
-    orgWidePosts,
     hqBranchPosts,
     hqBranchName,
     hqBranchExists,
@@ -369,7 +372,6 @@ function HQContainer({
     onPosContext,
     onBranchContext,
 }: {
-    orgWidePosts: PositionNode[];
     hqBranchPosts: PositionNode[];
     hqBranchName: string;
     hqBranchExists: boolean;
@@ -378,7 +380,6 @@ function HQContainer({
     onPosContext: (e: React.MouseEvent, position: PositionNode) => void;
     onBranchContext: (e: React.MouseEvent, branchId: string, branchName: string) => void;
 }) {
-    const allHqPosts = [...orgWidePosts, ...hqBranchPosts];
 
     const headerPill = (
         <div className="flex justify-center -mt-9 mb-2">
@@ -393,7 +394,7 @@ function HQContainer({
         </div>
     );
 
-    if (!hqBranchExists && allHqPosts.length === 0) {
+    if (!hqBranchExists) {
         return (
             <div className="relative rounded-xl border-2 border-dashed border-amber-400/70 dark:border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/15 p-8 min-w-[400px] text-center shadow-sm">
                 <Landmark size={28} className="mx-auto text-amber-400 dark:text-amber-300 mb-2" />
@@ -417,7 +418,7 @@ function HQContainer({
         );
     }
 
-    if (allHqPosts.length === 0) {
+    if (hqBranchPosts.length === 0) {
         return (
             <div className="relative rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 p-6 min-w-[400px] text-center shadow-sm">
                 {headerPill}
@@ -428,26 +429,9 @@ function HQContainer({
         );
     }
 
-    const boardPosts: PositionNode[] = [];
-    const ceoPosts: PositionNode[]   = [];
-    const cLevelPosts: PositionNode[] = [];
-    const centralDeptPosts: PositionNode[] = [];
-
-    for (const p of allHqPosts) {
-        const t = p.title.toLowerCase();
-        if (/\b(chairman|chairperson|independent director|board director|board member)\b/.test(t)) {
-            boardPosts.push(p);
-        } else if (/^(chief executive|ceo|managing director|md)\b/.test(t) || /\bceo\b/.test(t)) {
-            ceoPosts.push(p);
-        } else if (/^(cfo|cto|coo|cio|cmo|cso|chief)/.test(t) || /\b(c[a-z]o)\b/.test(t)) {
-            cLevelPosts.push(p);
-        } else {
-            centralDeptPosts.push(p);
-        }
-    }
-
-    const classifiedCount = boardPosts.length + ceoPosts.length + cLevelPosts.length;
-    const singleSection = classifiedCount === 0;
+    const hqGrouped: Record<string, PositionNode[]> = { board: [], chiefExecutive: [], cLevel: [], other: [] };
+    for (const p of hqBranchPosts) hqGrouped[classifyPosition(p.title)].push(p);
+    const singleSection = hqGrouped.board.length + hqGrouped.chiefExecutive.length + hqGrouped.cLevel.length === 0;
 
     const cardsWithMenu = (posts: PositionNode[], accent: "gold" | "blue") =>
         posts.map(p => (
@@ -466,45 +450,37 @@ function HQContainer({
 
             {singleSection && (
                 <>
-                    <SectionLabel>Executive Council</SectionLabel>
+                    <SectionLabel>HQ Positions</SectionLabel>
                     <div className="flex flex-wrap justify-center gap-2">
-                        {cardsWithMenu(allHqPosts, "gold")}
+                        {cardsWithMenu(hqBranchPosts, "gold")}
                     </div>
                 </>
             )}
 
             {!singleSection && (
                 <>
-                    {boardPosts.length > 0 && (
+                    {hqGrouped.board.length > 0 && (
                         <>
-                            <SectionLabel>Board of Directors</SectionLabel>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {cardsWithMenu(boardPosts, "gold")}
-                            </div>
+                            <SectionLabel>{SECTION_LABELS.board}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cardsWithMenu(hqGrouped.board, "gold")}</div>
                         </>
                     )}
-                    {ceoPosts.length > 0 && (
+                    {hqGrouped.chiefExecutive.length > 0 && (
                         <>
-                            <SectionLabel>Chief Executive</SectionLabel>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {cardsWithMenu(ceoPosts, "blue")}
-                            </div>
+                            <SectionLabel>{SECTION_LABELS.chiefExecutive}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cardsWithMenu(hqGrouped.chiefExecutive, "blue")}</div>
                         </>
                     )}
-                    {cLevelPosts.length > 0 && (
+                    {hqGrouped.cLevel.length > 0 && (
                         <>
-                            <SectionLabel>C-Level Executives</SectionLabel>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {cardsWithMenu(cLevelPosts, "blue")}
-                            </div>
+                            <SectionLabel>{SECTION_LABELS.cLevel}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cardsWithMenu(hqGrouped.cLevel, "blue")}</div>
                         </>
                     )}
-                    {centralDeptPosts.length > 0 && (
+                    {hqGrouped.other.length > 0 && (
                         <>
                             <SectionLabel>HQ Central Departments</SectionLabel>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {cardsWithMenu(centralDeptPosts, "gold")}
-                            </div>
+                            <div className="flex flex-wrap justify-center gap-2">{cardsWithMenu(hqGrouped.other, "gold")}</div>
                         </>
                     )}
                 </>
@@ -536,6 +512,88 @@ function HQBranchConnector({ branchCount }: { branchCount: number }) {
 
 function BranchTopStem() {
     return <div className="w-0.5 h-6 bg-emerald-400 dark:bg-emerald-500 mb-0" />;
+}
+
+// ── Executive Council band (org-wide positions — above HQ) ────────────────────
+
+function ExecCouncilBand({
+    posts, canManage, onPosContext, onContext,
+}: {
+    posts: PositionNode[];
+    canManage: boolean;
+    onPosContext: (e: React.MouseEvent, p: PositionNode) => void;
+    onContext: (e: React.MouseEvent) => void;
+}) {
+    if (posts.length === 0) return null;
+
+    const grouped: Record<string, PositionNode[]> = { board: [], chiefExecutive: [], cLevel: [], other: [] };
+    for (const p of posts) grouped[classifyPosition(p.title)].push(p);
+
+    const hasClassification = grouped.board.length + grouped.chiefExecutive.length + grouped.cLevel.length > 0;
+
+    const cards = (ps: PositionNode[], accent: "gold" | "blue") =>
+        ps.map(p => (
+            <PosCard key={p.id} position={p} accent={accent} canManage={canManage} onContextMenu={onPosContext} />
+        ));
+
+    return (
+        <div
+            className={`relative rounded-xl border-2 border-sky-400 dark:border-sky-600 bg-sky-50/50 dark:bg-sky-950/20 px-6 py-5 min-w-[400px] shadow-sm ${canManage ? "cursor-context-menu" : ""}`}
+            onContextMenu={(e) => { if (canManage) { e.preventDefault(); onContext(e); } }}
+        >
+            {/* Header pill */}
+            <div className="flex justify-center -mt-9 mb-3">
+                <div className="rounded-lg border border-sky-500 bg-card px-4 py-1 shadow-md">
+                    <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sky-700 dark:text-sky-300">
+                        <Crown size={12} /> Executive Council
+                    </p>
+                </div>
+            </div>
+
+            {!hasClassification && (
+                <div className="flex flex-wrap justify-center gap-2">
+                    {cards(grouped.other, "blue")}
+                </div>
+            )}
+
+            {hasClassification && (
+                <>
+                    {grouped.board.length > 0 && (
+                        <>
+                            <SectionLabel>{SECTION_LABELS.board}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cards(grouped.board, "gold")}</div>
+                        </>
+                    )}
+                    {grouped.chiefExecutive.length > 0 && (
+                        <>
+                            <SectionLabel>{SECTION_LABELS.chiefExecutive}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cards(grouped.chiefExecutive, "blue")}</div>
+                        </>
+                    )}
+                    {grouped.cLevel.length > 0 && (
+                        <>
+                            <SectionLabel>{SECTION_LABELS.cLevel}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cards(grouped.cLevel, "blue")}</div>
+                        </>
+                    )}
+                    {grouped.other.length > 0 && (
+                        <>
+                            <SectionLabel>{SECTION_LABELS.other}</SectionLabel>
+                            <div className="flex flex-wrap justify-center gap-2">{cards(grouped.other, "blue")}</div>
+                        </>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+function ExecToHQConnector() {
+    return (
+        <div className="flex flex-col items-center pointer-events-none">
+            <div className="w-0.5 h-8 bg-gradient-to-b from-sky-400 to-amber-400" />
+        </div>
+    );
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -704,6 +762,18 @@ export default function OrgRegions({
         ]);
     }, [canManage, handleDelete, openMenu]);
 
+    const onExecCouncilContext = useCallback((e: React.MouseEvent) => {
+        if (!canManage) return;
+        e.preventDefault();
+        openMenu(e.clientX, e.clientY, [
+            {
+                label: "Add org-wide position",
+                icon: <Plus size={12} />,
+                onClick: () => setIntent({ mode: "position", branchId: null, departmentId: null }),
+            },
+        ]);
+    }, [canManage, openMenu]);
+
     const onBranchContext = useCallback((e: React.MouseEvent, branchId: string, branchName: string) => {
         if (!canManage) return;
         e.preventDefault();
@@ -734,9 +804,8 @@ export default function OrgRegions({
         <div className="rounded-xl bg-gradient-to-br from-amber-50/40 via-card to-emerald-50/40 dark:from-amber-950/10 dark:via-card dark:to-emerald-950/10 p-6 sm:p-10 overflow-x-auto border border-border">
             {/* Legend bar */}
             <div className="flex justify-center flex-wrap gap-4 mb-8 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Headquarters</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /> Board of Directors</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500" /> Executives (C-Level)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500" /> Executive Council (org-wide)</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Headquarters (HQ branch)</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Regional Branch</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Branch Manager / Staff</span>
             </div>
@@ -747,11 +816,28 @@ export default function OrgRegions({
                 </p>
             )}
 
-            {/* HEADQUARTERS region */}
+            {/* EXECUTIVE COUNCIL — org-wide positions, sits above HQ */}
+            {structure.orgWidePositions.length > 0 && (
+                <div className="flex flex-col items-center mb-0">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Organisation</p>
+                    <ExecCouncilBand
+                        posts={structure.orgWidePositions}
+                        canManage={canManage}
+                        onPosContext={onPosContext}
+                        onContext={onExecCouncilContext}
+                    />
+                </div>
+            )}
+
+            {/* Connector: Executive Council → HQ */}
+            {structure.orgWidePositions.length > 0 && <ExecToHQConnector />}
+
+            {/* HEADQUARTERS — BR-HQ branch positions only */}
             <div className="flex flex-col items-center mb-0">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Headquarters</p>
+                {structure.orgWidePositions.length === 0 && (
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Headquarters</p>
+                )}
                 <HQContainer
-                    orgWidePosts={structure.orgWidePositions}
                     hqBranchPosts={hqBranchPosts}
                     hqBranchName={hqBranchName}
                     hqBranchExists={!!hqBranch}
@@ -806,8 +892,12 @@ export default function OrgRegions({
 
             <div className="mt-10 pt-6 border-t border-border/60 flex justify-center flex-wrap gap-6 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
+                    <Crown size={11} className="text-sky-500" />
+                    {structure.orgWidePositions.length} org-wide position{structure.orgWidePositions.length !== 1 ? "s" : ""}
+                </span>
+                <span className="flex items-center gap-1.5">
                     <Landmark size={11} className="text-amber-500" />
-                    {structure.orgWidePositions.length + hqBranchPosts.length} HQ position{(structure.orgWidePositions.length + hqBranchPosts.length) !== 1 ? "s" : ""}
+                    {hqBranchPosts.length} HQ branch position{hqBranchPosts.length !== 1 ? "s" : ""}
                 </span>
                 <span className="flex items-center gap-1.5">
                     <Building2 size={11} className="text-emerald-500" />

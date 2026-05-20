@@ -51,7 +51,9 @@ export default function BranchesPage() {
                 await axios.post("/api/branches", { ...form, id: form.id.toUpperCase() });
                 toast.success("Branch created");
             } else {
-                await axios.patch(`/api/branches/${editId}`, { name: form.name, address: form.address || null, phone: form.phone || null, isActive: form.isActive });
+                const body: Record<string, unknown> = { name: form.name, address: form.address || null, phone: form.phone || null, isActive: form.isActive };
+                if (form.id.trim().toUpperCase() !== editId) body.id = form.id.trim().toUpperCase();
+                await axios.patch(`/api/branches/${editId}`, body);
                 toast.success("Branch updated");
             }
             cancel();
@@ -135,6 +137,19 @@ export default function BranchesPage() {
                             {editId === b.id ? (
                                 <div className="p-4 space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-xs font-medium text-muted-foreground">ID</label>
+                                            <Input
+                                                value={form.id}
+                                                onChange={e => setForm(f => ({ ...f, id: e.target.value.toUpperCase() }))}
+                                                className="mt-1 font-mono uppercase"
+                                            />
+                                            {form.id.trim().toUpperCase() !== editId && form.id.trim() !== "" && (
+                                                <p className="text-[10px] text-amber-600 mt-0.5">
+                                                    Renaming ID — all linked departments, positions and inventory will cascade automatically.
+                                                </p>
+                                            )}
+                                        </div>
                                         <div>
                                             <label className="text-xs font-medium text-muted-foreground">Name *</label>
                                             <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />

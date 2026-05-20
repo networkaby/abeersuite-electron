@@ -7,6 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const updateSchema = z.object({
+    id:       z.string().trim().min(1).regex(/^[A-Z0-9-]+$/, "ID must be uppercase letters, numbers and hyphens only").optional(),
     name:     z.string().trim().min(1).optional(),
     address:  z.string().trim().optional().nullable(),
     phone:    z.string().trim().optional().nullable(),

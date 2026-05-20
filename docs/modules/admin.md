@@ -22,6 +22,8 @@
 - `/api/roles[/[id]]` — role + permission grant matrix endpoints.
 - `/api/permissions` — list of all defined permission IDs (read-only; source of truth is `prisma/seeds/bootstrap-seed.ts`).
 - `/api/branches`, `/api/departments`, `/api/positions`, `/api/positions/[id]/holders`, `/api/positions/structure` — org structure.
+  - `PATCH /api/branches/[id]` accepts optional `id` field to rename the branch — all FK references (`Department.branchId`, `Position.branchId`, inventory, POS, GL) cascade automatically (`ON UPDATE CASCADE`).
+  - `DELETE /api/positions/[id]/holders/[userId]` — detaches a holder without deleting the position.
 - `/api/org-chart` — user reporting-line tree (consumed by org-chart page and social profile wall).
 
 > Pipeline / status / org-defaults APIs live in [settings.md](./settings.md). They were not renamed — only the UI moved.
@@ -48,13 +50,17 @@
 
 > `OrgDefaultsForm` now lives in [settings.md](./settings.md) (`src/modules/settings/components/OrgDefaultsForm.tsx`).
 
-- **Org chart tab views** (`/office/admin/org-chart` — 6 tabs):
-  - `OrgTree.tsx` — Tab 1 "People Chart": reporting-line tree powered by `/api/org-chart` (`OrgNode[]`).
-  - `StructureTree.tsx` — Tab 2 "Structure Chart": 4-level CSS-connector hierarchy (Executive Council → Branch → Dept → Position) built from `OrgStructure`. Renders `PositionCard`, `DeptGroup`, `BranchNode`, `OrgWideRow` with `VLine`/`HBar` primitives.
-  - `OrgExplorer.tsx` — Tab 3 "Explorer (beta)": dashboard-style search + branch-filter chips + hover/pin detail panel.
-  - `OrgHierarchy.tsx` — Tab 4 "Hierarchy (beta)": top-down tree rooted at Board; click-to-highlight lineage path; collapse/expand nodes; zoom controls.
-  - `OrgLevels.tsx` — Tab 5 "Levels (beta)": classic level-based view — L1 Board (gold), L2 Branches (blue), L3 Departments (green), L4 Positions (purple); dark canvas with staggered `orgLevelFadeUp` animations.
-  - `OrgRegions.tsx` — Tab 6 "Regions (beta)": HQ container (amber) + regional branch cards (emerald); `HQ_BRANCH_ID = "BR-HQ"` sentinel separates HQ from regional branches; positions auto-classified by title regex into Board / Chief Executive / C-Level / Central Departments sections.
+- **Org chart tab views** (`/office/admin/org-chart` — 5 tabs; People Chart and Levels tabs removed):
+  - `StructureTree.tsx` — Tab "Structure": 4-level CSS-connector hierarchy (Executive Council → Branch → Dept → Position) built from `OrgStructure`. Renders `PositionCard`, `DeptGroup`, `BranchNode`, `OrgWideRow` with `VLine`/`HBar` primitives.
+  - `OrgExplorer.tsx` — Tab "Explorer (beta)": dashboard-style search + branch-filter chips + hover/pin detail panel.
+  - `OrgHierarchy.tsx` — Tab "Hierarchy (beta)": top-down tree rooted at Board; click-to-highlight lineage path; collapse/expand nodes; zoom controls.
+  - `OrgRegions.tsx` — Tab "Regions (beta)": visual org builder. Three-tier layout: **Executive Council band** (sky, org-wide positions — above HQ) → **HQ container** (amber, BR-HQ-scoped positions) → **Regional branch cards** (emerald). `HQ_BRANCH_ID = "BR-HQ"` sentinel. Right-click any card for contextual actions (add child, appoint holder, transfer/promote holder, remove holder, delete). `canManage` prop (derived from `settings:manage`) gates all mutations. "Create HQ" dashed CTA when no BR-HQ exists.
+  - `OrgCanvas.tsx` — Tab "Canvas (beta)": custom drag/pan/zoom canvas (no xyflow — incompatible with React 19). Absolute-positioned cards + SVG bezier connector lines. Pan via pointer drag on background, drag nodes via pointer capture, mouse-wheel zoom centered on cursor. View-only (create/edit stays on Regions tab).
+- **Org chart dialogs** (`src/modules/admin/components/`):
+  - `OrgRegionsCreateDialog.tsx` — single dialog switching between branch / department / position create forms. IDs are auto-generated client-side (`BR-{slug}`, `DEPT-{slug}`, `POS-{slug}`) with 409-retry (`-2`, `-3` …). `forceId` path used for "Create HQ" (sends exactly `BR-HQ`). Native `<datalist>` type-ahead from existing titles/names.
+  - `OrgAppointDialog.tsx` — searchable user picker; POST `/api/positions/[id]/holders`. Existing holders shown dimmed.
+  - `OrgTransferDialog.tsx` — searchable position picker for moving a holder. Atomic: DELETE source → POST target; rolls back to source if POST fails.
+- **Org chart classification** (`src/modules/admin/lib/orgChartClassification.ts`): `ORG_CLASSIFICATION_RULES` array drives which section a position title lands in (Board of Directors / Chief Executive / C-Level / Org-Wide). Edit this file to add new keywords — no component code change needed. `classifyPosition(title): OrgSection` is the exported classifier; `SECTION_LABELS` maps section keys to display strings.
 - `src/shared/types/orgChart.ts` — shared types for all org-chart views:
   - `OrgNode` — reporting-line node (used by OrgTree / `/api/org-chart`). `branches`/`departments` arrays are derived from the user's Positions inside the route handler.
   - `PositionNode` — position + holders shape (used by StructureTree / Explorer / Hierarchy / Levels / Regions).
@@ -82,6 +88,8 @@
 - **2026-05-20 — Position rename + M2M drop.** `Post` → `Position`, `UserPost` → `UserPosition` (table rename via `prisma db push`, prior data dropped). Deprecated `User.branches` / `User.departments` many-to-many relations removed; admin no longer assigns branches/departments directly on a user — those access lists are derived from the user's Position assignments. Delete guards on `/api/branches/[id]`, `/api/departments/[id]`, and `/api/positions/[id]` were rewritten to count Position-derived relations (previously counted the empty M2M and silently orphaned children).
 - **2026-05-19 — Org chart restructure**: `/api/positions/structure` was rewritten from a `parentPositionId`-based flat tree to a `branch → dept` grouping (`OrgStructure`). `parentPositionId` is still stored in the schema but is no longer the primary rendering axis.
 - **2026-05-19 — Rich demo seed**: `prisma/seeds/dummy-org-rich.ts` (`pnpm seed:dummy-org-rich`) creates 36 users, 36 positions, 5 branches (HQ + 4 regional), 10 departments matching a realistic company org chart. `HQ_BRANCH_ID = "BR-HQ"` is the sentinel used by `OrgRegions` to separate HQ from regional branches.
+- **2026-05-20 — Regions tab rebuilt as visual org builder**: People Chart and Levels tabs removed. Regions tab now has full create/appoint/transfer/remove via right-click context menus gated by `settings:manage`. Canvas (beta) tab added (custom canvas, no xyflow — xyflow v12 is incompatible with React 19: nodes stay `visibility:hidden`, edges never render). Executive Council (org-wide positions) now renders in its own band **above** HQ rather than inside it. Position-to-section classification extracted to `src/modules/admin/lib/orgChartClassification.ts` (editable config, no component changes needed to adjust keyword rules).
+- **2026-05-20 — Branch ID editable in admin UI**: `/office/admin/branches` edit form now exposes the ID field. `PATCH /api/branches/[id]` accepts an `id` field; all FK constraints are `ON UPDATE CASCADE` so the rename propagates to every linked table automatically.
 - **Future scope tier `position`** (between `own` and `department`) is planned but **not yet in code**. `permission-scope.ts` order is currently `own → department → branch → org`.
 
 ## Out of scope / deferred
@@ -89,4 +97,4 @@
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-20 — Renamed Post → Position across schema/API/UI/seeds; dropped deprecated User.branches and User.departments M2M; rewrote delete guards on branches/departments/positions to use the live Position-derived counts._
+_Last updated: 2026-05-20 — Regions tab rebuilt as visual org builder (create/appoint/transfer via right-click); People Chart + Levels tabs removed; Canvas tab added; Executive Council above HQ; classification config extracted; branch ID now editable via PATCH with FK cascade._
