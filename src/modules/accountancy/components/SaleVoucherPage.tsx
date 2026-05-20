@@ -1537,6 +1537,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                     value={header.date}
                                     onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
                                     className="h-9 text-xs"
+                                    tabIndex={-1}
                                 />
                             </>
                         )}
@@ -1573,6 +1574,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                     placeholder="e.g. 30"
                                     value={header.creditPeriodDays}
                                     onChange={(e) => setHeader((h) => ({ ...h, creditPeriodDays: e.target.value.replace(/\D/g, "") }))}
+                                    tabIndex={-1}
                                 />
                             </>
                         )}
@@ -1600,6 +1602,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                     {/* Toggle: price column treats entered rate as excl. or incl. tax */}
                                     <button
                                         type="button"
+                                        tabIndex={-1}
                                         title={prefs.rateInclTax ? "Prices are entered inclusive of tax — click to switch to exclusive" : "Prices are entered exclusive of tax — click to switch to inclusive"}
                                         onClick={() => toggleRateInclTax()}
                                         className={`text-[10px] leading-tight font-semibold uppercase tracking-wide px-1 py-0.5 rounded transition-colors ${prefs.rateInclTax ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" : "hover:bg-muted text-muted-foreground"}`}
@@ -1617,7 +1620,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                 <th rowSpan={2} className="w-10 px-1 py-2 text-right align-bottom">
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" title="Column settings">
+                                            <Button variant="ghost" size="icon-xs" tabIndex={-1} className="text-muted-foreground hover:text-foreground" title="Column settings">
                                                 <Settings2 size={13} />
                                             </Button>
                                         </DropdownMenuTrigger>

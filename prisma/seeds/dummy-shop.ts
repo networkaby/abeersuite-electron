@@ -153,14 +153,10 @@ async function upsertDemoAttributes() {
 }
 
 /** Idempotent: upsert full demo catalog for the public shop.
- *  Products live on InvProduct — a "PCS" unit is created if absent.
+ *  Products live on InvProduct — "PCS" unit is guaranteed by bootstrap-seed.ts.
  */
 async function upsertShopDemoCatalog() {
-    const pcsUnit = await prisma.invUnit.upsert({
-        where: { code: "PCS" },
-        update: {},
-        create: { code: "PCS", label: "Piece", decimals: 0, isActive: true },
-    });
+    const pcsUnit = await prisma.invUnit.findUniqueOrThrow({ where: { code: "PCS" } });
 
     for (const row of DEMO_SHOP_CATALOG) {
         const galleryJson = row.galleryUrls;

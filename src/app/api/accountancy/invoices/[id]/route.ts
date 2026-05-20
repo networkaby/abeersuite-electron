@@ -7,6 +7,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
+import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 
 const updateSchema = z.object({
     notes: z.string().trim().optional().nullable(),
@@ -70,8 +71,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
-            // DRAFT → SENT: auto-post JE
+            // DRAFT → SENT: credit check first, then auto-post JE
             if (body.status === "SENT" && existing.status === "DRAFT") {
+                await checkCreditLimit(
+                    tx,
+                    existing.accountId!,
+                    Number(existing.totalAmount),
+                );
                 await postInvoiceJe(
                     tx,
                     existing.id,
@@ -98,6 +104,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
         return NextResponse.json(updated);
     } catch (e) {
+        if (e instanceof CreditLimitError) {
+            return NextResponse.json({ error: e.message, code: e.code }, { status: 422 });
+        }
         return handleApiError(e, "Failed to update invoice");
     }
 }

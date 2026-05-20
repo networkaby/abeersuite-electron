@@ -8,6 +8,7 @@ import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
 import { postPosReceiptJe } from "@/modules/pos/lib/postPosReceiptJe";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -116,8 +117,16 @@ export async function POST(req: Request) {
         }
     }
 
+    // Amount that will increase the customer's AR balance (onCredit portion).
+    // Currently the route enforces paymentTotal === totalAmount so this is
+    // always 0 — the check is a forward-compatibility guard for partial payments.
+    const onCredit = Math.max(0, totalAmount - paymentTotal);
+
     try {
         const result = await prisma.$transaction(async (tx) => {
+            // ── Credit limit check (inside tx so balance read is fresh) ────────
+            await checkCreditLimit(tx, body.accountId, onCredit);
+
             // ── 1. Invoice + InvoiceLines + AR/Revenue JE ─────────────────────
             const invoiceNumber = await nextRef(tx, "invoice", "INV");
             const invoice = await tx.invoice.create({
@@ -234,6 +243,9 @@ export async function POST(req: Request) {
 
         return NextResponse.json(result, { status: 201 });
     } catch (err) {
+        if (err instanceof CreditLimitError) {
+            return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });
+        }
         console.error("[pos sale]", err);
         const msg = err instanceof Error ? err.message : "Failed to create POS sale";
         return NextResponse.json({ error: msg }, { status: 500 });

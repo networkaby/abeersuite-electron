@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { generateSku } from "@/modules/inventory/lib/sku";
+import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -86,7 +87,6 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
     const [sku, setSku] = useState("");
     const [unitId, setUnitId] = useState<string>("");
     const [salePrice, setSalePrice] = useState("");
-    const [costPrice, setCostPrice] = useState("");
     const [units, setUnits] = useState<Unit[]>([]);
     const [unitsLoading, setUnitsLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -99,20 +99,26 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
         setName(initialName);
         setSku(generateSku());
         setSalePrice("");
-        setCostPrice("");
+        setUnitId("");
         setInlineError(null);
         setSkuConflict(false);
     }, [open, initialName]);
 
-    // Fetch the units list once (cached server-side via unstable_cache).
+    // Fetch units + org defaults together so the unit select pre-selects the org default.
     useEffect(() => {
         if (!open) return;
         setUnitsLoading(true);
-        axios.get<Unit[]>("/api/inventory/units")
-            .then((r) => {
-                setUnits(r.data);
-                // Pre-select the first active unit so the user can save without picking.
-                if (r.data[0] && !unitId) setUnitId(String(r.data[0].id));
+        Promise.all([
+            axios.get<Unit[]>("/api/inventory/units"),
+            getOrgDefaults(),
+        ])
+            .then(([unitsRes, orgDefaults]) => {
+                const unitList = unitsRes.data;
+                setUnits(unitList);
+                const preferred = orgDefaults.defaultUnitId
+                    ? unitList.find((u) => u.id === orgDefaults.defaultUnitId)
+                    : null;
+                setUnitId(String((preferred ?? unitList[0])?.id ?? ""));
             })
             .catch((e) => {
                 if (axios.isAxiosError(e) && e.response?.status === 403) {
@@ -122,7 +128,6 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                 }
             })
             .finally(() => setUnitsLoading(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
     const handleNameChange = (v: string) => {
@@ -141,7 +146,6 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                 name: name.trim(),
                 unitId: parseInt(unitId, 10),
                 pricePaise: rupeesToPaise(salePrice),
-                costPaise:  rupeesToPaise(costPrice),
                 isActive: true,
             });
             const p = res.data as {
@@ -243,31 +247,17 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                             </Select>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="np-sale">Sale Price (₹) <span className="text-muted-foreground">opt</span></Label>
-                            <Input
-                                id="np-sale"
-                                type="text"
-                                inputMode="decimal"
-                                value={salePrice}
-                                onChange={(e) => setSalePrice(e.target.value.replace(/[^\d.]/g, ""))}
-                                placeholder="0.00"
-                                className="tabular-nums text-right"
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="np-cost">Cost Price (₹) <span className="text-muted-foreground">opt</span></Label>
-                            <Input
-                                id="np-cost"
-                                type="text"
-                                inputMode="decimal"
-                                value={costPrice}
-                                onChange={(e) => setCostPrice(e.target.value.replace(/[^\d.]/g, ""))}
-                                placeholder="0.00"
-                                className="tabular-nums text-right"
-                            />
-                        </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="np-sale">Sale Price (₹) <span className="text-muted-foreground">opt</span></Label>
+                        <Input
+                            id="np-sale"
+                            type="text"
+                            inputMode="decimal"
+                            value={salePrice}
+                            onChange={(e) => setSalePrice(e.target.value.replace(/[^\d.]/g, ""))}
+                            placeholder="0.00"
+                            className="tabular-nums text-right"
+                        />
                     </div>
                 </div>
                 {inlineError && (
@@ -283,7 +273,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                    onAdvanced({ name, sku, unitId, priceRupees: salePrice, costRupees: costPrice });
+                                    onAdvanced({ name, sku, unitId, priceRupees: salePrice, costRupees: "" });
                                     onOpenChange(false);
                                 }}
                                 disabled={saving}

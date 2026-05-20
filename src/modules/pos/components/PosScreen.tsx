@@ -40,10 +40,10 @@ type Snapshot = {
     discountPct: number;
     loyaltyPoints: number;
     customerLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
-    creditLimit: number;
+    creditLimit: number | null;    // null = unlimited (no check performed)
     balanceDue: number;
     balanceOverdue: number;
-    availableCredit: number;
+    availableCredit: number | null; // null when creditLimit is null
     rating: number | null;
     favouriteCategory: string | null;
     personalizedOffers: Array<{ id: string; label: string; tag: string }>;
@@ -310,6 +310,7 @@ export default function PosScreen() {
 
     const generateInvoice = async (printAfter = false) => {
         if (!snapshot?.account) return;
+        if (creditLimitBreached) return;   // guard against keyboard shortcut bypass
         // Build the summary from the named pay fields. Cash net = tendered − return.
         const summaryParts: string[] = [];
         if (cashNet > 0) {
@@ -450,6 +451,16 @@ export default function PosScreen() {
     const balanceDue = snapshot?.balanceDue ?? 0;
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
+
+    // Credit-limit guard — true when the on-credit portion of this sale would
+    // push the customer's outstanding balance past their credit limit.
+    const creditLimitBreached: boolean = (() => {
+        if (onCredit <= 0)                          return false; // fully paid, no AR impact
+        const limit = snapshot?.creditLimit ?? null;
+        if (limit === null)                         return false; // unlimited account
+        if (limit === 0)                            return true;  // zero-credit account
+        return (balanceDue + onCredit) > limit;
+    })();
 
     // ── Render ──────────────────────────────────────────────────────────────
 
@@ -737,6 +748,21 @@ export default function PosScreen() {
                             </div>
                         </div>
 
+                        {/* Credit limit warning — shown when on-credit portion would breach the limit */}
+                        {creditLimitBreached && (
+                            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                                <span>
+                                    {snapshot?.creditLimit === 0
+                                        ? "No credit facility — this account must be paid in full."
+                                        : `Credit limit ₹${snapshot!.creditLimit!.toLocaleString("en-IN")} exceeded. ` +
+                                          `Outstanding ₹${balanceDue.toLocaleString("en-IN")}, ` +
+                                          `this sale adds ₹${onCredit.toLocaleString("en-IN")} on credit.`
+                                    }
+                                </span>
+                            </div>
+                        )}
+
                         {(() => {
                             // Enter on any amount field → confirm. Tab walks Cash → UPI → Confirm
                             // (Cash-return is tabIndex=-1 and skipped; clickable for chip-changing).
@@ -916,7 +942,7 @@ export default function PosScreen() {
 
                                     {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                                     <div className="grid grid-cols-2 gap-2 pt-1">
-                                        <Button onClick={() => generateInvoice(false)} disabled={submitting} size="lg" variant="outline">
+                                        <Button onClick={() => generateInvoice(false)} disabled={submitting || creditLimitBreached} size="lg" variant="outline">
                                             {/* <Receipt size={16} /> {submitting
                                                 ? "Saving…"
                                                 : advanceTaken > 0 ? `Confirm · ${fmtINR(total)} + ${fmtINR(advanceTaken)} adv.`
@@ -927,7 +953,7 @@ export default function PosScreen() {
                                             <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm"}
                                             <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
                                         </Button>
-                                        <Button onClick={() => generateInvoice(true)} disabled={submitting} size="lg" >
+                                        <Button onClick={() => generateInvoice(true)} disabled={submitting || creditLimitBreached} size="lg" >
                                             <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : "Confirm + Print"}
                                             <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                                         </Button>
@@ -988,8 +1014,8 @@ function CustomerPanel({ snapshot }: { snapshot: Snapshot }) {
                 <Stat
                     icon={<CreditCard size={14} />}
                     label="Avail. credit"
-                    value={fmtINR(snapshot.availableCredit)}
-                    sub={`limit ${fmtINR(snapshot.creditLimit)}`}
+                    value={snapshot.availableCredit != null ? fmtINR(snapshot.availableCredit) : "Unlimited"}
+                    sub={snapshot.creditLimit != null ? `limit ${fmtINR(snapshot.creditLimit)}` : "no limit set"}
                 />
                 <Stat
                     icon={<TrendingDown size={14} />}

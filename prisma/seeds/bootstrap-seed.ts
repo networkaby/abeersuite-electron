@@ -11,7 +11,7 @@
 // data; only this file describes the production-required state.
 //
 // What this seeds (kept on hard-clean):
-//   • RBAC: 4 Roles, 80+ Permissions, RolePermission grants
+//   • RBAC: 7 Roles, 80+ Permissions, RolePermission grants
 //   • Workflow: 6 Pipelines, 49 TicketStatuses, 7 SubStatusGroups, 38
 //     SubStatuses, status + sub-status transitions
 //   • Org structure: 2 Branches (HQ + Online), 7 Departments, Role ranks
@@ -22,10 +22,13 @@
 //     accounts here — they would double-count with the synthetic.
 //   • Admin user: admin@networkservice.in / admin123 (bcrypt-hashed)
 //   • DB constraints: Phone/Email XOR ownership CHECK
+//   • Inventory Unit master: 13 common units (PCS, NOS, BOX, SET, MTR, ROLL,
+//     PKT, PAIR, KG, BAG, UNIT, REAM, DAY)
+//   • Inventory Brand master: ~60 brands (computers, CCTV, networking, etc.)
 //
 // What this does NOT seed (run dummy-* seeds for those):
 //   • Test users (tech, front, des) → dummy-users.ts
-//   • Demo products + InvUnit/Category/Brand/etc → dummy-shop.ts
+//   • Demo products + InvCategory/etc → dummy-shop.ts
 //   • InvAttributeMaster — seeded by dummy-shop.ts (global attrs + category-specific).
 //     Production users populate attribute masters via Configure → Attribute masters.
 //   • Test customers + companies → dummy-customers.ts
@@ -57,10 +60,13 @@ const prisma = new PrismaClient({ adapter });
 // receive a role directly — `User.role` is null until a Position appointment
 // promotes them. See `Position.roleTemplateId` and `authorizeStaff.ts`.
 const ROLES = [
-    { id: "R1", label: "Admin",      color: "bg-red-100 text-red-600",       isSystem: true, rank: 100 },
-    { id: "R2", label: "Technician", color: "bg-blue-100 text-blue-600",     isSystem: true, rank: 70  },
-    { id: "R3", label: "Front Desk", color: "bg-green-100 text-green-600",   isSystem: true, rank: 20  },
-    { id: "R4", label: "Despatch",   color: "bg-purple-100 text-purple-600", isSystem: true, rank: 20  },
+    { id: "R1", label: "Role-Admin",            color: "bg-red-100 text-red-600",       isSystem: true, rank: 100 },
+    { id: "R5", label: "Role-Branch Manager",   color: "bg-amber-100 text-amber-700",   isSystem: true, rank: 80  },
+    { id: "R2", label: "Role-Service Engineer", color: "bg-blue-100 text-blue-600",     isSystem: true, rank: 70  },
+    { id: "R6", label: "Role-Accountant",       color: "bg-indigo-100 text-indigo-700", isSystem: true, rank: 60  },
+    { id: "R7", label: "Role-Sales Executive",  color: "bg-teal-100 text-teal-700",     isSystem: true, rank: 50  },
+    { id: "R3", label: "Role-Counter / Cashier",color: "bg-green-100 text-green-600",   isSystem: true, rank: 30  },
+    { id: "R4", label: "Role-Stores & Despatch",color: "bg-purple-100 text-purple-600", isSystem: true, rank: 30  },
 ] as const;
 
 const PERMISSIONS = [
@@ -214,19 +220,77 @@ const PERMISSIONS = [
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-    // R1 gets every permission EXCEPT system-only sentinels (e.g. admin:bypass).
-    // System-only permissions can only be held by the env super admin; they are
-    // never auto-granted to any role.
+    // R1 — Owner / Admin: every permission except system-only sentinels.
     R1: (PERMISSIONS as readonly { id: string; systemOnly?: boolean }[])
         .filter((p) => !p.systemOnly)
         .map((p) => p.id),
+
+    // R5 — Branch Manager: full branch authority; no global settings/roles.
+    R5: [
+        "customers:view", "customers:view:org",
+        "customers:create", "customers:edit:branch", "customers:edit:org", "customers:delete:branch",
+        "companies:manage", "companies:create", "companies:edit:org",
+        "tickets:create", "tickets:status:set", "tickets:substatus:set",
+        "tickets:assign", "tickets:manage-participants", "warranty:convert",
+        "tickets:view:org", "tickets:edit:org", "tickets:delete:branch",
+        "assignments:view-org", "assignments:view:org",
+        "service-centers:view", "service-centers:view:org",
+        "finance:voucher:create", "finance:voucher:post", "finance:voucher:cancel", "finance:voucher:delete",
+        "finance:invoice:cancel", "finance:invoice:delete",
+        "finance:payment:cancel", "finance:payment:delete",
+        "finance:allocation:manage",
+        "inventory:manage",
+        "inventory:view:org", "inventory:edit:branch",
+        "inventory:voucher:cancel", "inventory:voucher:delete",
+        "pos:shift:open", "pos:shift:close", "pos:shift:drop",
+        "pos:shift:view:org", "pos:shift:manage",
+        "accountancy:create:own", "accountancy:view:br", "accountancy:view:org", "accountancy:edit:br",
+        "crm:view", "crm:manage",
+    ],
+
+    // R2 — Service Engineer: repair & diagnostics workflow.
     R2: [
         "customers:view",
         "tickets:create", "tickets:status:set", "tickets:substatus:set",
         "tickets:assign", "tickets:manage-participants", "warranty:convert",
-        "assignments:view-team",
-        "service-centers:view",
+        "tickets:view:own", "tickets:view:branch",
+        "assignments:view-team", "assignments:view:own",
+        "service-centers:view", "service-centers:view:branch",
     ],
+
+    // R6 — Accountant: books, GST, vouchers, reconciliation. No admin/POS/tickets.
+    R6: [
+        "customers:view", "customers:view:org",
+        "companies:manage", "companies:create", "companies:edit:org",
+        "finance:journal:cancel", "finance:journal:delete",
+        "finance:invoice:cancel", "finance:invoice:delete",
+        "finance:payment:cancel", "finance:payment:delete",
+        "finance:voucher:create", "finance:voucher:post", "finance:voucher:cancel", "finance:voucher:delete",
+        "finance:allocation:manage",
+        "finance:opening-balance:manage",
+        "inventory:view:org",
+        "pos:shift:view:org",
+        "accountancy:create:own",
+        "accountancy:view:own", "accountancy:view:br", "accountancy:view:org",
+        "accountancy:edit:own", "accountancy:edit:br", "accountancy:edit:org",
+        "accountancy:delete:own", "accountancy:delete:br",
+    ],
+
+    // R7 — Sales Executive: CRM, customer acquisition, ecommerce, counter sales.
+    R7: [
+        "customers:view", "customers:view:org",
+        "customers:create", "customers:edit:own", "customers:edit:branch", "customers:delete:own",
+        "companies:manage", "companies:create", "companies:edit:org",
+        "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
+        "tickets:view:own", "tickets:view:branch",
+        "assignments:view-team", "assignments:view:own",
+        "crm:view", "crm:manage",
+        "ecommerce:manage",
+        "inventory:view:branch",
+        "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
+    ],
+
+    // R3 — Counter / Cashier: POS, customer intake, ticket triage, branch inventory.
     R3: [
         "customers:view", "customers:manage", "companies:manage",
         "tickets:create", "tickets:status:set", "tickets:substatus:set", "tickets:assign",
@@ -235,6 +299,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
         "inventory:view:branch", "inventory:edit:branch",
         "pos:shift:open", "pos:shift:close", "pos:shift:drop", "pos:shift:view:branch",
     ],
+
+    // R4 — Stores & Despatch: stock vouchers, goods in/out, repair item handoff.
     R4: [
         "customers:view",
         "tickets:substatus:set", "tickets:assign",
@@ -957,7 +1023,7 @@ async function main() {
     console.log(`      ✓ InvNamingConfig singleton seeded\n`);
 
     // ── Section 8: GST Rate master ─────────────────────────────────────
-    console.log("[8/9] GST Rate master (Indian slabs)");
+    console.log("[8/11] GST Rate master (Indian slabs)");
     const GST_RATES = [
         { rate: "0.00",  label: "Nil (0%)",         description: "Nil rated — essential goods & services" },
         { rate: "0.25",  label: "Special (0.25%)",   description: "Rough / uncut diamonds" },
@@ -976,24 +1042,87 @@ async function main() {
     }
     console.log(`      ✓ ${GST_RATES.length} GST rates seeded\n`);
 
-    // ── Section 9: Org Defaults singleton ─────────────────────────────
-    console.log("[9/9] Org Defaults (singleton, id=1)");
+    // ── Section 9: Inventory Unit master ───────────────────────────────
+    console.log("[9/11] Inventory Unit master");
+    const INV_UNITS = [
+        { code: "PCS",  label: "Piece",      decimals: 0 },
+        { code: "NOS",  label: "Numbers",    decimals: 0 },
+        { code: "BOX",  label: "Box",        decimals: 0 },
+        { code: "SET",  label: "Set",        decimals: 0 },
+        { code: "UNIT", label: "Unit",       decimals: 0 },
+        { code: "MTR",  label: "Metre",      decimals: 2 },
+        { code: "ROLL", label: "Roll",       decimals: 0 },
+        { code: "PKT",  label: "Packet",     decimals: 0 },
+        { code: "PAIR", label: "Pair",       decimals: 0 },
+        { code: "KG",   label: "Kilogram",   decimals: 3 },
+        { code: "BAG",  label: "Bag",        decimals: 0 },
+        { code: "REAM", label: "Ream",       decimals: 0 },
+        { code: "DAY",  label: "Day",        decimals: 0 },
+    ];
+    for (const u of INV_UNITS) {
+        await prisma.invUnit.upsert({
+            where:  { code: u.code },
+            update: { label: u.label, decimals: u.decimals, isActive: true },
+            create: { code: u.code, label: u.label, decimals: u.decimals, isActive: true },
+        });
+    }
+    const defaultUnit = await prisma.invUnit.findUnique({ where: { code: "UNIT" } });
+    console.log(`      ✓ ${INV_UNITS.length} inventory units seeded\n`);
+
+    // ── Section 10: Inventory Brand master ─────────────────────────────
+    console.log("[10/11] Inventory Brand master");
+    const BRANDS = [
+        // Computers & Laptops
+        "Acer", "AMD", "Apple", "Asus", "Dell", "Gigabyte", "HP", "HCL",
+        "Intel", "Lenovo", "LG", "MSI", "Samsung", "Sony",
+        // Storage
+        "Corsair", "Crucial", "Kingston", "SanDisk", "Seagate", "Toshiba",
+        "Transcend", "WD",
+        // Printers & Consumables
+        "Brother", "Canon", "Epson", "Kyocera", "Lexmark", "Panasonic",
+        "Ricoh", "TVS", "Xerox",
+        // CCTV & Security
+        "Annke", "Axis", "Bosch", "CP Plus", "Dahua", "Ezviz", "Godrej",
+        "Hanwha", "Hikvision", "Honeywell", "Reolink", "Zicom",
+        // Networking
+        "Cisco", "D-Link", "Grandstream", "Netgear", "Tenda", "TP-Link", "Ubiquiti",
+        // Peripherals & Accessories
+        "APC", "Beetel", "Belkin", "Boat", "Hola", "iBall", "Intex",
+        "Logitech", "Luminous", "Microtek", "Nvidia", "Stanley", "Zebronics",
+    ];
+    const uniqueBrands = [...new Set(BRANDS)];
+    for (const name of uniqueBrands) {
+        await prisma.invBrand.upsert({
+            where:  { name },
+            update: { isActive: true },
+            create: { name, isActive: true },
+        });
+    }
+    console.log(`      ✓ ${uniqueBrands.length} brands seeded\n`);
+
+    // ── Section 11: Org Defaults singleton ────────────────────────────
+    console.log("[11/11] Org Defaults (singleton, id=1)");
     // Resolve the GST 18% master row that we just seeded in section 8.
     const gst18 = await prisma.gstRate.findUnique({ where: { label: "GST 18%" } });
     await prisma.orgDefaults.upsert({
         where:  { id: 1 },
-        // On first run: seed with sensible defaults (GST 18%, TAXABLE, ₹).
+        // On first run: seed with sensible defaults (GST 18%, TAXABLE, ₹, PCS).
         // On re-run: update only fields that are still at their default so
         // admin-customised values are NOT overwritten.
         create: {
             id: 1,
-            defaultGstRateId:  gst18?.id ?? null,
-            defaultTaxability: "TAXABLE",
-            defaultCurrencySymbol: "₹",
+            defaultGstRateId:            gst18?.id        ?? null,
+            defaultUnitId:               defaultUnit?.id  ?? null,
+            defaultTaxability:           "TAXABLE",
+            defaultCurrencySymbol:       "₹",
+            // Credit restricted by default: new vouchers due immediately.
+            // Admin can raise this in Settings → Org Defaults (e.g. 30/60).
+            defaultSaleCreditPeriod:     0,
+            defaultPurchaseCreditPeriod: 0,
         },
         update: {},   // never overwrite admin changes on re-seed
     });
-    console.log(`      ✓ OrgDefaults singleton seeded (defaultGstRateId=${gst18?.id ?? "null"} → 18%, TAXABLE, ₹)\n`);
+    console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

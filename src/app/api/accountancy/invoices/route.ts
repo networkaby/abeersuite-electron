@@ -7,6 +7,7 @@ import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 
 const lineSchema = z.object({
     description: z.string().trim().min(1),
@@ -90,6 +91,12 @@ export async function POST(req: Request) {
 
     try {
         const invoice = await prisma.$transaction(async (tx) => {
+            // ── Credit limit check (only SENT invoices post to AR) ───────────
+            // DRAFT invoices don't touch the GL, so no credit impact yet.
+            if (body.status === "SENT") {
+                await checkCreditLimit(tx, body.accountId, totalAmount);
+            }
+
             const number = await nextRefFromSeries(tx, "INVOICE", user!.id);
 
             const inv = await tx.invoice.create({
@@ -129,6 +136,9 @@ export async function POST(req: Request) {
 
         return NextResponse.json(invoice, { status: 201 });
     } catch (e) {
+        if (e instanceof CreditLimitError) {
+            return NextResponse.json({ error: e.message, code: e.code }, { status: 422 });
+        }
         return handleApiError(e, "Failed to create invoice");
     }
 }

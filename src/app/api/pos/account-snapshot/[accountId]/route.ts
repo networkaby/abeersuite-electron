@@ -13,7 +13,7 @@ import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/frag
 //   party          — { kind: "person" | "company", id, name, phone, email, gstin }
 //   account        — current ledger balance + opening balance
 //   turnover       — lifetime + last-12-month invoice totals
-//   discountPct    — placeholder tier from lifetime turnover
+//   discountPct    — tier from lifetime turnover (Bronze/Silver/Gold/Platinum)
 //   loyaltyPoints  — placeholder = ⌊totalInvoiced / 100⌋
 //   lastVisitAt    — most recent of (latest invoice issueDate, latest ticket createdAt)
 //   recentTickets  — last 3 tickets (matched via Ticket.billingAccountId)
@@ -35,6 +35,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 id: true,
                 balance: true,
                 openingBalance: true,
+                creditLimit: true,
                 person: {
                     select: {
                         id: true,
@@ -142,15 +143,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                               : lifetimeTotal >= 10000  ? "Silver"
                                                         : "Bronze";
 
-        // Placeholder credit-limit tier — schema has no credit_limit field yet.
-        // Bronze/Silver get ₹10k, Gold ₹50k, Platinum ₹2L.
-        const creditLimit = lifetimeTotal >= 200000 ? 200000
-                            : lifetimeTotal >= 50000  ? 50000
-                                                      : 10000;
-        const balance = Number(account.balance);                       // ledger balance (positive = customer owes)
+        // null  = unlimited (no check performed anywhere)
+        // 0     = no credit facility (must pay in full)
+        // > 0   = hard cap; enforced at sale APIs and the POS checkout dialog
+        const creditLimit: number | null = account.creditLimit !== null
+            ? Number(account.creditLimit)
+            : null;
+        const balance    = Number(account.balance);    // ledger balance (positive = customer owes)
         const balanceDue = Math.max(0, balance);
         const overdueDue = overdueRows.reduce((s, r) => s + Math.max(0, Number(r.totalAmount) - Number(r.amountPaid)), 0);
-        const availableCredit = Math.max(0, creditLimit - balanceDue);
+        const availableCredit: number | null = creditLimit !== null
+            ? Math.max(0, creditLimit - balanceDue)
+            : null;                                    // null = unlimited
 
         const lastVisitAt = (() => {
             const a = latestInvoice?.issueDate ?? null;
