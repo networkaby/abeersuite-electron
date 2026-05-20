@@ -169,7 +169,11 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const shippingAmt  = toNumber(voucher.shippingAmt);
     const roundOff     = toNumber(voucher.roundOff);
     const totalAmount  = toNumber(voucher.totalAmount);
-    const goodsAmount  = subtotal + shippingAmt; // body of the sale/purchase
+    // `voucher.subtotal` from calcVoucherTotals is tax-INCLUSIVE (sum of
+    // line.amount, where line.amount = taxable + line tax). The body ledger
+    // takes goods only — strip the line-level tax out and add shipping so
+    // body + tax + roundOff balances against totalAmount.
+    const goodsAmount  = subtotal - taxAmount + shippingAmt;
 
     if (totalAmount <= 0) {
         return { journalEntryId: null, notes: ["voucher total is zero — skipping GL post"] };

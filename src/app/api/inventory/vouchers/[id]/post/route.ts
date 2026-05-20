@@ -5,6 +5,21 @@ import { toNumber } from "@/modules/accountancy/lib/balance";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { handleApiError } from "@/shared/lib/api";
 
+// Tagged error: the GL bridge returned without creating a JournalEntry for a
+// trading voucher (SALE/PURCHASE/SALE_RETURN/PURCHASE_RETURN). The outer catch
+// converts this into HTTP 422 with the bridge's diagnostic `notes` so the UI
+// can show why (missing ledger, no party account, etc.). Throwing inside the
+// $transaction rolls back stock-ledger writes and the status=POSTED update,
+// so the voucher stays DRAFT until the underlying COA / party issue is fixed.
+class GlPostFailedError extends Error {
+    readonly notes: string[];
+    constructor(message: string, notes: string[]) {
+        super(message);
+        this.name = "GlPostFailedError";
+        this.notes = notes;
+    }
+}
+
 // POST /api/inventory/vouchers/[id]/post
 //   1. Write InvStockLedger entries + update cached InvProduct.stock
 //   2. Auto-create GL JournalEntry via postInvVoucherToGl (SALE / PURCHASE only)
@@ -269,6 +284,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 });
                 journalEntryId = out.journalEntryId;
                 postNotes.push(...out.notes);
+                // A trading voucher MUST produce a balanced JournalEntry — the
+                // top-bar Cash/Bank/Receivables/Payables widgets, Balance Sheet,
+                // Day Book and P&L all read GL only, so a POSTED-without-JE
+                // voucher is invisible to every consumer. Fail loud rather
+                // than create another silent orphan. Rollback is automatic via
+                // the surrounding $transaction.
+                if (journalEntryId === null) {
+                    throw new GlPostFailedError(
+                        `Cannot post ${voucher.type} ${voucher.reference}: GL bridge could not build a journal entry.`,
+                        out.notes,
+                    );
+                }
             } else if (isManufacturingJournal && voucher.expenseLines.length > 0) {
                 // Build the JE: N expense debits + 1 payment-account credit.
                 const totalCharges = voucher.expenseLines.reduce(
@@ -354,6 +381,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         return NextResponse.json({ ...result, _postNotes: notes });
     } catch (e) {
+        if (e instanceof GlPostFailedError) {
+            return NextResponse.json(
+                { error: e.message, notes: e.notes },
+                { status: 422 },
+            );
+        }
         return handleApiError(e, "Failed to post voucher");
     }
 }
