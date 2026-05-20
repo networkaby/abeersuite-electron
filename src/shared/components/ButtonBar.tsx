@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
 import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
@@ -21,6 +21,75 @@ import AllCreateActionsDialog from "@/shared/components/AllCreateActionsDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+const ACTION_HREFS: Partial<Record<NonNullable<ModuleCreateAction["action"]>, string>> = {
+    "new-journal-voucher":        "/vouchers/journal-entries/new",
+    "new-debit-note":             "/vouchers/debit-notes/new",
+    "new-contra":                 "/vouchers/contras/new",
+    "new-payment":                "/vouchers/payments/new",
+    "new-receipt":                "/vouchers/receipts/new",
+    "new-credit-note":            "/vouchers/credit-notes/new",
+    "new-sale":                   "/vouchers/sales/new",
+    "new-purchase":               "/vouchers/purchases/new",
+    "new-sale-return":            "/vouchers/sale-returns/new",
+    "new-purchase-return":        "/vouchers/purchase-returns/new",
+    "new-sales-order":            "/vouchers/sales-orders/new",
+    "new-purchase-order":         "/vouchers/purchase-orders/new",
+    "new-grn":                    "/vouchers/grn/new",
+    "new-challan":                "/vouchers/challans/new",
+    "new-manufacturing-journal":  "/vouchers/manufacturing-journals/new",
+    "new-physical-stock":         "/vouchers/physical-stock/new",
+    "new-branch-transfer":        "/vouchers/branch-transfers/new",
+    "new-rejection-in":           "/vouchers/rejections-in/new",
+    "new-rejection-out":          "/vouchers/rejections-out/new",
+    "new-estimate":               "/vouchers/estimates/new",
+};
+
+interface BtnBarMenuState { x: number; y: number; href: string; }
+
+function ActionContextMenu({ menu, onClose }: { menu: BtnBarMenuState | null; onClose: () => void }) {
+    const closeRef = useRef(onClose);
+    closeRef.current = onClose;
+
+    useEffect(() => {
+        if (!menu) return;
+        const onDown = (e: MouseEvent) => {
+            if ((e.target as HTMLElement).closest("[data-bb-ctx-menu]")) return;
+            closeRef.current();
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
+        const onScroll = () => closeRef.current();
+        document.addEventListener("mousedown", onDown);
+        document.addEventListener("keydown", onKey);
+        document.addEventListener("scroll", onScroll, true);
+        return () => {
+            document.removeEventListener("mousedown", onDown);
+            document.removeEventListener("keydown", onKey);
+            document.removeEventListener("scroll", onScroll, true);
+        };
+    }, [menu]);
+
+    if (!menu) return null;
+    const x = Math.min(menu.x, window.innerWidth - 200);
+    const y = Math.min(menu.y, window.innerHeight - 60);
+
+    return (
+        <div
+            data-bb-ctx-menu
+            className="fixed z-50 min-w-[180px] rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
+            style={{ left: x, top: y }}
+            onContextMenu={(e) => e.preventDefault()}
+        >
+            <button
+                type="button"
+                onClick={() => { window.open(menu.href, "_blank", "noopener"); onClose(); }}
+                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-foreground hover:bg-muted"
+            >
+                Open in new window
+            </button>
+        </div>
+    );
+}
+
 type UserType = {
     name?: string | null;
     role?: string;
@@ -33,6 +102,7 @@ type Pipeline = { id: string; isDefault: boolean; isActive: boolean };
 export default function ButtonBar({ user }: { user?: UserType }) {
     const pathname = usePathname();
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
+    const [ctxMenu, setCtxMenu] = useState<BtnBarMenuState | null>(null);
     const { barMode, setBarMode } = usePanelStore();
     const collapsed = barMode === "collapsed";
     const isHidden = barMode === "hidden";
@@ -103,46 +173,6 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             setPersonOpen(true);
         } else if (action.action === "new-company") {
             setCompanyOpen(true);
-        } else if (action.action === "new-journal-voucher") {
-            window.open("/vouchers/journal-entries/new", "_blank", "noopener");
-        } else if (action.action === "new-debit-note") {
-            window.open("/vouchers/debit-notes/new", "_blank", "noopener");
-        } else if (action.action === "new-contra") {
-            window.open("/vouchers/contras/new", "_blank", "noopener");
-        } else if (action.action === "new-payment") {
-            window.open("/vouchers/payments/new", "_blank", "noopener");
-        } else if (action.action === "new-receipt") {
-            window.open("/vouchers/receipts/new", "_blank", "noopener");
-        } else if (action.action === "new-credit-note") {
-            window.open("/vouchers/credit-notes/new", "_blank", "noopener");
-        } else if (action.action === "new-sale") {
-            window.open("/vouchers/sales/new", "_blank", "noopener");
-        } else if (action.action === "new-purchase") {
-            window.open("/vouchers/purchases/new", "_blank", "noopener");
-        } else if (action.action === "new-sale-return") {
-            window.open("/vouchers/sale-returns/new", "_blank", "noopener");
-        } else if (action.action === "new-purchase-return") {
-            window.open("/vouchers/purchase-returns/new", "_blank", "noopener");
-        } else if (action.action === "new-sales-order") {
-            window.open("/vouchers/sales-orders/new", "_blank", "noopener");
-        } else if (action.action === "new-purchase-order") {
-            window.open("/vouchers/purchase-orders/new", "_blank", "noopener");
-        } else if (action.action === "new-grn") {
-            window.open("/vouchers/grn/new", "_blank", "noopener");
-        } else if (action.action === "new-challan") {
-            window.open("/vouchers/challans/new", "_blank", "noopener");
-        } else if (action.action === "new-manufacturing-journal") {
-            window.open("/vouchers/manufacturing-journals/new", "_blank", "noopener");
-        } else if (action.action === "new-physical-stock") {
-            window.open("/vouchers/physical-stock/new", "_blank", "noopener");
-        } else if (action.action === "new-branch-transfer") {
-            window.open("/vouchers/branch-transfers/new", "_blank", "noopener");
-        } else if (action.action === "new-rejection-in") {
-            window.open("/vouchers/rejections-in/new", "_blank", "noopener");
-        } else if (action.action === "new-rejection-out") {
-            window.open("/vouchers/rejections-out/new", "_blank", "noopener");
-        } else if (action.action === "new-estimate") {
-            window.open("/vouchers/estimates/new", "_blank", "noopener");
         }
     };
 
@@ -267,7 +297,8 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                             {/* Module-specific or universal create actions */}
                             {actions.map((action) => {
                                 const Icon = action.icon;
-                                const isActive = !!(action.href && pathname.startsWith(action.href));
+                                const resolvedHref = action.href ?? (action.action ? ACTION_HREFS[action.action] : undefined);
+                                const isActive = !!(resolvedHref && pathname.startsWith(resolvedHref));
 
                                 const rowClass = [
                                     "flex h-auto w-full items-center rounded-lg text-sm font-medium transition-all duration-150",
@@ -297,13 +328,17 @@ export default function ButtonBar({ user }: { user?: UserType }) {
 
                                 const titleAttr = collapsed ? action.label : `${action.label} — ${action.subtitle}`;
 
-                                if (action.href && !action.disabled) {
+                                if (resolvedHref && !action.disabled) {
                                     return (
                                         <Link
                                             key={action.label}
-                                            href={action.href}
+                                            href={resolvedHref}
                                             className={rowClass}
                                             title={titleAttr}
+                                            onContextMenu={(e) => {
+                                                e.preventDefault();
+                                                setCtxMenu({ x: e.clientX, y: e.clientY, href: resolvedHref });
+                                            }}
                                             {...(action.newTab
                                                 ? { target: "_blank", rel: "noopener noreferrer" }
                                                 : {})}
@@ -341,6 +376,7 @@ export default function ButtonBar({ user }: { user?: UserType }) {
             />
             <CreatePersonDialog open={personOpen} onOpenChange={setPersonOpen} />
             <CreateCompanyDialog open={companyOpen} onOpenChange={setCompanyOpen} />
+            <ActionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
         </>
     );
 }

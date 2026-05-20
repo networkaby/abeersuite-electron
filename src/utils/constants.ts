@@ -187,6 +187,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         // pathPrefixes: ["/office/accountancy/account-groups", "/office/accountancy/ledgers", "/office/accountancy/sales", "/office/accountancy/purchases", "/office/accountancy/estimates", "/office/accountancy/payments", "/office/accountancy/receipts", "/office/accountancy/contras", "/office/accountancy/credit-notes", "/office/accountancy/debit-notes", "/office/accountancy/journal-entries", "/office/accountancy/invoices", "/office/accountancy/opening-balance", "/office/accountancy/reports"],
         pathPrefixes: ["/office/accountancy"],
         createActions: [
+            { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
@@ -324,6 +325,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             "/office/accountancy/vouchers-registers/branch-transfers",
         ],
         createActions: [
+            { label: "POS", subtitle: "Open POS register", icon: Monitor, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: Receipt, variant: "outline", action: "new-sale-return" },
