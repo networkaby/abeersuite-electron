@@ -17,6 +17,7 @@ model Permission {
   label         String
   description   String?
   module        String           @default("core")
+  systemOnly    Boolean          @default(false)
   roleGrants    RolePermission[]
   userOverrides UserPermission[]
 }

@@ -36,6 +36,15 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     const estimateCount = await prisma.invVoucher.count({ where: { type: "ESTIMATE" } });
     const saleReturnCount     = await prisma.invVoucher.count({ where: { type: "SALE_RETURN" } });
     const purchaseReturnCount = await prisma.invVoucher.count({ where: { type: "PURCHASE_RETURN" } });
+    const salesOrderCount         = await prisma.invVoucher.count({ where: { type: "SALES_ORDER" } });
+    const purchaseOrderCount      = await prisma.invVoucher.count({ where: { type: "PURCHASE_ORDER" } });
+    const grnCount                = await prisma.invVoucher.count({ where: { type: "GRN" } });
+    const challanCount            = await prisma.invVoucher.count({ where: { type: "CHALLAN" } });
+    const manufacturingCount      = await prisma.invVoucher.count({ where: { type: "MANUFACTURING_JOURNAL" } });
+    const physicalStockCount      = await prisma.invVoucher.count({ where: { type: "PHYSICAL_STOCK" } });
+    const branchTransferCount     = await prisma.invVoucher.count({ where: { type: "BRANCH_TRANSFER" } });
+    const rejectionInCount        = await prisma.invVoucher.count({ where: { type: "REJECTION_IN" } });
+    const rejectionOutCount       = await prisma.invVoucher.count({ where: { type: "REJECTION_OUT" } });
 
     const rows = [
         ...KINDS.map(({ kind, label, typeValue }) => ({
@@ -55,6 +64,15 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         { kind: "ESTIMATE", label: "Estimate",         typeValue: "EV", nextSeq: estimateCount },
         { kind: "SALE_RETURN",     label: "Sale Return",     typeValue: "SR", nextSeq: saleReturnCount },
         { kind: "PURCHASE_RETURN", label: "Purchase Return", typeValue: "PR", nextSeq: purchaseReturnCount },
+        { kind: "SALES_ORDER",           label: "Sales Order",            typeValue: "SO",   nextSeq: salesOrderCount },
+        { kind: "PURCHASE_ORDER",        label: "Purchase Order",         typeValue: "PO",   nextSeq: purchaseOrderCount },
+        { kind: "GRN",                   label: "Goods Receipt Note",     typeValue: "GRN",  nextSeq: grnCount },
+        { kind: "CHALLAN",               label: "Delivery Challan",       typeValue: "DC",   nextSeq: challanCount },
+        { kind: "MANUFACTURING_JOURNAL", label: "Manufacturing Journal",  typeValue: "MJ",   nextSeq: manufacturingCount },
+        { kind: "PHYSICAL_STOCK",        label: "Physical Stock",         typeValue: "PS",   nextSeq: physicalStockCount },
+        { kind: "BRANCH_TRANSFER",       label: "Branch Transfer",        typeValue: "BT",   nextSeq: branchTransferCount },
+        { kind: "REJECTION_IN",          label: "Rejection In",           typeValue: "RIN",  nextSeq: rejectionInCount },
+        { kind: "REJECTION_OUT",         label: "Rejection Out",          typeValue: "ROUT", nextSeq: rejectionOutCount },
     ].map((r) => ({
         kind:            r.kind,
         label:           r.label,

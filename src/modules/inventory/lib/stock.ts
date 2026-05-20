@@ -7,12 +7,21 @@ import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 // from /office/settings/year-ending (FY rollover, padding, separators, type code).
 // Anything not listed here falls through to the legacy calendar-year scheme.
 const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
-    SALE:             "SALE",
-    POS:              "POS",
-    PURCHASE:         "PURCHASE",
-    ESTIMATE:         "ESTIMATE",
-    SALE_RETURN:      "SALE_RETURN",
-    PURCHASE_RETURN:  "PURCHASE_RETURN",
+    SALE:                  "SALE",
+    POS:                   "POS",
+    PURCHASE:              "PURCHASE",
+    ESTIMATE:              "ESTIMATE",
+    SALE_RETURN:           "SALE_RETURN",
+    PURCHASE_RETURN:       "PURCHASE_RETURN",
+    SALES_ORDER:           "SALES_ORDER",
+    PURCHASE_ORDER:        "PURCHASE_ORDER",
+    GRN:                   "GRN",
+    CHALLAN:               "CHALLAN",
+    MANUFACTURING_JOURNAL: "MANUFACTURING_JOURNAL",
+    PHYSICAL_STOCK:        "PHYSICAL_STOCK",
+    BRANCH_TRANSFER:       "BRANCH_TRANSFER",
+    REJECTION_IN:          "REJECTION_IN",
+    REJECTION_OUT:         "REJECTION_OUT",
 };
 
 // Legacy prefixes for the fallback path — kept so older voucher types
