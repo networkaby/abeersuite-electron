@@ -31,7 +31,7 @@ The constant name mirrors the string: `INVENTORY_VOUCHER_HARD_DELETE = "inventor
 
 | Key | Effect |
 |---|---|
-| `admin:bypass` | Master key. Holder passes every `requirePermission(*)` check. Routed to `AdminBriefing` on `/office` home regardless of department. Granted only to R1. |
+| `admin:bypass` | Master key. Holder passes every `requirePermission(*)` check. Routed to `AdminBriefing` on `/office` home regardless of department. **Code-only sentinel** — marked `systemOnly: true` in the seed, never auto-granted to any role, removed from the Role Matrix UI. The only entity that ever holds it is the env super admin (see below). The legacy warning banner on the Role Matrix still fires if a historical role somehow has it pre-reseed. |
 | `accountancy:view:org` | Gates the entire Accountancy module — sidebar section hides for users without it, direct nav 403s. |
 | `settings:manage` | Required for Branches / Departments / POS Counters admin pages. |
 | `pos:shift:open` | Required to open a POS shift. Also the gate for the cashier-side return flow. |
@@ -49,12 +49,38 @@ The constant name mirrors the string: `INVENTORY_VOUCHER_HARD_DELETE = "inventor
 
 | ID | Name | Rank | Typical permissions |
 |---|---|---|---|
-| `R1` | Admin / Owner | 100 | `admin:bypass` |
+| `R1` | Admin / Owner | 100 | Every non-`systemOnly` permission (~111 keys). `admin:bypass` is **not** in this set — see Env super admin below. |
 | `R2` | Technician | 70 | `tickets:*:own/branch`, `inventory:view:branch`, repair-side ops |
 | `R3` | Front Desk | 40 | `tickets:create`, `customers:*`, `pos:shift:*`, `inventory:view:branch`, `inventory:edit:branch` |
 | `R4` | Despatch | 20 | `tickets:edit:branch` (despatch sub-statuses), `pos:shift:open` |
 
 > Read the actual `Role` + `RolePermission` rows in `bootstrap-seed.ts` (sections 2–3) for the canonical assignment matrix.
+
+## Env super admin (emergency bypass)
+
+A hardcoded super admin can sign in even when the DB is empty / wiped / locked-out. Configured via `.env`:
+
+```
+SUPER_ADMIN_EMAIL="superadmin@networkservice.in"
+SUPER_ADMIN_PASSWORD="<strong-random-secret>"
+```
+
+Leave either blank → feature disabled. Implementation in [`src/shared/lib/auth/authorizeStaff.ts`](../../src/shared/lib/auth/authorizeStaff.ts) (`checkSuperAdminEnv`):
+
+- Checked **before** the staff email domain allowlist and any DB query — works on a fresh / broken DB.
+- Synthetic session: `id: "0"` (never clashes with auto-increment), `role: "R1"`, `rank: 9999`, `scope: "ORG"`, `permissions: ["admin:bypass"]`.
+- Timing-safe comparison with 256-byte padded buffers via `crypto.timingSafeEqual` — no length leak, no user-enumeration via response time.
+
+**Production checklist:** rotate `SUPER_ADMIN_PASSWORD` to a strong random value (`openssl rand -base64 32`). The default placeholder in `.env` is dev-only.
+
+## System-only permissions (`systemOnly: true`)
+
+Permissions in the seed marked `systemOnly: true` are never auto-granted to any role and are excluded from the Role Matrix UI. They exist in the DB `Permission` table only so FK lookups don't break. Currently the only one is `admin:bypass`.
+
+R1's grant in `bootstrap-seed.ts` filters them out:
+```ts
+R1: PERMISSIONS.filter(p => !p.systemOnly).map(p => p.id),
+```
 
 ## Opaque IDs (seeded — do not rename in prod)
 
@@ -75,8 +101,8 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 ## Adding a new permission — recipe
 
 1. Add the constant to `src/shared/lib/constants/permissions.ts`.
-2. Add the row insert in `prisma/seeds/bootstrap-seed.ts` (section 3 — Permissions).
-3. Grant it to the relevant role(s) in the same seed file (section 4 — RolePermission).
+2. Add the row insert in `prisma/seeds/bootstrap-seed.ts` (section 3 — Permissions). If it should never be UI-grantable (e.g. another sentinel like `admin:bypass`), include `systemOnly: true` on the row.
+3. Grant it to the relevant role(s) in the same seed file (section 4 — RolePermission). System-only keys are auto-excluded from R1's union.
 4. Use `requirePermission(PERMISSIONS.YOUR_KEY)` (or `hasPermission` for client gates) in the route(s).
 5. Re-seed the dev DB: `pnpm seed:hard-clean && pnpm prisma db seed`.
 6. Add the gate row to the relevant module doc's "Permissions" section.
@@ -85,4 +111,4 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 
 Customers don't carry permission keys. Portal sessions are discriminated by `session.kind === "customer"` and routed through `requirePortalAuth()`. See [customer-portal.md](./customer-portal.md).
 
-_Last updated: 2026-05-19 — initial extraction from `permissions.ts` + `bootstrap-seed.ts`._
+_Last updated: 2026-05-20 — `admin:bypass` reclassified as `systemOnly` (never auto-granted to R1, removed from Role Matrix UI); env super admin (`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`) added as the only entity that can hold the bypass at runtime._
