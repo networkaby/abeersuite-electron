@@ -278,14 +278,14 @@ export function BranchTransferPage() {
     }
 
     return (
-        <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col h-screen overflow-hidden bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Branch Transfer"
                 onClose={handleClose}
                 editingRef={editing && voucherRef ? voucherRef : undefined}
-                sticky
             />
+            <div className="flex-1 overflow-y-auto">
             <div className="max-w-5xl mx-auto w-full space-y-5 p-6">
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-4">
@@ -406,38 +406,39 @@ export function BranchTransferPage() {
                     </table>
                 </div>
 
-                {/* Bottom row — narration left, actions right (Tally-style). */}
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end pt-2 border-t border-border">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Narration</Label>
-                        <Textarea
-                            rows={2}
-                            value={form.description}
-                            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                            placeholder="Free-form notes — e.g. carrier reference, packing list #"
-                        />
-                    </div>
-                    <VoucherInlineActions
-                        onCancel={handleClose}
-                        onSave={() => submit(true)}
-                        onSaveDraft={() => submit(false)}
-                        showSaveDraft
-                        saving={saving}
-                        leftContent={editing && loadedVoucher ? (
-                            <LifecycleActions
-                                voucher={loadedVoucher}
-                                apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
-                                listPath="/office/accountancy/vouchers-registers/branch-transfers"
-                                label="Branch Transfer"
-                                canCancel={canCancel}
-                                canDelete={canDelete}
-                                canHardDelete={canHardDelete}
-                                onChanged={closeForm}
-                            />
-                        ) : undefined}
+                {/* Narration — actions moved to pinned footer below. */}
+                <div className="pt-2 border-t border-border space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Narration</Label>
+                    <Textarea
+                        rows={2}
+                        value={form.description}
+                        onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                        placeholder="Free-form notes — e.g. carrier reference, packing list #"
                     />
                 </div>
             </div>
+            </div>
+            </div>
+            <div className="border-t border-border bg-card px-6 py-3 shrink-0">
+                <VoucherInlineActions
+                    onCancel={handleClose}
+                    onSave={() => submit(true)}
+                    onSaveDraft={() => submit(false)}
+                    showSaveDraft
+                    saving={saving}
+                    leftContent={editing && loadedVoucher ? (
+                        <LifecycleActions
+                            voucher={loadedVoucher}
+                            apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
+                            listPath="/office/accountancy/vouchers-registers/branch-transfers"
+                            label="Branch Transfer"
+                            canCancel={canCancel}
+                            canDelete={canDelete}
+                            canHardDelete={canHardDelete}
+                            onChanged={closeForm}
+                        />
+                    ) : undefined}
+                />
             </div>
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 <DialogContent showCloseButton={false}>

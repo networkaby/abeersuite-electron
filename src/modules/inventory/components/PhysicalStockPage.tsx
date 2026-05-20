@@ -27,7 +27,7 @@ import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Trash2, Building2, Plus, Minus } from "lucide-react";
+import { Loader2, Trash2, Plus, Minus } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,16 +38,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-
-type Branch = { id: string; name: string; isActive?: boolean };
-type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
 
 type LineForm = {
     productId:    number;
@@ -121,8 +116,7 @@ export function PhysicalStockPage() {
     const handleClose = useCallback(() => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     }, [closeForm]);
-    const [branches, setBranches] = useState<Branch[]>([]);
-    const [selectedBranchId, setSelectedBranchId] = useState<string | null>(activeBranchId);
+    const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
     const [form, setForm] = useState({
         date:        new Date().toISOString().slice(0, 10),
@@ -130,35 +124,6 @@ export function PhysicalStockPage() {
         lines:       [] as LineForm[],
     });
 
-    // Load branches the operator has access to (admin → all active; otherwise
-    // just their assigned branches). Same RBAC filter as BranchSwitcher.
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            const sess = await fetch("/api/auth/session").then((r) => r.json()).catch(() => null) as { user?: SessionUser } | null;
-            const user = sess?.user;
-            if (!user || cancelled) return;
-            const perms = user.permissions ?? [];
-            const userBranchIds = user.branchIds ?? [];
-            const isAdmin = perms.includes(PERMISSIONS.ADMIN_BYPASS);
-            try {
-                const res = await axios.get<Branch[]>("/api/branches");
-                if (cancelled) return;
-                const active = res.data.filter((b) => b.isActive !== false);
-                const visible = isAdmin ? active : active.filter((b) => userBranchIds.includes(b.id));
-                setBranches(visible);
-                // Default selection: keep the active branch if it's in the
-                // visible list, otherwise fall back to the first allowed.
-                setSelectedBranchId((prev) => {
-                    if (prev && visible.some((b) => b.id === prev)) return prev;
-                    return visible[0]?.id ?? null;
-                });
-            } catch {
-                /* no-op — picker stays empty, submit will fail with a clear message */
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [activeBranchId]);
 
     // Edit-mode prefill
     useEffect(() => {
@@ -259,7 +224,8 @@ export function PhysicalStockPage() {
 
     const submit = async (postAfterSave: boolean) => {
         if (!form.description.trim()) { toast.error("Description required"); return; }
-        if (!selectedBranchId) {
+        const branchId = editing ? selectedBranchId : activeBranchId;
+        if (!branchId) {
             toast.error("Pick a branch");
             return;
         }
@@ -275,7 +241,7 @@ export function PhysicalStockPage() {
         try {
             const payload = {
                 type:        "PHYSICAL_STOCK" as const,
-                branchId:    selectedBranchId,
+                branchId,
                 date:        form.date,
                 description: form.description.trim(),
                 lines: cleaned.map((l) => ({
@@ -324,34 +290,14 @@ export function PhysicalStockPage() {
 
     return (
         <BranchRequired action="record physical stock">
-        <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col h-screen overflow-hidden bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Physical Stock"
                 onClose={handleClose}
                 editingRef={editing && voucherRef ? voucherRef : undefined}
-                sticky
-                rightContent={branches.length > 1 ? (
-                    <Select value={selectedBranchId ?? ""} onValueChange={(v) => setSelectedBranchId(v)}>
-                        <SelectTrigger className="h-8 w-[180px] text-xs">
-                            <div className="flex items-center gap-1.5">
-                                <Building2 size={12} className="shrink-0 text-muted-foreground" />
-                                <SelectValue placeholder="Pick a branch" />
-                            </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {branches.map((b) => (
-                                <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                ) : branches.length === 1 ? (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
-                        <Building2 size={12} className="shrink-0" />
-                        <span>{branches[0]!.name}</span>
-                    </div>
-                ) : undefined}
             />
+            <div className="flex-1 overflow-y-auto">
             <div className="max-w-5xl mx-auto w-full space-y-5 p-6">
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-4">
@@ -459,6 +405,10 @@ export function PhysicalStockPage() {
                     </table>
                 </div>
 
+            </div>
+            </div>
+            </div>
+            <div className="border-t border-border bg-card px-6 py-3 shrink-0">
                 <VoucherInlineActions
                     onCancel={handleClose}
                     onSave={() => submit(true)}
@@ -478,7 +428,6 @@ export function PhysicalStockPage() {
                         />
                     ) : undefined}
                 />
-            </div>
             </div>
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 <DialogContent showCloseButton={false}>

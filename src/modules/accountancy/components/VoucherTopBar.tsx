@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
 
 interface VoucherTopBarProps {
     title: string;
@@ -14,7 +15,7 @@ interface VoucherTopBarProps {
     statusBadge?: { label: string; colorClass: string };
     /** Extra nodes after the nav (CASH/CREDIT toggle, New button, etc.). */
     leftExtras?: React.ReactNode;
-    /** Right section content (branch pill, reference+date row, etc.). */
+    /** Right section content (extra per-voucher controls). The shared BranchSwitcher + X close are always appended after this. */
     rightContent?: React.ReactNode;
     /** Make the header sticky (needed when the page scrolls, not a fixed-height container). */
     sticky?: boolean;
@@ -57,7 +58,13 @@ export function VoucherTopBar({
                 </nav>
                 {leftExtras}
             </div>
-            {rightContent}
+            <div className="flex items-center gap-2">
+                {rightContent}
+                <BranchSwitcher />
+                <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} title="Close (Esc)" aria-label="Close">
+                    <X size={15} />
+                </Button>
+            </div>
         </header>
     );
 }

@@ -18,7 +18,7 @@ import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Trash2, Building2, Workflow, Plus, Minus } from "lucide-react";
+import { Loader2, Trash2, Workflow, Plus, Minus } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,16 +33,11 @@ import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/compo
 import { BomPicker, type BomPickerPayload } from "@/modules/inventory/components/BomPicker";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { scaleBomLines } from "@/modules/inventory/lib/bom";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { LifecycleActions, type LifecycleVoucher } from "@/modules/accountancy/components/LifecycleActions";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-
-type Branch = { id: string; name: string; isActive?: boolean };
-type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
 
 type LineForm = {
     productId: number;
@@ -128,8 +123,7 @@ export function ManufacturingJournalPage() {
     const handleClose = useCallback(() => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     }, [closeForm]);
-    const [branches, setBranches] = useState<Branch[]>([]);
-    const [selectedBranchId, setSelectedBranchId] = useState<string | null>(activeBranchId);
+    const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
     const [form, setForm] = useState({
         date:               new Date().toISOString().slice(0, 10),
@@ -151,30 +145,6 @@ export function ManufacturingJournalPage() {
             .catch(() => setAccounts([]));
     }, []);
 
-    // Load branches with the same RBAC filter the global BranchSwitcher uses.
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            const sess = await fetch("/api/auth/session").then((r) => r.json()).catch(() => null) as { user?: SessionUser } | null;
-            const user = sess?.user;
-            if (!user || cancelled) return;
-            const perms = user.permissions ?? [];
-            const userBranchIds = user.branchIds ?? [];
-            const isAdmin = perms.includes(PERMISSIONS.ADMIN_BYPASS);
-            try {
-                const res = await axios.get<Branch[]>("/api/branches");
-                if (cancelled) return;
-                const active = res.data.filter((b) => b.isActive !== false);
-                const visible = isAdmin ? active : active.filter((b) => userBranchIds.includes(b.id));
-                setBranches(visible);
-                setSelectedBranchId((prev) => {
-                    if (prev && visible.some((b) => b.id === prev)) return prev;
-                    return visible[0]?.id ?? null;
-                });
-            } catch { /* picker stays empty; submit will flag */ }
-        })();
-        return () => { cancelled = true; };
-    }, [activeBranchId]);
 
     // Edit-mode prefill
     useEffect(() => {
@@ -407,11 +377,12 @@ export function ManufacturingJournalPage() {
             return;
         }
 
+        const branchId = editing ? selectedBranchId : activeBranchId;
         setSaving(true);
         try {
             const payload = {
                 type:             "MANUFACTURING_JOURNAL" as const,
-                branchId:         selectedBranchId ?? undefined,
+                branchId:         branchId ?? undefined,
                 date:             form.date,
                 description:      form.description.trim(),
                 bomId:            form.bomId ?? undefined,
@@ -462,34 +433,14 @@ export function ManufacturingJournalPage() {
 
     return (
         <BranchRequired action="post this manufacturing journal">
-        <div className="flex flex-col min-h-screen bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col h-screen overflow-hidden bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Manufacturing Journal"
                 onClose={handleClose}
                 editingRef={editing && voucherRef ? voucherRef : undefined}
-                sticky
-                rightContent={branches.length > 1 ? (
-                    <Select value={selectedBranchId ?? ""} onValueChange={(v) => setSelectedBranchId(v)}>
-                        <SelectTrigger className="h-8 w-[180px] text-xs">
-                            <div className="flex items-center gap-1.5">
-                                <Building2 size={12} className="shrink-0 text-muted-foreground" />
-                                <SelectValue placeholder="Pick a location" />
-                            </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {branches.map((b) => (
-                                <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                ) : branches.length === 1 ? (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
-                        <Building2 size={12} className="shrink-0" />
-                        <span>{branches[0]!.name}</span>
-                    </div>
-                ) : undefined}
             />
+            <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto w-full space-y-5 p-6">
 
             <div className="rounded-lg border border-border bg-card p-5 shadow space-y-5">
@@ -666,38 +617,39 @@ export function ManufacturingJournalPage() {
                     )}
                 </div>
 
-                {/* Bottom row — Tally-style narration on the left, actions on the right. */}
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end pt-2 border-t border-border">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Narration</Label>
-                        <Textarea
-                            rows={2}
-                            value={form.description}
-                            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                            placeholder="Free-form notes — e.g. operator on duty, batch reference"
-                        />
-                    </div>
-                    <VoucherInlineActions
-                        onCancel={handleClose}
-                        onSave={() => submit(true)}
-                        onSaveDraft={() => submit(false)}
-                        showSaveDraft
-                        saving={saving}
-                        leftContent={editing && loadedVoucher ? (
-                            <LifecycleActions
-                                voucher={loadedVoucher}
-                                apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
-                                listPath="/office/accountancy/vouchers-registers/manufacturing-journals"
-                                label="Manufacturing Journal"
-                                canCancel={canCancel}
-                                canDelete={canDelete}
-                                canHardDelete={canHardDelete}
-                                onChanged={closeForm}
-                            />
-                        ) : undefined}
+                {/* Narration — actions moved to pinned footer below. */}
+                <div className="pt-2 border-t border-border space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Narration</Label>
+                    <Textarea
+                        rows={2}
+                        value={form.description}
+                        onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                        placeholder="Free-form notes — e.g. operator on duty, batch reference"
                     />
                 </div>
             </div>
+            </div>
+            </div>
+            <div className="border-t border-border bg-card px-6 py-3 shrink-0">
+                <VoucherInlineActions
+                    onCancel={handleClose}
+                    onSave={() => submit(true)}
+                    onSaveDraft={() => submit(false)}
+                    showSaveDraft
+                    saving={saving}
+                    leftContent={editing && loadedVoucher ? (
+                        <LifecycleActions
+                            voucher={loadedVoucher}
+                            apiBasePath={`/api/inventory/vouchers/${voucherIdParam}`}
+                            listPath="/office/accountancy/vouchers-registers/manufacturing-journals"
+                            label="Manufacturing Journal"
+                            canCancel={canCancel}
+                            canDelete={canDelete}
+                            canHardDelete={canHardDelete}
+                            onChanged={closeForm}
+                        />
+                    ) : undefined}
+                />
             </div>
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
                 <DialogContent showCloseButton={false}>

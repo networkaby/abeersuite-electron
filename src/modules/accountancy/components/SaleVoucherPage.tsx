@@ -1423,12 +1423,6 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                         <CopyPlus size={14} /> {copy.newButtonLabel}
                     </Button>
                 </>}
-                rightContent={activeBranchId ? (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-muted-foreground border border-border/60 rounded">
-                        <Building2 size={12} className="shrink-0" />
-                        <span>{activeBranchId}</span>
-                    </div>
-                ) : undefined}
             />
 
             {/* One page-wide ScrollArea wraps the form header, the item table
