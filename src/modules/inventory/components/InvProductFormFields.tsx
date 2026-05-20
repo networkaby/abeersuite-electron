@@ -377,6 +377,22 @@ export function InvProductFormFields({
                             </SelectContent>
                         </Select>
                     </div>
+                    <div className="space-y-2">
+                        <Label>Warranty term</Label>
+                        <Select value={form.warrantyTermId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, warrantyTermId: v === "__none__" ? "" : v }))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Optional" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
+                                {warrantyTerms.map((w) => (
+                                    <SelectItem key={w.id} value={String(w.id)}>
+                                        {label(w)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2 sm:col-span-2">
                         <Label>Notes</Label>
                         <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} />
@@ -513,23 +529,6 @@ export function InvProductFormFields({
 
             <TabsContent value="stock" className={tabPanel}>
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2 sm:col-span-2">
-                        <Label>Warranty term</Label>
-                        <Select value={form.warrantyTermId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, warrantyTermId: v === "__none__" ? "" : v }))}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {warrantyTerms.map((w) => (
-                                    <SelectItem key={w.id} value={String(w.id)}>
-                                        {label(w)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
                     <div className="space-y-2 sm:col-span-2">
                         <p className="text-sm font-semibold">Barcodes</p>
                         <div className="grid gap-2 sm:grid-cols-3">

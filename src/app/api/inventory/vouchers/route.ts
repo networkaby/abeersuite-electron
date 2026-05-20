@@ -6,6 +6,7 @@ import { InvVoucherType } from "@/generated/prisma/client";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all&includeDeleted=1
 export async function GET(req: NextRequest) {
@@ -293,70 +294,74 @@ export async function POST(req: NextRequest) {
 
     const userId = user!.id;
 
-    const voucher = await prisma.$transaction(async (tx) => {
-        const reference = await invNextRef(tx, type);
-        return tx.invVoucher.create({
-            data: {
-                type,
-                reference,
-                branchId,
-                date:         new Date(date),
-                description:  description.trim(),
-                partyName:    partyName  || null,
-                partyType:    partyType  || null,
-                partyId:      partyId    || null,
-                partyPhone:   partyPhone || null,
-                partyAddress: partyAddress || null,
-                paymentMode:     paymentMode || null,
-                paymentAccountId: paymentAccountId ?? null,
-                creditPeriodDays: creditPeriodDays ?? null,
-                refNumber:       refNumber || null,
-                refDate:         refDate ? new Date(refDate) : null,
-                refVoucherId:    refVoucherId ?? null,
-                bomId:           isManufacturingJournal && bomId ? bomId : null,
-                destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
-                shippingAmt,
-                roundOff,
-                amountReceived,
-                discountPct: discountPct != null ? Number(discountPct) : null,
-                discountAmt: overallDiscount > 0 ? overallDiscount : null,
-                ...(typeof showPrices === "boolean" ? { showPrices } : {}),
-                subtotal,
-                taxAmount,
-                totalAmount,
-                createdById: userId,
-                lines: {
-                    create: computedLines.map((l) => ({
-                        productId:   l.productId,
-                        description: l.description || null,
-                        direction:   isManufacturingJournal ? l.direction ?? null : null,
-                        quantity:    l.quantity,
-                        freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
-                        rate:        l.rate,
-                        mrpPaise:    l.mrpPaise ?? null,
-                        discountPct: l.discountPct ?? 0,
-                        discountAmt: l.discountAmt,
-                        taxRate:     l.taxRate    ?? 0,
-                        taxAmount:   l.taxAmount,
-                        amount:      l.amount,
-                    })),
-                },
-                ...(isManufacturingJournal && expenseLines.length > 0 ? {
-                    expenseLines: {
-                        create: expenseLines.map((e) => ({
-                            accountId:   e.accountId,
-                            description: e.description?.trim() || null,
-                            amount:      e.amount,
+    try {
+        const voucher = await prisma.$transaction(async (tx) => {
+            const reference = await invNextRef(tx, type);
+            return tx.invVoucher.create({
+                data: {
+                    type,
+                    reference,
+                    branchId,
+                    date:         new Date(date),
+                    description:  description.trim(),
+                    partyName:    partyName  || null,
+                    partyType:    partyType  || null,
+                    partyId:      partyId    || null,
+                    partyPhone:   partyPhone || null,
+                    partyAddress: partyAddress || null,
+                    paymentMode:     paymentMode || null,
+                    paymentAccountId: paymentAccountId ?? null,
+                    creditPeriodDays: creditPeriodDays ?? null,
+                    refNumber:       refNumber || null,
+                    refDate:         refDate ? new Date(refDate) : null,
+                    refVoucherId:    refVoucherId ?? null,
+                    bomId:           isManufacturingJournal && bomId ? bomId : null,
+                    destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
+                    shippingAmt,
+                    roundOff,
+                    amountReceived,
+                    discountPct: discountPct != null ? Number(discountPct) : null,
+                    discountAmt: overallDiscount > 0 ? overallDiscount : null,
+                    ...(typeof showPrices === "boolean" ? { showPrices } : {}),
+                    subtotal,
+                    taxAmount,
+                    totalAmount,
+                    createdById: userId,
+                    lines: {
+                        create: computedLines.map((l) => ({
+                            productId:   l.productId,
+                            description: l.description || null,
+                            direction:   isManufacturingJournal ? l.direction ?? null : null,
+                            quantity:    l.quantity,
+                            freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,
+                            rate:        l.rate,
+                            mrpPaise:    l.mrpPaise ?? null,
+                            discountPct: l.discountPct ?? 0,
+                            discountAmt: l.discountAmt,
+                            taxRate:     l.taxRate    ?? 0,
+                            taxAmount:   l.taxAmount,
+                            amount:      l.amount,
                         })),
                     },
-                } : {}),
-            },
-            include: {
-                lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
-                createdBy: { select: { name: true } },
-            },
+                    ...(isManufacturingJournal && expenseLines.length > 0 ? {
+                        expenseLines: {
+                            create: expenseLines.map((e) => ({
+                                accountId:   e.accountId,
+                                description: e.description?.trim() || null,
+                                amount:      e.amount,
+                            })),
+                        },
+                    } : {}),
+                },
+                include: {
+                    lines: { include: { product: { select: { id: true, sku: true, name: true } } } },
+                    createdBy: { select: { name: true } },
+                },
+            });
         });
-    });
 
-    return NextResponse.json(voucher, { status: 201 });
+        return NextResponse.json(voucher, { status: 201 });
+    } catch (e) {
+        return handleApiError(e, "Failed to save voucher");
+    }
 }

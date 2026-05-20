@@ -36,6 +36,7 @@
 //   • Opening balances on accounts/products → set via UI
 
 import { PrismaClient } from "../../src/generated/prisma/client";
+import { seedVoucherSeries } from "../../src/modules/accountancy/lib/seedVoucherSeries";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -1123,6 +1124,11 @@ async function main() {
         update: {},   // never overwrite admin changes on re-seed
     });
     console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
+
+    // ── Section 12: VoucherSeries ──────────────────────────────────────
+    console.log("[12/12] VoucherSeries (all GL + inventory series)");
+    await seedVoucherSeries(prisma);
+    console.log(`      ✓ VoucherSeries seeded\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");
