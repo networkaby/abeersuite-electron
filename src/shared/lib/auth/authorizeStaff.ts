@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
+import { timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 
 export type StaffAuthUser = {
@@ -22,11 +23,51 @@ export type StaffAuthUser = {
     kind: "staff";
 };
 
+// ── Super-admin env bypass ────────────────────────────────────────────────────
+// Checked BEFORE the domain allowlist and DB lookup so it works even when the
+// database is empty / wiped. Set SUPER_ADMIN_EMAIL + SUPER_ADMIN_PASSWORD in
+// .env. Leave either blank to disable entirely.
+function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | null {
+    const envEmail    = process.env.SUPER_ADMIN_EMAIL?.trim();
+    const envPassword = process.env.SUPER_ADMIN_PASSWORD?.trim();
+    if (!envEmail || !envPassword) return null;
+
+    // Timing-safe comparisons — timingSafeEqual requires equal-length buffers,
+    // so we pad/compare against a fixed-length HMAC to avoid the length leak.
+    const emailBuf  = Buffer.from(email.toLowerCase().padEnd(256));
+    const envEmailBuf = Buffer.from(envEmail.toLowerCase().padEnd(256));
+    const passBuf   = Buffer.from(password.padEnd(256));
+    const envPassBuf  = Buffer.from(envPassword.padEnd(256));
+    const emailMatch = timingSafeEqual(emailBuf.subarray(0, 256), envEmailBuf.subarray(0, 256));
+    const passMatch  = timingSafeEqual(passBuf.subarray(0, 256), envPassBuf.subarray(0, 256));
+    if (!emailMatch || !passMatch) return null;
+
+    return {
+        id: "0",
+        name: "Super Admin",
+        email: envEmail,
+        role: "R1",
+        roles: ["R1"],
+        permissions: ["admin:bypass"],
+        rank: 9999,
+        scope: "ORG",
+        roleLabel: "Super Admin",
+        roleColor: "#7c3aed",
+        departmentIds: [],
+        branchIds: [],
+        kind: "staff",
+    };
+}
+
 export async function authorizeStaffCredentials(
     prisma: PrismaClient,
     email: string,
     password: string
 ): Promise<StaffAuthUser | null> {
+    // Env super-admin takes priority — no DB needed.
+    const superAdmin = checkSuperAdminEnv(email, password);
+    if (superAdmin) return superAdmin;
+
     if (!isStaffEmailDomainAllowed(email)) return null;
 
     const user = await prisma.user.findUnique({

@@ -360,14 +360,9 @@ const MATRIX_ROWS: {
             deleteOrg: "settings:pipelines",
         },
     },
-    {
-        key: "systemBypass",
-        label: "System Bypass",
-        module: "core",
-        cells: {
-            editOrg: "admin:bypass",
-        },
-    },
+    // admin:bypass is intentionally removed from the matrix — it is a code-only
+    // sentinel grantable only via the env super admin (.env). It must never appear
+    // in the UI where it could be ticked by mistake.
 ];
 
 const MATRIX_PERMISSION_IDS = new Set(

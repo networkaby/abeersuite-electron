@@ -7,7 +7,9 @@
  * dev DB. The mapping is `area:operation[:scope]` → `AREA_OPERATION[_SCOPE]`.
  */
 export const PERMISSIONS = {
-    // Admin master
+    // ── Code-only sentinel — NOT in the DB seed, NOT grantable via the Role Matrix UI.
+    // Only the env-based super admin (SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD) can
+    // ever hold this. Never add "admin:bypass" to bootstrap-seed.ts.
     ADMIN_BYPASS:                       "admin:bypass",
 
     // Accountancy — scoped views/edits

@@ -65,8 +65,12 @@ const ROLES = [
 ] as const;
 
 const PERMISSIONS = [
-    // core
-    { id: "admin:bypass", label: "Bypass all permission checks", module: "core", description: "Grants full access to everything. Skips every permission check in the system." },
+    // ── System-only sentinel — NOT auto-assigned to any role (see R1 grant below).
+    // Only the env-based super admin (SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD in
+    // .env) can ever hold it at runtime. It lives in the Permission table so FK
+    // lookups don't break, but the `systemOnly` flag keeps it out of role grants
+    // and off the Role Matrix UI.
+    { id: "admin:bypass", label: "Bypass all permission checks", module: "core", description: "Grants full access. Only usable by the env super admin — never grant this to a role.", systemOnly: true },
 
     // customers
     { id: "customers:view", label: "View customers & companies", module: "customers", description: "Access the Customers and Companies pages and view records." },
@@ -211,7 +215,12 @@ const PERMISSIONS = [
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-    R1: (PERMISSIONS as readonly { id: string }[]).map((p) => p.id),
+    // R1 gets every permission EXCEPT system-only sentinels (e.g. admin:bypass).
+    // System-only permissions can only be held by the env super admin; they are
+    // never auto-granted to any role.
+    R1: (PERMISSIONS as readonly { id: string; systemOnly?: boolean }[])
+        .filter((p) => !p.systemOnly)
+        .map((p) => p.id),
     R2: [
         "customers:view",
         "tickets:create", "tickets:status:set", "tickets:substatus:set",
