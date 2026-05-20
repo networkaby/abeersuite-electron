@@ -3,8 +3,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Run: `pnpm prisma db seed` (the standard Prisma command). Wired in
-// `prisma.config.ts → migrations.seed`. Auto-runs after `pnpm prisma migrate
-// reset`. Idempotent — safe to re-run.
+// `prisma.config.ts → migrations.seed`. Idempotent — safe to re-run.
 //
 // ⚠️ MAINTENANCE RULE
 // When you change `prisma/schema/*.prisma` (add / rename / drop a column or
@@ -618,7 +617,7 @@ async function ensureXorCheck(table: "Phone" | "Email", constraintName: string) 
 
 async function main() {
     console.log("\n━━━ BOOTSTRAP SEED ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("  Run: pnpm prisma db seed   (or after pnpm prisma migrate reset)\n");
+    console.log("  Run: pnpm prisma db seed\n");
 
     // ── Section 1: RBAC ────────────────────────────────────────────────
     console.log("[1/7] RBAC — Roles, Permissions, Role grants");

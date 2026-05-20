@@ -28,7 +28,7 @@ Run on a fresh database:
 
 ```bash
 pnpm prisma db push       # 1. apply schema
-pnpm prisma db seed       # 2. runs bootstrap-seed.ts (auto-runs after `prisma migrate reset`)
+pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 ```
 
 `bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
@@ -124,9 +124,3 @@ Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rathe
 - Stock-in-Hand `AccountGroup` is intentionally empty in bootstrap — closing-stock is computed dynamically, not stored.
 - Phone/Email rows are owned by exactly one of `personId` / `companyId` (XOR CHECK constraint applied by bootstrap).
 
-## Other scripts in `prisma/` (NOT seeds)
-
-These live at the prisma root, not under `seeds/`:
-
-- [`prisma/migrate-accounts.ts`](../prisma/migrate-accounts.ts) — one-time historical backfill (creates `Account` for `Person` rows missing one). Likely already run on existing databases.
-- [`prisma/smoke-test-people.ts`](../prisma/smoke-test-people.ts) — Person/Phone/Email smoke test, not a seed.

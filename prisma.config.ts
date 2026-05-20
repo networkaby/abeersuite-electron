@@ -10,7 +10,6 @@ export default defineConfig({
     url: (process.env.DIRECT_URL ?? process.env.DATABASE_URL)!,
   },
   migrations: {
-    path: "prisma/migrations",
     seed: "pnpm exec tsx prisma/seeds/bootstrap-seed.ts",
   },
 });
