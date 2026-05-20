@@ -1,0 +1,33 @@
+# Experiment environment — copy to experiment.env and fill in values.
+
+NEXTAUTH_SECRET="generate-a-long-random-string"
+NEXTAUTH_URL="http://localhost:3000"
+
+INTERNAL_STAFF_EMAIL_DOMAINS="yourcompany.in,partner.in"
+
+# Super-admin emergency bypass (leave blank to disable)
+SUPER_ADMIN_EMAIL="superadmin@example.com"
+SUPER_ADMIN_PASSWORD="changeme"
+
+# Local Postgres (optional)
+# DATABASE_URL="postgresql://postgres:postgres@localhost:5432/service-mgmt?schema=public"
+
+# Supabase — transaction pooler (runtime)
+DATABASE_URL="postgresql://postgres.PROJECT_REF:YOUR_DB_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
+
+# Supabase — direct connection (migrations)
+DIRECT_URL="postgresql://postgres.PROJECT_REF:YOUR_DB_PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require"
+
+NEXT_PUBLIC_SUPABASE_URL=https://PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# Sentry — https://sentry.io > Project Settings > Client Keys
+NEXT_PUBLIC_SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+SENTRY_ORG=your-sentry-org
+SENTRY_PROJECT=your-sentry-project
+SENTRY_AUTH_TOKEN=your-sentry-auth-token
+
+# Cloudinary — https://console.cloudinary.com
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
