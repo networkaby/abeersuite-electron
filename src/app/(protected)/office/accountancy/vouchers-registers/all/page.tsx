@@ -11,7 +11,7 @@
 // page only owns the filter chrome.
 
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fmt } from "@/utils/constants";
@@ -57,6 +57,12 @@ export default function AllVouchersPage() {
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
+            {/* Dev-only banner — this page is not linked from the nav in production.
+                Use Day Book (/office/accountancy/reports/day-book) as the production surface. */}
+            <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                <FlaskConical size={15} className="shrink-0" />
+                <span><strong>Testing only</strong> — this page is not linked from the nav. Use <strong>Day Book</strong> for the production combined-voucher view.</span>
+            </div>
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">All Vouchers</h1>

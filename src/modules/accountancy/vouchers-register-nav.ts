@@ -32,12 +32,6 @@ const BASE = "/office/accountancy/vouchers-registers";
 
 export const VOUCHERS_REGISTER_NAV_GROUPS: VoucherRegisterNavGroup[] = [
     {
-        label: "Overview",
-        links: [
-            { label: "All Vouchers", href: `${BASE}/all`, icon: ClipboardList },
-        ],
-    },
-    {
         label: "Trading",
         links: [
             { label: "Sales", href: `${BASE}/sales`, icon: Receipt },

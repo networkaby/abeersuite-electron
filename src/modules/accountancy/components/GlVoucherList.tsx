@@ -6,7 +6,7 @@
 // the same row markup, click-to-edit Reference link, 3-dot ⋮ action menu,
 // and deleted-row Restore + Hard-Delete UX.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -16,6 +16,11 @@ import {
     VoucherRegisterTable,
     type VoucherRegisterRow,
 } from "@/modules/accountancy/components/VoucherRegisterTable";
+import {
+    useRegisterFilters,
+    applyRegisterFilters,
+} from "@/modules/accountancy/hooks/useRegisterFilters";
+import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 
 export type GlVoucherKind = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
@@ -33,62 +38,66 @@ type RawRow = {
     partyAccount: { id: number; code: string; name: string } | null;
 };
 
-type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
-const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
-
 export function GlVoucherList({
     type, title, subtitle, basePath, newPath, newTab = false,
 }: {
     type:     GlVoucherKind;
     title:    string;
     subtitle: string;
-    basePath: string;   // e.g. /vouchers/payments  (unused — kept for call-site compatibility)
-    newPath:  string;   // e.g. /vouchers/payments/new
+    basePath: string;
+    newPath:  string;
     newTab?:  boolean;
 }) {
-    void basePath;  // shared table uses referenceHref() instead
-    const [rows, setRows]             = useState<VoucherRegisterRow[]>([]);
-    const [loading, setLoading]       = useState(true);
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
-    const [tick, setTick]             = useState(0);
+    void basePath;
+    const [allRows, setAllRows]   = useState<VoucherRegisterRow[]>([]);
+    const [loading, setLoading]   = useState(true);
+    const [tick, setTick]         = useState(0);
+    const reload                  = useCallback(() => setTick((t) => t + 1), []);
 
-    const reload = useCallback(() => setTick((t) => t + 1), []);
-    const showDeleted = statusFilter === "DELETED";
+    const filters = useRegisterFilters(`reg:${type}`);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const params = new URLSearchParams({ type });
-        if (statusFilter && statusFilter !== "DELETED") params.set("status", statusFilter);
-        if (showDeleted) params.set("includeDeleted", "1");
+        if (filters.showDeleted) params.set("includeDeleted", "1");
 
         axios.get<RawRow[]>(`/api/accountancy/vouchers?${params}`)
             .then((r) => {
-                const mapped: VoucherRegisterRow[] = (r.data ?? [])
-                    .filter((v) => showDeleted ? !!v.deletedAt : !v.deletedAt)
-                    .map((v) => ({
-                        id:          `gl-${v.id}`,
-                        rawId:       v.id,
-                        source:      "gl",
-                        kind:        v.type,
-                        reference:   v.reference,
-                        date:        v.date,
-                        party:       v.partyAccount?.name ?? null,
-                        narration:   v.narration,
-                        totalAmount: Number(v.totalAmount),
-                        status:      v.status,
-                        deletedAt:   v.deletedAt ?? null,
-                        cancelledAt: v.cancelledAt ?? null,
-                        createdBy:   v.createdBy?.name ?? null,
-                    }));
-                setRows(mapped);
+                const mapped: VoucherRegisterRow[] = (r.data ?? []).map((v) => ({
+                    id:          `gl-${v.id}`,
+                    rawId:       v.id,
+                    source:      "gl",
+                    kind:        v.type,
+                    reference:   v.reference,
+                    date:        v.date,
+                    party:       v.partyAccount?.name ?? null,
+                    narration:   v.narration,
+                    totalAmount: Number(v.totalAmount),
+                    status:      v.status,
+                    deletedAt:   v.deletedAt ?? null,
+                    cancelledAt: v.cancelledAt ?? null,
+                    createdBy:   v.createdBy?.name ?? null,
+                }));
+                setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
-    }, [type, statusFilter, showDeleted, tick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [type, filters.showDeleted, tick]);
+
+    const filtered = useMemo(
+        () => applyRegisterFilters(allRows, filters),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.showDeleted],
+    );
+
+    const postedTotal = useMemo(
+        () => filtered.filter((r) => r.status === "POSTED").reduce((s, r) => s + r.totalAmount, 0),
+        [filtered],
+    );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">{title}</h1>
@@ -99,25 +108,14 @@ export function GlVoucherList({
                 </Link>
             </div>
 
-            <div className="flex gap-1">
-                {STATUSES.map((s) => (
-                    <Button
-                        key={s}
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setStatusFilter(s)}
-                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
-                            statusFilter === s
-                                ? (s === "DELETED"
-                                    ? "border-rose-600 bg-rose-600 text-white"
-                                    : "border-primary bg-primary text-primary-foreground")
-                                : "border-border bg-card text-muted-foreground hover:bg-muted"
-                        }`}
-                    >
-                        {s || "All"}
-                    </Button>
-                ))}
-            </div>
+            <RegisterFilterBar
+                {...filters}
+                rowCount={filtered.length}
+                totalRows={allRows.length}
+                postedTotal={postedTotal}
+                onReload={reload}
+                onClearFilters={filters.clearFilters}
+            />
 
             {loading ? (
                 <div className="flex justify-center py-12">
@@ -125,11 +123,12 @@ export function GlVoucherList({
                 </div>
             ) : (
                 <VoucherRegisterTable
-                    rows={rows}
+                    rows={filtered}
                     onChanged={reload}
                     hideKind
+                    statusInline
                     emptyMessage={
-                        showDeleted
+                        filters.showDeleted
                             ? `No deleted ${title.toLowerCase()}.`
                             : `No ${title.toLowerCase()} yet.`
                     }

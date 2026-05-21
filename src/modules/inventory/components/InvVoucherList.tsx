@@ -7,7 +7,7 @@
 // the same row markup, click-to-edit Reference link, ⋮ action menu, and
 // Restore + Hard-Delete UX on soft-deleted rows.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -17,6 +17,11 @@ import {
     VoucherRegisterTable,
     type VoucherRegisterRow,
 } from "@/modules/accountancy/components/VoucherRegisterTable";
+import {
+    useRegisterFilters,
+    applyRegisterFilters,
+} from "@/modules/accountancy/hooks/useRegisterFilters";
+import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import type { InvVoucherKind } from "./InvVoucherForm";
 
 export type InvVoucherListKind = InvVoucherKind | "BRANCH_TRANSFER";
@@ -32,13 +37,10 @@ type ListRow = {
     status:       "DRAFT" | "POSTED" | "CANCELLED";
     deletedAt:    string | null;
     cancelledAt?: string | null;
-    branch?:      { name: string } | null;
+    branch?:      { id: string; name: string } | null;
     _count:       { lines: number };
     createdBy:    { name: string };
 };
-
-type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
-const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
 
 export function InvVoucherList({
     type, title, subtitle, basePath, newPath,
@@ -53,47 +55,65 @@ export function InvVoucherList({
     newPath?: string;
 }) {
     void basePath;
-    const [rows, setRows] = useState<VoucherRegisterRow[]>([]);
+    const [allRows, setAllRows] = useState<VoucherRegisterRow[]>([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
-    const [tick, setTick] = useState(0);
-    const reload = useCallback(() => setTick((t) => t + 1), []);
-    const showDeleted = statusFilter === "DELETED";
+    const [tick, setTick]       = useState(0);
+    const reload                = useCallback(() => setTick((t) => t + 1), []);
+
+    const filters = useRegisterFilters(`reg:${type}`);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
         const params = new URLSearchParams({ type });
-        if (statusFilter && statusFilter !== "DELETED") params.set("status", statusFilter);
-        if (showDeleted) params.set("includeDeleted", "1");
+        if (filters.showDeleted) params.set("includeDeleted", "1");
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
             .then((r) => {
-                const mapped: VoucherRegisterRow[] = (r.data ?? [])
-                    .filter((v) => showDeleted ? !!v.deletedAt : !v.deletedAt)
-                    .map((v) => ({
-                        id:          `inv-${v.id}`,
-                        rawId:       v.id,
-                        source:      "inv",
-                        kind:        v.type ?? type,
-                        reference:   v.reference,
-                        date:        v.date,
-                        party:       v.partyName,
-                        narration:   v.description,
-                        totalAmount: Number(v.totalAmount),
-                        status:      v.status,
-                        deletedAt:   v.deletedAt ?? null,
-                        cancelledAt: v.cancelledAt ?? null,
-                        createdBy:   v.createdBy?.name ?? null,
-                    }));
-                setRows(mapped);
+                const mapped: VoucherRegisterRow[] = (r.data ?? []).map((v) => ({
+                    id:          `inv-${v.id}`,
+                    rawId:       v.id,
+                    source:      "inv",
+                    kind:        v.type ?? type,
+                    reference:   v.reference,
+                    date:        v.date,
+                    party:       v.partyName,
+                    narration:   v.description,
+                    totalAmount: Number(v.totalAmount),
+                    status:      v.status,
+                    deletedAt:   v.deletedAt ?? null,
+                    cancelledAt: v.cancelledAt ?? null,
+                    branchId:    v.branch?.id   ?? null,
+                    branchName:  v.branch?.name ?? null,
+                    createdBy:   v.createdBy?.name ?? null,
+                }));
+                setAllRows(mapped);
             })
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
-    }, [type, statusFilter, showDeleted, tick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [type, filters.showDeleted, tick]);
+
+    const availableBranches = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const r of allRows) {
+            if (r.branchId && r.branchName) seen.set(r.branchId, r.branchName);
+        }
+        return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [allRows]);
+
+    const filtered = useMemo(
+        () => applyRegisterFilters(allRows, filters),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.showDeleted, filters.branchFilter],
+    );
+
+    const postedTotal = useMemo(
+        () => filtered.filter((r) => r.status === "POSTED").reduce((s, r) => s + r.totalAmount, 0),
+        [filtered],
+    );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">{title}</h1>
@@ -106,25 +126,15 @@ export function InvVoucherList({
                 )}
             </div>
 
-            <div className="flex gap-1">
-                {STATUSES.map((s) => (
-                    <Button
-                        key={s}
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setStatusFilter(s)}
-                        className={`h-auto px-3 py-1.5 text-xs font-medium transition-colors ${
-                            statusFilter === s
-                                ? (s === "DELETED"
-                                    ? "border-rose-600 bg-rose-600 text-white"
-                                    : "border-primary bg-primary text-primary-foreground")
-                                : "border-border bg-card text-muted-foreground hover:bg-muted"
-                        }`}
-                    >
-                        {s || "All"}
-                    </Button>
-                ))}
-            </div>
+            <RegisterFilterBar
+                {...filters}
+                availableBranches={availableBranches}
+                rowCount={filtered.length}
+                totalRows={allRows.length}
+                postedTotal={postedTotal}
+                onReload={reload}
+                onClearFilters={filters.clearFilters}
+            />
 
             {loading ? (
                 <div className="flex justify-center py-12">
@@ -132,11 +142,13 @@ export function InvVoucherList({
                 </div>
             ) : (
                 <VoucherRegisterTable
-                    rows={rows}
+                    rows={filtered}
                     onChanged={reload}
                     hideKind
+                    statusInline
+                    showBranch={availableBranches.length > 0}
                     emptyMessage={
-                        showDeleted
+                        filters.showDeleted
                             ? `No deleted ${title.toLowerCase()}.`
                             : `No ${title.toLowerCase()} yet.`
                     }
