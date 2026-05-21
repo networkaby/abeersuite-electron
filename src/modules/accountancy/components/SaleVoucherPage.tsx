@@ -48,6 +48,8 @@ import {
     DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { useFormKeyboardNav } from "@/shared/hooks/useFormKeyboardNav";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
@@ -525,9 +527,19 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
             const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            // Skip only when the user is editing rich text (contentEditable);
+            // plain inputs and textareas SHOULD respond to Esc so the dirty
+            // confirmation dialog can fire from anywhere in the form.
+            if (t && t.isContentEditable) return;
+            // If a confirm/edit/etc. dialog is already open, let it own Esc
+            // (Radix closes the dialog natively) — we don't want both the
+            // dialog and the page-close logic firing on one keypress.
             if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
+            if (isDirtyRef.current) {
+                e.preventDefault();
+                setCloseDialogOpen(true);
+                return;
+            }
             if (typeof window !== "undefined") {
                 if (window.history.length > 1) router.back(); else window.close();
             }
@@ -535,6 +547,21 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [router]);
+
+    // Browser-level guard for tab close / refresh / external navigations.
+    // Triggers the OS-native "leave site?" prompt when the form is dirty.
+    // Our in-app close paths (Cancel button, top-bar X / back arrow, Esc)
+    // continue to use the friendlier Stay / Save Draft / Discard dialog.
+    useEffect(() => {
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirtyRef.current) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }, []);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = () => {
@@ -583,6 +610,13 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const [showPricesOnPrint, setShowPricesOnPrint] = useState(true);
     const [party, setParty] = useState<PickedParty | null>(null);
     const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
+    // Auto-focus the party picker on first mount so the user lands keyboard-
+    // first on Party (Tally-style). No-op on CASH mode (component isn't
+    // rendered) and on edit mode (party already populated; the picker locks).
+    useEffect(() => {
+        partyPickerRef.current?.focus();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     // CASH walk-in fields — free-form name + phone. Stored on the voucher as
     // partyName / partyPhone strings only; no Person / Account row is created.
     const [walkInName, setWalkInName] = useState("");
@@ -1211,6 +1245,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         const cash = cashBankAccounts.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND);
         setPaymentAccount(cash ?? cashBankAccounts[0] ?? null);
         partyPickerRef.current?.clear();
+        partyPickerRef.current?.focus();
         const t = new Date().toISOString().slice(0, 10);
         setHeader({
             date: t, description: "", shippingAmt: "", roundOff: "", received: "",
@@ -1387,8 +1422,19 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
 
     const cell = "bg-transparent border-0 outline-none text-sm text-right w-full focus:bg-accent/40 rounded px-1 tabular-nums";
 
+    // Tally-style keyboard nav: Enter advances focus through input/select
+    // tour; Ctrl+Enter / Ctrl+A trigger primary Save (full post).
+    const { containerRef, onKeyDown: onFormKeyDown } = useFormKeyboardNav({
+        onSave: () => { void submit(true); },
+    });
+
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div
+            ref={containerRef}
+            onKeyDown={onFormKeyDown}
+            className="flex flex-col flex-1 min-h-0 bg-background"
+            onChange={() => { isDirtyRef.current = true; }}
+        >
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title={copy.title}
@@ -1461,7 +1507,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                         <div className="font-medium truncate">{party.name}</div>
                                         <button
                                             type="button"
-                                            onClick={() => { setParty(null); partyPickerRef.current?.clear(); }}
+                                            onClick={() => { setParty(null); partyPickerRef.current?.clear(); partyPickerRef.current?.focus(); }}
                                             className="text-muted-foreground hover:text-foreground shrink-0 underline-offset-2 hover:underline"
                                             title="Clear party"
                                         >
@@ -1532,10 +1578,9 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                         {copy.showVoucherDate && (
                             <>
                                 <label className="text-xs text-muted-foreground text-right">{copy.voucherDateLabel}</label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     value={header.date}
-                                    onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
+                                    onValueChange={(iso) => setHeader((h) => ({ ...h, date: iso }))}
                                     className="h-9 text-xs"
                                     tabIndex={-1}
                                 />
@@ -1556,10 +1601,9 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                     className="h-9 text-xs"
                                 />
                                 <label className="text-xs text-muted-foreground text-right">{copy.refDateLabel} <span className="text-destructive">*</span></label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     value={header.refDate}
-                                    onChange={(e) => setHeader((h) => ({ ...h, refDate: e.target.value }))}
+                                    onValueChange={(iso) => setHeader((h) => ({ ...h, refDate: iso }))}
                                     className="h-9 text-xs"
                                 />
                             </>
@@ -2175,7 +2219,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
 
             {/* ── Sticky action bar ────────────────────────────────────── */}
             <VoucherActionBar
-                onCancel={closeForm}
+                onCancel={handleClose}
                 onSave={() => submit(true)}
                 onSaveDraft={() => submit(false)}
                 showSaveDraft
@@ -2229,10 +2273,27 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                 </>}
             />
             <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
-                <DialogContent showCloseButton={false}>
+                {/* Keyboard: Esc → Stay (handled natively by Radix Dialog).
+                    Enter → Discard & Close (always, regardless of focused button). */}
+                <DialogContent
+                    showCloseButton={false}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            isDirtyRef.current = false;
+                            setCloseDialogOpen(false);
+                            closeForm();
+                        }
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Unsaved changes</DialogTitle>
-                        <DialogDescription>You have unsaved changes that will be lost if you leave now.</DialogDescription>
+                        <DialogDescription>
+                            You have unsaved changes that will be lost if you leave now.
+                            <br />
+                            <span className="text-xs text-muted-foreground">Press Esc to stay · Enter to discard.</span>
+                        </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
