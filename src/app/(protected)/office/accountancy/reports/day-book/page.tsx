@@ -52,7 +52,7 @@ function matchKind(kind: string, filter: string): boolean {
 const OPTIONAL_KINDS = new Set([
     "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER",
     "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",
-    "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER", "ISSUE", "ADJUSTMENT",
+    "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER",
 ]);
 
 // ── Page ──────────────────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ export default function DayBookPage() {
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
         const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
-        const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","BRANCH_TRANSFER","ISSUE","ADJUSTMENT","GRN","REJECTION_IN","REJECTION_OUT"]);
+        const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","BRANCH_TRANSFER","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
             if (from && d < from) return false;
@@ -313,8 +313,6 @@ export default function DayBookPage() {
                             </SelectGroup>
                             <SelectGroup>
                                 <SelectLabel>Inventory Ops</SelectLabel>
-                                <SelectItem value="ISSUE">Issue</SelectItem>
-                                <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
                                 <SelectItem value="MANUFACTURING_JOURNAL">Manufacturing Journal</SelectItem>
                                 <SelectItem value="BRANCH_TRANSFER">Branch Transfer</SelectItem>
                                 <SelectItem value="PHYSICAL_STOCK">Physical Stock</SelectItem>

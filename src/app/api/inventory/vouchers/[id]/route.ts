@@ -214,8 +214,8 @@ export async function PATCH(req: Request, { params }: Params) {
             // PHASE 1 — Reverse the existing posting (POSTED only)
             // ────────────────────────────────────────────────────────────
             if (wasPosted) {
-                const isPurchase = existing.type === "PURCHASE" || existing.type === "RECEIPT" || existing.type === "GRN" || existing.type === "REJECTION_IN" || existing.type === "SALE_RETURN";
-                const isSale     = existing.type === "SALE"     || existing.type === "ISSUE"   || existing.type === "CHALLAN" || existing.type === "REJECTION_OUT" || existing.type === "PURCHASE_RETURN";
+                const isPurchase = existing.type === "PURCHASE" || existing.type === "GRN" || existing.type === "REJECTION_IN" || existing.type === "SALE_RETURN";
+                const isSale     = existing.type === "SALE"     || existing.type === "CHALLAN" || existing.type === "REJECTION_OUT" || existing.type === "PURCHASE_RETURN";
 
                 // Reverse stock — write counter entries against the same
                 // voucher id and adjust the cached InvProduct.stock so the
@@ -395,8 +395,8 @@ export async function PATCH(req: Request, { params }: Params) {
                 });
                 if (!fresh) throw new Error("Voucher disappeared mid-transaction");
 
-                const isPurchase = ["PURCHASE", "RECEIPT", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(fresh.type);
-                const isSale     = ["SALE", "ISSUE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(fresh.type);
+                const isPurchase = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(fresh.type);
+                const isSale     = ["SALE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(fresh.type);
 
                 for (const line of fresh.lines) {
                     const qty = toNumber(line.quantity);

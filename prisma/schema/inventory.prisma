@@ -406,7 +406,7 @@ model InvVoucherLine {
 }
 
 /// Immutable audit trail — one row per product per voucher line posted.
-/// inQty > 0 for PURCHASE/RECEIPT; outQty > 0 for SALE/ISSUE.
+/// inQty > 0 for PURCHASE/GRN; outQty > 0 for SALE/CHALLAN.
 model InvStockLedger {
   id        Int        @id @default(autoincrement())
   productId Int

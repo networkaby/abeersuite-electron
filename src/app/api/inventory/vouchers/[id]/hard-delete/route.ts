@@ -30,8 +30,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "RECEIPT" || voucher.type === "GRN";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "ISSUE"   || voucher.type === "CHALLAN";
+    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
+    const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
 
     const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
 

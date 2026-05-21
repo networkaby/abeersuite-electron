@@ -63,15 +63,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
 
     // Stock-direction classification per voucher type:
-    //   incoming stock: PURCHASE, RECEIPT, GRN, REJECTION_IN, SALE_RETURN
+    //   incoming stock: PURCHASE, GRN, REJECTION_IN, SALE_RETURN
     //                   (sale return: customer returns goods → stock back in)
-    //   outgoing stock: SALE, ISSUE, CHALLAN, REJECTION_OUT, PURCHASE_RETURN
+    //   outgoing stock: SALE, CHALLAN, REJECTION_OUT, PURCHASE_RETURN
     //                   (purchase return: we return to supplier → stock back out)
     //   per-line direction: MANUFACTURING_JOURNAL (line.direction "CONSUME"|"PRODUCE")
     //   start-of-day reset: PHYSICAL_STOCK (line.quantity = counted opening qty)
     //   commitments:   SALES_ORDER, PURCHASE_ORDER — no stock movement at all on POST.
-    const isPurchase = ["PURCHASE", "RECEIPT", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(voucher.type);
-    const isSale     = ["SALE", "ISSUE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
+    const isPurchase = ["PURCHASE", "GRN", "REJECTION_IN", "SALE_RETURN"].includes(voucher.type);
+    const isSale     = ["SALE", "CHALLAN", "REJECTION_OUT", "PURCHASE_RETURN"].includes(voucher.type);
     const isCommitment = voucher.type === "SALES_ORDER" || voucher.type === "PURCHASE_ORDER";
     const isPhysicalStock = voucher.type === "PHYSICAL_STOCK";
     const isManufacturingJournal = voucher.type === "MANUFACTURING_JOURNAL";

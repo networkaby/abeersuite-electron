@@ -19,8 +19,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "RECEIPT" || voucher.type === "GRN";
-    const isSale     = voucher.type === "SALE"     || voucher.type === "ISSUE"   || voucher.type === "CHALLAN";
+    const isPurchase = voucher.type === "PURCHASE" || voucher.type === "GRN";
+    const isSale     = voucher.type === "SALE"     || voucher.type === "CHALLAN";
 
     try {
         ensureRestorable(voucher);

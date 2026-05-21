@@ -24,9 +24,8 @@ const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     REJECTION_OUT:         "REJECTION_OUT",
 };
 
-// Legacy prefixes for the fallback path — kept so older voucher types
-// (RECEIPT/ISSUE/etc.) still get a sane default reference until / unless
-// they're promoted to the configurable VoucherSeries system.
+// Legacy prefixes for the fallback path — kept for any voucher types
+// not promoted to the configurable VoucherSeries system.
 const PREFIX: Record<InvVoucherType, string> = {
     PURCHASE:         "PV",
     SALE:             "SV",
@@ -34,9 +33,6 @@ const PREFIX: Record<InvVoucherType, string> = {
     ESTIMATE:         "EV",
     SALE_RETURN:      "SR",
     PURCHASE_RETURN:  "PR",
-    RECEIPT:          "RV",
-    ISSUE:            "IV",
-    ADJUSTMENT:       "AV",
     MANUFACTURING_JOURNAL: "MJ",
     PHYSICAL_STOCK:   "PS",
     BRANCH_TRANSFER:  "BT",
@@ -55,8 +51,8 @@ const PREFIX: Record<InvVoucherType, string> = {
  * up the FY-aware convention managed at /office/settings/year-ending — same
  * formatting (FY_SHORT, padding, separators) the GL vouchers use.
  *
- * Other inventory voucher types (RECEIPT, ISSUE, GRN, etc.) keep the legacy
- * calendar-year `${prefix}-YYYY-####` scheme until they're promoted.
+ * Other inventory voucher types not in SERIES_KINDS fall back to the legacy
+ * calendar-year `${prefix}-YYYY-####` scheme.
  *
  * Must be called inside a prisma.$transaction to be safe against races.
  */

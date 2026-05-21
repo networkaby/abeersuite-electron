@@ -273,8 +273,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 //     { label: "Journal Entries", icon: FileText, href: "/office/accountancy/vouchers-registers/journal-entries", permission: "finance:voucher:create" },
                 //     { label: "Estimates", icon: ScrollText, href: "/office/accountancy/vouchers-registers/estimates", permission: "finance:voucher:create" },
                 //     { label: "Goods Receipts", icon: PackageCheck, href: "/office/accountancy/vouchers-registers/goods-receipts", permission: "finance:voucher:create" },
-                //     { label: "Issues", icon: ArrowUpRight, href: "/office/accountancy/vouchers-registers/issues", permission: "finance:voucher:create" },
-                //     { label: "Adjustments", icon: ArrowLeftRight, href: "/office/accountancy/vouchers-registers/adjustments", permission: "finance:voucher:create" },
                 // ]
 
             },

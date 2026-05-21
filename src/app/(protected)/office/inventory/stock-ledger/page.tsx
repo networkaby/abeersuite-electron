@@ -49,9 +49,6 @@ type LedgerResponse = {
 const VOUCHER_TYPE_LABELS: Record<string, string> = {
     PURCHASE:   "Purchase",
     SALE:       "Sale",
-    RECEIPT:    "Receipt",
-    ISSUE:      "Issue",
-    ADJUSTMENT: "Adjustment",
 };
 
 export default function StockLedgerPage() {

@@ -39,9 +39,9 @@ export async function GET(req: Request) {
     if (kind !== "All") {
         if (kind === "Sale" || kind === "Purchase" || kind === "Estimate") {
             const types =
-                kind === "Sale"     ? ["SALE", "ISSUE", "ADJUSTMENT"] as const :
-                kind === "Purchase" ? ["PURCHASE", "RECEIPT"]         as const :
-                                      ["ESTIMATE"]                    as const;
+                kind === "Sale"     ? ["SALE"]     as const :
+                kind === "Purchase" ? ["PURCHASE"] as const :
+                                      ["ESTIMATE"] as const;
             const rows = await prisma.invVoucher.findMany({
                 where: { type: { in: [...types] }, journalEntryId: { not: null } },
                 select: { journalEntryId: true },

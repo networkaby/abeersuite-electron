@@ -75,7 +75,6 @@ const TYPE_COLORS: Record<string, string> = {
     PURCHASE_RETURN: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
     GRN: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300",
     CHALLAN: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
-    ADJUSTMENT: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
 };
 
 function typeLabel(type: string): string {

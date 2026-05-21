@@ -19,9 +19,6 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
     ESTIMATE:         "estimates",
     SALE_RETURN:      "sale-returns",
     PURCHASE_RETURN:  "purchase-returns",
-    RECEIPT:          "purchases",
-    ISSUE:            "sales",
-    ADJUSTMENT:       "sales",
     MANUFACTURING_JOURNAL: "manufacturing-journals",
     PHYSICAL_STOCK:   "physical-stock",
     BRANCH_TRANSFER:  "branch-transfers",
@@ -43,7 +40,6 @@ const VOUCHER_BASE = "/vouchers";
 
 const EDIT_VIA_NEW_QUERY: ReadonlySet<InvVoucherType> = new Set([
     "SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN", "ESTIMATE",
-    "ISSUE", "ADJUSTMENT", "RECEIPT",
 ]);
 
 function buildEditUrl(type: InvVoucherType, id: number): string {
@@ -61,7 +57,7 @@ export async function resolveSource(journalEntryId: number, reference?: string):
     });
     if (v) {
         const kind: SourceDoc["kind"] =
-            v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
+            v.type === "PURCHASE" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
         return { kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id) };
@@ -87,7 +83,7 @@ export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map
     for (const v of vouchers) {
         if (v.journalEntryId === null) continue;
         const kind: SourceDoc["kind"] =
-            v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
+            v.type === "PURCHASE" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
         out.set(v.journalEntryId, {

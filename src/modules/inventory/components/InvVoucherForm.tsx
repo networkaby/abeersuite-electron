@@ -26,11 +26,7 @@ export type InvVoucherKind =
     | "MANUFACTURING_JOURNAL" | "PHYSICAL_STOCK"
     | "REJECTION_IN" | "REJECTION_OUT";
 
-// All inventory voucher types — superset of InvVoucherKind, includes the
-// three read-only stock kinds (RECEIPT-as-goods, ISSUE, ADJUSTMENT) that
-// have no dedicated form. Used by InvVoucherList so it can serve every kind
-// the inventory API recognises.
-export type InvVoucherListKind = InvVoucherKind | "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "BRANCH_TRANSFER";
+export type InvVoucherListKind = InvVoucherKind | "BRANCH_TRANSFER";
 
 const TITLES: Record<InvVoucherKind, string> = {
     SALES_ORDER:    "Sales Order",
