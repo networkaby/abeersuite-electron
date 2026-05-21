@@ -184,4 +184,4 @@ Walk-ins (no customer account) are blocked on all tiers — `customerAccountId` 
 - Multiple partial-return guard: currently caps per-line at original qty but does not subtract qty already returned in prior return invoices.
 - Exchange as one atomic transaction (currently: issue credit note, then start new sale that draws down the advance).
 
-_Last updated: 2026-05-19 — `PosCounter.defaultFloatPaise` field removed (carry-over is per-shift, not per-counter); `POST /api/pos/shifts` documents crash-recovery `resumed: true` behaviour; thermal-relay removed in favour of direct ESC/POS (see accountancy.md)._
+_Last updated: 2026-05-21 — `postPosReceiptJe` plus the shift-close + handover variance JEs now mint their reference through the `GL_POSTING` VoucherSeries (`GL-…` prefix) instead of the legacy `JE-…` series; user-facing behaviour unchanged. See [accountancy.md → Two engines](./accountancy.md) for the rationale. Previously (2026-05-19): `PosCounter.defaultFloatPaise` field removed (carry-over is per-shift, not per-counter); `POST /api/pos/shifts` documents crash-recovery `resumed: true` behaviour; thermal-relay removed in favour of direct ESC/POS._
