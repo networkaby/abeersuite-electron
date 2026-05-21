@@ -105,6 +105,9 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
         setLoading(true);
         setError(null);
 
+        // Reports default to org-wide. The inventory vouchers route returns
+        // every branch when `branchId` is omitted (post the top-bar / report
+        // split); GL voucher and JE endpoints have never been branch-scoped.
         const qs = includeDeleted ? "?includeDeleted=1" : "";
 
         Promise.all([

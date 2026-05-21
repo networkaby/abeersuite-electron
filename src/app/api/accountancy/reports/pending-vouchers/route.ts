@@ -13,7 +13,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { InvVoucherType, VoucherStatus, type Prisma } from "@/generated/prisma/client";
-import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
+import { requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 
 type PendingType =
@@ -56,21 +56,18 @@ export async function GET(req: NextRequest) {
     const limit     = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? "50")));
     const branchParam = searchParams.get("branchId");
 
-    // Branch filter — admin can omit / pass "all"; everyone else uses active branch.
+    // Branch filter — reports default to org-wide. Pass `branchId=<id>` to
+    // scope to a specific branch (with access check), or omit / `=all` for
+    // org-wide. The top-bar working-branch cookie is intentionally NOT used.
     let branchFilter: { branchId?: string } = {};
-    if (branchParam === "all") {
-        // No branch filter
-    } else if (branchParam) {
+    if (branchParam === "all" || !branchParam) {
+        // No branch filter — org-wide.
+    } else {
         try { requireBranchAccess(session, branchParam); } catch (e) {
             if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
             throw e;
         }
         branchFilter = { branchId: branchParam };
-    } else {
-        try { branchFilter = { branchId: resolveActiveBranchId(req, session) }; } catch (e) {
-            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
-            throw e;
-        }
     }
 
     // Type filter — narrow to one pending type, or OR-combine all four.

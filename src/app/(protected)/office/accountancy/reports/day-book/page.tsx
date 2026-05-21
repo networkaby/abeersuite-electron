@@ -162,6 +162,20 @@ export default function DayBookPage() {
         .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
 
+    // Reset every user-controlled filter back to defaults. The "Show all" /
+    // "Clear filters" banner uses this to escape the common footgun where
+    // vouchers are dated outside the active window — the page silently shows
+    // "0 of N rows" and the user can't tell why.
+    const clearFilters = () => {
+        applyPreset("thisFY");
+        setSearch("");
+        setKind("__all__");
+        setStatuses(new Set());
+        setOptionalOnly(false);
+        setInventoryOnly(false);
+    };
+    const hiddenCount = rows.length - filtered.length;
+
     // ── Render ────────────────────────────────────────────────────────────
     return (
         <div className="-m-8 flex h-full flex-col overflow-hidden">
@@ -334,6 +348,20 @@ export default function DayBookPage() {
                 </div>
                 <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
             </div>
+
+            {/* Hidden-rows banner — when filters drop every / nearly every row */}
+            {hiddenCount > 0 && !loading && (
+                <div className="flex shrink-0 items-center gap-3 border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    <span className="font-medium">
+                        {filtered.length === 0
+                            ? `All ${rows.length} voucher${rows.length === 1 ? "" : "s"} are hidden by the current filters.`
+                            : `${hiddenCount} of ${rows.length} vouchers are hidden by the current filters.`}
+                    </span>
+                    <Button variant="outline" size="xs" className="h-6 text-xs" onClick={clearFilters}>
+                        Clear filters (show all this FY)
+                    </Button>
+                </div>
+            )}
 
             {/* Table */}
             <div className="flex flex-1 overflow-hidden">

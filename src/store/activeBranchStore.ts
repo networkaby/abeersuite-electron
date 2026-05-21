@@ -26,10 +26,23 @@ interface ActiveBranchStore {
 
 /** Read stored branch from localStorage at store-creation time so components
  * like BranchRequired don't flash a "no branch" gate before the BranchSwitcher
- * effect fires. This runs client-side only (window guard). */
+ * effect fires. This runs client-side only (window guard).
+ *
+ * Stale `__combined__` (the legacy multi-branch sentinel) is silently dropped
+ * so the BranchSwitcher's hydrate path picks a real branch on first render.
+ * The top-bar control is now strictly "working branch = one specific branch";
+ * reports default to org-wide on their own. */
 function readStoredBranch(): string | null {
     if (typeof window === "undefined") return null;
-    try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
+    try {
+        const v = localStorage.getItem(STORAGE_KEY);
+        if (v === COMBINED_BRANCH) {
+            localStorage.removeItem(STORAGE_KEY);
+            document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
+            return null;
+        }
+        return v;
+    } catch { return null; }
 }
 
 export const useActiveBranchStore = create<ActiveBranchStore>((set, get) => ({
@@ -52,9 +65,12 @@ export const useActiveBranchStore = create<ActiveBranchStore>((set, get) => ({
         if (typeof window === "undefined") return;
         if (get().activeBranchId) return;
         try {
-            const stored = localStorage.getItem(STORAGE_KEY);
+            const raw = localStorage.getItem(STORAGE_KEY);
+            // Drop the legacy `__combined__` sentinel — see readStoredBranch.
+            const stored = raw === COMBINED_BRANCH ? null : raw;
             const next = stored || fallback;
             if (next) {
+                localStorage.setItem(STORAGE_KEY, next);
                 document.cookie = `${COOKIE_NAME}=${encodeURIComponent(next)}; path=/; max-age=31536000; SameSite=Lax`;
                 set({ activeBranchId: next });
             }

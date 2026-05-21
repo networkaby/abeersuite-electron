@@ -9,6 +9,14 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all&includeDeleted=1
+//
+// Branch handling:
+//   • No `branchId` param → org-wide (no branch filter). Reports default here.
+//   • `branchId=all`      → org-wide (kept for explicit callers).
+//   • `branchId=<id>`     → branch-scoped, with access check.
+// Write paths that want branch-scoping pass `branchId` explicitly. The top-bar
+// active-branch cookie is no longer consulted by this GET — top bar represents
+// the working branch for writes; reports default to org-wide.
 export async function GET(req: NextRequest) {
     const { response, user } = await requireAuth();
     if (response) return response;
@@ -29,19 +37,14 @@ export async function GET(req: NextRequest) {
     const includeDeleted = includeDeletedParam && canSeeDeleted;
 
     let branchFilter: { branchId?: string } = {};
-    if (branchParam === "all") {
-        // No branch filter — admin / org-scope only (enforced at perm layer later).
-    } else if (branchParam) {
+    if (branchParam === "all" || !branchParam) {
+        // No branch filter — org-wide. Reports land here by omitting the param.
+    } else {
         try { requireBranchAccess(session, branchParam); } catch (e) {
             if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
             throw e;
         }
         branchFilter = { branchId: branchParam };
-    } else {
-        try { branchFilter = { branchId: resolveActiveBranchId(req, session) }; } catch (e) {
-            if (e instanceof BranchAccessError) return NextResponse.json({ error: e.message }, { status: 400 });
-            throw e;
-        }
     }
 
     const vouchers = await prisma.invVoucher.findMany({

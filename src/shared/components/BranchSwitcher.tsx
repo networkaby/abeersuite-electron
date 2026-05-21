@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Building2, Globe2 } from "lucide-react";
+import { Building2 } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -11,7 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useActiveBranchStore, COMBINED_BRANCH } from "@/store/activeBranchStore";
+import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 type Branch = { id: string; name: string; isActive?: boolean };
@@ -52,10 +52,12 @@ export function BranchSwitcher() {
                     visible = active.filter((b) => userBranchIds.includes(b.id));
                 }
                 setBranches(visible);
-                // Default selection rule: multi-branch users land in COMBINED ("My branches");
-                // single-branch users land on their one branch. hydrate() is a no-op if
-                // something is already stored, so persistent selection survives reload.
-                const fallback = visible.length >= 2 ? COMBINED_BRANCH : (visible[0]?.id ?? null);
+                // Default selection rule: land on the first available branch. The top
+                // bar represents the user's *working* branch — reports default to org-
+                // wide scope on their own, so we never select a combined sentinel here.
+                // hydrate() is a no-op if something is already stored, so persistent
+                // selection survives reload.
+                const fallback = visible[0]?.id ?? null;
                 hydrate(fallback);
             } catch {
                 /* ignore — fallback to empty list */
@@ -88,10 +90,10 @@ export function BranchSwitcher() {
         );
     }
 
-    const current = activeBranchId ?? COMBINED_BRANCH;
-    // Admins see the whole org → label as "Consolidated".
-    // Multi-branch non-admin users (incl. org-wide post holders like CEO) see "My branches".
-    const combinedLabel = isAdmin ? "Consolidated" : "My branches";
+    // Top bar always represents a specific working branch. If somehow nothing
+    // is selected (shouldn't happen after hydrate, but defensive), fall back to
+    // the first visible branch's id rather than showing an empty trigger.
+    const current = activeBranchId ?? branches[0]!.id;
 
     return (
         <Select value={current} onValueChange={(v) => {
@@ -101,19 +103,11 @@ export function BranchSwitcher() {
         }}>
             <SelectTrigger className="h-7 w-[200px] text-xs">
                 <div className="flex items-center gap-1.5">
-                    {current === COMBINED_BRANCH
-                        ? <Globe2 size={12} className="shrink-0 text-muted-foreground" />
-                        : <Building2 size={12} className="shrink-0 text-muted-foreground" />}
+                    <Building2 size={12} className="shrink-0 text-muted-foreground" />
                     <SelectValue placeholder="Branch" />
                 </div>
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value={COMBINED_BRANCH} className="text-xs">
-                    <span className="flex items-center gap-1.5">
-                        <Globe2 size={12} className="opacity-70" />
-                        {combinedLabel}
-                    </span>
-                </SelectItem>
                 {branches.map((b) => (
                     <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
                 ))}
