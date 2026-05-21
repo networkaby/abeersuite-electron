@@ -164,6 +164,11 @@ type KindConfig = {
     /// null → no Bill/Original-Invoice field on the form
     refLabel:         string | null;
     refDateLabel:     string;
+    /// When true, the ref number + ref date fields render without the
+    /// required-asterisk and the submit validation skips them. Used by
+    /// kinds where the upstream document (Customer PO, etc.) is nice-to-
+    /// have but not always available — currently Delivery Challan.
+    refOptional?:     boolean;
     listPath:         string;
     nextRefType:      TradingKind;
     showProfit:       boolean;
@@ -398,6 +403,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
         partyPlaceholder: "Search customer by name or phone…",
         ratePick: (p) => p.salePrice,
         refLabel: "Customer PO Ref", refDateLabel: "Customer PO Date",
+        refOptional: true,
         listPath: "/office/accountancy/vouchers-registers/challans",
         nextRefType: "CHALLAN",
         showProfit: false, showPrint: false,
@@ -1314,7 +1320,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             toast.error("Add at least one item with a product and quantity");
             return;
         }
-        if (copy.refLabel) {
+        if (copy.refLabel && !copy.refOptional) {
             if (!header.refNumber.trim()) {
                 toast.error(`${copy.refLabel} is required`);
                 return;
@@ -1632,14 +1638,18 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                             returned against. SALE skips this field entirely. */}
                         {copy.refLabel && (
                             <>
-                                <label className="text-xs text-muted-foreground text-right">{copy.refLabel} <span className="text-destructive">*</span></label>
+                                <label className="text-xs text-muted-foreground text-right">
+                                    {copy.refLabel}{!copy.refOptional && <span className="text-destructive"> *</span>}
+                                </label>
                                 <Input
                                     value={header.refNumber}
                                     onChange={(e) => setHeader((h) => ({ ...h, refNumber: e.target.value }))}
                                     placeholder="—"
                                     className="h-9 text-xs"
                                 />
-                                <label className="text-xs text-muted-foreground text-right">{copy.refDateLabel} <span className="text-destructive">*</span></label>
+                                <label className="text-xs text-muted-foreground text-right">
+                                    {copy.refDateLabel}{!copy.refOptional && <span className="text-destructive"> *</span>}
+                                </label>
                                 <TallyDateInput
                                     value={header.refDate}
                                     onValueChange={(iso) => setHeader((h) => ({ ...h, refDate: iso }))}
