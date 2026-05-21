@@ -33,10 +33,13 @@ pnpm prisma db seed       # 2. runs bootstrap-seed.ts
 
 `bootstrap-seed.ts` is **idempotent** — safe to re-run. It seeds:
 
-- **RBAC** — 4 roles, 80+ permissions, RolePermission grants
+- **RBAC** — 7 roles (prefixed `Role-`), 80+ permissions, RolePermission grants
 - **Workflow** — 6 pipelines, 49 ticket statuses, 7 sub-status groups, 38 sub-statuses, transitions
 - **Org structure** — 2 branches (HQ + Online), 7 cross-branch departments, role ranks
-- **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; legacy US-style codes preserved on merged accounts
+- **Chart of accounts** — 28 AccountGroups (Tally tree, 15 primary + 13 sub) + ~50 GL ledgers; per-branch Vault accounts + POS counter till accounts
+- **Inventory Unit master** — 13 units (PCS, NOS, BOX, SET, UNIT, MTR, ROLL, PKT, PAIR, KG, BAG, REAM, DAY)
+- **Inventory Brand master** — ~60 brands (computers, storage, printers, CCTV, networking, peripherals)
+- **Org Defaults** — default GST rate (18%), default unit (UNIT), taxability (TAXABLE), currency (₹), credit periods (0 days)
 - **DB constraints** — `Phone_owner_xor`, `Email_owner_xor` CHECK constraints (Prisma can't express XOR; applied via raw SQL inside the seed)
 
 > Production deployments run **only** `pnpm prisma db seed`. Do not run any `dummy-*` script in production.
@@ -63,14 +66,21 @@ pnpm seed:hard-clean
 `hard-clean.ts` wipes **everything `bootstrap-seed.ts` does NOT seed**:
 
 - All transactions: vouchers, journal entries, invoices, payments, allocations, audits
-- All inventory data: stock-ledger, vouchers, products, units, categories, brands, warranty terms
+- All inventory data: stock-ledger, vouchers, products, categories, product groups, warranty terms
+- All attribute masters (InvAttributeMaster — seeded by dummy-shop)
 - All shop orders, repair tickets, CRM leads, social posts, chat messages
 - All non-admin Users (only `admin@networkservice.in` survives)
 - All Persons / Companies / Phones / Emails
 - All party-linked Account rows
 - ServiceCenter, ShopCoupon, PortalCredentials
 
-Preserves everything bootstrap-seed wrote, plus user-set config (opening balances, CompanySettings).
+**Preserves** everything bootstrap-seed wrote, plus user-set config:
+- Roles, Permissions, RolePermissions, Pipelines, Statuses, Branches, Departments
+- Chart of accounts (AccountGroup tree + GL ledgers)
+- **InvUnit** (13 units) — bootstrap data, not dummy
+- **InvBrand** (~60 brands) — bootstrap data, not dummy
+- OrgDefaults singleton, InvNamingConfig singleton
+- Account opening balances, CompanySettings
 
 > **Destructive.** Vouchers + customers + products are unrecoverable. Use only in dev.
 
@@ -106,6 +116,7 @@ Future fixtures (dummy customer lists, voucher fixtures, etc.) go here too rathe
 | Add a new fixture data file | `prisma/seeds/data/<name>.ts`; document the consumer here |
 | Add a new dummy script | wire into `package.json` `scripts` and into `seed:dummy-all` |
 | Hard-clean must remove a new dummy table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
+| Data moves from a dummy seed into bootstrap | **remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES`** in `hard-clean.ts` — bootstrap data must survive a hard-clean |
 
 > **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` (production) and the matching `dummy-*.ts` (dev) in the same commit. The dummy scripts are the canonical demo for that schema; if they break after a schema change, future agents have no working reference.
 

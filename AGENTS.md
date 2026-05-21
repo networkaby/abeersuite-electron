@@ -53,6 +53,8 @@ All seed scripts live in `prisma/seeds/`. Read [docs/seeds.md](docs/seeds.md) be
 
 When `hard-clean.ts` needs to remove rows from a new dummy-only table, extend its `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` arrays in the same commit.
 
+**Hard-clean contract:** `hard-clean.ts` must NEVER delete data that `bootstrap-seed.ts` seeds. If a master table moves from a dummy seed into bootstrap (e.g. `InvUnit`, `InvBrand`), remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in the same commit — bootstrap data must survive a hard-clean unchanged.
+
 ## 6. Status lives in one place
 
 `PROJECT_BRAIN.md` is the only doc that carries status (what's in flight, what shipped recently, what's next). Module docs and `ARCHITECTURE.md` are present-tense reference — they don't carry "shipped" / "pending" markers, milestone dates, or roadmap items. When something ships, update `PROJECT_BRAIN.md` only.
