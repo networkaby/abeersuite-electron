@@ -5,7 +5,7 @@ import SessionWrapper from "@/shared/components/SessionWrapper";
 // Shared auth wrapper + SessionProvider for ALL `/vouchers/*` routes.
 //
 // Most inventory detail pages (InvVoucherDetail) and the new GL/JE edit
-// forms (MoneyFlowVoucherPage, JournalVoucherPage) call `useSession()` to
+// forms (GlVoucherPage, JournalVoucherPage) call `useSession()` to
 // read user permissions for lifecycle action gating — that hook fails
 // without a SessionProvider in the tree, hence this parent layout.
 //

@@ -2,7 +2,7 @@
 
 // PREVIEW MIGRATION — Tally-finish full-page voucher form for the five
 // pure-GL voucher kinds (Payment, Receipt, Contra, Credit Note, Debit Note).
-// Mirrors the data model + per-kind COPY config of `MoneyFlowDialog.tsx`
+// Mirrors the data model + per-kind COPY config of `GlVoucherDialog.tsx`
 // but lays out as a Tally classic voucher: compact top strip, two-column
 // Particulars / Amount body, balance indicator + amount-in-words, sticky
 // footer. Create-only (matches the existing dialogs' scope).
@@ -212,7 +212,7 @@ const newRow = (): Row => ({ id: ++rowSeq, accountId: null, amount: "", note: ""
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function MoneyFlowVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; voucherId?: number }) {
+export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; voucherId?: number }) {
     const router = useRouter();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];

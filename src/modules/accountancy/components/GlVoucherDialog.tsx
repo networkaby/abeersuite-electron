@@ -146,7 +146,7 @@ const COPY: Record<Kind, {
     },
 };
 
-export function MoneyFlowDialog({ kind }: { kind: Kind }) {
+export function GlVoucherDialog({ kind }: { kind: Kind }) {
     const router = useRouter();
     const copy = COPY[kind];
     const paymentStore = usePaymentDialogStore();
@@ -586,7 +586,7 @@ export function MoneyFlowDialog({ kind }: { kind: Kind }) {
 }
 
 /** Thin wrappers for layout mounting + module sidebar actions. */
-export function PaymentDialog() { return <MoneyFlowDialog kind="PAYMENT" />; }
-export function ReceiptDialog() { return <MoneyFlowDialog kind="RECEIPT" />; }
-export function CreditNoteDialog() { return <MoneyFlowDialog kind="CREDIT_NOTE" />; }
-export function DebitNoteDialog() { return <MoneyFlowDialog kind="DEBIT_NOTE" />; }
+export function PaymentDialog() { return <GlVoucherDialog kind="PAYMENT" />; }
+export function ReceiptDialog() { return <GlVoucherDialog kind="RECEIPT" />; }
+export function CreditNoteDialog() { return <GlVoucherDialog kind="CREDIT_NOTE" />; }
+export function DebitNoteDialog() { return <GlVoucherDialog kind="DEBIT_NOTE" />; }

@@ -1,4 +1,4 @@
-import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
+import { TradingVoucherPage } from "@/modules/accountancy/components/TradingVoucherPage";
 
 // Full-screen Sales Order form — same shell as /sale and /purchase. Stock-
 // neutral commitment; converts to a Sale invoice / Challan downstream.
@@ -6,5 +6,5 @@ import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPag
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-    return <SaleVoucherPage kind="SALES_ORDER" />;
+    return <TradingVoucherPage kind="SALES_ORDER" />;
 }

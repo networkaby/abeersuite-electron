@@ -8,7 +8,7 @@ import SessionWrapper from "@/shared/components/SessionWrapper";
 // the form gets the full canvas. Opens in a new tab via button bar.
 //
 // `SessionWrapper` is required because the edit-mode forms (e.g.
-// MoneyFlowVoucherPage at /vouchers/payments/[id]) read permissions via
+// GlVoucherPage at /vouchers/payments/[id]) read permissions via
 // `useSession()` to decide which LifecycleActions buttons to render.
 export default async function GlVoucherLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();

@@ -258,7 +258,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             {cb.open && portalTarget && pos && createPortal(
                 <div
                     // z-[60] sits above shadcn Dialog's z-50 backdrop + the
-                    // SaleVoucherPage action bar (no explicit z but rendered
+                    // TradingVoucherPage action bar (no explicit z but rendered
                     // later in DOM). overflow-hidden clips inner list to
                     // maxHeight so the dropdown never spills past viewport.
                     className="fixed z-[60] mt-0.5 overflow-hidden rounded-lg border border-border bg-popover shadow-xl text-sm"

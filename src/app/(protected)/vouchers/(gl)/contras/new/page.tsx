@@ -1,5 +1,5 @@
-import { MoneyFlowVoucherPage } from "@/modules/accountancy/components/preview/MoneyFlowVoucherPage";
+import { GlVoucherPage } from "@/modules/accountancy/components/preview/GlVoucherPage";
 
 export default function Page() {
-    return <MoneyFlowVoucherPage kind="CONTRA" />;
+    return <GlVoucherPage kind="CONTRA" />;
 }

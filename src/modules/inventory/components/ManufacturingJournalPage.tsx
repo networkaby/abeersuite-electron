@@ -101,7 +101,7 @@ export function ManufacturingJournalPage() {
     const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
-    // Close / Cancel — smart back-nav (matches SaleVoucherPage).
+    // Close / Cancel — smart back-nav (matches TradingVoucherPage).
     const closeForm = useCallback(() => {
         if (typeof window === "undefined") return;
         if (window.history.length > 1) router.back();

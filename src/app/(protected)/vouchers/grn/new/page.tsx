@@ -1,4 +1,4 @@
-import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
+import { TradingVoucherPage } from "@/modules/accountancy/components/TradingVoucherPage";
 
 // Goods Received Note — increments stock, no GL post (Purchase invoice posts).
 // Parent-link picker offers any POSTED Purchase Order to copy lines from.
@@ -6,5 +6,5 @@ import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPag
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-    return <SaleVoucherPage kind="GRN" />;
+    return <TradingVoucherPage kind="GRN" />;
 }

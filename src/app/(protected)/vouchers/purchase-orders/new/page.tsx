@@ -1,4 +1,4 @@
-import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
+import { TradingVoucherPage } from "@/modules/accountancy/components/TradingVoucherPage";
 
 // Full-screen Purchase Order form — stock-neutral commitment; converts to a
 // GRN on receipt and ultimately a Purchase invoice.
@@ -6,5 +6,5 @@ import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPag
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-    return <SaleVoucherPage kind="PURCHASE_ORDER" />;
+    return <TradingVoucherPage kind="PURCHASE_ORDER" />;
 }

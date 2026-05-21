@@ -20,7 +20,7 @@ import { fmt } from "@/utils/constants";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
 
-import type { VoucherFormType } from "./VoucherForm";
+import type { GlVoucherFormType } from "./GlVoucherForm";
 
 const STATUS_COLORS: Record<string, string> = {
     DRAFT:     "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 interface Voucher {
     id:           number;
-    type:         VoucherFormType;
+    type:         GlVoucherFormType;
     reference:    string;
     date:         string;
     narration:    string | null;

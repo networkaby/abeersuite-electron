@@ -16,11 +16,11 @@ import {
     type VoucherRegisterRow,
 } from "@/modules/accountancy/components/VoucherRegisterTable";
 
-import type { VoucherFormType } from "./VoucherForm";
+import type { GlVoucherFormType } from "./GlVoucherForm";
 
 type RawRow = {
     id:           number;
-    type:         VoucherFormType;
+    type:         GlVoucherFormType;
     reference:    string;
     date:         string;
     narration:    string | null;
@@ -38,7 +38,7 @@ const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"]
 export function VoucherList({
     type, title, subtitle, basePath, newPath, newTab = false,
 }: {
-    type:     VoucherFormType;
+    type:     GlVoucherFormType;
     title:    string;
     subtitle: string;
     basePath: string;   // e.g. /vouchers/payments  (used for the chevron link — kept for back-compat but unused by the shared table)

@@ -15,7 +15,7 @@ export interface DuplicateLine {
     type?:        "DEBIT" | "CREDIT";
     amount?:      number | string;
     description?: string | null;
-    // Inventory line fields (SaleVoucherPage):
+    // Inventory line fields (TradingVoucherPage):
     productId?:   number;
     quantity?:    number | string;
     rate?:        number | string;
@@ -37,7 +37,7 @@ export interface DuplicatePayload {
     narration?:      string | null;
     /** GL voucher party-account, for CREDIT_NOTE / DEBIT_NOTE. */
     partyAccountId?: number | null;
-    /** Inventory party-snapshot fields (SaleVoucherPage). */
+    /** Inventory party-snapshot fields (TradingVoucherPage). */
     party?: {
         name:    string | null;
         type:    string | null;

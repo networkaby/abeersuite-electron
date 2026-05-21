@@ -507,7 +507,7 @@ const PER_KIND: Record<TradingKind, KindConfig> = {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
+function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const copy = PER_KIND[kind];
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -941,7 +941,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     }, [editVoucherId, isEditing]);
 
     // Load cash + bank ledgers once and pre-select "Cash-in-Hand" if present.
-    // Same fetch as MoneyFlowDialog — Account rows enriched with their group
+    // Same fetch as GlVoucherDialog — Account rows enriched with their group
     // so we can filter by ACCOUNT_GROUPS.CASH_IN_HAND / BANK_ACCOUNTS.
     // In edit mode the default is skipped — a separate effect matches the
     // voucher's saved paymentAccountId once both fetches resolve.
@@ -2379,10 +2379,10 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     );
 }
 
-export function SaleVoucherPage(props: { kind?: TradingKind }) {
+export function TradingVoucherPage(props: { kind?: TradingKind }) {
     return (
         <Suspense fallback={<div>Loading…</div>}>
-            <SaleVoucherPageInner {...props} />
+            <TradingVoucherPageInner {...props} />
         </Suspense>
     );
 }

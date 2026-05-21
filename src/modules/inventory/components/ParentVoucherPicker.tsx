@@ -5,7 +5,7 @@
 //
 // On pick we hand the caller a hydrated voucher payload (reference + date +
 // lines) so the form can copy lines into its own state — see
-// `SaleVoucherPage.tsx` wiring under `linkParentType`.
+// `TradingVoucherPage.tsx` wiring under `linkParentType`.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";

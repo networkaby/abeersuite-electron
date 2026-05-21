@@ -376,7 +376,7 @@ export default function PosScreen() {
             // POS sale route now requires payments to TOTAL = invoice total.
             // The on-credit portion (`onCredit`) breaks this invariant — for
             // now, only allow full-paid POS sales. Mixed-pay sales should go
-            // through the SaleVoucherPage (credit-mode) instead.
+            // through the TradingVoucherPage (credit-mode) instead.
             const collectedFromPayments = paymentsList.reduce((s, p) => s + p.amount, 0);
             if (Math.abs(collectedFromPayments - total) > 0.01) {
                 toast.error("POS sale must be fully paid. Use 'Save & Print' on /sale for partial / credit sales.");

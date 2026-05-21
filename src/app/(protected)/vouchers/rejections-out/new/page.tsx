@@ -1,4 +1,4 @@
-import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
+import { TradingVoucherPage } from "@/modules/accountancy/components/TradingVoucherPage";
 
 // Rejection Out — we return goods to supplier; stock decrements. Parent-link
 // picker offers any POSTED GRN (Purchase) so lines can be carried over.
@@ -6,5 +6,5 @@ import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPag
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-    return <SaleVoucherPage kind="REJECTION_OUT" />;
+    return <TradingVoucherPage kind="REJECTION_OUT" />;
 }

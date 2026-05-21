@@ -1,4 +1,4 @@
-import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
+import { TradingVoucherPage } from "@/modules/accountancy/components/TradingVoucherPage";
 
 // Rejection In — customer returns goods; stock increments. Parent-link picker
 // offers any POSTED Challan (Sale) so lines can be carried over.
@@ -6,5 +6,5 @@ import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPag
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-    return <SaleVoucherPage kind="REJECTION_IN" />;
+    return <TradingVoucherPage kind="REJECTION_IN" />;
 }

@@ -14,7 +14,7 @@ import {
     ReceiptDialog,
     CreditNoteDialog,
     DebitNoteDialog,
-} from "@/modules/accountancy/components/MoneyFlowDialog";
+} from "@/modules/accountancy/components/GlVoucherDialog";
 // Sale + Purchase moved to full-page routes (/sale, /purchase). Sale Return
 // + Purchase Return are full-page at /sale-return + /purchase-return.
 // Only Estimate keeps the dialog flow for now.

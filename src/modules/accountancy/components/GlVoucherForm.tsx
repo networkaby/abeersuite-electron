@@ -19,7 +19,7 @@ import { fmt } from "@/utils/constants";
 import { BillAllocationDrawer, type AllocationDraft } from "./BillAllocationDrawer";
 import { PartyCombobox, type SelectedParty } from "./PartyCombobox";
 
-export type VoucherFormType = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
+export type GlVoucherFormType = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
 interface GlAccount { id: number; code: string; name: string; type: string }
 
@@ -29,7 +29,7 @@ interface GlAccount { id: number; code: string; name: string; type: string }
 // CREDIT_NOTE — party Credited (sales return reduces what customer owes)
 // DEBIT_NOTE  — party Debited  (purchase return reduces what we owe)
 // CONTRA   — no party (cash↔bank movement)
-function partyLineSide(t: VoucherFormType): "DEBIT" | "CREDIT" | null {
+function partyLineSide(t: GlVoucherFormType): "DEBIT" | "CREDIT" | null {
     switch (t) {
         case "PAYMENT":
         case "DEBIT_NOTE":
@@ -51,7 +51,7 @@ type LineInput = {
 
 const cell = "w-full rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-const TITLES: Record<VoucherFormType, string> = {
+const TITLES: Record<GlVoucherFormType, string> = {
     CONTRA:      "Contra Voucher",
     PAYMENT:     "Payment Voucher",
     RECEIPT:     "Receipt Voucher",
@@ -59,7 +59,7 @@ const TITLES: Record<VoucherFormType, string> = {
     DEBIT_NOTE:  "Debit Note",
 };
 
-const PARTY_LABEL: Record<VoucherFormType, string> = {
+const PARTY_LABEL: Record<GlVoucherFormType, string> = {
     CONTRA:      "Counterparty (optional)",
     PAYMENT:     "Pay to (party / supplier)",
     RECEIPT:     "Received from (party / customer)",
@@ -67,7 +67,7 @@ const PARTY_LABEL: Record<VoucherFormType, string> = {
     DEBIT_NOTE:  "Supplier (creditor)",
 };
 
-const NARRATION_PLACEHOLDER: Record<VoucherFormType, string> = {
+const NARRATION_PLACEHOLDER: Record<GlVoucherFormType, string> = {
     CONTRA:      "e.g. Cash deposit to bank",
     PAYMENT:     "e.g. Office rent for Mar 2026",
     RECEIPT:     "e.g. Cash received from customer #123",
@@ -75,7 +75,7 @@ const NARRATION_PLACEHOLDER: Record<VoucherFormType, string> = {
     DEBIT_NOTE:  "e.g. Purchase return — wrong model",
 };
 
-export function VoucherForm({ type, redirectTo }: { type: VoucherFormType; redirectTo: string }) {
+export function GlVoucherForm({ type, redirectTo }: { type: GlVoucherFormType; redirectTo: string }) {
     const router = useRouter();
     const [accounts, setAccounts] = useState<GlAccount[]>([]);
     const [saving, setSaving] = useState(false);

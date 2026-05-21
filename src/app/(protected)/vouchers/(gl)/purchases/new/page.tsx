@@ -1,5 +1,5 @@
-import { SaleVoucherPage } from "@/modules/accountancy/components/SaleVoucherPage";
+import { TradingVoucherPage } from "@/modules/accountancy/components/TradingVoucherPage";
 
 export default function Page() {
-    return <SaleVoucherPage kind="PURCHASE" />;
+    return <TradingVoucherPage kind="PURCHASE" />;
 }

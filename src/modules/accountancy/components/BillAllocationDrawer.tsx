@@ -4,7 +4,7 @@
 // which open bills the new voucher settles, mirroring Tally's four allocation
 // methods: New Ref / Against Ref / Advance / On Account.
 //
-// State is held by the parent VoucherForm — this component is purely a controlled
+// State is held by the parent GlVoucherForm — this component is purely a controlled
 // UI on the `allocations` array. Allocations are persisted to the
 // VoucherAllocation table after the parent voucher is saved.
 

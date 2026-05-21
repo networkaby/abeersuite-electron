@@ -91,7 +91,7 @@ export function PhysicalStockPage() {
     const canDelete     = hasPermissionWithScope(permissions, "inventory:voucher:delete");
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
-    // Close / Cancel — smart back-nav (matches SaleVoucherPage):
+    // Close / Cancel — smart back-nav (matches TradingVoucherPage):
     //   • Same-tab open → router.back() returns to wherever the operator came from.
     //   • New-tab open (window.open from ButtonBar) → window.close() shuts the tab.
     //   • Manually-typed URL → window.close() silently fails. Acceptable.
