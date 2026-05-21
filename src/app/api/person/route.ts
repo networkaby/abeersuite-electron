@@ -112,7 +112,7 @@ async function lookupAccounts(term: string, group?: string): Promise<LookupResul
             name: c.name,
             phone: c.phones[0]?.phone ?? null,
             email: c.emails[0]?.email ?? null,
-            address: null,
+            address: c.address ?? null,
             type: "company" as const,
             accountId: c.account?.id ?? null,
             linkedCompanies: [] as { id: number; name: string; accountId: number | null }[],

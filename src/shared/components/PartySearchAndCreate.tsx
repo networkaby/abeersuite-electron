@@ -572,16 +572,26 @@ export const PartySearchAndCreate = forwardRef<
                                 type="button"
                                 onClick={() => pickHit(c)}
                                 onMouseEnter={() => setHighlightedHit(i)}
-                                className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
+                                className={`flex w-full items-start gap-3 px-3 py-2 text-left text-sm ${i === highlightedHit ? "bg-muted" : "hover:bg-muted"}`}
                             >
                                 {c.type === "company"
-                                    ? <Building2 size={14} className="shrink-0 text-muted-foreground" />
-                                    : <User size={14} className="shrink-0 text-muted-foreground" />}
-                                <span className="flex-1 truncate">{c.name}</span>
-                                <Badge variant="secondary" className="text-[10px]">
-                                    {c.type === "company" ? "Company" : "Person"}
-                                </Badge>
-                                <span className="w-32 truncate text-right text-xs text-muted-foreground">{c.phone ?? ""}</span>
+                                    ? <Building2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+                                    : <User size={14} className="mt-0.5 shrink-0 text-muted-foreground" />}
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                    <div className="flex items-center gap-2">
+                                        <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                            {c.type === "company" ? "Company" : "Person"}
+                                        </Badge>
+                                    </div>
+                                    {(c.phone || c.address || c.email) && (
+                                        <div className="truncate text-[11px] text-muted-foreground">
+                                            {[c.phone, c.address?.replace(/\s*\n\s*/g, " · "), c.email]
+                                                .filter(Boolean)
+                                                .join(" · ")}
+                                        </div>
+                                    )}
+                                </div>
                             </button>
                         </li>
                     ))}
