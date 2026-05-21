@@ -141,17 +141,24 @@ export function useTallyDate(value: string, onValueChange: (iso: string) => void
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 } {
     const [display, setDisplay] = useState<string>(() => isoToDisplay(value));
+    // `prevValue` (state, not a ref) detects prop changes during render.
+    // React 19 forbids ref reads/writes during render, so we cannot store
+    // the previous prop in a ref.
+    const [prevValue, setPrevValue] = useState<string>(value);
+    // `lastIso` mirrors the most-recently-emitted ISO so `commit` can dedupe
+    // outbound onValueChange calls. Touched only in effects and event
+    // handlers — never during render.
     const lastIso = useRef<string>(value);
 
     // Sync external value changes (e.g. parent resets the form) without
     // clobbering in-flight typing — only resync when the prop genuinely
-    // changes away from the last value we emitted.
-    useEffect(() => {
-        if (value !== lastIso.current) {
-            lastIso.current = value;
-            setDisplay(isoToDisplay(value));
-        }
-    }, [value]);
+    // changes away from what we last saw.
+    if (value !== prevValue) {
+        setPrevValue(value);
+        setDisplay(isoToDisplay(value));
+    }
+    // Mirror the latest prop into `lastIso` so commit() dedupes against it.
+    useEffect(() => { lastIso.current = value; }, [value]);
 
     const commit = useCallback(() => {
         const trimmed = display.trim();

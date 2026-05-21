@@ -48,7 +48,7 @@ interface BtnBarMenuState { x: number; y: number; href: string; }
 
 function ActionContextMenu({ menu, onClose }: { menu: BtnBarMenuState | null; onClose: () => void }) {
     const closeRef = useRef(onClose);
-    closeRef.current = onClose;
+    useEffect(() => { closeRef.current = onClose; }, [onClose]);
 
     useEffect(() => {
         if (!menu) return;

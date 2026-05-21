@@ -657,7 +657,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     // rendered) and on edit mode (party already populated; the picker locks).
     useEffect(() => {
         partyPickerRef.current?.focus();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
     // CASH walk-in fields — free-form name + phone. Stored on the voucher as
     // partyName / partyPhone strings only; no Person / Account row is created.

@@ -299,15 +299,19 @@ export const PartySearchAndCreate = forwardRef<
 
     async function doOpenNewParty() {
         const q = query.trim();
-        // Defensive re-check before opening: an exact match may exist
+        // Defensive re-check before opening: only auto-pick on an EXACT name
+        // match. Prefix matches (e.g. "datamat" → "datamation465") must fall
+        // through so the user can still create a similarly-named party.
         if (q.length >= 2) {
             try {
                 const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
                 const { data } = await axios.get<PartyHit[]>(
                     `/api/person?lookup=${encodeURIComponent(q)}${groupSuffix}`,
                 );
-                if (data.length > 0) {
-                    pickHit(data[0]);
+                const qLower = q.toLowerCase();
+                const exact = data.find((d) => d.name.trim().toLowerCase() === qLower);
+                if (exact) {
+                    pickHit(exact);
                     return;
                 }
             } catch { /* fall through */ }
@@ -325,34 +329,39 @@ export const PartySearchAndCreate = forwardRef<
         setOpenDialog(true);
     };
 
+    // "New customer" sits at index `activeHits.length` in the navigable list
+    // whenever the query is long enough to allow creation. Keep this as the
+    // single source of truth so arrow nav, Enter, and the rendered highlight
+    // all agree on the row's position.
+    const showNewCustomerRow = !locked && query.trim().length >= 2;
+    const newCustomerIndex = activeHits.length;
+    const navLength = activeHits.length + (showNewCustomerRow ? 1 : 0);
+
     const onSearchKeyDown = async (e: ReactKeyboardEvent<HTMLInputElement>) => {
         if (e.key === "ArrowDown") {
-            if (activeHits.length === 0) return;
+            if (navLength === 0) return;
             e.preventDefault();
-            setHighlightedHit((i) => Math.min(i + 1, activeHits.length - 1));
+            setHighlightedHit((i) => Math.min(i + 1, navLength - 1));
         } else if (e.key === "ArrowUp") {
-            if (activeHits.length === 0) return;
+            if (navLength === 0) return;
             e.preventDefault();
             setHighlightedHit((i) => Math.max(i - 1, 0));
         } else if (e.key === "Enter") {
             if (query.trim().length < 2) return;
             e.preventDefault();
+            // Explicit "New customer" row → open the create dialog. doOpenNewParty
+            // still does an exact-match safety check before opening.
+            if (showNewCustomerRow && highlightedHit === newCustomerIndex) {
+                openNewParty();
+                return;
+            }
             if (activeHits.length > 0) {
                 const hit = activeHits[highlightedHit] ?? activeHits[0];
                 if (hit) pickHit(hit);
                 return;
             }
-            // Defensive re-check — debounce may not have fired
-            try {
-                const groupSuffix = effectiveGroup ? `&group=${encodeURIComponent(effectiveGroup)}` : "";
-                const { data } = await axios.get<PartyHit[]>(
-                    `/api/person?lookup=${encodeURIComponent(query)}${groupSuffix}`,
-                );
-                if (data.length > 0) {
-                    pickHit(data[0]);
-                    return;
-                }
-            } catch { /* fall through */ }
+            // No hits yet (debounce may not have fired) — fall through to the
+            // create dialog; doOpenNewParty handles the exact-match re-check.
             openNewParty();
         } else if (e.key === "Escape") {
             setQuery("");
@@ -519,7 +528,7 @@ export const PartySearchAndCreate = forwardRef<
         }
     };
 
-    const showDropdown = !locked && (activeHits.length > 0 || query.trim().length >= 2);
+    const showDropdown = !locked && (activeHits.length > 0 || showNewCustomerRow);
 
     return (
         <div className={`relative ${className ?? ""}`}>
@@ -576,12 +585,13 @@ export const PartySearchAndCreate = forwardRef<
                             </button>
                         </li>
                     ))}
-                    {query.trim().length >= 2 && (
+                    {showNewCustomerRow && (
                         <li className="border-t border-border">
                             <button
                                 type="button"
                                 onClick={openNewParty}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
+                                onMouseEnter={() => setHighlightedHit(newCustomerIndex)}
+                                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary ${highlightedHit === newCustomerIndex ? "bg-muted" : "hover:bg-muted"}`}
                             >
                                 <UserPlus size={14} />
                                 New customer{activeHits.length === 0 ? `: "${query.trim()}"` : ""}

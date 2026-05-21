@@ -10,7 +10,7 @@
 // never sees an ID field. Special case: when intent.forceId is set (used for
 // "Create HQ" which forces id = "BR-HQ"), that exact id is sent through.
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Building2, Layers, Briefcase, Landmark } from "lucide-react";
@@ -377,8 +377,10 @@ export default function OrgRegionsCreateDialog({
     intent, branches, departments, positionTitles = [], departmentNames = [], onClose, onCreated,
 }: Props) {
     // Re-mount the form whenever intent changes so initial values stick.
-    const [key, setKey] = useState(0);
-    useEffect(() => { setKey(k => k + 1); }, [intent]);
+    const formKey = useMemo(
+        () => intent ? `${intent.mode}:${JSON.stringify(intent)}` : "closed",
+        [intent],
+    );
 
     const open = intent !== null;
 
@@ -428,7 +430,7 @@ export default function OrgRegionsCreateDialog({
                 </DialogHeader>
                 {intent?.mode === "branch" && (
                     <BranchForm
-                        key={key}
+                        key={formKey}
                         forceId={intent.forceId}
                         isHq={intent.isHq}
                         onDone={handleDone}
@@ -436,7 +438,7 @@ export default function OrgRegionsCreateDialog({
                 )}
                 {intent?.mode === "department" && (
                     <DepartmentForm
-                        key={key}
+                        key={formKey}
                         branches={branches}
                         initialBranchId={intent.branchId ?? null}
                         suggestions={departmentNames}
@@ -445,7 +447,7 @@ export default function OrgRegionsCreateDialog({
                 )}
                 {intent?.mode === "position" && (
                     <PositionForm
-                        key={key}
+                        key={formKey}
                         branches={branches}
                         departments={departments}
                         initialBranchId={intent.branchId ?? null}
