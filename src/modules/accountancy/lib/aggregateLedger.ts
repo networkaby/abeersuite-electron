@@ -94,6 +94,68 @@ export async function aggregateClosingAsOf(
     return closing;
 }
 
+/** Roll-up `aggregateClosingAsOf` by group — returns Map<groupId, rolledUpClosing>.
+ *  Walks each requested group's descendants, sums the truth-path closing of
+ *  every account under them. Use this for any display surface that needs a
+ *  group's total balance — it agrees with the Balance Sheet by construction
+ *  because both go through `aggregateClosingAsOf`.
+ *
+ *  Replaces the cache-path `loadGroupRolledUpBalances` (which read the
+ *  drift-prone `Account.balance` column). */
+export async function aggregateRolledUpByGroup(
+    groupIds: number[],
+    asOf: Date = new Date(),
+): Promise<Map<number, number>> {
+    const out = new Map<number, number>();
+    if (groupIds.length === 0) return out;
+
+    const [allGroups, allAccounts, nbMap] = await Promise.all([
+        prisma.accountGroup.findMany({ select: { id: true, parentId: true } }),
+        prisma.account.findMany({ select: { id: true, groupId: true } }),
+        loadNormalBalanceMap(),
+    ]);
+    const closingMap = await aggregateClosingAsOf(asOf, nbMap);
+
+    const childMap = new Map<number, number[]>();
+    for (const g of allGroups) {
+        if (g.parentId === null) continue;
+        const arr = childMap.get(g.parentId) ?? [];
+        arr.push(g.id);
+        childMap.set(g.parentId, arr);
+    }
+    const descendantIds = (rootId: number): number[] => {
+        const acc = [rootId];
+        const stack = [rootId];
+        while (stack.length) {
+            const top = stack.pop()!;
+            const kids = childMap.get(top) ?? [];
+            acc.push(...kids);
+            stack.push(...kids);
+        }
+        return acc;
+    };
+
+    // Index accounts by groupId for O(1) lookup per descendant.
+    const byGroup = new Map<number, number[]>();
+    for (const a of allAccounts) {
+        if (a.groupId == null) continue;
+        const arr = byGroup.get(a.groupId) ?? [];
+        arr.push(a.id);
+        byGroup.set(a.groupId, arr);
+    }
+
+    for (const gid of groupIds) {
+        let sum = 0;
+        for (const id of descendantIds(gid)) {
+            const accIds = byGroup.get(id);
+            if (!accIds) continue;
+            for (const accId of accIds) sum += closingMap.get(accId) ?? 0;
+        }
+        out.set(gid, sum);
+    }
+    return out;
+}
+
 /** Opening + transactions + closing per account over a date range.
  *
  * Master-page opening balances (Account.openingBalance) are one-sided —

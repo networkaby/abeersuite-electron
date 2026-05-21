@@ -106,4 +106,4 @@
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-20 — V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._
+_Last updated: 2026-05-22 — `OrgRegionsCreateDialog` form-key derivation switched from `setState`-in-effect to `useMemo` (React 19 hygiene; no behaviour change). Previously (2026-05-20): V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._

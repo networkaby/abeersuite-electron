@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { loadGroupRolledUpBalances } from "@/modules/accountancy/lib/effectiveBalance";
+import { aggregateRolledUpByGroup } from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -53,10 +53,9 @@ export async function GET() {
             include: { _count: { select: { children: true, accounts: true } } },
         });
 
-        // totalBalance per group is the rolled-up effective balance (running
-        // + opening) of every account under it. The shared helper folds in
-        // opening so this list reconciles with the Balance Sheet drilldowns.
-        const balanceMap = await loadGroupRolledUpBalances(flat.map((g) => g.id));
+        // totalBalance per group is the rolled-up closing of every account
+        // under it, derived from JournalLine (same path as the Balance Sheet).
+        const balanceMap = await aggregateRolledUpByGroup(flat.map((g) => g.id));
 
         const flatWithBalance: FlatGroup[] = (flat as Omit<FlatGroup, "totalBalance">[]).map(
             (g) => ({ ...g, totalBalance: balanceMap.get(g.id) ?? 0 })

@@ -27,6 +27,8 @@ interface LedgerRow {
     reference: string;
     description: string;
     lineDescription: string | null;
+    branchId: string | null;
+    branchName: string | null;
     debit: number | null;
     credit: number | null;
     balance: number;
@@ -45,9 +47,6 @@ interface LedgerData {
     rows: LedgerRow[];
 }
 
-const SRC_LABEL: Record<SourceDoc["kind"], string> = {
-    sale: "Sale", purchase: "Purchase", estimate: "Estimate", invoice: "Invoice",
-};
 const SRC_COLOR: Record<SourceDoc["kind"], string> = {
     sale: "bg-green-50 text-green-700 border-green-200",
     purchase: "bg-blue-50 text-blue-700 border-blue-200",
@@ -138,9 +137,9 @@ export default function AccountLedgerPage() {
                             <thead className="border-b bg-muted text-xs text-muted-foreground">
                                 <tr>
                                     <th className="px-4 py-2 text-left font-medium">Date</th>
-                                    <th className="px-4 py-2 text-left font-medium">Reference</th>
+                                    <th className="px-4 py-2 text-left font-medium">Voucher</th>
                                     <th className="px-4 py-2 text-left font-medium">Description</th>
-                                    <th className="px-4 py-2 text-left font-medium">Source</th>
+                                    <th className="px-4 py-2 text-left font-medium">Branch</th>
                                     <th className="px-4 py-2 text-right font-medium">Debit</th>
                                     <th className="px-4 py-2 text-right font-medium">Credit</th>
                                     <th className="px-4 py-2 text-right font-medium">Balance</th>
@@ -156,21 +155,23 @@ export default function AccountLedgerPage() {
                                         <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
                                             {new Date(row.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
                                         </td>
-                                        <td className="px-4 py-2.5 font-mono text-primary">{row.reference}</td>
-                                        <td className="px-4 py-2.5">
-                                            <p>{row.description}</p>
-                                            {row.lineDescription && <p className="text-xs text-muted-foreground">{row.lineDescription}</p>}
-                                        </td>
                                         <td className="px-4 py-2.5">
                                             {row.source ? (
                                                 <Link
                                                     href={row.source.url}
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className={`text-xs px-2 py-0.5 border rounded-sm font-medium hover:underline ${SRC_COLOR[row.source.kind]}`}
+                                                    className={`text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SRC_COLOR[row.source.kind]}`}
                                                 >
-                                                    {SRC_LABEL[row.source.kind]} {row.source.reference ?? row.source.number}
+                                                    {row.source.reference ?? row.source.number}
                                                 </Link>
-                                            ) : <span className="text-muted-foreground/40 text-xs">—</span>}
+                                            ) : <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            <p>{row.description}</p>
+                                            {row.lineDescription && <p className="text-xs text-muted-foreground">{row.lineDescription}</p>}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                                            {row.branchName ?? <span className="text-muted-foreground/40">—</span>}
                                         </td>
                                         <td className="px-4 py-2.5 text-right font-mono">
                                             {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/40">—</span>}

@@ -2,7 +2,9 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
+import {
+    aggregateClosingAsOf, loadNormalBalanceMap,
+} from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -28,24 +30,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         include: {
             parent: { select: { id: true, code: true, name: true } },
             children: {
-                select: {
-                    id: true, code: true, name: true,
-                    balance: true, normalBalance: true,
-                    openingBalance: true, openingBalanceType: true,
-                },
+                select: { id: true, code: true, name: true, normalBalance: true },
             },
             _count: { select: { lines: true } },
         },
     });
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    // Replace raw balance with effective (running + opening) for both the
-    // account itself and any children rendered alongside it.
+    // Truth-path closing from JournalLine for this account + any children.
+    const nbMap = await loadNormalBalanceMap();
+    const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
     return NextResponse.json({
         ...account,
-        balance: effectiveLedgerBalance(account),
+        balance: closingMap.get(account.id) ?? 0,
         children: account.children.map((c) => ({
             id: c.id, code: c.code, name: c.name,
-            balance: effectiveLedgerBalance(c),
+            balance: closingMap.get(c.id) ?? 0,
         })),
     });
 }

@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { fmt } from "@/utils/constants";
-import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp } from "lucide-react";
+import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench } from "lucide-react";
+import { toast } from "sonner";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { usePanelStore } from "@/store/panelStore";
 import { BranchSwitcher } from "@/shared/components/BranchSwitcher";
@@ -92,7 +93,26 @@ export default function FinanceTopBar({
     const canView = permissions.includes(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     const [data, setData] = useState<CashPosition | null>(null);
     const [loading, setLoading] = useState(false);
+    const [recomputing, setRecomputing] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+    const recompute = useCallback(async () => {
+        setRecomputing(true);
+        try {
+            const { data: r } = await axios.post<{ driftCount: number }>(
+                "/api/accountancy/maintenance/recompute-balances",
+            );
+            toast.success(
+                r.driftCount === 0
+                    ? "Cached balances in sync."
+                    : `Repaired ${r.driftCount} drifted account${r.driftCount === 1 ? "" : "s"}.`,
+            );
+        } catch {
+            toast.error("Recompute failed");
+        } finally {
+            setRecomputing(false);
+        }
+    }, []);
 
     const load = useCallback(() => {
         if (!canView) return;
@@ -194,6 +214,17 @@ export default function FinanceTopBar({
                         className={`text-muted-foreground hover:text-foreground transition-colors ${loading ? "animate-spin" : ""}`}
                     >
                         <RefreshCw size={11} />
+                    </button>
+                )}
+                {canView && (
+                    <button
+                        type="button"
+                        onClick={recompute}
+                        disabled={recomputing}
+                        title="Recompute cached balances from journal entries (rarely needed — only if you suspect drift)"
+                        className={`text-muted-foreground/60 hover:text-foreground transition-colors ${recomputing ? "animate-spin" : ""}`}
+                    >
+                        <Wrench size={11} />
                     </button>
                 )}
 

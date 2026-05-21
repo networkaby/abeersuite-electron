@@ -59,16 +59,42 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 journalEntry: {
                     select: { id: true, date: true, reference: true, description: true },
                 },
+                branch: { select: { id: true, name: true } },
             },
         });
 
+        // Hide edit-reversal noise: when a voucher is edited, the original JE
+        // stays POSTED and a counter-entry JE is posted ("EDIT (reverse): X").
+        // Together they net to zero on the account, so we collapse the pair
+        // away and only surface the new posting. Match by identical
+        // description, earliest unmatched original wins (handles repeated
+        // edits where each pair nets independently).
+        const excludeJeIds = new Set<number>();
+        const REV_PREFIX = "EDIT (reverse): ";
+        for (const l of lines) {
+            const desc = l.journalEntry.description ?? "";
+            if (!desc.startsWith(REV_PREFIX)) continue;
+            if (excludeJeIds.has(l.journalEntry.id)) continue;
+            const origDesc = desc.slice(REV_PREFIX.length);
+            const orig = lines.find((o) =>
+                o.journalEntry.id !== l.journalEntry.id
+                && !excludeJeIds.has(o.journalEntry.id)
+                && (o.journalEntry.description ?? "") === origDesc,
+            );
+            if (orig) {
+                excludeJeIds.add(orig.journalEntry.id);
+                excludeJeIds.add(l.journalEntry.id);
+            }
+        }
+        const visibleLines = lines.filter((l) => !excludeJeIds.has(l.journalEntry.id));
+
         // Resolve source documents in bulk
-        const jeIds = [...new Set(lines.map((l) => l.journalEntry.id))];
+        const jeIds = [...new Set(visibleLines.map((l) => l.journalEntry.id))];
         const sourceMap = await resolveSourceBatch(jeIds);
 
         // Compute running balance and attach source URL
         let runningBalance = openingBalance;
-        const rows = lines.map((l) => {
+        const rows = visibleLines.map((l) => {
             const delta = balanceDelta(nb, l.type, toNumber(l.amount));
             runningBalance += delta;
             const source = sourceMap.get(l.journalEntry.id) ?? null;
@@ -79,6 +105,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 reference: l.journalEntry.reference,
                 description: l.journalEntry.description,
                 lineDescription: l.description,
+                branchId: l.branch?.id ?? null,
+                branchName: l.branch?.name ?? null,
                 debit: l.type === "DEBIT" ? toNumber(l.amount) : null,
                 credit: l.type === "CREDIT" ? toNumber(l.amount) : null,
                 balance: runningBalance,

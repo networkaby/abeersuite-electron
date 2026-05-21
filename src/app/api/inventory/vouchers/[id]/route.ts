@@ -297,15 +297,15 @@ export async function PATCH(req: Request, { params }: Params) {
                             });
                         }
 
-                        await tx.journalEntry.update({
-                            where: { id: origJe.id },
-                            data:  {
-                                status:        "CANCELLED",
-                                cancelledAt:   new Date(),
-                                cancelledById: userId,
-                                cancelReason:  `Voucher ${existing.reference} edited. Reversal: ${revJe.reference}`,
-                            },
-                        });
+                        // Tally-style: original JE stays POSTED. The reversal
+                        // JE above nets it out at the line level (so ledger
+                        // running balance is correct) and is the audit signal
+                        // for "this was edited". Marking the original as
+                        // CANCELLED would hide it from the POSTED-only ledger
+                        // view while the reversal stayed visible — leaving the
+                        // counter-entry with no original to cancel out, and
+                        // breaking the closing balance.
+                        void revJe;
                     }
                 }
             }

@@ -76,6 +76,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 }),
             });
 
+            // InvStockLedger.voucher is a required relation without
+            // onDelete: Cascade (deliberate — the ledger is an immutable
+            // audit trail at the schema level). Hard-delete is the one
+            // place we DO want to wipe those rows, so the voucher row can
+            // actually be removed. The audit snapshot above already
+            // captured the voucher state.
+            // (InvVoucherLine + InvVoucherExpenseLine cascade automatically.)
+            await tx.invStockLedger.deleteMany({ where: { voucherId: voucher.id } });
+
             await tx.invVoucher.delete({ where: { id: voucher.id } });
             return created;
         });

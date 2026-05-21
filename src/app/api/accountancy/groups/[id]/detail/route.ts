@@ -4,8 +4,8 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
-    effectiveLedgerBalance, EFFECTIVE_BALANCE_SELECT,
-} from "@/modules/accountancy/lib/effectiveBalance";
+    aggregateClosingAsOf, loadNormalBalanceMap,
+} from "@/modules/accountancy/lib/aggregateLedger";
 
 // GET /api/accountancy/groups/[id]/detail
 // Returns the group, its child sub-groups (with rolled-up balances), and direct ledger accounts.
@@ -55,26 +55,39 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             return out;
         }
 
-        const subGroups = await Promise.all(
-            subGroupsRaw.map(async (sg) => {
-                const ids = descendantIds(sg.id);
-                // Walk descendant accounts so we can fold in opening balances —
-                // a single _sum aggregate can't combine balance + opening.
-                const accs = await prisma.account.findMany({
-                    where: { groupId: { in: ids } },
-                    select: EFFECTIVE_BALANCE_SELECT,
-                });
-                const rolledUpBalance = accs.reduce((s, a) => s + effectiveLedgerBalance(a), 0);
-                return {
-                    id: sg.id,
-                    name: sg.name,
-                    type: sg.type,
-                    accountCount: sg._count.accounts,
-                    childGroupCount: sg._count.children,
-                    rolledUpBalance,
-                };
-            }),
-        );
+        // Truth-path closing per account from JournalLine, folding in master openings.
+        // Shared with the Balance Sheet — guaranteed to agree with the BS / Trial Balance.
+        const nbMap = await loadNormalBalanceMap();
+        const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
+
+        // Index accounts by groupId for descendant rollups (one query, used twice below).
+        const allAccounts = await prisma.account.findMany({
+            select: { id: true, groupId: true, isActive: true },
+        });
+        const byGroup = new Map<number, number[]>();
+        for (const a of allAccounts) {
+            if (a.groupId == null) continue;
+            const arr = byGroup.get(a.groupId) ?? [];
+            arr.push(a.id);
+            byGroup.set(a.groupId, arr);
+        }
+
+        const subGroups = subGroupsRaw.map((sg) => {
+            let rolledUpBalance = 0;
+            for (const id of descendantIds(sg.id)) {
+                const accIds = byGroup.get(id);
+                if (!accIds) continue;
+                for (const accId of accIds) rolledUpBalance += closingMap.get(accId) ?? 0;
+            }
+            return {
+                id: sg.id,
+                name: sg.name,
+                type: sg.type,
+                accountCount: sg._count.accounts,
+                childGroupCount: sg._count.children,
+                rolledUpBalance,
+            };
+        });
 
         // Direct ledger accounts in this group
         const ledgers = await prisma.account.findMany({
@@ -82,14 +95,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             orderBy: [{ name: "asc" }],
             select: {
                 id: true, name: true, code: true,
-                personId: true, companyId: true, balance: true,
+                personId: true, companyId: true,
                 normalBalance: true,
-                openingBalance: true, openingBalanceType: true,
             },
         });
         const ledgersWithEffective = ledgers.map((l) => ({
             ...l,
-            balance: effectiveLedgerBalance(l),
+            balance: closingMap.get(l.id) ?? 0,
         }));
 
         // Total = own ledgers + sub-group rolled-up balances

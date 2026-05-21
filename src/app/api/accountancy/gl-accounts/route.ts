@@ -2,7 +2,9 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { effectiveLedgerBalance } from "@/modules/accountancy/lib/effectiveBalance";
+import {
+    aggregateClosingAsOf, loadNormalBalanceMap,
+} from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -53,13 +55,14 @@ export async function GET(req: Request) {
                 _count: { select: { lines: true } },
             },
         });
-        // Replace the raw `balance` (transactions only) with the effective
-        // closing balance (running + opening) so every consumer — chart of
-        // accounts, voucher dropdowns, party combobox — shows numbers that
-        // reconcile with the Balance Sheet.
+        // Truth-path closing from JournalLine (folds in master openings),
+        // so the chart of accounts, voucher dropdowns and party combobox
+        // all show numbers that match the Balance Sheet by construction.
+        const nbMap = await loadNormalBalanceMap();
+        const closingMap = await aggregateClosingAsOf(new Date(), nbMap);
         const accountsWithEffective = accounts.map((a) => ({
             ...a,
-            balance: effectiveLedgerBalance(a),
+            balance: closingMap.get(a.id) ?? 0,
         }));
         return NextResponse.json(accountsWithEffective);
     } catch (e) {

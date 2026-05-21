@@ -1,14 +1,19 @@
-// "Effective" balance helpers — the single source of truth for any UI or
-// API that wants to display an account's true closing position.
+// "Effective" balance helper — returns the CACHED balance (running cache in
+// `Account.balance` + master opening), drift-prone if any post helper drops
+// a delta.
 //
-// Why this exists: `Account.balance` only tracks deltas from posted vouchers.
-// Opening balances live in separate columns (`openingBalance` +
-// `openingBalanceType`). So any view that reads `Account.balance` directly
-// (chart of accounts, group detail, account-groups list, …) under-reports
-// opening-only ledgers (Cash, Bank, Capital seeded via opening-balance).
+// ⚠️  Do NOT use this in reporting / display surfaces.  All display paths
+// (chart of accounts, group detail, account-groups list, GL account view,
+// etc.) now read from `aggregateClosingAsOf` in aggregateLedger.ts, which
+// re-derives closing from JournalLine and cannot drift.  See the kalu /
+// Sundry Debtors incident in PROJECT_BRAIN / git history for the rationale.
 //
-// These helpers fold in opening using the same `balanceDelta()` formula the
-// Balance Sheet uses, so drilldowns reconcile with reports.
+// This helper is retained for **write-time quick reads** only — places that
+// need a first-render hint of a party's current outstanding while a voucher
+// is being composed, where slight staleness is acceptable because the user
+// is about to post a new transaction anyway.  The post helpers themselves
+// still maintain `Account.balance` via incremental deltas; this helper is
+// the read side of that cache.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { balanceDelta, toNumber } from "./balance";
@@ -47,10 +52,10 @@ export function effectiveLedgerBalance(a: AccountForBalance): number {
 }
 
 /**
- * Bulk-load `Map<groupId, rolledUpEffectiveBalance>` for a set of group ids.
- * Walks descendants of each group, sums effective balances of every account
- * under them. Use when displaying a list of groups (account-groups tree,
- * group rollup columns, etc.) instead of repeated single calls.
+ * @deprecated Use `aggregateRolledUpByGroup` from `aggregateLedger.ts` for
+ * any display surface — that variant derives the rollup from JournalLine and
+ * cannot drift. This cache-path version is retained only for write-time
+ * quick reads.
  */
 export async function loadGroupRolledUpBalances(
     groupIds: number[],
