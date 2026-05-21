@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -26,7 +26,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     try {
         const posted = await prisma.$transaction(async (tx) => {
             // Mirror JE for the audit trail (so reports/Day Book see it the same as Journal entries).
-            const jeRef = await nextRef(tx, "journalEntry", "JE");
+            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
             const je = await tx.journalEntry.create({
                 data: {
                     date:        voucher.date,

@@ -29,7 +29,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise } from "@/modules/pos/lib/shiftMath";
-import { nextRef, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 const closeSchema = z.object({
     declaredCashPaise:  z.number().int().min(0),
@@ -133,7 +133,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             let varianceJeId: number | null = null;
             if (variance !== 0) {
                 const absRupees = Math.abs(variance) / 100;
-                const jeRef = await nextRef(tx, "journalEntry", "JE");
+                const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
                 const lines = variance > 0
                     ? [
                         { accountId: tillAccountId,  type: "DEBIT"  as const, amount: absRupees, description: "Cash drawer over" },

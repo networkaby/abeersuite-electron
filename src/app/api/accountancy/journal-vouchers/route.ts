@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { isBalanced, balanceDelta, nextRef, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { isBalanced, balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
             });
             const normalBalanceById = new Map(accountsLite.map((a) => [a.id, a.normalBalance]));
 
-            const jeRef = await nextRef(tx, "journalEntry", "JE");
+            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
             const je = await tx.journalEntry.create({
                 data: {
                     date:        new Date(body.date),

@@ -19,7 +19,7 @@
 // no auto-routing, keeping the contract simple.
 
 import type { PaymentMethod, Prisma } from "@/generated/prisma/client";
-import { balanceDelta, nextRef, toNumber } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, nextRefFromSeries, toNumber } from "@/modules/accountancy/lib/balance";
 
 export type PosPaymentInput = {
     method:    PaymentMethod;
@@ -67,7 +67,7 @@ export async function postPosReceiptJe(
     }
 
     // 2. Cash-receipt JE — debit each payment account, credit AR for total.
-    const jeRef = await nextRef(tx, "journalEntry", "JE");
+    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", args.userId);
     const lines: Array<{ accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description: string }> = [];
     for (const p of args.payments) {
         lines.push({

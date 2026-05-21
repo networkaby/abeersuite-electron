@@ -26,7 +26,14 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
             return { kind, count };
         }),
     );
-    const jeCount = await prisma.journalEntry.count();
+    // User-entered Journal Vouchers — counted from Voucher rows of type=JOURNAL.
+    // (Was previously counted from JournalEntry table, which conflated user JVs
+    // with the engine's GL postings — see GL_POSTING series below.)
+    const userJournalCount = await prisma.voucher.count({ where: { type: "JOURNAL" } });
+    // GL postings — engine output behind every primary voucher. Continues from
+    // existing JournalEntry count so new GL-… references don't collide with
+    // legacy JE-… references in the same table.
+    const glPostingCount = await prisma.journalEntry.count();
     const invCount = await prisma.invoice.count();
     // Inventory voucher counts — needed for new-install continuity so the next
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
@@ -53,8 +60,13 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
             typeValue,
             nextSeq: voucherCounts.find((c) => c.kind === kind)?.count ?? 0,
         })),
-        { kind: "JOURNAL", label: "Journal Entry", typeValue: "JE",  nextSeq: jeCount },
-        { kind: "INVOICE", label: "Sales Invoice", typeValue: "INV", nextSeq: invCount },
+        // User Journal Voucher (primary voucher) — prefix JV.
+        { kind: "JOURNAL",     label: "Journal Voucher", typeValue: "JV", nextSeq: userJournalCount },
+        // GL posting engine output — internal, kept for audit drill-down only.
+        // Reference prefix GL deliberately differs from the user-facing JV so the
+        // two never collide in reports or in the Day Book.
+        { kind: "GL_POSTING",  label: "GL Posting",      typeValue: "GL", nextSeq: glPostingCount },
+        { kind: "INVOICE",     label: "Sales Invoice",   typeValue: "INV", nextSeq: invCount },
         // Inventory vouchers — same FY-aware convention managed from
         // /office/settings/year-ending. invNextRef() routes through nextRefFromSeries
         // to read these rows on every save.
@@ -100,4 +112,14 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
             data:  { label: r.label },
         }).catch(() => { /* ignore if row doesn't exist yet */ })
     ));
+
+    // One-time typeValue migration: JOURNAL series used to emit `JE-…` which
+    // collided visually with the engine's GL postings. Flip to `JV-` so the
+    // user-facing Journal Voucher and the engine's GL posting have distinct
+    // prefixes. Only touches rows still on the old default — admin overrides
+    // are preserved.
+    await prisma.voucherSeries.updateMany({
+        where: { kind: "JOURNAL", typeValue: "JE" },
+        data:  { typeValue: "JV" },
+    });
 }

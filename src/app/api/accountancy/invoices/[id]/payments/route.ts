@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { nextRef, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -56,7 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             }
 
             // Post JE: DR Cash / CR Accounts Receivable
-            const jeRef = await nextRef(tx, "journalEntry", "JE");
+            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
             const jeLines = [
                 { accountId: cashAcct.id, type: "DEBIT" as const,  amount: body.amount, description: `Payment for ${invoice.number}` },
                 { accountId: arAcct.id,   type: "CREDIT" as const, amount: body.amount, description: `Payment for ${invoice.number}` },

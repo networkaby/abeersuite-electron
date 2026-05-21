@@ -42,6 +42,8 @@ Before editing critical completed flows, read `docs/completed-and-protected.md`.
 
 All seed scripts live in `prisma/seeds/`. Read [docs/seeds.md](docs/seeds.md) before changing any of them.
 
+- **Database is disposable.** No important data lives in the dev database — reset it anytime (`pnpm prisma db push --force-reset`, migrate reset, or a fresh DB) when schema drift or bad data blocks progress.
+- **Before resetting:** update `prisma/seeds/bootstrap-seed.ts` so it matches the current schema and seeds everything bootstrap needs. Fix seeds first, then reset and run `pnpm prisma db seed` (optional `pnpm seed:dummy-*` after).
 - **Production seed:** `prisma/seeds/bootstrap-seed.ts`, run via `pnpm prisma db seed`. Single source of truth for RBAC, pipelines, statuses, branches, departments, chart of accounts, DB constraints.
 - **Dummy seeds:** `prisma/seeds/dummy-*.ts`, run manually via `pnpm seed:dummy-*`. Canonical demo for the current schema.
 - **Cleaner:** `prisma/seeds/hard-clean.ts` (`pnpm seed:hard-clean`) — wipes everything bootstrap doesn't seed.

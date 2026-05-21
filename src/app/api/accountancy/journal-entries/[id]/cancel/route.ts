@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
             }
 
-            const reversalRef = await nextRef(tx, "journalEntry", "JE");
+            const reversalRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
             await tx.journalEntry.create({
                 data: {
                     date: new Date(),

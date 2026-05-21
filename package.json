@@ -18,6 +18,7 @@
     "seed:dummy-all": "pnpm seed:dummy-customers && pnpm seed:dummy-users && pnpm seed:dummy-shop && pnpm seed:dummy-vouchers && pnpm seed:check-docs",
     "seed:purge-vouchers": "tsx prisma/seeds/purge-vouchers.ts",
     "seed:hard-clean": "tsx prisma/seeds/hard-clean.ts",
+    "seed:recompute-balances": "tsx prisma/seeds/recompute-balances.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "precommit": "tsx scripts/check-doc-sync.ts --strict",

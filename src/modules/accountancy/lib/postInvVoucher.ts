@@ -15,7 +15,7 @@
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { balanceDelta, toNumber } from "./balance";
+import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType } from "./groupNature";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -93,13 +93,6 @@ function effectiveNormalBalance(led: LedgerLite): "DEBIT" | "CREDIT" {
     if (led.groupType)     return defaultNormalBalanceForGroupType(led.groupType);
     // Last-resort default (shouldn't happen for properly grouped accounts)
     return "DEBIT";
-}
-
-async function nextJeRef(tx: Tx, prefix: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const startsWith = `${prefix}-${year}-`;
-    const cnt = await tx.journalEntry.count({ where: { reference: { startsWith } } });
-    return `${startsWith}${String(cnt + 1).padStart(4, "0")}`;
 }
 
 export type PostVoucherInput = {
@@ -321,7 +314,9 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     }
 
     // ── Create JournalEntry + JournalLines ───────────────────────────────
-    const ref = await nextJeRef(tx, "JE");
+    // Engine output — uses the GL_POSTING series (prefix `GL-`) so it never
+    // collides visually with the user's Journal Voucher (prefix `JV-`).
+    const ref = await nextRefFromSeries(tx as Prisma.TransactionClient, "GL_POSTING", userId);
     const je = await tx.journalEntry.create({
         data: {
             date:        voucher.date,

@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ShopOrderStatus } from "@/generated/prisma/enums";
-import { balanceDelta, nextRef } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, nextRef, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/orderStatusTransitions";
 import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
@@ -25,7 +25,7 @@ async function postSaleJournal(
     const amount = totalPaise / 100;
     if (amount <= 0) return null;
 
-    const reference = await nextRef(tx, "journalEntry", "JE");
+    const reference = await nextRefFromSeries(tx, "GL_POSTING", createdById);
     const lines = [
         {
             accountId: bank.id,

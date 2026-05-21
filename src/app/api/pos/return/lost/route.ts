@@ -17,7 +17,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { nextRef, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { nextRef, nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 
 const lostLineSchema = z.object({
@@ -133,7 +133,7 @@ export async function POST(req: Request) {
             });
 
             // 2. Return JE.
-            const jeRef = await nextRef(tx, "journalEntry", "JE");
+            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
             const creditAccountId = data.refundMode === "CASH" ? tillAccountId! : customerAcct.id;
             const jeLines = [
                 { accountId: revenueAcct.id,  type: "DEBIT"  as const, amount: total, description: `Lost-invoice return ${returnNumber}` },

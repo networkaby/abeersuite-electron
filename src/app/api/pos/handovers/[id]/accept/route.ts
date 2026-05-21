@@ -25,7 +25,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
 import { computeExpectedCash, computeVariance, sumPaise } from "@/modules/pos/lib/shiftMath";
-import { nextRef, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 const acceptSchema = z.object({
     countedByBPaise: z.number().int().min(0),
@@ -133,7 +133,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             let varianceJeId: number | null = null;
             if (tillDiscrepancy !== 0) {
                 const absRupees = Math.abs(tillDiscrepancy) / 100;
-                const jeRef = await nextRef(tx, "journalEntry", "JE");
+                const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
                 const lines = tillDiscrepancy > 0
                     // Books say more than B counted → counter short (shortage is A's accountability).
                     ? [

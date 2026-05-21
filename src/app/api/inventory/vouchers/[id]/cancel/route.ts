@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { toNumber } from "@/modules/accountancy/lib/balance";
+import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -172,10 +172,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 });
 
                 if (origJe && origJe.status === "POSTED") {
-                    const year  = new Date().getFullYear();
-                    const start = `JE-${year}-`;
-                    const cnt   = await tx.journalEntry.count({ where: { reference: { startsWith: start } } });
-                    const ref   = `${start}${String(cnt + 1).padStart(4, "0")}`;
+                    const ref = await nextRefFromSeries(tx, "GL_POSTING", userId);
 
                     const reversalLines = origJe.lines.map((l) => ({
                         accountId:   l.accountId,

@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { nextRef, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries, balanceDelta } from "@/modules/accountancy/lib/balance";
 
 /**
  * Post the accounts-receivable / revenue journal entry for an invoice.
@@ -25,7 +25,7 @@ export async function postInvoiceJe(
         throw new Error("Required GL accounts not found (1100 AR, 4000 Revenue). Run the finance seed first.");
     }
 
-    const jeRef = await nextRef(tx, "journalEntry", "JE");
+    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
     const lines: Prisma.JournalLineUncheckedCreateWithoutJournalEntryInput[] = [
         { accountId: ar.id, type: "DEBIT",  amount: totalAmount, description: `Invoice ${invoiceNumber}` },
         { accountId: revenue.id, type: "CREDIT", amount: subtotal, description: `Invoice ${invoiceNumber}` },

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { balanceDelta, toNumber, nextRef } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { ensureCancelable, cancelFields, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             }
 
             // Counter JE
-            const reversalRef = await nextRef(tx, "journalEntry", "JE");
+            const reversalRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
             const reversalLines = voucher.lines.map((l) => ({
                 accountId:   l.accountId,
                 type:        (l.type === "DEBIT" ? "CREDIT" : "DEBIT") as "DEBIT" | "CREDIT",

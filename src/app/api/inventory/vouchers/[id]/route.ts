@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
-import { toNumber } from "@/modules/accountancy/lib/balance";
+import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -265,10 +265,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         include: { lines: { include: { account: { select: { normalBalance: true } } } } },
                     });
                     if (origJe && origJe.status === "POSTED") {
-                        const year  = new Date().getFullYear();
-                        const start = `JE-${year}-`;
-                        const cnt   = await tx.journalEntry.count({ where: { reference: { startsWith: start } } });
-                        const jeRef = `${start}${String(cnt + 1).padStart(4, "0")}`;
+                        const jeRef = await nextRefFromSeries(tx, "GL_POSTING", userId);
 
                         const reversalLines = origJe.lines.map((l) => ({
                             accountId:   l.accountId,

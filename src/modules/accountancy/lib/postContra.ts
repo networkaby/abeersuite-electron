@@ -23,7 +23,7 @@
 
 import { Prisma } from "@/generated/prisma/client";
 import {
-    balanceDelta, isBalanced, nextRef, nextRefFromSeries, toNumber,
+    balanceDelta, isBalanced, nextRefFromSeries, toNumber,
 } from "@/modules/accountancy/lib/balance";
 
 export type ContraLine = {
@@ -100,9 +100,10 @@ export async function postContra(
         select: { id: true },
     });
 
-    // 3. Mirror JE — required to surface in Day Book / ledger reports
-    //    (the Voucher table alone is treated as draft-ish by some reports).
-    const jeRef = await nextRef(tx, "journalEntry", "JE");
+    // 3. Mirror JE — engine output for double-entry posting. Carries the
+    //    internal GL_POSTING reference (`GL-…`); the user-visible reference
+    //    is the parent Voucher's `CV-…` above.
+    const jeRef = await nextRefFromSeries(tx, "GL_POSTING", input.userId);
     const je = await tx.journalEntry.create({
         data: {
             date,

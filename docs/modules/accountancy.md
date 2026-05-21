@@ -118,6 +118,39 @@ Writes both `InvVoucher` and `Voucher`. Self-contained.
 | `PURCHASE_RETURN` (full)    | Stock OUT | Reverses expense / AP | We returned physical goods to supplier |
 | `DEBIT_NOTE` (GL-only)      | —         | Debits supplier       | Claim / price correction without goods movement |
 
+## Two engines (architectural model)
+
+Every primary voucher in the system is processed by zero, one, or two **internal engines** that run inside the same `prisma.$transaction` as the voucher post. The engines have **no UI of their own** — they emit audit/ledger rows the user never has to acknowledge.
+
+| Engine | Trigger | Output row | Reference series | Visible to user? |
+|---|---|---|---|---|
+| **GL Balancing engine** | Any primary voucher that posts to ledgers (Sale, Purchase, POS, Receipt, Payment, Contra, CN, DN, **and** user Journal Voucher) | `JournalEntry` + `JournalLine` | `GL-…` (kind `GL_POSTING` in `VoucherSeries`) | No — internal posting receipt |
+| **Inventory engine** | Any primary voucher that moves stock (Sale, Purchase, returns, GRN, Challan, MFG_JOURNAL, BRANCH_TRANSFER, PHYSICAL_STOCK, Rejections) | `InvStockLedger` movement + `InvProduct.stock` cache update | n/a — rows linked by `voucherId` FK | No — stock plumbing |
+| **Primary voucher** | User action | `Voucher` / `InvVoucher` row | Per-kind: `SV-`, `PV-`, `JV-`, `CV-`, `PMT-`, `RCT-`, … | **Yes** — what the Day Book shows |
+
+### Why the two-engine split matters
+
+- **The user's "Journal Voucher" (`JV-…`) is a primary voucher**, not an engine output. The user enters it for ledger adjustments (depreciation, write-offs, opening balances, ledger transfers). It is stored in `Voucher` with `type=JOURNAL`. When posted, the GL engine *also* creates a `JournalEntry` with a `GL-…` reference — that's the engine's posting receipt, not a second user document.
+- **`JE-…` references that exist in the database are legacy** — pre-refactor engine output that used the same `JOURNAL` series as user journal vouchers. New engine output uses the `GL_POSTING` series (`GL-…`). The `GL-` vs `JV-` split is what lets the Day Book filter cleanly.
+- **The Day Book reads primary vouchers only.** `GET /api/accountancy/journal-entries` filters out engine-output JEs by default (any JE with reference starting `GL-` *or* with a back-reference from `Voucher.journalEntryId` / `InvVoucher.journalEntryId`). Pass `?includeEngine=1` for admin/debug visibility. `useCombinedVouchers` consumes the filtered list, so every Day Book row is a primary voucher — never a duplicate-looking JE.
+- **`POST /api/accountancy/journal-entries` is deprecated** (returns `410 Gone`). User journals must go through `POST /api/accountancy/journal-vouchers` so every user document is a `Voucher` row with the GL engine attached. Standalone JE creation is no longer allowed.
+- **Accounting math is unchanged.** `effectiveLedgerBalance`, `aggregateClosingAsOf`, `aggregateRange`, `netProfitLoss` continue to read every `JournalLine` regardless of which engine wrote it. Only the *reference prefix* and the *Day Book reading layer* changed; the GL itself is one unified table.
+
+### Why two voucher tables (`Voucher` vs `InvVoucher`)
+
+Both tables are *primary user vouchers* — they sit on the same layer above the engines. They are split along **data shape**, not behaviour:
+
+| Table | `type` enum | Line shape | Extra fields |
+|---|---|---|---|
+| `Voucher` | `VoucherType` — CONTRA / PAYMENT / RECEIPT / CREDIT_NOTE / DEBIT_NOTE / JOURNAL | `VoucherLine` = `{ account, debit/credit, amount }` — pure money | minimal |
+| `InvVoucher` | `InvVoucherType` — PURCHASE / SALE / POS / SALE_RETURN / PURCHASE_RETURN / GRN / CHALLAN / MFG_JOURNAL / BRANCH_TRANSFER / PHYSICAL_STOCK / ESTIMATE / SO / PO / REJECTIONS… | `InvVoucherLine` = `{ product, qty, unit, rate, HSN, GST, batch, … }` — goods | required `branchId`, optional `expenseLines`, `destinationBranchId`, parent voucher links |
+
+A PAYMENT voucher has no "product × qty × rate" concept; a SALE voucher has no meaningful pure-money `VoucherLine`. Unifying would force dozens of nullable columns and two parallel line-table relations on every row. Tally itself has one master table but pays for that with sparse columns.
+
+**Known wrinkles** (documented, **not** fixed in the GL-engine refactor — separate cleanup if/when needed):
+- `VoucherType.RECEIPT` (cash receipt) vs `InvVoucherType.RECEIPT` (goods receipt) — same word, different table, different meaning.
+- `VoucherType.CREDIT_NOTE` / `DEBIT_NOTE` (pure accounting) vs `InvVoucherType.SALE_RETURN` / `PURCHASE_RETURN` (stock-bearing returns) — Tally collapses these via a stock toggle; here they're split across tables.
+
 ## Prisma models (file: `prisma/schema/finance.prisma`)
 
 - `JournalEntry` + `JournalLine` — double-entry GL.
@@ -145,7 +178,8 @@ These are the **single source of truth** for every balance/value calculation in 
 | `balanceDelta(normalBalance, entryType, amount)` | `src/modules/accountancy/lib/balance.ts` | Sign-corrected GL delta for a posting | Updating `Account.balance` on voucher post; folding opening into running balance |
 | `isBalanced(lines)` | same | True iff Σ debits == Σ credits within tolerance | Voucher pre-flight before save/post |
 | `toNumber(v)` | same | Prisma Decimal / string → number | Reading any `Decimal` field in JS |
-| `nextRef(tx, model, prefix)` | same | Sequential reference (`PV-2026-0001`) | Generating voucher / JE references inside a transaction |
+| `nextRefFromSeries(tx, kind, userId)` | same | FY-aware sequential reference assembled from a `VoucherSeries` row (prefix + year + counter). Use `kind="GL_POSTING"` for any engine-output JE; `kind="JOURNAL"` for the user's JV; per-type kind for inventory vouchers. | Generating any voucher / JE reference inside a transaction — **always** prefer this over the legacy `nextRef` |
+| `nextRef(tx, model, prefix)` | same | **Legacy** sequential reference (`INV-2026-0001`). Only used for `model="invoice"` and the POS-return `RTN-` series; the `journalEntry` form is gone. | Don't introduce new callers — extend `nextRefFromSeries` instead |
 | **`postContra(tx, { date, narration, lines, userId })`** | `src/modules/accountancy/lib/postContra.ts` | Atomic create-and-post for a CONTRA Voucher + mirror JE + balance deltas. Returns `{ voucherId, journalEntryId, reference }`. | Any system-generated cross-cash-account transfer — POS shift open/close handover, future inter-branch transfers, payroll cash handover. **DRY for Contra construction in non-dialog code paths.** The user-facing Contra dialog still uses the two-step `POST /api/accountancy/vouchers` → `/[id]/post` flow because it goes through DRAFT first; the helper is for "create and post immediately." |
 | **`effectiveLedgerBalance(account)`** | `src/modules/accountancy/lib/effectiveBalance.ts` | True closing = `Account.balance` (tx running) **+** sign-corrected opening | Any UI/API displaying a single account balance — chart of accounts, group ledger rows, account detail |
 | **`loadGroupRolledUpBalances([groupIds])`** | same | Bulk `Map<groupId, totalEffectiveBalance>` walking descendants | Group lists / trees that show rolled-up balances per node |
@@ -172,6 +206,15 @@ These are the **single source of truth** for every balance/value calculation in 
 ### Architectural rule
 
 `Account.balance` is a **transaction-only running cache** updated by post handlers. **Never display it directly** — always pass through `effectiveLedgerBalance()` so the opening balance is folded in. The four endpoints that previously read `balance` raw (chart of accounts, group detail, account-groups tree, account detail) all wrap it now; new endpoints must too.
+
+#### Drift between cache and truth
+
+Because the cache is incremental (`{ increment: balanceDelta(...) }` per post), it can drift from the JournalLine source of truth if a transaction crashes mid-way, a raw SQL statement edits a row, or a future bug in a post helper drops a delta. There is a recompute tool:
+
+- `pnpm seed:recompute-balances` — **dry-run.** Aggregates `JournalLine` per account (POSTED, not deleted), compares to the cached `Account.balance`, prints a drift table. Read-only.
+- `pnpm seed:recompute-balances --apply` — writes the computed value back to `Account.balance` in a single transaction. Safe to re-run.
+
+Script: [prisma/seeds/recompute-balances.ts](../../prisma/seeds/recompute-balances.ts). Inlines `balanceDelta` and the normal-balance lookup so it doesn't depend on the shared runtime prisma client.
 
 ## Common workflows (wiring)
 
@@ -224,4 +267,4 @@ The `node-thermal-printer` package is still a dependency for the POS path. No lo
 - **2026-05-20 — VoucherSeries expanded to all inventory kinds**: `seedVoucherSeries` now seeds 9 additional `VoucherSeries` rows — `SALES_ORDER (SO)`, `PURCHASE_ORDER (PO)`, `GRN`, `CHALLAN (DC)`, `MANUFACTURING_JOURNAL (MJ)`, `PHYSICAL_STOCK (PS)`, `BRANCH_TRANSFER (BT)`, `REJECTION_IN (RIN)`, `REJECTION_OUT (ROUT)`. `SERIES_KINDS` in `stock.ts` and the `next-ref` API route both include these kinds so every inventory voucher type now uses FY-aware sequential references (`MJ-2026-0001` etc.) instead of the legacy `${prefix}-YYYY-####` fallback.
 - **2026-05-20 — VoucherTopBar: built-in BranchSwitcher + X close**: `BranchSwitcher` and an X close button (Esc shortcut) are now always rendered inside `VoucherTopBar`. Pages no longer need to pass a branch picker via `rightContent` — remove any `<Select>` or static branch pill you see there. `rightContent` slot is still available for other page-specific extras. The layout of every inventory voucher page follows: `flex flex-col h-screen overflow-hidden` root → `VoucherTopBar (shrink-0)` → `<div className="flex-1 overflow-y-auto">` scrollable form → `VoucherInlineActions` pinned footer `(border-t bg-card px-6 py-3 shrink-0)`.
 
-_Last updated: 2026-05-20 — Three inventory-only voucher pages (MANUFACTURING_JOURNAL, PHYSICAL_STOCK, BRANCH_TRANSFER) added to URL table; VoucherTopBar now has built-in BranchSwitcher + X close; VoucherInlineActions is a pinned footer (not inline); VoucherSeries expanded to all 15 inventory kinds; registers list corrected (manufacturing-journals + branch-transfers added; read-only count fixed from 5→4). Previously (2026-05-19): API folder rename; thermal-print relay replaced; account model file corrected._
+_Last updated: 2026-05-21 — Two-engine architectural model documented; engine-output JEs renamed `JE-…` → `GL-…` via new `GL_POSTING` VoucherSeries; user Journal Voucher prefix locked to `JV-`; `GET /api/accountancy/journal-entries` filters engine output by default (use `?includeEngine=1` to inspect); `POST /api/accountancy/journal-entries` deprecated (returns 410, route through `/journal-vouchers` instead); `Voucher` vs `InvVoucher` table split documented as data-shape rather than behaviour split; `nextRef(journalEntry,…)` removed from the codebase. Previously (2026-05-20): Three inventory-only voucher pages added; VoucherTopBar built-in BranchSwitcher + X close; VoucherSeries expanded to all 15 inventory kinds._
