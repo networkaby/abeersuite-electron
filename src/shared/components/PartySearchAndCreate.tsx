@@ -550,6 +550,7 @@ export const PartySearchAndCreate = forwardRef<
                         checked={includeOther}
                         onChange={(e) => setIncludeOther(e.target.checked)}
                         className="h-3 w-3 accent-primary cursor-pointer"
+                        tabIndex={-1}
                     />
                     Include {otherGroup} too
                 </label>

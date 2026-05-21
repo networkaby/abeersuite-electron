@@ -62,9 +62,21 @@ export function useFormKeyboardNav({ onSave }: { onSave: () => void }): {
             container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
         ).filter(isVisible);
         const idx = focusables.indexOf(target);
-        if (idx < 0 || idx >= focusables.length - 1) return;
-
-        const next = focusables[idx + 1];
+        // When `target` is in the focusables list, advance to the next one.
+        // When it isn't — e.g. the field's tabIndex just flipped to -1 in
+        // response to its own value change (Tax % when filled) — fall back
+        // to the first focusable that comes after `target` in document
+        // order. Without this, the user gets stuck on the just-edited cell.
+        let next: HTMLElement | undefined;
+        if (idx >= 0) {
+            if (idx >= focusables.length - 1) return;
+            next = focusables[idx + 1];
+        } else {
+            next = focusables.find((f) =>
+                Boolean(target.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING),
+            );
+            if (!next) return;
+        }
         // Run after the current input's own Enter handler (commit / combobox
         // pick) so its state updates land before focus moves. A microtask
         // (queueMicrotask) is enough; setTimeout(0) would re-queue past

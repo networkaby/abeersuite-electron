@@ -531,9 +531,14 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             // plain inputs and textareas SHOULD respond to Esc so the dirty
             // confirmation dialog can fire from anywhere in the form.
             if (t && t.isContentEditable) return;
-            // If a confirm/edit/etc. dialog is already open, let it own Esc
-            // (Radix closes the dialog natively) — we don't want both the
-            // dialog and the page-close logic firing on one keypress.
+            // If the unsaved-changes confirm dialog is open, let it own Esc
+            // (Radix closes the dialog natively). Read React state via a ref
+            // — the DOM `data-state` attribute races with the window listener
+            // and can read "closed" before React's re-render, causing this
+            // handler to mistakenly re-open the dialog.
+            if (dialogOpenRef.current) return;
+            // Also defer to any other open Radix dialog (Create Party / Create
+            // Product / etc.) so their native Esc closes them, not our page.
             if (document.querySelector('[data-state="open"][role="dialog"]')) return;
             if (isDirtyRef.current) {
                 e.preventDefault();
@@ -581,6 +586,15 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     }, []);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    // Mirror of closeDialogOpen for the window-level Esc handler. The DOM
+    // query for `[data-state="open"]` races with Radix's own Esc handler —
+    // by the time the window handler runs (bubble phase, after Radix's
+    // React-tree listener), data-state may have flipped to "closed" and the
+    // handler would mistakenly re-open the dialog. Reading React state via
+    // a ref is consistent: dialogOpenRef stays true until React commits the
+    // setCloseDialogOpen(false) from Radix.
+    const dialogOpenRef = useRef(false);
+    useEffect(() => { dialogOpenRef.current = closeDialogOpen; }, [closeDialogOpen]);
     const handleClose = () => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     };
@@ -2319,14 +2333,19 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                     Enter → Discard & Close (always, regardless of focused button). */}
                 <DialogContent
                     showCloseButton={false}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            isDirtyRef.current = false;
-                            setCloseDialogOpen(false);
-                            closeForm();
-                        }
+                    // Esc → Discard (close the page). Semantic flip from Radix's
+                    // native Esc-closes-dialog (Stay): pressing Esc on this
+                    // dialog completes the "I want to leave" gesture instead
+                    // of cancelling it. preventDefault stops Radix from also
+                    // closing the dialog via its own listener — we drive the
+                    // close + navigation explicitly. Enter is intentionally
+                    // unhandled; Radix focuses the Stay button by default so
+                    // Enter clicks it (keep editing).
+                    onEscapeKeyDown={(e) => {
+                        e.preventDefault();
+                        isDirtyRef.current = false;
+                        setCloseDialogOpen(false);
+                        closeForm();
                     }}
                 >
                     <DialogHeader>
@@ -2334,7 +2353,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                         <DialogDescription>
                             You have unsaved changes that will be lost if you leave now.
                             <br />
-                            <span className="text-xs text-muted-foreground">Press Esc to stay · Enter to discard.</span>
+                            <span className="text-xs text-muted-foreground">Press Esc to discard · Enter to stay.</span>
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
