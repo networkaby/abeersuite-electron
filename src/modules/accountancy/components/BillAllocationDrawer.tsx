@@ -4,9 +4,9 @@
 // which open bills the new voucher settles, mirroring Tally's four allocation
 // methods: New Ref / Against Ref / Advance / On Account.
 //
-// State is held by the parent GlVoucherForm — this component is purely a controlled
-// UI on the `allocations` array. Allocations are persisted to the
-// VoucherAllocation table after the parent voucher is saved.
+// Purely a controlled UI on the `allocations` array passed down by the
+// parent voucher form. Allocations are persisted to the VoucherAllocation
+// table after the parent voucher is saved.
 
 import { useEffect, useState } from "react";
 import axios from "axios";

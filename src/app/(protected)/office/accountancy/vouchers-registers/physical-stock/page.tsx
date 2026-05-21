@@ -1,5 +1,5 @@
 "use client";
-import { InvVoucherList } from "@/modules/inventory/components/InvVoucherForm";
+import { InvVoucherList } from "@/modules/inventory/components/InvVoucherList";
 
 export default function Page() {
     return (

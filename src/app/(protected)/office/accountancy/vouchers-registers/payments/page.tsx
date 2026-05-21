@@ -1,8 +1,8 @@
-import { VoucherList } from "@/modules/accountancy/components/VoucherList";
+import { GlVoucherList } from "@/modules/accountancy/components/GlVoucherList";
 
 export default function Page() {
     return (
-        <VoucherList
+        <GlVoucherList
             type="PAYMENT"
             title="Payments"
             subtitle="Money paid out — to suppliers, expenses, or party accounts"

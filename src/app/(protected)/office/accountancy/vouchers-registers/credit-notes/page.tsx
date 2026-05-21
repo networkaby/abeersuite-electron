@@ -1,8 +1,8 @@
-import { VoucherList } from "@/modules/accountancy/components/VoucherList";
+import { GlVoucherList } from "@/modules/accountancy/components/GlVoucherList";
 
 export default function Page() {
     return (
-        <VoucherList
+        <GlVoucherList
             type="CREDIT_NOTE"
             title="Credit Notes"
             subtitle="Allowances granted to customers — reduces debtor balance"

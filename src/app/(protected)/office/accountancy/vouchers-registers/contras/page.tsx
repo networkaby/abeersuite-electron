@@ -1,8 +1,8 @@
-import { VoucherList } from "@/modules/accountancy/components/VoucherList";
+import { GlVoucherList } from "@/modules/accountancy/components/GlVoucherList";
 
 export default function Page() {
     return (
-        <VoucherList
+        <GlVoucherList
             type="CONTRA"
             title="Contras"
             subtitle="Inter-account transfers between cash and bank accounts"

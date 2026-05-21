@@ -1,5 +1,6 @@
 "use client";
-// Shared list view for the unified Voucher table (GL types). Filters by type.
+// Shared list view for the five GL voucher kinds (Contra, Payment, Receipt,
+// Credit Note, Debit Note). Filters by type and status.
 //
 // Renders via the shared <VoucherRegisterTable> so every register inherits
 // the same row markup, click-to-edit Reference link, 3-dot ⋮ action menu,
@@ -16,11 +17,11 @@ import {
     type VoucherRegisterRow,
 } from "@/modules/accountancy/components/VoucherRegisterTable";
 
-import type { GlVoucherFormType } from "./GlVoucherForm";
+export type GlVoucherKind = "CONTRA" | "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 
 type RawRow = {
     id:           number;
-    type:         GlVoucherFormType;
+    type:         GlVoucherKind;
     reference:    string;
     date:         string;
     narration:    string | null;
@@ -35,13 +36,13 @@ type RawRow = {
 type StatusFilter = "" | "DRAFT" | "POSTED" | "CANCELLED" | "DELETED";
 const STATUSES: StatusFilter[] = ["", "DRAFT", "POSTED", "CANCELLED", "DELETED"];
 
-export function VoucherList({
+export function GlVoucherList({
     type, title, subtitle, basePath, newPath, newTab = false,
 }: {
-    type:     GlVoucherFormType;
+    type:     GlVoucherKind;
     title:    string;
     subtitle: string;
-    basePath: string;   // e.g. /vouchers/payments  (used for the chevron link — kept for back-compat but unused by the shared table)
+    basePath: string;   // e.g. /vouchers/payments  (unused — kept for call-site compatibility)
     newPath:  string;   // e.g. /vouchers/payments/new
     newTab?:  boolean;
 }) {

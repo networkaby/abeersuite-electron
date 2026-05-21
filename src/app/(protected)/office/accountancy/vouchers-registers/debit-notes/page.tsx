@@ -1,8 +1,8 @@
-import { VoucherList } from "@/modules/accountancy/components/VoucherList";
+import { GlVoucherList } from "@/modules/accountancy/components/GlVoucherList";
 
 export default function Page() {
     return (
-        <VoucherList
+        <GlVoucherList
             type="DEBIT_NOTE"
             title="Debit Notes"
             subtitle="Adjustments raised against suppliers — reduces creditor balance"

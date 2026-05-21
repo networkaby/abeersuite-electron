@@ -154,8 +154,8 @@ const PER_KIND: Record<MoneyFlowKind, KindConfig> = {
     },
     CONTRA: {
         title:                "Contra Voucher",
-        topLabel:             "From",
-        rowsHeader:           "To",
+        topLabel:             "Transfer from",
+        rowsHeader:           "Transfer to",
         topPlaceholder:       "Cash-in-Hand / Bank Account…",
         rowPlaceholder:       "Cash-in-Hand / Bank Account…",
         narrationPlaceholder: "e.g. Deposit cash to HDFC current account",
