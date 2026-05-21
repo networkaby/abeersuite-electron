@@ -18,7 +18,7 @@
  * they can dismiss it.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { generateSku } from "@/modules/inventory/lib/sku";
@@ -134,6 +134,10 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
         setName(v);
     };
 
+    const onEnterToSave = (e: ReactKeyboardEvent) => {
+        if (e.key === "Enter" && !saving) { e.preventDefault(); void submit(); }
+    };
+
     const submit = async () => {
         if (!name.trim()) { setInlineError("Name is required"); return; }
         if (!unitId)      { setInlineError("Pick a unit");       return; }
@@ -203,6 +207,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                             id="np-name"
                             value={name}
                             onChange={(e) => handleNameChange(e.target.value)}
+                            onKeyDown={onEnterToSave}
                             placeholder="Product name"
                             autoFocus
                         />
@@ -215,6 +220,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                                     id="np-sku"
                                     value={sku}
                                     onChange={(e) => { setSku(e.target.value.toUpperCase()); setSkuConflict(false); setInlineError(null); }}
+                                    onKeyDown={onEnterToSave}
                                     placeholder="123456"
                                     className={`font-mono flex-1 ${skuConflict ? "border-destructive focus-visible:ring-destructive" : ""}`}
                                 />
@@ -255,6 +261,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                             inputMode="decimal"
                             value={salePrice}
                             onChange={(e) => setSalePrice(e.target.value.replace(/[^\d.]/g, ""))}
+                            onKeyDown={onEnterToSave}
                             placeholder="0.00"
                             className="tabular-nums text-right"
                         />

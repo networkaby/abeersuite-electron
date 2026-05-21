@@ -1105,23 +1105,21 @@ async function main() {
     console.log("[11/11] Org Defaults (singleton, id=1)");
     // Resolve the GST 18% master row that we just seeded in section 8.
     const gst18 = await prisma.gstRate.findUnique({ where: { label: "GST 18%" } });
+    const orgDefaultsData = {
+        defaultGstRateId:            gst18?.id       ?? null,
+        defaultUnitId:               defaultUnit?.id ?? null,
+        defaultTaxability:           "TAXABLE"       as const,
+        defaultCurrencySymbol:       "₹",
+        // Credit restricted by default — admin can raise in Settings → Org Defaults.
+        defaultSaleCreditPeriod:     0,
+        defaultPurchaseCreditPeriod: 0,
+    };
     await prisma.orgDefaults.upsert({
         where:  { id: 1 },
-        // On first run: seed with sensible defaults (GST 18%, TAXABLE, ₹, PCS).
-        // On re-run: update only fields that are still at their default so
-        // admin-customised values are NOT overwritten.
-        create: {
-            id: 1,
-            defaultGstRateId:            gst18?.id        ?? null,
-            defaultUnitId:               defaultUnit?.id  ?? null,
-            defaultTaxability:           "TAXABLE",
-            defaultCurrencySymbol:       "₹",
-            // Credit restricted by default: new vouchers due immediately.
-            // Admin can raise this in Settings → Org Defaults (e.g. 30/60).
-            defaultSaleCreditPeriod:     0,
-            defaultPurchaseCreditPeriod: 0,
-        },
-        update: {},   // never overwrite admin changes on re-seed
+        // Both create and update use the same data so re-seeding always
+        // restores the baseline. Admin can override via UI after seeding.
+        create: { id: 1, ...orgDefaultsData },
+        update: orgDefaultsData,
     });
     console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
 

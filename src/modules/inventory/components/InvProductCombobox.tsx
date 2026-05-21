@@ -194,6 +194,13 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
 
     // Wrap handleKeyDown to add Tab commit-on-exit + Enter-creates-when-empty.
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        // Alt+C → open the quick-create dialog from anywhere in the combobox.
+        if (e.altKey && e.key.toLowerCase() === "c" && allowCreate) {
+            e.preventDefault();
+            cb.setOpen(false);
+            setCreateOpen(true);
+            return;
+        }
         if (cb.open && e.key === "Tab") {
             const normalizedQuery = query.trim().toLowerCase();
             const normalizedSelected = (selectedProduct?.name ?? "").trim().toLowerCase();

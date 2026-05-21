@@ -3,25 +3,22 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invUnitCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
-import { unstable_cache, revalidateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
-// Cache key+tag exported so the [id] route's PATCH/DELETE can revalidate.
+// Tag exported so the [id] route's PATCH/DELETE can revalidate.
 export const INV_UNITS_TAG = "inv-units";
-
-const getUnitsCached = unstable_cache(
-    async () => prisma.invUnit.findMany({ orderBy: { code: "asc" } }),
-    ["inv-units:list"],
-    { tags: [INV_UNITS_TAG], revalidate: 3600 },
-);
 
 export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
-        const rows = await getUnitsCached();
+        // Units is a small master list (~13 rows) that changes only when an admin
+        // adds/edits a unit. Direct DB hit keeps it always fresh — no stale-cache
+        // surprises after seeding or imports.
+        const rows = await prisma.invUnit.findMany({ orderBy: { code: "asc" } });
         return NextResponse.json(rows);
     } catch (e) {
         return handleApiError(e, "Failed to fetch units");

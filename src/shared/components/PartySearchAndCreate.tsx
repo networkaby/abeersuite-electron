@@ -478,6 +478,9 @@ export const PartySearchAndCreate = forwardRef<
                 return;
             }
             setOpenDialog(false);
+            // Return focus to the search input after the dialog closes so the
+            // user can continue on the form without having to click.
+            setTimeout(() => inputRef.current?.focus(), 80);
         } catch (e: unknown) {
             // Server-side errors carry { error, field? } — e.g. 409 with
             // field: "phone" when the value is already used. Surface inline
