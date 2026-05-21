@@ -55,8 +55,8 @@ export default function LedgerOutstandingsPage({
         switch (kind) {
             case "invoice":  return `/office/accountancy/invoices/${id}`;
             case "voucher":  return `/office/accountancy/journal-entries/${id}`;
-            case "sale":     return `/office/accountancy/sales/${id}`;
-            case "purchase": return `/office/accountancy/purchases/${id}`;
+            case "sale":     return `/vouchers/sales/new?voucherId=${id}`;
+            case "purchase": return `/vouchers/purchases/new?voucherId=${id}`;
         }
     };
 

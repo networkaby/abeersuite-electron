@@ -33,12 +33,25 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
     PURCHASE_ORDER:   "purchase-orders",
 };
 
-const VOUCHER_BASE: Partial<Record<InvVoucherType, string>> = {
-    POS:                   "/vouchers",
-    MANUFACTURING_JOURNAL: "/vouchers",
-    PHYSICAL_STOCK:        "/vouchers",
-    BRANCH_TRANSFER:       "/vouchers",
-};
+// All voucher editors live under /vouchers/<seg>/...  GL editors (POS,
+// Manufacturing Journal, etc.) have a dedicated `/[id]` page; the four
+// trading kinds (SALE / PURCHASE / SALE_RETURN / PURCHASE_RETURN) and
+// ESTIMATE re-use their `/new` page with a `?voucherId=<id>` query param
+// because there is no separate `/[id]` route (see DayBookActionsMenu's
+// `newFormUrl` comment for the canonical pattern).
+const VOUCHER_BASE = "/vouchers";
+
+const EDIT_VIA_NEW_QUERY: ReadonlySet<InvVoucherType> = new Set([
+    "SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN", "ESTIMATE",
+    "ISSUE", "ADJUSTMENT", "RECEIPT",
+]);
+
+function buildEditUrl(type: InvVoucherType, id: number): string {
+    const seg = VOUCHER_SEG[type];
+    return EDIT_VIA_NEW_QUERY.has(type)
+        ? `${VOUCHER_BASE}/${seg}/new?voucherId=${id}`
+        : `${VOUCHER_BASE}/${seg}/${id}`;
+}
 
 /** Single-record resolver — returns SourceDoc for one journal entry id, or null. */
 export async function resolveSource(journalEntryId: number, reference?: string): Promise<SourceDoc | null> {
@@ -47,13 +60,11 @@ export async function resolveSource(journalEntryId: number, reference?: string):
         select: { id: true, type: true, reference: true },
     });
     if (v) {
-        const seg = VOUCHER_SEG[v.type];
-        const base = VOUCHER_BASE[v.type] ?? "/office/accountancy";
         const kind: SourceDoc["kind"] =
             v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
-        return { kind, id: v.id, reference: v.reference, url: `${base}/${seg}/${v.id}` };
+        return { kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id) };
     }
     if (reference?.startsWith("INV-")) {
         const inv = await prisma.invoice.findFirst({
@@ -75,14 +86,12 @@ export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map
     });
     for (const v of vouchers) {
         if (v.journalEntryId === null) continue;
-        const seg = VOUCHER_SEG[v.type];
-        const base = VOUCHER_BASE[v.type] ?? "/office/accountancy";
         const kind: SourceDoc["kind"] =
             v.type === "PURCHASE" || v.type === "RECEIPT" ? "purchase"
             : v.type === "ESTIMATE" ? "estimate"
             : "sale";
         out.set(v.journalEntryId, {
-            kind, id: v.id, reference: v.reference, url: `${base}/${seg}/${v.id}`,
+            kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id),
         });
     }
     return out;
