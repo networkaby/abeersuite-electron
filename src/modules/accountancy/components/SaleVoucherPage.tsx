@@ -613,6 +613,11 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
 
     const [saving, setSaving] = useState(false);
     const [lines, setLines] = useState<LineState[]>([newLine()]);
+    // After addLine() (button click or Enter on last-row Amount) this holds
+    // the new row's id. React's `autoFocus` only fires on mount, which is
+    // exactly when the new InvProductCombobox renders — so we just thread the
+    // id into its autoFocus prop. No clear-after-focus needed.
+    const [lastFocusRowId, setLastFocusRowId] = useState<number | null>(null);
     // CREDIT is the default — most sales need a party on file so the
     // outstanding can be tracked. CASH is the walk-in / counter mode.
     // Non-GL kinds (orders, GRN, challan, rejections) keep CREDIT — they don't
@@ -1057,7 +1062,11 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const updateLine = (id: number, patch: Partial<LineState>) =>
         setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     const removeLine = (id: number) => setLines((ls) => ls.filter((l) => l.id !== id));
-    const addLine = () => setLines((ls) => [...ls, newLine()]);
+    const addLine = () => {
+        const fresh = newLine();
+        setLines((ls) => [...ls, fresh]);
+        setLastFocusRowId(fresh.id);
+    };
 
     // Recompute helpers — when the derived value is zero we write "" so the
     // cell stays blank (no noisy "0.00" prefills). The other recompute
@@ -1752,7 +1761,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                 <InvProductCombobox
                                                     value={line.product?.id ?? null}
                                                     onChange={(p) => handleProductSelect(line.id, p)}
-                                                    autoFocus={i === 0 && !line.product}
+                                                    autoFocus={(i === 0 && !line.product) || line.id === lastFocusRowId}
                                                 />
                                             </td>
                                             {prefs.mrpHint && (
@@ -1767,6 +1776,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                             onChange={(e) => updateLine(line.id, { mrpRupees: num(e.target.value) })}
                                                             placeholder="—"
                                                             className={cell}
+                                                            tabIndex={-1}
                                                         />
                                                     ) : (
                                                         <span className="text-muted-foreground">
@@ -1792,6 +1802,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                         value={line.freeQty}
                                                         onChange={(e) => updateLine(line.id, { freeQty: num(e.target.value) })}
                                                         className={cell}
+                                                        tabIndex={-1}
                                                     />
                                                 </td>
                                             )}
@@ -1825,6 +1836,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                             value={line.discountAmt}
                                                             onChange={(e) => setLineDiscountAmt(line.id, num(e.target.value))}
                                                             className={cell}
+                                                            tabIndex={-1}
                                                         />
                                                     </td>
                                                 </>
@@ -1838,6 +1850,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                             value={line.taxRate}
                                                             onChange={(e) => setLineTaxRate(line.id, num(e.target.value))}
                                                             className={cell}
+                                                            tabIndex={line.taxRate ? -1 : 0}
                                                         />
                                                     </td>
                                                     <td className="px-1 py-1">
@@ -1847,6 +1860,7 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                             value={line.taxAmount}
                                                             onChange={(e) => setLineTaxAmount(line.id, num(e.target.value))}
                                                             className={cell}
+                                                            tabIndex={-1}
                                                         />
                                                     </td>
                                                 </>
@@ -1862,6 +1876,18 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
                                                     }}
                                                     onChange={(e) => setLineAmount(line.id, num(e.target.value))}
                                                     onBlur={() => updateLine(line.id, { amountInput: "" })}
+                                                    onKeyDown={(e) => {
+                                                        // Tally-style rapid entry: Enter on the LAST row's Amount
+                                                        // spawns a new line and focuses its Item picker. stopPropagation
+                                                        // keeps the form-level Enter→next-focusable from also advancing
+                                                        // into the footer (Discount/Shipping/Received) before the new
+                                                        // row mounts.
+                                                        if (e.key === "Enter" && i === lines.length - 1) {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            addLine();
+                                                        }
+                                                    }}
                                                     className={`${cell} text-right font-mono font-medium`}
                                                 />
                                             </td>
