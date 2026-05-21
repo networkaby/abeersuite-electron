@@ -1450,7 +1450,6 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
             ref={containerRef}
             onKeyDown={onFormKeyDown}
             className="flex flex-col flex-1 min-h-0 bg-background"
-            onChange={() => { isDirtyRef.current = true; }}
         >
             {/* Breadcrumb bar */}
             <VoucherTopBar
