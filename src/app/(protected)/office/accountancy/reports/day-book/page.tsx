@@ -104,6 +104,11 @@ export default function DayBookPage() {
         catch { return false; }
     });
 
+    const [branchFilter, setBranchFilter] = useState(() => {
+        try { return localStorage.getItem("daybook:branchFilter") ?? "__all__"; }
+        catch { return "__all__"; }
+    });
+
     const [statuses, setStatuses] = useState<Set<string>>(() => {
         try {
             const saved = localStorage.getItem("daybook:statuses");
@@ -114,6 +119,7 @@ export default function DayBookPage() {
         setStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
 
     // Persist filters
+    useEffect(() => { try { localStorage.setItem("daybook:branchFilter",  branchFilter);                  } catch {} }, [branchFilter]);
     useEffect(() => { try { localStorage.setItem("daybook:preset",        preset);                        } catch {} }, [preset]);
     useEffect(() => { try { localStorage.setItem("daybook:from",          from);                          } catch {} }, [from]);
     useEffect(() => { try { localStorage.setItem("daybook:to",            to);                            } catch {} }, [to]);
@@ -136,6 +142,18 @@ export default function DayBookPage() {
     }, [router]);
 
     // ── Filtering ─────────────────────────────────────────────────────────
+
+    // Unique branches derived from all inv rows (stable even when branch filter is active).
+    const availableBranches = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const r of rows) {
+            if (r.branchId && r.branchName) seen.set(r.branchId, r.branchName);
+        }
+        return [...seen.entries()]
+            .map(([id, name]) => ({ id, name }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [rows]);
+
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
         const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
@@ -151,12 +169,13 @@ export default function DayBookPage() {
                 const isInv = inventoryOnly && INV_SET.has(r.kind);
                 if (!isOpt && !isInv) return false;
             }
+            if (branchFilter !== "__all__" && r.source === "inv" && r.branchId !== branchFilter) return false;
             if (q && !r.reference.toLowerCase().includes(q)
                   && !(r.narration ?? "").toLowerCase().includes(q)
                   && !(r.party     ?? "").toLowerCase().includes(q)) return false;
             return true;
         });
-    }, [rows, from, to, statuses, kind, search, optionalOnly, inventoryOnly]);
+    }, [rows, from, to, statuses, kind, search, optionalOnly, inventoryOnly, branchFilter]);
 
     const postedTotal = filtered
         .filter((r) => r.status === "POSTED")
@@ -173,6 +192,7 @@ export default function DayBookPage() {
         setStatuses(new Set());
         setOptionalOnly(false);
         setInventoryOnly(false);
+        setBranchFilter("__all__");
     };
     const hiddenCount = rows.length - filtered.length;
 
@@ -231,6 +251,22 @@ export default function DayBookPage() {
                         placeholder="ref / party / narration"
                         className="h-8 w-52"
                     />
+                </div>
+
+                {/* Branch filter */}
+                <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Branch</label>
+                    <Select value={branchFilter} onValueChange={setBranchFilter}>
+                        <SelectTrigger className="h-8 w-40">
+                            <SelectValue placeholder="All branches" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">All branches</SelectItem>
+                            {availableBranches.map((b) => (
+                                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 {/* Kind dropdown */}
@@ -380,6 +416,7 @@ export default function DayBookPage() {
                             stickyHead={true}
                             statusInline={true}
                             accentBySource={true}
+                            showBranch={true}
                             optionalKinds={OPTIONAL_KINDS}
                         />
                     )}

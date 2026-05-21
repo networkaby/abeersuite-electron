@@ -108,6 +108,8 @@ export interface VoucherRegisterTableProps {
     optionalKinds?: Set<string>;
     /** Thin coloured left stripe per row keyed by source (inv=blue, gl=violet, je=amber). */
     accentBySource?: boolean;
+    /** Show a Branch column (after Reference). inv rows show their branch name; gl/je show —. */
+    showBranch?: boolean;
     /** Empty-state copy. */
     emptyMessage?:  string;
 }
@@ -125,6 +127,7 @@ export function VoucherRegisterTable({
     statusInline   = false,
     optionalKinds,
     accentBySource = false,
+    showBranch     = false,
     emptyMessage   = "No vouchers match the current filters.",
 }: VoucherRegisterTableProps) {
     // Hooks before any early return.
@@ -166,6 +169,7 @@ export function VoucherRegisterTable({
         + (hideKind ? 0 : 1)
         + (showSource ? 1 : 0)
         + 1 /* Reference */
+        + (showBranch ? 1 : 0)
         + 1 /* Party */
         + 1 /* Narration */
         + (extraColumns?.length ?? 0)
@@ -186,6 +190,7 @@ export function VoucherRegisterTable({
                         {!hideKind   && <th className="px-3 py-3 text-left font-medium">Type</th>}
                         {showSource  && <th className="px-3 py-3 text-left font-medium">Source</th>}
                         <th className="px-3 py-3 text-left font-medium">Reference</th>
+                        {showBranch  && <th className="px-3 py-3 text-left font-medium">Branch</th>}
                         <th className="px-3 py-3 text-left font-medium">Party</th>
                         <th className="px-3 py-3 text-left font-medium">Narration</th>
                         {extraColumns?.map((c) => (
@@ -280,6 +285,13 @@ export function VoucherRegisterTable({
                                             <span>{r.reference}</span>
                                         )}
                                     </td>
+
+                                    {/* Branch — inv rows only; gl/je show — */}
+                                    {showBranch && (
+                                        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                                            {r.branchName ?? "—"}
+                                        </td>
+                                    )}
 
                                     {/* Party — italic when optional */}
                                     <td
@@ -405,6 +417,8 @@ export function VoucherRegisterTable({
                                             <td className="px-3 py-1 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
                                                 {isGl ? l.account.code : l.product.sku}
                                             </td>
+                                            {/* Branch placeholder */}
+                                            {showBranch && <td />}
                                             {/* Party + Narration */}
                                             {isGl ? (
                                                 <td colSpan={2} className="px-3 py-1 text-xs text-foreground">

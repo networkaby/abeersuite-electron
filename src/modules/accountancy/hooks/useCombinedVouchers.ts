@@ -21,6 +21,10 @@ export type CombinedRow = {
     kind:        string;
     reference:   string;
     date:        string;
+    /** Branch the voucher was recorded in. Only `inv`-source rows carry this;
+     *  `gl`/`je` rows are org-level and have no branch concept. */
+    branchId?:   string | null;
+    branchName?: string | null;
     party:       string | null;
     /** Account id for the party, when the row has one resolved. Used to link
      *  the Party cell to /office/customers/<accountId>. Inventory rows carry
@@ -71,6 +75,7 @@ type RawInv = {
     deletedAt?: string | null; cancelledAt?: string | null;
     createdAt: string;
     createdBy?: { name: string } | null;
+    branch?: { id: string; name: string } | null;
 };
 type RawGl = {
     id: number; type: string; reference: string; date: string;
@@ -124,6 +129,8 @@ export function useCombinedVouchers(options: UseCombinedVouchersOptions = {}) {
                     kind:        v.type,
                     reference:   v.reference,
                     date:        v.date,
+                    branchId:    v.branch?.id   ?? null,
+                    branchName:  v.branch?.name ?? null,
                     party:       v.partyName,
                     partyAccountId: v.partyAccountId ?? null,
                     partyKind:     v.partyPersonId != null ? "person" : v.partyCompanyId != null ? "company" : null,
