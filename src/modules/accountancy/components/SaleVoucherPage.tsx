@@ -562,6 +562,23 @@ function SaleVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
         window.addEventListener("beforeunload", onBeforeUnload);
         return () => window.removeEventListener("beforeunload", onBeforeUnload);
     }, []);
+
+    // Dirty tracking via native `input` + `change` events on the container.
+    // React's onChange on a <div> isn't reliable — synthetic onChange is
+    // designed for form elements, not arbitrary ancestors. A native listener
+    // on the form root catches every descendant input/textarea/select edit
+    // via DOM bubbling and flips the dirty flag once.
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const markDirty = () => { isDirtyRef.current = true; };
+        el.addEventListener("input", markDirty);
+        el.addEventListener("change", markDirty);
+        return () => {
+            el.removeEventListener("input", markDirty);
+            el.removeEventListener("change", markDirty);
+        };
+    }, []);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = () => {
