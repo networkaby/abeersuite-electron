@@ -58,16 +58,17 @@ For the milestone log (M1–M26) prior to 2026-05-14, read `git log` or earlier 
 1. **Doc consistency sweep** — keep this file as the only source of status; resist re-adding "shipped" markers to module docs.
 2. **`/lab` decision** — promote to a real `/office` module, fold into existing nav, or delete. It currently lives undefined.
 3. **POS follow-ups**: return receipt print page (`/receipt/return/[id]`); multi-partial-return guard (subtract prior returns from per-line cap); stuck-shift auto-close cron; per-row bank account picker for UPI/Card.
-4. **Repair-side reporting** — tickets by status/pipeline, avg resolution, technician workload. Finance side is covered; repair side is bare.
-5. **Branch-scoped data filtering** — permissions exist but ticket/customer/invoice queries don't filter by `branchId`.
-6. **Ticket list pagination** — current list loads all rows.
-7. **Accountancy Phase 5b** — GSTR-1/3B export, e-Invoice (IRN) integration, RCM on purchases.
-8. **Portal ticket detail** — full notes + status history, not just the list.
-9. **Stock decrement on shop order confirm** — now possible since `InvProduct` is unified and multi-branch stock is live.
-10. **Razorpay payment status page** — post-payment redirect with real-time polling.
-11. **`/api/finance/*` → `/api/accountancy/*`** rename (still deferred from the 2026-05-07 module rename).
-12. **Schema migration hygiene** — GST/HSN + naming-convention columns were added via `db push`, no migration. Needs a proper migration before any prod deploy.
-13. **Long-term**: SLA alerts; B2B Company portal; ERP module foundation; per-customer pricing tiers; credit-limit enforcement.
+4. **Outstandings — Pay Now / Receive Now action** — on `/office/accountancy/reports/ledger-outstandings/[id]` (and the Receivables/Payables bill-wise tabs), add a per-row "Receive Now" (debtors) / "Pay Now" (creditors) button that opens a pre-filled Receipt/Payment voucher with the bill auto-allocated. Saves the user from copy-pasting the bill ref + amount into a blank voucher.
+5. **Repair-side reporting** — tickets by status/pipeline, avg resolution, technician workload. Finance side is covered; repair side is bare.
+6. **Branch-scoped data filtering** — permissions exist but ticket/customer/invoice queries don't filter by `branchId`.
+7. **Ticket list pagination** — current list loads all rows.
+8. **Accountancy Phase 5b** — GSTR-1/3B export, e-Invoice (IRN) integration, RCM on purchases.
+9. **Portal ticket detail** — full notes + status history, not just the list.
+10. **Stock decrement on shop order confirm** — now possible since `InvProduct` is unified and multi-branch stock is live.
+11. **Razorpay payment status page** — post-payment redirect with real-time polling.
+12. **`/api/finance/*` → `/api/accountancy/*`** rename (still deferred from the 2026-05-07 module rename).
+13. **Schema migration hygiene** — GST/HSN + naming-convention columns were added via `db push`, no migration. Needs a proper migration before any prod deploy.
+14. **Long-term**: SLA alerts; B2B Company portal; ERP module foundation; per-customer pricing tiers; credit-limit enforcement.
 
 ---
 
