@@ -19,6 +19,7 @@ import {
 import { fmt } from "@/utils/constants";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { useEscape } from "@/shared/hooks";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -228,20 +229,22 @@ export default function StockSummaryPage() {
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="space-y-4">
-            {/* Breadcrumb */}
-            <Breadcrumb>
-                <BreadcrumbList>
-                    <BreadcrumbItem>
-                        <BreadcrumbLink asChild>
-                            <Link href="/office/inventory">Inventory</Link>
-                        </BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem>
-                        <BreadcrumbPage>Stock Summary</BreadcrumbPage>
-                    </BreadcrumbItem>
-                </BreadcrumbList>
-            </Breadcrumb>
+            {/* Breadcrumb bar — uniform with the other inventory pages */}
+            <BreadcrumbBar>
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <Link href="/office/inventory">Inventory</Link>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>Stock Summary</BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </BreadcrumbBar>
 
             {/* Header */}
             <div className="flex items-start justify-between gap-3 flex-wrap">

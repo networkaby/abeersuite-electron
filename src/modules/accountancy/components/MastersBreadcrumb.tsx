@@ -14,6 +14,7 @@ import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { MASTERS_NAV_LINKS } from "@/modules/accountancy/masters-nav";
 
 const MASTERS_BASE = "/office/accountancy/masters";
@@ -33,7 +34,8 @@ export function MastersBreadcrumb() {
         .find((link) => pathname === link.href || pathname.startsWith(`${link.href}/`));
 
     return (
-        <Breadcrumb className="py-2">
+        <BreadcrumbBar>
+            <Breadcrumb>
             <BreadcrumbList>
                 <BreadcrumbItem>
                     <BreadcrumbLink asChild>
@@ -59,6 +61,7 @@ export function MastersBreadcrumb() {
                     </>
                 )}
             </BreadcrumbList>
-        </Breadcrumb>
+            </Breadcrumb>
+        </BreadcrumbBar>
     );
 }

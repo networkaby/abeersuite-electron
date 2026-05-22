@@ -21,6 +21,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { cn } from "@/shared/lib/format/utils";
 
 export interface PathBreadcrumbProps {
@@ -43,6 +44,10 @@ export interface PathBreadcrumbProps {
     /** Hide a segment from the rendered breadcrumb (still walked for href
      *  composition). Useful when a route group like `(gl)` shouldn't show. */
     hide?: Set<string>;
+    /** Suppress the breadcrumb entirely on these exact pathnames. Use for
+     *  full-bleed pages (e.g. day-book uses `-m-8` and would render under
+     *  the breadcrumb). */
+    hideOn?: string[];
     /** Extra className on the wrapping <nav>. */
     className?: string;
 }
@@ -62,10 +67,13 @@ export function PathBreadcrumb({
     labels,
     escapeBack = false,
     hide,
+    hideOn,
     className,
 }: PathBreadcrumbProps) {
     const pathname = usePathname();
     useEscapeBack(escapeBack);
+
+    if (hideOn?.includes(pathname)) return null;
 
     const boundary = basePath ?? root.href;
     // Only walk segments that live under `boundary`. Drop the boundary
@@ -88,7 +96,8 @@ export function PathBreadcrumb({
     });
 
     return (
-        <Breadcrumb className={cn("py-2", className)}>
+        <BreadcrumbBar className={className}>
+            <Breadcrumb>
             <BreadcrumbList>
                 <BreadcrumbItem>
                     {crumbs.length === 0 ? (
@@ -118,6 +127,7 @@ export function PathBreadcrumb({
                     ),
                 ])}
             </BreadcrumbList>
-        </Breadcrumb>
+            </Breadcrumb>
+        </BreadcrumbBar>
     );
 }

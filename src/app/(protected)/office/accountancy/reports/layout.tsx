@@ -9,6 +9,9 @@ export default function AccountancyReportsLayout({ children }: { children: React
         <div className="container max-w-7xl space-y-4">
             <PathBreadcrumb
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
+                // Day Book is a full-bleed page (-m-8) with its own back-
+                // button header — the layout breadcrumb would render under it.
+                hideOn={["/office/accountancy/reports/day-book"]}
                 labels={{
                     "reports": "Reports",
                     "balance-sheet": "Balance Sheet",

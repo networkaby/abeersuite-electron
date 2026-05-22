@@ -29,6 +29,7 @@ import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
+import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { BookPage } from "@/modules/accountancy/components/BookPage";
@@ -222,7 +223,7 @@ export function AccountLedgerExplorer({
     return (
         <div className="-m-8 flex h-screen flex-col overflow-hidden bg-card">
             {/* Breadcrumb bar */}
-            <div className="shrink-0 border-b bg-card px-8 py-2.5">
+            <BreadcrumbBar escape={false}>
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
@@ -252,7 +253,7 @@ export function AccountLedgerExplorer({
                         )}
                     </BreadcrumbList>
                 </Breadcrumb>
-            </div>
+            </BreadcrumbBar>
 
             {/* Master-detail row */}
             <div className="flex flex-1 overflow-hidden">
