@@ -1,16 +1,23 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
     User, Phone, MapPin, Building2,
-    Smartphone, ExternalLink, Pencil, Loader2, ArrowLeft,
+    Smartphone, ExternalLink, Loader2, ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { initials } from "@/modules/customer/lib/initials";
+import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
+import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
+import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
+import DevicesMiniGrid from "@/modules/customer/components/DevicesMiniGrid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +41,10 @@ import {
 } from "@/components/ui/table";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
+import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
+import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
+import PersonProfileEdit from "@/modules/customer/components/PersonProfileEdit";
+
 interface CustomerListItem {
     id: number;
     name: string;
@@ -41,21 +52,6 @@ interface CustomerListItem {
     email: string | null;
     _count: { companies: number; devices: number };
     account: { id: number } | null;
-}
-
-interface Ticket {
-    id: number;
-    priority: string;
-    createdAt: string;
-    ticketStatus: { label: string; color: string };
-}
-
-interface Device {
-    id: number;
-    brand: string;
-    model: string;
-    type: string;
-    tickets: Ticket[];
 }
 
 interface CustomerDetail {
@@ -66,42 +62,32 @@ interface CustomerDetail {
     email: string | null;
     address: string | null;
     createdAt: string;
-    devices: Device[];
+    devices: CustomerDevice[];
     companies: { id: number; company: { id: number; name: string; phone: string | null; accountId: number } }[];
+    phones: { id: number; phone: string; label: string | null; isPrimary: boolean }[];
+    emails: { id: number; email: string; label: string | null; isPrimary: boolean }[];
 }
 
 type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies";
 
-function initials(name: string) {
-    return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
-    return (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <div className="mb-3">{icon}</div>
-            <p className="text-sm">{message}</p>
-        </div>
-    );
-}
-
 export default function CustomersPage() {
+    const { data: session } = useSession();
     const [customers, setCustomers] = useState<CustomerListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<CustomerDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [tab, setTab] = useState<Tab>("transactions");
+    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
+    const [txLoading, setTxLoading] = useState(false);
+    const [linkKey, setLinkKey] = useState(0);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
     const [saving, setSaving] = useState(false);
 
-    const [editing, setEditing] = useState(false);
-    const [editForm, setEditForm] = useState({ name: "", phone: "", email: "", address: "" });
-    const [editSaving, setEditSaving] = useState(false);
-    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
-    const [txLoading, setTxLoading] = useState(false);
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canManageUsers = perms.includes(PERMISSIONS.USERS_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     const router = useRouter();
 
@@ -119,6 +105,7 @@ export default function CustomersPage() {
     useEffect(() => {
         if (!selectedId) {
             setDetail(null);
+            setTransactions(null);
             return;
         }
         setDetailLoading(true);
@@ -147,8 +134,24 @@ export default function CustomersPage() {
 
     const handleTabChange = (next: Tab) => { setTab(next); };
 
-    // Auto-load transactions when the tab is active (covers both the initial
-    // default-to-transactions case and switching to the tab manually).
+    // Re-fetch after a link is added (CustomerLinkPanel), to get fresh companies list.
+    const handleLinked = useCallback(() => {
+        if (!selectedId) return;
+        setLinkKey(k => k + 1);
+        axios.get<CustomerDetail>(`/api/person/${selectedId}`)
+            .then((res) => setDetail(res.data))
+            .catch(() => {});
+    }, [selectedId]);
+
+    // Re-fetch after profile edits (name/address/phones/emails saved).
+    const refetchDetail = useCallback(() => {
+        if (!selectedId) return;
+        axios.get<CustomerDetail>(`/api/person/${selectedId}`)
+            .then((res) => setDetail(res.data))
+            .catch(() => {});
+    }, [selectedId]);
+
+    // Auto-load transactions when the tab is active.
     useEffect(() => {
         if (!selectedId || tab !== "transactions" || transactions) return;
         setTxLoading(true);
@@ -160,9 +163,14 @@ export default function CustomersPage() {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.name.trim()) {
-            toast.error("Name is required");
-            return;
+        if (!form.name.trim()) { toast.error("Name is required"); return; }
+        if (form.phone.trim()) {
+            const err = phoneError(form.phone);
+            if (err) { toast.error(err); return; }
+        }
+        if (form.email.trim()) {
+            const err = emailError(form.email);
+            if (err) { toast.error(err); return; }
         }
         setSaving(true);
         try {
@@ -184,37 +192,6 @@ export default function CustomersPage() {
         }
     };
 
-    const startEdit = () => {
-        if (!detail) return;
-        setEditForm({
-            name: detail.name,
-            phone: detail.phone ?? "",
-            email: detail.email ?? "",
-            address: detail.address ?? "",
-        });
-        setEditing(true);
-    };
-
-    const saveEdit = async () => {
-        if (!detail) return;
-        setEditSaving(true);
-        try {
-            await axios.put(`/api/person/${detail.id}`, editForm);
-            toast.success("Saved");
-            setEditing(false);
-            const [listResponse, detailResponse] = await Promise.all([
-                axios.get<CustomerListItem[]>("/api/person"),
-                axios.get<CustomerDetail>(`/api/person/${detail.id}`),
-            ]);
-            setCustomers(listResponse.data);
-            setDetail(detailResponse.data);
-        } catch {
-            toast.error("Failed to save");
-        } finally {
-            setEditSaving(false);
-        }
-    };
-
     const filtered = search
         ? customers.filter((customer) =>
             customer.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -222,7 +199,7 @@ export default function CustomersPage() {
         )
         : customers;
 
-    const allTickets: (Ticket & { device: Device })[] = detail
+    const allTickets: (Ticket & { device: CustomerDevice })[] = detail
         ? detail.devices.flatMap((device) => device.tickets.map((ticket) => ({ ...ticket, device })))
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         : [];
@@ -285,7 +262,7 @@ export default function CustomersPage() {
 
             <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
                 {!selectedId && (
-                    <EmptyState icon={<User size={40} strokeWidth={1} />} message="Select a customer to view activity" />
+                    <CustomerEmptyState icon={<User size={40} strokeWidth={1} />} message="Select a customer to view activity" />
                 )}
 
                 {selectedId && detailLoading && (
@@ -296,6 +273,7 @@ export default function CustomersPage() {
 
                 {selectedId && !detailLoading && detail && (
                     <>
+                        {/* ── Header ── */}
                         <div className="border-b bg-card px-6 py-4">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex items-center gap-3">
@@ -303,58 +281,20 @@ export default function CustomersPage() {
                                         {initials(detail.name)}
                                     </div>
                                     <div>
-                                        {editing ? (
-                                            <Input
-                                                value={editForm.name}
-                                                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                                                className="h-9 w-64 text-base font-semibold"
-                                                autoFocus
-                                            />
-                                        ) : (
-                                            <h2 className="text-xl font-bold">{detail.name}</h2>
-                                        )}
+                                        <h2 className="text-xl font-bold">{detail.name}</h2>
                                         <div className="mt-1 flex flex-wrap items-center gap-3">
-                                            {editing ? (
-                                                <>
-                                                    <Input value={editForm.phone} onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Phone" className="h-8 w-36" />
-                                                    <Input value={editForm.address} onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" className="h-8 w-48" />
-                                                    <Input value={editForm.email} onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" className="h-8 w-44" />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
-                                                    {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
-                                                    {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
-                                                    <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
-                                                </>
-                                            )}
+                                            {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
+                                            {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
+                                            {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
+                                            <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div className="flex items-center gap-2 shrink-0">
-                                    {editing ? (
-                                        <>
-                                            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>
-                                                Cancel
-                                            </Button>
-                                            <Button type="button" size="sm" onClick={saveEdit} disabled={editSaving}>
-                                                {editSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Button type="button" variant="outline" size="icon-sm" onClick={startEdit} title="Edit customer">
-                                                <Pencil size={14} />
-                                            </Button>
-                                            <Button asChild type="button" variant="outline" size="icon-sm">
-                                                <Link href={`/office/social/users/${detail.id}`} title="Social profile">
-                                                    <ExternalLink size={14} />
-                                                </Link>
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
+                                <Button asChild type="button" variant="outline" size="icon-sm">
+                                    <Link href={`/office/social/users/${detail.id}`} title="Social profile">
+                                        <ExternalLink size={14} />
+                                    </Link>
+                                </Button>
                             </div>
 
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -364,6 +304,7 @@ export default function CustomersPage() {
                             </div>
                         </div>
 
+                        {/* ── Tabs ── */}
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
                                 {(["transactions", "profile", "tickets", "devices", "companies"] as Tab[]).map((item) => (
@@ -380,70 +321,34 @@ export default function CustomersPage() {
                             </div>
                         </div>
 
+                        {/* ── Tab content ── */}
                         <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
+
+                            {/* Profile — inline editing */}
                             {tab === "profile" && (
-                                <div className="space-y-4">
-                                    <Card>
-                                        <CardContent className="pt-4 space-y-2.5">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contact</p>
-                                            {detail.phone && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Phone size={13} className="shrink-0 text-muted-foreground" />
-                                                    <span>{detail.phone}</span>
-                                                </div>
-                                            )}
-                                            {detail.email && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <span className="shrink-0 text-muted-foreground text-xs">✉</span>
-                                                    <span>{detail.email}</span>
-                                                </div>
-                                            )}
-                                            {detail.address && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
-                                                    <span>{detail.address}</span>
-                                                </div>
-                                            )}
-                                            <p className="text-xs text-muted-foreground pt-1">Customer since {formatDate(detail.createdAt)}</p>
-                                        </CardContent>
-                                    </Card>
-                                    {detail.companies.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Building2 size={11} /> Companies</p>
-                                            {detail.companies.map((cl) => (
-                                                <Card key={cl.id}>
-                                                    <CardContent className="flex items-center gap-3 py-3">
-                                                        <Building2 size={13} className="shrink-0 text-muted-foreground" />
-                                                        <div>
-                                                            <p className="text-sm font-medium">{cl.company.name}</p>
-                                                            {cl.company.phone && <p className="text-xs text-muted-foreground">{cl.company.phone}</p>}
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {detail.devices.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
-                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                {detail.devices.map((d) => (
-                                                    <Card key={d.id}>
-                                                        <CardContent className="py-3">
-                                                            <p className="text-sm font-medium">{d.brand} {d.model}</p>
-                                                            <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
-                                                        </CardContent>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        </div>
+                                <div className="space-y-6">
+                                    <PersonProfileEdit
+                                        key={selectedId}
+                                        profile={{
+                                            id: detail.id,
+                                            name: detail.name,
+                                            address: detail.address,
+                                            phones: detail.phones ?? [],
+                                            emails: detail.emails ?? [],
+                                        }}
+                                        onSaved={refetchDetail}
+                                    />
+                                    <DevicesMiniGrid devices={detail.devices} />
+                                    {canManageUsers && (
+                                        <CustomerEmergencyPasswordResetCard customerId={detail.id} />
                                     )}
                                 </div>
                             )}
 
+                            {/* Tickets */}
                             {tab === "tickets" && (
                                 allTickets.length === 0 ? (
-                                    <EmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />
+                                    <CustomerEmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />
                                 ) : (
                                     <Card>
                                         <CardContent className="px-0 pt-0">
@@ -469,11 +374,7 @@ export default function CustomersPage() {
                                                             <TableCell><Badge className={ticket.ticketStatus.color}>{ticket.ticketStatus.label}</Badge></TableCell>
                                                             <TableCell><Badge className={PRIORITY_META[ticket.priority]?.color ?? ""}>{PRIORITY_META[ticket.priority]?.label ?? ticket.priority}</Badge></TableCell>
                                                             <TableCell className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</TableCell>
-                                                            <TableCell className="text-right">
-                                                                {/* <Button asChild variant="link" size="sm">
-                                                                    <Link href={`/office/repairing/tickets/${ticket.id}`}>View</Link>
-                                                                </Button> //breaking*/}
-                                                            </TableCell>
+                                                            <TableCell />
                                                         </TableRow>
                                                     ))}
                                                 </TableBody>
@@ -483,9 +384,10 @@ export default function CustomersPage() {
                                 )
                             )}
 
+                            {/* Devices */}
                             {tab === "devices" && (
                                 detail.devices.length === 0 ? (
-                                    <EmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered yet" />
+                                    <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered yet" />
                                 ) : (
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {detail.devices.map((device) => (
@@ -508,38 +410,22 @@ export default function CustomersPage() {
                                 )
                             )}
 
+                            {/* Companies — link management */}
                             {tab === "companies" && (
-                                detail.companies.length === 0 ? (
-                                    <EmptyState icon={<span className="text-3xl">🏢</span>} message="Not linked to any company" />
-                                ) : (
-                                    <div className="space-y-2">
-                                        {detail.companies.map((companyLink) => (
-                                            <Card key={companyLink.id}>
-                                                <CardContent className="flex items-center justify-between pt-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                                                            <Building2 size={14} className="text-blue-600" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium">{companyLink.company.name}</p>
-                                                            {companyLink.company.phone && <p className="text-xs text-muted-foreground">{companyLink.company.phone}</p>}
-                                                        </div>
-                                                    </div>
-                                                    <Button asChild variant="link" size="sm">
-                                                        <Link href={`/office/customers/${companyLink.company.accountId}`}>View</Link>
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )
+                                <CustomerLinkPanel
+                                    key={linkKey}
+                                    customerId={detail.id}
+                                    initialLinks={detail.companies}
+                                    onLinked={handleLinked}
+                                />
                             )}
 
+                            {/* Transactions */}
                             {tab === "transactions" && (
                                 txLoading ? (
                                     <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                 ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
-                                    <EmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                    <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                 ) : (
                                     <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
                                 )
@@ -556,7 +442,7 @@ export default function CustomersPage() {
                         <DialogTitle>New Customer</DialogTitle>
                         <DialogDescription>Add a customer record for future tickets and device history.</DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleCreate} className="space-y-3">
+                    <form onSubmit={(e) => { void handleCreate(e); }} className="space-y-3">
                         <div className="space-y-2">
                             <Label>Name</Label>
                             <Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} autoFocus />
@@ -587,4 +473,3 @@ export default function CustomersPage() {
         </div>
     );
 }
-

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import {
     ArrowLeft,
@@ -18,10 +19,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { PRIORITY_META } from "@/utils/constants";
+import { initials } from "@/modules/customer/lib/initials";
+import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
+import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
+import DevicesMiniGrid from "@/modules/customer/components/DevicesMiniGrid";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
+import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
+import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
+import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
+import PersonProfileEdit from "@/modules/customer/components/PersonProfileEdit";
+import CompanyProfileEdit from "@/modules/customer/components/CompanyProfileEdit";
 
 type PersonRow = {
     id: number;
@@ -49,8 +60,10 @@ type PersonDetail = {
     email: string | null;
     address: string | null;
     createdAt: string;
-    devices: PersonDevice[];
+    devices: CustomerDevice[];
     companies: { id: number; company: { id: number; name: string; phone: string | null; accountId: number } }[];
+    phones: { id: number; phone: string; label: string | null; isPrimary: boolean }[];
+    emails: { id: number; email: string; label: string | null; isPrimary: boolean }[];
 };
 
 type CompanyDetail = {
@@ -63,43 +76,22 @@ type CompanyDetail = {
     companyReg: string | null;
     taxId: string | null;
     createdAt: string;
-    devices: CompanyDevice[];
+    devices: CustomerDevice[];
     customers: { id: number; customer: { id: number; accountId: number; name: string; phone: string | null } }[];
+    contactRows: {
+        phones: { id: number; value: string; label: string | null; isPrimary: boolean }[];
+        emails: { id: number; value: string; label: string | null; isPrimary: boolean }[];
+    } | null;
 };
 
 type SelectedItem = { kind: "person" | "company"; id: number };
 type PersonTab = "transactions" | "profile" | "tickets" | "devices" | "companies";
 type CompanyTab = "transactions" | "profile" | "contacts" | "devices";
 
-type Ticket = {
-    id: number;
-    priority: string;
-    createdAt: string;
-    ticketStatus: { label: string; color: string };
-};
-
-type PersonDevice = {
-    id: number;
-    brand: string;
-    model: string;
-    type: string;
-    tickets: Ticket[];
-};
-
-type CompanyDevice = {
-    id: number;
-    brand: string;
-    model: string;
-    type: string;
-    tickets: Ticket[];
-};
-
-function initials(name: string) {
-    return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
-}
 
 export default function AllCustomersPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const [people, setPeople] = useState<PersonRow[]>([]);
     const [companies, setCompanies] = useState<CompanyRow[]>([]);
     const [search, setSearch] = useState("");
@@ -111,6 +103,11 @@ export default function AllCustomersPage() {
     const [companyTab, setCompanyTab] = useState<CompanyTab>("transactions");
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
+    const [personLinkKey, setPersonLinkKey] = useState(0);
+    const [companyLinkKey, setCompanyLinkKey] = useState(0);
+
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canManageUsers = perms.includes(PERMISSIONS.USERS_MANAGE) || perms.includes(PERMISSIONS.ADMIN_BYPASS);
 
     useEffect(() => {
         axios.get<PersonRow[]>("/api/person").then((res) => setPeople(res.data)).catch(() => setPeople([]));
@@ -221,6 +218,36 @@ export default function AllCustomersPage() {
         return () => window.removeEventListener("keydown", onKey);
     }, [router, selected]);
 
+    const handlePersonLinked = useCallback(() => {
+        if (!selected || selected.kind !== "person") return;
+        setPersonLinkKey(k => k + 1);
+        axios.get<PersonDetail>(`/api/person/${selected.id}`)
+            .then((res) => setPersonDetail(res.data))
+            .catch(() => {});
+    }, [selected]);
+
+    const handleCompanyLinked = useCallback(() => {
+        if (!selected || selected.kind !== "company") return;
+        setCompanyLinkKey(k => k + 1);
+        axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
+            .then((res) => setCompanyDetail(res.data))
+            .catch(() => {});
+    }, [selected]);
+
+    const refetchPersonDetail = useCallback(() => {
+        if (!selected || selected.kind !== "person") return;
+        axios.get<PersonDetail>(`/api/person/${selected.id}`)
+            .then((res) => setPersonDetail(res.data))
+            .catch(() => {});
+    }, [selected]);
+
+    const refetchCompanyDetail = useCallback(() => {
+        if (!selected || selected.kind !== "company") return;
+        axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
+            .then((res) => setCompanyDetail(res.data))
+            .catch(() => {});
+    }, [selected]);
+
     const merged = useMemo<CombinedListItem[]>(
         () => [
             ...people.map((p) => ({ kind: "person" as const, id: p.id, name: p.name, phone: p.phone, accountId: p.account?.id ?? null })),
@@ -241,7 +268,7 @@ export default function AllCustomersPage() {
         [merged, search]
     );
 
-    const personTickets: (Ticket & { device: PersonDevice })[] = personDetail
+    const personTickets: (Ticket & { device: CustomerDevice })[] = personDetail
         ? personDetail.devices
             .flatMap((device) => device.tickets.map((ticket) => ({ ...ticket, device })))
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -315,9 +342,7 @@ export default function AllCustomersPage() {
 
             <section className="flex flex-1 bg-muted/30">
                 {!selected && (
-                    <div className="m-auto text-sm text-muted-foreground">
-                        Select a person or company from the list to open details.
-                    </div>
+                    <CustomerEmptyState message="Select a person or company from the list to open details." />
                 )}
 
                 {selected && detailLoading && (
@@ -369,68 +394,28 @@ export default function AllCustomersPage() {
 
                         <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
                             {personTab === "profile" && (
-                                <div className="space-y-4">
-                                    <Card>
-                                        <CardContent className="pt-4 space-y-2.5">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contact</p>
-                                            {personDetail.phone && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Phone size={13} className="shrink-0 text-muted-foreground" />
-                                                    <span>{personDetail.phone}</span>
-                                                </div>
-                                            )}
-                                            {personDetail.email && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <span className="shrink-0 text-muted-foreground text-xs">✉</span>
-                                                    <span>{personDetail.email}</span>
-                                                </div>
-                                            )}
-                                            {personDetail.address && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
-                                                    <span>{personDetail.address}</span>
-                                                </div>
-                                            )}
-                                            <p className="text-xs text-muted-foreground pt-1">Customer since {formatDate(personDetail.createdAt)}</p>
-                                        </CardContent>
-                                    </Card>
-                                    {personDetail.companies.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Building2 size={11} /> Companies</p>
-                                            {personDetail.companies.map((cl) => (
-                                                <Card key={cl.id}>
-                                                    <CardContent className="flex items-center gap-3 py-3">
-                                                        <Building2 size={13} className="shrink-0 text-muted-foreground" />
-                                                        <div>
-                                                            <p className="text-sm font-medium">{cl.company.name}</p>
-                                                            {cl.company.phone && <p className="text-xs text-muted-foreground">{cl.company.phone}</p>}
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {personDetail.devices.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
-                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                {personDetail.devices.map((d) => (
-                                                    <Card key={d.id}>
-                                                        <CardContent className="py-3">
-                                                            <p className="text-sm font-medium">{d.brand} {d.model}</p>
-                                                            <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
-                                                        </CardContent>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        </div>
+                                <div className="space-y-6">
+                                    <PersonProfileEdit
+                                        key={selected?.id}
+                                        profile={{
+                                            id: personDetail.id,
+                                            name: personDetail.name,
+                                            address: personDetail.address,
+                                            phones: personDetail.phones ?? [],
+                                            emails: personDetail.emails ?? [],
+                                        }}
+                                        onSaved={refetchPersonDetail}
+                                    />
+                                    <DevicesMiniGrid devices={personDetail.devices} />
+                                    {canManageUsers && (
+                                        <CustomerEmergencyPasswordResetCard customerId={personDetail.id} />
                                     )}
                                 </div>
                             )}
 
                             {personTab === "tickets" && (
                                 personTickets.length === 0 ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">No tickets for this customer yet</div>
+                                    <CustomerEmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />
                                 ) : (
                                     <Card>
                                         <CardContent className="px-0 pt-0">
@@ -466,7 +451,7 @@ export default function AllCustomersPage() {
 
                             {personTab === "devices" && (
                                 personDetail.devices.length === 0 ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">No devices registered yet</div>
+                                    <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered yet" />
                                 ) : (
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {personDetail.devices.map((device) => (
@@ -490,34 +475,19 @@ export default function AllCustomersPage() {
                             )}
 
                             {personTab === "companies" && (
-                                personDetail.companies.length === 0 ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">Not linked to any company</div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {personDetail.companies.map((companyLink) => (
-                                            <Card key={companyLink.id}>
-                                                <CardContent className="flex items-center justify-between pt-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                                                            <Building2 size={14} className="text-blue-600" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium">{companyLink.company.name}</p>
-                                                            {companyLink.company.phone && <p className="text-xs text-muted-foreground">{companyLink.company.phone}</p>}
-                                                        </div>
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )
+                                <CustomerLinkPanel
+                                    key={personLinkKey}
+                                    customerId={personDetail.id}
+                                    initialLinks={personDetail.companies}
+                                    onLinked={handlePersonLinked}
+                                />
                             )}
 
                             {personTab === "transactions" && (
                                 txLoading ? (
                                     <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                 ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">No transactions found</div>
+                                    <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                 ) : (
                                     <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
                                 )
@@ -570,105 +540,36 @@ export default function AllCustomersPage() {
 
                         <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
                             {companyTab === "profile" && (
-                                <div className="space-y-4">
-                                    <Card>
-                                        <CardContent className="pt-4 space-y-2.5">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Company Info</p>
-                                            {companyDetail.phone && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Phone size={13} className="shrink-0 text-muted-foreground" />
-                                                    <span>{companyDetail.phone}</span>
-                                                </div>
-                                            )}
-                                            {companyDetail.email && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <span className="shrink-0 text-muted-foreground text-xs">✉</span>
-                                                    <span>{companyDetail.email}</span>
-                                                </div>
-                                            )}
-                                            {companyDetail.address && (
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
-                                                    <span>{companyDetail.address}</span>
-                                                </div>
-                                            )}
-                                            {companyDetail.companyReg && (
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    <span className="text-xs">Reg:</span><span>{companyDetail.companyReg}</span>
-                                                </div>
-                                            )}
-                                            {companyDetail.taxId && (
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    <span className="text-xs">Tax:</span><span>{companyDetail.taxId}</span>
-                                                </div>
-                                            )}
-                                            <p className="text-xs text-muted-foreground pt-1">Since {formatDate(companyDetail.createdAt)}</p>
-                                        </CardContent>
-                                    </Card>
-                                    {companyDetail.customers.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><User size={11} /> Contacts</p>
-                                            {companyDetail.customers.map((cc) => (
-                                                <Card key={cc.id}>
-                                                    <CardContent className="flex items-center gap-3 py-3">
-                                                        <User size={13} className="shrink-0 text-muted-foreground" />
-                                                        <div>
-                                                            <p className="text-sm font-medium">{cc.customer.name}</p>
-                                                            {cc.customer.phone && <p className="text-xs text-muted-foreground">{cc.customer.phone}</p>}
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {companyDetail.devices.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
-                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                {companyDetail.devices.map((d) => (
-                                                    <Card key={d.id}>
-                                                        <CardContent className="py-3">
-                                                            <p className="text-sm font-medium">{d.brand} {d.model}</p>
-                                                            <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
-                                                        </CardContent>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                <div className="space-y-6">
+                                    <CompanyProfileEdit
+                                        key={selected?.id}
+                                        profile={{
+                                            id: companyDetail.id,
+                                            name: companyDetail.name,
+                                            address: companyDetail.address,
+                                            companyReg: companyDetail.companyReg,
+                                            taxId: companyDetail.taxId,
+                                            phones: companyDetail.contactRows?.phones ?? [],
+                                            emails: companyDetail.contactRows?.emails ?? [],
+                                        }}
+                                        onSaved={refetchCompanyDetail}
+                                    />
+                                    <DevicesMiniGrid devices={companyDetail.devices} />
                                 </div>
                             )}
 
                             {companyTab === "contacts" && (
-                                companyDetail.customers.length === 0 ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">No contacts linked to this company</div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {companyDetail.customers.map((companyContact) => (
-                                            <Card key={companyContact.id}>
-                                                <CardContent className="flex items-center justify-between pt-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-none bg-muted">
-                                                            <User size={14} className="text-muted-foreground" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium">{companyContact.customer.name}</p>
-                                                            {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
-                                                        </div>
-                                                    </div>
-                                                    <Button asChild variant="link" size="sm">
-                                                        <Link href={`/office/customers/${companyContact.customer.accountId}`}>View</Link>
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                )
+                                <CompanyLinkPanel
+                                    key={companyLinkKey}
+                                    companyId={companyDetail.id}
+                                    initialLinks={companyDetail.customers}
+                                    onLinked={handleCompanyLinked}
+                                />
                             )}
 
                             {companyTab === "devices" && (
                                 companyDetail.devices.length === 0 ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">No devices registered to this company</div>
+                                    <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
                                 ) : (
                                     <Card>
                                         <CardContent className="px-0 pt-0">
@@ -706,7 +607,7 @@ export default function AllCustomersPage() {
                                 txLoading ? (
                                     <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                 ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
-                                    <div className="py-10 text-center text-sm text-muted-foreground">No transactions found</div>
+                                    <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                 ) : (
                                     <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
                                 )

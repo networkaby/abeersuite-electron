@@ -4,7 +4,6 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Plus, X, Building2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +16,12 @@ interface LinkedCompany {
 interface Props {
     customerId: number;
     initialLinks: LinkedCompany[];
+    onLinked?: () => void;
 }
 
 const fieldClass = "flex-1";
 
-export default function CustomerLinkPanel({ customerId, initialLinks }: Props) {
-    const router = useRouter();
+export default function CustomerLinkPanel({ customerId, initialLinks, onLinked }: Props) {
     const [links, setLinks] = useState(initialLinks);
     const [showSearch, setShowSearch] = useState(false);
     const [query, setQuery] = useState("");
@@ -49,7 +48,7 @@ export default function CustomerLinkPanel({ customerId, initialLinks }: Props) {
             setShowSearch(false);
             setQuery("");
             setResults([]);
-            router.refresh();
+            onLinked?.();
         } catch (e: unknown) {
             const msg = axios.isAxiosError(e) ? e.response?.data?.error : "Failed to link";
             toast.error(msg);

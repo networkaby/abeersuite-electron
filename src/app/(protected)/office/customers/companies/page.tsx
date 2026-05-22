@@ -6,10 +6,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
     ArrowLeft, Building2, Phone, MapPin,
-    User, Smartphone, ExternalLink, Pencil, Loader2,
+    User, Smartphone, ExternalLink, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { initials } from "@/modules/customer/lib/initials";
+import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
+import type { CustomerDevice } from "@/modules/customer/lib/customerTypes";
+import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
+import DevicesMiniGrid from "@/modules/customer/components/DevicesMiniGrid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,6 +38,8 @@ import {
 } from "@/components/ui/table";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
+import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
+import CompanyProfileEdit from "@/modules/customer/components/CompanyProfileEdit";
 
 interface CompanyListItem {
     id: number;
@@ -40,21 +47,6 @@ interface CompanyListItem {
     phone: string | null;
     companyReg: string | null;
     _count: { customers: number; devices: number };
-}
-
-interface Ticket {
-    id: number;
-    priority: string;
-    createdAt: string;
-    ticketStatus: { label: string; color: string };
-}
-
-interface Device {
-    id: number;
-    brand: string;
-    model: string;
-    type: string;
-    tickets: Ticket[];
 }
 
 interface CompanyDetail {
@@ -67,24 +59,15 @@ interface CompanyDetail {
     companyReg: string | null;
     taxId: string | null;
     createdAt: string;
-    devices: Device[];
+    devices: CustomerDevice[];
     customers: { id: number; customer: { id: number; accountId: number; name: string; phone: string | null } }[];
+    contactRows: {
+        phones: { id: number; value: string; label: string | null; isPrimary: boolean }[];
+        emails: { id: number; value: string; label: string | null; isPrimary: boolean }[];
+    } | null;
 }
 
 type Tab = "transactions" | "profile" | "contacts" | "devices";
-
-function initials(name: string) {
-    return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
-    return (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <div className="mb-3">{icon}</div>
-            <p className="text-sm">{message}</p>
-        </div>
-    );
-}
 
 export default function CompaniesPage() {
     const router = useRouter();
@@ -96,14 +79,11 @@ export default function CompaniesPage() {
     const [tab, setTab] = useState<Tab>("transactions");
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
+    const [linkKey, setLinkKey] = useState(0);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
     const [saving, setSaving] = useState(false);
-
-    const [editing, setEditing] = useState(false);
-    const [editForm, setEditForm] = useState({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
-    const [editSaving, setEditSaving] = useState(false);
 
     const loadList = useCallback(async () => {
         try {
@@ -158,11 +138,37 @@ export default function CompaniesPage() {
 
     const handleTabChange = (next: Tab) => { setTab(next); };
 
+    // Re-fetch after a contact is linked (CompanyLinkPanel).
+    const handleLinked = useCallback(() => {
+        if (!selectedId) return;
+        setLinkKey(k => k + 1);
+        axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
+            .then((res) => setDetail(res.data))
+            .catch(() => {});
+    }, [selectedId]);
+
+    // Re-fetch after profile edits saved (CompanyProfileEdit).
+    const refetchDetail = useCallback(() => {
+        if (!selectedId) return;
+        axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
+            .then((res) => {
+                setDetail(res.data);
+                // Also refresh the list item name in sidebar
+                setCompanies(prev => prev.map(c => c.id === selectedId && res.data ? { ...c, name: res.data.name } : c));
+            })
+            .catch(() => {});
+    }, [selectedId]);
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.name.trim()) {
-            toast.error("Company name is required");
-            return;
+        if (!form.name.trim()) { toast.error("Company name is required"); return; }
+        if (form.phone.trim()) {
+            const err = phoneError(form.phone);
+            if (err) { toast.error(err); return; }
+        }
+        if (form.email.trim()) {
+            const err = emailError(form.email);
+            if (err) { toast.error(err); return; }
         }
         setSaving(true);
         try {
@@ -183,39 +189,6 @@ export default function CompaniesPage() {
             toast.error("Failed to create company");
         } finally {
             setSaving(false);
-        }
-    };
-
-    const startEdit = () => {
-        if (!detail) return;
-        setEditForm({
-            name: detail.name,
-            phone: detail.phone ?? "",
-            email: detail.email ?? "",
-            address: detail.address ?? "",
-            companyReg: detail.companyReg ?? "",
-            taxId: detail.taxId ?? "",
-        });
-        setEditing(true);
-    };
-
-    const saveEdit = async () => {
-        if (!detail) return;
-        setEditSaving(true);
-        try {
-            await axios.put(`/api/companies/${detail.id}`, editForm);
-            toast.success("Saved");
-            setEditing(false);
-            const [listResponse, detailResponse] = await Promise.all([
-                axios.get<CompanyListItem[]>("/api/companies"),
-                axios.get<CompanyDetail>(`/api/companies/${detail.id}`),
-            ]);
-            setCompanies(listResponse.data);
-            setDetail(detailResponse.data);
-        } catch {
-            toast.error("Failed to save");
-        } finally {
-            setEditSaving(false);
         }
     };
 
@@ -278,7 +251,7 @@ export default function CompaniesPage() {
 
                 <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
                     {!selectedId && (
-                        <EmptyState icon={<Building2 size={40} strokeWidth={1} />} message="Select a company to view details" />
+                        <CustomerEmptyState icon={<Building2 size={40} strokeWidth={1} />} message="Select a company to view details" />
                     )}
 
                     {selectedId && detailLoading && (
@@ -289,6 +262,7 @@ export default function CompaniesPage() {
 
                     {selectedId && !detailLoading && detail && (
                         <>
+                            {/* ── Header ── */}
                             <div className="border-b bg-card px-6 py-4">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex items-center gap-3">
@@ -296,59 +270,21 @@ export default function CompaniesPage() {
                                             {initials(detail.name)}
                                         </div>
                                         <div>
-                                            {editing ? (
-                                                <Input
-                                                    value={editForm.name}
-                                                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                                                    className="h-9 w-64 text-base font-semibold"
-                                                    autoFocus
-                                                />
-                                            ) : (
-                                                <h2 className="text-xl font-bold">{detail.name}</h2>
-                                            )}
+                                            <h2 className="text-xl font-bold">{detail.name}</h2>
                                             <div className="mt-1 flex flex-wrap items-center gap-3">
-                                                {editing ? (
-                                                    <>
-                                                        <Input value={editForm.phone} onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Phone" className="h-8 w-32" />
-                                                        <Input value={editForm.address} onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" className="h-8 w-44" />
-                                                        <Input value={editForm.email} onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" className="h-8 w-40" />
-                                                        <Input value={editForm.companyReg} onChange={(e) => setEditForm((prev) => ({ ...prev, companyReg: e.target.value }))} placeholder="Company Reg" className="h-8 w-32" />
-                                                        <Input value={editForm.taxId} onChange={(e) => setEditForm((prev) => ({ ...prev, taxId: e.target.value }))} placeholder="Tax / VAT" className="h-8 w-28" />
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
-                                                        {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
-                                                        {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
-                                                        {detail.companyReg && <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span>}
-                                                        <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
-                                                    </>
-                                                )}
+                                                {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
+                                                {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
+                                                {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
+                                                {detail.companyReg && <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span>}
+                                                <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
                                             </div>
                                         </div>
                                     </div>
-
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        {editing ? (
-                                            <>
-                                                <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-                                                <Button type="button" size="sm" onClick={saveEdit} disabled={editSaving}>
-                                                    {editSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Button type="button" variant="outline" size="icon-sm" onClick={startEdit}>
-                                                    <Pencil size={14} />
-                                                </Button>
-                                                <Button asChild type="button" variant="outline" size="icon-sm">
-                                                    <Link href={`/office/social/users/${detail.id}`} title="Social profile">
-                                                        <ExternalLink size={14} />
-                                                    </Link>
-                                                </Button>
-                                            </>
-                                        )}
-                                    </div>
+                                    <Button asChild type="button" variant="outline" size="icon-sm">
+                                        <Link href={`/office/social/users/${detail.id}`} title="Social profile">
+                                            <ExternalLink size={14} />
+                                        </Link>
+                                    </Button>
                                 </div>
 
                                 <div className="mt-3 flex flex-wrap gap-2">
@@ -358,6 +294,7 @@ export default function CompaniesPage() {
                                 </div>
                             </div>
 
+                            {/* ── Tabs ── */}
                             <div className="border-b bg-card px-6">
                                 <div className="flex gap-2 py-2">
                                     {(["transactions", "profile", "contacts", "devices"] as Tab[]).map((item) => (
@@ -374,107 +311,43 @@ export default function CompaniesPage() {
                                 </div>
                             </div>
 
+                            {/* ── Tab content ── */}
                             <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
+
+                                {/* Profile — inline editing */}
                                 {tab === "profile" && (
-                                    <div className="space-y-4">
-                                        <Card>
-                                            <CardContent className="pt-4 space-y-2.5">
-                                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Company Info</p>
-                                                {detail.phone && (
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <Phone size={13} className="shrink-0 text-muted-foreground" />
-                                                        <span>{detail.phone}</span>
-                                                    </div>
-                                                )}
-                                                {detail.email && (
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <span className="shrink-0 text-muted-foreground text-xs">✉</span>
-                                                        <span>{detail.email}</span>
-                                                    </div>
-                                                )}
-                                                {detail.address && (
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <MapPin size={13} className="shrink-0 text-muted-foreground" />
-                                                        <span>{detail.address}</span>
-                                                    </div>
-                                                )}
-                                                {detail.companyReg && (
-                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                        <span className="text-xs">Reg:</span><span>{detail.companyReg}</span>
-                                                    </div>
-                                                )}
-                                                {detail.taxId && (
-                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                        <span className="text-xs">Tax:</span><span>{detail.taxId}</span>
-                                                    </div>
-                                                )}
-                                                <p className="text-xs text-muted-foreground pt-1">Since {formatDate(detail.createdAt)}</p>
-                                            </CardContent>
-                                        </Card>
-                                        {detail.customers.length > 0 && (
-                                            <div className="space-y-2">
-                                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><User size={11} /> Contacts</p>
-                                                {detail.customers.map((cc) => (
-                                                    <Card key={cc.id}>
-                                                        <CardContent className="flex items-center gap-3 py-3">
-                                                            <User size={13} className="shrink-0 text-muted-foreground" />
-                                                            <div>
-                                                                <p className="text-sm font-medium">{cc.customer.name}</p>
-                                                                {cc.customer.phone && <p className="text-xs text-muted-foreground">{cc.customer.phone}</p>}
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {detail.devices.length > 0 && (
-                                            <div className="space-y-2">
-                                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
-                                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                    {detail.devices.map((d) => (
-                                                        <Card key={d.id}>
-                                                            <CardContent className="py-3">
-                                                                <p className="text-sm font-medium">{d.brand} {d.model}</p>
-                                                                <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
-                                                            </CardContent>
-                                                        </Card>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="space-y-6">
+                                        <CompanyProfileEdit
+                                            key={selectedId}
+                                            profile={{
+                                                id: detail.id,
+                                                name: detail.name,
+                                                address: detail.address,
+                                                companyReg: detail.companyReg,
+                                                taxId: detail.taxId,
+                                                phones: detail.contactRows?.phones ?? [],
+                                                emails: detail.contactRows?.emails ?? [],
+                                            }}
+                                            onSaved={refetchDetail}
+                                        />
+                                        <DevicesMiniGrid devices={detail.devices} />
                                     </div>
                                 )}
 
+                                {/* Contacts — link management */}
                                 {tab === "contacts" && (
-                                    detail.customers.length === 0 ? (
-                                        <EmptyState icon={<span className="text-3xl">👤</span>} message="No contacts linked to this company" />
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {detail.customers.map((companyContact) => (
-                                                <Card key={companyContact.id}>
-                                                    <CardContent className="flex items-center justify-between pt-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex h-8 w-8 items-center justify-center rounded-none bg-muted">
-                                                                <User size={14} className="text-muted-foreground" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-sm font-medium">{companyContact.customer.name}</p>
-                                                                {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
-                                                            </div>
-                                                        </div>
-                                                        <Button asChild variant="link" size="sm">
-                                                            <Link href={`/office/customers/${companyContact.customer.accountId}`}>View</Link>
-                                                        </Button>
-                                                    </CardContent>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    )
+                                    <CompanyLinkPanel
+                                        key={linkKey}
+                                        companyId={detail.id}
+                                        initialLinks={detail.customers}
+                                        onLinked={handleLinked}
+                                    />
                                 )}
 
+                                {/* Devices */}
                                 {tab === "devices" && (
                                     detail.devices.length === 0 ? (
-                                        <EmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
+                                        <CustomerEmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
                                     ) : (
                                         <Card>
                                             <CardContent className="px-0 pt-0">
@@ -516,11 +389,12 @@ export default function CompaniesPage() {
                                     )
                                 )}
 
+                                {/* Transactions */}
                                 {tab === "transactions" && (
                                     txLoading ? (
                                         <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
                                     ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
-                                        <EmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                        <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                     ) : (
                                         <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
                                     )
@@ -537,7 +411,7 @@ export default function CompaniesPage() {
                         <DialogTitle>New Company</DialogTitle>
                         <DialogDescription>Create a company record with optional registration and tax details.</DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleCreate} className="space-y-3">
+                    <form onSubmit={(e) => { void handleCreate(e); }} className="space-y-3">
                         <div className="space-y-2">
                             <Label>Company Name</Label>
                             <Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} autoFocus />
