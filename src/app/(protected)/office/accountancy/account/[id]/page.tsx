@@ -93,7 +93,7 @@ export default function AccountLedgerPage() {
                     </h1>
                     {data?.account.groupName && (
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            <Link href={`/office/accountancy/groups/${data.account.groupId}`} className="hover:underline">
+                            <Link href={`/office/accountancy/masters/groups/${data.account.groupId}`} className="hover:underline">
                                 {data.account.groupName}
                             </Link>
                             {" › "}{data.account.name}

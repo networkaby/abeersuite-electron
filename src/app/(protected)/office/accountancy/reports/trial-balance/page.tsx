@@ -234,7 +234,7 @@ export default function TrialBalancePage() {
         return next;
     });
     const goLedger = (id: number) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`);
-    const goGroup  = (id: number) => router.push(`/office/accountancy/groups/${id}?from=${from}&to=${to}`);
+    const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
 
     // Grand-total columns — balanced after folding the opening-difference plug
     // into both Opening and Closing on the deficient side.

@@ -182,7 +182,7 @@ export default function BalanceSheetPage() {
         router.push(`/office/accountancy/account/${id}?asOf=${asOf}`);
     };
     const goGroup = (id: number) =>
-        router.push(`/office/accountancy/groups/${id}?asOf=${asOf}`);
+        router.push(`/office/accountancy/masters/groups/${id}?asOf=${asOf}`);
 
     // Compute side totals + auto-balancing "Difference in opening balances".
     //

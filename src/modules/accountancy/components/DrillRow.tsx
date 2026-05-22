@@ -32,7 +32,7 @@ export function DrillRow({ target, period, children, className = "", onClick }: 
         const tail = q ? `?${q}` : "";
 
         switch (target.kind) {
-            case "group":   return `/office/accountancy/groups/${target.id}${tail}`;
+            case "group":   return `/office/accountancy/masters/groups/${target.id}${tail}`;
             case "ledger":  return `/office/accountancy/account/${target.id}${tail}`;
             case "journal": return `/office/accountancy/journal-entries/${target.id}`;
             case "voucher": return target.url;

@@ -106,11 +106,11 @@ export default function GroupDetailPage() {
                         </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        <Link href="/office/accountancy/ledgers" className="hover:underline">Ledgers</Link>
+                        <Link href="/office/accountancy/masters/ledgers" className="hover:underline">Ledgers</Link>
                         {data.group.parent && (
                             <>
                                 {" › "}
-                                <Link href={`/office/accountancy/groups/${data.group.parent.id}${periodSuffix}`} className="hover:underline">
+                                <Link href={`/office/accountancy/masters/groups/${data.group.parent.id}${periodSuffix}`} className="hover:underline">
                                     {data.group.parent.name}
                                 </Link>
                             </>
@@ -145,7 +145,7 @@ export default function GroupDetailPage() {
                                 <tr
                                     key={sg.id}
                                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                    onClick={() => router.push(`/office/accountancy/groups/${sg.id}${periodSuffix}`)}
+                                    onClick={() => router.push(`/office/accountancy/masters/groups/${sg.id}${periodSuffix}`)}
                                 >
                                     <td className="px-4 py-2.5">
                                         <span className="font-medium hover:underline">{sg.name}</span>

@@ -285,10 +285,10 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 href: "/office/accountancy/masters",
                 permission: "finance:voucher:create",
                 children: [
-                    { label: "Account Groups", icon: FolderTree, href: "/office/accountancy/groups" },
-                    { label: "Ledgers", icon: BookOpen, href: "/office/accountancy/ledgers" },
-                    { label: "Chart of accounts", icon: Wallet, href: "/office/accountancy/chart-of-accounts" },
-                    { label: "Opening Balance", icon: Wallet, href: "/office/accountancy/opening-balance", permission: "finance:opening-balance:manage" },
+                    { label: "Account Groups", icon: FolderTree, href: "/office/accountancy/masters/groups" },
+                    { label: "Ledgers", icon: BookOpen, href: "/office/accountancy/masters/ledgers" },
+                    { label: "Chart of accounts", icon: Wallet, href: "/office/accountancy/masters/chart-of-accounts" },
+                    { label: "Opening Balance", icon: Wallet, href: "/office/accountancy/masters/opening-balance", permission: "finance:opening-balance:manage" },
                 ]
             },
 

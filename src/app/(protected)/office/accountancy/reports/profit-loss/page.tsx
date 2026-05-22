@@ -203,7 +203,7 @@ export default function ProfitLossPage() {
         return next;
     });
     const goLedger = (id: number) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`);
-    const goGroup  = (id: number) => router.push(`/office/accountancy/groups/${id}?from=${from}&to=${to}`);
+    const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
 
     const tradingDr = data
         ? data.trading.debit.openingStock + data.trading.debit.purchaseAccounts + data.trading.debit.directExpenses
