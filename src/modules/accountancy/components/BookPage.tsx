@@ -57,11 +57,19 @@ function flattenLedgers(node: GroupNode): LedgerNode[] {
 
 export function BookPage({
     title, subtitle, groupName, autoSingle = true,
+    compact = false, onSelectLedger,
 }: {
     title:        string;
     subtitle:     string;
     groupName:    string;        // e.g. "Cash-in-Hand", "Bank Accounts"
     autoSingle?:  boolean;       // auto-redirect when group has exactly one ledger
+    /** When true, drop the centered `max-w-6xl` wrapper so the report fits a
+     *  parent column (e.g. the right pane of AccountLedgerExplorer). */
+    compact?:     boolean;
+    /** If provided, row clicks call this instead of navigating to
+     *  /office/accountancy/account/[id]. Used to keep the click inside a
+     *  parent master-detail view. */
+    onSelectLedger?: (ledgerId: number) => void;
 }) {
     const router = useRouter();
     const fyStart = indianFiscalYearStart();
@@ -79,12 +87,13 @@ export function BookPage({
                 list.sort((a, b) => a.name.localeCompare(b.name));
                 setLedgers(list);
                 if (autoSingle && list.length === 1) {
-                    router.replace(`/office/accountancy/account/${list[0].id}?from=${from}&to=${to}`);
+                    if (onSelectLedger) onSelectLedger(list[0].id);
+                    else router.replace(`/office/accountancy/account/${list[0].id}?from=${from}&to=${to}`);
                 }
             })
             .catch(() => toast.error(`Failed to load ${title}`))
             .finally(() => setLoading(false));
-    }, [from, to, groupName, autoSingle, router, title]);
+    }, [from, to, groupName, autoSingle, router, title, onSelectLedger]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
@@ -102,7 +111,7 @@ export function BookPage({
         : null;
 
     return (
-        <div className="max-w-6xl mx-auto space-y-5">
+        <div className={compact ? "space-y-4 p-6" : "max-w-6xl mx-auto space-y-5"}>
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">{title}</h1>
@@ -151,7 +160,10 @@ export function BookPage({
                                 <tr
                                     key={l.id}
                                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                    onClick={() => router.push(`/office/accountancy/account/${l.id}?from=${from}&to=${to}`)}
+                                    onClick={() => {
+                                        if (onSelectLedger) onSelectLedger(l.id);
+                                        else router.push(`/office/accountancy/account/${l.id}?from=${from}&to=${to}`);
+                                    }}
                                 >
                                     <td className="px-3 py-2.5 font-medium text-foreground">
                                         {l.name}

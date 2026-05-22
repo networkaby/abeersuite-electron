@@ -11,6 +11,7 @@ export default function CashLedgersPage() {
             panelIcon={<Wallet size={15} className="text-primary" />}
             groupNames={["Cash-in-Hand"]}
             emptyMessage="No cash accounts. Bootstrap seeds 'Cash' + 'Petty Cash' under Cash-in-Hand."
+            book={{ groupName: "Cash-in-Hand", subtitle: "All cash ledgers with period totals — pick one to see its register." }}
         />
     );
 }

@@ -12,6 +12,9 @@ export default function LoanLedgersPage() {
             // Three groups under Loans (Liability): the parent itself plus secured / unsecured.
             groupNames={["Loans (Liability)", "Secured Loans", "Unsecured Loans"]}
             emptyMessage="No loan accounts. Add ledgers under Loans (Liability) / Secured Loans / Unsecured Loans."
+            // BookPage flattens descendants — passing the parent surfaces
+            // Secured + Unsecured loans in the same summary table.
+            book={{ groupName: "Loans (Liability)", subtitle: "All loan ledgers with period totals — pick one to see its register." }}
         />
     );
 }

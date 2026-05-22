@@ -11,6 +11,7 @@ export default function BankLedgersPage() {
             panelIcon={<Banknote size={15} className="text-primary" />}
             groupNames={["Bank Accounts"]}
             emptyMessage="No bank accounts. Add ledgers under the Bank Accounts group."
+            book={{ groupName: "Bank Accounts", subtitle: "All bank ledgers with period totals — pick one to see its register." }}
         />
     );
 }

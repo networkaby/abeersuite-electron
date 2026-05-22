@@ -31,6 +31,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { BookPage } from "@/modules/accountancy/components/BookPage";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,6 +117,15 @@ export interface AccountLedgerExplorerProps {
     manageHref?: string;
     /** Empty-state copy when no accounts match the filter. */
     emptyMessage?: string;
+    /** If provided, the right pane's empty state shows the matching BookPage
+     *  report (opening / debits / credits / closing per ledger + totals)
+     *  instead of "Select an account…". Row clicks select the account here.
+     *  `groupName` should be the parent group when there are sub-groups (the
+     *  report flattens descendants). */
+    book?: {
+        groupName: string;
+        subtitle?: string;
+    };
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -127,6 +137,7 @@ export function AccountLedgerExplorer({
     groupNames,
     manageHref = "/office/accountancy/masters/ledgers",
     emptyMessage,
+    book,
 }: AccountLedgerExplorerProps) {
     const router = useRouter();
     const params = useSearchParams();
@@ -297,10 +308,23 @@ export function AccountLedgerExplorer({
                 {/* ── Right section: account detail ── */}
                 <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
                     {!selectedId && (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-                            <BookOpen size={40} strokeWidth={1} />
-                            <p className="text-sm">Select an account to view its ledger</p>
-                        </div>
+                        book ? (
+                            <div className="flex-1 overflow-auto">
+                                <BookPage
+                                    title={title}
+                                    subtitle={book.subtitle ?? `All ${title.toLowerCase()} ledgers with period totals — click any row to drill in.`}
+                                    groupName={book.groupName}
+                                    autoSingle={false}
+                                    compact
+                                    onSelectLedger={(id) => setSelectedId(id)}
+                                />
+                            </div>
+                        ) : (
+                            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+                                <BookOpen size={40} strokeWidth={1} />
+                                <p className="text-sm">Select an account to view its ledger</p>
+                            </div>
+                        )
                     )}
 
                     {selectedId && detailLoading && (
