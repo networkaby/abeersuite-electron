@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
@@ -202,7 +203,7 @@ export default function ProfitLossPage() {
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
         return next;
     });
-    const goLedger = (id: number) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`);
+    const goLedger = (id: number) => router.push(accountLedgerUrl(id, { from, to }));
     const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
 
     const tradingDr = data

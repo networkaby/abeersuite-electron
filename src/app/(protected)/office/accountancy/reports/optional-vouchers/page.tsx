@@ -22,6 +22,7 @@ import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 type OptionalType =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -37,14 +38,8 @@ const TYPE_LABEL: Record<OptionalType, string> = {
     REJECTION_OUT:  "Rejection Out",
 };
 
-const TYPE_ROUTE: Record<OptionalType, string> = {
-    SALES_ORDER:    "/vouchers/sales-orders",
-    PURCHASE_ORDER: "/vouchers/purchase-orders",
-    GRN:            "/vouchers/grn",
-    CHALLAN:        "/vouchers/challans",
-    REJECTION_IN:   "/vouchers/rejections-in",
-    REJECTION_OUT:  "/vouchers/rejections-out",
-};
+// (TYPE_ROUTE removed — use editFormUrl() from VoucherActionsMenu so
+//  the drill goes to the editable form, not the read-only detail.)
 
 const TYPE_COLOR: Record<OptionalType, string> = {
     SALES_ORDER:    "bg-green-50 text-green-700 border-green-200",
@@ -75,6 +70,8 @@ type Row = {
     reference:   string;
     description: string;
     partyName:   string | null;
+    partyType:   string | null;
+    partyId:     number | null;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
     deletedAt:   string | null;
     totalAmount: number;
@@ -218,7 +215,14 @@ export default function OptionalVouchersPage() {
                                     <tr><td colSpan={9} className="py-12 text-center text-muted-foreground text-sm">No optional vouchers in this period.</td></tr>
                                 ) : data.rows.map((r) => {
                                     const isOpen = expanded.has(r.id);
-                                    const drillUrl = `${TYPE_ROUTE[r.type]}/${r.id}`;
+                                    // Edit form — uses editFormUrl so the drill opens the editable
+                                    // page (?voucherId=…) instead of read-only detail.
+                                    const drillUrl = editFormUrl(r.type, r.id) ?? "";
+                                    // Party link — customer/supplier → /office/customers/all?personId=N
+                                    const partyHref = r.partyId != null
+                                        && (r.partyType === "customer" || r.partyType === "supplier")
+                                        ? `/office/customers/all?personId=${r.partyId}`
+                                        : null;
                                     return (
                                         <Fragment key={r.id}>
                                             <tr
@@ -236,7 +240,13 @@ export default function OptionalVouchersPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-3 py-2.5 font-mono text-primary text-xs whitespace-nowrap">{r.reference}</td>
-                                                <td className="px-3 py-2.5 truncate max-w-[180px]">{r.partyName ?? <span className="text-muted-foreground/50">—</span>}</td>
+                                                <td className="px-3 py-2.5 truncate max-w-[180px]" onClick={(e) => { if (partyHref) e.stopPropagation(); }}>
+                                                    {r.partyName == null
+                                                        ? <span className="text-muted-foreground/50">—</span>
+                                                        : partyHref
+                                                            ? <Link href={partyHref} className="text-primary hover:underline">{r.partyName}</Link>
+                                                            : r.partyName}
+                                                </td>
                                                 <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[260px]">{r.description}</td>
                                                 <td className="px-3 py-2.5 text-center">
                                                     {r.stockDir === "IN"  ? <ArrowDownToLine size={14} className="inline text-green-600" />
@@ -249,7 +259,7 @@ export default function OptionalVouchersPage() {
                                                 <td className="px-3 py-2.5">
                                                     {r.refVoucher ? (
                                                         <Link
-                                                            href={`${TYPE_ROUTE[r.refVoucher.type as OptionalType] ?? drillUrl}/${r.refVoucher.id}`}
+                                                            href={editFormUrl(r.refVoucher.type, r.refVoucher.id) ?? drillUrl}
                                                             onClick={(e) => e.stopPropagation()}
                                                             className="text-xs text-primary hover:underline font-mono"
                                                         >

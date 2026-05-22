@@ -127,6 +127,7 @@ export async function GET(req: NextRequest) {
             type:        v.type,
             date:        v.date,
             partyId:     v.partyId,
+            partyType:   v.partyType,
             partyName:   v.partyName,
             description: v.description,
             totalAmount: Number(v.totalAmount),

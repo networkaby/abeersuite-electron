@@ -12,6 +12,7 @@ import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type Side = "DEBIT" | "CREDIT";
@@ -233,7 +234,7 @@ export default function TrialBalancePage() {
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
         return next;
     });
-    const goLedger = (id: number) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`);
+    const goLedger = (id: number) => router.push(accountLedgerUrl(id, { from, to }));
     const goGroup  = (id: number) => router.push(`/office/accountancy/masters/groups/${id}?from=${from}&to=${to}`);
 
     // Grand-total columns — balanced after folding the opening-difference plug

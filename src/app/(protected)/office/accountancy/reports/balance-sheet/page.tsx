@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
 
@@ -179,7 +180,7 @@ export default function BalanceSheetPage() {
             return;
         }
         if (id <= 0) return;
-        router.push(`/office/accountancy/account/${id}?asOf=${asOf}`);
+        router.push(accountLedgerUrl(id, { asOf }));
     };
     const goGroup = (id: number) =>
         router.push(`/office/accountancy/masters/groups/${id}?asOf=${asOf}`);

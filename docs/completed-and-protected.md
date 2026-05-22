@@ -7,3 +7,7 @@
 - [x] Admin module V1.5 — in-section nav (`office/admin/layout.tsx`, `AdminNav`, `admin/loading.tsx`) (2026-05-20). Grouped tab bar + permission filtering; preserve-first.
 - [x] Settings module V1 (`/office/settings/*` — pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings) extracted from Admin module on 2026-05-20. Same maturity as the V1 Admin pages it replaced — preserve-first.
 - [x] Settings module V1.5 — in-section nav (`office/settings/layout.tsx`, `SettingsNav`) (2026-05-20). Parent layout wraps all settings pages (including naming-convention and printer-settings, which still lack per-page `layout.tsx`). Preserve-first.
+
+## Protected-surface change log
+
+- **2026-05-22 — Balance Sheet drill URL migrated.** `goLedger` in `reports/balance-sheet/page.tsx` now pushes to `/office/accountancy/account-ledgers?accountId=N&asOf=...` (the new master-detail explorer) instead of the legacy single-page `/office/accountancy/account/[id]`. Behavior-equivalent — same destination data, new chrome. No math/output change. Same migration applied to Trial Balance, P&L, Cash Book, Bank Book in the same commit; routed through the new `accountLedgerUrl()` helper in `src/modules/accountancy/lib/accountLedgerUrl.ts`.

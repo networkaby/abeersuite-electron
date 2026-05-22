@@ -88,6 +88,8 @@ export async function GET(req: Request) {
         reference:   v.reference,
         description: v.description,
         partyName:   v.partyName,
+        partyType:   v.partyType,
+        partyId:     v.partyId,
         status:      v.status,
         deletedAt:   v.deletedAt,
         totalAmount: Number(v.totalAmount),

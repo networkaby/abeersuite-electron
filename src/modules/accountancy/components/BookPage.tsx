@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 
 type LedgerNode = {
@@ -88,7 +89,7 @@ export function BookPage({
                 setLedgers(list);
                 if (autoSingle && list.length === 1) {
                     if (onSelectLedger) onSelectLedger(list[0].id);
-                    else router.replace(`/office/accountancy/account/${list[0].id}?from=${from}&to=${to}`);
+                    else router.replace(accountLedgerUrl(list[0].id, { from, to }));
                 }
             })
             .catch(() => toast.error(`Failed to load ${title}`))
@@ -162,7 +163,7 @@ export function BookPage({
                                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                     onClick={() => {
                                         if (onSelectLedger) onSelectLedger(l.id);
-                                        else router.push(`/office/accountancy/account/${l.id}?from=${from}&to=${to}`);
+                                        else router.push(accountLedgerUrl(l.id, { from, to }));
                                     }}
                                 >
                                     <td className="px-3 py-2.5 font-medium text-foreground">

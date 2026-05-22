@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronLeft, ChevronRight as ChevronRightIcon, Search, Clock, ArrowRight, Link2, PackageSearch, ChevronDown } from "lucide-react";
@@ -21,6 +22,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { fmt } from "@/utils/constants";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
 
@@ -115,6 +117,7 @@ type Row = {
     type:        PendingType;
     date:        string;
     partyId:     number | null;
+    partyType:   string | null;
     partyName:   string | null;
     description: string;
     totalAmount: number;
@@ -592,7 +595,14 @@ export default function PendingVouchersPage() {
                                             </td></tr>
                                         ) : data.rows.map((r) => {
                                             const isOpen = expanded.has(r.id);
-                                            const drillUrl = `${TYPE_ROUTE[r.type]}/new?voucherId=${r.id}`;
+                                            // Edit form — `editFormUrl` produces /vouchers/{kind}/new?voucherId=N.
+                                            // The local TYPE_ROUTE map is kept (and used for the StockRow tab below
+                                            // + for SETTLE_NEW_ROUTE) to avoid touching unrelated code paths.
+                                            const drillUrl = editFormUrl(r.type, r.id) ?? `${TYPE_ROUTE[r.type]}/new?voucherId=${r.id}`;
+                                            const partyHref = r.partyId != null
+                                                && (r.partyType === "customer" || r.partyType === "supplier")
+                                                ? `/office/customers/all?personId=${r.partyId}`
+                                                : null;
                                             return (
                                                 <Fragment key={r.id}>
                                                     <tr
@@ -611,7 +621,13 @@ export default function PendingVouchersPage() {
                                                         </td>
                                                         <td className="px-3 py-2.5 font-mono text-primary text-xs whitespace-nowrap">{r.reference}</td>
                                                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{r.branchName ?? <span className="text-muted-foreground/30">—</span>}</td>
-                                                        <td className="px-3 py-2.5 truncate max-w-[180px]">{r.partyName ?? <span className="text-muted-foreground/50">—</span>}</td>
+                                                        <td className="px-3 py-2.5 truncate max-w-[180px]" onClick={(e) => { if (partyHref) e.stopPropagation(); }}>
+                                                            {r.partyName == null
+                                                                ? <span className="text-muted-foreground/50">—</span>
+                                                                : partyHref
+                                                                    ? <Link href={partyHref} className="text-primary hover:underline">{r.partyName}</Link>
+                                                                    : r.partyName}
+                                                        </td>
                                                         <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[260px]">{r.description}</td>
                                                         <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                                                             {r.totalAmount > 0 ? `₹ ${fmt(r.totalAmount)}` : <span className="text-muted-foreground/40">—</span>}
