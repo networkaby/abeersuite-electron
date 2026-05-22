@@ -1,14 +1,5 @@
-"use client";
-import DaybookPage from "./reports/day-book/page";
-// import { useJournalVoucherStore } from "@/store/journalVoucherStore";
-// useJournalVoucherStore.getState().setOpen(true);
+import { redirect } from "next/navigation";
 
-export default function AccountancyPage() {
-    return (
-
-        <>
-            {/* <Button onClick={() => useJournalVoucherStore.getState().setOpen(true)}>Open Journal Voucher</Button> */}
-            <DaybookPage />
-        </>
-    );
+export default function AccountancyMastersPage() {
+    redirect("/office/accountancy/reports/day-book");
 }
