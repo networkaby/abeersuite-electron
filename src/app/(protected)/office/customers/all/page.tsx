@@ -367,7 +367,7 @@ export default function AllCustomersPage() {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6">
+                        <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
                             {personTab === "tickets" && (
                                 personTickets.length === 0 ? (
                                     <div className="py-10 text-center text-sm text-muted-foreground">No tickets for this customer yet</div>
@@ -508,7 +508,7 @@ export default function AllCustomersPage() {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6">
+                        <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
                             {companyTab === "contacts" && (
                                 companyDetail.customers.length === 0 ? (
                                     <div className="py-10 text-center text-sm text-muted-foreground">No contacts linked to this company</div>

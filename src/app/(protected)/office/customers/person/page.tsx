@@ -91,7 +91,7 @@ export default function CustomersPage() {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<CustomerDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [tab, setTab] = useState<Tab>("tickets");
+    const [tab, setTab] = useState<Tab>("transactions");
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
@@ -126,7 +126,7 @@ export default function CustomersPage() {
         axios.get<CustomerDetail>(`/api/person/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
-                setTab("tickets");
+                setTab("transactions");
             })
             .catch(() => toast.error("Failed to load customer"))
             .finally(() => setDetailLoading(false));
@@ -145,16 +145,18 @@ export default function CustomersPage() {
         return () => window.removeEventListener("keydown", onKey);
     }, [router, selectedId]);
 
-    const handleTabChange = (next: Tab) => {
-        setTab(next);
-        if (next === "transactions" && !transactions && selectedId) {
-            setTxLoading(true);
-            axios.get<CustomerTransactions>(`/api/person/${selectedId}/transactions`)
-                .then((r) => setTransactions(r.data))
-                .catch(() => toast.error("Failed to load transactions"))
-                .finally(() => setTxLoading(false));
-        }
-    };
+    const handleTabChange = (next: Tab) => { setTab(next); };
+
+    // Auto-load transactions when the tab is active (covers both the initial
+    // default-to-transactions case and switching to the tab manually).
+    useEffect(() => {
+        if (!selectedId || tab !== "transactions" || transactions) return;
+        setTxLoading(true);
+        axios.get<CustomerTransactions>(`/api/person/${selectedId}/transactions`)
+            .then((r) => setTransactions(r.data))
+            .catch(() => {})
+            .finally(() => setTxLoading(false));
+    }, [selectedId, tab, transactions]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -364,7 +366,7 @@ export default function CustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["tickets", "devices", "companies", "transactions"] as Tab[]).map((item) => (
+                                {(["transactions", "tickets", "devices", "companies"] as Tab[]).map((item) => (
                                     <Button
                                         key={item}
                                         type="button"
@@ -378,7 +380,7 @@ export default function CustomersPage() {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6">
+                        <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
                             {tab === "tickets" && (
                                 allTickets.length === 0 ? (
                                     <EmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />

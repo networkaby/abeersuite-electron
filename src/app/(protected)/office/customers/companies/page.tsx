@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-    Building2, Phone, MapPin,
+    ArrowLeft, Building2, Phone, MapPin,
     User, Smartphone, ExternalLink, Pencil, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -70,7 +71,7 @@ interface CompanyDetail {
     customers: { id: number; customer: { id: number; accountId: number; name: string; phone: string | null } }[];
 }
 
-type Tab = "contacts" | "devices" | "transactions";
+type Tab = "transactions" | "contacts" | "devices";
 
 function initials(name: string) {
     return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
@@ -86,12 +87,13 @@ function EmptyState({ icon, message }: { icon: React.ReactNode; message: string 
 }
 
 export default function CompaniesPage() {
+    const router = useRouter();
     const [companies, setCompanies] = useState<CompanyListItem[]>([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<CompanyDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [tab, setTab] = useState<Tab>("contacts");
+    const [tab, setTab] = useState<Tab>("transactions");
     const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
     const [txLoading, setTxLoading] = useState(false);
 
@@ -125,22 +127,36 @@ export default function CompaniesPage() {
         axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
             .then((response) => {
                 setDetail(response.data);
-                setTab("contacts");
+                setTab("transactions");
             })
             .catch(() => toast.error("Failed to load company"))
             .finally(() => setDetailLoading(false));
     }, [selectedId]);
 
-    const handleTabChange = (next: Tab) => {
-        setTab(next);
-        if (next === "transactions" && !transactions && selectedId) {
-            setTxLoading(true);
-            axios.get<CustomerTransactions>(`/api/companies/${selectedId}/transactions`)
-                .then((r) => setTransactions(r.data))
-                .catch(() => toast.error("Failed to load transactions"))
-                .finally(() => setTxLoading(false));
-        }
-    };
+    // Auto-load transactions when tab is active (covers default + manual switch).
+    useEffect(() => {
+        if (!selectedId || tab !== "transactions" || transactions) return;
+        setTxLoading(true);
+        axios.get<CustomerTransactions>(`/api/companies/${selectedId}/transactions`)
+            .then((r) => setTransactions(r.data))
+            .catch(() => {})
+            .finally(() => setTxLoading(false));
+    }, [selectedId, tab, transactions]);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
+            if (selectedId !== null) setSelectedId(null);
+            else router.back();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [router, selectedId]);
+
+    const handleTabChange = (next: Tab) => { setTab(next); };
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -212,225 +228,238 @@ export default function CompaniesPage() {
         : companies;
 
     return (
-        <div className="-m-8 flex h-screen overflow-hidden bg-card">
-            <EntityListPanel
-                title="Companies"
-                icon={<Building2 size={16} className="text-primary" />}
-                count={companies.length}
-                search={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Search name, phone, reg…"
-                onAdd={() => setShowCreate(true)}
-                isEmpty={filtered.length === 0}
-                emptyMessage={search ? "No matches" : "No companies yet"}
-            >
-                {filtered.map((company) => (
-                    <Button
-                        key={company.id}
-                        type="button"
-                        variant="ghost"
-                        className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${selectedId === company.id ? "bg-muted" : ""}`}
-                        onClick={() => setSelectedId(company.id)}
-                    >
-                        <div className="flex w-full items-center gap-3 text-left">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
-                                {initials(company.name)}
+        <div className="-m-8 flex h-screen flex-col overflow-hidden bg-card">
+            <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
+                    <ArrowLeft size={15} />
+                </Button>
+                <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Link href="/office/customers" className="transition-colors hover:text-foreground">Customers</Link>
+                    <span>/</span>
+                    <span className="font-medium text-foreground">Companies</span>
+                </nav>
+            </header>
+
+            <div className="flex flex-1 overflow-hidden">
+                <EntityListPanel
+                    title="Companies"
+                    icon={<Building2 size={16} className="text-primary" />}
+                    count={companies.length}
+                    search={search}
+                    onSearchChange={setSearch}
+                    searchPlaceholder="Search name, phone, reg…"
+                    onAdd={() => setShowCreate(true)}
+                    isEmpty={filtered.length === 0}
+                    emptyMessage={search ? "No matches" : "No companies yet"}
+                >
+                    {filtered.map((company) => (
+                        <Button
+                            key={company.id}
+                            type="button"
+                            variant="ghost"
+                            className={`h-auto w-full justify-start rounded-none border-b px-4 py-3 ${selectedId === company.id ? "bg-muted" : ""}`}
+                            onClick={() => setSelectedId(company.id)}
+                        >
+                            <div className="flex w-full items-center gap-3 text-left">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-none bg-muted text-xs font-bold">
+                                    {initials(company.name)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{company.name}</p>
+                                    <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
+                                </div>
+                                {company._count.customers > 0 && (
+                                    <span className="text-xs text-muted-foreground">{company._count.customers}c</span>
+                                )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium">{company.name}</p>
-                                <p className="truncate text-xs text-muted-foreground">{company.phone || "No phone"}</p>
-                            </div>
-                            {company._count.customers > 0 && (
-                                <span className="text-xs text-muted-foreground">{company._count.customers}c</span>
-                            )}
+                        </Button>
+                    ))}
+                </EntityListPanel>
+
+                <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
+                    {!selectedId && (
+                        <EmptyState icon={<Building2 size={40} strokeWidth={1} />} message="Select a company to view details" />
+                    )}
+
+                    {selectedId && detailLoading && (
+                        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+                            <Loader2 size={20} className="animate-spin" />
                         </div>
-                    </Button>
-                ))}
-            </EntityListPanel>
+                    )}
 
-            <section className="flex flex-1 flex-col overflow-hidden bg-muted/30">
-                {!selectedId && (
-                    <EmptyState icon={<Building2 size={40} strokeWidth={1} />} message="Select a company to view details" />
-                )}
-
-                {selectedId && detailLoading && (
-                    <div className="flex flex-1 items-center justify-center text-muted-foreground">
-                        <Loader2 size={20} className="animate-spin" />
-                    </div>
-                )}
-
-                {selectedId && !detailLoading && detail && (
-                    <>
-                        <div className="border-b bg-card px-6 py-4">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
-                                        {initials(detail.name)}
-                                    </div>
-                                    <div>
-                                        {editing ? (
-                                            <Input
-                                                value={editForm.name}
-                                                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                                                className="h-9 w-64 text-base font-semibold"
-                                                autoFocus
-                                            />
-                                        ) : (
-                                            <h2 className="text-xl font-bold">{detail.name}</h2>
-                                        )}
-                                        <div className="mt-1 flex flex-wrap items-center gap-3">
+                    {selectedId && !detailLoading && detail && (
+                        <>
+                            <div className="border-b bg-card px-6 py-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-bold text-primary-foreground">
+                                            {initials(detail.name)}
+                                        </div>
+                                        <div>
                                             {editing ? (
-                                                <>
-                                                    <Input value={editForm.phone} onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Phone" className="h-8 w-32" />
-                                                    <Input value={editForm.address} onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" className="h-8 w-44" />
-                                                    <Input value={editForm.email} onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" className="h-8 w-40" />
-                                                    <Input value={editForm.companyReg} onChange={(e) => setEditForm((prev) => ({ ...prev, companyReg: e.target.value }))} placeholder="Company Reg" className="h-8 w-32" />
-                                                    <Input value={editForm.taxId} onChange={(e) => setEditForm((prev) => ({ ...prev, taxId: e.target.value }))} placeholder="Tax / VAT" className="h-8 w-28" />
-                                                </>
+                                                <Input
+                                                    value={editForm.name}
+                                                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                                                    className="h-9 w-64 text-base font-semibold"
+                                                    autoFocus
+                                                />
                                             ) : (
-                                                <>
-                                                    {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
-                                                    {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
-                                                    {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
-                                                    {detail.companyReg && <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span>}
-                                                    <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
-                                                </>
+                                                <h2 className="text-xl font-bold">{detail.name}</h2>
                                             )}
+                                            <div className="mt-1 flex flex-wrap items-center gap-3">
+                                                {editing ? (
+                                                    <>
+                                                        <Input value={editForm.phone} onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Phone" className="h-8 w-32" />
+                                                        <Input value={editForm.address} onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" className="h-8 w-44" />
+                                                        <Input value={editForm.email} onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" className="h-8 w-40" />
+                                                        <Input value={editForm.companyReg} onChange={(e) => setEditForm((prev) => ({ ...prev, companyReg: e.target.value }))} placeholder="Company Reg" className="h-8 w-32" />
+                                                        <Input value={editForm.taxId} onChange={(e) => setEditForm((prev) => ({ ...prev, taxId: e.target.value }))} placeholder="Tax / VAT" className="h-8 w-28" />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {detail.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone size={11} />{detail.phone}</span>}
+                                                        {detail.address && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{detail.address}</span>}
+                                                        {detail.email && <span className="text-xs text-muted-foreground">{detail.email}</span>}
+                                                        {detail.companyReg && <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span>}
+                                                        <span className="text-xs text-muted-foreground">Since {formatDate(detail.createdAt)}</span>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
-                                    {editing ? (
-                                        <>
-                                            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-                                            <Button type="button" size="sm" onClick={saveEdit} disabled={editSaving}>
-                                                {editSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Button type="button" variant="outline" size="icon-sm" onClick={startEdit}>
-                                                <Pencil size={14} />
-                                            </Button>
-                                            <Button asChild type="button" variant="outline" size="icon-sm">
-                                                <Link href={`/office/customers/${detail.accountId}`}>
-                                                    <ExternalLink size={14} />
-                                                </Link>
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <Badge variant="outline"><User size={11} /> {detail.customers.length} contact{detail.customers.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline"><Smartphone size={11} /> {detail.devices.length} device{detail.devices.length !== 1 ? "s" : ""}</Badge>
-                                <Badge variant="outline">{detail.devices.flatMap((d) => d.tickets).length} ticket{detail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
-                            </div>
-                        </div>
-
-                        <div className="border-b bg-card px-6">
-                            <div className="flex gap-2 py-2">
-                                {(["contacts", "devices", "transactions"] as Tab[]).map((item) => (
-                                    <Button
-                                        key={item}
-                                        type="button"
-                                        size="sm"
-                                        variant={tab === item ? "default" : "ghost"}
-                                        onClick={() => handleTabChange(item)}
-                                    >
-                                        {item}
-                                    </Button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-6">
-                            {tab === "contacts" && (
-                                detail.customers.length === 0 ? (
-                                    <EmptyState icon={<span className="text-3xl">👤</span>} message="No contacts linked to this company" />
-                                ) : (
-                                    <div className="space-y-2">
-                                        {detail.customers.map((companyContact) => (
-                                            <Card key={companyContact.id}>
-                                                <CardContent className="flex items-center justify-between pt-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-none bg-muted">
-                                                            <User size={14} className="text-muted-foreground" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium">{companyContact.customer.name}</p>
-                                                            {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
-                                                        </div>
-                                                    </div>
-                                                    <Button asChild variant="link" size="sm">
-                                                        <Link href={`/office/customers/${companyContact.customer.accountId}`}>View</Link>
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {editing ? (
+                                            <>
+                                                <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+                                                <Button type="button" size="sm" onClick={saveEdit} disabled={editSaving}>
+                                                    {editSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Button type="button" variant="outline" size="icon-sm" onClick={startEdit}>
+                                                    <Pencil size={14} />
+                                                </Button>
+                                                <Button asChild type="button" variant="outline" size="icon-sm">
+                                                    <Link href={`/office/customers/${detail.accountId}`}>
+                                                        <ExternalLink size={14} />
+                                                    </Link>
+                                                </Button>
+                                            </>
+                                        )}
                                     </div>
-                                )
-                            )}
+                                </div>
 
-                            {tab === "devices" && (
-                                detail.devices.length === 0 ? (
-                                    <EmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
-                                ) : (
-                                    <Card>
-                                        <CardContent className="px-0 pt-0">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Device</TableHead>
-                                                        <TableHead>Type</TableHead>
-                                                        <TableHead>Latest Ticket</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead>Tickets</TableHead>
-                                                        <TableHead />
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {detail.devices.map((device) => {
-                                                        const latest = device.tickets[0];
-                                                        return (
-                                                            <TableRow key={device.id}>
-                                                                <TableCell><span className="text-sm font-medium">{device.brand} {device.model}</span></TableCell>
-                                                                <TableCell className="text-xs text-muted-foreground">{device.type}</TableCell>
-                                                                <TableCell className="font-mono text-xs text-muted-foreground">{latest ? `#${latest.id}` : "—"}</TableCell>
-                                                                <TableCell>{latest ? <Badge className={latest.ticketStatus.color}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
-                                                                <TableCell className="text-xs text-muted-foreground">{device.tickets.length}</TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {latest && (
-                                                                        <Button asChild variant="link" size="sm">
-                                                                            <Link href={`/office/repairing/tickets/${latest.id}`}>View</Link>
-                                                                        </Button>
-                                                                    )}
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
-                                        </CardContent>
-                                    </Card>
-                                )
-                            )}
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Badge variant="outline"><User size={11} /> {detail.customers.length} contact{detail.customers.length !== 1 ? "s" : ""}</Badge>
+                                    <Badge variant="outline"><Smartphone size={11} /> {detail.devices.length} device{detail.devices.length !== 1 ? "s" : ""}</Badge>
+                                    <Badge variant="outline">{detail.devices.flatMap((d) => d.tickets).length} ticket{detail.devices.flatMap((d) => d.tickets).length !== 1 ? "s" : ""}</Badge>
+                                </div>
+                            </div>
 
-                            {tab === "transactions" && (
-                                txLoading ? (
-                                    <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
-                                ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
-                                    <EmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
-                                ) : (
-                                    <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
-                                )
-                            )}
-                        </div>
-                    </>
-                )}
-            </section>
+                            <div className="border-b bg-card px-6">
+                                <div className="flex gap-2 py-2">
+                                    {(["transactions", "contacts", "devices"] as Tab[]).map((item) => (
+                                        <Button
+                                            key={item}
+                                            type="button"
+                                            size="sm"
+                                            variant={tab === item ? "default" : "ghost"}
+                                            onClick={() => handleTabChange(item)}
+                                        >
+                                            {item}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
+                                {tab === "contacts" && (
+                                    detail.customers.length === 0 ? (
+                                        <EmptyState icon={<span className="text-3xl">👤</span>} message="No contacts linked to this company" />
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {detail.customers.map((companyContact) => (
+                                                <Card key={companyContact.id}>
+                                                    <CardContent className="flex items-center justify-between pt-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex h-8 w-8 items-center justify-center rounded-none bg-muted">
+                                                                <User size={14} className="text-muted-foreground" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-medium">{companyContact.customer.name}</p>
+                                                                {companyContact.customer.phone && <p className="text-xs text-muted-foreground">{companyContact.customer.phone}</p>}
+                                                            </div>
+                                                        </div>
+                                                        <Button asChild variant="link" size="sm">
+                                                            <Link href={`/office/customers/${companyContact.customer.accountId}`}>View</Link>
+                                                        </Button>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )
+                                )}
+
+                                {tab === "devices" && (
+                                    detail.devices.length === 0 ? (
+                                        <EmptyState icon={<span className="text-3xl">📱</span>} message="No devices registered to this company" />
+                                    ) : (
+                                        <Card>
+                                            <CardContent className="px-0 pt-0">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Device</TableHead>
+                                                            <TableHead>Type</TableHead>
+                                                            <TableHead>Latest Ticket</TableHead>
+                                                            <TableHead>Status</TableHead>
+                                                            <TableHead>Tickets</TableHead>
+                                                            <TableHead />
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {detail.devices.map((device) => {
+                                                            const latest = device.tickets[0];
+                                                            return (
+                                                                <TableRow key={device.id}>
+                                                                    <TableCell><span className="text-sm font-medium">{device.brand} {device.model}</span></TableCell>
+                                                                    <TableCell className="text-xs text-muted-foreground">{device.type}</TableCell>
+                                                                    <TableCell className="font-mono text-xs text-muted-foreground">{latest ? `#${latest.id}` : "—"}</TableCell>
+                                                                    <TableCell>{latest ? <Badge className={latest.ticketStatus.color}>{latest.ticketStatus.label}</Badge> : "—"}</TableCell>
+                                                                    <TableCell className="text-xs text-muted-foreground">{device.tickets.length}</TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        {latest && (
+                                                                            <Button asChild variant="link" size="sm">
+                                                                                <Link href={`/office/repairing/tickets/${latest.id}`}>View</Link>
+                                                                            </Button>
+                                                                        )}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
+                                    )
+                                )}
+
+                                {tab === "transactions" && (
+                                    txLoading ? (
+                                        <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
+                                    ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
+                                        <EmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
+                                    ) : (
+                                        <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
+                                    )
+                                )}
+                            </div>
+                        </>
+                    )}
+                </section>
+            </div>
 
             <Dialog open={showCreate} onOpenChange={setShowCreate}>
                 <DialogContent className="sm:max-w-md">
