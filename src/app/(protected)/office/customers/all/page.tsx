@@ -359,7 +359,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["tickets", "devices", "companies", "transactions"] as PersonTab[]).map((item) => (
+                                {(["transactions", "tickets", "devices", "companies"] as PersonTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
                                         {item}
                                     </Button>
@@ -500,7 +500,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["contacts", "devices", "transactions"] as CompanyTab[]).map((item) => (
+                                {(["transactions", "contacts", "devices"] as CompanyTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
                                         {item}
                                     </Button>

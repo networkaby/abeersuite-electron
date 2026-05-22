@@ -31,6 +31,8 @@ export type TxInvVoucher = {
     date: string;
     totalAmount: string;
     amountReceived: string;
+    branch:    { name: string };
+    createdBy: { name: string };
 };
 
 export type CustomerTransactions = { invoices: TxInvoice[]; invVouchers: TxInvVoucher[] };
@@ -49,32 +51,69 @@ const TX_STATUS_COLORS: Record<string, string> = {
 };
 
 export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoice[]; invVouchers: TxInvVoucher[] }) {
-    type Row = { kind: string; id: number; ref: string; type: string; date: string; total: string; paid: string; status: string; url: string | null };
+    type Row = {
+        kind:       string;
+        id:         number;
+        ref:        string;
+        type:       string;
+        date:       string;
+        total:      number;
+        paid:       number;
+        status:     string;
+        url:        string | null;
+        branchName: string | null;
+        createdBy:  string | null;
+        balance:    number; // running balance — set in second pass below
+    };
 
-    const rows: Row[] = [
+    // Build raw rows (balance will be filled below)
+    const rawRows: Omit<Row, "balance">[] = [
         ...invoices.map((inv) => ({
-            kind: "invoice",
-            id: inv.id,
-            ref: inv.number,
-            type: "Invoice",
-            date: inv.issueDate,
-            total: inv.totalAmount,
-            paid: inv.amountPaid,
-            status: inv.status,
-            url: `/office/accountancy/invoices/${inv.id}`,
+            kind:       "invoice",
+            id:         inv.id,
+            ref:        inv.number,
+            type:       "Invoice",
+            date:       inv.issueDate,
+            total:      Number(inv.totalAmount),
+            paid:       Number(inv.amountPaid),
+            status:     inv.status,
+            url:        `/office/accountancy/invoices/${inv.id}`,
+            branchName: null,
+            createdBy:  null,
         })),
         ...invVouchers.map((v) => ({
-            kind: "voucher",
-            id: v.id,
-            ref: v.reference,
-            type: v.type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" "),
-            date: v.date,
-            total: v.totalAmount,
-            paid: v.amountReceived,
-            status: v.status,
-            url: editFormUrl(v.type, v.id),
+            kind:       "voucher",
+            id:         v.id,
+            ref:        v.reference,
+            type:       v.type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" "),
+            date:       v.date,
+            total:      Number(v.totalAmount),
+            paid:       Number(v.amountReceived),
+            status:     v.status,
+            url:        editFormUrl(v.type, v.id),
+            branchName: v.branch.name,
+            createdBy:  v.createdBy.name,
         })),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    ];
+
+    // Running balance: sort chronologically (oldest first), accumulate
+    // (total − paid) = outstanding at each step, then attach to each row.
+    const ascending = [...rawRows].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    let runningBalance = 0;
+    const balanceMap = new Map<string, number>();
+    for (const r of ascending) {
+        runningBalance += r.total - r.paid;
+        balanceMap.set(`${r.kind}-${r.id}`, runningBalance);
+    }
+
+    // Display newest first
+    const rows: Row[] = rawRows
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .map((r) => ({ ...r, balance: balanceMap.get(`${r.kind}-${r.id}`) ?? 0 }));
+
+    const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
     return (
         <Card>
@@ -85,8 +124,11 @@ export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoi
                             <TableHead>Type</TableHead>
                             <TableHead>Reference</TableHead>
                             <TableHead>Date</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                             <TableHead className="text-right">Paid</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
                             <TableHead>Status</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -102,8 +144,13 @@ export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoi
                                     )}
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(row.date)}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{formatRupeesFromPaise(Number(row.total) * 100)}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{formatRupeesFromPaise(Number(row.paid) * 100)}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{row.branchName ?? <span className="opacity-40">—</span>}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{row.createdBy ?? <span className="opacity-40">—</span>}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">{money(row.total)}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">{money(row.paid)}</TableCell>
+                                <TableCell className="text-right font-mono text-xs font-medium tabular-nums">
+                                    {money(row.balance)}
+                                </TableCell>
                                 <TableCell>
                                     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLORS[row.status] ?? "bg-muted text-muted-foreground"}`}>
                                         {row.status.charAt(0) + row.status.slice(1).toLowerCase()}

@@ -37,6 +37,8 @@ export async function GET(
                     date: true,
                     totalAmount: true,
                     amountReceived: true,
+                    branch:    { select: { name: true } },
+                    createdBy: { select: { name: true } },
                 },
                 orderBy: { date: "desc" },
             }),
