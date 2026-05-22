@@ -26,11 +26,20 @@ const BUCKET_COLORS = {
     b90_plus: "text-red-600",
 } as const;
 
+type ViewMode = "party" | "bill";
+
+function fmtIsoDate(s: string): string {
+    // Mon DD format; year omitted for compact rows
+    const d = new Date(s);
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
 export default function ReceivablesPage() {
     const router = useRouter();
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
     const [data, setData] = useState<OutstandingsReport | null>(null);
     const [loading, setLoading] = useState(false);
+    const [view, setView] = useState<ViewMode>("party");
 
     const load = useCallback(() => {
         setLoading(true);
@@ -86,6 +95,31 @@ export default function ReceivablesPage() {
                         </div>
                     </div>
 
+                    {/* View tabs */}
+                    <div className="flex items-center gap-1 border-b border-border">
+                        <button
+                            onClick={() => setView("party")}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                                view === "party"
+                                    ? "border-primary text-primary"
+                                    : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                            Party-wise
+                        </button>
+                        <button
+                            onClick={() => setView("bill")}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                                view === "bill"
+                                    ? "border-primary text-primary"
+                                    : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                            Bill-wise <span className="ml-1 text-xs text-muted-foreground">({data.bills.length})</span>
+                        </button>
+                    </div>
+
+                    {view === "party" && (
                     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <table className="w-full text-sm">
                             <thead className="border-b bg-muted text-xs text-muted-foreground">
@@ -140,6 +174,71 @@ export default function ReceivablesPage() {
                             )}
                         </table>
                     </div>
+                    )}
+
+                    {view === "bill" && (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                        <table className="w-full text-sm">
+                            <thead className="border-b bg-muted text-xs text-muted-foreground">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Bill date</th>
+                                    <th className="px-3 py-2 text-left font-medium">Ref</th>
+                                    <th className="px-3 py-2 text-left font-medium">Party</th>
+                                    <th className="px-3 py-2 text-left font-medium">Due date</th>
+                                    <th className="px-3 py-2 text-right font-medium">Total</th>
+                                    <th className="px-3 py-2 text-right font-medium">Paid</th>
+                                    <th className="px-3 py-2 text-right font-medium">Outstanding</th>
+                                    <th className="px-3 py-2 text-right font-medium">Status</th>
+                                    <th className="px-3 py-2 w-8" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.bills.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={9} className="py-12 text-center text-muted-foreground text-sm">
+                                            No outstanding bills.
+                                        </td>
+                                    </tr>
+                                ) : data.bills.map((b) => {
+                                    const statusClass =
+                                        b.bucket === "b0_30"    ? "text-muted-foreground" :
+                                        b.bucket === "b30_60"   ? "text-amber-600" :
+                                        b.bucket === "b60_90"   ? "text-orange-600" :
+                                                                  "text-red-600";
+                                    const statusLabel = b.daysOverdue <= 30
+                                        ? `Within ${30 - b.daysOverdue}d`
+                                        : `Overdue ${b.daysOverdue - 30}d`;
+                                    return (
+                                        <tr
+                                            key={`${b.kind}-${b.id}`}
+                                            className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
+                                            onClick={() => router.push(`/office/accountancy/reports/ledger-outstandings/${b.accountId}?asOf=${asOf}`)}
+                                        >
+                                            <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.billDate)}</td>
+                                            <td className="px-3 py-2.5 font-mono text-xs">{b.ref}</td>
+                                            <td className="px-3 py-2.5 font-medium text-foreground">{b.accountName}</td>
+                                            <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground text-xs">{fmtIsoDate(b.dueDate)}</td>
+                                            <td className="px-3 py-2.5 text-right font-mono">{fmt(b.totalAmount)}</td>
+                                            <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{b.paid > 0 ? fmt(b.paid) : <span className="text-muted-foreground/40">—</span>}</td>
+                                            <td className="px-3 py-2.5 text-right font-mono font-semibold">{fmt(b.outstanding)}</td>
+                                            <td className={`px-3 py-2.5 text-right text-xs font-medium ${statusClass}`}>{statusLabel}</td>
+                                            <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                            {data.bills.length > 0 && (
+                                <tfoot className="border-t bg-muted/30 font-semibold">
+                                    <tr>
+                                        <td colSpan={6} className="px-3 py-2.5 text-right">Total</td>
+                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totalOutstanding)}</td>
+                                        <td colSpan={2} />
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                    )}
                 </>
             )}
         </div>

@@ -35,10 +35,16 @@ export type PartyOutstanding = {
     billCount:        number;
 };
 
+export type OutstandingBillFlat = OutstandingBill & {
+    accountId:   number;
+    accountName: string;
+};
+
 export type OutstandingsReport = {
     asOf:             string;
     groupName:        string;
     parties:          PartyOutstanding[];
+    bills:            OutstandingBillFlat[];
     totalOutstanding: number;
     buckets:          Buckets;
 };
@@ -317,6 +323,7 @@ export async function getOutstandings(
             asOf:             asOf.toISOString(),
             groupName,
             parties:          [],
+            bills:            [],
             totalOutstanding: 0,
             buckets:          emptyBuckets(),
         };
@@ -333,6 +340,7 @@ export async function getOutstandings(
     ]);
 
     const partyMap = new Map<number, PartyOutstanding>();
+    const accountNameMap = new Map<number, string>();
     for (const a of accounts) {
         partyMap.set(a.id, {
             accountId:        a.id,
@@ -343,7 +351,10 @@ export async function getOutstandings(
             buckets:          emptyBuckets(),
             billCount:        0,
         });
+        accountNameMap.set(a.id, a.name);
     }
+
+    const flatBills: OutstandingBillFlat[] = [];
 
     for (const raw of bills) {
         const bill = toOutstandingBill(raw, asOf);
@@ -353,7 +364,15 @@ export async function getOutstandings(
         party.buckets[bill.bucket] += bill.outstanding;
         party.totalOutstanding     += bill.outstanding;
         party.billCount            += 1;
+        flatBills.push({
+            ...bill,
+            accountId:   raw.accountId,
+            accountName: accountNameMap.get(raw.accountId) ?? "",
+        });
     }
+
+    // Most-overdue first; oldest bills are the ones to chase.
+    flatBills.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
     const parties = Array.from(partyMap.values())
         .filter((p) => p.totalOutstanding > 0.005)
@@ -373,6 +392,7 @@ export async function getOutstandings(
         asOf: asOf.toISOString(),
         groupName,
         parties,
+        bills: flatBills,
         totalOutstanding,
         buckets: totalBuckets,
     };

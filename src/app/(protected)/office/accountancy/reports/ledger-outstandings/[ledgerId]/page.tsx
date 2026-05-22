@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import type { LedgerOutstanding, AgeingBucket } from "@/modules/accountancy/lib/outstandings";
 
 const BUCKET_LABELS: Record<AgeingBucket, string> = {
@@ -39,6 +40,8 @@ export default function LedgerOutstandingsPage({
     const [asOf, setAsOf] = useState(initialAsOf);
     const [data, setData] = useState<LedgerOutstanding | null>(null);
     const [loading, setLoading] = useState(false);
+
+    useEscapeBack();
 
     const load = useCallback(() => {
         setLoading(true);
