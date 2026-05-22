@@ -3,7 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+    BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { useEscape } from "@/shared/hooks";
 import { Box, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -103,9 +108,13 @@ function startOfYear(): string {
 
 export default function InventoryDetailsPage() {
     const router = useRouter();
+    const params = useSearchParams();
     const [products, setProducts] = useState<ProductListItem[]>([]);
     const [search, setSearch] = useState("");
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [selectedId, setSelectedId] = useState<number | null>(() => {
+        const id = params.get("productId");
+        return id ? Number(id) : null;
+    });
     const [detail, setDetail] = useState<DetailResponse | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [from, setFrom] = useState(startOfYear());
@@ -140,6 +149,11 @@ export default function InventoryDetailsPage() {
         if (selectedId) loadDetail(selectedId, from, to);
     };
 
+    useEscape(() => {
+        if (selectedId) setSelectedId(null);
+        else router.back();
+    });
+
     const filtered = search
         ? products.filter(
             (p) =>
@@ -149,7 +163,42 @@ export default function InventoryDetailsPage() {
         : products;
 
     return (
-        <div className="-m-8 flex h-screen overflow-hidden bg-card">
+        <div className="-m-8 flex h-screen flex-col overflow-hidden bg-card">
+            {/* Breadcrumb bar */}
+            <div className="shrink-0 border-b bg-card px-8 py-2.5">
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <Link href="/office/inventory">Inventory</Link>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            {selectedId && detail ? (
+                                <BreadcrumbLink asChild>
+                                    <button type="button" onClick={() => setSelectedId(null)} className="transition-colors hover:text-foreground">
+                                        Inventory Details
+                                    </button>
+                                </BreadcrumbLink>
+                            ) : (
+                                <BreadcrumbPage>Inventory Details</BreadcrumbPage>
+                            )}
+                        </BreadcrumbItem>
+                        {selectedId && detail && (
+                            <>
+                                <BreadcrumbSeparator />
+                                <BreadcrumbItem>
+                                    <BreadcrumbPage>{detail.product.name}</BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </>
+                        )}
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </div>
+
+            {/* Master-detail row */}
+            <div className="flex flex-1 overflow-hidden">
             <EntityListPanel
                 title="Products"
                 icon={<Box size={15} className="text-primary" />}
@@ -400,6 +449,7 @@ export default function InventoryDetailsPage() {
                     </>
                 )}
             </section>
+            </div>
         </div>
     );
 }

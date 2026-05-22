@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback, Fragment } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
     Loader2, ArrowLeft, AlertTriangle, ChevronRight, ChevronDown, Pencil,
 } from "lucide-react";
@@ -11,8 +12,13 @@ import { Button } from "@/components/ui/button";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+    BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { fmt } from "@/utils/constants";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+import { useEscape } from "@/shared/hooks";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,7 +45,8 @@ type Row = {
     isLow: boolean;
 };
 
-type Response = { method: ValuationMethod; rows: Row[] };
+type Branch = { id: string; name: string };
+type Response = { method: ValuationMethod; branches: Branch[]; rows: Row[] };
 type View = "group" | "category" | "brand";
 
 const METHOD_LABELS: Record<ValuationMethod, string> = {
@@ -68,8 +75,10 @@ export default function StockSummaryPage() {
         return m === "WEIGHTED_AVG" || m === "FIFO" || m === "LIFO" ? m : "LAST_COST";
     });
     const [showProfit, setShowProfitState] = useState<boolean>(() => params.get("profit") === "1");
+    const [branchId, setBranchIdState] = useState<string>(() => params.get("branch") ?? "all");
 
     const [rows, setRows] = useState<Row[]>([]);
+    const [branches, setBranches] = useState<Branch[]>([]);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -79,32 +88,37 @@ export default function StockSummaryPage() {
 
     // ── URL sync helper (don't lose ref/asOf when toggling controls) ──────────
     const pushUrl = useCallback(
-        (next: { view?: View; method?: ValuationMethod; showProfit?: boolean }) => {
+        (next: { view?: View; method?: ValuationMethod; showProfit?: boolean; branchId?: string }) => {
             const qs = new URLSearchParams(params.toString());
-            const v = next.view    ?? view;
-            const m = next.method  ?? method;
+            const v = next.view      ?? view;
+            const m = next.method    ?? method;
             const p = next.showProfit ?? showProfit;
+            const b = next.branchId  ?? branchId;
             if (v === "group") qs.delete("view"); else qs.set("view", v);
             if (m === "LAST_COST") qs.delete("method"); else qs.set("method", m);
             if (p) qs.set("profit", "1"); else qs.delete("profit");
+            if (b === "all") qs.delete("branch"); else qs.set("branch", b);
             router.replace(`${pathname}?${qs.toString()}`);
         },
-        [params, pathname, router, view, method, showProfit],
+        [params, pathname, router, view, method, showProfit, branchId],
     );
 
     const setView = (v: View) => { setViewState(v); pushUrl({ view: v }); };
     const setMethod = (m: ValuationMethod) => { setMethodState(m); pushUrl({ method: m }); };
     const setShowProfit = (p: boolean) => { setShowProfitState(p); pushUrl({ showProfit: p }); };
+    const setBranchId = (b: string) => { setBranchIdState(b); pushUrl({ branchId: b }); };
 
-    // ── Fetch (depends on method) ─────────────────────────────────────────────
+    // ── Fetch (depends on method + branch) ───────────────────────────────────
     const reload = useCallback(() => {
         setLoading(true);
+        const qs = new URLSearchParams({ method });
+        if (branchId !== "all") qs.set("branchId", branchId);
         return axios
-            .get<Response>(`/api/inventory/reports/stock-summary?method=${method}`)
-            .then((r) => setRows(r.data.rows))
+            .get<Response>(`/api/inventory/reports/stock-summary?${qs.toString()}`)
+            .then((r) => { setRows(r.data.rows); setBranches(r.data.branches); })
             .catch(() => toast.error("Failed to load stock summary"))
             .finally(() => setLoading(false));
-    }, [method]);
+    }, [method, branchId]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { reload(); }, [reload]);
@@ -201,6 +215,8 @@ export default function StockSummaryPage() {
         setDialogOpen(true);
     };
 
+    useEscape(() => router.back());
+
     // Column counts
     // Always: Particulars(1) + Qty(1) + Rate(1) + Value(1) = 4
     // + Edit(1) on the right
@@ -212,6 +228,21 @@ export default function StockSummaryPage() {
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="space-y-4">
+            {/* Breadcrumb */}
+            <Breadcrumb>
+                <BreadcrumbList>
+                    <BreadcrumbItem>
+                        <BreadcrumbLink asChild>
+                            <Link href="/office/inventory">Inventory</Link>
+                        </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                        <BreadcrumbPage>Stock Summary</BreadcrumbPage>
+                    </BreadcrumbItem>
+                </BreadcrumbList>
+            </Breadcrumb>
+
             {/* Header */}
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
@@ -272,6 +303,24 @@ export default function StockSummaryPage() {
                         </SelectContent>
                     </Select>
                 </div>
+
+                {/* Branch */}
+                {branches.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Branch</span>
+                        <Select value={branchId} onValueChange={setBranchId}>
+                            <SelectTrigger className="h-8 w-[160px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All branches</SelectItem>
+                                {branches.map((b) => (
+                                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
 
                 {/* Expand / Collapse all */}
                 <Button
@@ -398,7 +447,13 @@ export default function StockSummaryPage() {
                                                     className={r.isLow ? "bg-amber-50/40 hover:bg-amber-100/60 dark:bg-amber-950/10 dark:hover:bg-amber-900/20" : "hover:bg-muted/30"}
                                                 >
                                                     <td className="px-3 py-1.5 pl-9">
-                                                        <span className="text-foreground">{r.name}</span>
+                                                        <Link
+                                                            href={`/office/inventory/inventory-details?productId=${r.id}`}
+                                                            className="text-foreground hover:text-primary hover:underline"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            {r.name}
+                                                        </Link>
                                                         <span className="ml-2 font-mono text-xs text-muted-foreground/70">{r.sku}</span>
                                                         {r.isLow && (
                                                             <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400 text-xs">
