@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 type Voucher = {
     id:             number;
@@ -49,22 +50,10 @@ type Voucher = {
     }[];
 };
 
-// Map each non-GL voucher type to the route segment its detail page lives at.
-// Used to render a clickable back-link to the parent voucher (e.g. GRN → PO).
-const TYPE_ROUTE: Record<string, string> = {
-    SALES_ORDER:     "/vouchers/sales-orders",
-    PURCHASE_ORDER:  "/vouchers/purchase-orders",
-    GRN:             "/vouchers/grn",
-    CHALLAN:         "/vouchers/challans",
-    REJECTION_IN:    "/vouchers/rejections-in",
-    REJECTION_OUT:   "/vouchers/rejections-out",
-    BRANCH_TRANSFER: "/vouchers/branch-transfers",
-    PHYSICAL_STOCK:  "/vouchers/physical-stock",
-    MANUFACTURING_JOURNAL: "/vouchers/manufacturing-journals",
-    SALE:            "/office/inventory/sales",
-    POS:             "/vouchers/pos",
-    PURCHASE:        "/office/inventory/purchases",
-};
+// (Local TYPE_ROUTE removed — duplicated VoucherActionsMenu.EDIT_FORM_URLS
+//  and contained the now-dead /office/inventory/{sales,purchases} entries.
+//  The parent-voucher back-link below now uses editFormUrl() so SALE_RETURN
+//  → SALE drills to the editable form, matching the rest of the app.)
 
 export function InvVoucherDetail({ basePath, label, formPath }: {
     /** Register list URL — Lifecycle hard-delete + refVoucher fallback land here. */
@@ -200,7 +189,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                     <Link2 size={14} className="text-primary" />
                     <span className="text-muted-foreground">Linked to</span>
                     <Link
-                        href={`${TYPE_ROUTE[voucher.refVoucher.type] ?? basePath}/${voucher.refVoucher.id}`}
+                        href={editFormUrl(voucher.refVoucher.type, voucher.refVoucher.id) ?? `${basePath}/${voucher.refVoucher.id}`}
                         className="font-mono font-medium text-primary hover:underline"
                     >
                         {voucher.refVoucher.reference}

@@ -28,12 +28,14 @@ import {
 // Single source of truth for "where does this voucher type's read-only detail
 // page live". Used by Duplicate (which lands on the detail of a fresh draft)
 // and by any consumer that wants to link to a voucher elsewhere.
+// Read-only voucher detail base paths. SALE / PURCHASE / SALE_RETURN /
+// PURCHASE_RETURN are intentionally absent — they no longer have a
+// read-only detail page (deleted 2026-05-23). All four are always opened
+// in the editable form via EDIT_FORM_URLS below; voucherUrl() returns
+// null for them, which surfaces as "no edit page" toast if any caller
+// asks for the legacy detail URL.
 export const VOUCHER_URLS: Record<string, string> = {
-    PURCHASE:        "/office/inventory/purchases",
-    SALE:            "/office/inventory/sales",
     POS:             "/vouchers/pos",
-    SALE_RETURN:     "/office/inventory/sale-returns",
-    PURCHASE_RETURN: "/office/inventory/purchase-returns",
     ESTIMATE:        "/vouchers/estimates",
     SALES_ORDER:     "/vouchers/sales-orders",
     PURCHASE_ORDER:  "/vouchers/purchase-orders",
@@ -140,7 +142,9 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
             const { data } = await axios.post<{ id: number; type: string; reference: string }>(
                 `/api/inventory/vouchers/${voucherId}/duplicate`,
             );
-            const url = voucherUrl(data.type, data.id);
+            // Duplicate always produces a DRAFT — land on the editable form
+            // (the read-only detail would force the user to click Edit again).
+            const url = editFormUrl(data.type, data.id);
             toast.success(`Duplicated as ${data.reference}`);
             if (url) router.push(url);
         } catch (e: unknown) {
