@@ -107,6 +107,7 @@ export async function GET(req: NextRequest) {
             take:    limit,
             include: {
                 _count: { select: { lines: true } },
+                branch: { select: { id: true, name: true } },
                 lines: {
                     include: {
                         product: { select: { id: true, sku: true, name: true } },
@@ -130,6 +131,7 @@ export async function GET(req: NextRequest) {
             description: v.description,
             totalAmount: Number(v.totalAmount),
             lineCount:   v._count.lines,
+            branchName:  v.branch?.name ?? null,
             daysOpen,
             lines: v.lines.map((l) => ({
                 id:          l.id,
