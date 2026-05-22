@@ -68,8 +68,8 @@ type CompanyDetail = {
 };
 
 type SelectedItem = { kind: "person" | "company"; id: number };
-type PersonTab = "tickets" | "devices" | "companies" | "transactions";
-type CompanyTab = "contacts" | "devices" | "transactions";
+type PersonTab = "transactions" | "profile" | "tickets" | "devices" | "companies";
+type CompanyTab = "transactions" | "profile" | "contacts" | "devices";
 
 type Ticket = {
     id: number;
@@ -345,7 +345,7 @@ export default function AllCustomersPage() {
                                     </div>
                                 </div>
                                 <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/customers/${personDetail.accountId}`} title="Open full page">
+                                    <Link href={`/office/social/users/${personDetail.id}`} title="Social profile">
                                         <ExternalLink size={14} />
                                     </Link>
                                 </Button>
@@ -359,7 +359,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "tickets", "devices", "companies"] as PersonTab[]).map((item) => (
+                                {(["transactions", "profile", "tickets", "devices", "companies"] as PersonTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={personTab === item ? "default" : "ghost"} onClick={() => handlePersonTabChange(item)}>
                                         {item}
                                     </Button>
@@ -368,6 +368,66 @@ export default function AllCustomersPage() {
                         </div>
 
                         <div className={`flex-1 overflow-y-auto ${personTab === "transactions" ? "" : "p-6"}`}>
+                            {personTab === "profile" && (
+                                <div className="space-y-4">
+                                    <Card>
+                                        <CardContent className="pt-4 space-y-2.5">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contact</p>
+                                            {personDetail.phone && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <Phone size={13} className="shrink-0 text-muted-foreground" />
+                                                    <span>{personDetail.phone}</span>
+                                                </div>
+                                            )}
+                                            {personDetail.email && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <span className="shrink-0 text-muted-foreground text-xs">✉</span>
+                                                    <span>{personDetail.email}</span>
+                                                </div>
+                                            )}
+                                            {personDetail.address && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
+                                                    <span>{personDetail.address}</span>
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-muted-foreground pt-1">Customer since {formatDate(personDetail.createdAt)}</p>
+                                        </CardContent>
+                                    </Card>
+                                    {personDetail.companies.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Building2 size={11} /> Companies</p>
+                                            {personDetail.companies.map((cl) => (
+                                                <Card key={cl.id}>
+                                                    <CardContent className="flex items-center gap-3 py-3">
+                                                        <Building2 size={13} className="shrink-0 text-muted-foreground" />
+                                                        <div>
+                                                            <p className="text-sm font-medium">{cl.company.name}</p>
+                                                            {cl.company.phone && <p className="text-xs text-muted-foreground">{cl.company.phone}</p>}
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {personDetail.devices.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                {personDetail.devices.map((d) => (
+                                                    <Card key={d.id}>
+                                                        <CardContent className="py-3">
+                                                            <p className="text-sm font-medium">{d.brand} {d.model}</p>
+                                                            <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {personTab === "tickets" && (
                                 personTickets.length === 0 ? (
                                     <div className="py-10 text-center text-sm text-muted-foreground">No tickets for this customer yet</div>
@@ -486,7 +546,7 @@ export default function AllCustomersPage() {
                                     </div>
                                 </div>
                                 <Button asChild type="button" variant="outline" size="icon-sm">
-                                    <Link href={`/office/customers/${companyDetail.accountId}`}>
+                                    <Link href={`/office/social/users/${companyDetail.id}`} title="Social profile">
                                         <ExternalLink size={14} />
                                     </Link>
                                 </Button>
@@ -500,7 +560,7 @@ export default function AllCustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "contacts", "devices"] as CompanyTab[]).map((item) => (
+                                {(["transactions", "profile", "contacts", "devices"] as CompanyTab[]).map((item) => (
                                     <Button key={item} type="button" size="sm" variant={companyTab === item ? "default" : "ghost"} onClick={() => handleCompanyTabChange(item)}>
                                         {item}
                                     </Button>
@@ -509,6 +569,76 @@ export default function AllCustomersPage() {
                         </div>
 
                         <div className={`flex-1 overflow-y-auto ${companyTab === "transactions" ? "" : "p-6"}`}>
+                            {companyTab === "profile" && (
+                                <div className="space-y-4">
+                                    <Card>
+                                        <CardContent className="pt-4 space-y-2.5">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Company Info</p>
+                                            {companyDetail.phone && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <Phone size={13} className="shrink-0 text-muted-foreground" />
+                                                    <span>{companyDetail.phone}</span>
+                                                </div>
+                                            )}
+                                            {companyDetail.email && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <span className="shrink-0 text-muted-foreground text-xs">✉</span>
+                                                    <span>{companyDetail.email}</span>
+                                                </div>
+                                            )}
+                                            {companyDetail.address && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
+                                                    <span>{companyDetail.address}</span>
+                                                </div>
+                                            )}
+                                            {companyDetail.companyReg && (
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                    <span className="text-xs">Reg:</span><span>{companyDetail.companyReg}</span>
+                                                </div>
+                                            )}
+                                            {companyDetail.taxId && (
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                    <span className="text-xs">Tax:</span><span>{companyDetail.taxId}</span>
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-muted-foreground pt-1">Since {formatDate(companyDetail.createdAt)}</p>
+                                        </CardContent>
+                                    </Card>
+                                    {companyDetail.customers.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><User size={11} /> Contacts</p>
+                                            {companyDetail.customers.map((cc) => (
+                                                <Card key={cc.id}>
+                                                    <CardContent className="flex items-center gap-3 py-3">
+                                                        <User size={13} className="shrink-0 text-muted-foreground" />
+                                                        <div>
+                                                            <p className="text-sm font-medium">{cc.customer.name}</p>
+                                                            {cc.customer.phone && <p className="text-xs text-muted-foreground">{cc.customer.phone}</p>}
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {companyDetail.devices.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                {companyDetail.devices.map((d) => (
+                                                    <Card key={d.id}>
+                                                        <CardContent className="py-3">
+                                                            <p className="text-sm font-medium">{d.brand} {d.model}</p>
+                                                            <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {companyTab === "contacts" && (
                                 companyDetail.customers.length === 0 ? (
                                     <div className="py-10 text-center text-sm text-muted-foreground">No contacts linked to this company</div>

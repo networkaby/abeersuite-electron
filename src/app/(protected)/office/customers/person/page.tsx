@@ -70,7 +70,7 @@ interface CustomerDetail {
     companies: { id: number; company: { id: number; name: string; phone: string | null; accountId: number } }[];
 }
 
-type Tab = "tickets" | "devices" | "companies" | "transactions";
+type Tab = "transactions" | "profile" | "tickets" | "devices" | "companies";
 
 function initials(name: string) {
     return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
@@ -348,7 +348,7 @@ export default function CustomersPage() {
                                                 <Pencil size={14} />
                                             </Button>
                                             <Button asChild type="button" variant="outline" size="icon-sm">
-                                                <Link href={`/office/customers/${detail.accountId}`} title="Open full page">
+                                                <Link href={`/office/social/users/${detail.id}`} title="Social profile">
                                                     <ExternalLink size={14} />
                                                 </Link>
                                             </Button>
@@ -366,7 +366,7 @@ export default function CustomersPage() {
 
                         <div className="border-b bg-card px-6">
                             <div className="flex gap-2 py-2">
-                                {(["transactions", "tickets", "devices", "companies"] as Tab[]).map((item) => (
+                                {(["transactions", "profile", "tickets", "devices", "companies"] as Tab[]).map((item) => (
                                     <Button
                                         key={item}
                                         type="button"
@@ -381,6 +381,66 @@ export default function CustomersPage() {
                         </div>
 
                         <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
+                            {tab === "profile" && (
+                                <div className="space-y-4">
+                                    <Card>
+                                        <CardContent className="pt-4 space-y-2.5">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Contact</p>
+                                            {detail.phone && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <Phone size={13} className="shrink-0 text-muted-foreground" />
+                                                    <span>{detail.phone}</span>
+                                                </div>
+                                            )}
+                                            {detail.email && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <span className="shrink-0 text-muted-foreground text-xs">✉</span>
+                                                    <span>{detail.email}</span>
+                                                </div>
+                                            )}
+                                            {detail.address && (
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <MapPin size={13} className="shrink-0 text-muted-foreground" />
+                                                    <span>{detail.address}</span>
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-muted-foreground pt-1">Customer since {formatDate(detail.createdAt)}</p>
+                                        </CardContent>
+                                    </Card>
+                                    {detail.companies.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Building2 size={11} /> Companies</p>
+                                            {detail.companies.map((cl) => (
+                                                <Card key={cl.id}>
+                                                    <CardContent className="flex items-center gap-3 py-3">
+                                                        <Building2 size={13} className="shrink-0 text-muted-foreground" />
+                                                        <div>
+                                                            <p className="text-sm font-medium">{cl.company.name}</p>
+                                                            {cl.company.phone && <p className="text-xs text-muted-foreground">{cl.company.phone}</p>}
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {detail.devices.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                {detail.devices.map((d) => (
+                                                    <Card key={d.id}>
+                                                        <CardContent className="py-3">
+                                                            <p className="text-sm font-medium">{d.brand} {d.model}</p>
+                                                            <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {tab === "tickets" && (
                                 allTickets.length === 0 ? (
                                     <EmptyState icon={<span className="text-3xl">🎫</span>} message="No tickets for this customer yet" />

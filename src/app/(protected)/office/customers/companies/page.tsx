@@ -71,7 +71,7 @@ interface CompanyDetail {
     customers: { id: number; customer: { id: number; accountId: number; name: string; phone: string | null } }[];
 }
 
-type Tab = "transactions" | "contacts" | "devices";
+type Tab = "transactions" | "profile" | "contacts" | "devices";
 
 function initials(name: string) {
     return name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
@@ -342,7 +342,7 @@ export default function CompaniesPage() {
                                                     <Pencil size={14} />
                                                 </Button>
                                                 <Button asChild type="button" variant="outline" size="icon-sm">
-                                                    <Link href={`/office/customers/${detail.accountId}`}>
+                                                    <Link href={`/office/social/users/${detail.id}`} title="Social profile">
                                                         <ExternalLink size={14} />
                                                     </Link>
                                                 </Button>
@@ -360,7 +360,7 @@ export default function CompaniesPage() {
 
                             <div className="border-b bg-card px-6">
                                 <div className="flex gap-2 py-2">
-                                    {(["transactions", "contacts", "devices"] as Tab[]).map((item) => (
+                                    {(["transactions", "profile", "contacts", "devices"] as Tab[]).map((item) => (
                                         <Button
                                             key={item}
                                             type="button"
@@ -375,6 +375,76 @@ export default function CompaniesPage() {
                             </div>
 
                             <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
+                                {tab === "profile" && (
+                                    <div className="space-y-4">
+                                        <Card>
+                                            <CardContent className="pt-4 space-y-2.5">
+                                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Company Info</p>
+                                                {detail.phone && (
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Phone size={13} className="shrink-0 text-muted-foreground" />
+                                                        <span>{detail.phone}</span>
+                                                    </div>
+                                                )}
+                                                {detail.email && (
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <span className="shrink-0 text-muted-foreground text-xs">✉</span>
+                                                        <span>{detail.email}</span>
+                                                    </div>
+                                                )}
+                                                {detail.address && (
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <MapPin size={13} className="shrink-0 text-muted-foreground" />
+                                                        <span>{detail.address}</span>
+                                                    </div>
+                                                )}
+                                                {detail.companyReg && (
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                        <span className="text-xs">Reg:</span><span>{detail.companyReg}</span>
+                                                    </div>
+                                                )}
+                                                {detail.taxId && (
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                        <span className="text-xs">Tax:</span><span>{detail.taxId}</span>
+                                                    </div>
+                                                )}
+                                                <p className="text-xs text-muted-foreground pt-1">Since {formatDate(detail.createdAt)}</p>
+                                            </CardContent>
+                                        </Card>
+                                        {detail.customers.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><User size={11} /> Contacts</p>
+                                                {detail.customers.map((cc) => (
+                                                    <Card key={cc.id}>
+                                                        <CardContent className="flex items-center gap-3 py-3">
+                                                            <User size={13} className="shrink-0 text-muted-foreground" />
+                                                            <div>
+                                                                <p className="text-sm font-medium">{cc.customer.name}</p>
+                                                                {cc.customer.phone && <p className="text-xs text-muted-foreground">{cc.customer.phone}</p>}
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {detail.devices.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><Smartphone size={11} /> Devices</p>
+                                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                    {detail.devices.map((d) => (
+                                                        <Card key={d.id}>
+                                                            <CardContent className="py-3">
+                                                                <p className="text-sm font-medium">{d.brand} {d.model}</p>
+                                                                <p className="text-xs text-muted-foreground">{d.type} · {d.tickets.length} ticket{d.tickets.length !== 1 ? "s" : ""}</p>
+                                                            </CardContent>
+                                                        </Card>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {tab === "contacts" && (
                                     detail.customers.length === 0 ? (
                                         <EmptyState icon={<span className="text-3xl">👤</span>} message="No contacts linked to this company" />
