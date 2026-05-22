@@ -11,6 +11,7 @@ import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 
 type Flow = { id: number; name: string; amount: number };
 type CashFlowData = {
@@ -88,7 +89,7 @@ export default function CashFlowPage() {
                             empty="No cash receipts in this period."
                             rows={data.inflows}
                             total={data.totalIn}
-                            onRow={(id) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`)}
+                            onRow={(id) => router.push(accountLedgerUrl(id, { from, to }))}
                             tone="positive"
                         />
                         <FlowPanel
@@ -96,7 +97,7 @@ export default function CashFlowPage() {
                             empty="No cash payments in this period."
                             rows={data.outflows}
                             total={data.totalOut}
-                            onRow={(id) => router.push(`/office/accountancy/account/${id}?from=${from}&to=${to}`)}
+                            onRow={(id) => router.push(accountLedgerUrl(id, { from, to }))}
                             tone="negative"
                         />
                     </div>

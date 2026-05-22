@@ -9,6 +9,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -185,7 +186,11 @@ export default function GroupDetailPage() {
                                 <tr
                                     key={l.id}
                                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
-                                    onClick={() => router.push(`/office/accountancy/account/${l.id}${periodSuffix}`)}
+                                    onClick={() => router.push(accountLedgerUrl(l.id, {
+                                        from: search.get("from") ?? undefined,
+                                        to:   search.get("to")   ?? undefined,
+                                        asOf: search.get("asOf") ?? undefined,
+                                    }))}
                                 >
                                     <td className="px-4 py-2.5">
                                         <span className="font-medium hover:underline">{l.name}</span>
