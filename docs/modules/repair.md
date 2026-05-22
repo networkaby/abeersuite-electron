@@ -49,6 +49,7 @@
 - **2026-05-10 — Tickets list is repair-only.** The pipeline switcher buttons and Pipeline column were removed from `/office/repairing/tickets`; the page resolves the "service" pipeline by name and only shows its tickets. Any `?pipeline=` URL param is ignored (the sidebar still passes `?pipeline=P1` — harmless no-op).
 - **2026-05-11 — Quick Ticket party step is shared.** The "select/create customer" UI moved into `src/shared/components/PartySearchAndCreate.tsx` and supports person/company creation inline. When a person has linked companies, the ticket form exposes a "Bill To" chooser to set `billingAccountId`.
 - **Linked tickets** for cross-pipeline escalation is by convention (close + create child); `parentTicketId` self-relation is in design docs but **not yet in schema** — verify before relying on it.
+- **Ticket scope derives from Positions, not User M2M.** `buildTicketReadScopeWhere` filters via `primaryOwner.userPositions[].position.{branchId,departmentId}` (and the same on participants). The legacy `User.branches` / `User.departments` many-to-many relations were dropped in the 2026-05-20 Post→Position rename. A user with no Position appointment has empty `branchIds` / `departmentIds` and silently falls back to `"own"` scope — assign them a Position before expecting branch/department visibility.
 
 ## Out of scope / deferred
 
@@ -63,4 +64,4 @@
 | `buildTicketReadScopeWhere(user)` | `src/modules/repairing/lib/ticketScope.ts` | Build a Prisma `where` fragment that constrains tickets to what the caller's `scope` (own / branch / department / org) allows. Use in every list endpoint that returns tickets so the radius is consistent. |
 | `getRepairPipeline(prisma)`, `REPAIR_PIPELINE_NAME` | `src/modules/repairing/lib/repairPipeline.ts` | Name-based resolver for the seeded Service & Repair pipeline. Use instead of hardcoding `P1`. |
 
-_Last updated: 2026-05-19 — `/api/finance/invoices` → `/api/accountancy/invoices` in billing workflow; `repairPipeline.ts` path fixed to `src/modules/repairing/lib/`; stale memory-file link removed._
+_Last updated: 2026-05-23 — noted that `buildTicketReadScopeWhere` now derives branch/department visibility from `userPositions[].position`, not the dropped `User.branches/departments` M2M (2026-05-20 Post→Position rename); date inputs in `TicketEscalation` / `WarrantyConvertModal` migrated to `TallyDateInput`._
