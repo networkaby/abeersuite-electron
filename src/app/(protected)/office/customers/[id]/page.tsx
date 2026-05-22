@@ -1,8 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { notFound } from "next/navigation";
-import PersonProfileView from "@/modules/customer/components/PersonProfileView";
-import CompanyProfileView from "@/modules/customer/components/CompanyProfileView";
+import { notFound, redirect } from "next/navigation";
 
+// /office/customers/[id] uses the account ID as the URL key (legacy pattern).
+// We look up whether the account belongs to a Person or Company, then redirect
+// into the EntityListPanel explorer at /office/customers/all so the customer
+// opens dynamically in the right pane — no separate full-page view needed.
 export default async function CustomerDetailPage({
     params,
 }: {
@@ -17,18 +19,18 @@ export default async function CustomerDetailPage({
         select: {
             personId: true,
             companyId: true,
-            person: { select: { isActive: true } },
-            company: { select: { isActive: true } },
+            person:   { select: { isActive: true } },
+            company:  { select: { isActive: true } },
         },
     });
 
     if (!account) notFound();
 
     if (account.personId && account.person?.isActive) {
-        return <PersonProfileView personId={account.personId} backHref="/office/customers" />;
+        redirect(`/office/customers/all?personId=${account.personId}`);
     }
     if (account.companyId && account.company?.isActive) {
-        return <CompanyProfileView companyId={account.companyId} backHref="/office/customers" />;
+        redirect(`/office/customers/all?companyId=${account.companyId}`);
     }
     notFound();
 }
