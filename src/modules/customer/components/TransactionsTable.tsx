@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { Card, CardContent } from "@/components/ui/card";
 import {
     Table,
@@ -34,12 +35,8 @@ export type TxInvVoucher = {
 
 export type CustomerTransactions = { invoices: TxInvoice[]; invVouchers: TxInvVoucher[] };
 
-const INV_VOUCHER_URLS: Record<string, (id: number) => string> = {
-    SALE:            (id) => `/office/inventory/sales/${id}`,
-    SALE_RETURN:     (id) => `/office/inventory/sales/${id}`,
-    PURCHASE:        (id) => `/office/inventory/purchases/${id}`,
-    PURCHASE_RETURN: (id) => `/office/inventory/purchases/${id}`,
-};
+// (INV_VOUCHER_URLS removed — use the shared editFormUrl() so refs open
+//  the editable full-page form instead of the read-only detail.)
 
 const TX_STATUS_COLORS: Record<string, string> = {
     PAID:      "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
@@ -75,7 +72,7 @@ export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoi
             total: v.totalAmount,
             paid: v.amountReceived,
             status: v.status,
-            url: INV_VOUCHER_URLS[v.type]?.(v.id) ?? null,
+            url: editFormUrl(v.type, v.id),
         })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
