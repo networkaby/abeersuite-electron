@@ -20,7 +20,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
-import { VoucherActionsMenu, voucherUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { VoucherActionsMenu, editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,8 @@ type Transaction = {
     reference: string;
     date: string;
     partyName: string | null;
+    partyType: string | null;
+    partyId: number | null;
     quantity: number;
     rate: number;
     amount: number;
@@ -384,7 +386,17 @@ export default function InventoryDetailsPage() {
                                         </thead>
                                         <tbody className="divide-y divide-border">
                                             {detail.transactions.map((tx) => {
-                                                const url = voucherUrl(tx.type, tx.voucherId);
+                                                // Edit URL — trading vouchers (SALE/PURCHASE/RETURNS) land on the
+                                                // full-page editable form with ?voucherId=; other types fall back to
+                                                // their read-only detail. See editFormUrl in VoucherActionsMenu.
+                                                const url = editFormUrl(tx.type, tx.voucherId);
+                                                // Party link — only customer/supplier party types map to a Person
+                                                // record under /office/customers/all?personId=. Account-type and
+                                                // walk-in (null) parties render as plain text.
+                                                const partyHref = tx.partyId != null
+                                                    && (tx.partyType === "customer" || tx.partyType === "supplier")
+                                                    ? `/office/customers/all?personId=${tx.partyId}`
+                                                    : null;
                                                 const typeClass = TYPE_COLORS[tx.type] ?? "bg-muted text-muted-foreground";
                                                 const statusClass = STATUS_COLORS[tx.paymentStatus] ?? "bg-muted text-muted-foreground";
                                                 return (
@@ -406,8 +418,16 @@ export default function InventoryDetailsPage() {
                                                                 <span className="font-mono text-xs text-muted-foreground">{tx.reference}</span>
                                                             )}
                                                         </td>
-                                                        <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                                                            {tx.partyName ?? "—"}
+                                                        <td className="px-4 py-2.5 text-sm">
+                                                            {tx.partyName == null ? (
+                                                                <span className="text-muted-foreground">—</span>
+                                                            ) : partyHref ? (
+                                                                <Link href={partyHref} className="text-primary hover:underline">
+                                                                    {tx.partyName}
+                                                                </Link>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">{tx.partyName}</span>
+                                                            )}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                                                             {formatDate(tx.date)}
