@@ -14,14 +14,17 @@ import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { MASTERS_NAV_LINKS } from "@/modules/accountancy/masters-nav";
 
 const MASTERS_BASE = "/office/accountancy/masters";
 
+// Plan A: no layout-level Esc binding here. masters/groups/[id] and
+// masters/ledgers/[id] already have their own useEscapeBack; adding one
+// here would stack handlers and double-back. Tab pages without their own
+// handler simply don't respond to Esc — use the breadcrumb to navigate up.
+
 export function MastersBreadcrumb() {
     const pathname = usePathname();
-    useEscapeBack();
 
     // Longest-prefix match so /ledgers/[id] resolves to the Ledgers tab,
     // not to nothing.

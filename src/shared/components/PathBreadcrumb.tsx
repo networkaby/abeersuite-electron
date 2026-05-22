@@ -34,7 +34,11 @@ export interface PathBreadcrumbProps {
      *  title-cased automatically (e.g. "vouchers-registers" → "Vouchers
      *  Registers"). */
     labels?: Record<string, string>;
-    /** If true (default), Esc → router.back() with input/dialog guards. */
+    /** If true, Esc → router.back() with input/dialog guards. Default is
+     *  false so the breadcrumb never double-binds Esc on pages that already
+     *  install their own handler (Plan A — exact return path everywhere).
+     *  Pages without their own Esc handler can opt-in by passing
+     *  `escapeBack` on the layout's PathBreadcrumb. */
     escapeBack?: boolean;
     /** Hide a segment from the rendered breadcrumb (still walked for href
      *  composition). Useful when a route group like `(gl)` shouldn't show. */
@@ -56,7 +60,7 @@ export function PathBreadcrumb({
     root,
     basePath,
     labels,
-    escapeBack = true,
+    escapeBack = false,
     hide,
     className,
 }: PathBreadcrumbProps) {
