@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 
 type VoucherDetail = {
     id: number;
@@ -49,6 +50,7 @@ type VoucherDetail = {
 export default function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
+    useEscapeBack();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canCancel = hasPermissionWithScope(permissions, "inventory:voucher:cancel");

@@ -5,3 +5,4 @@ export { useDeleteWithConfirm } from "./useDeleteWithConfirm";
 export { useApiResource } from "./useApiResource";
 export { useTallyDate, parseTallyDate, isoToDisplay, toIsoDate } from "./useTallyDate";
 export { useEscape } from "./useEscape";
+export { useEscapeBack } from "./useEscapeBack";

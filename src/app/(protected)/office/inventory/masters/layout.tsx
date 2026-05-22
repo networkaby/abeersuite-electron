@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { InventoryMastersNav } from "@/modules/inventory/components/InventoryMastersNav";
+import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export default async function InventoryMastersLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,17 @@ export default async function InventoryMastersLayout({ children }: { children: R
 
     return (
         <div className="container max-w-7xl space-y-0 py-0">
+            <PathBreadcrumb
+                root={{ href: "/office/inventory", label: "Inventory" }}
+                labels={{
+                    "masters": "Masters",
+                    "gst-rates": "GST Rates",
+                    "warranty-terms": "Warranty Terms",
+                    "product-groups": "Product Groups",
+                    "attribute-masters": "Attribute Masters",
+                    "boms": "BOMs",
+                }}
+            />
             <InventoryMastersNav permissions={permissions} />
             {children}
         </div>

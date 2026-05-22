@@ -8,7 +8,7 @@ import { ArrowLeft, Loader2, FolderTree, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { fmt } from "@/utils/constants";
-import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 

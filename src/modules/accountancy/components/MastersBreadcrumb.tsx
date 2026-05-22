@@ -9,28 +9,19 @@
 // page can render its own deeper breadcrumb if/when desired.
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { useEscape } from "@/shared/hooks";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { MASTERS_NAV_LINKS } from "@/modules/accountancy/masters-nav";
 
 const MASTERS_BASE = "/office/accountancy/masters";
 
 export function MastersBreadcrumb() {
     const pathname = usePathname();
-    const router = useRouter();
-
-    // Esc anywhere under /masters/* goes back. Skips when typing in an input
-    // or when a dialog/sheet/popover is open (those consume Esc themselves).
-    useEscape(() => {
-        const t = document.activeElement as HTMLElement | null;
-        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-        if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-        router.back();
-    });
+    useEscapeBack();
 
     // Longest-prefix match so /ledgers/[id] resolves to the Ledgers tab,
     // not to nothing.

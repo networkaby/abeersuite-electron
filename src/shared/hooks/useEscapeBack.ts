@@ -7,9 +7,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export function useEscapeBack(): void {
+export function useEscapeBack(enabled: boolean = true): void {
     const router = useRouter();
     useEffect(() => {
+        if (!enabled) return;
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
             // Don't intercept while typing in an input/textarea/contenteditable.
@@ -21,5 +22,5 @@ export function useEscapeBack(): void {
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [router]);
+    }, [router, enabled]);
 }

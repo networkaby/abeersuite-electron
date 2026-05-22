@@ -12,7 +12,7 @@ import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
-import { useEscapeBack } from "@/modules/accountancy/hooks/useEscapeBack";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 
 interface SourceDoc {
     kind: "sale" | "purchase" | "estimate" | "invoice";
