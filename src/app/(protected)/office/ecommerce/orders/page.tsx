@@ -8,6 +8,7 @@ import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import {
     Table,
     TableBody,
@@ -101,11 +102,11 @@ export default function EcommerceOrdersPage() {
                 </div>
                 <div className="grid gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">From</label>
-                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                    <TallyDateInput value={from} onValueChange={setFrom} />
                 </div>
                 <div className="grid gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">To</label>
-                    <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                    <TallyDateInput value={to} onValueChange={setTo} />
                 </div>
                 <Button type="button" variant="secondary" onClick={() => void load()}>
                     Refresh

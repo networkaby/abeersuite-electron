@@ -40,6 +40,8 @@ import { fmt } from "@/utils/constants";
 // SALE was moved to the full-page /sale route — SaleDialog export is gone.
 // Purchase uses the full-page /purchase route now — no dialog store.
 import { useEstimateDialogStore } from "@/store/estimateDialogStore";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 // SALE + PURCHASE moved to full-page routes (/sale, /purchase) — dialog
 // covers Estimate only now. The Kind union stays as a single-member union
@@ -121,7 +123,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
     const [lines, setLines] = useState<LineState[]>([newLine()]);
     // CASH / CREDIT toggle — SALE only. PURCHASE infers from supplier presence.
     const [payMode, setPayMode] = useState<"CREDIT" | "CASH">("CASH");
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toIsoDate(new Date());
     const [party, setParty] = useState<PickedParty | null>(null);
     const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
     const [header, setHeader] = useState({
@@ -138,7 +140,7 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
         setPayMode("CASH");
         setParty(null);
         partyPickerRef.current?.clear();
-        setHeader({ date: new Date().toISOString().slice(0, 10), description: "", shippingAmt: "", roundOff: "", received: "", validDays: "15" });
+        setHeader({ date: toIsoDate(new Date()), description: "", shippingAmt: "", roundOff: "", received: "", validDays: "15" });
     };
 
     const updateLine = (id: number, patch: Partial<LineState>) =>
@@ -278,10 +280,9 @@ export function TradingVoucherForm({ kind }: { kind: Kind }) {
                             )}
                             <div className="flex items-center gap-2">
                                 <span>Date</span>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     value={header.date}
-                                    onChange={(e) => setHeader((h) => ({ ...h, date: e.target.value }))}
+                                    onValueChange={(iso) => setHeader((h) => ({ ...h, date: iso }))}
                                     className="h-7 w-36 text-xs"
                                 />
                             </div>

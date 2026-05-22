@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatTimeOnly } from "@/shared/lib/format/formatDate";
@@ -573,7 +574,7 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
     const fileInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
 
-    const { register, handleSubmit, watch, formState: { errors } } = useForm<EditForm>({
+    const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<EditForm>({
         resolver: zodResolver(editSchema),
         defaultValues: {
             name: profile.name,
@@ -738,7 +739,10 @@ function EditProfileTab({ profile, onSaved }: { profile: UserProfile; onSaved: (
                     </div>
                     <div className="space-y-1.5">
                         <Label>Birthday <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                        <Input {...register("birthday")} type="date" />
+                        <TallyDateInput
+                            value={watch("birthday") ?? ""}
+                            onValueChange={(iso) => setValue("birthday", iso, { shouldValidate: true })}
+                        />
                     </div>
                 </div>
             </div>

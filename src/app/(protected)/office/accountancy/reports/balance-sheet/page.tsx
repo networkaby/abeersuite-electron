@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
 
@@ -142,7 +143,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
 
 export default function BalanceSheetPage() {
     const router = useRouter();
-    const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+    const [asOf, setAsOf] = useState(toIsoDate(new Date()));
     const [data, setData] = useState<BalanceSheetData | null>(null);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -220,7 +221,7 @@ export default function BalanceSheetPage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1">
                         <Label>As at</Label>
-                        <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
                     <Button onClick={load}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print">

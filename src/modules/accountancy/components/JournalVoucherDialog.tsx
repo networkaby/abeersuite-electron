@@ -34,6 +34,8 @@ import { formatBalanceWithSide } from "@/modules/accountancy/lib/balanceFormat";
 import { useJournalVoucherStore } from "@/store/journalVoucherStore";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 // Voucher.type stored on the row. The reference number follows the JOURNAL
 // VoucherSeries (Settings → Year Ending), producing "JOURNAL/26-27/0001"-style refs.
@@ -150,7 +152,7 @@ export function JournalVoucherDialog() {
     const [saving, setSaving] = useState(false);
     const [nextRef, setNextRef] = useState<string>("");
 
-    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(() => toIsoDate(new Date()));
     const [narration, setNarration] = useState("");
     const [autoFocusSideLineId, setAutoFocusSideLineId] = useState<number | null>(null);
     // Single sequential list of lines — Dr/Cr is per-line via dropdown.
@@ -171,7 +173,7 @@ export function JournalVoucherDialog() {
     }, [open]);
 
     const reset = () => {
-        setDate(new Date().toISOString().slice(0, 10));
+        setDate(toIsoDate(new Date()));
         setNarration("");
         setAutoFocusSideLineId(null);
         setLines([newLine("DEBIT"), newLine("CREDIT")]);
@@ -351,11 +353,10 @@ export function JournalVoucherDialog() {
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Date</Label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     autoFocus
                                     value={date}
-                                    onChange={(e) => setDate(e.target.value)}
+                                    onValueChange={setDate}
                                 />
                             </div>
                             <div className="space-y-1.5">

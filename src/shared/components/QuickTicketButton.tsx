@@ -21,6 +21,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -373,7 +374,10 @@ export default function QuickTicketButton() {
                                     </div>
                                     <div className="space-y-2">
                                         <FieldLabel>Purchase Date</FieldLabel>
-                                        <Input {...ticketForm.register("purchaseDate")} type="date" />
+                                        <TallyDateInput
+                                            value={ticketForm.watch("purchaseDate") ?? ""}
+                                            onValueChange={(iso) => ticketForm.setValue("purchaseDate", iso, { shouldValidate: true })}
+                                        />
                                     </div>
                                 </div>
                             )}

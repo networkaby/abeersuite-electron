@@ -19,6 +19,8 @@ import { fmt } from "@/utils/constants";
 import { InvProductPicker } from "@/modules/inventory/components/InvProductPicker";
 import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 export type InvVoucherKind =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -74,7 +76,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState({
-        date:         new Date().toISOString().slice(0, 10),
+        date:         toIsoDate(new Date()),
         description:  "",
         partyName:    "",
         partyPhone:   "",
@@ -153,7 +155,7 @@ export function InvVoucherForm({ type, redirectTo }: { type: InvVoucherKind; red
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1.5">
                         <Label>Date</Label>
-                        <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+                        <TallyDateInput value={form.date} onValueChange={(iso) => setForm((f) => ({ ...f, date: iso }))} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>{PARTY_LABEL[type]}</Label>

@@ -43,6 +43,8 @@ import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type LineForm = {
     productId:    number;
@@ -119,7 +121,7 @@ export function PhysicalStockPage() {
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
     const [form, setForm] = useState({
-        date:        new Date().toISOString().slice(0, 10),
+        date:        toIsoDate(new Date()),
         description: "Physical stock count — counted qty is the opening for this date.",
         lines:       [] as LineForm[],
     });
@@ -304,7 +306,7 @@ export function PhysicalStockPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1.5">
                         <Label>Date</Label>
-                        <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+                        <TallyDateInput value={form.date} onValueChange={(iso) => setForm((f) => ({ ...f, date: iso }))} />
                     </div>
                     <div className="md:col-span-2 space-y-1.5">
                         <Label>Description / Narration *</Label>

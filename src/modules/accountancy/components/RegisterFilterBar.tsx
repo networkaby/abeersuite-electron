@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -71,12 +72,12 @@ export function RegisterFilterBar({
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">From</label>
-                        <Input type="date" value={from} onChange={(e) => handleFrom(e.target.value)} className="h-8 w-36" />
+                        <TallyDateInput value={from} onValueChange={handleFrom} className="h-8 w-36" />
                     </div>
                     <span className="pb-1.5 text-xs text-muted-foreground">→</span>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">To</label>
-                        <Input type="date" value={to} onChange={(e) => handleTo(e.target.value)} className="h-8 w-36" />
+                        <TallyDateInput value={to} onValueChange={handleTo} className="h-8 w-36" />
                     </div>
                 </div>
 

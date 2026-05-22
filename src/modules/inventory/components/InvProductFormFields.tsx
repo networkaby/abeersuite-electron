@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -698,10 +699,9 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>As of</Label>
-                        <Input
-                            type="date"
+                        <TallyDateInput
                             value={form.openingDate}
-                            onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))}
+                            onValueChange={(iso) => setForm((f) => ({ ...f, openingDate: iso }))}
                         />
                         <p className="text-[11px] text-muted-foreground">Books-beginning date.</p>
                     </div>

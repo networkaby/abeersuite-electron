@@ -5,10 +5,11 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
-import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type Movement = { label: string; amount: number };
 type FundFlowData = {
@@ -22,8 +23,8 @@ type FundFlowData = {
 
 export default function FundFlowPage() {
     const fyStart = indianFiscalYearStart();
-    const [from, setFrom] = useState(formatDateInput(fyStart));
-    const [to, setTo]     = useState(formatDateInput(new Date()));
+    const [from, setFrom] = useState(toIsoDate(fyStart));
+    const [to, setTo]     = useState(toIsoDate(new Date()));
     const [data, setData] = useState<FundFlowData | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -50,11 +51,11 @@ export default function FundFlowPage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1">
                         <Label>From</Label>
-                        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={from} onValueChange={setFrom} className="w-auto" />
                     </div>
                     <div className="space-y-1">
                         <Label>To</Label>
-                        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={to} onValueChange={setTo} className="w-auto" />
                     </div>
                     <Button onClick={load}>Refresh</Button>
                 </div>

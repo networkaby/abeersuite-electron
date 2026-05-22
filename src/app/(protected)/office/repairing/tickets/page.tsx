@@ -11,6 +11,7 @@ import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
 import { PRIORITY_META } from "@/utils/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import {
     Select,
     SelectContent,
@@ -189,8 +190,8 @@ export default function TicketsPage() {
                             <SelectItem value="non_warranty">Non-warranty only</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                    <TallyDateInput value={dateFrom} onValueChange={setDateFrom} />
+                    <TallyDateInput value={dateTo} onValueChange={setDateTo} />
                 </div>
 
                 {/* Results count + clear */}

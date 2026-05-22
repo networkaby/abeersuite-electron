@@ -14,25 +14,9 @@ import {
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
-import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { useRegisterFilters, type DatePreset } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
-
-// ── Date preset helpers ───────────────────────────────────────────────────
-
-type DatePreset = "today" | "yesterday" | "last7" | "thisMonth" | "thisFY" | "custom";
-
-function presetRange(p: DatePreset): { from: string; to: string } {
-    const t = new Date();
-    const f = (d: Date) => formatDateInput(d);
-    switch (p) {
-        case "today":     return { from: f(t), to: f(t) };
-        case "yesterday": { const d = new Date(t); d.setDate(d.getDate() - 1); return { from: f(d), to: f(d) }; }
-        case "last7":     { const d = new Date(t); d.setDate(d.getDate() - 6); return { from: f(d), to: f(t) }; }
-        case "thisMonth": return { from: f(new Date(t.getFullYear(), t.getMonth(), 1)), to: f(t) };
-        case "thisFY":    return { from: formatDateInput(indianFiscalYearStart()), to: f(t) };
-        default:          return { from: "", to: "" };
-    }
-}
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 
 // ── Kind filter helper ────────────────────────────────────────────────────
 
@@ -47,7 +31,6 @@ function matchKind(kind: string, filter: string): boolean {
 }
 
 // ── Optional / documentary voucher kinds ─────────────────────────────────
-// Rendered with subtle dimming — they don't create direct accounting entries.
 
 const OPTIONAL_KINDS = new Set([
     "ESTIMATE", "SALES_ORDER", "PURCHASE_ORDER",
@@ -61,36 +44,10 @@ export default function DayBookPage() {
     const { rows, loading, error, reload } = useCombinedVouchers();
     const router = useRouter();
 
-    // ── Filter state (persisted to localStorage) ──────────────────────────
-    const [preset, setPreset] = useState<DatePreset>(() => {
-        try { return (localStorage.getItem("daybook:preset") as DatePreset) ?? "today"; }
-        catch { return "today"; }
-    });
-    const [from, setFrom] = useState(() => {
-        try {
-            const p = (localStorage.getItem("daybook:preset") as DatePreset) ?? "today";
-            return p === "custom"
-                ? (localStorage.getItem("daybook:from") ?? presetRange("today").from)
-                : presetRange(p).from;
-        } catch { return presetRange("today").from; }
-    });
-    const [to, setTo] = useState(() => {
-        try {
-            const p = (localStorage.getItem("daybook:preset") as DatePreset) ?? "today";
-            return p === "custom"
-                ? (localStorage.getItem("daybook:to") ?? presetRange("today").to)
-                : presetRange(p).to;
-        } catch { return presetRange("today").to; }
-    });
+    // Shared date/period/search/status/branch filter state (localStorage-persisted).
+    const filters = useRegisterFilters("daybook");
 
-    const applyPreset = (p: DatePreset) => {
-        setPreset(p);
-        if (p !== "custom") { const r = presetRange(p); setFrom(r.from); setTo(r.to); }
-    };
-    const handleFrom = (v: string) => { setFrom(v); setPreset("custom"); };
-    const handleTo   = (v: string) => { setTo(v);   setPreset("custom"); };
-
-    const [search, setSearch] = useState("");
+    // Day Book-specific filters not in the shared hook.
     const [kind, setKind] = useState(() => {
         try { return localStorage.getItem("daybook:kind") ?? "__all__"; }
         catch { return "__all__"; }
@@ -104,29 +61,9 @@ export default function DayBookPage() {
         catch { return false; }
     });
 
-    const [branchFilter, setBranchFilter] = useState(() => {
-        try { return localStorage.getItem("daybook:branchFilter") ?? "__all__"; }
-        catch { return "__all__"; }
-    });
-
-    const [statuses, setStatuses] = useState<Set<string>>(() => {
-        try {
-            const saved = localStorage.getItem("daybook:statuses");
-            return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
-        } catch { return new Set(); }
-    });
-    const toggleStatus = (s: string) =>
-        setStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
-
-    // Persist filters
-    useEffect(() => { try { localStorage.setItem("daybook:branchFilter",  branchFilter);                  } catch {} }, [branchFilter]);
-    useEffect(() => { try { localStorage.setItem("daybook:preset",        preset);                        } catch {} }, [preset]);
-    useEffect(() => { try { localStorage.setItem("daybook:from",          from);                          } catch {} }, [from]);
-    useEffect(() => { try { localStorage.setItem("daybook:to",            to);                            } catch {} }, [to]);
-    useEffect(() => { try { localStorage.setItem("daybook:kind",          kind);                          } catch {} }, [kind]);
-    useEffect(() => { try { localStorage.setItem("daybook:statuses",      JSON.stringify([...statuses])); } catch {} }, [statuses]);
-    useEffect(() => { try { localStorage.setItem("daybook:optionalOnly",  String(optionalOnly));          } catch {} }, [optionalOnly]);
-    useEffect(() => { try { localStorage.setItem("daybook:inventoryOnly", String(inventoryOnly));         } catch {} }, [inventoryOnly]);
+    useEffect(() => { try { localStorage.setItem("daybook:kind",          kind);                  } catch {} }, [kind]);
+    useEffect(() => { try { localStorage.setItem("daybook:optionalOnly",  String(optionalOnly));  } catch {} }, [optionalOnly]);
+    useEffect(() => { try { localStorage.setItem("daybook:inventoryOnly", String(inventoryOnly)); } catch {} }, [inventoryOnly]);
 
     // Escape → back
     useEffect(() => {
@@ -143,7 +80,6 @@ export default function DayBookPage() {
 
     // ── Filtering ─────────────────────────────────────────────────────────
 
-    // Unique branches derived from all inv rows (stable even when branch filter is active).
     const availableBranches = useMemo(() => {
         const seen = new Map<string, string>();
         for (const r of rows) {
@@ -155,44 +91,37 @@ export default function DayBookPage() {
     }, [rows]);
 
     const filtered = useMemo(() => {
-        const q = search.toLowerCase();
+        const q = filters.search.toLowerCase();
         const OPT_SET = new Set(["ESTIMATE","SALES_ORDER","PURCHASE_ORDER","CHALLAN"]);
         const INV_SET = new Set(["PHYSICAL_STOCK","MANUFACTURING_JOURNAL","BRANCH_TRANSFER","GRN","REJECTION_IN","REJECTION_OUT"]);
         return rows.filter((r) => {
             const d = r.date.slice(0, 10);
-            if (from && d < from) return false;
-            if (to   && d > to)   return false;
-            if (statuses.size > 0 && !statuses.has(r.status)) return false;
+            if (filters.from && d < filters.from) return false;
+            if (filters.to   && d > filters.to)   return false;
+            if (filters.statuses.size > 0 && !filters.statuses.has(r.status)) return false;
             if (!matchKind(r.kind, kind)) return false;
             if (optionalOnly || inventoryOnly) {
                 const isOpt = optionalOnly && OPT_SET.has(r.kind);
                 const isInv = inventoryOnly && INV_SET.has(r.kind);
                 if (!isOpt && !isInv) return false;
             }
-            if (branchFilter !== "__all__" && r.source === "inv" && r.branchId !== branchFilter) return false;
+            if (filters.branchFilter !== "__all__" && r.source === "inv" && r.branchId !== filters.branchFilter) return false;
             if (q && !r.reference.toLowerCase().includes(q)
                   && !(r.narration ?? "").toLowerCase().includes(q)
                   && !(r.party     ?? "").toLowerCase().includes(q)) return false;
             return true;
         });
-    }, [rows, from, to, statuses, kind, search, optionalOnly, inventoryOnly, branchFilter]);
+    }, [rows, filters.from, filters.to, filters.statuses, kind, filters.search, optionalOnly, inventoryOnly, filters.branchFilter]);
 
     const postedTotal = filtered
         .filter((r) => r.status === "POSTED")
         .reduce((s, r) => s + r.totalAmount, 0);
 
-    // Reset every user-controlled filter back to defaults. The "Show all" /
-    // "Clear filters" banner uses this to escape the common footgun where
-    // vouchers are dated outside the active window — the page silently shows
-    // "0 of N rows" and the user can't tell why.
     const clearFilters = () => {
-        applyPreset("thisFY");
-        setSearch("");
+        filters.clearFilters();
         setKind("__all__");
-        setStatuses(new Set());
         setOptionalOnly(false);
         setInventoryOnly(false);
-        setBranchFilter("__all__");
     };
     const hiddenCount = rows.length - filtered.length;
 
@@ -217,7 +146,7 @@ export default function DayBookPage() {
                 <div className="flex items-end gap-2">
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">Period</label>
-                        <Select value={preset} onValueChange={(v) => applyPreset(v as DatePreset)}>
+                        <Select value={filters.preset} onValueChange={(v) => filters.setPreset(v as DatePreset)}>
                             <SelectTrigger className="h-8 w-36">
                                 <SelectValue />
                             </SelectTrigger>
@@ -233,12 +162,12 @@ export default function DayBookPage() {
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">From</label>
-                        <Input type="date" value={from} onChange={(e) => handleFrom(e.target.value)} className="h-8 w-36" />
+                        <TallyDateInput value={filters.from} onValueChange={filters.handleFrom} className="h-8 w-36" />
                     </div>
                     <span className="pb-1.5 text-muted-foreground text-xs">→</span>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-muted-foreground">To</label>
-                        <Input type="date" value={to} onChange={(e) => handleTo(e.target.value)} className="h-8 w-36" />
+                        <TallyDateInput value={filters.to} onValueChange={filters.handleTo} className="h-8 w-36" />
                     </div>
                 </div>
 
@@ -246,8 +175,8 @@ export default function DayBookPage() {
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-muted-foreground">Search</label>
                     <Input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        value={filters.search}
+                        onChange={(e) => filters.setSearch(e.target.value)}
                         placeholder="ref / party / narration"
                         className="h-8 w-52"
                     />
@@ -256,7 +185,7 @@ export default function DayBookPage() {
                 {/* Branch filter */}
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-muted-foreground">Branch</label>
-                    <Select value={branchFilter} onValueChange={setBranchFilter}>
+                    <Select value={filters.branchFilter} onValueChange={filters.setBranchFilter}>
                         <SelectTrigger className="h-8 w-40">
                             <SelectValue placeholder="All branches" />
                         </SelectTrigger>
@@ -332,8 +261,8 @@ export default function DayBookPage() {
                         <div className="flex items-center gap-1.5">
                             <Checkbox
                                 id="status-all"
-                                checked={statuses.size === 0}
-                                onCheckedChange={() => setStatuses(new Set())}
+                                checked={filters.statuses.size === 0}
+                                onCheckedChange={filters.clearStatuses}
                             />
                             <Label htmlFor="status-all" className="text-xs cursor-pointer">All</Label>
                         </div>
@@ -341,8 +270,8 @@ export default function DayBookPage() {
                             <div key={s} className="flex items-center gap-1.5">
                                 <Checkbox
                                     id={`status-${s}`}
-                                    checked={statuses.has(s)}
-                                    onCheckedChange={() => toggleStatus(s)}
+                                    checked={filters.statuses.has(s)}
+                                    onCheckedChange={() => filters.toggleStatus(s)}
                                 />
                                 <Label htmlFor={`status-${s}`} className="text-xs cursor-pointer">
                                     {s.charAt(0) + s.slice(1).toLowerCase()}
@@ -383,7 +312,7 @@ export default function DayBookPage() {
                 <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
             </div>
 
-            {/* Hidden-rows banner — when filters drop every / nearly every row */}
+            {/* Hidden-rows banner */}
             {hiddenCount > 0 && !loading && (
                 <div className="flex shrink-0 items-center gap-3 border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                     <span className="font-medium">

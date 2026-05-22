@@ -38,6 +38,8 @@ import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type LineForm = {
     productId: number;
@@ -126,7 +128,7 @@ export function ManufacturingJournalPage() {
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
     const [form, setForm] = useState({
-        date:               new Date().toISOString().slice(0, 10),
+        date:               toIsoDate(new Date()),
         description:        "Manufacturing run — consume raw materials, produce finished goods.",
         bomId:              null as number | null,
         bomOutputProductId: null as number | null,
@@ -448,7 +450,7 @@ export function ManufacturingJournalPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1.5">
                         <Label>Date</Label>
-                        <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+                        <TallyDateInput value={form.date} onValueChange={(iso) => setForm((f) => ({ ...f, date: iso }))} />
                     </div>
                     <div className="md:col-span-2">
                         <BomPicker

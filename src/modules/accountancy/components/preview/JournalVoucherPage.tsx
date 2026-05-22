@@ -38,6 +38,8 @@ import { VoucherActionBar } from "@/modules/accountancy/components/VoucherAction
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 // ── Loaded JE shape (edit mode) ─────────────────────────────────────────────
 
@@ -193,7 +195,7 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
     const [reloadCounter, setReloadCounter] = useState(0);
     const originalSnapshotRef     = useRef<Snapshot | null>(null);
 
-    const [date, setDate]           = useState(() => new Date().toISOString().slice(0, 10));
+    const [date, setDate]           = useState(() => toIsoDate(new Date()));
     const [narration, setNarration] = useState("");
     const [lines, setLines]         = useState<Line[]>([newLine("DEBIT"), newLine("CREDIT")]);
 
@@ -466,10 +468,9 @@ export function JournalVoucherPage({ voucherId }: { voucherId?: number } = {}) {
                         </div>
                         <div className="flex items-center gap-2">
                             <label className="text-muted-foreground uppercase tracking-wide">Date</label>
-                            <Input
-                                type="date"
+                            <TallyDateInput
                                 value={date}
-                                onChange={(e) => setDate(e.target.value)}
+                                onValueChange={setDate}
                                 className="h-8 w-40 text-xs"
                             />
                         </div>

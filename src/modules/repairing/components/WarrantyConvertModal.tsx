@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -109,7 +110,7 @@ export default function WarrantyConvertModal({ ticketId, isWarranty, warrantySta
                                 <Label className="mb-1 block">
                                     Purchase date <span className="text-muted-foreground">(optional)</span>
                                 </Label>
-                                <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
+                                <TallyDateInput value={purchaseDate} onValueChange={setPurchaseDate} />
                             </div>
                         </>
                     )}

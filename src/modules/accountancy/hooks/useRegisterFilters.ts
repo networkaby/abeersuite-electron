@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDateInput, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 export type DatePreset = "today" | "yesterday" | "last7" | "thisMonth" | "thisFY" | "custom";
 
 export function presetRange(p: DatePreset): { from: string; to: string } {
     const t = new Date();
-    const f = (d: Date) => formatDateInput(d);
+    const f = (d: Date) => toIsoDate(d);
     switch (p) {
         case "today":     return { from: f(t), to: f(t) };
         case "yesterday": { const d = new Date(t); d.setDate(d.getDate() - 1); return { from: f(d), to: f(d) }; }
         case "last7":     { const d = new Date(t); d.setDate(d.getDate() - 6); return { from: f(d), to: f(t) }; }
         case "thisMonth": return { from: f(new Date(t.getFullYear(), t.getMonth(), 1)), to: f(t) };
-        case "thisFY":    return { from: formatDateInput(indianFiscalYearStart()), to: f(t) };
+        case "thisFY":    return { from: toIsoDate(indianFiscalYearStart()), to: f(t) };
         default:          return { from: "", to: "" };
     }
 }

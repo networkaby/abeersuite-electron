@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
@@ -292,17 +293,15 @@ export default function InventoryDetailsPage() {
                                 <span className="text-sm font-semibold shrink-0">Transactions</span>
                                 <div className="flex items-center gap-2 ml-auto flex-wrap">
                                     <label className="text-xs text-muted-foreground">From</label>
-                                    <Input
-                                        type="date"
+                                    <TallyDateInput
                                         value={from}
-                                        onChange={(e) => setFrom(e.target.value)}
+                                        onValueChange={setFrom}
                                         className="h-7 w-36 text-xs"
                                     />
                                     <label className="text-xs text-muted-foreground">To</label>
-                                    <Input
-                                        type="date"
+                                    <TallyDateInput
                                         value={to}
-                                        onChange={(e) => setTo(e.target.value)}
+                                        onValueChange={setTo}
                                         className="h-7 w-36 text-xs"
                                     />
                                     <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={handleRefresh}>

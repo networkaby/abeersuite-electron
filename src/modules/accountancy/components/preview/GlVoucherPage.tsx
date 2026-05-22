@@ -35,6 +35,8 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { numberToIndianWords } from "@/shared/lib/format/numberWords";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 // ── Loaded voucher shape (used in edit mode) ────────────────────────────────
 
@@ -273,7 +275,7 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
     // Bumped after any lifecycle action so the prefill effect re-runs.
     const [reloadCounter, setReloadCounter] = useState(0);
     const originalSnapshotRef = useRef<Snapshot | null>(null);
-    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(() => toIsoDate(new Date()));
     const [narration, setNarration] = useState("");
 
     // Top side — either a Cash/Bank ledger (Payment/Receipt/Contra) or a Party
@@ -495,10 +497,9 @@ export function GlVoucherPage({ kind, voucherId }: { kind: MoneyFlowKind; vouche
                         </div>
                         <div className="flex items-center gap-2">
                             <label className="text-muted-foreground uppercase tracking-wide">Date</label>
-                            <Input
-                                type="date"
+                            <TallyDateInput
                                 value={date}
-                                onChange={(e) => setDate(e.target.value)}
+                                onValueChange={setDate}
                                 className="h-8 w-40 text-xs"
                             />
                         </div>

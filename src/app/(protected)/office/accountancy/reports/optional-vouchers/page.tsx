@@ -19,7 +19,9 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
-import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type OptionalType =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -93,8 +95,8 @@ type Data = {
 export default function OptionalVouchersPage() {
     const router = useRouter();
     const fyStart = indianFiscalYearStart();
-    const [from, setFrom] = useState(formatDateInput(fyStart));
-    const [to, setTo]     = useState(formatDateInput(new Date()));
+    const [from, setFrom] = useState(toIsoDate(fyStart));
+    const [to, setTo]     = useState(toIsoDate(new Date()));
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
     const [page, setPage] = useState(1);
@@ -158,8 +160,8 @@ export default function OptionalVouchersPage() {
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
-                    <div className="space-y-1"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></div>
-                    <div className="space-y-1"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} className="w-auto" /></div>
                     <Button onClick={() => { setPage(1); load(1, search, typeFilter); }}>Refresh</Button>
                 </div>
             </div>

@@ -7,10 +7,10 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
-import { formatDateInput } from "@/modules/accountancy/lib/period";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { LedgerOutstanding, AgeingBucket } from "@/modules/accountancy/lib/outstandings";
 
 const BUCKET_LABELS: Record<AgeingBucket, string> = {
@@ -35,7 +35,7 @@ export default function LedgerOutstandingsPage({
     const router = useRouter();
     const searchParams = useSearchParams();
     const { ledgerId } = use(params);
-    const initialAsOf = searchParams.get("asOf") ?? formatDateInput(new Date());
+    const initialAsOf = searchParams.get("asOf") ?? toIsoDate(new Date());
     const [asOf, setAsOf] = useState(initialAsOf);
     const [data, setData] = useState<LedgerOutstanding | null>(null);
     const [loading, setLoading] = useState(false);
@@ -77,7 +77,7 @@ export default function LedgerOutstandingsPage({
                 <div className="flex items-end gap-2">
                     <div className="space-y-1">
                         <Label>As on</Label>
-                        <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
                     <Button onClick={load}>Refresh</Button>
                 </div>

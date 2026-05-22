@@ -13,6 +13,7 @@ import { Loader2, ChevronLeft, ChevronRight, Search, Clock, ArrowRight, Link2 } 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -383,8 +384,8 @@ export default function PendingVouchersPage() {
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
-                    <div className="space-y-1"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></div>
-                    <div className="space-y-1"><Label>To</Label><Input type="date" value={to}   onChange={(e) => setTo(e.target.value)}   className="w-auto" /></div>
+                    <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} className="w-auto" /></div>
                     <Button onClick={handleRange}>Refresh</Button>
                 </div>
             </div>

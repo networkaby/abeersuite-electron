@@ -5,10 +5,10 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
-import { formatDateInput } from "@/modules/accountancy/lib/period";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type RatioData = {
     from: string; to: string;
@@ -41,7 +41,7 @@ const ratio = (v: number | null): string =>
     v === null || !Number.isFinite(v) ? "—" : `${v.toFixed(2)} : 1`;
 
 export default function RatioAnalysisPage() {
-    const [asOf, setAsOf] = useState(formatDateInput(new Date()));
+    const [asOf, setAsOf] = useState(toIsoDate(new Date()));
     const [data, setData] = useState<RatioData | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -68,7 +68,7 @@ export default function RatioAnalysisPage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1">
                         <Label>As on</Label>
-                        <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
                     <Button onClick={load}>Refresh</Button>
                 </div>

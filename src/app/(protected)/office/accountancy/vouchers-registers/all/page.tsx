@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { fmt } from "@/utils/constants";
 import { useCombinedVouchers } from "@/modules/accountancy/hooks/useCombinedVouchers";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
@@ -76,11 +77,11 @@ export default function AllVouchersPage() {
             <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-muted-foreground">From</label>
-                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-40" />
+                    <TallyDateInput value={from} onValueChange={setFrom} className="h-8 w-40" />
                 </div>
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-muted-foreground">To</label>
-                    <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-40" />
+                    <TallyDateInput value={to} onValueChange={setTo} className="h-8 w-40" />
                 </div>
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-muted-foreground">Kind contains</label>

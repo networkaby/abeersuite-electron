@@ -25,6 +25,8 @@ import { BalanceHint } from "./BalanceHint";
 import { VoucherDialogFooter } from "./VoucherDialogFooter";
 import { useContraDialogStore } from "@/store/contraDialogStore";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 const CONTRA_GROUPS = [ACCOUNT_GROUPS.CASH_IN_HAND, ACCOUNT_GROUPS.BANK_ACCOUNTS] as const;
 const isCashOrBank = (a: GlAccount) =>
@@ -47,7 +49,7 @@ export function ContraDialog() {
     const [nextRef, setNextRef] = useState("");
     const [saving, setSaving] = useState(false);
 
-    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(() => toIsoDate(new Date()));
     const [sourceId, setSourceId] = useState<number | null>(null);
     const [rows, setRows] = useState<ParticularsRow[]>([newRow()]);
     const [narration, setNarration] = useState("");
@@ -66,7 +68,7 @@ export function ContraDialog() {
         setSourceId(null);
         setRows([newRow()]);
         setNarration("");
-        setDate(new Date().toISOString().slice(0, 10));
+        setDate(toIsoDate(new Date()));
     };
 
     useEffect(() => {
@@ -150,11 +152,10 @@ export function ContraDialog() {
                     {/* ── Date row ── */}
                     <div className="flex items-center gap-3">
                         <Label className="w-16 shrink-0 text-xs">Date</Label>
-                        <Input
-                            type="date"
+                        <TallyDateInput
                             autoFocus
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
+                            onValueChange={setDate}
                             className="h-7 w-40 text-sm"
                         />
                     </div>

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Loader2, AlertTriangle, CheckCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -288,7 +289,7 @@ function AccountOpeningSection({
                     </div>
                     <div className="space-y-1.5">
                         <Label>As of</Label>
-                        <Input type="date" value={form.asOfDate} onChange={(e) => setForm((f) => ({ ...f, asOfDate: e.target.value }))} />
+                        <TallyDateInput value={form.asOfDate} onValueChange={(iso) => setForm((f) => ({ ...f, asOfDate: iso }))} />
                     </div>
                     <div className="md:col-span-5 flex justify-end gap-2 pt-1">
                         <Button variant="outline" onClick={() => setShowAdd(false)}>Close</Button>
@@ -470,7 +471,7 @@ function ProductOpeningSection({
                     </div>
                     <div className="space-y-1.5">
                         <Label>As of</Label>
-                        <Input type="date" value={form.asOfDate} onChange={(e) => setForm((f) => ({ ...f, asOfDate: e.target.value }))} />
+                        <TallyDateInput value={form.asOfDate} onValueChange={(iso) => setForm((f) => ({ ...f, asOfDate: iso }))} />
                     </div>
                     <div className="md:col-span-5 flex justify-end gap-2 pt-1">
                         <Button variant="outline" onClick={() => setShowAdd(false)}>Close</Button>
@@ -660,10 +661,9 @@ function QuickCreateAccountDialog({
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-xs">As of</Label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     value={form.openingDate}
-                                    onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))}
+                                    onValueChange={(iso) => setForm((f) => ({ ...f, openingDate: iso }))}
                                 />
                             </div>
                         </div>
@@ -806,10 +806,9 @@ function QuickCreateProductDialog({
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-xs">As of</Label>
-                                <Input
-                                    type="date"
+                                <TallyDateInput
                                     value={form.openingDate}
-                                    onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))}
+                                    onValueChange={(iso) => setForm((f) => ({ ...f, openingDate: iso }))}
                                 />
                             </div>
                         </div>

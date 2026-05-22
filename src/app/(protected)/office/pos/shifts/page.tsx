@@ -10,12 +10,13 @@ import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronRight, ArrowDownUp, Clock, AlertTriangle, Users } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type ShiftRow = {
     id: number;
@@ -39,9 +40,9 @@ export default function ShiftsReportPage() {
     const [branchScope, setBranchScope] = useState<"active" | "all">("active");
     const [from, setFrom] = useState(() => {
         const d = new Date(); d.setDate(d.getDate() - 30);
-        return d.toISOString().slice(0, 10);
+        return toIsoDate(d);
     });
-    const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+    const [to, setTo] = useState(() => toIsoDate(new Date()));
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -90,9 +91,9 @@ export default function ShiftsReportPage() {
                 </Select>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     From
-                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-36 text-xs" />
+                    <TallyDateInput value={from} onValueChange={setFrom} className="h-8 w-36 text-xs" />
                     To
-                    <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-36 text-xs" />
+                    <TallyDateInput value={to} onValueChange={setTo} className="h-8 w-36 text-xs" />
                 </div>
             </div>
 

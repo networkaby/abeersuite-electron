@@ -15,10 +15,10 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
 
 type LedgerNode = {
     id:      number;
@@ -111,11 +111,11 @@ export function BookPage({
                 <div className="flex items-end gap-2">
                     <div className="space-y-1">
                         <Label>From</Label>
-                        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={from} onValueChange={setFrom} className="w-auto" />
                     </div>
                     <div className="space-y-1">
                         <Label>To</Label>
-                        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
+                        <TallyDateInput value={to} onValueChange={setTo} className="w-auto" />
                     </div>
                     <Button onClick={load}>Run</Button>
                 </div>

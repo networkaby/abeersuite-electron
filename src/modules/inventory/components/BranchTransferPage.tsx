@@ -38,6 +38,8 @@ import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherInlineActions } from "@/modules/accountancy/components/VoucherInlineActions";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type Branch = { id: string; name: string; isActive?: boolean };
 type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
@@ -91,7 +93,7 @@ export function BranchTransferPage() {
     const canHardDelete = hasPermissionWithScope(permissions, "inventory:voucher:hard-delete");
 
     const [form, setForm] = useState({
-        date:        new Date().toISOString().slice(0, 10),
+        date:        toIsoDate(new Date()),
         description: "Branch transfer — moving stock between locations.",
         lines:       [] as LineForm[],
     });
@@ -327,7 +329,7 @@ export function BranchTransferPage() {
                     </div>
                     <div className="space-y-1.5">
                         <Label>Date</Label>
-                        <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+                        <TallyDateInput value={form.date} onValueChange={(iso) => setForm((f) => ({ ...f, date: iso }))} />
                     </div>
                 </div>
 

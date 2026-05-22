@@ -9,6 +9,8 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -19,8 +21,8 @@ type EscalationFormData = { serviceCenterId: string; externalRef: string; escala
 export default function TicketEscalation({ ticket, onClose }: Props) {
     const { data: session } = useSession();
     const [serviceCenters, setServiceCenters] = useState<ServiceCenterOption[]>([]);
-    const { register, handleSubmit, setValue, control, formState: { isSubmitting } } = useForm({
-        defaultValues: { serviceCenterId: "", externalRef: "", escalatedAt: new Date().toISOString().split("T")[0], expectedReturn: "" },
+    const { register, handleSubmit, setValue, watch, control, formState: { isSubmitting } } = useForm({
+        defaultValues: { serviceCenterId: "", externalRef: "", escalatedAt: toIsoDate(new Date()), expectedReturn: "" },
     });
     const serviceCenterId = useWatch({ control, name: "serviceCenterId" });
 
@@ -73,13 +75,19 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <Label className="mb-1 block">Escalated Date</Label>
-                            <Input type="date" {...register("escalatedAt")} />
+                            <TallyDateInput
+                                value={watch("escalatedAt") ?? ""}
+                                onValueChange={(iso) => setValue("escalatedAt", iso, { shouldValidate: true })}
+                            />
                         </div>
                         <div>
                             <Label className="mb-1 block">
                                 Expected Return <span className="text-muted-foreground">(optional)</span>
                             </Label>
-                            <Input type="date" {...register("expectedReturn")} />
+                            <TallyDateInput
+                                value={watch("expectedReturn") ?? ""}
+                                onValueChange={(iso) => setValue("expectedReturn", iso, { shouldValidate: true })}
+                            />
                         </div>
                     </div>
                     <DialogFooter className="pt-2">

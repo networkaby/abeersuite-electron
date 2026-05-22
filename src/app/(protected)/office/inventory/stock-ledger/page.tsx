@@ -7,6 +7,8 @@ import { Loader2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import {
     Select,
     SelectContent,
@@ -52,13 +54,10 @@ const VOUCHER_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function StockLedgerPage() {
-    const today   = new Date().toISOString().slice(0, 10);
-    const yearStart = `${new Date().getFullYear()}-01-01`;
-
     const [products, setProducts]   = useState<Product[]>([]);
     const [productId, setProductId] = useState<string>("");
-    const [from, setFrom]           = useState(yearStart);
-    const [to,   setTo]             = useState(today);
+    const [from, setFrom]           = useState(() => { const d = new Date(); return `${d.getFullYear()}-01-01`; });
+    const [to,   setTo]             = useState(() => toIsoDate(new Date()));
     const [ledger, setLedger]       = useState<LedgerResponse | null>(null);
     const [loading, setLoading]     = useState(false);
 
@@ -107,11 +106,11 @@ export default function StockLedgerPage() {
                 </div>
                 <div className="space-y-1">
                     <Label>From</Label>
-                    <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-36" />
+                    <TallyDateInput value={from} onValueChange={setFrom} className="w-36" />
                 </div>
                 <div className="space-y-1">
                     <Label>To</Label>
-                    <Input type="date" value={to}   onChange={(e) => setTo(e.target.value)}   className="w-36" />
+                    <TallyDateInput value={to} onValueChange={setTo} className="w-36" />
                 </div>
                 <Button onClick={load} disabled={loading || !productId}>
                     {loading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}

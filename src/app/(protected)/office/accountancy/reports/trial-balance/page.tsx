@@ -6,10 +6,11 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/utils/constants";
-import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
+import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
@@ -196,8 +197,8 @@ function deriveSummary(tree: GroupNode[]) {
 export default function TrialBalancePage() {
     const router = useRouter();
     const fyStart = indianFiscalYearStart();
-    const [from, setFrom] = useState(formatDateInput(fyStart));
-    const [to, setTo]     = useState(formatDateInput(new Date()));
+    const [from, setFrom] = useState(toIsoDate(fyStart));
+    const [to, setTo]     = useState(toIsoDate(new Date()));
     const [data, setData] = useState<TBData | null>(null);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -256,8 +257,8 @@ export default function TrialBalancePage() {
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
-                    <div className="space-y-1"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></div>
-                    <div className="space-y-1"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
+                    <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} className="w-auto" /></div>
                     <Button variant="outline" onClick={() => setShowEmpty((v) => !v)} title="Toggle visibility of groups / ledgers with no activity">
                         {showEmpty ? "Hide empty" : "Show all"}
                     </Button>

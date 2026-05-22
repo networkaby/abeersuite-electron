@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Plus, Loader2, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { Label } from "@/components/ui/label";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { InvProductPicker } from "@/modules/inventory/components/InvProductPicker";
@@ -43,7 +45,7 @@ export default function PurchasesPage() {
     const [saving, setSaving]     = useState(false);
 
     const [form, setForm] = useState({
-        date:        new Date().toISOString().slice(0, 10),
+        date:        toIsoDate(new Date()),
         description: "",
         partyName:   "",
         partyPhone:  "",
@@ -162,7 +164,7 @@ export default function PurchasesPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="space-y-1">
                             <Label>Date</Label>
-                            <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+                            <TallyDateInput value={form.date} onValueChange={(iso) => setForm((f) => ({ ...f, date: iso }))} />
                         </div>
                         <div className="space-y-1 md:col-span-2">
                             <Label>Description / Narration *</Label>

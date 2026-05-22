@@ -48,6 +48,8 @@ import { usePaymentDialogStore } from "@/store/paymentDialogStore";
 import { useReceiptDialogStore } from "@/store/receiptDialogStore";
 import { useCreditNoteDialogStore } from "@/store/creditNoteDialogStore";
 import { useDebitNoteDialogStore } from "@/store/debitNoteDialogStore";
+import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { toIsoDate } from "@/shared/hooks/useTallyDate";
 
 type Kind = "PAYMENT" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
 type Mode = "single" | "multi";
@@ -168,7 +170,7 @@ export function GlVoucherDialog({ kind }: { kind: Kind }) {
     const [mode, setMode] = useState<Mode>("single");
     const activeMode: Mode = supportsMulti ? mode : "single";
 
-    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(() => toIsoDate(new Date()));
     const [narration, setNarration] = useState("");
 
     // Single-mode state — one top-side account, many particulars rows.
@@ -215,7 +217,7 @@ export function GlVoucherDialog({ kind }: { kind: Kind }) {
         setPartyRows([newRow()]);
         setMultiMoneyRows([newRow()]);
         setNarration("");
-        setDate(new Date().toISOString().slice(0, 10));
+        setDate(toIsoDate(new Date()));
     };
 
     useEffect(() => {
@@ -331,11 +333,10 @@ export function GlVoucherDialog({ kind }: { kind: Kind }) {
                 <div className="relative z-30 space-y-3 px-5 pt-4 pb-2">
                     <div className="flex items-center gap-3">
                         <Label className="w-16 shrink-0 text-xs">Date</Label>
-                        <Input
-                            type="date"
+                        <TallyDateInput
                             autoFocus
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
+                            onValueChange={setDate}
                             className="h-7 w-40 text-sm"
                         />
                     </div>
