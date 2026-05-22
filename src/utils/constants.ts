@@ -47,6 +47,7 @@ import {
     Printer,
     Factory,
     Workflow,
+    Banknote,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -218,6 +219,11 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             // { label: "Optional Vouchers", icon: PackageCheck, href: "/office/accountancy/reports/optional-vouchers", permission: "finance:voucher:create" },
             { label: "Pending Inventory", icon: ClipboardList, href: "/office/accountancy/reports/pending-vouchers", permission: "finance:voucher:create" },
             { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
+            { label: "Account Ledger", icon: BookOpen, href: "/office/accountancy/account-ledgers", permission: "finance:voucher:create" },
+            { label: "Bank Book", icon: Banknote, href: "/office/accountancy/bank-ledgers", permission: "finance:voucher:create" },
+            { label: "Cash Book", icon: Wallet, href: "/office/accountancy/cash-ledgers", permission: "finance:voucher:create" },
+            { label: "Loans Book", icon: Banknote, href: "/office/accountancy/loan-ledgers", permission: "finance:voucher:create" },
+
             { label: "Balance Sheet", icon: FolderTree, href: "/office/accountancy/reports/balance-sheet" },
             { label: "Profit & Loss A/c", icon: BookOpen, href: "/office/accountancy/reports/profit-loss" },
             {
