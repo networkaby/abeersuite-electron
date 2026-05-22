@@ -65,7 +65,7 @@ The `customers:*` umbrella still gates Person and Company UI even though the mod
 3. **Add a phone/email to an existing party** — `POST /api/{people|companies}/[id]/{phones|emails}`. Returns 409 if the value is already used by anyone (including a different party type).
 4. **Person detail balance** — `/office/customers/people/[id]` → reads `/api/accounts/[id]/ledger` (the same endpoint chart-of-accounts uses for any account).
 5. **Company contact display** — `GET /api/companies/[id]` returns `phones` (own) and `derivedPhones` (union of linked persons' phones). The detail page shows them in two sections.
-6. **Transactions tab** — both `/office/customers/people/[id]` and `/office/customers/companies/[id]` carry a Transactions tab that lists the party's posted vouchers + invoices via `GET /api/accounts/[id]/ledger`. Backfilled for legacy parties via `a687684`.
+6. **Transactions tab** — both `/office/customers/people/[id]` and `/office/customers/companies/[id]` carry a Transactions tab that lists the party's posted vouchers + invoices via `GET /api/accounts/[id]/ledger`. Backfilled for legacy parties via `a687684`. Reference click drills via the shared `editFormUrl(type, id)` helper (`src/modules/inventory/components/VoucherActionsMenu.tsx`) — SALE / PURCHASE / SALE_RETURN / PURCHASE_RETURN open in the editable full-page form, matching the convention used by every other voucher surface.
 7. **CRM lead → won → person** — `/office/customers/leads/[id]` → "Convert to customer" → POST `/api/people` linking back to the lead via metadata.
 8. **Phone auth for customer portal** — phone+password against `PersonPortalCredential`; lookup is via the normalised phone column on the credential table (no schema change to that column).
 
@@ -104,4 +104,4 @@ These are module-scoped (consumed only by `customer/` routes + components). Don'
 | `getCompanyContacts(companyId)` | `src/modules/customer/lib/companyContacts.ts` | Returns the company's own phones/emails + derived contacts from linked persons. |
 | `ContactConflictError`, `contactValueSchema`, `createPhone`, `updatePhone`, `deletePhone`, `createEmail`, `updateEmail`, `deleteEmail` | `src/modules/customer/lib/contactWrite.ts` | All write paths for the `Phone` / `Email` polymorphic-owner rows. Centralises uniqueness checking, isPrimary toggling, and the `ContactConflictError` shape that routes catch + map to a 409 with `{ error, field }`. |
 
-_Last updated: 2026-05-19 — added Transactions tab workflow (commits `db0fe45`, `7342b96`, `a687684`)._
+_Last updated: 2026-05-23 — Transactions tab now opens voucher refs in the editable form via the shared `editFormUrl` helper (commit `4c2654e`); local `INV_VOUCHER_URLS` map deleted (AGENTS.md §2). Earlier: Transactions tab workflow (commits `db0fe45`, `7342b96`, `a687684`)._
