@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -266,9 +267,18 @@ export default function LedgersPage() {
                                 {/* Name (indented by depth) */}
                                 <td className="py-2.5 pr-4">
                                     <div style={{ paddingLeft: row.depth * 20 }}>
-                                        <span className={`font-medium ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                                            {row.name}
-                                        </span>
+                                        {row._count.accounts > 0 ? (
+                                            <Link
+                                                href={`/office/accountancy/masters/ledgers/${row.id}`}
+                                                className={`font-medium hover:underline hover:text-primary ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}
+                                            >
+                                                {row.name}
+                                            </Link>
+                                        ) : (
+                                            <span className={`font-medium ${row.depth === 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                                                {row.name}
+                                            </span>
+                                        )}
                                     </div>
                                 </td>
 

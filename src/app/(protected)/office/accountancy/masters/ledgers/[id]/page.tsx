@@ -10,10 +10,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
+import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
@@ -60,7 +59,6 @@ function drCr(balance: number, normalBalance: NormalBalance | null): string {
     return `${fmt(Math.abs(balance))} ${sign}`;
 }
 
-const NONE = "none";
 const LIMIT = 20;
 
 export default function GroupLedgersPage() {
@@ -76,10 +74,12 @@ export default function GroupLedgersPage() {
     const [loading, setLoading]       = useState(true);
     const [groups, setGroups]         = useState<GroupOption[]>([]);
     const [editId, setEditId]         = useState<number | null>(null);
-    const [editGroupId, setEditGroupId] = useState<string>(NONE);
+    const [editGroupId, setEditGroupId] = useState<number | null>(null);
     const [saving, setSaving]         = useState(false);
 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEscapeBack();
 
     // Load all groups for the edit dropdown (once)
     useEffect(() => {
@@ -137,7 +137,7 @@ export default function GroupLedgersPage() {
         setSaving(true);
         try {
             await axios.patch(`/api/accountancy/ledgers/${itemId}`, {
-                groupId: editGroupId !== NONE ? Number(editGroupId) : null,
+                groupId: editGroupId,
             });
             toast.success("Group updated");
             setEditId(null);
@@ -256,18 +256,13 @@ export default function GroupLedgersPage() {
                                         </div>
                                         {/* Inline group edit selector */}
                                         {isEditing && (
-                                            <div className="mt-1.5">
-                                                <Select value={editGroupId} onValueChange={setEditGroupId}>
-                                                    <SelectTrigger className="h-7 text-xs w-48">
-                                                        <SelectValue placeholder="No group" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value={NONE}>No group</SelectItem>
-                                                        {groups.map((g) => (
-                                                            <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                            <div className="mt-1.5 w-56">
+                                                <GroupCombobox
+                                                    value={editGroupId}
+                                                    onChange={setEditGroupId}
+                                                    groups={groups}
+                                                    autoFocus
+                                                />
                                             </div>
                                         )}
                                     </td>
@@ -310,7 +305,7 @@ export default function GroupLedgersPage() {
                                                     className="text-muted-foreground hover:bg-primary/10 hover:text-primary"
                                                     onClick={() => {
                                                         setEditId(item.id);
-                                                        setEditGroupId(item.groupId ? String(item.groupId) : NONE);
+                                                        setEditGroupId(item.groupId);
                                                     }}
                                                 >
                                                     <Pencil size={14} />
