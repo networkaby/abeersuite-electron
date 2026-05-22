@@ -48,6 +48,7 @@ import {
     Factory,
     Workflow,
     Banknote,
+    Database,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -596,6 +597,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:manage" },
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
+    { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────
