@@ -6,17 +6,28 @@
 // Posting rules:
 //   SALE   →  Dr <Party | Cash>  total
 //             Cr Sales A/c       subtotal + shippingAmt
-//             Cr <Tax ledger>    taxAmount        (if > 0)
+//             Cr <Tax ledgers>   taxAmount        (split CGST+SGST or IGST)
 //             Dr/Cr Round Off    |roundOff|       (if non-zero)
 //   PURCH  →  Dr Purchase A/c    subtotal + shippingAmt
-//             Dr <Tax ledger>    taxAmount        (if > 0)
+//             Dr <Tax ledgers>   taxAmount        (split CGST+SGST or IGST)
 //             Cr <Party | Cash>  total
 //             Dr/Cr Round Off    |roundOff|       (if non-zero)
+//
+// GST routing (added 2026-05-23):
+//   • Caller passes resolved `sellerStateCode` + `buyerStateCode` (place of
+//     supply) on PostVoucherInput. We compute the split via computeGstSplit:
+//       seller == buyer  → CGST + SGST (each = taxAmount / 2)
+//       seller != buyer  → IGST (full taxAmount)
+//   • Caller may also pass `placeOfSupply` directly (already-resolved 2-char
+//     code); it short-circuits the resolution chain.
+//   • Missing buyer state (legacy callers) falls back to seller state →
+//     intra-state, matching pre-refactor behaviour.
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
 import { defaultNormalBalanceForGroupType } from "./groupNature";
+import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -40,8 +51,15 @@ const NAMES = {
     SALES_RETURNS:    ["Sales Return A/c", "Sales Returns", "Returns Inward", "Sales Return"],
     PURCHASE_RETURNS: ["Purchase Return A/c", "Purchase Returns", "Returns Outward", "Purchase Return"],
     CASH:             ["Cash", "Cash-in-Hand", "Cash A/c"],
-    GST_OUTPUT:       ["IGST", "GST Output", "Output GST", "Output Tax"],
-    GST_INPUT:        ["IGST", "GST Input", "Input GST", "Input Tax"],
+    // Per-direction tax ledger name lookups for the CGST/SGST/IGST split.
+    // The final IGST fallbacks keep the legacy single-ledger behaviour for
+    // installs whose CoA only seeded one combined "GST Output / IGST" row.
+    GST_OUTPUT_CGST:  ["CGST Output", "Output CGST", "CGST"],
+    GST_OUTPUT_SGST:  ["SGST Output", "Output SGST", "SGST"],
+    GST_OUTPUT_IGST:  ["IGST Output", "Output IGST", "IGST", "GST Output", "Output GST", "Output Tax"],
+    GST_INPUT_CGST:   ["CGST Input", "Input CGST", "CGST"],
+    GST_INPUT_SGST:   ["SGST Input", "Input SGST", "SGST"],
+    GST_INPUT_IGST:   ["IGST Input", "Input IGST", "IGST", "GST Input", "Input GST", "Input Tax"],
     ROUND_OFF:        ["Round Off", "Rounded Off", "Round-Off"],
     SUNDRY_DEB:       [ACCOUNT_GROUPS.SUNDRY_DEBTORS],   // ledger fallback (rare)
     SUNDRY_CRED:      [ACCOUNT_GROUPS.SUNDRY_CREDITORS], // ledger fallback (rare)
@@ -121,6 +139,15 @@ export type PostVoucherInput = {
             normalBalance: "DEBIT" | "CREDIT" | null;
             group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
         } | null;
+        /// Seller's state code (place of business — branch.gstStateCode,
+        /// falling back to org.gstStateCode). Drives the CGST/SGST vs IGST
+        /// split. Optional for back-compat: when blank we treat the sale as
+        /// intra-state (pre-refactor behaviour).
+        sellerStateCode?: string | null;
+        /// Buyer's state code (place of supply). Already resolved by the
+        /// caller via resolveBuyerStateCode(party, sellerState, deliveryMode).
+        /// Defaults to sellerStateCode → intra-state when blank.
+        buyerStateCode?:  string | null;
     };
     userId: number;
 };
@@ -234,15 +261,58 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         ] };
     }
 
-    // Tax ledger (optional) — Output GST for sale-side (SALE + SALE_RETURN),
-    // Input GST for purchase-side (PURCHASE + PURCHASE_RETURN). Returns
-    // reverse the tax leg (Dr Output / Cr Input) via bodyType below.
+    // Tax leg — split into CGST + SGST (intra-state) or IGST (inter-state)
+    // based on the caller-supplied state codes. Output ledgers for sale-side
+    // (SALE + SALE_RETURN), Input ledgers for purchase-side. Returns reverse
+    // the direction via bodyType below.
     const isOutputTax = isPositiveSale || isSaleReturn;
-    let taxLedger: LedgerLite | null = null;
+    const sellerStateCode = (voucher.sellerStateCode ?? "").trim();
+    // Default buyer = seller → intra-state (matches pre-refactor behaviour
+    // for old callers that don't pass a buyer state yet).
+    const buyerStateCode  = (voucher.buyerStateCode  ?? sellerStateCode).trim();
+
+    type TaxLeg = { ledger: LedgerLite; amount: number; label: string };
+    const taxLegs: TaxLeg[] = [];
+    let unledgered = 0; // tax amount that couldn't find a ledger — folds into body
+
     if (taxAmount > 0) {
-        taxLedger = await findLedgerByNames(tx, isOutputTax ? NAMES.GST_OUTPUT : NAMES.GST_INPUT);
-        if (!taxLedger) {
-            notes.push(`no GST ledger found — tax of ${taxAmount.toFixed(2)} folded into ${bodyLedger.name}`);
+        const split = computeGstSplit({
+            taxAmount,
+            sellerStateCode,
+            buyerStateCode,
+        });
+
+        if (split.kind === "INTRA") {
+            const cgst = split.cgst;
+            const sgst = split.sgst;
+            const cgstLedger = await findLedgerByNames(
+                tx, isOutputTax ? NAMES.GST_OUTPUT_CGST : NAMES.GST_INPUT_CGST,
+            );
+            const sgstLedger = await findLedgerByNames(
+                tx, isOutputTax ? NAMES.GST_OUTPUT_SGST : NAMES.GST_INPUT_SGST,
+            );
+            if (cgstLedger && cgst > 0) {
+                taxLegs.push({ ledger: cgstLedger, amount: cgst, label: `${isOutputTax ? "Output" : "Input"} CGST` });
+            } else if (cgst > 0) {
+                unledgered += cgst;
+                notes.push(`no CGST ledger — ${cgst.toFixed(2)} folded into ${bodyLedger.name}`);
+            }
+            if (sgstLedger && sgst > 0) {
+                taxLegs.push({ ledger: sgstLedger, amount: sgst, label: `${isOutputTax ? "Output" : "Input"} SGST` });
+            } else if (sgst > 0) {
+                unledgered += sgst;
+                notes.push(`no SGST ledger — ${sgst.toFixed(2)} folded into ${bodyLedger.name}`);
+            }
+        } else {
+            const igstLedger = await findLedgerByNames(
+                tx, isOutputTax ? NAMES.GST_OUTPUT_IGST : NAMES.GST_INPUT_IGST,
+            );
+            if (igstLedger) {
+                taxLegs.push({ ledger: igstLedger, amount: split.igst, label: `${isOutputTax ? "Output" : "Input"} IGST` });
+            } else {
+                unledgered += split.igst;
+                notes.push(`no IGST ledger — ${split.igst.toFixed(2)} folded into ${bodyLedger.name}`);
+            }
         }
     }
 
@@ -263,9 +333,10 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
 
     // Body-side amounts (split where possible)
     let bodyAmount = goodsAmount;
-    let taxLineAmt = taxAmount;
     let rndLineAmt = roundOff;
-    if (!taxLedger)      { bodyAmount += taxLineAmt; taxLineAmt = 0; }
+    // Any tax amount that couldn't find its CGST/SGST/IGST ledger gets
+    // folded into the body so the JE still balances.
+    if (unledgered > 0)  { bodyAmount += unledgered; }
     if (!roundOffLedger) { bodyAmount += rndLineAmt; rndLineAmt = 0; }
 
     const lines: JeLine[] = [];
@@ -283,12 +354,12 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
             description: voucher.description,
         });
     }
-    if (taxLedger && taxLineAmt > 0) {
+    for (const leg of taxLegs) {
         lines.push({
-            accountId:   taxLedger.id,
+            accountId:   leg.ledger.id,
             type:        bodyType, // for SALE: credit GST; for PURCHASE: debit GST
-            amount:      taxLineAmt,
-            description: `${isOutputTax ? "Output" : "Input"} tax`,
+            amount:      leg.amount,
+            description: leg.label,
         });
     }
     if (roundOffLedger && rndLineAmt !== 0) {
@@ -337,8 +408,11 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
 
     // Update Account.balance for each line
     const ledgerById = new Map<number, LedgerLite>();
-    for (const led of [counterLedger, bodyLedger, taxLedger, roundOffLedger]) {
+    for (const led of [counterLedger, bodyLedger, roundOffLedger]) {
         if (led) ledgerById.set(led.id, led);
+    }
+    for (const leg of taxLegs) {
+        ledgerById.set(leg.ledger.id, leg.ledger);
     }
     for (const l of lines) {
         const led = ledgerById.get(l.accountId);

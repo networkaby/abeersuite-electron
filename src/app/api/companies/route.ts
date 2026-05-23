@@ -4,9 +4,11 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { phoneEmailSchema } from "@/shared/lib/schemas/commonSchemas";
+import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
+import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
+import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 
-const createSchema = phoneEmailSchema.extend({
+const createSchema = phoneEmailSchema.merge(gstSchema).extend({
     name: z.string().trim().min(1, "Company name is required"),
     address: z.string().trim().optional().or(z.literal("")),
     companyReg: z.string().trim().optional().or(z.literal("")),
@@ -69,6 +71,23 @@ export async function POST(req: Request) {
 
     if (error) return error;
     const body = data;
+
+    // GSTIN ↔ state-code integrity (Company has no separate textual state field).
+    const integrity = normaliseGstinState({
+        gstin:        body.gstin,
+        gstStateCode: body.gstStateCode,
+    });
+    if (!integrity.ok) {
+        return NextResponse.json({ error: integrity.error }, { status: 400 });
+    }
+    const shippingState = body.shippingStateCode?.trim() || "";
+    if (shippingState && !isValidStateCode(shippingState)) {
+        return NextResponse.json(
+            { error: `Invalid shippingStateCode "${shippingState}". Expected a 2-digit GSTIN state code.` },
+            { status: 400 },
+        );
+    }
+
     const phones = body.phones.filter(p => p.trim().length > 0);
     const emails = body.emails.filter(e => e.trim().length > 0);
 
@@ -80,6 +99,10 @@ export async function POST(req: Request) {
                     address: body.address || null,
                     companyReg: body.companyReg || null,
                     taxId: body.taxId || null,
+                    gstin:             integrity.value.gstin || null,
+                    gstStateCode:      integrity.value.gstStateCode || null,
+                    gstRegType:        body.gstRegType ?? (integrity.value.gstin ? "REGULAR" : null),
+                    shippingStateCode: shippingState || null,
                 },
             });
 

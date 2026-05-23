@@ -28,6 +28,11 @@ model Person {
   /// State code (first two digits of GSTIN, also used for place-of-supply)
   gstStateCode String?
   gstRegType   GstRegType?
+  /// Default destination state for couriered B2C sales (place-of-supply
+  /// when the voucher's deliveryMode = SHIPPED and the customer has no
+  /// GSTIN). Ignored on COUNTER pickups — those use the branch state per
+  /// §10(1)(c). Must be a valid 2-char Indian state code.
+  shippingStateCode String?
 
   account          Account? // enforced at app level; FK lives on Account.personId
   companies        PersonCompany[]
@@ -52,6 +57,8 @@ model Company {
   gstin        String?
   gstStateCode String?
   gstRegType   GstRegType?
+  /// Default destination state for couriered B2C sales — see Person.shippingStateCode.
+  shippingStateCode String?
 
   // Tally-style period anchors (per-company; mid-year migration sets these
   // differently — financial year starts 1 Apr but books begin from cutover date)

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 
 const branchTextField = z.string().trim().optional().nullable();
 
@@ -80,14 +81,23 @@ export async function POST(req: Request) {
         const existing = await prisma.branch.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Branch ID already exists" }, { status: 409 });
 
-        // Auto-derive gstStateCode from first 2 chars of GSTIN if the caller
-        // sent GSTIN without an explicit state code. The form on the admin
-        // page already does this client-side; the API enforces it server-side
-        // so place-of-supply logic never drifts.
-        const payload = { ...data };
-        if (payload.gstin && !payload.gstStateCode) {
-            payload.gstStateCode = payload.gstin.length >= 2 ? payload.gstin.slice(0, 2) : "";
+        // GSTIN ↔ state-code/state-name integrity guard. Cross-checks all three
+        // and rejects mismatches with a clear error.
+        const integrity = normaliseGstinState({
+            gstin:        data.gstin ?? "",
+            gstStateCode: data.gstStateCode ?? "",
+            state:        data.state ?? "",
+        });
+        if (!integrity.ok) {
+            return NextResponse.json({ error: integrity.error }, { status: 400 });
         }
+
+        const payload = {
+            ...data,
+            gstin:        integrity.value.gstin        || null,
+            gstStateCode: integrity.value.gstStateCode || null,
+            state:        integrity.value.state        || data.state,
+        };
 
         const branch = await prisma.branch.create({
             data: { ...payload, isActive: payload.isActive ?? true },

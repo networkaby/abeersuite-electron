@@ -170,7 +170,14 @@ export async function POST(req: Request) {
             });
 
             // ── 3. InvVoucher (type=POS) + lines + stock ledger + cached stock ─
+            // POS is always counter-pickup — place of supply = branch state
+            // regardless of customer's address (CGST Act §10(1)(c)).
             const voucherRef = await invNextRef(tx, "POS");
+            const posBranch = await tx.branch.findUnique({
+                where: { id: activeBranchId },
+                select: { gstStateCode: true },
+            });
+            const posPlaceOfSupply = (posBranch?.gstStateCode || "").trim();
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "POS",
@@ -181,6 +188,8 @@ export async function POST(req: Request) {
                     status:         "POSTED",
                     postedAt:       new Date(),
                     paymentMode:    "CASH",
+                    deliveryMode:   "COUNTER",
+                    placeOfSupply:  posPlaceOfSupply || null,
                     subtotal,
                     taxAmount,
                     totalAmount,

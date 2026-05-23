@@ -43,9 +43,13 @@ export const phoneEmailSchema = z.object({
  * case happy without throwing.
  */
 export const gstSchema = z.object({
-    gstin:        z.string().trim().optional().or(z.literal("")),
-    gstStateCode: z.string().trim().optional().or(z.literal("")),
-    gstRegType:   z.enum(["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"]).optional(),
+    gstin:             z.string().trim().optional().or(z.literal("")),
+    gstStateCode:      z.string().trim().optional().or(z.literal("")),
+    gstRegType:        z.enum(["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"]).optional(),
+    /// Default destination state code for couriered B2C sales (Indian GST §10
+    /// place-of-supply for movement-involving supplies). Ignored on COUNTER
+    /// pickups — those use the branch state regardless of customer address.
+    shippingStateCode: z.string().trim().max(2).optional().or(z.literal("")),
 });
 
 /**

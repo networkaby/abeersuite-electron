@@ -309,6 +309,13 @@ model InvVoucher {
   /// State code where the supply happens — drives intra/inter-state GST split.
   /// Defaults to the company's state code when unset.
   placeOfSupply       String?
+  /// Counter pickup vs delivery — drives the place-of-supply resolution.
+  /// COUNTER (default): customer picks up at the counter; place of supply
+  /// is the branch state per §10(1)(c) regardless of the customer's address.
+  /// SHIPPED: goods are couriered/dispatched, place of supply is the
+  /// customer's shippingStateCode (or GSTIN state for B2B).
+  /// POS sales are always COUNTER (hardcoded in /api/pos/sale).
+  deliveryMode        InvVoucherDeliveryMode @default(COUNTER)
   discountPct         Decimal?       @db.Decimal(5, 2)
   discountAmt         Decimal?       @db.Decimal(14, 2)
   shippingAmt         Decimal        @default(0) @db.Decimal(14, 2)

@@ -21,6 +21,22 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
         { description: "Cash received from customer", quantity: 1, amount: 5000 },
     ];
 
+    // INTRA-state sample (Assam → Assam, 18% GST = 9% CGST + 9% SGST). Used
+    // by SALE / POS / RECEIPT etc. — the most common case.
+    const intraBreakdown = {
+        kind: "INTRA" as const,
+        cgst: 242.46,
+        sgst: 242.46,
+        placeOfSupplyName: "Assam",
+    };
+    // INTER-state sample (Assam → Maharashtra, 18% IGST). Used by PURCHASE
+    // and one of the returns to demonstrate the IGST single-line layout.
+    const interBreakdown = {
+        kind: "INTER" as const,
+        igst: 484.92,
+        placeOfSupplyName: "Maharashtra",
+    };
+
     switch (kind) {
         case "POS":
         case "SALE":
@@ -30,13 +46,15 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 partyName: "Walk-in", partyPhone: null,
                 lines: productLines, subtotal: 2694, taxAmount: 484.92, total: 3178.92,
                 notes: null,
+                taxBreakdown: intraBreakdown,
             };
         case "PURCHASE":
             return {
                 reference: "PV/26-27/0008", date: today,
-                partyName: "Acme Distributors", partyPhone: "+91 98000 11111",
+                partyName: "Acme Distributors (Mumbai)", partyPhone: "+91 98000 11111",
                 lines: productLines, subtotal: 2694, taxAmount: 484.92, total: 3178.92,
                 notes: null,
+                taxBreakdown: interBreakdown,
             };
         case "ESTIMATE":
             return {
@@ -44,6 +62,7 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 partyName: "Sample Customer", partyPhone: null,
                 lines: productLines, subtotal: 2694, taxAmount: 484.92, total: 3178.92,
                 notes: "Valid for 7 days from issue date.",
+                taxBreakdown: intraBreakdown,
             };
         case "SALE_RETURN":
         case "PURCHASE_RETURN":
@@ -53,6 +72,9 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 partyName: "Sample Party", partyPhone: null,
                 lines: [productLines[0]], subtotal: 598, taxAmount: 107.64, total: 705.64,
                 notes: null,
+                taxBreakdown: kind === "PURCHASE_RETURN"
+                    ? { kind: "INTER" as const, igst: 107.64, placeOfSupplyName: "Maharashtra" }
+                    : { kind: "INTRA" as const, cgst: 53.82, sgst: 53.82, placeOfSupplyName: "Assam" },
             };
         case "RECEIPT":
         case "PAYMENT":
@@ -104,6 +126,7 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 partyName: "Sample Party", partyPhone: null,
                 lines: productLines, subtotal: 2694, taxAmount: 484.92, total: 3178.92,
                 notes: "Expected delivery in 5 working days.",
+                taxBreakdown: kind === "PURCHASE_ORDER" ? interBreakdown : intraBreakdown,
             };
         case "BRANCH_TRANSFER":
             return {

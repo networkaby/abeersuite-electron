@@ -5,6 +5,7 @@ import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { organisationUpdateSchema } from "@/shared/lib/schemas/organisationSchemas";
+import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 
 /**
  * Returns the raw Organisation row (id=1). Auto-upserts on first read so the
@@ -38,11 +39,28 @@ export async function PATCH(req: NextRequest) {
 
     const patch = { ...data };
 
-    // Keep gstStateCode in lockstep with the first 2 chars of GSTIN when the
-    // admin updates GSTIN without manually setting the code. If they sent
-    // both, trust what they sent.
-    if (patch.gstin !== undefined && patch.gstStateCode === undefined) {
-        patch.gstStateCode = patch.gstin.length >= 2 ? patch.gstin.slice(0, 2) : "";
+    // GSTIN ↔ state-code/state-name integrity guard. Only fires when the
+    // PATCH touches any of those three fields — otherwise the singleton's
+    // stored values stay untouched (PATCH semantics).
+    if (patch.gstin !== undefined || patch.gstStateCode !== undefined || patch.state !== undefined) {
+        // Load whatever's currently stored so we can validate the merged
+        // intent rather than just the patched-in fields. Example: user
+        // changes only `state` text → we still want to ensure it matches
+        // the existing GSTIN.
+        const current = await prisma.organisation.findUnique({ where: { id: 1 } });
+        const integrity = normaliseGstinState({
+            gstin:        patch.gstin        ?? current?.gstin        ?? "",
+            gstStateCode: patch.gstStateCode ?? current?.gstStateCode ?? "",
+            state:        patch.state        ?? current?.state        ?? "",
+        });
+        if (!integrity.ok) {
+            return NextResponse.json({ error: integrity.error }, { status: 400 });
+        }
+        // Force the canonical values back into the patch so the row never
+        // persists a mismatch even if the client tried to.
+        patch.gstin        = integrity.value.gstin;
+        patch.gstStateCode = integrity.value.gstStateCode;
+        if (patch.state !== undefined) patch.state = integrity.value.state;
     }
 
     const row = await prisma.organisation.upsert({

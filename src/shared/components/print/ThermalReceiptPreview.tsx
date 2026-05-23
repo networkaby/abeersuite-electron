@@ -26,6 +26,17 @@ export interface ThermalReceiptLine {
     amount:      number; // line total (post-tax inclusive or pre-tax, caller's choice)
 }
 
+/**
+ * Per-invoice GST split for the totals box. When `taxBreakdown` is set, the
+ * renderer shows two rows (CGST + SGST) for INTRA-state supply OR one row
+ * (IGST) for INTER-state supply, instead of a single generic "Tax" row.
+ * When null, the renderer falls back to the legacy single-row layout driven
+ * by `taxAmount`.
+ */
+export type ThermalTaxBreakdown =
+    | { kind: "INTRA"; cgst: number; sgst: number; placeOfSupplyName: string | null }
+    | { kind: "INTER"; igst: number; placeOfSupplyName: string | null };
+
 export interface ThermalReceiptSample {
     reference: string;          // voucher / invoice number
     date:      string;          // ISO date or display date
@@ -36,6 +47,8 @@ export interface ThermalReceiptSample {
     taxAmount: number | null;   // null hides the tax row
     total:     number | null;   // null hides the total row
     notes:     string | null;
+    /// Optional CGST/SGST/IGST breakdown — overrides the single Tax row.
+    taxBreakdown?: ThermalTaxBreakdown | null;
 }
 
 const fmtINR = (n: number) =>
@@ -172,7 +185,16 @@ function ReceiptBody({ template, sample }: BodyProps) {
                 <>
                     <div className="hr" />
                     <div className="row"><span>Subtotal</span><span>{fmtINR(sample.subtotal)}</span></div>
-                    {sample.taxAmount !== null && sample.taxAmount > 0 && (
+                    {sample.taxBreakdown ? (
+                        sample.taxBreakdown.kind === "INTRA" ? (
+                            <>
+                                <div className="row"><span>CGST</span><span>{fmtINR(sample.taxBreakdown.cgst)}</span></div>
+                                <div className="row"><span>SGST</span><span>{fmtINR(sample.taxBreakdown.sgst)}</span></div>
+                            </>
+                        ) : (
+                            <div className="row"><span>IGST</span><span>{fmtINR(sample.taxBreakdown.igst)}</span></div>
+                        )
+                    ) : sample.taxAmount !== null && sample.taxAmount > 0 && (
                         <div className="row"><span>Tax</span><span>{fmtINR(sample.taxAmount)}</span></div>
                     )}
                 </>

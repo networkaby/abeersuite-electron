@@ -7,6 +7,8 @@ import { handleApiError, parsePagination, validateRequest } from "@/shared/lib/a
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
+import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
+import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 
 // Multi-value `phones` / `emails` arrays default to []; the first entry is
 // primary unless an entry explicitly carries `isPrimary: true` at the write site.
@@ -186,6 +188,27 @@ export async function POST(req: Request) {
 
     if (error) return error;
     const body = data;
+
+    // GSTIN ↔ state-code integrity (Person has no separate textual state field
+    // today; only gstStateCode). The validator still normalises and rejects
+    // anyone trying to send a mismatched gstStateCode.
+    const integrity = normaliseGstinState({
+        gstin:        body.gstin,
+        gstStateCode: body.gstStateCode,
+    });
+    if (!integrity.ok) {
+        return NextResponse.json({ error: integrity.error }, { status: 400 });
+    }
+
+    // shippingStateCode: when sent, must be a known Indian state code.
+    const shippingState = body.shippingStateCode?.trim() || "";
+    if (shippingState && !isValidStateCode(shippingState)) {
+        return NextResponse.json(
+            { error: `Invalid shippingStateCode "${shippingState}". Expected a 2-digit GSTIN state code.` },
+            { status: 400 },
+        );
+    }
+
     const phones = body.phones.filter(p => p.trim().length > 0);
     const emails = body.emails.filter(e => e.trim().length > 0);
 
@@ -197,10 +220,10 @@ export async function POST(req: Request) {
                     address: body.address || null,
                     agreedToTerms: body.agreedToTerms ?? false,
                     agreedAt: body.agreedToTerms ? new Date() : null,
-                    gstin:        body.gstin?.trim() || null,
-                    gstStateCode: body.gstStateCode?.trim()
-                                  || (body.gstin?.trim()?.slice(0, 2) || null),
-                    gstRegType:   body.gstRegType ?? (body.gstin ? "REGULAR" : null),
+                    gstin:             integrity.value.gstin || null,
+                    gstStateCode:      integrity.value.gstStateCode || null,
+                    gstRegType:        body.gstRegType ?? (integrity.value.gstin ? "REGULAR" : null),
+                    shippingStateCode: shippingState || null,
                 },
             });
 

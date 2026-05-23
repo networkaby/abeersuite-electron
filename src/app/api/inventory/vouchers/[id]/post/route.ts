@@ -4,6 +4,8 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { handleApiError } from "@/shared/lib/api";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 
 // Tagged error: the GL bridge returned without creating a JournalEntry for a
 // trading voucher (SALE/PURCHASE/SALE_RETURN/PURCHASE_RETURN). The outer catch
@@ -55,6 +57,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     normalBalance: true,
                     group: { select: { type: true } },
                 },
+            },
+            // Branch state drives the seller-state in the CGST/SGST vs IGST split.
+            branch: {
+                select: { id: true, gstStateCode: true },
             },
         },
     });
@@ -277,9 +283,38 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             let journalEntryId: number | null = null;
             const postNotes: string[] = [];
             if (["SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"].includes(voucher.type)) {
+                // Resolve seller / buyer state for the CGST/SGST vs IGST split.
+                // Prefer the placeOfSupply that was stamped at save time
+                // (immutable audit trail); otherwise resolve live from party +
+                // delivery mode + branch as a defensive fallback.
+                const org = await getOrganisation();
+                const sellerStateCode = (voucher.branch?.gstStateCode || org.gstStateCode || "").trim();
+                let buyerStateCode = (voucher.placeOfSupply ?? "").trim();
+                if (!buyerStateCode) {
+                    // Live lookup against party — covers legacy rows where
+                    // placeOfSupply was never set.
+                    let party: { gstin: string | null; gstStateCode: string | null; shippingStateCode: string | null } | null = null;
+                    if (voucher.partyType === "customer" && voucher.partyId) {
+                        party = await tx.person.findUnique({
+                            where: { id: voucher.partyId },
+                            select: { gstin: true, gstStateCode: true, shippingStateCode: true },
+                        });
+                    } else if (voucher.partyType === "company" && voucher.partyId) {
+                        party = await tx.company.findUnique({
+                            where: { id: voucher.partyId },
+                            select: { gstin: true, gstStateCode: true, shippingStateCode: true },
+                        });
+                    }
+                    buyerStateCode = resolveBuyerStateCode(
+                        party,
+                        sellerStateCode,
+                        voucher.deliveryMode ?? "COUNTER",
+                    );
+                }
+
                 const out = await postInvVoucherToGl(tx, {
                     voucherId: voucher.id,
-                    voucher,
+                    voucher: { ...voucher, sellerStateCode, buyerStateCode },
                     userId,
                 });
                 journalEntryId = out.journalEntryId;

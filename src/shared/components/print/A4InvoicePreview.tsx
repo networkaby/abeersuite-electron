@@ -287,12 +287,30 @@ function InvoiceBody({ template, sample }: InvoiceBodyProps) {
                                 <span>{fmtINR(sample.subtotal)}</span>
                             </div>
                         )}
-                        {template.showTaxSummary && sample.taxAmount !== null && sample.taxAmount > 0 && (
+                        {template.showTaxSummary && sample.taxBreakdown ? (
+                            sample.taxBreakdown.kind === "INTRA" ? (
+                                <>
+                                    <div className="trow">
+                                        <span className="muted">CGST</span>
+                                        <span>{fmtINR(sample.taxBreakdown.cgst)}</span>
+                                    </div>
+                                    <div className="trow">
+                                        <span className="muted">SGST</span>
+                                        <span>{fmtINR(sample.taxBreakdown.sgst)}</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="trow">
+                                    <span className="muted">IGST</span>
+                                    <span>{fmtINR(sample.taxBreakdown.igst)}</span>
+                                </div>
+                            )
+                        ) : template.showTaxSummary && sample.taxAmount !== null && sample.taxAmount > 0 ? (
                             <div className="trow">
                                 <span className="muted">Tax</span>
                                 <span>{fmtINR(sample.taxAmount)}</span>
                             </div>
-                        )}
+                        ) : null}
                         {sample.total !== null && (
                             <div className="trow grand">
                                 <span>Total</span>

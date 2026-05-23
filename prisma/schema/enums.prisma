@@ -134,6 +134,14 @@ enum InvVoucherType {
   PURCHASE_ORDER
 }
 
+// Drives the place-of-supply resolver. COUNTER = customer takes goods at
+// the counter (place of supply = supplier counter, §10(1)(c)). SHIPPED =
+// goods couriered/dispatched (place of supply = destination state).
+enum InvVoucherDeliveryMode {
+  COUNTER
+  SHIPPED
+}
+
 // ── GST enums ─────────────────────────────────────────────────────────────────
 
 enum GstRegType {

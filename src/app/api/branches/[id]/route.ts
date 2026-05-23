@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 
 const branchTextField = z.string().trim().optional().nullable();
 
@@ -33,14 +34,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, updateSchema);
         if (error) return error;
 
-        // Keep gstStateCode in lockstep with GSTIN unless the admin sent both
-        // explicitly. Mirrors the same auto-derivation in POST /api/branches
-        // and PATCH /api/settings/organisation.
         const payload = { ...data };
-        if (payload.gstin !== undefined && payload.gstStateCode === undefined) {
-            payload.gstStateCode = payload.gstin && payload.gstin.length >= 2
-                ? payload.gstin.slice(0, 2)
-                : "";
+
+        // GSTIN ↔ state guard, but only when the PATCH touched any of those
+        // three fields. Otherwise we'd reject "rename only" PATCHes whose
+        // existing row already has slightly-off state-name text.
+        if (data.gstin !== undefined || data.gstStateCode !== undefined || data.state !== undefined) {
+            const current = await prisma.branch.findUnique({ where: { id } });
+            const integrity = normaliseGstinState({
+                gstin:        data.gstin        ?? current?.gstin        ?? "",
+                gstStateCode: data.gstStateCode ?? current?.gstStateCode ?? "",
+                state:        data.state        ?? current?.state        ?? "",
+            });
+            if (!integrity.ok) {
+                return NextResponse.json({ error: integrity.error }, { status: 400 });
+            }
+            payload.gstin        = integrity.value.gstin        || null;
+            payload.gstStateCode = integrity.value.gstStateCode || null;
+            if (data.state !== undefined) {
+                payload.state = integrity.value.state || null;
+            }
         }
 
         const branch = await prisma.branch.update({ where: { id }, data: payload });

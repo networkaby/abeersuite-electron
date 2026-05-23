@@ -1178,12 +1178,12 @@ async function main() {
     console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
-    console.log("[12/13] VoucherSeries (all GL + inventory series)");
+    console.log("[12/15] VoucherSeries (all GL + inventory series)");
     await seedVoucherSeries(prisma);
     console.log(`      ✓ VoucherSeries seeded\n`);
 
     // ── Section 13: Voucher print templates ───────────────────────────
-    console.log("[13/14] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
+    console.log("[13/15] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
     // Create payload uses the full per-kind defaults so a fresh DB starts in
     // the right place. On re-seed we only force `defaultPaper` back to its
     // per-kind baseline (POS = THERMAL_80MM, everything else = A4); all
@@ -1199,7 +1199,7 @@ async function main() {
     console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded\n`);
 
     // ── Section 14: Organisation singleton ────────────────────────────
-    console.log("[14/14] Organisation (your own business / legal entity)");
+    console.log("[14/15] Organisation (your own business / legal entity)");
     // Create-only on re-seed (mirrors VoucherSeries / VoucherPrintTemplate
     // pattern) so admin edits via /office/settings/organisation survive a
     // re-run of `pnpm prisma db seed`. Initial values come from
@@ -1233,6 +1233,21 @@ async function main() {
         update: {},
     });
     console.log(`      ✓ Organisation singleton seeded (id=1)\n`);
+
+    // ── Section 15: GSTIN ↔ gstStateCode integrity fixup ─────────────────
+    console.log("[15/15] GSTIN ↔ state-code integrity fixup");
+    // Idempotent: for every Branch / Person / Company / Organisation row
+    // with a non-empty GSTIN, force gstStateCode = gstin[:2]. Safe to re-run.
+    // (Doesn't touch the human-readable `state` text — admins clean those
+    // via the UI, which now rejects mismatches.)
+    const gstinFixupSql = `gstStateCode" = LEFT("gstin", 2) WHERE "gstin" IS NOT NULL AND "gstin" <> '' AND ("gstStateCode" IS DISTINCT FROM LEFT("gstin", 2))`;
+    const branchFix     = await pool.query(`UPDATE "Branch"       SET "${gstinFixupSql}`);
+    const personFix     = await pool.query(`UPDATE "Person"       SET "${gstinFixupSql}`);
+    const companyFix    = await pool.query(`UPDATE "Company"      SET "${gstinFixupSql}`);
+    const orgFix        = await pool.query(`UPDATE "Organisation" SET "${gstinFixupSql}`);
+    const fixedTotal = (branchFix.rowCount ?? 0) + (personFix.rowCount ?? 0)
+                     + (companyFix.rowCount ?? 0) + (orgFix.rowCount ?? 0);
+    console.log(`      ✓ Re-aligned gstStateCode on ${fixedTotal} row(s) where it disagreed with GSTIN\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

@@ -2,11 +2,14 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { invNextRef, calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
-import { InvVoucherType } from "@/generated/prisma/client";
+import { InvVoucherType, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
 import { resolveActiveBranchId, requireBranchAccess, BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
+import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all&includeDeleted=1
 //
@@ -139,6 +142,8 @@ export async function POST(req: NextRequest) {
         discountPct,
         discountAmt,
         showPrices,
+        deliveryMode,
+        placeOfSupply,
         lines = [],
         expenseLines = [],
     } = body as {
@@ -176,6 +181,13 @@ export async function POST(req: NextRequest) {
         discountAmt?:    number;
         // Challan-only: when false the printed challan hides rate/amount columns.
         showPrices?:     boolean;
+        /// "COUNTER" | "SHIPPED" — drives place-of-supply resolution for GST.
+        /// Defaults to "COUNTER" (server-side) so older callers behave as before.
+        deliveryMode?:   InvVoucherDeliveryMode;
+        /// Explicit 2-char state code for the place of supply. When omitted
+        /// the server resolves it from the party + branch via
+        /// resolveBuyerStateCode(party, branchState, deliveryMode).
+        placeOfSupply?:  string;
         lines: {
             productId:   number;
             description?: string;
@@ -295,6 +307,41 @@ export async function POST(req: NextRequest) {
         Number(roundOff),
     );
 
+    // Resolve place-of-supply for the GST routing. The client (TradingVoucherPage)
+    // can send `placeOfSupply` directly when the cashier picked a state override;
+    // otherwise we derive it from the party (Person/Company lookup) + delivery
+    // mode + branch state. Stamped on InvVoucher.placeOfSupply so /post never
+    // has to re-resolve.
+    const resolvedDeliveryMode: InvVoucherDeliveryMode = deliveryMode ?? "COUNTER";
+    let resolvedPlaceOfSupply = (placeOfSupply ?? "").trim();
+    if (resolvedPlaceOfSupply && !isValidStateCode(resolvedPlaceOfSupply)) {
+        return NextResponse.json(
+            { error: `Invalid placeOfSupply "${resolvedPlaceOfSupply}". Expected a 2-digit GSTIN state code.` },
+            { status: 400 },
+        );
+    }
+    if (!resolvedPlaceOfSupply) {
+        const branch = await prisma.branch.findUnique({
+            where: { id: branchId },
+            select: { gstStateCode: true },
+        });
+        const org = await getOrganisation();
+        const sellerState = (branch?.gstStateCode || org.gstStateCode || "").trim();
+        let party: { gstin: string | null; gstStateCode: string | null; shippingStateCode: string | null } | null = null;
+        if (partyType === "customer" && partyId) {
+            party = await prisma.person.findUnique({
+                where: { id: partyId },
+                select: { gstin: true, gstStateCode: true, shippingStateCode: true },
+            });
+        } else if (partyType === "company" && partyId) {
+            party = await prisma.company.findUnique({
+                where: { id: partyId },
+                select: { gstin: true, gstStateCode: true, shippingStateCode: true },
+            });
+        }
+        resolvedPlaceOfSupply = resolveBuyerStateCode(party, sellerState, resolvedDeliveryMode);
+    }
+
     const userId = user!.id;
 
     try {
@@ -329,6 +376,8 @@ export async function POST(req: NextRequest) {
                     subtotal,
                     taxAmount,
                     totalAmount,
+                    deliveryMode:  resolvedDeliveryMode,
+                    placeOfSupply: resolvedPlaceOfSupply || null,
                     createdById: userId,
                     lines: {
                         create: computedLines.map((l) => ({
