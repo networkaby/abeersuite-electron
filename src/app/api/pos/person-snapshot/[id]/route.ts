@@ -5,18 +5,23 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/pos/person-snapshot/[id]
-// "We know you" panel for the POS — aggregates everything in one call so the UI
-// can render quickly without N round-trips.
+// "We know you" panel for the POS — aggregates everything in one call so
+// the UI can render quickly without N round-trips.
 //
 // Returns:
 //   person         — id, name, primaryPhone, primaryEmail, gstin
 //   account        — current ledger balance + opening balance
-//   turnover       — lifetime invoice total + last-12-month total
-//   discountPct    — TODO (no schema field yet) — placeholder tier from turnover
-//   loyaltyPoints  — TODO (no schema field yet) — placeholder = ⌊totalInvoiced / 100⌋
-//   lastVisitAt    — most recent of (latest invoice issueDate, latest ticket createdAt)
+//   turnover       — lifetime InvVoucher (SALE+POS) total + last-12-month total
+//   discountPct    — tier from lifetime turnover
+//   loyaltyPoints  — placeholder = ⌊lifetime / 100⌋
+//   lastVisitAt    — most recent of (latest sale voucher date, latest ticket createdAt)
 //   recentTickets  — last 3 tickets w/ status label
-//   warrantiesEnding — TODO (no warranty-end-date field) — surfaced as warning copy
+//   warrantiesEnding — TODO (no warranty-end-date field)
+//
+// Migrated from prisma.invoice to prisma.invVoucher (SALE + POS only) on
+// 2026-05-24 as part of the Invoice → InvVoucher consolidation (Layer 3d).
+
+const SALE_TYPES = ["SALE", "POS"] as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
@@ -37,30 +42,34 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         });
         if (!person) return NextResponse.json({ error: "Person not found" }, { status: 404 });
 
-        const accountId = person.account?.id;
+        const accountId = person.account?.id ?? null;
 
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-        const [lifetimeAgg, ytdAgg, latestInvoice, latestTicket, recentTickets] = await Promise.all([
-            accountId
-                ? prisma.invoice.aggregate({
-                    where: { accountId, deletedAt: null, status: { not: "VOID" } },
+        const baseWhere = accountId
+            ? { accountId, type: { in: [...SALE_TYPES] }, status: "POSTED" as const, deletedAt: null }
+            : null;
+
+        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets] = await Promise.all([
+            baseWhere
+                ? prisma.invVoucher.aggregate({
+                    where: baseWhere,
                     _sum: { totalAmount: true },
                     _count: { _all: true },
                 })
                 : Promise.resolve(null),
-            accountId
-                ? prisma.invoice.aggregate({
-                    where: { accountId, deletedAt: null, status: { not: "VOID" }, issueDate: { gte: oneYearAgo } },
+            baseWhere
+                ? prisma.invVoucher.aggregate({
+                    where: { ...baseWhere, date: { gte: oneYearAgo } },
                     _sum: { totalAmount: true },
                 })
                 : Promise.resolve(null),
-            accountId
-                ? prisma.invoice.findFirst({
-                    where: { accountId, deletedAt: null, status: { not: "VOID" } },
-                    orderBy: { issueDate: "desc" },
-                    select: { issueDate: true, number: true, totalAmount: true },
+            baseWhere
+                ? prisma.invVoucher.findFirst({
+                    where: baseWhere,
+                    orderBy: { date: "desc" },
+                    select: { date: true, reference: true, totalAmount: true },
                 })
                 : Promise.resolve(null),
             accountId
@@ -92,7 +101,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         const loyaltyPoints = Math.floor(lifetimeTotal / 100);
 
         const lastVisitAt = (() => {
-            const a = latestInvoice?.issueDate ?? null;
+            const a = latestVoucher?.date ?? null;
             const b = latestTicket?.createdAt ?? null;
             if (!a) return b;
             if (!b) return a;

@@ -125,22 +125,24 @@ export async function ShowroomBriefing() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // POS (walk-in counter) invoices = Invoice where shopOrderId=null AND ticketId=null AND not void/deleted
+    // POS counter sales = today's posted InvVouchers of type POS (walk-in
+    // counter); deliberately excludes ecommerce/shop-order or ticket-linked
+    // SALE vouchers. Migrated from prisma.invoice to prisma.invVoucher on
+    // 2026-05-24 (Layer 3d of the Invoice → InvVoucher consolidation).
     const posFilter = {
-        createdAt:   { gte: today },
-        deletedAt:   null,
-        shopOrderId: null,
-        ticketId:    null,
-        status:      { not: "VOID" as const },
+        createdAt: { gte: today },
+        deletedAt: null,
+        status:    "POSTED" as const,
+        type:      "POS" as const,
     };
 
     let billsToday: number | string = "—", openShifts: number | string = "—",
         salesDisplay = "—";
     try {
         const [b, s, agg] = await Promise.all([
-            prisma.invoice.count({ where: posFilter }),
+            prisma.invVoucher.count({ where: posFilter }),
             prisma.posShift.count({ where: { closedAt: null } }),
-            prisma.invoice.aggregate({ where: posFilter, _sum: { totalAmount: true } }),
+            prisma.invVoucher.aggregate({ where: posFilter, _sum: { totalAmount: true } }),
         ]);
         billsToday = b;
         openShifts = s;

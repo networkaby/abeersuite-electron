@@ -15,7 +15,7 @@ type StatsData = {
     from: string; to: string;
     voucherTypes:    Bucket[];
     invVoucherTypes: Bucket[];
-    other:   { invoices: number; cancelledInvoices: number; journalEntries: number };
+    other:   { journalEntries: number };
     masters: {
         groups: number; ledgers: number; parties: number;
         stockItems: number; stockGroups: number; categories: number;
@@ -29,7 +29,8 @@ const VOUCHER_LABEL: Record<string, string> = {
 };
 
 const INV_VOUCHER_LABEL: Record<string, string> = {
-    PURCHASE: "Purchase", SALE: "Sale", ESTIMATE: "Estimate",
+    PURCHASE: "Purchase", SALE: "Sale", POS: "POS Sale", ESTIMATE: "Estimate",
+    SALE_RETURN: "Sale Return", PURCHASE_RETURN: "Purchase Return",
     MANUFACTURING_JOURNAL: "Manufacturing Journal", PHYSICAL_STOCK: "Physical Stock",
     BRANCH_TRANSFER: "Branch Transfer",
     GRN: "GRN", CHALLAN: "Delivery Challan",
@@ -92,7 +93,8 @@ export default function StatisticsPage() {
                         labels={VOUCHER_LABEL}
                         extras={[
                             { label: "Journal Entries", value: data.other.journalEntries },
-                            { label: "Invoices",        value: data.other.invoices, dim: data.other.cancelledInvoices > 0 ? `${data.other.cancelledInvoices} cancelled` : undefined },
+                            // Sales / POS counts moved to the Inventory Vouchers
+                            // card after the Invoice → InvVoucher consolidation.
                         ]}
                     />
 

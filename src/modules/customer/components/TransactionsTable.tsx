@@ -14,15 +14,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
-export type TxInvoice = {
-    id: number;
-    number: string;
-    status: string;
-    issueDate: string;
-    totalAmount: string;
-    amountPaid: string;
-};
-
 export type TxInvVoucher = {
     id: number;
     reference: string;
@@ -35,24 +26,19 @@ export type TxInvVoucher = {
     createdBy: { name: string };
 };
 
-export type CustomerTransactions = { invoices: TxInvoice[]; invVouchers: TxInvVoucher[] };
-
-// (INV_VOUCHER_URLS removed — use the shared editFormUrl() so refs open
-//  the editable full-page form instead of the read-only detail.)
+// `TxInvoice` and the parallel Invoice array were retired with the
+// Invoice → InvVoucher consolidation (Layer 3b, 2026-05-24). Callers
+// now pass a single `invVouchers` list.
+export type CustomerTransactions = { invVouchers: TxInvVoucher[] };
 
 const TX_STATUS_COLORS: Record<string, string> = {
-    PAID:      "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
     POSTED:    "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-    PARTIAL:   "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-    SENT:      "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
     DRAFT:     "bg-muted text-muted-foreground",
-    VOID:      "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
     CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
-export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoice[]; invVouchers: TxInvVoucher[] }) {
+export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[] }) {
     type Row = {
-        kind:       string;
         id:         number;
         ref:        string;
         type:       string;
@@ -67,34 +53,18 @@ export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoi
     };
 
     // Build raw rows (balance will be filled below)
-    const rawRows: Omit<Row, "balance">[] = [
-        ...invoices.map((inv) => ({
-            kind:       "invoice",
-            id:         inv.id,
-            ref:        inv.number,
-            type:       "Invoice",
-            date:       inv.issueDate,
-            total:      Number(inv.totalAmount),
-            paid:       Number(inv.amountPaid),
-            status:     inv.status,
-            url:        `/office/accountancy/invoices/${inv.id}`,
-            branchName: null,
-            createdBy:  null,
-        })),
-        ...invVouchers.map((v) => ({
-            kind:       "voucher",
-            id:         v.id,
-            ref:        v.reference,
-            type:       v.type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" "),
-            date:       v.date,
-            total:      Number(v.totalAmount),
-            paid:       Number(v.amountReceived),
-            status:     v.status,
-            url:        editFormUrl(v.type, v.id),
-            branchName: v.branch.name,
-            createdBy:  v.createdBy.name,
-        })),
-    ];
+    const rawRows: Omit<Row, "balance">[] = invVouchers.map((v) => ({
+        id:         v.id,
+        ref:        v.reference,
+        type:       v.type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" "),
+        date:       v.date,
+        total:      Number(v.totalAmount),
+        paid:       Number(v.amountReceived),
+        status:     v.status,
+        url:        editFormUrl(v.type, v.id),
+        branchName: v.branch.name,
+        createdBy:  v.createdBy.name,
+    }));
 
     // Running balance: sort chronologically (oldest first), accumulate
     // (total − paid) = outstanding at each step, then attach to each row.
@@ -102,16 +72,16 @@ export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoi
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     let runningBalance = 0;
-    const balanceMap = new Map<string, number>();
+    const balanceMap = new Map<number, number>();
     for (const r of ascending) {
         runningBalance += r.total - r.paid;
-        balanceMap.set(`${r.kind}-${r.id}`, runningBalance);
+        balanceMap.set(r.id, runningBalance);
     }
 
     // Display newest first
     const rows: Row[] = rawRows
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .map((r) => ({ ...r, balance: balanceMap.get(`${r.kind}-${r.id}`) ?? 0 }));
+        .map((r) => ({ ...r, balance: balanceMap.get(r.id) ?? 0 }));
 
     const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
@@ -134,7 +104,7 @@ export function TransactionsTable({ invoices, invVouchers }: { invoices: TxInvoi
                     </TableHeader>
                     <TableBody>
                         {rows.map((row) => (
-                            <TableRow key={`${row.kind}-${row.id}`}>
+                            <TableRow key={row.id}>
                                 <TableCell className="text-xs text-muted-foreground">{row.type}</TableCell>
                                 <TableCell>
                                     {row.url ? (

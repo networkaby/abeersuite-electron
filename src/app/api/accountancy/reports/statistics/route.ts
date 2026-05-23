@@ -21,8 +21,6 @@ export async function GET(req: Request) {
         const [
             voucherByType,
             invVoucherByType,
-            invoiceCount,
-            cancelledInvoices,
             journalEntryCount,
             accountGroupCount,
             ledgerCount,
@@ -43,12 +41,9 @@ export async function GET(req: Request) {
                 where: { date: dateRange, deletedAt: null },
                 _count: { _all: true },
             }),
-            prisma.invoice.count({
-                where: { issueDate: dateRange, deletedAt: null, status: { not: "VOID" } },
-            }),
-            prisma.invoice.count({
-                where: { issueDate: dateRange, deletedAt: null, status: "VOID" },
-            }),
+            // Legacy invoice counts retired with the Invoice → InvVoucher
+            // consolidation (Layer 3e, 2026-05-24). Sale counts are now
+            // exposed via invVoucherTypes[SALE / POS] in the same payload.
             prisma.journalEntry.count({
                 where: { date: dateRange, deletedAt: null },
             }),
@@ -87,8 +82,6 @@ export async function GET(req: Request) {
             voucherTypes:    rollup(voucherByType),
             invVoucherTypes: rollup(invVoucherByType),
             other: {
-                invoices:          invoiceCount,
-                cancelledInvoices,
                 journalEntries:    journalEntryCount,
             },
             masters: {

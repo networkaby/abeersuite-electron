@@ -3,6 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
+import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -12,12 +13,19 @@ import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/frag
 // Returns:
 //   party          — { kind: "person" | "company", id, name, phone, email, gstin }
 //   account        — current ledger balance + opening balance
-//   turnover       — lifetime + last-12-month invoice totals
+//   turnover       — lifetime + last-12-month InvVoucher (SALE+POS) totals
 //   discountPct    — tier from lifetime turnover (Bronze/Silver/Gold/Platinum)
-//   loyaltyPoints  — placeholder = ⌊totalInvoiced / 100⌋
-//   lastVisitAt    — most recent of (latest invoice issueDate, latest ticket createdAt)
+//   loyaltyPoints  — placeholder = ⌊lifetime / 100⌋
+//   lastVisitAt    — most recent of (latest sale voucher date, latest ticket createdAt)
 //   recentTickets  — last 3 tickets (matched via Ticket.billingAccountId)
 //   warrantiesEnding — TODO; placeholder
+//
+// Overdue calculation uses outstandings.ts (the canonical receivables
+// engine) so InvVoucher allocations are netted correctly. Migrated from
+// prisma.invoice/payment to prisma.invVoucher on 2026-05-24 as part of
+// the Invoice → InvVoucher consolidation (Layer 3d).
+
+const SALE_TYPES = ["SALE", "POS"] as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ accountId: string }> }) {
     const { response } = await requireAuth();
@@ -88,30 +96,28 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
 
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const today = new Date();
 
-        const [lifetimeAgg, ytdAgg, overdueRows, latestInvoice, latestTicket, recentTickets] = await Promise.all([
-            prisma.invoice.aggregate({
-                where: { accountId, deletedAt: null, status: { not: "VOID" } },
+        const baseWhere = {
+            accountId,
+            type:      { in: [...SALE_TYPES] },
+            status:    "POSTED" as const,
+            deletedAt: null,
+        };
+
+        const [lifetimeAgg, ytdAgg, latestVoucher, latestTicket, recentTickets, ledgerOutstanding] = await Promise.all([
+            prisma.invVoucher.aggregate({
+                where: baseWhere,
                 _sum: { totalAmount: true },
                 _count: { _all: true },
             }),
-            prisma.invoice.aggregate({
-                where: { accountId, deletedAt: null, status: { not: "VOID" }, issueDate: { gte: oneYearAgo } },
+            prisma.invVoucher.aggregate({
+                where: { ...baseWhere, date: { gte: oneYearAgo } },
                 _sum: { totalAmount: true },
             }),
-            prisma.invoice.findMany({
-                where: {
-                    accountId, deletedAt: null,
-                    status: { in: ["SENT", "PARTIAL"] },
-                    dueDate: { lt: today },
-                },
-                select: { totalAmount: true, amountPaid: true },
-            }),
-            prisma.invoice.findFirst({
-                where: { accountId, deletedAt: null, status: { not: "VOID" } },
-                orderBy: { issueDate: "desc" },
-                select: { issueDate: true, number: true, totalAmount: true },
+            prisma.invVoucher.findFirst({
+                where: baseWhere,
+                orderBy: { date: "desc" },
+                select: { date: true, reference: true, totalAmount: true },
             }),
             prisma.ticket.findFirst({
                 where: { billingAccountId: accountId },
@@ -128,6 +134,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                     ticketStatus: { select: { label: true, color: true } },
                 },
             }),
+            // Receivables-engine-backed overdue: respects VoucherAllocation
+            // netting (POS cash receipts, partial settlements, etc.).
+            getLedgerOutstanding(accountId),
         ]);
 
         const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
@@ -137,7 +146,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         const discountPct = lifetimeTotal >= 200000 ? 8 : lifetimeTotal >= 50000 ? 5 : lifetimeTotal >= 10000 ? 2 : 0;
         const loyaltyPoints = Math.floor(lifetimeTotal / 100);
 
-        // Tier label drives "Customer level" UI. Same thresholds as discountPct.
         const customerLevel = lifetimeTotal >= 200000 ? "Platinum"
                               : lifetimeTotal >= 50000  ? "Gold"
                               : lifetimeTotal >= 10000  ? "Silver"
@@ -151,13 +159,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             : null;
         const balance    = Number(account.balance);    // ledger balance (positive = customer owes)
         const balanceDue = Math.max(0, balance);
-        const overdueDue = overdueRows.reduce((s, r) => s + Math.max(0, Number(r.totalAmount) - Number(r.amountPaid)), 0);
+        const overdueDue = ledgerOutstanding?.bills
+            .filter((b) => b.daysOverdue > 0)
+            .reduce((s, b) => s + b.outstanding, 0) ?? 0;
         const availableCredit: number | null = creditLimit !== null
             ? Math.max(0, creditLimit - balanceDue)
             : null;                                    // null = unlimited
 
         const lastVisitAt = (() => {
-            const a = latestInvoice?.issueDate ?? null;
+            const a = latestVoucher?.date ?? null;
             const b = latestTicket?.createdAt ?? null;
             if (!a) return b;
             if (!b) return a;

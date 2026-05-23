@@ -393,10 +393,10 @@ export default function CompaniesPage() {
                                 {tab === "transactions" && (
                                     txLoading ? (
                                         <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={20} className="animate-spin" /></div>
-                                    ) : !transactions ? null : (transactions.invoices.length === 0 && transactions.invVouchers.length === 0) ? (
+                                    ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                         <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                     ) : (
-                                        <TransactionsTable invoices={transactions.invoices} invVouchers={transactions.invVouchers} />
+                                        <TransactionsTable invVouchers={transactions.invVouchers} />
                                     )
                                 )}
                             </div>

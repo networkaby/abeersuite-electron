@@ -26,9 +26,30 @@ export async function GET(req: NextRequest) {
 
     const session = await auth();
     const { searchParams } = new URL(req.url);
-    const type   = searchParams.get("type")   as InvVoucherType | null;
+    const typeParam = searchParams.get("type");                                       // single value, OR
+    const typesParam = searchParams.get("types");                                     // comma-separated list (POS,SALE)
     const status = searchParams.get("status") as "DRAFT" | "POSTED" | "CANCELLED" | null;
     const branchParam = searchParams.get("branchId");
+    const accountIdParam = searchParams.get("accountId");
+    const ticketIdParam = searchParams.get("ticketId");
+    const shopOrderIdParam = searchParams.get("shopOrderId");
+
+    // Normalise the type filter — accept either ?type=SALE or ?types=SALE,POS.
+    const ALLOWED_TYPES = new Set<InvVoucherType>([
+        "PURCHASE", "SALE", "POS", "ESTIMATE", "SALE_RETURN", "PURCHASE_RETURN",
+        "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER",
+        "GRN", "CHALLAN", "REJECTION_IN", "REJECTION_OUT",
+        "SALES_ORDER", "PURCHASE_ORDER",
+    ]);
+    const typeList: InvVoucherType[] = [];
+    if (typesParam) {
+        for (const t of typesParam.split(",").map((s) => s.trim())) {
+            if (ALLOWED_TYPES.has(t as InvVoucherType)) typeList.push(t as InvVoucherType);
+        }
+    } else if (typeParam && ALLOWED_TYPES.has(typeParam as InvVoucherType)) {
+        typeList.push(typeParam as InvVoucherType);
+    }
+    const typeFilter = typeList.length > 0 ? { type: { in: typeList } } : {};
     // includeDeleted is opt-in and gated on the delete permission so casual
     // viewers don't see soft-deleted rows. The All Vouchers register passes
     // includeDeleted=1 when the user ticks the "Deleted" status filter.
@@ -52,9 +73,12 @@ export async function GET(req: NextRequest) {
 
     const vouchers = await prisma.invVoucher.findMany({
         where: {
-            ...(type   ? { type }   : {}),
+            ...typeFilter,
             ...(status ? { status } : {}),
             ...(includeDeleted ? {} : { deletedAt: null }),
+            ...(accountIdParam   ? { accountId:   Number(accountIdParam) }   : {}),
+            ...(ticketIdParam    ? { ticketId:    Number(ticketIdParam) }    : {}),
+            ...(shopOrderIdParam ? { shopOrderId: Number(shopOrderIdParam) } : {}),
             ...branchFilter,
         },
         orderBy: [{ date: "desc" }, { id: "desc" }],

@@ -4,11 +4,17 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // GET /api/accountancy/allocations/open?accountId=N
-// Returns invoices/vouchers tied to the given party account that still have
-// outstanding amount (totalAmount − Σ allocations linked to this row as target).
+// Returns InvVoucher (SALE/POS/PURCHASE) and finance Voucher (CREDIT_NOTE /
+// DEBIT_NOTE) rows tied to the given party account that still have an
+// outstanding amount (totalAmount − Σ allocations targeting this row).
 //
 // Used by the bill-wise drawer when entering a Receipt or Payment voucher
 // to show which open bills can be settled.
+//
+// Migrated from prisma.invoice to prisma.invVoucher on 2026-05-24 as part
+// of the Invoice → InvVoucher consolidation (Layer 3e). Allocations target
+// the InvVoucher's `journalEntryId` (the canonical receipts-engine link),
+// not the InvVoucher id directly.
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
@@ -17,42 +23,64 @@ export async function GET(req: Request) {
     const accountId = searchParams.get("accountId") ? Number(searchParams.get("accountId")) : null;
     if (!accountId) return NextResponse.json({ error: "accountId required" }, { status: 400 });
 
-    // Pull invoices for the account
-    const invoices = await prisma.invoice.findMany({
-        where: { accountId, deletedAt: null, status: { not: "VOID" } },
-        select: {
-            id: true, number: true, issueDate: true, dueDate: true, totalAmount: true, status: true,
+    // ── InvVoucher bills (SALE / POS / PURCHASE) for the party ────────────
+    const invVouchers = await prisma.invVoucher.findMany({
+        where: {
+            accountId,
+            type:      { in: ["SALE", "POS", "PURCHASE"] },
+            status:    "POSTED",
+            deletedAt: null,
         },
-        orderBy: [{ issueDate: "asc" }],
+        select: {
+            id: true, type: true, reference: true, date: true,
+            totalAmount: true, amountReceived: true,
+            journalEntryId: true, creditPeriodDays: true,
+        },
+        orderBy: [{ date: "asc" }],
     });
-
-    // Pull existing allocations against these invoices (target side)
-    const invIds = invoices.map((i) => i.id);
-    const invAllocs = invIds.length > 0 ? await prisma.voucherAllocation.findMany({
-        where: { targetType: "INVOICE", targetId: { in: invIds } },
+    const jeIds = invVouchers
+        .map((v) => v.journalEntryId)
+        .filter((x): x is number => x !== null);
+    const jeAllocs = jeIds.length > 0 ? await prisma.voucherAllocation.findMany({
+        where: { targetType: "JOURNAL_ENTRY", targetId: { in: jeIds } },
         select: { targetId: true, amount: true },
     }) : [];
-    const invAllocSum = invAllocs.reduce<Record<number, number>>((acc, a) => {
+    const jeAllocSum = jeAllocs.reduce<Record<number, number>>((acc, a) => {
         acc[a.targetId] = (acc[a.targetId] ?? 0) + Number(a.amount);
         return acc;
     }, {});
 
-    const openInvoices = invoices
-        .map((inv) => ({
-            kind:        "invoice" as const,
-            id:          inv.id,
-            reference:   inv.number,
-            date:        inv.issueDate,
-            dueDate:     inv.dueDate,
-            totalAmount: Number(inv.totalAmount),
-            allocated:   invAllocSum[inv.id] ?? 0,
-            outstanding: Number(inv.totalAmount) - (invAllocSum[inv.id] ?? 0),
-        }))
+    const openInvoices = invVouchers
+        .map((v) => {
+            const total = Number(v.totalAmount);
+            const upfront = Number(v.amountReceived);
+            const allocated = upfront + (v.journalEntryId !== null ? (jeAllocSum[v.journalEntryId] ?? 0) : 0);
+            const due = new Date(v.date);
+            due.setDate(due.getDate() + (v.creditPeriodDays ?? 30));
+            return {
+                kind:        "invoice" as const, // keep the wire key the dialog already consumes
+                id:          v.id,
+                reference:   v.reference,
+                date:        v.date,
+                dueDate:     due,
+                totalAmount: total,
+                allocated,
+                outstanding: total - allocated,
+            };
+        })
         .filter((row) => row.outstanding > 0.005);
 
-    // Same shape for Voucher rows where the voucher has the account as party.
+    // ── Finance Voucher bills (CREDIT_NOTE / DEBIT_NOTE) for the party ────
+    // RECEIPT/PAYMENT are settlements, not bills — they appear as the
+    // source side of an allocation, not the target side. Same logic as
+    // outstandings.ts post-2026-05-24.
     const vouchers = await prisma.voucher.findMany({
-        where: { partyAccountId: accountId, deletedAt: null, status: { not: "CANCELLED" } },
+        where: {
+            partyAccountId: accountId,
+            type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
+            deletedAt:      null,
+            status:         { not: "CANCELLED" },
+        },
         select: { id: true, type: true, reference: true, date: true, totalAmount: true },
         orderBy: [{ date: "asc" }],
     });

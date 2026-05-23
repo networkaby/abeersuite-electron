@@ -8,11 +8,14 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Surfaced kinds in the Day Book — the union of inventory-voucher origins
-// (Sale/Purchase/Estimate), invoices, GL voucher types, and stand-alone JE.
-type Kind = "All" | "Sale" | "Purchase" | "Estimate" | "Invoice"
+// (Sale/Purchase/Estimate/Sale Return/Purchase Return), GL voucher types,
+// and stand-alone JEs. "Sale" includes POS (same AR/Revenue shape). The
+// legacy "Invoice" kind was retired with the Invoice → InvVoucher
+// consolidation (Layer 3a, 2026-05-24).
+type Kind = "All" | "Sale" | "Purchase" | "Estimate" | "Sale Return" | "Purchase Return"
     | "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note"
     | "Journal";
-const KINDS: Kind[] = ["All", "Sale", "Purchase", "Estimate", "Invoice",
+const KINDS: Kind[] = ["All", "Sale", "Purchase", "Estimate", "Sale Return", "Purchase Return",
     "Contra", "Payment", "Receipt", "Credit Note", "Debit Note", "Journal"];
 
 // GET /api/accountancy/reports/day-book?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=50&search=...&kind=Sale
@@ -37,23 +40,21 @@ export async function GET(req: Request) {
     };
     let kindIdsFilter: { id: { in: number[] } } | { id: { notIn: number[] } } | undefined;
     if (kind !== "All") {
-        if (kind === "Sale" || kind === "Purchase" || kind === "Estimate") {
+        if (kind === "Sale" || kind === "Purchase" || kind === "Estimate" || kind === "Sale Return" || kind === "Purchase Return") {
+            // Each Day Book kind maps to one or more InvVoucher.type values.
+            // POS shares the Sale bucket — same AR/Revenue JE shape, only
+            // counter-side settlement differs.
             const types =
-                kind === "Sale"     ? ["SALE"]     as const :
-                kind === "Purchase" ? ["PURCHASE"] as const :
-                                      ["ESTIMATE"] as const;
+                kind === "Sale"            ? (["SALE", "POS"] as const) :
+                kind === "Purchase"        ? (["PURCHASE"] as const) :
+                kind === "Estimate"        ? (["ESTIMATE"] as const) :
+                kind === "Sale Return"     ? (["SALE_RETURN"] as const) :
+                                             (["PURCHASE_RETURN"] as const);
             const rows = await prisma.invVoucher.findMany({
                 where: { type: { in: [...types] }, journalEntryId: { not: null } },
                 select: { journalEntryId: true },
             });
             kindIdsFilter = { id: { in: rows.map((r) => r.journalEntryId!).filter(Boolean) } };
-        } else if (kind === "Invoice") {
-            // Invoices don't have a journalEntryId column — link via reference prefix.
-            const rows = await prisma.journalEntry.findMany({
-                where: { ...baseWhere, reference: { startsWith: "INV-" } },
-                select: { id: true },
-            });
-            kindIdsFilter = { id: { in: rows.map((r) => r.id) } };
         } else if (kind === "Journal") {
             // "Journal" covers two things:
             //   1. JEs linked to a Voucher of type=JOURNAL (the dialog's path).
@@ -75,12 +76,6 @@ export async function GET(req: Request) {
             const linkedSet = new Set<number>();
             for (const r of invs) if (r.journalEntryId != null) linkedSet.add(r.journalEntryId);
             for (const r of vchs) if (r.journalEntryId != null) linkedSet.add(r.journalEntryId);
-            // Plus invoices via reference prefix
-            const invJEs = await prisma.journalEntry.findMany({
-                where: { ...baseWhere, reference: { startsWith: "INV-" } },
-                select: { id: true },
-            });
-            for (const r of invJEs) linkedSet.add(r.id);
             const journalIds = new Set<number>();
             for (const r of journalVchs) if (r.journalEntryId != null) journalIds.add(r.journalEntryId);
             // We want JEs that are EITHER unlinked OR linked to a JOURNAL voucher.
@@ -184,12 +179,13 @@ export async function GET(req: Request) {
             const source = sourceMap.get(e.id) ?? null;
             const gl     = glMap.get(e.id);
             const kind: Kind =
-                source?.kind === "sale"     ? "Sale"
-              : source?.kind === "purchase" ? "Purchase"
-              : source?.kind === "estimate" ? "Estimate"
-              : source?.kind === "invoice"  ? "Invoice"
-              : gl                          ? VOUCHER_KIND_LABEL[gl.type] ?? "Journal"
-              :                               "Journal";
+                source?.kind === "sale"            ? "Sale"
+              : source?.kind === "purchase"        ? "Purchase"
+              : source?.kind === "estimate"        ? "Estimate"
+              : source?.kind === "sale-return"     ? "Sale Return"
+              : source?.kind === "purchase-return" ? "Purchase Return"
+              : gl                                 ? VOUCHER_KIND_LABEL[gl.type] ?? "Journal"
+              :                                      "Journal";
             // Principal account = first line in stable order. Tally-style display:
             // single Amount column with Dr/Cr suffix matching this side.
             const first = e.lines[0];

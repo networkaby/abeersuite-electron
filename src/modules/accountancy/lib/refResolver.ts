@@ -1,14 +1,18 @@
 // Resolves a JournalEntry → URL of its originating source document
-// (sales / purchase / estimate voucher, or invoice).  Returns null for
-// stand-alone journal entries.
+// (InvVoucher of trading kind, or null for stand-alone journal entries).
+//
+// Pre-2026-05-24 this also recognised legacy Invoice rows via the `INV-`
+// reference prefix. After the Invoice → InvVoucher consolidation the
+// Invoice writers are retired and the fallback has been removed.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export type SourceDoc =
-    | { kind: "sale";     id: number; reference: string; url: string }
-    | { kind: "purchase"; id: number; reference: string; url: string }
-    | { kind: "estimate"; id: number; reference: string; url: string }
-    | { kind: "invoice";  id: number; number: string;    url: string };
+    | { kind: "sale";            id: number; reference: string; url: string }
+    | { kind: "purchase";        id: number; reference: string; url: string }
+    | { kind: "estimate";        id: number; reference: string; url: string }
+    | { kind: "sale-return";     id: number; reference: string; url: string }
+    | { kind: "purchase-return"; id: number; reference: string; url: string };
 
 import type { InvVoucherType } from "@/generated/prisma/client";
 
@@ -49,26 +53,28 @@ function buildEditUrl(type: InvVoucherType, id: number): string {
         : `${VOUCHER_BASE}/${seg}/${id}`;
 }
 
+function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
+    switch (type) {
+        case "PURCHASE":        return "purchase";
+        case "ESTIMATE":        return "estimate";
+        case "SALE_RETURN":     return "sale-return";
+        case "PURCHASE_RETURN": return "purchase-return";
+        case "SALE":
+        case "POS":             return "sale";
+        default:                return null; // GRN/CHALLAN/etc. don't surface in the day book
+    }
+}
+
 /** Single-record resolver — returns SourceDoc for one journal entry id, or null. */
-export async function resolveSource(journalEntryId: number, reference?: string): Promise<SourceDoc | null> {
+export async function resolveSource(journalEntryId: number): Promise<SourceDoc | null> {
     const v = await prisma.invVoucher.findFirst({
         where: { journalEntryId },
         select: { id: true, type: true, reference: true },
     });
-    if (v) {
-        const kind: SourceDoc["kind"] =
-            v.type === "PURCHASE" ? "purchase"
-            : v.type === "ESTIMATE" ? "estimate"
-            : "sale";
-        return { kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id) };
-    }
-    if (reference?.startsWith("INV-")) {
-        const inv = await prisma.invoice.findFirst({
-            where: { number: reference }, select: { id: true, number: true },
-        });
-        if (inv) return { kind: "invoice", id: inv.id, number: inv.number, url: `/office/accountancy/invoices/${inv.id}` };
-    }
-    return null;
+    if (!v) return null;
+    const kind = kindForVoucherType(v.type);
+    if (!kind) return null;
+    return { kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id) };
 }
 
 /** Bulk resolver — efficient for tables/reports listing many JEs. */
@@ -82,10 +88,8 @@ export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map
     });
     for (const v of vouchers) {
         if (v.journalEntryId === null) continue;
-        const kind: SourceDoc["kind"] =
-            v.type === "PURCHASE" ? "purchase"
-            : v.type === "ESTIMATE" ? "estimate"
-            : "sale";
+        const kind = kindForVoucherType(v.type);
+        if (!kind) continue;
         out.set(v.journalEntryId, {
             kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id),
         });

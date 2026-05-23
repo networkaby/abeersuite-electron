@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 
+// GET /api/companies/[id]/transactions
+//
+// Returns every InvVoucher that hits the given company's ledger account.
+// Response shape kept as `{ invVouchers }` (the `invoices` array was
+// retired with the Invoice → InvVoucher consolidation on 2026-05-24).
 export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -14,21 +19,20 @@ export async function GET(
     const companyId = Number(id);
 
     try {
-        const [invoices, invVouchers] = await Promise.all([
-            prisma.invoice.findMany({
-                where: { account: { companyId }, deletedAt: null },
-                select: {
-                    id: true,
-                    number: true,
-                    status: true,
-                    issueDate: true,
-                    totalAmount: true,
-                    amountPaid: true,
+        const account = await prisma.account.findFirst({
+            where:  { companyId },
+            select: { id: true },
+        });
+
+        const invVouchers = account
+            ? await prisma.invVoucher.findMany({
+                where: {
+                    deletedAt: null,
+                    OR: [
+                        { accountId: account.id },
+                        { partyType: "company", partyId: companyId },
+                    ],
                 },
-                orderBy: { issueDate: "desc" },
-            }),
-            prisma.invVoucher.findMany({
-                where: { partyType: "company", partyId: companyId, deletedAt: null },
                 select: {
                     id: true,
                     reference: true,
@@ -41,10 +45,10 @@ export async function GET(
                     createdBy: { select: { name: true } },
                 },
                 orderBy: { date: "desc" },
-            }),
-        ]);
+            })
+            : [];
 
-        return NextResponse.json({ invoices, invVouchers });
+        return NextResponse.json({ invVouchers });
     } catch (e) {
         return handleApiError(e, "Failed to load transactions");
     }

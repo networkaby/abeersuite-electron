@@ -4,25 +4,32 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { Receipt } from "lucide-react";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
-type Invoice = {
-    id: number;
-    number: string;
-    issueDate: string;
+// Reads InvVoucher rows linked to this ticket. The legacy Invoice/ticketId
+// path was retired with the Invoice → InvVoucher consolidation (Layer 3c,
+// 2026-05-24); the panel now consumes /api/inventory/vouchers with the
+// new `ticketId` query filter and renders any of SALE / POS / SALE_RETURN
+// that the operator linked to the ticket.
+type InvVoucher = {
+    id:          number;
+    reference:   string;
+    type:        string;
+    status:      string;
+    date:        string;
     totalAmount: string;
-    status: string;
 };
 
 export default function TicketInvoicesPanel({ ticketId }: { ticketId: number }) {
-    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [vouchers, setVouchers] = useState<InvVoucher[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         axios
-            .get(`/api/accountancy/invoices?ticketId=${ticketId}`)
-            .then((res) => { if (!cancelled) setInvoices(res.data ?? []); })
-            .catch(() => { if (!cancelled) setInvoices([]); })
+            .get<InvVoucher[]>(`/api/inventory/vouchers?ticketId=${ticketId}&types=SALE,POS,SALE_RETURN`)
+            .then((res) => { if (!cancelled) setVouchers(res.data ?? []); })
+            .catch(() => { if (!cancelled) setVouchers([]); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
     }, [ticketId]);
@@ -34,18 +41,25 @@ export default function TicketInvoicesPanel({ ticketId }: { ticketId: number }) 
             </h2>
             {loading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : invoices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No invoices linked to this ticket yet. Create one from <Link href="/office/accountancy/sales/new" className="text-primary underline">Sales</Link> and set the ticket on the invoice.</p>
+            ) : vouchers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No invoices linked to this ticket yet. Create one from <Link href="/vouchers/sales/new" className="text-primary underline">Sales</Link> and set the ticket on the voucher.</p>
             ) : (
                 <ul className="divide-y divide-border text-sm">
-                    {invoices.map((inv) => (
-                        <li key={inv.id} className="flex items-center justify-between py-2">
-                            <Link href={`/office/accountancy/invoices/${inv.id}`} className="font-mono text-primary hover:underline">{inv.number}</Link>
-                            <span className="text-muted-foreground">{new Date(inv.issueDate).toLocaleDateString()}</span>
-                            <span className="font-medium">₹{Number(inv.totalAmount).toFixed(2)}</span>
-                            <span className="text-xs uppercase tracking-wide text-muted-foreground">{inv.status}</span>
-                        </li>
-                    ))}
+                    {vouchers.map((v) => {
+                        const href = editFormUrl(v.type, v.id);
+                        return (
+                            <li key={v.id} className="flex items-center justify-between py-2">
+                                {href ? (
+                                    <Link href={href} className="font-mono text-primary hover:underline">{v.reference}</Link>
+                                ) : (
+                                    <span className="font-mono text-muted-foreground">{v.reference}</span>
+                                )}
+                                <span className="text-muted-foreground">{new Date(v.date).toLocaleDateString()}</span>
+                                <span className="font-medium">₹{Number(v.totalAmount).toFixed(2)}</span>
+                                <span className="text-xs uppercase tracking-wide text-muted-foreground">{v.status}</span>
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
         </div>
