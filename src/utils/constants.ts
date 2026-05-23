@@ -49,6 +49,7 @@ import {
     Workflow,
     Banknote,
     Database,
+    Upload,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -598,6 +599,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
+    { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:manage" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────
