@@ -61,6 +61,7 @@ model ShopOrder {
   pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
   orderStatus  TicketStatus?   @relation(fields: [statusId], references: [id])
   invoice      Invoice?        @relation("OrderInvoice")
+  invVoucher   InvVoucher?     @relation("OrderInvVoucher")
   sourceCoupon ShopCoupon?     @relation(fields: [sourceCouponId], references: [id])
   lines        ShopOrderLine[]
   tickets      Ticket[]

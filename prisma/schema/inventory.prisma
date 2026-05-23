@@ -281,6 +281,12 @@ model InvVoucher {
   description         String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
   status              VoucherStatus  @default(DRAFT)
+  /// Single FK to the party's ledger account. Replaces the legacy
+  /// (partyType, partyId, partyName) triple. Nullable during the
+  /// Invoice→InvVoucher consolidation; becomes required in Layer 5
+  /// once all writers populate it.
+  accountId           Int?
+  account             Account?       @relation("InvVoucherAccount", fields: [accountId], references: [id])
   partyName           String?
   partyType           String? // "supplier" | "customer" | "account"
   partyId             Int?
@@ -340,6 +346,18 @@ model InvVoucher {
   destinationBranchId String?
   destinationBranch   Branch?        @relation("InvVoucherDestBranch", fields: [destinationBranchId], references: [id])
 
+  /// Back-link to an ecommerce order this voucher was raised against.
+  /// Unique because one shop order produces at most one sale voucher.
+  /// Replaces Invoice.shopOrderId during the Invoice→InvVoucher consolidation.
+  shopOrderId Int?       @unique
+  shopOrder   ShopOrder? @relation("OrderInvVoucher", fields: [shopOrderId], references: [id], onDelete: SetNull)
+
+  /// Back-link to a repair ticket this voucher was raised against.
+  /// Soft FK — one ticket can have multiple vouchers (estimate + final, etc.).
+  /// Replaces Invoice.ticketId during the Invoice→InvVoucher consolidation.
+  ticketId Int?
+  ticket   Ticket? @relation("TicketInvVouchers", fields: [ticketId], references: [id], onDelete: SetNull)
+
   // ── Lifecycle metadata (Cancel / Delete / Hard Delete) ──────────────────
   cancelledAt   DateTime?
   cancelledById Int?
@@ -363,6 +381,8 @@ model InvVoucher {
   @@index([status])
   @@index([deletedAt])
   @@index([branchId, type, date])
+  @@index([accountId])
+  @@index([ticketId])
 }
 
 model InvVoucherAudit {

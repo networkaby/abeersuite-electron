@@ -145,7 +145,8 @@
       "PowerShell(try { $r = Invoke-WebRequest -Uri 'http://localhost:3000/office/accountancy/masters/groups' -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 10 -ErrorAction Stop; \"$\\($r.StatusCode\\) $\\($r.StatusDescription\\)\" } catch { \"$\\($_.Exception.Response.StatusCode.value__\\) $\\($_.Exception.Message\\)\" })",
       "Bash(git --no-pager log --oneline -3)",
       "Bash(pg_dump --version)",
-      "Bash(pg_restore --version)"
+      "Bash(pg_restore --version)",
+      "PowerShell(git add PROJECT_BRAIN.md)"
     ]
   }
 }

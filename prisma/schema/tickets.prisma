@@ -60,6 +60,7 @@ model Ticket {
   logs            TicketLog[]
   participants    TicketParticipant[]
   invoices        Invoice[]           @relation("TicketInvoices")
+  invVouchers     InvVoucher[]        @relation("TicketInvVouchers")
 
   @@index([status])
   @@index([pipelineId, status])
