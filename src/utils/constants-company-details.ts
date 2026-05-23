@@ -78,7 +78,7 @@ export type CompanyDetails = {
 };
 
 export const COMPANY_DETAILS: CompanyDetails = {
-    brandName: "Network Shop",
+    brandName: "Network Service",
     legalName: "Network Service",
     tagline: "IT hardware & components — delivered fast across India",
     description:

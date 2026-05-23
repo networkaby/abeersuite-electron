@@ -1,12 +1,33 @@
 // ── Org structure — Branch, Department & Position ─────────────────────────────
 
 model Branch {
-  id          String       @id
-  name        String
-  address     String?
-  phone       String?
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
+  id   String @id
+  name String
+
+  // Legacy free-form single-line address. Kept for back-compat with older
+  // list / display surfaces. New structured fields below are the canonical
+  // identity for invoice letterheads — the renderer prefers them and only
+  // falls back to `address` when all structured fields are blank.
+  address String?
+  phone   String?
+
+  // Structured address (Indian-business convention). Each branch in a
+  // different GST state legally needs its own GSTIN — invoices issued from
+  // that branch must carry the branch's address + GSTIN.
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  pinCode      String?
+  country      String? @default("India")
+
+  // Branch contact + tax
+  email        String?
+  gstin        String? // 15-char Indian GSTIN; may differ from org.gstin
+  gstStateCode String? // first 2 chars of GSTIN — denormalised for place-of-supply
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
   departments Department[]
   positions   Position[]
 
@@ -95,4 +116,54 @@ model OrgDefaults {
   defaultCurrencySymbol String @default("₹")
 
   updatedAt DateTime @updatedAt
+}
+
+// ── Organisation — singleton row (id=1) ───────────────────────────────────────
+// Your own business / legal entity. Used as the source of truth for:
+//   • Invoice / voucher print headers (GSTIN, address, brand name, phone)
+//   • Letterhead and signature blocks
+// Voucher print templates (VoucherPrintTemplate.headerLine1 / gstinLine /
+// addressBlock / phoneLine / logoUrl) act as PER-KIND OVERRIDES — when those
+// fields are blank the renderer falls back to this row.
+//
+// Bootstrap seed copies initial values from src/utils/constants-company-details.ts
+// and is create-only on re-run, so admin edits survive `pnpm prisma db seed`.
+// Edited via /office/settings/organisation.
+//
+// Storefront-only fields (SEO keywords, theme colour, social handles, return
+// policy text, etc.) stay in constants-company-details.ts on purpose — they
+// change with marketing copy, not business identity.
+model Organisation {
+  id Int @id @default(1) // singleton — always row id=1
+
+  // Identity
+  brandName String @default("") // customer-facing name (storefront, receipts)
+  legalName String @default("") // legal entity name (invoices, contracts)
+  tagline   String @default("")
+  logoUrl   String @default("") // optional public URL; no upload UI yet
+
+  // Address (one place; matches invoice convention)
+  addressLine1 String @default("")
+  addressLine2 String @default("")
+  city         String @default("")
+  state        String @default("")
+  pinCode      String @default("")
+  country      String @default("India")
+
+  // Tax IDs
+  gstin        String @default("") // 15-char Indian GSTIN
+  pan          String @default("") // 10-char PAN
+  gstStateCode String @default("") // first two chars of GSTIN — denormalised for place-of-supply
+
+  // Contact
+  email        String @default("")
+  supportEmail String @default("")
+  phone        String @default("")
+  whatsapp     String @default("")
+  siteUrl      String @default("")
+  hours        String @default("")
+
+  // Audit
+  updatedAt   DateTime @updatedAt
+  updatedById Int? // optional, mirror VoucherPrintTemplate.updatedById — no FK
 }

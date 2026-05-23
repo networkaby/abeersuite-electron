@@ -9,13 +9,16 @@ import {
     type VoucherTemplateDefaults,
     type VoucherTemplateKind,
 } from "@/shared/lib/print/voucherTemplateDefaults";
+import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
+import type { OrganisationView } from "@/shared/lib/org/organisationView";
 import { buildSampleForKind, VOUCHER_KIND_LABEL } from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
-    templates: VoucherTemplateDefaults[];
+    templates:    VoucherTemplateDefaults[];
+    organisation: OrganisationView;
 }
 
-export function VoucherTemplatesPreviewGallery({ templates }: Props) {
+export function VoucherTemplatesPreviewGallery({ templates, organisation }: Props) {
     const byKind = useMemo(() => {
         const m = new Map<VoucherTemplateKind, VoucherTemplateDefaults>();
         for (const t of templates) m.set(t.kind as VoucherTemplateKind, t);
@@ -24,7 +27,14 @@ export function VoucherTemplatesPreviewGallery({ templates }: Props) {
 
     const [selectedKind, setSelectedKind] = useState<VoucherTemplateKind>("SALE");
 
-    const template = byKind.get(selectedKind);
+    const rawTemplate = byKind.get(selectedKind);
+    // Merge with org so the gallery shows the same output the real print
+    // route would produce. Done client-side here so kind switches don't
+    // need a server round-trip.
+    const template = useMemo(
+        () => (rawTemplate ? mergeTemplateWithOrg(rawTemplate, organisation) : null),
+        [rawTemplate, organisation],
+    );
     const sample = useMemo(() => buildSampleForKind(selectedKind), [selectedKind]);
 
     if (!template) return null;

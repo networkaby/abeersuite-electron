@@ -9,6 +9,7 @@
 - `src/modules/admin/components/SettingsNav.tsx` — client grouped tab bar (Org config → Workflow → Inventory → Hardware). Items and permissions come from `SETTINGS_NAV` in `src/utils/constants.ts`.
 
 ### UI pages (all under `/office/settings/`)
+- `/office/settings/organisation` — `office/settings/organisation/{layout,page}.tsx` — your own business identity: brand / legal names, address, GSTIN + PAN, contact channels, logo URL. Stored in the `Organisation` singleton (row id=1) and used as the source of truth for every printed voucher header. Gated by `settings:manage`.
 - `/office/settings/org-defaults` — `office/settings/org-defaults/{layout,page}.tsx` — org-wide defaults (unit, GST, HSN, taxability, payment terms, currency).
 - `/office/settings/statuses` — `office/settings/statuses/{layout,page}.tsx` — ticket statuses.
 - `/office/settings/sub-statuses` — `office/settings/sub-statuses/{layout,page}.tsx` — ticket sub-statuses (with sub-status groups).
@@ -24,6 +25,7 @@
 > Hard cut, no compat redirects from the legacy `/office/admin/<page>` URLs (user opted out 2026-05-20). The `/office/repairing/settings/*` redirects in `next.config.ts` now point at the new `/office/settings/*` paths.
 
 ### API routes (unchanged by the module split)
+- `/api/settings/organisation` — GET (any signed-in staff; auto-upserts row id=1) + PATCH (settings:manage). Body validated by `organisationUpdateSchema`. PATCH auto-derives `gstStateCode` from the first 2 chars of GSTIN when the admin updates GSTIN without setting the code explicitly.
 - `/api/settings/org-defaults` — GET (read singleton, auto-upserts row id=1) + PATCH. Permission: `settings:manage`.
 - `/api/settings/backup` — POST. Streams a `pg_dump --format=custom` of the whole DB as a download. Permission: `settings:manage`.
 - `/api/settings/restore` — POST multipart (`dump` file + `confirm=RESTORE`). Runs `pg_restore --clean --if-exists`; replaces all current data. Permission: `settings:manage`.
@@ -48,6 +50,7 @@ All keys are seeded in `prisma/seeds/bootstrap-seed.ts`. Adding a new permission
 
 ## Prisma models
 
+- `Organisation` — singleton (id=1) in `prisma/schema/org.prisma`. Your own business / legal entity. Fields: identity (`brandName`, `legalName`, `tagline`, `logoUrl`), address (`addressLine1/2`, `city`, `state`, `pinCode`, `country`), tax (`gstin`, `pan`, `gstStateCode`), contact (`email`, `supportEmail`, `phone`, `whatsapp`, `siteUrl`, `hours`), audit (`updatedAt`, `updatedById`). Bootstrap seed copies initial values from `COMPANY_DETAILS` in `constants-company-details.ts`; re-seed is create-only so admin edits survive. Used as the fallback when a `VoucherPrintTemplate` field (header/address/GSTIN/phone/logo) is blank — see `mergeTemplateWithOrg`.
 - `OrgDefaults` — singleton (id=1) in `prisma/schema/org.prisma`. Fields: `defaultUnitId` (FK → `InvUnit`), `defaultGstRateId` (FK → `GstRate`), `defaultHsnCode`, `defaultTaxability`, `defaultSaleCreditPeriod` (days), `defaultPurchaseCreditPeriod` (days), `defaultCurrencySymbol`. Auto-upserted on first GET; bootstrap seed upserts the row with `defaultGstRateId` pointing to the 18% `GstRate` row. Acts as final fallback in the GST/HSN cascade (after product and all group ancestors return null).
 - `Pipeline`, `TicketStatus`, `TicketSubStatus`, `SubStatusGroup`, `StatusTransition`, `SubStatusTransition` (in `prisma/schema/pipeline.prisma`).
 - `VoucherSeries` (in `prisma/schema/finance.prisma`) — driven by the Year Ending page; controls FY-aware reference number generation for inventory + GL vouchers (SALE, POS, PURCHASE, ESTIMATE, SALE_RETURN, PURCHASE_RETURN, JOURNAL, INVOICE).
@@ -77,6 +80,11 @@ All keys are seeded in `prisma/seeds/bootstrap-seed.ts`. Adding a new permission
 - `src/shared/lib/print/voucherTemplateDefaults.ts` — single source of truth: `VOUCHER_TEMPLATE_KINDS`, `VOUCHER_TEMPLATE_KIND_GROUPS` (accounting / inventory), `PAPER_FORMATS` + `isPaperFormat`, `buildVoucherTemplateDefaults(kind)` (POS → thermal default, all others → A4 default). Imported by bootstrap seed, API routes, and the settings UI.
 - `src/shared/lib/format/numberToWords.ts` — Indian-system rupees → words (`rupeesInWords(3178.92)` → `"Rupees Three Thousand One Hundred Seventy Eight and Ninety Two Paise Only"`). Used by the A4 layout under the grand total.
 - `src/shared/lib/schemas/voucherTemplateSchemas.ts` — `voucherTemplateUpdateSchema` (zod) for the PUT body + `voucherTemplateKindSchema` for URL-param validation. Includes `defaultPaper: z.enum(PAPER_FORMATS)`.
+- `src/modules/settings/components/OrganisationForm.tsx` — client form for the Organisation page. Single flat state, sticky Save/Discard bar. Auto-derives `gstStateCode` from GSTIN as the user types.
+- `src/shared/lib/org/organisationView.ts` — pure types and formatters for `OrganisationView`. Includes `formatAddressBlock(org)` which joins `addressLine1 / addressLine2 / "city, state pin" / country` into a multi-line block. Pure — safe to import from client code.
+- `src/shared/lib/org/getOrganisation.ts` — server helpers: `getOrganisation()` (with COMPANY_DETAILS fallback for blank fields), `getOrganisationRaw()` (no fallback, for the settings form to show the raw row). Auto-upserts the singleton on first read.
+- `src/shared/lib/print/mergeTemplateWithOrg.ts` — pure merge of `VoucherPrintTemplate ⊕ OrganisationView`. Blank template fields fall back to the org row (brand, address, GSTIN, phone, logo). Per-kind template values always win when non-empty. Reused by the print route, the editor preview, and the demo gallery so all three render identical output.
+- `src/shared/lib/schemas/organisationSchemas.ts` — `organisationUpdateSchema` (zod) for the PATCH body. All fields optional.
 
 ## Common workflows (wiring)
 
@@ -86,6 +94,7 @@ All keys are seeded in `prisma/seeds/bootstrap-seed.ts`. Adding a new permission
 4. **Adjust naming convention** — `/office/settings/naming-convention` → PUT `/api/inventory/naming-config`. Token order, separators, slug length, fallback chain all configurable. Inventory Masters page (`/office/inventory/masters`) links to this page from both its tab nav and the configuration card grid.
 5. **Customise a voucher print template** — `/office/settings/voucher-templates` → pick a kind → edit fields (including `defaultPaper`) → PUT `/api/settings/voucher-templates/[kind]`. The next print from `/receipt/invoice/[id]?kind=...` reads the row on every request (no caching), so changes show up immediately. Paper format is resolved by `resolvePaperFormat`: the URL `?paper=A4` / `?paper=THERMAL_80MM` wins; otherwise the row's `defaultPaper` applies. POS sales pass `?kind=POS` (thermal default); sale invoices use `?kind=SALE` (A4 default). Reset-to-defaults re-applies the bootstrap row from `buildVoucherTemplateDefaults`.
 6. **Demo a voucher print to a client** — `/office/settings/voucher-templates/preview` → pick the kind in the dropdown → side-by-side A4 and Thermal panes update immediately. The pane with the "Default · prints today" badge is the one that would come out of the printer if you clicked the receipt button on a real voucher of this kind right now.
+7. **Update business identity (one place)** — `/office/settings/organisation` → fill brand / legal name, address, GSTIN, contact → PATCH `/api/settings/organisation`. Every voucher kind picks up the new values automatically because `getVoucherTemplate(kind)` merges the Organisation row into the per-kind template before handing it to the renderer. Only need to type GSTIN once, not 21 times.
 
 ## Recent decisions / gotchas
 
@@ -104,4 +113,4 @@ All keys are seeded in `prisma/seeds/bootstrap-seed.ts`. Adding a new permission
 - A runtime UI for adding new permission rows — still requires editing `bootstrap-seed.ts` and reseeding.
 - Moving APIs from `/api/pipelines` etc. into an `/api/settings/*` namespace — not part of the 2026-05-20 split.
 
-_Last updated: 2026-05-23 — added Voucher Templates editor + Voucher Preview demo gallery; A4 layout (`<A4InvoicePreview>`) joins the existing thermal 80mm layout via a `<ReceiptPreview>` dispatcher; per-kind `defaultPaper` chooses which one prints by default, with `?paper=` URL override._
+_Last updated: 2026-05-23 — added Organisation singleton (`/office/settings/organisation`) + `mergeTemplateWithOrg` so per-kind voucher templates fall back to one source of truth for brand / address / GSTIN / phone / logo. Initial values seeded from `COMPANY_DETAILS`; edits via the UI are preserved across re-seeds._

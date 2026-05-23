@@ -6,27 +6,80 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, X, Check, Building2, MapPin, Phone, ToggleLeft, ToggleRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { branchAddressSummary } from "@/shared/lib/org/formatBranchAddress";
 
 interface Branch {
-    id: string;
-    name: string;
-    address: string | null;
-    phone: string | null;
-    isActive: boolean;
-    createdAt: string;
+    id:           string;
+    name:         string;
+    address:      string | null; // legacy summary
+    phone:        string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city:         string | null;
+    state:        string | null;
+    pinCode:      string | null;
+    country:      string | null;
+    email:        string | null;
+    gstin:        string | null;
+    gstStateCode: string | null;
+    isActive:     boolean;
+    createdAt:    string;
     _count: { users: number; departments: number };
 }
 
-const EMPTY = { id: "", name: "", address: "", phone: "", isActive: true };
+interface FormState {
+    id:           string;
+    name:         string;
+    address:      string;
+    phone:        string;
+    addressLine1: string;
+    addressLine2: string;
+    city:         string;
+    state:        string;
+    pinCode:      string;
+    country:      string;
+    email:        string;
+    gstin:        string;
+    gstStateCode: string;
+    isActive:     boolean;
+}
+
+const EMPTY: FormState = {
+    id: "", name: "", address: "", phone: "",
+    addressLine1: "", addressLine2: "", city: "", state: "",
+    pinCode: "", country: "India",
+    email: "", gstin: "", gstStateCode: "",
+    isActive: true,
+};
+
+function fromBranch(b: Branch): FormState {
+    return {
+        id:           b.id,
+        name:         b.name,
+        address:      b.address      ?? "",
+        phone:        b.phone        ?? "",
+        addressLine1: b.addressLine1 ?? "",
+        addressLine2: b.addressLine2 ?? "",
+        city:         b.city         ?? "",
+        state:        b.state        ?? "",
+        pinCode:      b.pinCode      ?? "",
+        country:      b.country      ?? "India",
+        email:        b.email        ?? "",
+        gstin:        b.gstin        ?? "",
+        gstStateCode: b.gstStateCode ?? "",
+        isActive:     b.isActive,
+    };
+}
 
 export default function BranchesPage() {
-    const [branches, setBranches] = useState<Branch[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [branches, setBranches]   = useState<Branch[]>([]);
+    const [loading, setLoading]     = useState(true);
     const [addingNew, setAddingNew] = useState(false);
-    const [editId, setEditId] = useState<string | null>(null);
-    const [form, setForm] = useState(EMPTY);
-    const [saving, setSaving] = useState(false);
+    const [editId, setEditId]       = useState<string | null>(null);
+    const [form, setForm]           = useState<FormState>(EMPTY);
+    const [saving, setSaving]       = useState(false);
 
     const loadBranches = async () => {
         try {
@@ -39,19 +92,47 @@ export default function BranchesPage() {
     useEffect(() => { loadBranches(); }, []);
 
     const startAdd = () => { setForm(EMPTY); setEditId(null); setAddingNew(true); };
-    const startEdit = (b: Branch) => { setForm({ id: b.id, name: b.name, address: b.address ?? "", phone: b.phone ?? "", isActive: b.isActive }); setEditId(b.id); setAddingNew(false); };
-    const cancel = () => { setAddingNew(false); setEditId(null); };
+    const startEdit = (b: Branch) => { setForm(fromBranch(b)); setEditId(b.id); setAddingNew(false); };
+    const cancel    = () => { setAddingNew(false); setEditId(null); };
+
+    function set<K extends keyof FormState>(field: K, value: FormState[K]) {
+        setForm((prev) => {
+            const next = { ...prev, [field]: value };
+            // GSTIN → first 2 chars → state code. Mirrors the API auto-derive.
+            if (field === "gstin" && typeof value === "string") {
+                next.gstStateCode = value.length >= 2 ? value.slice(0, 2) : "";
+            }
+            return next;
+        });
+    }
 
     const handleSave = async () => {
         if (!form.name.trim()) { toast.error("Name is required"); return; }
         if (addingNew && !form.id.trim()) { toast.error("ID is required"); return; }
         setSaving(true);
         try {
+            // Send nullable empties as null so the column stays clean (avoids
+            // empty strings vs nulls drift in the DB).
+            const body: Record<string, unknown> = {
+                name:         form.name,
+                address:      form.address || null,
+                phone:        form.phone || null,
+                addressLine1: form.addressLine1 || null,
+                addressLine2: form.addressLine2 || null,
+                city:         form.city || null,
+                state:        form.state || null,
+                pinCode:      form.pinCode || null,
+                country:      form.country || null,
+                email:        form.email || null,
+                gstin:        form.gstin || null,
+                gstStateCode: form.gstStateCode || null,
+                isActive:     form.isActive,
+            };
             if (addingNew) {
-                await axios.post("/api/branches", { ...form, id: form.id.toUpperCase() });
+                body.id = form.id.toUpperCase();
+                await axios.post("/api/branches", body);
                 toast.success("Branch created");
             } else {
-                const body: Record<string, unknown> = { name: form.name, address: form.address || null, phone: form.phone || null, isActive: form.isActive };
                 if (form.id.trim().toUpperCase() !== editId) body.id = form.id.trim().toUpperCase();
                 await axios.patch(`/api/branches/${editId}`, body);
                 toast.success("Branch updated");
@@ -89,7 +170,12 @@ export default function BranchesPage() {
                     <h1 className="text-3xl font-bold flex items-center gap-2">
                         <Building2 size={28} /> Branches
                     </h1>
-                    <p className="text-sm text-muted-foreground mt-1">Physical and virtual locations of your organisation</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Physical and virtual locations of your organisation. Each branch has its own address and GSTIN
+                        (required by Indian GST law when branches are in different states); other identity (brand, logo,
+                        website, PAN) stays on the org-wide{" "}
+                        <a className="underline hover:text-foreground" href="/office/settings/organisation">Organisation</a> page.
+                    </p>
                 </div>
                 <Button onClick={startAdd} disabled={addingNew}>
                     <Plus size={16} /> New Branch
@@ -98,31 +184,15 @@ export default function BranchesPage() {
 
             {/* New branch inline form */}
             {addingNew && (
-                <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
-                    <p className="text-sm font-semibold">New Branch</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground">ID (e.g. BR-NYC) *</label>
-                            <Input value={form.id} onChange={e => setForm(f => ({ ...f, id: e.target.value.toUpperCase() }))} placeholder="BR-HQ" className="mt-1 font-mono uppercase" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground">Name *</label>
-                            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Head Office" className="mt-1" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground">Address</label>
-                            <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St, Dhaka" className="mt-1" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground">Phone</label>
-                            <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+880 1xxx-xxxxxx" className="mt-1" />
-                        </div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                        <Button onClick={handleSave} disabled={saving} size="sm"><Check size={14} /> Save</Button>
-                        <Button variant="outline" size="sm" onClick={cancel}><X size={14} /> Cancel</Button>
-                    </div>
-                </div>
+                <BranchForm
+                    form={form}
+                    set={set}
+                    onSave={handleSave}
+                    onCancel={cancel}
+                    saving={saving}
+                    title="New Branch"
+                    isCreate
+                />
             )}
 
             {loading ? (
@@ -135,39 +205,15 @@ export default function BranchesPage() {
                     {branches.map(b => (
                         <div key={b.id} className={`rounded-lg border border-border border-l-4 ${b.isActive ? "border-l-primary" : "border-l-muted-foreground opacity-60"} bg-card`}>
                             {editId === b.id ? (
-                                <div className="p-4 space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="text-xs font-medium text-muted-foreground">ID</label>
-                                            <Input
-                                                value={form.id}
-                                                onChange={e => setForm(f => ({ ...f, id: e.target.value.toUpperCase() }))}
-                                                className="mt-1 font-mono uppercase"
-                                            />
-                                            {form.id.trim().toUpperCase() !== editId && form.id.trim() !== "" && (
-                                                <p className="text-[10px] text-amber-600 mt-0.5">
-                                                    Renaming ID — all linked departments, positions and inventory will cascade automatically.
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-muted-foreground">Name *</label>
-                                            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-muted-foreground">Address</label>
-                                            <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className="mt-1" />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-muted-foreground">Phone</label>
-                                            <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="mt-1" />
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button size="sm" onClick={handleSave} disabled={saving}><Check size={14} /> Save</Button>
-                                        <Button size="sm" variant="outline" onClick={cancel}><X size={14} /> Cancel</Button>
-                                    </div>
-                                </div>
+                                <BranchForm
+                                    form={form}
+                                    set={set}
+                                    onSave={handleSave}
+                                    onCancel={cancel}
+                                    saving={saving}
+                                    title={`Edit ${b.name}`}
+                                    renameWarning={form.id.trim().toUpperCase() !== editId && form.id.trim() !== ""}
+                                />
                             ) : (
                                 <div className="flex items-center gap-4 px-4 py-3">
                                     <div className="shrink-0">
@@ -175,9 +221,22 @@ export default function BranchesPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold text-sm">{b.name}</p>
-                                        <div className="flex gap-3 mt-0.5">
-                                            {b.address && <span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin size={10} />{b.address}</span>}
-                                            {b.phone   && <span className="text-xs text-muted-foreground flex items-center gap-1"><Phone size={10} />{b.phone}</span>}
+                                        <div className="flex gap-3 mt-0.5 flex-wrap">
+                                            {branchAddressSummary(b) && (
+                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    <MapPin size={10} />{branchAddressSummary(b)}
+                                                </span>
+                                            )}
+                                            {b.phone && (
+                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    <Phone size={10} />{b.phone}
+                                                </span>
+                                            )}
+                                            {b.gstin && (
+                                                <span className="text-xs text-muted-foreground font-mono">
+                                                    GSTIN: {b.gstin}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
@@ -199,6 +258,128 @@ export default function BranchesPage() {
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+interface BranchFormProps {
+    form:          FormState;
+    set:           <K extends keyof FormState>(field: K, value: FormState[K]) => void;
+    onSave:        () => void;
+    onCancel:      () => void;
+    saving:        boolean;
+    title:         string;
+    isCreate?:     boolean;
+    renameWarning?: boolean;
+}
+
+function BranchForm({ form, set, onSave, onCancel, saving, title, isCreate, renameWarning }: BranchFormProps) {
+    return (
+        <div className={`space-y-4 ${isCreate ? "rounded-lg border border-primary bg-muted/30 p-4" : "p-4"}`}>
+            <p className="text-sm font-semibold">{title}</p>
+
+            {/* Identity */}
+            <section className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">Identity</p>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label={`ID${isCreate ? " *" : ""}`} hint={isCreate ? "e.g. BR-HQ, BR-NYC" : undefined}>
+                        <Input
+                            value={form.id}
+                            onChange={(e) => set("id", e.target.value.toUpperCase())}
+                            className="font-mono uppercase"
+                        />
+                        {renameWarning && (
+                            <p className="text-[10px] text-amber-600 mt-0.5">
+                                Renaming ID — all linked departments, positions and inventory will cascade automatically.
+                            </p>
+                        )}
+                    </Field>
+                    <Field label="Name *">
+                        <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
+                    </Field>
+                </div>
+            </section>
+
+            {/* Address */}
+            <section className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">Address</p>
+                <Field label="Address line 1">
+                    <Input value={form.addressLine1} onChange={(e) => set("addressLine1", e.target.value)} />
+                </Field>
+                <Field label="Address line 2">
+                    <Input value={form.addressLine2} onChange={(e) => set("addressLine2", e.target.value)} />
+                </Field>
+                <div className="grid grid-cols-3 gap-3">
+                    <Field label="City">
+                        <Input value={form.city} onChange={(e) => set("city", e.target.value)} />
+                    </Field>
+                    <Field label="State">
+                        <Input value={form.state} onChange={(e) => set("state", e.target.value)} />
+                    </Field>
+                    <Field label="PIN code">
+                        <Input inputMode="numeric" value={form.pinCode} onChange={(e) => set("pinCode", e.target.value)} />
+                    </Field>
+                </div>
+                <Field label="Country">
+                    <Input value={form.country} onChange={(e) => set("country", e.target.value)} />
+                </Field>
+            </section>
+
+            {/* Tax */}
+            <section className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">Tax</p>
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                        <Field label="GSTIN" hint="15 chars. Branches in different GST states need their own.">
+                            <Input
+                                value={form.gstin}
+                                onChange={(e) => set("gstin", e.target.value.toUpperCase().slice(0, 15))}
+                                className="font-mono"
+                                placeholder="00ABCDE1234F1Z5"
+                            />
+                        </Field>
+                    </div>
+                    <Field label="State code" hint="Auto from GSTIN">
+                        <Input value={form.gstStateCode} readOnly className="bg-muted/40 font-mono" />
+                    </Field>
+                </div>
+            </section>
+
+            {/* Contact */}
+            <section className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">Contact</p>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="Phone">
+                        <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+                    </Field>
+                    <Field label="Email">
+                        <Input value={form.email} onChange={(e) => set("email", e.target.value)} />
+                    </Field>
+                </div>
+                <Field
+                    label="Legacy single-line address"
+                    hint="Optional shorthand shown on old list rows. Leave blank if you've filled in the structured fields above."
+                >
+                    <Input value={form.address} onChange={(e) => set("address", e.target.value)} />
+                </Field>
+            </section>
+
+            <div className="flex gap-2 pt-1">
+                <Button onClick={onSave} disabled={saving} size="sm"><Check size={14} /> Save</Button>
+                <Button variant="outline" size="sm" onClick={onCancel}><X size={14} /> Cancel</Button>
+            </div>
+        </div>
+    );
+}
+
+function Field({
+    label, hint, children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
+    return (
+        <div className="space-y-1">
+            <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+            {children}
+            {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
         </div>
     );
 }

@@ -41,6 +41,7 @@ import {
     VOUCHER_TEMPLATE_KINDS,
     buildVoucherTemplateDefaults,
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
+import { COMPANY_DETAILS } from "../../src/utils/constants-company-details";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -570,9 +571,44 @@ const SUB_STATUS_TRANSITIONS = [
 // ════════════════════════════════════════════════════════════════════════════
 
 // Only the two branches needed for the typical setup. Add more via UI later.
+// HQ inherits the organisation address from COMPANY_DETAILS — for a single-
+// state business this lets you start with a printable invoice address on
+// day one. The Online / Virtual branch carries no postal address by design.
+const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
-    { id: "BR-HQ",  name: "Head Office",      address: "HQ",   phone: null as string | null },
-    { id: "BR-ONL", name: "Online / Virtual", address: null as string | null, phone: null as string | null },
+    {
+        id:    "BR-HQ",
+        name:  "Head Office",
+        // Legacy single-line — kept for old list rows that still consult it.
+        address:      `${COMPANY_DETAILS.address.line1}, ${COMPANY_DETAILS.address.city}`,
+        phone:        COMPANY_DETAILS.contact.phone || null,
+        // Structured identity for invoice headers / letterheads
+        addressLine1: COMPANY_DETAILS.address.line1,
+        addressLine2: COMPANY_DETAILS.address.line2 ?? "",
+        city:         COMPANY_DETAILS.address.city,
+        state:        COMPANY_DETAILS.address.state,
+        pinCode:      COMPANY_DETAILS.address.pin,
+        country:      COMPANY_DETAILS.address.country,
+        email:        COMPANY_DETAILS.contact.email || null,
+        gstin:        HQ_GSTIN,
+        gstStateCode: HQ_GSTIN.length >= 2 ? HQ_GSTIN.slice(0, 2) : "",
+    },
+    {
+        id:    "BR-ONL",
+        name:  "Online / Virtual",
+        address:      null as string | null,
+        phone:        null as string | null,
+        addressLine1: "",
+        addressLine2: "",
+        city:         "",
+        state:        "",
+        pinCode:      "",
+        country:      COMPANY_DETAILS.address.country,
+        email:        null as string | null,
+        // Online branch typically shares the HQ GSTIN — no separate registration.
+        gstin:        HQ_GSTIN,
+        gstStateCode: HQ_GSTIN.length >= 2 ? HQ_GSTIN.slice(0, 2) : "",
+    },
 ];
 
 const DEPARTMENTS = [
@@ -759,11 +795,25 @@ async function main() {
     // ── Section 3: Org structure ────────────────────────────────────────
     console.log("[3/7] Org structure — Branches, Departments");
     for (const b of BRANCHES) {
+        // Re-seed contract: insert with the full identity on a fresh DB so
+        // invoices have a printable address on day one. On re-seed we touch
+        // only `name` and `isActive` — every other column is preserved so
+        // admin edits via /office/admin/branches survive `pnpm prisma db seed`.
         await pool.query(
-            `INSERT INTO "Branch" (id, name, address, phone, "isActive")
-             VALUES ($1, $2, $3, $4, true)
-             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, phone = EXCLUDED.phone, "isActive" = true`,
-            [b.id, b.name, b.address, b.phone],
+            `INSERT INTO "Branch" (
+                id, name, address, phone, "isActive",
+                "addressLine1", "addressLine2", city, state, "pinCode", country,
+                email, gstin, "gstStateCode"
+             )
+             VALUES ($1, $2, $3, $4, true,
+                     $5, $6, $7, $8, $9, $10,
+                     $11, $12, $13)
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "isActive" = true`,
+            [
+                b.id, b.name, b.address, b.phone,
+                b.addressLine1, b.addressLine2, b.city, b.state, b.pinCode, b.country,
+                b.email, b.gstin, b.gstStateCode,
+            ],
         );
     }
     for (const d of DEPARTMENTS) {
@@ -1133,7 +1183,7 @@ async function main() {
     console.log(`      ✓ VoucherSeries seeded\n`);
 
     // ── Section 13: Voucher print templates ───────────────────────────
-    console.log("[13/13] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
+    console.log("[13/14] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
     // Create payload uses the full per-kind defaults so a fresh DB starts in
     // the right place. On re-seed we only force `defaultPaper` back to its
     // per-kind baseline (POS = THERMAL_80MM, everything else = A4); all
@@ -1147,6 +1197,42 @@ async function main() {
         });
     }
     console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded\n`);
+
+    // ── Section 14: Organisation singleton ────────────────────────────
+    console.log("[14/14] Organisation (your own business / legal entity)");
+    // Create-only on re-seed (mirrors VoucherSeries / VoucherPrintTemplate
+    // pattern) so admin edits via /office/settings/organisation survive a
+    // re-run of `pnpm prisma db seed`. Initial values come from
+    // src/utils/constants-company-details.ts.
+    const orgGstin = COMPANY_DETAILS.tax.gstin ?? "";
+    await prisma.organisation.upsert({
+        where:  { id: 1 },
+        create: {
+            id:           1,
+            brandName:    COMPANY_DETAILS.brandName,
+            legalName:    COMPANY_DETAILS.legalName,
+            tagline:      COMPANY_DETAILS.tagline,
+            logoUrl:      "",
+            addressLine1: COMPANY_DETAILS.address.line1,
+            addressLine2: COMPANY_DETAILS.address.line2 ?? "",
+            city:         COMPANY_DETAILS.address.city,
+            state:        COMPANY_DETAILS.address.state,
+            pinCode:      COMPANY_DETAILS.address.pin,
+            country:      COMPANY_DETAILS.address.country,
+            gstin:        orgGstin,
+            pan:          COMPANY_DETAILS.tax.pan,
+            // First two chars of GSTIN = state code (per GST convention).
+            gstStateCode: orgGstin.length >= 2 ? orgGstin.slice(0, 2) : "",
+            email:        COMPANY_DETAILS.contact.email,
+            supportEmail: COMPANY_DETAILS.contact.supportEmail,
+            phone:        COMPANY_DETAILS.contact.phone,
+            whatsapp:     COMPANY_DETAILS.contact.whatsapp,
+            siteUrl:      COMPANY_DETAILS.siteUrl,
+            hours:        COMPANY_DETAILS.hours,
+        },
+        update: {},
+    });
+    console.log(`      ✓ Organisation singleton seeded (id=1)\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

@@ -5,12 +5,16 @@ import {
     isPaperFormat,
     type VoucherTemplateDefaults,
 } from "@/shared/lib/print/voucherTemplateDefaults";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { VoucherTemplatesPreviewGallery } from "@/modules/settings/components/VoucherTemplatesPreviewGallery";
 
 export const metadata = { title: "Voucher Template Preview" };
 
 export default async function VoucherTemplatesPreviewPage() {
-    const rows = await prisma.voucherPrintTemplate.findMany();
+    const [rows, organisation] = await Promise.all([
+        prisma.voucherPrintTemplate.findMany(),
+        getOrganisation(),
+    ]);
     const byKind = new Map(rows.map((r) => [r.kind, r]));
 
     const templates: VoucherTemplateDefaults[] = VOUCHER_TEMPLATE_KINDS.map((kind) => {
@@ -54,7 +58,7 @@ export default async function VoucherTemplatesPreviewPage() {
                     </p>
                 </div>
             </div>
-            <VoucherTemplatesPreviewGallery templates={templates} />
+            <VoucherTemplatesPreviewGallery templates={templates} organisation={organisation} />
         </div>
     );
 }

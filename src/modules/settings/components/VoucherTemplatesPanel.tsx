@@ -16,10 +16,13 @@ import {
     type VoucherTemplateKind,
     type PaperFormat,
 } from "@/shared/lib/print/voucherTemplateDefaults";
+import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
+import type { OrganisationView } from "@/shared/lib/org/organisationView";
 import { buildSampleForKind, VOUCHER_KIND_LABEL as KIND_LABEL } from "@/modules/settings/lib/voucherTemplateSamples";
 
 interface Props {
     initialTemplates: VoucherTemplateDefaults[];
+    organisation:     OrganisationView;
 }
 
 function clampInt(raw: string, min: number, max: number, fallback: number): number {
@@ -28,7 +31,7 @@ function clampInt(raw: string, min: number, max: number, fallback: number): numb
     return Math.min(max, Math.max(min, n));
 }
 
-export function VoucherTemplatesPanel({ initialTemplates }: Props) {
+export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props) {
     const byKind = useMemo(() => {
         const m = new Map<VoucherTemplateKind, VoucherTemplateDefaults>();
         for (const t of initialTemplates) m.set(t.kind as VoucherTemplateKind, t);
@@ -198,10 +201,11 @@ export function VoucherTemplatesPanel({ initialTemplates }: Props) {
                         <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
                             Header
                         </legend>
-                        <Field label="Header line 1 (brand name)" hint="Blank → uses COMPANY_DETAILS.brandName.">
+                        <Field label="Header line 1 (brand name)" hint="Blank → uses Organisation > Brand name.">
                             <Input
                                 value={current.headerLine1}
                                 onChange={(e) => setField("headerLine1", e.target.value)}
+                                placeholder={organisation.brandName}
                             />
                         </Field>
                         <Field label="Header line 2 (sub-title)">
@@ -210,32 +214,35 @@ export function VoucherTemplatesPanel({ initialTemplates }: Props) {
                                 onChange={(e) => setField("headerLine2", e.target.value)}
                             />
                         </Field>
-                        <Field label="Address block" hint="One address line per row.">
+                        <Field label="Address block" hint="One address line per row. Blank → uses Organisation > Address.">
                             <Textarea
                                 rows={3}
                                 value={current.addressBlock}
                                 onChange={(e) => setField("addressBlock", e.target.value)}
+                                placeholder={organisation.addressLine1 ? `${organisation.addressLine1}\n${[organisation.city, organisation.state, organisation.pinCode].filter(Boolean).join(", ")}` : ""}
                             />
                         </Field>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Field label="Phone line">
+                            <Field label="Phone line" hint="Blank → uses Organisation > Phone.">
                                 <Input
                                     value={current.phoneLine}
                                     onChange={(e) => setField("phoneLine", e.target.value)}
+                                    placeholder={organisation.phone ? `Ph: ${organisation.phone}` : ""}
                                 />
                             </Field>
-                            <Field label="GSTIN line">
+                            <Field label="GSTIN line" hint="Blank → uses Organisation > GSTIN.">
                                 <Input
                                     value={current.gstinLine}
                                     onChange={(e) => setField("gstinLine", e.target.value)}
+                                    placeholder={organisation.gstin ? `GSTIN: ${organisation.gstin}` : ""}
                                 />
                             </Field>
                         </div>
-                        <Field label="Logo URL (optional)" hint="Shown above the header if 'Show logo' is on.">
+                        <Field label="Logo URL (optional)" hint="Shown above the header if 'Show logo' is on. Blank → uses Organisation > Logo URL.">
                             <Input
                                 value={current.logoUrl}
                                 onChange={(e) => setField("logoUrl", e.target.value)}
-                                placeholder="https://…"
+                                placeholder={organisation.logoUrl || "https://…"}
                             />
                         </Field>
                     </fieldset>
@@ -357,7 +364,10 @@ export function VoucherTemplatesPanel({ initialTemplates }: Props) {
                     <ScaledPreviewBox format={previewOverride ?? current.defaultPaper}>
                         <ReceiptPreview
                             format={previewOverride ?? current.defaultPaper}
-                            template={current}
+                            // Merge with Organisation so blank template fields
+                            // (no headerLine1, no GSTIN, etc.) fall back to the
+                            // org-wide values exactly like the real print route.
+                            template={mergeTemplateWithOrg(current, organisation)}
                             sample={sample}
                             previewMode
                         />
