@@ -54,9 +54,8 @@ export default function LedgerOutstandingsPage({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
 
-    const billUrl = (kind: "invoice" | "voucher" | "sale" | "purchase", id: number): string => {
+    const billUrl = (kind: "voucher" | "sale" | "purchase", id: number): string => {
         switch (kind) {
-            case "invoice":  return `/office/accountancy/invoices/${id}`;
             case "voucher":  return `/office/accountancy/journal-entries/${id}`;
             case "sale":     return `/vouchers/sales/new?voucherId=${id}`;
             case "purchase": return `/vouchers/purchases/new?voucherId=${id}`;

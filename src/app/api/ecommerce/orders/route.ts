@@ -86,7 +86,7 @@ export async function GET(req: Request) {
                     },
                 },
                 orderStatus: { select: { id: true, label: true, color: true, isTerminal: true } },
-                invoice: { select: { id: true, number: true, status: true } },
+                invVoucher: { select: { id: true, reference: true, type: true, status: true } },
                 lines: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
             },
         });

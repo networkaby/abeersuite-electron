@@ -22,6 +22,7 @@ import { OrderSourceBadge } from "@/modules/ecommerce/components/OrderSourceBadg
 import type { OrderSource, ShopOrderStatus } from "@/generated/prisma/enums";
 import { toast } from "sonner";
 import { FileText, ExternalLink } from "lucide-react";
+import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 
 type NextPipelineStatus = {
     id: string;
@@ -72,9 +73,13 @@ type OrderDetail = {
         product: { id: number; name: string; imageUrl: string | null };
     }[];
     tickets: { id: number; status: string; createdAt: string }[];
-    invoice: {
+    // Renamed `invoice` → `invVoucher` on 2026-05-24 (Invoice → InvVoucher
+    // consolidation, Layer 4a). Reference is `voucher.reference`; status
+    // is the InvVoucher status enum (DRAFT / POSTED / CANCELLED).
+    invVoucher: {
         id: number;
-        number: string;
+        reference: string;
+        type: string;
         status: string;
         totalAmount: string;
     } | null;
@@ -280,21 +285,25 @@ export default function EcommerceOrderDetailPage() {
                             <FileText size={15} className="text-muted-foreground" />
                             Invoice
                         </h2>
-                        {order.invoice ? (
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="font-mono text-sm font-semibold text-primary">{order.invoice.number}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {order.invoice.status} · {formatRupeesFromPaise(Math.round(Number(order.invoice.totalAmount) * 100))}
-                                    </p>
+                        {order.invVoucher ? (() => {
+                            const v = order.invVoucher;
+                            const href = editFormUrl(v.type, v.id) ?? "#";
+                            return (
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="font-mono text-sm font-semibold text-primary">{v.reference}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {v.status} · {formatRupeesFromPaise(Math.round(Number(v.totalAmount) * 100))}
+                                        </p>
+                                    </div>
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href={href}>
+                                            <ExternalLink size={13} /> Open voucher
+                                        </Link>
+                                    </Button>
                                 </div>
-                                <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/office/accountancy/invoices/${order.invoice.id}`}>
-                                        <ExternalLink size={13} /> View in Tally
-                                    </Link>
-                                </Button>
-                            </div>
-                        ) : (
+                            );
+                        })() : (
                             <p className="text-sm text-muted-foreground">
                                 Invoice will be auto-created when the order is <span className="font-medium">Confirmed</span>.
                             </p>

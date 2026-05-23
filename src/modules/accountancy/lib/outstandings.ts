@@ -11,9 +11,11 @@ export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
 export type Buckets = Record<AgeingBucket, number>;
 
 export type OutstandingBill = {
-    // "invoice" — finance Invoice row · "voucher" — finance Voucher row
-    // "sale" / "purchase" — InvVoucher (inventory voucher) of that type
-    kind:        "invoice" | "voucher" | "sale" | "purchase";
+    // "sale" / "purchase" — InvVoucher (SALE / POS / PURCHASE)
+    // "voucher"           — finance Voucher (CREDIT_NOTE / DEBIT_NOTE)
+    // The legacy "invoice" kind was retired with the Invoice → InvVoucher
+    // consolidation (2026-05-24).
+    kind:        "voucher" | "sale" | "purchase";
     id:          number;
     ref:         string;
     billDate:    string;
@@ -134,19 +136,7 @@ async function loadOpenBills(
 ): Promise<RawBill[]> {
     if (accountIds.length === 0) return [];
 
-    const [invoices, vouchers, accounts] = await Promise.all([
-        prisma.invoice.findMany({
-            where: {
-                accountId: { in: accountIds },
-                deletedAt: null,
-                status:    { not: "VOID" },
-                issueDate: { lte: asOf },
-            },
-            select: {
-                id: true, accountId: true, number: true,
-                issueDate: true, dueDate: true, totalAmount: true,
-            },
-        }),
+    const [vouchers, accounts] = await Promise.all([
         // Only bill-shaped vouchers (CREDIT_NOTE / DEBIT_NOTE) count as
         // outstanding here. RECEIPT / PAYMENT are settlements — they appear
         // in VoucherAllocation as `sourceType=VOUCHER` and nett against the
@@ -171,7 +161,6 @@ async function loadOpenBills(
         }),
     ]);
 
-    const invIds = invoices.map((i) => i.id);
     const vchIds = vouchers.map((v) => v.id);
 
     // Build identity → account maps so we can resolve InvVoucher.partyId back
@@ -230,13 +219,7 @@ async function loadOpenBills(
         .map((v) => v.journalEntryId)
         .filter((x): x is number => x !== null);
 
-    const [invAllocs, vchAllocs, jeAllocs] = await Promise.all([
-        invIds.length > 0
-            ? prisma.voucherAllocation.findMany({
-                where: { targetType: "INVOICE", targetId: { in: invIds } },
-                select: { targetId: true, amount: true },
-            })
-            : Promise.resolve([] as { targetId: number; amount: unknown }[]),
+    const [vchAllocs, jeAllocs] = await Promise.all([
         vchIds.length > 0
             ? prisma.voucherAllocation.findMany({
                 where: { targetType: "VOUCHER", targetId: { in: vchIds } },
@@ -251,25 +234,10 @@ async function loadOpenBills(
             : Promise.resolve([] as { targetId: number; amount: unknown }[]),
     ]);
 
-    const paidByInv = sumByTarget(invAllocs);
     const paidByVch = sumByTarget(vchAllocs);
     const paidByJe  = sumByTarget(jeAllocs);
 
     const bills: RawBill[] = [];
-
-    for (const inv of invoices) {
-        if (inv.accountId === null) continue;
-        bills.push({
-            kind:        "invoice",
-            id:          inv.id,
-            accountId:   inv.accountId,
-            ref:         inv.number,
-            billDate:    inv.issueDate,
-            dueDate:     inv.dueDate,
-            totalAmount: Number(inv.totalAmount),
-            paid:        paidByInv[inv.id] ?? 0,
-        });
-    }
 
     for (const v of vouchers) {
         if (v.partyAccountId === null) continue;

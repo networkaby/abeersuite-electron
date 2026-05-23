@@ -1,20 +1,15 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { z } from "zod";
-import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
-import { validateRequest } from "@/shared/lib/api";
-import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
-import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 
-const updateSchema = z.object({
-    notes: z.string().trim().optional().nullable(),
-    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    // Sending (DRAFT → SENT) auto-posts the JE
-    status: z.enum(["SENT"]).optional(),
-});
+// /api/accountancy/invoices/[id]
+//
+// GET stays alive returning whatever Invoice row still exists (zero after
+// the Layer 1 reset). PATCH (and the sibling cancel/delete/restore/
+// hard-delete routes) returns 410 Gone — operate on the InvVoucher
+// equivalent at /api/inventory/vouchers/[id] instead.
 
 // GET /api/accountancy/invoices/[id]
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -52,61 +47,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json(invoice);
 }
 
-// PATCH /api/accountancy/invoices/[id]
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
-    if (response) return response;
-
-    const { id } = await params;
-    const existing = await prisma.invoice.findUnique({ where: { id: Number(id) } });
-    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (existing.status === "VOID") {
-        return NextResponse.json({ error: "Cannot update a voided invoice" }, { status: 409 });
-    }
-
-    const { data, error } = await validateRequest(req, updateSchema);
-
-    if (error) return error;
-    const body = data;
-
-    try {
-        const updated = await prisma.$transaction(async (tx) => {
-            // DRAFT → SENT: credit check first, then auto-post JE
-            if (body.status === "SENT" && existing.status === "DRAFT") {
-                await checkCreditLimit(
-                    tx,
-                    existing.accountId!,
-                    Number(existing.totalAmount),
-                );
-                await postInvoiceJe(
-                    tx,
-                    existing.id,
-                    existing.number,
-                    Number(existing.subtotal),
-                    Number(existing.taxAmount),
-                    Number(existing.totalAmount),
-                    user!.id,
-                );
-            }
-
-            return tx.invoice.update({
-                where: { id: Number(id) },
-                data: {
-                    ...(body.status ? { status: body.status } : {}),
-                    ...(body.dueDate ? { dueDate: new Date(body.dueDate) } : {}),
-                    ...(body.notes !== undefined ? { notes: body.notes } : {}),
-                },
-                include: {
-                    lines: true,
-                    payments: true,
-                },
-            });
-        });
-        return NextResponse.json(updated);
-    } catch (e) {
-        if (e instanceof CreditLimitError) {
-            return NextResponse.json({ error: e.message, code: e.code }, { status: 422 });
-        }
-        return handleApiError(e, "Failed to update invoice");
-    }
+// PATCH — retired (2026-05-24)
+export async function PATCH() {
+    return NextResponse.json(
+        {
+            error: "This endpoint is retired. Edit the InvVoucher via PATCH /api/inventory/vouchers/[id].",
+            code:  "INVOICE_ENDPOINT_RETIRED",
+        },
+        { status: 410 },
+    );
 }

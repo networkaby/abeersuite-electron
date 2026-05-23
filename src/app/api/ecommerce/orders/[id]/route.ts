@@ -51,8 +51,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                         },
                     },
                 },
-                invoice: {
-                    select: { id: true, number: true, status: true, totalAmount: true },
+                invVoucher: {
+                    select: { id: true, reference: true, type: true, status: true, totalAmount: true },
                 },
             },
         });

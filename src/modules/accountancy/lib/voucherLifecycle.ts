@@ -1,5 +1,5 @@
-// Voucher lifecycle helpers — shared between JournalEntry, Invoice, Payment,
-// InvVoucher, and the new Voucher table. Tally-style three-tier model:
+// Voucher lifecycle helpers — shared between JournalEntry, InvVoucher, and
+// the finance Voucher table. Tally-style three-tier model:
 //
 //   POSTED  ──cancel──►  CANCELLED   (reference number kept, GL reversed)
 //      │
@@ -11,9 +11,13 @@
 // differs per voucher type. These helpers cover the bookkeeping boilerplate
 // (validation, field shapes, status-string normalisation) so each route stays
 // thin.
+//
+// The legacy `InvoiceLifecycleStatus` enum + `cancelInvoiceFields` helper
+// were dropped on 2026-05-24 with the Invoice → InvVoucher consolidation;
+// every voucher kind now lives on the shared `VoucherStatus` enum
+// (DRAFT / POSTED / CANCELLED).
 
 export type LifecycleStatus = "DRAFT" | "POSTED" | "CANCELLED" | "DRAFT_INV";
-export type InvoiceLifecycleStatus = "DRAFT" | "SENT" | "PARTIAL" | "PAID" | "VOID";
 
 export interface LifecycleVoucher {
   status: string;
@@ -30,9 +34,9 @@ export class LifecycleError extends Error {
 
 // ── Predicates ────────────────────────────────────────────────────────────
 
-/** True when the voucher has been cancelled. Treats Invoice's "VOID" as cancelled. */
+/** True when the voucher has been cancelled. */
 export function isCancelled(v: LifecycleVoucher): boolean {
-  return v.status === "CANCELLED" || v.status === "VOID" || !!v.cancelledAt;
+  return v.status === "CANCELLED" || !!v.cancelledAt;
 }
 
 /** True when the voucher has been soft-deleted. */
@@ -42,8 +46,7 @@ export function isDeleted(v: LifecycleVoucher): boolean {
 
 /** True when the voucher has live GL/stock impact and could be cancelled. */
 export function isPosted(v: LifecycleVoucher): boolean {
-  // Invoice statuses SENT/PARTIAL/PAID all imply the GL has been posted.
-  return v.status === "POSTED" || v.status === "SENT" || v.status === "PARTIAL" || v.status === "PAID";
+  return v.status === "POSTED";
 }
 
 /** True when the voucher is still a draft (no GL impact). */
@@ -75,20 +78,10 @@ export function ensureRestorable(v: LifecycleVoucher): void {
 
 // ── Field-shape helpers for prisma `data` payloads ────────────────────────
 
-/** Cancel-tier field updates for vouchers using VoucherStatus (Journal, InvVoucher, Voucher, Payment). */
+/** Cancel-tier field updates for vouchers using VoucherStatus (every voucher kind, post-2026-05-24). */
 export function cancelFields(userId: number, reason: string) {
   return {
     status: "CANCELLED" as const,
-    cancelledAt: new Date(),
-    cancelledById: userId,
-    cancelReason: reason,
-  };
-}
-
-/** Cancel-tier field updates for Invoice (which uses InvoiceStatus.VOID for the cancelled state). */
-export function cancelInvoiceFields(userId: number, reason: string) {
-  return {
-    status: "VOID" as const,
     cancelledAt: new Date(),
     cancelledById: userId,
     cancelReason: reason,
