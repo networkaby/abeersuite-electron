@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ShopOrderStatus } from "@/generated/prisma/enums";
-import { balanceDelta, nextRef, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { invNextRef } from "@/modules/inventory/lib/stock";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { canTransition, ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/orderStatusTransitions";
 import { CONFIRMED_STATUS_LABEL } from "@/modules/ecommerce/lib/ordersPipeline";
@@ -67,59 +68,73 @@ async function postSaleJournal(
 }
 
 /**
- * Auto-create a DRAFT GL Invoice when an order is Confirmed.
- * Links Invoice.shopOrderId → order.id and sets the account from order.accountId.
+ * Auto-create a DRAFT SALE InvVoucher when an order is Confirmed.
+ * Links InvVoucher.shopOrderId → order.id and sets the account from
+ * order.accountId. Replaces the legacy Invoice path that lived here
+ * before the Invoice → InvVoucher consolidation (Layer 2e, 2026-05-24).
+ *
+ * Stays DRAFT until the operator POSTs it via the inventory voucher
+ * lifecycle — `postInvVoucherToGl` then auto-creates the JE
+ * (Dr Customer AR / Cr Shop Sales Revenue / Cr GST Output).
  */
-async function createOrderInvoice(
+async function createOrderInvVoucher(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tx: any,
     order: {
         id: number;
         accountId: number | null;
+        branchId?: string | null;
         totalPaise: number;
-        lines: { product: { name: string }; quantity: number; unitPricePaise: number }[];
+        lines: { product: { id: number; name: string }; quantity: number; unitPricePaise: number }[];
     },
     createdById: number,
+    fallbackBranchId: string,
 ): Promise<number | null> {
     if (!order.accountId) return null;
 
-    const number = await nextRef(tx, "invoice", "INV");
+    const reference = await invNextRef(tx, "SALE");
     const computedLines = order.lines.map((l) => {
         const subtotal = l.quantity * (l.unitPricePaise / 100);
         return {
+            productId:   l.product.id,
             description: l.product.name,
-            quantity: l.quantity,
-            unitPrice: l.unitPricePaise / 100,
-            taxRate: 0,
-            taxAmount: 0,
-            amount: subtotal,
+            quantity:    l.quantity,
+            rate:        l.unitPricePaise / 100,
+            taxRate:     0,
+            taxAmount:   0,
+            amount:      subtotal,
         };
     });
     const subtotal = computedLines.reduce((s, l) => s + l.amount, 0);
     const totalAmount = subtotal;
 
     const today = new Date();
-    const dueDate = new Date(today);
-    dueDate.setDate(dueDate.getDate() + 30);
 
-    const invoice = await tx.invoice.create({
+    const voucher = await tx.invVoucher.create({
         data: {
-            number,
-            status: "DRAFT",
-            issueDate: today,
-            dueDate,
-            accountId: order.accountId,
-            shopOrderId: order.id,
+            type:            "SALE",
+            reference,
+            branchId:        order.branchId ?? fallbackBranchId,
+            date:            today,
+            description:     `Shop order #${order.id}`,
+            status:          "DRAFT",
+            accountId:       order.accountId,
+            partyType:       "account",
+            partyId:         order.accountId,
+            shopOrderId:     order.id,
+            paymentMode:     "CREDIT",
+            deliveryMode:    "SHIPPED",   // ecommerce: courier dispatch, place of supply = customer's state
             subtotal,
-            taxAmount: 0,
+            taxAmount:       0,
             totalAmount,
-            amountPaid: 0,
+            amountReceived:  0,
+            creditPeriodDays: 30,
             createdById,
             lines: { create: computedLines },
         },
     });
 
-    return invoice.id;
+    return voucher.id;
 }
 
 /** Run after DB commit — inbox only. */
@@ -159,7 +174,7 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
             include: {
                 lines: { include: { product: true } },
                 account: true,
-                invoice: { select: { id: true } },
+                invVoucher: { select: { id: true } },
             },
         });
         if (!order) throw new Error("Order not found");
@@ -198,10 +213,20 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
             },
         });
 
-        // Auto-create DRAFT invoice when order is Confirmed
+        // Auto-create DRAFT SALE InvVoucher when order is Confirmed.
+        // Branch context: order has no branch FK today, so we resolve the
+        // org's first active branch as a fallback. Operators retag in the
+        // voucher edit screen if a different branch should own the sale.
         let invoiceId: number | null = null;
-        if (toStatusLabel === CONFIRMED_STATUS_LABEL && !order.invoice) {
-            invoiceId = await createOrderInvoice(tx, order, actorUserId);
+        if (toStatusLabel === CONFIRMED_STATUS_LABEL && !order.invVoucher) {
+            const fallbackBranch = await tx.branch.findFirst({
+                where:  { isActive: true },
+                orderBy: { name: "asc" },
+                select: { id: true },
+            });
+            if (fallbackBranch) {
+                invoiceId = await createOrderInvVoucher(tx, order, actorUserId, fallbackBranch.id);
+            }
         }
 
         return { order: updated, lowStockHints, invoiceId };
