@@ -1,31 +1,22 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { z } from "zod";
-import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
-import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
-import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 
-const lineSchema = z.object({
-    description: z.string().trim().min(1),
-    quantity: z.number().positive(),
-    unitPrice: z.number().min(0),
-    taxRate: z.number().min(0).max(100).default(0),
-});
-
-const createSchema = z.object({
-    // Primary GL link — account from PartyPicker
-    accountId: z.number().int().positive(),
-    issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    notes: z.string().trim().optional(),
-    lines: z.array(lineSchema).min(1, "At least one line item required"),
-    // If status is SENT, auto-post the AR/Revenue journal entry
-    status: z.enum(["DRAFT", "SENT"]).default("DRAFT"),
-});
+// /api/accountancy/invoices
+//
+// The Invoice model is being retired in favour of InvVoucher (consolidation
+// plan filed 2026-05-24). Layer 2d of that plan stops new writes here:
+//
+//   POST → 410 Gone, with a pointer to the canonical create endpoint
+//          (POST /api/inventory/vouchers with type=SALE).
+//
+// The GET stays alive returning whatever Invoice rows still exist in the
+// database (zero after the Layer 1 reset), so the few legacy callers
+// (TicketInvoicesPanel, ledger-outstandings UI) don't 404 during the
+// transition. Layer 3 migrates those readers to InvVoucher; Layer 5
+// deletes this directory.
 
 const INVOICE_INCLUDE = {
     createdBy: { select: { id: true, name: true } },
@@ -69,76 +60,13 @@ export async function GET(req: Request) {
     }
 }
 
-// POST /api/accountancy/invoices
-export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
-    if (response) return response;
-
-    const { data, error } = await validateRequest(req, createSchema);
-
-    if (error) return error;
-    const body = data;
-
-    // Compute totals
-    const computedLines = body.lines.map((l) => {
-        const lineSubtotal = l.quantity * l.unitPrice;
-        const taxAmount = Math.round(lineSubtotal * (l.taxRate / 100) * 100) / 100;
-        return { ...l, taxAmount, amount: lineSubtotal + taxAmount };
-    });
-    const subtotal = computedLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-    const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
-    const totalAmount = subtotal + taxAmount;
-
-    try {
-        const invoice = await prisma.$transaction(async (tx) => {
-            // ── Credit limit check (only SENT invoices post to AR) ───────────
-            // DRAFT invoices don't touch the GL, so no credit impact yet.
-            if (body.status === "SENT") {
-                await checkCreditLimit(tx, body.accountId, totalAmount);
-            }
-
-            const number = await nextRefFromSeries(tx, "INVOICE", user!.id);
-
-            const inv = await tx.invoice.create({
-                data: {
-                    number,
-                    status: body.status,
-                    issueDate: new Date(body.issueDate),
-                    dueDate: new Date(body.dueDate),
-                    notes: body.notes ?? null,
-                    accountId: body.accountId,
-                    subtotal,
-                    taxAmount,
-                    totalAmount,
-                    amountPaid: 0,
-                    createdById: user!.id,
-                    lines: {
-                        create: computedLines.map((l) => ({
-                            description: l.description,
-                            quantity: l.quantity,
-                            unitPrice: l.unitPrice,
-                            taxRate: l.taxRate,
-                            taxAmount: l.taxAmount,
-                            amount: l.amount,
-                        })),
-                    },
-                },
-                include: { lines: true },
-            });
-
-            // Auto-post AR/Revenue JE if status is SENT
-            if (body.status === "SENT") {
-                await postInvoiceJe(tx, inv.id, number, subtotal, taxAmount, totalAmount, user!.id);
-            }
-
-            return inv;
-        });
-
-        return NextResponse.json(invoice, { status: 201 });
-    } catch (e) {
-        if (e instanceof CreditLimitError) {
-            return NextResponse.json({ error: e.message, code: e.code }, { status: 422 });
-        }
-        return handleApiError(e, "Failed to create invoice");
-    }
+// POST /api/accountancy/invoices — deprecated; use /api/inventory/vouchers
+export async function POST() {
+    return NextResponse.json(
+        {
+            error: "This endpoint is retired. Create a SALE InvVoucher via POST /api/inventory/vouchers (type=SALE).",
+            code:  "INVOICE_ENDPOINT_RETIRED",
+        },
+        { status: 410 },
+    );
 }
