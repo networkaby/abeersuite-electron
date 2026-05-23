@@ -1,13 +1,17 @@
 // GET /api/pos/return/search
 //
-// Two lookup modes, both return the same FoundInvoice[] shape so the
+// Two lookup modes, both return the same `FoundInvoice[]` shape so the
 // PosReturnDialog UI is uniform:
 //
-//   ?q=INV-…           — invoice-number substring search (cashier types it in)
-//   ?customerId=N      — every PAID invoice for that customer (used when the
-//                        customer has lost the invoice but is in the system)
+//   ?q=POS-…/SV-…  — voucher-reference substring search (cashier types it)
+//   ?customerId=N  — every POS/SALE InvVoucher for that customer account
+//                    (used when the customer has lost the original receipt)
 //
-// Only PAID invoices, not already returns themselves, not deleted.
+// Returns POS + SALE InvVouchers only — never SALE_RETURN (no return of a
+// return) and never DRAFT/CANCELLED/deleted rows. The `id` and per-line
+// `id` in the response point to InvVoucher / InvVoucherLine since the
+// 2026-05-24 Invoice→InvVoucher consolidation; the field names are kept
+// for client-side API back-compat — the dialog treats them as opaque IDs.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
@@ -31,23 +35,16 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const where = customerId
-            ? {
-                deletedAt:  null,
-                status:     "PAID" as const,
-                returnOfId: null,
-                accountId:  Number(customerId),
-            }
-            : {
-                deletedAt:  null,
-                status:     "PAID" as const,
-                returnOfId: null,
-                number:     { contains: q, mode: "insensitive" as const },
-            };
-
-        const invoices = await prisma.invoice.findMany({
-            where,
-            orderBy: { issueDate: "desc" },
+        const vouchers = await prisma.invVoucher.findMany({
+            where: {
+                deletedAt: null,
+                status:    "POSTED",
+                type:      { in: ["POS", "SALE"] },
+                ...(customerId
+                    ? { accountId: Number(customerId) }
+                    : { reference: { contains: q, mode: "insensitive" } }),
+            },
+            orderBy: { date: "desc" },
             take:    10,
             include: {
                 account: { select: { id: true, name: true } },
@@ -57,38 +54,39 @@ export async function GET(req: NextRequest) {
                         productId: true,
                         description: true,
                         quantity: true,
-                        unitPrice: true,
+                        rate: true,
                         taxRate: true,
                         taxAmount: true,
                         amount: true,
                         product: { select: { id: true, name: true, sku: true } },
                     },
                 },
-                returns: { select: { id: true, number: true, totalAmount: true } },
+                // SALE_RETURN children of this voucher — for the dialog's "already returned" guard
+                refReturns: { select: { id: true, reference: true, totalAmount: true } },
             },
         });
 
-        return NextResponse.json(invoices.map((inv) => ({
-            id:          inv.id,
-            number:      inv.number,
-            issueDate:   inv.issueDate,
-            status:      inv.status,
-            totalAmount: inv.totalAmount.toString(),
-            account:     inv.account,
-            lines:       inv.lines.map((l) => ({
+        return NextResponse.json(vouchers.map((v) => ({
+            id:          v.id,
+            number:      v.reference,
+            issueDate:   v.date,
+            status:      "PAID", // legacy field — POS sales are always settled at counter; UI uses it as a "OK to return" sentinel
+            totalAmount: v.totalAmount.toString(),
+            account:     v.account ? { id: v.account.id, name: v.account.name } : null,
+            lines:       v.lines.map((l) => ({
                 id:          l.id,
                 productId:   l.productId,
-                description: l.description,
+                description: l.description ?? "",
                 quantity:    l.quantity.toString(),
-                unitPrice:   l.unitPrice.toString(),
-                taxRate:     l.taxRate.toString(),
-                taxAmount:   l.taxAmount.toString(),
+                unitPrice:   l.rate.toString(),
+                taxRate:     l.taxRate?.toString() ?? "0",
+                taxAmount:   l.taxAmount?.toString() ?? "0",
                 amount:      l.amount.toString(),
                 product:     l.product,
             })),
-            returns: inv.returns.map((r) => ({
+            returns: v.refReturns.map((r) => ({
                 id:          r.id,
-                number:      r.number,
+                number:      r.reference,
                 totalAmount: r.totalAmount.toString(),
             })),
         })));

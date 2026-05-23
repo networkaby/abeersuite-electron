@@ -1,15 +1,20 @@
 // POST /api/pos/return/lost
 //
-// Manager-only "lost invoice" return. Customer lost the original bill but is
-// in the system — the manager picks products + qty + unit price free-form,
-// types a reason, and we post the same GL + stock reversal as a normal return
-// (no link to an original Invoice or InvVoucher).
+// Manager-only "lost invoice" return. Customer lost the original bill but
+// is in the system — the manager picks products + qty + unit price free-form,
+// types a reason, and we post the same GL + stock reversal as a normal return,
+// but with no link back to an original voucher (`refVoucherId: null`).
 //
 // Walk-ins are blocked: customerAccountId is required.
 //
-// GL:  CASH refund   → Dr Sales Revenue / Cr Counter Till  (requires OPEN shift)
-//      CREDIT note   → Dr Sales Revenue / Cr Customer AR
-// Stock: SALE_RETURN InvVoucher (refVoucherId=null) + InvStockLedger + branch/global stock + 1
+// GL (via postInvVoucherToGl on the SALE_RETURN):
+//   CASH refund  → Dr Sales Returns / (Dr GST Output reversal) / Cr Counter Till
+//   CREDIT note  → Dr Sales Returns / (Dr GST Output reversal) / Cr Customer AR
+//
+// Stock: SALE_RETURN InvVoucher (refVoucherId=null) + InvStockLedger IN
+// + branch + global stock + 1.
+//
+// Replaces the legacy Invoice + manual JE flow — see Layer 2c of the plan.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
@@ -17,8 +22,8 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { nextRef, nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
+import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 
 const lostLineSchema = z.object({
     productId: z.number().int().positive(),
@@ -34,6 +39,10 @@ const lostSchema = z.object({
     reason:            z.string().trim().min(5, "Reason must be at least 5 characters").max(500),
 });
 
+class GlPostFailedError extends Error {
+    constructor(message: string, public notes: string[]) { super(message); }
+}
+
 export async function POST(req: Request) {
     const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_MANAGE);
     if (response) return response;
@@ -45,7 +54,7 @@ export async function POST(req: Request) {
         // ── Customer account ─────────────────────────────────────────────────
         const customerAcct = await prisma.account.findUnique({
             where:  { id: data.customerAccountId },
-            select: { id: true, name: true },
+            select: { id: true, name: true, personId: true, companyId: true },
         });
         if (!customerAcct) return NextResponse.json({ error: "Customer account not found" }, { status: 404 });
 
@@ -88,99 +97,54 @@ export async function POST(req: Request) {
         const total    = subtotal + taxAmt;
         if (total <= 0) return NextResponse.json({ error: "Return total must be > 0" }, { status: 400 });
 
-        // ── GL accounts ──────────────────────────────────────────────────────
-        const revenueAcct = await prisma.account.findFirst({ where: { code: "4000" } });
-        if (!revenueAcct) return NextResponse.json({ error: "Revenue account (code 4000) missing" }, { status: 500 });
+        // ── Branch state for GST split + pre-fetch payment account if CASH ──
+        const [branch, paymentAccount] = await Promise.all([
+            prisma.branch.findUnique({
+                where:  { id: branchId },
+                select: { gstStateCode: true },
+            }),
+            data.refundMode === "CASH" && tillAccountId !== null
+                ? prisma.account.findUnique({
+                    where:  { id: tillAccountId },
+                    select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } },
+                })
+                : Promise.resolve(null),
+        ]);
+        const sellerStateCode = (branch?.gstStateCode || "").trim() || null;
+
+        const partyType = customerAcct.personId !== null ? "customer"
+                        : customerAcct.companyId !== null ? "company"
+                        : "account";
+        const partyId = customerAcct.personId ?? customerAcct.companyId ?? customerAcct.id;
 
         // ── Transaction ──────────────────────────────────────────────────────
         const result = await prisma.$transaction(async (tx) => {
             const today = new Date();
 
-            // 1. Return Invoice (no `returnOfId`, reason in notes).
-            const returnNumber = await nextRef(tx, "invoice", "RTN");
-            const returnInvoice = await tx.invoice.create({
-                data: {
-                    number:      returnNumber,
-                    status:      "PAID",
-                    issueDate:   today,
-                    dueDate:     today,
-                    notes:       `[LOST INVOICE] ${data.reason}`,
-                    accountId:   customerAcct.id,
-                    returnOfId:  null,
-                    subtotal:    -subtotal,
-                    taxAmount:   -taxAmt,
-                    totalAmount: -total,
-                    amountPaid:  -total,
-                    createdById: user!.id,
-                    lines: {
-                        create: data.lines.map((l) => {
-                            const lineSubtotal = l.qty * l.unitPrice;
-                            const lineTax      = (lineSubtotal * l.taxRate) / 100;
-                            const p = productById.get(l.productId)!;
-                            return {
-                                productId:   l.productId,
-                                description: `${p.sku} — ${p.name}`,
-                                quantity:    -l.qty,
-                                unitPrice:   l.unitPrice,
-                                taxRate:     l.taxRate,
-                                taxAmount:   -lineTax,
-                                amount:      -(lineSubtotal + lineTax),
-                            };
-                        }),
-                    },
-                },
-                select: { id: true, number: true },
-            });
-
-            // 2. Return JE.
-            const jeRef = await nextRefFromSeries(tx, "GL_POSTING", user!.id);
-            const creditAccountId = data.refundMode === "CASH" ? tillAccountId! : customerAcct.id;
-            const jeLines = [
-                { accountId: revenueAcct.id,  type: "DEBIT"  as const, amount: total, description: `Lost-invoice return ${returnNumber}` },
-                { accountId: creditAccountId, type: "CREDIT" as const, amount: total, description: `${data.refundMode === "CASH" ? "Cash refund from till" : "Credit note"} — ${returnNumber}` },
-            ];
-            const je = await tx.journalEntry.create({
-                data: {
-                    date:        today,
-                    reference:   jeRef,
-                    description: `Lost-invoice sale return — ${returnNumber}`,
-                    status:      "POSTED",
-                    postedAt:    today,
-                    createdById: user!.id,
-                    lines: { create: jeLines },
-                },
-                select: { id: true, reference: true },
-            });
-            const accts = await tx.account.findMany({
-                where:  { id: { in: [revenueAcct.id, creditAccountId] } },
-                select: { id: true, normalBalance: true },
-            });
-            const normalById = new Map(accts.map((a) => [a.id, a.normalBalance]));
-            for (const line of jeLines) {
-                const normal = normalById.get(line.accountId)!;
-                const delta  = balanceDelta(normal, line.type, toNumber(line.amount));
-                await tx.account.update({ where: { id: line.accountId }, data: { balance: { increment: delta } } });
-            }
-
-            // 3. SALE_RETURN InvVoucher + stock IN.
             const vRef = await invNextRef(tx, "SALE_RETURN");
-            const rv = await tx.invVoucher.create({
+            const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "SALE_RETURN",
                     reference:      vRef,
                     branchId,
                     date:           today,
-                    description:    `Lost-invoice return ${returnNumber} — ${data.reason.slice(0, 80)}`,
+                    description:    `Lost-invoice return — ${data.reason.slice(0, 200)}`,
                     status:         "POSTED",
                     postedAt:       today,
+                    accountId:      customerAcct.id,
+                    partyName:      customerAcct.name,
+                    partyType,
+                    partyId,
                     refNumber:      null,
                     refVoucherId:   null,
                     paymentMode:    data.refundMode,
+                    paymentAccountId: data.refundMode === "CASH" ? tillAccountId : null,
+                    deliveryMode:   "COUNTER",
+                    placeOfSupply:  sellerStateCode,
                     subtotal,
                     taxAmount:      taxAmt,
                     totalAmount:    total,
                     amountReceived: data.refundMode === "CASH" ? total : 0,
-                    journalEntryId: je.id,
                     createdById:    user!.id,
                     lines: {
                         create: data.lines.map((l) => {
@@ -197,14 +161,49 @@ export async function POST(req: Request) {
                         }),
                     },
                 },
-                select: { id: true },
+                include: { lines: true },
             });
 
+            const gl = await postInvVoucherToGl(tx, {
+                voucherId: voucher.id,
+                voucher: {
+                    id:          voucher.id,
+                    type:        voucher.type,
+                    reference:   voucher.reference,
+                    date:        voucher.date,
+                    description: voucher.description,
+                    partyName:   voucher.partyName,
+                    partyType:   voucher.partyType,
+                    partyId:     voucher.partyId,
+                    paymentMode: voucher.paymentMode,
+                    subtotal:    voucher.subtotal,
+                    taxAmount:   voucher.taxAmount,
+                    shippingAmt: voucher.shippingAmt,
+                    roundOff:    voucher.roundOff,
+                    totalAmount: voucher.totalAmount,
+                    paymentAccount,
+                    sellerStateCode,
+                    buyerStateCode: sellerStateCode,
+                },
+                userId: user!.id,
+            });
+            if (gl.journalEntryId === null) {
+                throw new GlPostFailedError(
+                    `Cannot post lost-invoice return ${vRef}: GL bridge could not build a journal entry.`,
+                    gl.notes,
+                );
+            }
+            await tx.invVoucher.update({
+                where: { id: voucher.id },
+                data:  { journalEntryId: gl.journalEntryId },
+            });
+
+            // Stock IN.
             for (const l of data.lines) {
                 await tx.invStockLedger.create({
                     data: {
                         productId: l.productId,
-                        voucherId: rv.id,
+                        voucherId: voucher.id,
                         branchId,
                         date:   today,
                         inQty:  l.qty,
@@ -225,16 +224,21 @@ export async function POST(req: Request) {
             }
 
             return {
-                returnInvoiceId:  returnInvoice.id,
-                returnNumber:     returnInvoice.number,
-                journalEntryRef:  je.reference,
-                returnVoucherId:  rv.id,
-                returnTotal:      total,
+                returnVoucherId: voucher.id,
+                returnVoucherRef: voucher.reference,
+                journalEntryId:  gl.journalEntryId,
+                returnTotal:     total,
+                // Back-compat aliases for the dialog
+                returnInvoiceId: voucher.id,
+                returnNumber:    voucher.reference,
             };
         });
 
         return NextResponse.json(result, { status: 201 });
     } catch (e) {
+        if (e instanceof GlPostFailedError) {
+            return NextResponse.json({ error: e.message, notes: e.notes }, { status: 500 });
+        }
         return handleApiError(e, "Failed to process lost-invoice return");
     }
 }
