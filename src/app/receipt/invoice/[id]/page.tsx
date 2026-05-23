@@ -9,6 +9,10 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode, isValidStateCode } from "@/shared/lib/gst/indianStates";
 
+// Resolves the id as an InvVoucher (the new shape, used by POS sales since
+// the Invoice→InvVoucher consolidation on 2026-05-24). The URL path keeps
+// `/receipt/invoice/...` for back-compat with bookmarked links and the
+// thermal-print fallback in PosScreen.
 export default async function PosReceiptPage({
     params,
     searchParams,
@@ -29,23 +33,24 @@ export default async function PosReceiptPage({
     // → intra-state → single "Tax" row (legacy behaviour).
     const placeOfSupplyParam = (sp.placeOfSupply ?? "").trim();
 
-    const invoice = await prisma.invoice.findUnique({
+    const voucher = await prisma.invVoucher.findUnique({
         where: { id: Number(id) },
         include: {
             lines: true,
             account: {
                 select: {
                     id: true,
+                    name: true,
                     person:  { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
                     company: { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
                 },
             },
         },
     });
-    if (!invoice) notFound();
+    if (!voucher) notFound();
 
-    const owner = invoice.account?.person ?? invoice.account?.company ?? null;
-    const partyName  = owner?.name ?? "Walk-in";
+    const owner = voucher.account?.person ?? voucher.account?.company ?? null;
+    const partyName  = owner?.name ?? voucher.account?.name ?? voucher.partyName ?? "Walk-in";
     const partyPhone = owner?.phones[0]?.phone ?? null;
 
     const [template, org] = await Promise.all([
@@ -61,7 +66,7 @@ export default async function PosReceiptPage({
     // or a stale call).
     const sellerStateCode = (org.gstStateCode || "").trim();
     let taxBreakdown: ThermalTaxBreakdown | null = null;
-    const taxAmt = Number(invoice.taxAmount);
+    const taxAmt = Number(voucher.taxAmount);
     if (taxAmt > 0 && placeOfSupplyParam && isValidStateCode(placeOfSupplyParam) && sellerStateCode) {
         const split = computeGstSplit({
             taxAmount:       taxAmt,
@@ -75,19 +80,19 @@ export default async function PosReceiptPage({
     }
 
     const sample: ThermalReceiptSample = {
-        reference:  invoice.number,
-        date:       invoice.issueDate.toISOString().slice(0, 10),
+        reference:  voucher.reference,
+        date:       voucher.date.toISOString().slice(0, 10),
         partyName,
         partyPhone,
-        lines: invoice.lines.map((l) => ({
-            description: l.description,
+        lines: voucher.lines.map((l) => ({
+            description: l.description ?? "",
             quantity:    Number(l.quantity),
             amount:      Number(l.amount),
         })),
-        subtotal:  Number(invoice.subtotal),
+        subtotal:  Number(voucher.subtotal),
         taxAmount: taxAmt,
-        total:     Number(invoice.totalAmount),
-        notes:     invoice.notes ?? null,
+        total:     Number(voucher.totalAmount),
+        notes:     null,
         taxBreakdown,
     };
 
@@ -97,7 +102,7 @@ export default async function PosReceiptPage({
             template={template}
             sample={sample}
             toolbar={<ReceiptButtons />}
-            docTitle={`Invoice ${invoice.number}`}
+            docTitle={`Invoice ${voucher.reference}`}
         />
     );
 }

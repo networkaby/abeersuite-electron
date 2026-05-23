@@ -384,7 +384,7 @@ export default function PosScreen() {
                 return;
             }
 
-            const { data } = await axios.post<{ invoiceId: number; invoiceNumber: string }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: due.toISOString().slice(0, 10),
@@ -398,7 +398,7 @@ export default function PosScreen() {
                 })),
                 payments: paymentsList,
             });
-            toast.success(`Invoice ${data.invoiceNumber} · ${fmtINR(total)}`);
+            toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}`);
             setCart([]);
             setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
             setExtras([]);
@@ -411,7 +411,7 @@ export default function PosScreen() {
                         method:  "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            invoiceNumber:  data.invoiceNumber,
+                            invoiceNumber:  data.voucherRef,
                             date:           today,
                             customerName:   snapshot?.party.name ?? "Walk-in",
                             lines: cart.map((l) => ({
@@ -431,7 +431,7 @@ export default function PosScreen() {
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
                 } else {
-                    window.open(`/receipt/invoice/${data.invoiceId}?kind=POS&autoprint=1`, "_blank", "noopener");
+                    window.open(`/receipt/invoice/${data.voucherId}?kind=POS&autoprint=1`, "_blank", "noopener");
                 }
             }
         } catch (e: unknown) {

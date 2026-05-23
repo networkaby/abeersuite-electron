@@ -147,9 +147,15 @@ async function loadOpenBills(
                 issueDate: true, dueDate: true, totalAmount: true,
             },
         }),
+        // Only bill-shaped vouchers (CREDIT_NOTE / DEBIT_NOTE) count as
+        // outstanding here. RECEIPT / PAYMENT are settlements — they appear
+        // in VoucherAllocation as `sourceType=VOUCHER` and nett against the
+        // bill's JE; including them again as "open bills" would double-count
+        // them as false positives. CONTRA / JOURNAL never sit against a party.
         prisma.voucher.findMany({
             where: {
                 partyAccountId: { in: accountIds },
+                type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE"] },
                 deletedAt:      null,
                 status:         { not: "CANCELLED" },
                 date:           { lte: asOf },
@@ -179,15 +185,31 @@ async function loadOpenBills(
     const personIds = Object.keys(personToAcc).map(Number);
     const companyIds  = Object.keys(companyToAcc).map(Number);
 
-    const partyOr: { partyType: string; partyId: { in: number[] } }[] = [];
+    // OR-match clauses for the InvVoucher lookup. Modern rows carry
+    // `accountId` directly (added 2026-05-24); legacy rows are resolved via
+    // the partyType+partyId pair against the person/company identity maps.
+    const partyOr: Array<
+        | { accountId: { in: number[] } }
+        | { partyType: string; partyId: { in: number[] } }
+    > = [];
+    partyOr.push({ accountId: { in: accountIds } });
     if (personIds.length > 0) partyOr.push({ partyType: "customer", partyId: { in: personIds } });
     if (companyIds.length  > 0) partyOr.push({ partyType: "company",  partyId: { in: companyIds  } });
 
-    const invVouchers = partyOr.length === 0 ? [] : await prisma.invVoucher.findMany({
+    // POS InvVouchers carry AR exactly like a SALE — only their settlement
+    // flow differs (immediate receipt voucher at the counter). They must
+    // count as receivables-side bills so credit-on-POS sales (partial
+    // payments, future feature) show up correctly here, and so the
+    // PaidByJe allocation logic can net them out for cash-paid POS.
+    const saleSideTypes = ["SALE", "POS"] as const;
+    const purchaseSideTypes = ["PURCHASE"] as const;
+    const invVouchers = accountIds.length === 0 ? [] : await prisma.invVoucher.findMany({
         where: {
             ...(invType === "BOTH"
-                ? { type: { in: ["SALE", "PURCHASE"] } }
-                : { type: invType }),
+                ? { type: { in: [...saleSideTypes, ...purchaseSideTypes] } }
+                : invType === "SALE"
+                    ? { type: { in: [...saleSideTypes] } }
+                    : { type: { in: [...purchaseSideTypes] } }),
             status:    "POSTED",
             deletedAt: null,
             date:      { lte: asOf },
@@ -196,6 +218,7 @@ async function loadOpenBills(
         select: {
             id: true, type: true, reference: true, date: true,
             totalAmount: true, amountReceived: true,
+            accountId: true,
             partyType: true, partyId: true, journalEntryId: true,
             creditPeriodDays: true,
         },
@@ -265,12 +288,17 @@ async function loadOpenBills(
     }
 
     for (const v of invVouchers) {
-        if (v.partyId === null) continue;
-        const accountId = v.partyType === "customer"
-            ? personToAcc[v.partyId] ?? null
-            : v.partyType === "company"
-                ? companyToAcc[v.partyId] ?? null
-                : null;
+        // Prefer the explicit `accountId` FK added on 2026-05-24; fall back
+        // to the legacy partyType+partyId resolution dance for old rows
+        // written before the column existed.
+        const accountId = v.accountId
+            ?? (v.partyId === null
+                ? null
+                : v.partyType === "customer"
+                    ? personToAcc[v.partyId] ?? null
+                    : v.partyType === "company"
+                        ? companyToAcc[v.partyId] ?? null
+                        : null);
         if (accountId === null) continue;
         const due = new Date(v.date);
         due.setDate(due.getDate() + (v.creditPeriodDays ?? DEFAULT_DUE_DAYS));
@@ -281,7 +309,7 @@ async function loadOpenBills(
             Number(v.amountReceived) +
             (v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0);
         bills.push({
-            kind:        v.type === "SALE" ? "sale" : "purchase",
+            kind:        v.type === "SALE" || v.type === "POS" ? "sale" : "purchase",
             id:          v.id,
             accountId,
             ref:         v.reference,

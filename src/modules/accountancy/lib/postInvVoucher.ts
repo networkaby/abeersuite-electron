@@ -169,7 +169,12 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     //   "purchase shape" — counter (party/cash) Cr, body Dr, tax Dr
     //                      → PURCHASE (body=Purchase, tax=Input GST)
     //                      → SALE_RETURN (body=Sales Returns, tax=Output GST reversal)
-    const isPositiveSale     = voucher.type === "SALE";
+    // POS shares the sale shape (counter Dr / body Cr) — the only difference
+    // is the counter-side settlement timing, which is handled outside this
+    // helper by `postReceiptVoucher`. Treating POS as a sale here lets the
+    // POS route reuse the same GST split + body/tax ledger resolution as
+    // office sales.
+    const isPositiveSale     = voucher.type === "SALE" || voucher.type === "POS";
     const isPositivePurchase = voucher.type === "PURCHASE";
     const isSaleReturn       = voucher.type === "SALE_RETURN";
     const isPurchaseReturn   = voucher.type === "PURCHASE_RETURN";

@@ -2,10 +2,9 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { nextRef } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
-import { postInvoiceJe } from "@/modules/accountancy/lib/postInvoiceJe";
-import { postPosReceiptJe } from "@/modules/pos/lib/postPosReceiptJe";
+import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -15,11 +14,20 @@ import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/che
 
 // POST /api/pos/sale
 //
-// Atomic POS sale — creates the Invoice + InvoiceLines, posts the AR/Revenue
-// journal entry, writes Payment rows + a cash-receipt JE that immediately
-// closes the AR (Dr Cash/Bank / Cr AR), then writes the parallel InvVoucher
-// (type=SALE, status=POSTED) + InvVoucherLines + InvStockLedger and
-// decrements per-branch stock.
+// Atomic POS sale — writes a single InvVoucher (type=POS) carrying lines,
+// stock movement, GST routing, and a back-link to the customer's ledger
+// account. Posting flow:
+//   1. InvVoucher row + lines created (status=POSTED).
+//   2. postInvVoucherToGl → AR / Revenue / GST Output JournalEntry
+//      (Dr Customer AR / Cr Sales / Cr CGST+SGST or IGST).
+//   3. postReceiptVoucher → Voucher type=RECEIPT (Dr Till/Bank / Cr AR) +
+//      mirror JE + VoucherAllocation tying the receipt to the InvVoucher's
+//      JE so Receivables nets it out automatically.
+//   4. InvStockLedger rows + per-branch + org-wide stock decrement.
+//
+// Replaces the legacy three-table write (Invoice + InvoiceLine + Payment)
+// that ran here before 2026-05-24. See plan in
+// C:\Users\User\.claude\plans\from-earlier-massage-distributed-eclipse.md.
 //
 // As of 2026-05-14 the route requires the cashier to have an OPEN PosShift
 // in the active branch. The CASH portion of any payment auto-debits the
@@ -50,6 +58,10 @@ const createSchema = z.object({
     payments:  z.array(paymentSchema).min(1, "At least one payment line required"),
 });
 
+class GlPostFailedError extends Error {
+    constructor(message: string, public notes: string[]) { super(message); }
+}
+
 export async function POST(req: Request) {
     const { user, response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
@@ -75,7 +87,33 @@ export async function POST(req: Request) {
     const tillAccountId  = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;
 
-    // ── Validate payment lines ────────────────────────────────────────────
+    // ── Resolve customer account (party ledger) ───────────────────────────
+    // The new schema stores `accountId` directly on InvVoucher. We also
+    // capture the display name + identity ids for the partyName/partyType/
+    // partyId triple so postInvVoucherToGl can build the JE description and
+    // any legacy reader (until Layer 5) still sees the old fields populated.
+    const customerAccount = await prisma.account.findUnique({
+        where:  { id: body.accountId },
+        select: {
+            id: true, name: true, personId: true, companyId: true,
+            person:  { select: { name: true } },
+            company: { select: { name: true } },
+        },
+    });
+    if (!customerAccount) {
+        return NextResponse.json({ error: "Customer account not found." }, { status: 422 });
+    }
+    const partyName = customerAccount.person?.name
+                   ?? customerAccount.company?.name
+                   ?? customerAccount.name;
+    const partyType = customerAccount.personId !== null ? "customer"
+                     : customerAccount.companyId !== null ? "company"
+                     : "account";
+    const partyId   = customerAccount.personId
+                   ?? customerAccount.companyId
+                   ?? customerAccount.id;
+
+    // ── Validate line items + payment totals ──────────────────────────────
     const computedLines = body.lines.map((l) => {
         const lineSubtotal = l.quantity * l.unitPrice;
         const lineTax = (lineSubtotal * l.taxRate) / 100;
@@ -89,9 +127,9 @@ export async function POST(req: Request) {
             amount:      lineSubtotal + lineTax,
         };
     });
-    const subtotal    = computedLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+    const subtotal    = computedLines.reduce((s, l) => s + l.amount, 0);   // tax-inclusive (matches postInvVoucherToGl contract)
     const taxAmount   = computedLines.reduce((s, l) => s + l.taxAmount, 0);
-    const totalAmount = subtotal + taxAmount;
+    const totalAmount = subtotal; // no shipping / round-off on POS today
 
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0);
     if (Math.abs(paymentTotal - totalAmount) > 0.01) {
@@ -122,79 +160,44 @@ export async function POST(req: Request) {
     // always 0 — the check is a forward-compatibility guard for partial payments.
     const onCredit = Math.max(0, totalAmount - paymentTotal);
 
+    // POS is always counter-pickup → place of supply = branch state regardless
+    // of customer's address (CGST Act §10(1)(c)). Resolve once, outside tx.
+    const posBranch = await prisma.branch.findUnique({
+        where: { id: activeBranchId },
+        select: { gstStateCode: true },
+    });
+    const sellerStateCode = (posBranch?.gstStateCode || "").trim() || null;
+
     try {
         const result = await prisma.$transaction(async (tx) => {
-            // ── Credit limit check (inside tx so balance read is fresh) ────────
+            // ── Credit limit check (inside tx so balance read is fresh) ────
             await checkCreditLimit(tx, body.accountId, onCredit);
 
-            // ── 1. Invoice + InvoiceLines + AR/Revenue JE ─────────────────────
-            const invoiceNumber = await nextRef(tx, "invoice", "INV");
-            const invoice = await tx.invoice.create({
-                data: {
-                    number:      invoiceNumber,
-                    status:      "SENT",
-                    issueDate:   new Date(body.issueDate),
-                    dueDate:     new Date(body.dueDate),
-                    notes:       body.notes ?? null,
-                    accountId:   body.accountId,
-                    subtotal,
-                    taxAmount,
-                    totalAmount,
-                    amountPaid:  0,
-                    createdById: user!.id,
-                    lines: {
-                        create: computedLines.map((l) => ({
-                            productId:   l.productId,   // stored so sale-return can trace stock
-                            description: l.description,
-                            quantity:    l.quantity,
-                            unitPrice:   l.unitPrice,
-                            taxRate:     l.taxRate,
-                            taxAmount:   l.taxAmount,
-                            amount:      l.amount,
-                        })),
-                    },
-                },
-            });
-
-            const je = await postInvoiceJe(tx, invoice.id, invoiceNumber, subtotal, taxAmount, totalAmount, user!.id);
-
-            // ── 2. Cash-receipt JE — closes the AR side immediately ──────────
-            const receiptDate = new Date();
-            const receipt = await postPosReceiptJe(tx, {
-                invoiceId:         invoice.id,
-                invoiceNumber,
-                customerAccountId: body.accountId,
-                payments:          resolvedPayments,
-                userId:            user!.id,
-                date:              receiptDate,
-            });
-
-            // ── 3. InvVoucher (type=POS) + lines + stock ledger + cached stock ─
-            // POS is always counter-pickup — place of supply = branch state
-            // regardless of customer's address (CGST Act §10(1)(c)).
+            // ── 1. InvVoucher (type=POS) + lines ──────────────────────────
+            // paymentMode="CREDIT" so postInvVoucherToGl routes the counter
+            // side to the customer AR ledger (not Cash directly). The cash
+            // settlement is layered on by the receipt voucher in step 3.
             const voucherRef = await invNextRef(tx, "POS");
-            const posBranch = await tx.branch.findUnique({
-                where: { id: activeBranchId },
-                select: { gstStateCode: true },
-            });
-            const posPlaceOfSupply = (posBranch?.gstStateCode || "").trim();
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "POS",
                     reference:      voucherRef,
                     branchId:       activeBranchId,
                     date:           new Date(body.issueDate),
-                    description:    `POS sale ${invoiceNumber}`,
+                    description:    body.notes?.trim() || `POS sale — ${partyName}`,
                     status:         "POSTED",
                     postedAt:       new Date(),
-                    paymentMode:    "CASH",
+                    accountId:      customerAccount.id,
+                    partyName,
+                    partyType,
+                    partyId,
+                    paymentMode:    "CREDIT",
                     deliveryMode:   "COUNTER",
-                    placeOfSupply:  posPlaceOfSupply || null,
+                    placeOfSupply:  sellerStateCode,
                     subtotal,
                     taxAmount,
                     totalAmount,
                     amountReceived: totalAmount,
-                    journalEntryId: je.id,
                     createdById:    user!.id,
                     lines: {
                         create: computedLines.map((l) => ({
@@ -211,6 +214,57 @@ export async function POST(req: Request) {
                 include: { lines: true },
             });
 
+            // ── 2. GL post (Dr Customer AR / Cr Sales / Cr GST Output) ────
+            const gl = await postInvVoucherToGl(tx, {
+                voucherId: voucher.id,
+                voucher: {
+                    id:          voucher.id,
+                    type:        voucher.type,
+                    reference:   voucher.reference,
+                    date:        voucher.date,
+                    description: voucher.description,
+                    partyName:   voucher.partyName,
+                    partyType:   voucher.partyType,
+                    partyId:     voucher.partyId,
+                    paymentMode: voucher.paymentMode,
+                    subtotal:    voucher.subtotal,
+                    taxAmount:   voucher.taxAmount,
+                    shippingAmt: voucher.shippingAmt,
+                    roundOff:    voucher.roundOff,
+                    totalAmount: voucher.totalAmount,
+                    paymentAccount: null,
+                    sellerStateCode,
+                    buyerStateCode: sellerStateCode, // counter pickup → intra-state
+                },
+                userId: user!.id,
+            });
+            if (gl.journalEntryId === null) {
+                throw new GlPostFailedError(
+                    `Cannot post POS sale ${voucherRef}: GL bridge could not build a journal entry.`,
+                    gl.notes,
+                );
+            }
+            await tx.invVoucher.update({
+                where: { id: voucher.id },
+                data:  { journalEntryId: gl.journalEntryId },
+            });
+
+            // ── 3. Receipt voucher (Dr till+bank / Cr AR) + allocation ────
+            const receiptDate = new Date();
+            const receipt = await postReceiptVoucher(tx, {
+                customerAccountId:        customerAccount.id,
+                tenders:                  resolvedPayments.map((p) => ({
+                    accountId:   p.accountId,
+                    amount:      p.amount,
+                    description: p.reference ? `${p.method} · ${p.reference}` : p.method,
+                })),
+                date:                     receiptDate,
+                userId:                   user!.id,
+                narration:                `POS receipt for ${voucherRef}`,
+                allocateToJournalEntryId: gl.journalEntryId,
+            });
+
+            // ── 4. Stock ledger + per-branch + org-wide stock decrement ───
             const date = new Date(body.issueDate);
             for (const line of voucher.lines) {
                 const qty = Number(line.quantity);
@@ -239,14 +293,19 @@ export async function POST(req: Request) {
             }
 
             return {
-                invoiceId:        invoice.id,
-                invoiceNumber:    invoice.number,
-                journalEntryId:   je.id,
-                receiptJeId:      receipt.journalEntryId,
-                paymentIds:       receipt.paymentIds,
+                // New canonical fields
                 voucherId:        voucher.id,
                 voucherRef:       voucher.reference,
+                journalEntryId:   gl.journalEntryId,
+                receiptVoucherId: receipt.voucherId,
+                receiptVoucherRef: receipt.voucherRef,
+                receiptJeId:      receipt.journalEntryId,
+                allocationId:     receipt.allocationId,
                 shiftId:          shift.id,
+                // Back-compat aliases — PosScreen reads these names today.
+                // Will be removed once Layer 4 swaps the UI to voucherId.
+                invoiceId:        voucher.id,
+                invoiceNumber:    voucher.reference,
             };
         });
 
@@ -254,6 +313,9 @@ export async function POST(req: Request) {
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });
+        }
+        if (err instanceof GlPostFailedError) {
+            return NextResponse.json({ error: err.message, notes: err.notes }, { status: 500 });
         }
         console.error("[pos sale]", err);
         const msg = err instanceof Error ? err.message : "Failed to create POS sale";
