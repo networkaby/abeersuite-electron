@@ -431,7 +431,7 @@ export default function PosScreen() {
                         }),
                     }).catch(() => toast.error("Thermal print failed"));
                 } else {
-                    window.open(`/receipt/invoice/${data.invoiceId}?autoprint=1`, "_blank", "noopener");
+                    window.open(`/receipt/invoice/${data.invoiceId}?kind=POS&autoprint=1`, "_blank", "noopener");
                 }
             }
         } catch (e: unknown) {

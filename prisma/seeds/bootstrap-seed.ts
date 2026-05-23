@@ -37,6 +37,10 @@
 
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { seedVoucherSeries } from "../../src/modules/accountancy/lib/seedVoucherSeries";
+import {
+    VOUCHER_TEMPLATE_KINDS,
+    buildVoucherTemplateDefaults,
+} from "../../src/shared/lib/print/voucherTemplateDefaults";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -1124,9 +1128,25 @@ async function main() {
     console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
-    console.log("[12/12] VoucherSeries (all GL + inventory series)");
+    console.log("[12/13] VoucherSeries (all GL + inventory series)");
     await seedVoucherSeries(prisma);
     console.log(`      ✓ VoucherSeries seeded\n`);
+
+    // ── Section 13: Voucher print templates ───────────────────────────
+    console.log("[13/13] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
+    // Create payload uses the full per-kind defaults so a fresh DB starts in
+    // the right place. On re-seed we only force `defaultPaper` back to its
+    // per-kind baseline (POS = THERMAL_80MM, everything else = A4); all
+    // other admin customisations to header/footer/toggles survive.
+    for (const kind of VOUCHER_TEMPLATE_KINDS) {
+        const data = buildVoucherTemplateDefaults(kind);
+        await prisma.voucherPrintTemplate.upsert({
+            where:  { kind },
+            create: data,
+            update: { defaultPaper: data.defaultPaper },
+        });
+    }
+    console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded\n`);
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");

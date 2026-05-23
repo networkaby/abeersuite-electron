@@ -75,7 +75,9 @@ interface MasterMaps {
     groups: Map<string, { id: number; name: string }>;
     brands: Map<string, { id: number; name: string }>;
     warrantyTerms: Map<string, { id: number; name: string }>;
-    gstRates: Map<string, { id: number; rate: string | number; label: string }>;
+    // `rate` is dropped from the map value — only used inline to build the
+    // numeric lookup key. Downstream code reads only `id` / `label`.
+    gstRates: Map<string, { id: number; label: string }>;
 }
 
 function norm(s: string | null | undefined): string {
@@ -106,11 +108,12 @@ async function loadMasters(): Promise<MasterMaps> {
     const wtMap = new Map<string, { id: number; name: string }>();
     for (const w of warrantyTerms) wtMap.set(norm(w.name), { id: w.id, name: w.name });
 
-    const gstMap = new Map<string, { id: number; rate: string | number; label: string }>();
+    const gstMap = new Map<string, { id: number; label: string }>();
     for (const g of gstRates) {
         const rateStr = String(g.rate).replace(/\.?0+$/, "");
-        gstMap.set(rateStr, g);
-        gstMap.set(norm(g.label), g);
+        const value = { id: g.id, label: g.label };
+        gstMap.set(rateStr, value);
+        gstMap.set(norm(g.label), value);
     }
 
     return { units: unitMap, categories: catMap, groups: grpMap, brands: brMap, warrantyTerms: wtMap, gstRates: gstMap };
@@ -408,13 +411,15 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             hsnCode: v.data.hsnCode,
             gstRateId: v.data.gstRateId,
             taxability: v.data.taxability,
-            costPaise: v.data.costPaise,
             pricePaise: v.data.pricePaise,
             mrpPaise: v.data.mrpPaise,
             openingStock: v.data.openingStock,
             openingRate: v.data.openingRate,
             openingValue: openingValueComputed,
             openingStockDate: v.data.openingDate ? new Date(v.data.openingDate) : null,
+            // `cachePatch` provides `costPaise` (derived from openingRate) and
+            // `stock`. Listing it after the explicit fields keeps that intent
+            // and avoids TS2783 about the previous duplicate `costPaise` key.
             ...cachePatch,
         };
     };

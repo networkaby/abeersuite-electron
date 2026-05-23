@@ -598,6 +598,8 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Naming Convention", icon: ClipboardList, href: "/office/settings/naming-convention", permission: "inventory:manage" },
     { label: "Year Ending", href: "/office/settings/year-ending", icon: Calendar, permission: "settings:manage" },
     { label: "Thermal Printer", href: "/office/settings/printer-settings", icon: Printer, permission: "settings:manage" },
+    { label: "Voucher Templates", href: "/office/settings/voucher-templates", icon: FileText, permission: "settings:manage" },
+    { label: "Voucher Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:manage" },
 ];

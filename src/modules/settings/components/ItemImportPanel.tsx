@@ -250,7 +250,7 @@ export function ItemImportPanel() {
                 <div>
                     <h2 className="text-sm font-semibold">1. Upload CSV</h2>
                     <p className="text-xs text-muted-foreground">
-                        First row must be the column headers — actual names don't matter, you'll map them in the next
+                        First row must be the column headers — actual names don&apos;t matter, you&apos;ll map them in the next
                         step.
                     </p>
                 </div>
@@ -327,7 +327,7 @@ export function ItemImportPanel() {
                     <div>
                         <h2 className="text-sm font-semibold">3. Mode &amp; preview</h2>
                         <p className="text-xs text-muted-foreground">
-                            Choose what happens when a row's SKU already exists, then preview before committing.
+                            Choose what happens when a row&apos;s SKU already exists, then preview before committing.
                         </p>
                     </div>
                     <div className="space-y-1">
@@ -461,7 +461,7 @@ export function ItemImportPanel() {
                                     ))}
                                 {preview.errorCount > 50 && (
                                     <div className="text-muted-foreground">
-                                        …showing first 50 of {preview.errorCount}. Click "Download error rows" for the
+                                        …showing first 50 of {preview.errorCount}. Click &quot;Download error rows&quot; for the
                                         full list.
                                     </div>
                                 )}

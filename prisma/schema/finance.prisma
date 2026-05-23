@@ -367,3 +367,51 @@ model VoucherSeries {
 
   updatedAt DateTime @updatedAt
 }
+
+// ── Voucher print templates ─────────────────────────────────────────────────
+// One row per voucher kind. The `kind` PK is a string that's one of:
+//   • VoucherType   (CONTRA | PAYMENT | RECEIPT | CREDIT_NOTE | DEBIT_NOTE | JOURNAL)
+//   • InvVoucherType (PURCHASE | SALE | POS | ESTIMATE | SALE_RETURN | PURCHASE_RETURN
+//                     | MANUFACTURING_JOURNAL | PHYSICAL_STOCK | BRANCH_TRANSFER | GRN
+//                     | CHALLAN | REJECTION_IN | REJECTION_OUT | SALES_ORDER | PURCHASE_ORDER)
+// Drives the thermal 80mm receipt rendered by /receipt/invoice/[id] and the
+// shared <ThermalReceiptPreview> component (src/shared/components/print/).
+// Bootstrap seed inserts all 21 rows; reset endpoint re-applies the defaults
+// from src/shared/lib/print/voucherTemplateDefaults.ts (same source).
+model VoucherPrintTemplate {
+  kind String @id
+
+  // Header
+  headerLine1  String @default("")
+  headerLine2  String @default("")
+  addressBlock String @default("")
+  gstinLine    String @default("")
+  phoneLine    String @default("")
+  logoUrl      String @default("")
+
+  // Body toggles
+  showLogo       Boolean @default(false)
+  showAddress    Boolean @default(true)
+  showGstin      Boolean @default(true)
+  showPhone      Boolean @default(true)
+  showTaxSummary Boolean @default(true)
+  showSignature  Boolean @default(false)
+  showQrCode     Boolean @default(false)
+
+  // Footer
+  termsText      String @default("")
+  footerLine     String @default("Thank you · Visit again")
+  signatureLabel String @default("Authorised Signatory")
+
+  // Paper — default format used when the print route doesn't pass `?paper=`.
+  // Values: "A4" | "THERMAL_80MM". POS rows are seeded with "THERMAL_80MM";
+  // everything else seeds with "A4" (formal tax invoice on a printer).
+  defaultPaper String @default("A4")
+  paperWidthMm Int    @default(80)
+  fontFamily   String @default("Courier New, monospace")
+  fontSizePx   Int    @default(12)
+
+  // Audit — no FK to User to avoid relation churn; just record the id.
+  updatedAt   DateTime @updatedAt
+  updatedById Int?
+}
