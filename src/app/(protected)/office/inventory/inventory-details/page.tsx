@@ -9,7 +9,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useEscape } from "@/shared/hooks";
-import { Box, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Box, Loader2, RefreshCw, AlertTriangle, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { VoucherActionsMenu, editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,7 @@ export default function InventoryDetailsPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [from, setFrom] = useState(startOfYear());
     const [to, setTo] = useState(today());
+    const [editOpen, setEditOpen] = useState(false);
 
     useEffect(() => {
         axios
@@ -279,6 +281,10 @@ export default function InventoryDetailsPage() {
                                         )}
                                     </div>
                                 </div>
+                                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                                    <Pencil size={13} className="mr-1.5" />
+                                    Edit Product
+                                </Button>
                             </div>
 
                             {/* 4-stat row */}
@@ -471,6 +477,13 @@ export default function InventoryDetailsPage() {
                 )}
             </section>
             </div>
+
+            <InvProductDialog
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                editId={selectedId}
+                onSaved={handleRefresh}
+            />
         </div>
     );
 }
