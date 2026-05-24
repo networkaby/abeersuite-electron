@@ -9,8 +9,11 @@ import {
     ShoppingCart, Plus, Minus, Trash2, ArrowLeft, ExternalLink,
     Banknote, Wallet, CreditCard, Smartphone, Building2, FileText, UserPlus,
     MapPin, Star, Sparkles, AlertCircle, TrendingDown, Tag,
-    ReceiptIndianRupee, Check, RotateCcw,
+    ReceiptIndianRupee, Check, RotateCcw, ChevronDown, ChevronRight,
 } from "lucide-react";
+import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { calcVoucherTotals, calcLineTotals } from "@/modules/inventory/lib/stock";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,12 +59,19 @@ type ProductOption = {
     id: number; sku: string; name: string;
     pricePaise?: number | null;
     mrpPaise?: number | null;
+    /// Effective GST rate resolved by the cascade product → group → org-default.
+    /// Null = no rate found anywhere in the chain (line stays untaxed).
+    taxRate?: number | null;
+    hsnCode?: string | null;
     unit?: { code: string };
     warrantyTerm?: { name: string; durationMonths: number | null } | null;
 };
 type CartLine = {
     productId: number; sku: string; name: string;
     qty: number; unitPrice: number; description: string;
+    /// Snapshotted at add-to-cart time so changing a product's GST later
+    /// doesn't retroactively shift prices in an active sale.
+    taxRate: number;
     mrpPaise?: number | null;
     warrantyLabel?: string | null;
 };
@@ -82,6 +92,29 @@ const EXTRA_METHODS: { value: ExtraMethod; label: string; icon: React.ReactNode 
 
 const fmtINR = (n: number) =>
     `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Text-input sanitisers — same shape as TradingVoucherPage's num/numSigned.
+// Project rule: no <input type="number">; we keep raw strings in state and
+// parse on submit / when computing totals.
+function numUnsigned(s: string): string {
+    return s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
+}
+function numSignedStr(s: string): string {
+    const sign = s.trimStart().startsWith("-") ? "-" : "";
+    return sign + numUnsigned(s);
+}
+function parseAmt(s: string): number {
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+}
+
+type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
+const newChargeRow = (): ChargeRow => ({
+    id: Math.random().toString(36).slice(2, 10),
+    accountId: null,
+    description: "",
+    amount: "",
+});
 
 const since = (iso: string | null) => {
     if (!iso) return "never";
@@ -119,6 +152,15 @@ export default function PosScreen() {
     const [submitting, setSubmitting] = useState(false);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
     const upiAmountRef = useRef<HTMLInputElement>(null);
+
+    // ── Cart-level adjustments (shipping / round-off / charges) ────────────
+    // Mirrors office SALE (TradingVoucherPage). Hidden behind a collapsible
+    // panel above the Total row so the default cart screen stays clean.
+    const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
+    const [shippingAmtStr, setShippingAmtStr] = useState("");
+    const [roundOffStr, setRoundOffStr] = useState("");
+    const [charges, setCharges] = useState<ChargeRow[]>([]);
+    const [chargeAccounts, setChargeAccounts] = useState<GlAccount[]>([]);
 
     // ── Active POS shift ────────────────────────────────────────────────────
     // Mount order:
@@ -208,6 +250,20 @@ export default function PosScreen() {
             .catch(() => { /* page is still useful without it */ });
     }, []);
 
+    // Chart-of-accounts for the "+ Add charge" picker. Same filter as
+    // TradingVoucherPage: exclude Cash-in-Hand and Bank Accounts (those are
+    // tender ledgers — POS routes them via the counter map, not via charges).
+    useEffect(() => {
+        axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
+            .then((r) => setChargeAccounts(
+                r.data.filter((a) =>
+                    a.group?.name !== ACCOUNT_GROUPS.CASH_IN_HAND &&
+                    a.group?.name !== ACCOUNT_GROUPS.BANK_ACCOUNTS,
+                ),
+            ))
+            .catch(() => setChargeAccounts([]));
+    }, []);
+
     // Ctrl/Cmd+Enter from anywhere → open checkout dialog (skip when modals are already open)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -234,11 +290,35 @@ export default function PosScreen() {
             .slice(0, 8);
     }, [productQuery, allProducts]);
 
-    const subtotal = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    // Per-line tax via the same calcLineTotals helper office SALE uses, so
+    // POS and SALE always compute identical GST. POS has no per-line discount
+    // today (only voucher-level loyalty %) so discountPct/Amt are 0 here.
+    const lineRows = cart.map((l) => {
+        const { taxAmount, amount } = calcLineTotals({
+            quantity:    l.qty,
+            rate:        l.unitPrice,
+            discountPct: 0,
+            discountAmt: 0,
+            taxRate:     l.taxRate,
+        });
+        return { amount, taxAmount, gross: l.qty * l.unitPrice };
+    });
+    const subtotal = lineRows.reduce((s, l) => s + l.gross, 0);   // pre-tax goods value
+    const tax      = lineRows.reduce((s, l) => s + l.taxAmount, 0);
     const discountPct = snapshot?.discountPct ?? 0;
     const discountAmount = (subtotal * discountPct) / 100;
-    const tax = 0; // placeholder — wire to GST engine later
-    const total = subtotal - discountAmount + tax;
+    const shippingAmt = Math.max(0, parseAmt(shippingAmtStr));
+    const roundOff = parseAmt(roundOffStr);  // signed
+    const chargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
+    // Single source of truth — matches /api/inventory/vouchers SALE math via
+    // calcVoucherTotals, so server-side validation cannot disagree.
+    const { totalAmount: total } = calcVoucherTotals(
+        lineRows,                  // each row's `amount` is tax-inclusive
+        shippingAmt,
+        discountAmount,
+        roundOff,
+        chargesNet,
+    );
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -274,7 +354,15 @@ export default function PosScreen() {
 
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
-        const defaultPrice = p.pricePaise ? p.pricePaise / 100 : 0;
+        // Product's pricePaise is treated as TAX-INCLUSIVE (matches the
+        // price tag / MRP-style retail expectations). We back-calculate the
+        // pre-tax rate here so the rest of the math (calcLineTotals) — which
+        // expects an exclusive rate — produces the right breakdown.
+        // Cashier sees Subtotal ₹100 + Tax ₹18 = Total ₹118 for an 18% item
+        // tagged at ₹118.
+        const inclusivePrice = p.pricePaise ? p.pricePaise / 100 : 0;
+        const taxRate = p.taxRate ?? 0;
+        const defaultPrice = taxRate > 0 ? inclusivePrice / (1 + taxRate / 100) : inclusivePrice;
         const warrantyLabel = p.warrantyTerm
             ? (p.warrantyTerm.durationMonths
                 ? (p.warrantyTerm.durationMonths >= 12
@@ -288,6 +376,7 @@ export default function PosScreen() {
             return [...prev, {
                 productId: p.id, sku: p.sku, name: p.name,
                 qty: 1, unitPrice: defaultPrice, description: "",
+                taxRate: p.taxRate ?? 0,
                 mrpPaise: p.mrpPaise ?? null,
                 warrantyLabel,
             }];
@@ -409,6 +498,7 @@ export default function PosScreen() {
                 return;
             }
 
+            const validCharges = charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
             const { data } = await axios.post<{ voucherId: number; voucherRef: string }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
@@ -419,14 +509,25 @@ export default function PosScreen() {
                     description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
                     quantity: l.qty,
                     unitPrice: l.unitPrice,
-                    taxRate: 0,
+                    taxRate: l.taxRate,
                 })),
                 payments: paymentsList,
+                shippingAmt,
+                roundOff,
+                charges: validCharges.map((c) => ({
+                    accountId:   c.accountId as number,
+                    description: c.description.trim() || undefined,
+                    amount:      parseAmt(c.amount),
+                })),
             });
             toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}`);
             setCart([]);
             setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
             setExtras([]);
+            setShippingAmtStr("");
+            setRoundOffStr("");
+            setCharges([]);
+            setAdjustmentsOpen(false);
             setCheckoutOpen(false);
             if (printAfter) {
                 const relayAvailable = await fetch("http://localhost:9191/health", { signal: AbortSignal.timeout(1000) })
@@ -719,6 +820,104 @@ export default function PosScreen() {
                             <Row label="Subtotal" value={fmtINR(subtotal)} />
                             {discountPct > 0 && <Row label={`Loyalty discount (${discountPct}%)`} value={`− ${fmtINR(discountAmount)}`} highlight />}
                             <Row label="Tax" value={fmtINR(tax)} muted />
+
+                            {/* ── Collapsible Adjustments panel ────────────────
+                                Shipping + Round-off + Charges. Mirrors office
+                                SALE (TradingVoucherPage). Hidden by default —
+                                expanded only when the cashier needs them. */}
+                            {(() => {
+                                const adjustmentsCount =
+                                    (shippingAmt > 0 ? 1 : 0) +
+                                    (Math.abs(roundOff) >= 0.005 ? 1 : 0) +
+                                    charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005).length;
+                                return (
+                                    <div className="rounded border border-border/60 bg-muted/30">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAdjustmentsOpen((o) => !o)}
+                                            className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                                        >
+                                            <span className="inline-flex items-center gap-1">
+                                                {adjustmentsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                Adjustments
+                                                {adjustmentsCount > 0 && (
+                                                    <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">{adjustmentsCount}</Badge>
+                                                )}
+                                            </span>
+                                            <span className="text-[10px] opacity-60">Shipping · Round-off · Charges</span>
+                                        </button>
+                                        {adjustmentsOpen && (
+                                            <div className="space-y-2 border-t border-border/60 px-2 py-2">
+                                                <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                                    <Label htmlFor="pos-shipping" className="text-xs text-muted-foreground">Shipping</Label>
+                                                    <Input
+                                                        id="pos-shipping"
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={shippingAmtStr}
+                                                        onChange={(e) => setShippingAmtStr(numUnsigned(e.target.value))}
+                                                        placeholder="0.00"
+                                                        className="h-7 w-28 text-right text-xs"
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                                    <Label htmlFor="pos-roundoff" className="text-xs text-muted-foreground">Round-off</Label>
+                                                    <Input
+                                                        id="pos-roundoff"
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={roundOffStr}
+                                                        onChange={(e) => setRoundOffStr(numSignedStr(e.target.value))}
+                                                        placeholder="0 (− to lower)"
+                                                        className="h-7 w-28 text-right text-xs"
+                                                        title="Positive raises bill, negative lowers it"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5 border-t border-border/60 pt-2">
+                                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Additional charges</p>
+                                                    {charges.map((c, idx) => (
+                                                        <div key={c.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-1.5">
+                                                            <GlAccountCombobox
+                                                                value={c.accountId}
+                                                                onChange={(acc) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, accountId: acc?.id ?? null } : r))}
+                                                                accounts={chargeAccounts}
+                                                                placeholder="Ledger (e.g. Packing Income)"
+                                                                className="h-7 text-xs"
+                                                            />
+                                                            <Input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={c.amount}
+                                                                onChange={(e) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, amount: numSignedStr(e.target.value) } : r))}
+                                                                placeholder="0 (− for opposite)"
+                                                                className="h-7 w-24 text-right text-xs"
+                                                                title="Positive = Cr (Income); Negative = Dr (Expense / reduces bill)"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                onClick={() => setCharges((rows) => rows.filter((_, i) => i !== idx))}
+                                                                title="Remove"
+                                                            >
+                                                                <X size={12} />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCharges((rows) => [...rows, newChargeRow()])}
+                                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                                    >
+                                                        + Add charge
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
                             <div className="flex items-center justify-between border-t border-border pt-2 text-lg font-semibold">
                                 <span>Total</span>
                                 <span>{fmtINR(total)}</span>

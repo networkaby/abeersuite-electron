@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
+import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 
 /**
  * GET /api/inventory/products/lookup
@@ -55,7 +56,14 @@ export async function GET(req: NextRequest) {
                 warrantyTerm: { select: { name: true, durationMonths: true } },
             },
         });
-        return NextResponse.json(product);
+        if (!product) return NextResponse.json(null);
+        const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
+        const resolved = taxByProduct.get(product.id);
+        return NextResponse.json({
+            ...product,
+            taxRate: resolved?.gstRate ?? null,
+            hsnCode: resolved?.hsnCode ?? null,
+        });
     }
 
     const products = await prisma.invProduct.findMany({
@@ -77,5 +85,22 @@ export async function GET(req: NextRequest) {
         },
     });
 
-    return NextResponse.json(products);
+    // Resolve effective GST + HSN per product via the cascade (product →
+    // group chain → org defaults). Batch-resolved in 3 queries so this stays
+    // cheap even with thousands of products. Snapshot consumers (POS cart,
+    // voucher line entry) read taxRate/hsnCode to seed their per-line values.
+    const { products: taxByProduct } = await resolveProductTaxBatch({
+        productIds: products.map((p) => p.id),
+    });
+
+    const enriched = products.map((p) => {
+        const r = taxByProduct.get(p.id);
+        return {
+            ...p,
+            taxRate: r?.gstRate ?? null,
+            hsnCode: r?.hsnCode ?? null,
+        };
+    });
+
+    return NextResponse.json(enriched);
 }

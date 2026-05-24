@@ -24,7 +24,7 @@ export async function GET(
             select: { id: true },
         });
 
-        const invVouchers = account
+        const rawVouchers = account
             ? await prisma.invVoucher.findMany({
                 where: {
                     deletedAt: null,
@@ -42,12 +42,54 @@ export async function GET(
                     status: true,
                     date: true,
                     totalAmount: true,
+                    accountId: true,
+                    journalEntryId: true,
+                    tenders:   { select: { accountId: true, amount: true } },
                     branch:    { select: { name: true } },
                     createdBy: { select: { name: true } },
                 },
                 orderBy: { date: "desc" },
             })
             : [];
+
+        // amountPaid = Σ(non-AR tenders on this voucher) + Σ(later RECEIPT
+        // VoucherAllocations against this voucher's JournalEntry). Mirrors
+        // the per-bill paid calc in src/modules/accountancy/lib/outstandings.ts
+        // (loadOpenBills) so customer Transactions and Receivables agree.
+        const jeIds = rawVouchers
+            .map((v) => v.journalEntryId)
+            .filter((x): x is number => x !== null);
+        const jeAllocs = jeIds.length > 0
+            ? await prisma.voucherAllocation.findMany({
+                where:  { targetType: "JOURNAL_ENTRY", targetId: { in: jeIds } },
+                select: { targetId: true, amount: true },
+            })
+            : [];
+        const paidByJe = jeAllocs.reduce<Record<number, number>>((acc, a) => {
+            acc[a.targetId] = (acc[a.targetId] ?? 0) + Number(a.amount);
+            return acc;
+        }, {});
+
+        const invVouchers = rawVouchers.map((v) => {
+            const arAccountId = v.accountId ?? account?.id ?? null;
+            const nonArTenderSum = v.tenders.reduce(
+                (s, t) => s + (t.accountId === arAccountId ? 0 : Number(t.amount)),
+                0,
+            );
+            const jePaid = v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0;
+            const amountPaid = nonArTenderSum + jePaid;
+            return {
+                id:         v.id,
+                reference:  v.reference,
+                type:       v.type,
+                status:     v.status,
+                date:       v.date,
+                totalAmount: v.totalAmount,
+                amountPaid: amountPaid.toFixed(2),
+                branch:     v.branch,
+                createdBy:  v.createdBy,
+            };
+        });
 
         return NextResponse.json({ invVouchers });
     } catch (e) {

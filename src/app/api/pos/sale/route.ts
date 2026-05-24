@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { invNextRef } from "@/modules/inventory/lib/stock";
+import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -48,6 +48,15 @@ const paymentSchema = z.object({
     reference: z.string().trim().max(120).optional(),
 });
 
+// Signed amount — positive raises the bill (Cr Income leg), negative lowers it
+// (Dr Expense leg). Mirrors office SALE charges. accountId is the GL account
+// the leg posts against.
+const chargeSchema = z.object({
+    accountId:   z.number().int().positive(),
+    description: z.string().trim().max(200).optional(),
+    amount:      z.number().refine((n) => Math.abs(n) >= 0.005, "Charge amount must be non-zero"),
+});
+
 const createSchema = z.object({
     accountId: z.number().int().positive(),                                       // customer AR account
     issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -55,6 +64,9 @@ const createSchema = z.object({
     notes:     z.string().trim().optional(),
     lines:     z.array(lineSchema).min(1, "At least one line item required"),
     payments:  z.array(paymentSchema).min(1, "At least one payment line required"),
+    shippingAmt: z.number().min(0).default(0),
+    roundOff:    z.number().default(0),  // signed
+    charges:     z.array(chargeSchema).default([]),
 });
 
 class GlPostFailedError extends Error {
@@ -151,9 +163,18 @@ export async function POST(req: Request) {
             amount:      lineSubtotal + lineTax,
         };
     });
-    const subtotal    = computedLines.reduce((s, l) => s + l.amount, 0);   // tax-inclusive (matches postInvVoucherToGl contract)
-    const taxAmount   = computedLines.reduce((s, l) => s + l.taxAmount, 0);
-    const totalAmount = subtotal; // no shipping / round-off on POS today
+    // Shipping / round-off / charges parity with office SALE — same single
+    // source of truth (calcVoucherTotals) so /api/inventory/vouchers and
+    // /api/pos/sale always agree on the math.
+    const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
+    const chargesNet = body.charges.reduce((s, c) => s + c.amount, 0);
+    const { subtotal, totalAmount } = calcVoucherTotals(
+        computedLines,
+        body.shippingAmt,
+        0,              // POS has no voucher-level discount today
+        body.roundOff,
+        chargesNet,
+    );
 
     const paymentTotal = body.payments.reduce((s, p) => s + p.amount, 0);
     if (Math.abs(paymentTotal - totalAmount) > 0.01) {
@@ -238,6 +259,8 @@ export async function POST(req: Request) {
                     partyId,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
+                    shippingAmt:    body.shippingAmt,
+                    roundOff:       body.roundOff,
                     subtotal,
                     taxAmount,
                     totalAmount,
@@ -261,8 +284,21 @@ export async function POST(req: Request) {
                             reference: t.reference,
                         })),
                     },
+                    ...(body.charges.length > 0 ? {
+                        charges: {
+                            create: body.charges.map((c) => ({
+                                accountId:   c.accountId,
+                                description: c.description?.trim() || null,
+                                amount:      c.amount,
+                            })),
+                        },
+                    } : {}),
                 },
-                include: { lines: true, tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } } },
+                include: {
+                    lines:   true,
+                    tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
+                    charges: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } },
+                },
             });
 
             // ── 2. GL post (Dr Till/Bank + (optional) Dr Customer AR / Cr Sales / Cr GST) ─
@@ -288,6 +324,12 @@ export async function POST(req: Request) {
                         accountId: t.accountId,
                         amount:    Number(t.amount),
                         account:   t.account,
+                    })),
+                    charges:     voucher.charges.map((c) => ({
+                        accountId:   c.accountId,
+                        amount:      Number(c.amount),
+                        description: c.description,
+                        account:     c.account,
                     })),
                     sellerStateCode,
                     buyerStateCode: sellerStateCode, // counter pickup → intra-state

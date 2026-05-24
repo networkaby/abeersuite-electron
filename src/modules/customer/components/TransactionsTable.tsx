@@ -21,7 +21,7 @@ export type TxInvVoucher = {
     status: string;
     date: string;
     totalAmount: string;
-    amountReceived: string;
+    amountPaid: string;
     branch:    { name: string };
     createdBy: { name: string };
 };
@@ -59,7 +59,7 @@ export function TransactionsTable({ invVouchers }: { invVouchers: TxInvVoucher[]
         type:       v.type.split("_").map((w: string) => w[0] + w.slice(1).toLowerCase()).join(" "),
         date:       v.date,
         total:      Number(v.totalAmount),
-        paid:       Number(v.amountReceived),
+        paid:       Number(v.amountPaid),
         status:     v.status,
         url:        editFormUrl(v.type, v.id),
         branchName: v.branch.name,
