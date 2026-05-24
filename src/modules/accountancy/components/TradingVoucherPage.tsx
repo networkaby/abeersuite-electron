@@ -697,6 +697,32 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         reference: "",
     });
     const [tenders, setTenders] = useState<TenderRow[]>([]);
+
+    // Additional GL legs ("+ Add Account" rows below the items table).
+    // Each row = one extra JE leg (e.g. Cr Packing Income, Dr Insurance
+    // Expense). Amount is signed at submit time: positive value uses the
+    // voucher type's body direction (Cr on sale, Dr on purchase),
+    // negative flips. The signed sum (`chargesNet`) is added to the
+    // voucher total via calcVoucherTotals.
+    type ChargeRow = {
+        id:          string;
+        accountId:   number | null;
+        account:     GlAccount | null;
+        description: string;
+        amount:      string;  // freeform, allows leading minus
+    };
+    const newCharge = (): ChargeRow => ({
+        id: `c${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+        accountId:   null,
+        account:     null,
+        description: "",
+        amount:      "",
+    });
+    const [charges, setCharges] = useState<ChargeRow[]>([]);
+    // All non-cash/bank ledgers operators might want to pick — Income /
+    // Expense / Liability ledgers (Packing Income, Service Charges,
+    // Insurance, Bank Charges, etc.). Loaded lazily on mount.
+    const [chargeAccounts, setChargeAccounts] = useState<GlAccount[]>([]);
     const [header, setHeader] = useState({
         date: today,
         description: "",
@@ -872,6 +898,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 reference: string | null;
                 account: { id: number; name: string; code: string | null };
             }[];
+            charges?: {
+                id: number;
+                accountId: number;
+                amount: string | number;
+                description: string | null;
+                account: { id: number; name: string; code: string | null };
+            }[];
         }>(`/api/inventory/vouchers/${editVoucherId}`)
             .then((r) => {
                 if (cancelled) return;
@@ -984,6 +1017,19 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                             reference: t.reference ?? "",
                         })));
                 }
+
+                // Hydrate additional-ledger rows from voucher.charges[].
+                // Amount is stored signed in the DB; the form keeps it
+                // signed (operator types positive or "-50" directly).
+                if (v.charges && v.charges.length > 0) {
+                    setCharges(v.charges.map((c) => ({
+                        id:          `cdb${c.id}`,
+                        accountId:   c.accountId,
+                        account:     { id: c.account.id, name: c.account.name, code: c.account.code ?? "" } as GlAccount,
+                        description: c.description ?? "",
+                        amount:      String(Number(c.amount)),
+                    })));
+                }
             })
             .catch(() => {
                 if (cancelled) return;
@@ -1008,6 +1054,16 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS,
                 );
                 setCashBankAccounts(cb);
+                // chargeAccounts = every non-party ledger that ISN'T a
+                // cash/bank til (those are tender accounts, picked above).
+                // Operators see Packing Income / Discount Allowed /
+                // Service Charges / Insurance etc. in the "+ Add Account"
+                // picker — anything they might want to surface as a
+                // separate JE leg on the voucher.
+                setChargeAccounts(r.data.filter((a) =>
+                    a.group?.name !== ACCOUNT_GROUPS.CASH_IN_HAND &&
+                    a.group?.name !== ACCOUNT_GROUPS.BANK_ACCOUNTS,
+                ));
                 if (isEditing) return;
                 // Default to "Cash-in-Hand" if available, else first hit.
                 if (!paymentAccount) {
@@ -1015,7 +1071,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     setPaymentAccount(cash ?? cb[0] ?? null);
                 }
             })
-            .catch(() => setCashBankAccounts([]));
+            .catch(() => { setCashBankAccounts([]); setChargeAccounts([]); });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -1292,7 +1348,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const shipping = parseFloat(header.shippingAmt) || 0;
     const overallDiscount = prefs.overallDiscount ? (parseFloat(header.discountAmt) || 0) : 0;
     const roundOff = enableRoundOff ? (parseFloat(header.roundOff) || 0) : 0;
-    const grandTotal = lineSubtotal - overallDiscount + shipping + roundOff;
+    // Signed sum of additional GL legs. Positive on a sale-side voucher
+    // means body-direction (Cr Income → bill UP); negative means opposite
+    // (Dr Expense → bill DOWN). See InvVoucherCharge in inventory.prisma.
+    const chargesNet = charges.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const grandTotal = lineSubtotal - overallDiscount + shipping + roundOff + chargesNet;
     // Sum of operator-typed tender rows. `received` (legacy single field)
     // is also tallied so the form keeps working until UI fully migrates.
     const tendersSum = tenders.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
@@ -1469,6 +1529,21 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         taxRate: tRate,
                     };
                 }),
+                // Additional GL legs (Layer 7e). The signed amount carries
+                // direction — postInvVoucherToGl uses positive = body
+                // direction (Cr on sale / Dr on purchase), negative = the
+                // opposite side with |amount|. Empty / invalid rows are
+                // filtered before send.
+                ...(() => {
+                    const validCharges = charges
+                        .filter((c) => c.accountId != null && Math.abs(parseFloat(c.amount) || 0) > 0.005)
+                        .map((c) => ({
+                            accountId:   c.accountId as number,
+                            amount:      parseFloat(c.amount),
+                            ...(c.description.trim() ? { description: c.description.trim() } : {}),
+                        }));
+                    return validCharges.length > 0 ? { charges: validCharges } : {};
+                })(),
                 // Multi-tender payload (Layer 7d). Built from the operator-
                 // typed rows plus an auto-appended Customer-AR row for any
                 // unsettled balance (only when a party is picked — walk-in
@@ -2130,6 +2205,61 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+                    )}
+
+                    {/* ── Additional ledger rows ("+ Add Account") ─────────────
+                        SALE / PURCHASE only. Each row is one extra JE leg —
+                        positive amount = body direction (Cr on sale / Dr on
+                        purchase, e.g. Packing Income); negative amount =
+                        opposite direction (e.g. -50 on Discount Allowed =
+                        Dr Discount Allowed 50, reducing the bill). The
+                        signed sum flows into Total via chargesNet. */}
+                    {copy.showPaymentBlock && (
+                        <div className="px-6 py-3 border-t border-border space-y-1.5">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Additional charges / income</p>
+                            {charges.map((c, idx) => (
+                                <div key={c.id} className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 items-center">
+                                    <GlAccountCombobox
+                                        value={c.accountId}
+                                        onChange={(acc) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, account: acc, accountId: acc?.id ?? null } : r))}
+                                        accounts={chargeAccounts}
+                                        placeholder="Ledger (e.g. Packing Income)"
+                                        className="h-8 text-xs"
+                                    />
+                                    <Input
+                                        type="text"
+                                        value={c.description}
+                                        onChange={(e) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, description: e.target.value } : r))}
+                                        placeholder="Description (optional)"
+                                        className="h-8 text-xs"
+                                    />
+                                    <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={c.amount}
+                                        onChange={(e) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, amount: numSigned(e.target.value) } : r))}
+                                        className="h-8 w-28 text-xs text-right"
+                                        placeholder="0 (− for opposite)"
+                                        title="Positive = body direction (Cr on sale / Dr on purchase). Negative = opposite side."
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setCharges((rows) => rows.filter((_, i) => i !== idx))}
+                                        aria-label="Remove charge row"
+                                        className="h-8 w-8 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={() => setCharges((rows) => [...rows, newCharge()])}
+                                className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                            >
+                                + Add Account
+                            </button>
                         </div>
                     )}
 
