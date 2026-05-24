@@ -896,6 +896,9 @@ async function main() {
     await upsertLedger("Warranty Revenue",        "Direct Incomes",    "CREDIT", "4200");
     await upsertLedger("Other Revenue",           "Indirect Incomes",  "CREDIT", "4900");
     await upsertLedger("Discount Received",       "Indirect Incomes",  "CREDIT");
+    // Outward freight collected from customers on the sale invoice.
+    // Separated from Sales A/c so the P&L breaks out delivery revenue.
+    await upsertLedger("Shipping Income",         "Indirect Incomes",  "CREDIT");
     await upsertLedger("Round Off",               "Indirect Incomes",  "CREDIT");
     await upsertLedger("Interest Received",       "Indirect Incomes",  "CREDIT");
     await upsertLedger("Commission Received",     "Indirect Incomes",  "CREDIT");

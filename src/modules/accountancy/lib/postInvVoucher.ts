@@ -61,6 +61,14 @@ const NAMES = {
     GST_INPUT_SGST:   ["SGST Input", "Input SGST", "SGST"],
     GST_INPUT_IGST:   ["IGST Input", "Input IGST", "IGST", "GST Input", "Input GST", "Input Tax"],
     ROUND_OFF:        ["Round Off", "Rounded Off", "Round-Off"],
+    // Outward freight on a sale invoice → Cr Shipping Income.
+    // Inward freight on a purchase invoice → Dr Freight Charges.
+    SHIPPING_INCOME:  ["Shipping Income", "Freight Income", "Carriage Outward", "Delivery Charges Income"],
+    SHIPPING_EXPENSE: ["Freight Charges", "Carriage Inward", "Inward Freight"],
+    // Voucher-level (overall) discount given on a sale → Dr Discount Allowed.
+    // Voucher-level discount received on a purchase → Cr Discount Received.
+    DISCOUNT_ALLOWED:  ["Discount Allowed", "Discount Given", "Trade Discount Allowed"],
+    DISCOUNT_RECEIVED: ["Discount Received", "Trade Discount Received"],
     SUNDRY_DEB:       [ACCOUNT_GROUPS.SUNDRY_DEBTORS],   // ledger fallback (rare)
     SUNDRY_CRED:      [ACCOUNT_GROUPS.SUNDRY_CREDITORS], // ledger fallback (rare)
 } as const;
@@ -130,6 +138,12 @@ export type PostVoucherInput = {
         shippingAmt: Prisma.Decimal | number;
         roundOff:    Prisma.Decimal | number;
         totalAmount: Prisma.Decimal | number;
+        /// Voucher-level overall discount (₹). Posts to "Discount Allowed"
+        /// on sale-side (Dr) or "Discount Received" on purchase-side (Cr).
+        /// Folds into the body ledger if the dedicated ledger isn't seeded.
+        /// Per-line discount is already netted into line.amount and never
+        /// reaches this helper as a separate field.
+        discountAmt?: Prisma.Decimal | number | null;
         /// Cash received upfront on a CREDIT sale / paid upfront on a CREDIT
         /// purchase. When > 0 (and `paymentAccount` set) the JE splits the
         /// counter side into two debits / credits so the cash leg actually
@@ -200,13 +214,16 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     const subtotal     = toNumber(voucher.subtotal);
     const taxAmount    = toNumber(voucher.taxAmount);
     const shippingAmt  = toNumber(voucher.shippingAmt);
+    const discountAmt  = Math.max(0, toNumber(voucher.discountAmt ?? 0));
     const roundOff     = toNumber(voucher.roundOff);
     const totalAmount  = toNumber(voucher.totalAmount);
     // `voucher.subtotal` from calcVoucherTotals is tax-INCLUSIVE (sum of
-    // line.amount, where line.amount = taxable + line tax). The body ledger
-    // takes goods only — strip the line-level tax out and add shipping so
-    // body + tax + roundOff balances against totalAmount.
-    const goodsAmount  = subtotal - taxAmount + shippingAmt;
+    // line.amount, where line.amount = taxable + line tax). Pure goods =
+    // subtotal − taxAmount. Shipping and voucher-level discount used to
+    // be folded into the body (Sales/Purchase) credit/debit; since
+    // 2026-05-24 they're posted as their own GL legs — see Shipping Income
+    // / Discount Allowed / Discount Received resolution below.
+    const goodsAmount  = subtotal - taxAmount;
 
     if (totalAmount <= 0) {
         return { journalEntryId: null, notes: ["voucher total is zero — skipping GL post"] };
@@ -338,19 +355,50 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         }
     }
 
+    // Shipping leg ledger (optional). Outward shipping on a sale-side
+    // voucher → Shipping Income. Inward freight on a purchase-side voucher
+    // → Freight Charges. Falls back to folding into body when missing so
+    // legacy installs that haven't seeded the ledger still post correctly.
+    let shippingLedger: LedgerLite | null = null;
+    if (shippingAmt > 0.005) {
+        shippingLedger = await findLedgerByNames(
+            tx, isDebtorParty ? NAMES.SHIPPING_INCOME : NAMES.SHIPPING_EXPENSE,
+        );
+        if (!shippingLedger) {
+            notes.push(`no ${isDebtorParty ? "Shipping Income" : "Freight Charges"} ledger — shipping of ${shippingAmt.toFixed(2)} folded into ${bodyLedger.name}`);
+        }
+    }
+
+    // Voucher-level discount leg (optional). Discount given on a sale →
+    // Discount Allowed (Dr — expense). Discount received on a purchase →
+    // Discount Received (Cr — income). Falls back to reducing the body
+    // line so the JE still balances on legacy installs.
+    let discountLedger: LedgerLite | null = null;
+    if (discountAmt > 0.005) {
+        discountLedger = await findLedgerByNames(
+            tx, isDebtorParty ? NAMES.DISCOUNT_ALLOWED : NAMES.DISCOUNT_RECEIVED,
+        );
+        if (!discountLedger) {
+            notes.push(`no ${isDebtorParty ? "Discount Allowed" : "Discount Received"} ledger — discount of ${discountAmt.toFixed(2)} folded into ${bodyLedger.name}`);
+        }
+    }
+
     // ── Build balanced JE lines ──────────────────────────────────────────
     // For a SALE: counter side debits the party; body side credits sales/tax/round-off.
     // For a PURCHASE: counter side credits the party; body side debits purchase/tax/round-off.
     const counterType: "DEBIT" | "CREDIT" = isSale ? "DEBIT" : "CREDIT";
     const bodyType:    "DEBIT" | "CREDIT" = isSale ? "CREDIT" : "DEBIT";
 
-    // Body-side amounts (split where possible)
+    // Body-side amounts (split where possible). Tax / shipping / discount
+    // each fall back to folding into body when their dedicated ledger
+    // isn't seeded. Shipping is same direction as body (+); discount is
+    // opposite direction (so it gets subtracted from body when folded).
     let bodyAmount = goodsAmount;
     let rndLineAmt = roundOff;
-    // Any tax amount that couldn't find its CGST/SGST/IGST ledger gets
-    // folded into the body so the JE still balances.
-    if (unledgered > 0)  { bodyAmount += unledgered; }
-    if (!roundOffLedger) { bodyAmount += rndLineAmt; rndLineAmt = 0; }
+    if (unledgered > 0)     { bodyAmount += unledgered; }
+    if (!shippingLedger)    { bodyAmount += shippingAmt; }
+    if (!discountLedger)    { bodyAmount -= discountAmt; }
+    if (!roundOffLedger)    { bodyAmount += rndLineAmt; rndLineAmt = 0; }
 
     // Partial-tender split — CREDIT sale / CREDIT purchase with cash
     // received / paid upfront. The counter side (party AR / AP) takes the
@@ -413,6 +461,27 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
             description: leg.label,
         });
     }
+    if (shippingLedger && shippingAmt > 0) {
+        // Same direction as body — credits Shipping Income on sale,
+        // debits Freight Charges on purchase. Returns flip via bodyType.
+        lines.push({
+            accountId:   shippingLedger.id,
+            type:        bodyType,
+            amount:      shippingAmt,
+            description: shippingLedger.name,
+        });
+    }
+    if (discountLedger && discountAmt > 0) {
+        // Opposite direction to body — debits Discount Allowed on sale
+        // (it's an expense that offsets revenue), credits Discount
+        // Received on purchase. Returns flip via counterType.
+        lines.push({
+            accountId:   discountLedger.id,
+            type:        counterType,
+            amount:      discountAmt,
+            description: discountLedger.name,
+        });
+    }
     if (roundOffLedger && rndLineAmt !== 0) {
         // Positive roundOff → income (Cr) on sale, expense (Dr) on purchase. Negative → mirror.
         const positiveSide = isSale ? "CREDIT" : "DEBIT";
@@ -459,7 +528,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
 
     // Update Account.balance for each line
     const ledgerById = new Map<number, LedgerLite>();
-    for (const led of [counterLedger, bodyLedger, roundOffLedger, upfrontLedger]) {
+    for (const led of [counterLedger, bodyLedger, roundOffLedger, upfrontLedger, shippingLedger, discountLedger]) {
         if (led) ledgerById.set(led.id, led);
     }
     for (const leg of taxLegs) {
