@@ -75,7 +75,7 @@ model JournalLine {
 
 // ── Unified accounting voucher (Contra / Payment / Receipt / Credit Note / Debit Note) ───────────
 // Each row's lines must sum to zero (Σ debits = Σ credits). On POST the helper
-// in src/modules/tally/lib/voucherLifecycle.ts creates a JournalEntry with the
+// in src/modules/accountancy/lib/voucherLifecycle.ts creates a JournalEntry with the
 // same lines so the GL stays consistent with traditional double-entry tooling.
 model Voucher {
   id             Int           @id @default(autoincrement())

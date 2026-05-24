@@ -101,24 +101,3 @@ export async function nextRefFromSeries(
     return assembleReference(series, userId);
 }
 
-/**
- * @deprecated Use nextRefFromSeries() instead.
- * Generate sequential reference numbers: e.g. JE-2026-0001
- */
-export async function nextRef(
-    tx: { journalEntry: { count: (a: object) => Promise<number> } } | { invoice: { count: (a: object) => Promise<number> } },
-    model: "journalEntry" | "invoice",
-    prefix: string,
-): Promise<string> {
-    const year = new Date().getFullYear();
-    const startsWith = `${prefix}-${year}-`;
-    const count =
-        model === "journalEntry"
-            ? await (tx as { journalEntry: { count: (a: object) => Promise<number> } }).journalEntry.count({
-                where: { reference: { startsWith } },
-            })
-            : await (tx as { invoice: { count: (a: object) => Promise<number> } }).invoice.count({
-                where: { number: { startsWith } },
-            });
-    return `${startsWith}${String(count + 1).padStart(4, "0")}`;
-}

@@ -56,7 +56,7 @@
 - `src/modules/admin/components/AdminNav.tsx` — in-section nav for all `/office/admin/*` pages (see Layout above). Mirrors the voucher-registers pattern (`VouchersRegistersNav`).
 - `ADMIN_NAV` in `src/utils/constants.ts` — single source of truth for admin tab labels, icons, hrefs, and permission keys consumed by `AdminNav` and the office sidebar.
 
-> `OrgDefaultsForm` now lives in [settings.md](./settings.md) (`src/modules/settings/components/OrgDefaultsForm.tsx`).
+> The `OrgDefaultsForm` UI moved to the [Settings module](./settings.md) — see `src/modules/settings/components/OrgDefaultsForm.tsx`.
 
 - **Org chart tab views** (`/office/admin/org-chart` — 5 tabs; People Chart and Levels tabs removed):
   - `StructureTree.tsx` — Tab "Structure": 4-level CSS-connector hierarchy (Executive Council → Branch → Dept → Position) built from `OrgStructure`. Renders `PositionCard`, `DeptGroup`, `BranchNode`, `OrgWideRow` with `VLine`/`HBar` primitives.
