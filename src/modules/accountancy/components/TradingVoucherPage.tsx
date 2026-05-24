@@ -1066,10 +1066,15 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 ));
                 if (isEditing) return;
                 // Default to "Cash-in-Hand" if available, else first hit.
+                const cash = cb.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND) ?? cb[0] ?? null;
                 if (!paymentAccount) {
-                    const cash = cb.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND);
-                    setPaymentAccount(cash ?? cb[0] ?? null);
+                    setPaymentAccount(cash);
                 }
+                // Seed one ready-to-fill Cash tender row so the operator
+                // doesn't have to click "+ More payment option" for the
+                // common single-tender path. Empty amount — the auto
+                // Balance row picks up the remainder until they type.
+                setTenders((rows) => rows.length === 0 ? [newTender(cash)] : rows);
             })
             .catch(() => { setCashBankAccounts([]); setChargeAccounts([]); });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1408,8 +1413,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         setWalkInPhone("");
         setPartySnapshot({ balance: 0, address: null });
         // Re-select "Cash-in-Hand" default so the picker is ready for the next sale.
-        const cash = cashBankAccounts.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND);
-        setPaymentAccount(cash ?? cashBankAccounts[0] ?? null);
+        const cash = cashBankAccounts.find((a) => a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND) ?? cashBankAccounts[0] ?? null;
+        setPaymentAccount(cash);
+        setTenders([newTender(cash)]);
         partyPickerRef.current?.clear();
         partyPickerRef.current?.focus();
         const t = new Date().toISOString().slice(0, 10);
