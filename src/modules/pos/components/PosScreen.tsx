@@ -796,14 +796,27 @@ export default function PosScreen() {
                                                         />
                                                         <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, l.qty + 1)}><Plus size={12} /></Button>
                                                     </div>
-                                                    <Input
-                                                        value={l.unitPrice || ""}
-                                                        onChange={(e) => setPrice(l.productId, Number(e.target.value) || 0)}
-                                                        onKeyDown={enterToNextProduct}
-                                                        placeholder="₹ price"
-                                                        className="h-8 text-right"
-                                                        inputMode="decimal"
-                                                    />
+                                                    {/* Price column shows the TAX-INCLUSIVE price (matches the
+                                                        price tag). Storage stays pre-tax — we back-calculate on
+                                                        every edit so calcLineTotals keeps receiving an exclusive
+                                                        rate. For tax-free items (taxRate=0) the two values match. */}
+                                                    {(() => {
+                                                        const factor = 1 + (l.taxRate ?? 0) / 100;
+                                                        const inclusive = l.unitPrice * factor;
+                                                        return (
+                                                            <Input
+                                                                value={inclusive ? inclusive.toFixed(2) : ""}
+                                                                onChange={(e) => {
+                                                                    const typed = Number(e.target.value) || 0;
+                                                                    setPrice(l.productId, typed / factor);
+                                                                }}
+                                                                onKeyDown={enterToNextProduct}
+                                                                placeholder="₹ price"
+                                                                className="h-8 text-right"
+                                                                inputMode="decimal"
+                                                            />
+                                                        );
+                                                    })()}
                                                     <Button variant="ghost" size="icon-sm" onClick={() => setQty(l.productId, 0)} title="Remove">
                                                         <Trash2 size={12} className="text-destructive" />
                                                     </Button>
@@ -817,9 +830,19 @@ export default function PosScreen() {
 
                         {/* Totals + checkout */}
                         <div className="shrink-0 space-y-2 border-t border-border p-4">
-                            <Row label="Subtotal" value={fmtINR(subtotal)} />
+                            {/* Subtotal is the tax-INCLUSIVE cart value (price-tag-style).
+                                When the operator hasn't added shipping / round-off / charges,
+                                Subtotal equals Total. The CGST/SGST split underneath is
+                                informational — cashiers and printed receipts show the breakdown
+                                but the math has already happened in the per-line inclusive price. */}
+                            <Row label="Subtotal" value={fmtINR(subtotal + tax)} />
                             {discountPct > 0 && <Row label={`Loyalty discount (${discountPct}%)`} value={`− ${fmtINR(discountAmount)}`} highlight />}
-                            <Row label="Tax" value={fmtINR(tax)} muted />
+                            {tax > 0.005 && (
+                                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                    <span>Tax (incl.)</span>
+                                    <span className="tabular-nums">SGST {fmtINR(tax / 2)} + CGST {fmtINR(tax / 2)} = {fmtINR(tax)}</span>
+                                </div>
+                            )}
 
                             {/* ── Collapsible Adjustments panel ────────────────
                                 Shipping + Round-off + Charges. Mirrors office

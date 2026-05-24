@@ -1142,10 +1142,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         lineTax: true,
         lineDescription: true,
         overallDiscount: true,
-        rateInclTax: false,
+        // Retail-style default: product MRP is treated as tax-inclusive.
+        // Operator can flip via the column-prefs menu and the choice persists.
+        rateInclTax: true,
     };
-    // Bumped to v2 when rateInclTax was added — clears stale v1 cache.
-    const PREFS_KEY = "saleVoucherPage.columnPrefs.v2";
+    // v3: rateInclTax flipped to true by default (2026-05-25).
+    const PREFS_KEY = "saleVoucherPage.columnPrefs.v3";
     const [prefs, setPrefs] = useState<ColumnPrefs>(DEFAULT_PREFS);
     const prefsRef = useRef<ColumnPrefs>(DEFAULT_PREFS);
     useEffect(() => { prefsRef.current = prefs; });
