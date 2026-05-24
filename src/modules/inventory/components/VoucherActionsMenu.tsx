@@ -61,6 +61,10 @@ export function voucherUrl(type: string, id: number): string | null {
 // transparent, so the actual paths use the plural directory names.
 const EDIT_FORM_URLS: Record<string, string> = {
     SALE:            "/vouchers/sales/new",
+    // POS sales edit through the SALES form — POS is a sale flavour, same
+    // party / lines / tax / totals shape; the POS register at /vouchers/pos
+    // is for *ringing up* new counter sales, not editing existing ones.
+    POS:             "/vouchers/sales/new",
     PURCHASE:        "/vouchers/purchases/new",
     SALE_RETURN:     "/vouchers/sale-returns/new",
     PURCHASE_RETURN: "/vouchers/purchase-returns/new",

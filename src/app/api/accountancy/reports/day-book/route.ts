@@ -8,14 +8,14 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 // Surfaced kinds in the Day Book — the union of inventory-voucher origins
-// (Sale/Purchase/Estimate/Sale Return/Purchase Return), GL voucher types,
-// and stand-alone JEs. "Sale" includes POS (same AR/Revenue shape). The
-// legacy "Invoice" kind was retired with the Invoice → InvVoucher
-// consolidation (Layer 3a, 2026-05-24).
-type Kind = "All" | "Sale" | "Purchase" | "Estimate" | "Sale Return" | "Purchase Return"
+// (Sale/POS/Purchase/Estimate/Sale Return/Purchase Return), GL voucher
+// types, and stand-alone JEs. POS is split out from Sale (post-2026-05-24)
+// so cashiers and managers can tell counter sales apart from office
+// sales at a glance.
+type Kind = "All" | "Sale" | "POS" | "Purchase" | "Estimate" | "Sale Return" | "Purchase Return"
     | "Contra" | "Payment" | "Receipt" | "Credit Note" | "Debit Note"
     | "Journal";
-const KINDS: Kind[] = ["All", "Sale", "Purchase", "Estimate", "Sale Return", "Purchase Return",
+const KINDS: Kind[] = ["All", "Sale", "POS", "Purchase", "Estimate", "Sale Return", "Purchase Return",
     "Contra", "Payment", "Receipt", "Credit Note", "Debit Note", "Journal"];
 
 // GET /api/accountancy/reports/day-book?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=50&search=...&kind=Sale
@@ -40,12 +40,14 @@ export async function GET(req: Request) {
     };
     let kindIdsFilter: { id: { in: number[] } } | { id: { notIn: number[] } } | undefined;
     if (kind !== "All") {
-        if (kind === "Sale" || kind === "Purchase" || kind === "Estimate" || kind === "Sale Return" || kind === "Purchase Return") {
-            // Each Day Book kind maps to one or more InvVoucher.type values.
-            // POS shares the Sale bucket — same AR/Revenue JE shape, only
-            // counter-side settlement differs.
+        if (kind === "Sale" || kind === "POS" || kind === "Purchase" || kind === "Estimate" || kind === "Sale Return" || kind === "Purchase Return") {
+            // Each Day Book kind maps to exactly one InvVoucher.type value.
+            // Sale and POS are split so the counter flow is distinguishable
+            // from the office sale flow even though both post the same
+            // AR/Revenue JE shape.
             const types =
-                kind === "Sale"            ? (["SALE", "POS"] as const) :
+                kind === "Sale"            ? (["SALE"] as const) :
+                kind === "POS"             ? (["POS"] as const) :
                 kind === "Purchase"        ? (["PURCHASE"] as const) :
                 kind === "Estimate"        ? (["ESTIMATE"] as const) :
                 kind === "Sale Return"     ? (["SALE_RETURN"] as const) :
@@ -180,6 +182,7 @@ export async function GET(req: Request) {
             const gl     = glMap.get(e.id);
             const kind: Kind =
                 source?.kind === "sale"            ? "Sale"
+              : source?.kind === "pos"             ? "POS"
               : source?.kind === "purchase"        ? "Purchase"
               : source?.kind === "estimate"        ? "Estimate"
               : source?.kind === "sale-return"     ? "Sale Return"

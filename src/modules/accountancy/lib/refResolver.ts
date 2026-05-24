@@ -9,6 +9,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 export type SourceDoc =
     | { kind: "sale";            id: number; reference: string; url: string }
+    | { kind: "pos";             id: number; reference: string; url: string }
     | { kind: "purchase";        id: number; reference: string; url: string }
     | { kind: "estimate";        id: number; reference: string; url: string }
     | { kind: "sale-return";     id: number; reference: string; url: string }
@@ -34,12 +35,13 @@ const VOUCHER_SEG: Record<InvVoucherType, string> = {
     PURCHASE_ORDER:   "purchase-orders",
 };
 
-// All voucher editors live under /vouchers/<seg>/...  GL editors (POS,
-// Manufacturing Journal, etc.) have a dedicated `/[id]` page; the four
-// trading kinds (SALE / PURCHASE / SALE_RETURN / PURCHASE_RETURN) and
-// ESTIMATE re-use their `/new` page with a `?voucherId=<id>` query param
-// because there is no separate `/[id]` route (see DayBookActionsMenu's
-// `newFormUrl` comment for the canonical pattern).
+// All voucher editors live under /vouchers/<seg>/... Trading kinds — SALE,
+// PURCHASE, SALE_RETURN, PURCHASE_RETURN, ESTIMATE — re-use their `/new`
+// page with a `?voucherId=<id>` query param because there is no separate
+// `/[id]` route (see DayBookActionsMenu's `newFormUrl` comment for the
+// canonical pattern). POS sales are sale-shape: they edit via the SALES
+// form (`/vouchers/sales/new?voucherId=…`) so the operator gets the same
+// line/tax/totals UI the SALE form already provides.
 const VOUCHER_BASE = "/vouchers";
 
 const EDIT_VIA_NEW_QUERY: ReadonlySet<InvVoucherType> = new Set([
@@ -47,6 +49,11 @@ const EDIT_VIA_NEW_QUERY: ReadonlySet<InvVoucherType> = new Set([
 ]);
 
 function buildEditUrl(type: InvVoucherType, id: number): string {
+    // POS edits route to the SALE form — POS is a sale flavour and the
+    // sales form handles the shape (party / lines / GST / totals) without
+    // change. The POS register at /vouchers/pos is for *ringing up new*
+    // counter sales, not editing existing ones.
+    if (type === "POS") return `${VOUCHER_BASE}/${VOUCHER_SEG.SALE}/new?voucherId=${id}`;
     const seg = VOUCHER_SEG[type];
     return EDIT_VIA_NEW_QUERY.has(type)
         ? `${VOUCHER_BASE}/${seg}/new?voucherId=${id}`
@@ -59,8 +66,8 @@ function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
         case "ESTIMATE":        return "estimate";
         case "SALE_RETURN":     return "sale-return";
         case "PURCHASE_RETURN": return "purchase-return";
-        case "SALE":
-        case "POS":             return "sale";
+        case "SALE":            return "sale";
+        case "POS":             return "pos";
         default:                return null; // GRN/CHALLAN/etc. don't surface in the day book
     }
 }
