@@ -142,21 +142,25 @@ GL for all tiers:
 - **CASH refund**: `Dr Sales Revenue / Cr Counter Till` — requires OPEN shift; cash leaves the till.
 - **Credit note**: `Dr Sales Revenue / Cr Customer AR` — credit sits as advance until next sale draws it down.
 
-Stock: `SALE_RETURN InvVoucher` + `InvStockLedger` IN row per product. `InvProductBranch.stock` + `InvProduct.stock` increment. `refVoucherId` links back to original SALE voucher (null for lost-invoice path).
+Implementation: SALE_RETURN `InvVoucher` carries one tender row pointing at the refund account — till for CASH refund (money leaves the drawer), customer AR for CREDIT note (sits as customer credit). `postInvVoucherToGl` handles the SALE_RETURN direction: body Dr Sales Returns + Dr GST reversal, counter Cr <tender>. `refVoucherId` links back to the original SALE voucher (null for the lost-invoice path).
+
+Stock: `InvStockLedger` IN row per product. `InvProductBranch.stock` + `InvProduct.stock` increment.
 
 Walk-ins (no customer account) are blocked on all tiers — `customerAccountId` is required.
 
-**Schema additions for return tracing:**
-- `Invoice.returnOfId Int?` — self-FK; credit note invoice → original sale invoice.
-- `InvoiceLine.productId Int?` — stored by POS sale so the return can match stock.
+## POS sale shape (Layer 7g, 2026-05-24)
+
+POS sale = a single `InvVoucher type=POS` with one `InvVoucherTender` row per tender (Cash + UPI + Card + Customer AR for any unsettled balance). Posts ONE balanced JE per voucher — no separate Receipt voucher, no `VoucherAllocation`. Same shape as office SALE.
+
+`postInvVoucherToGl` reads `voucher.tenders[]` directly: one Dr leg per tender, plus Cr Sales / GST / (optional Cr Shipping Income) / (optional Dr Discount Allowed for voucher-level discount). Today the POS form enforces `Σ tenders == totalAmount` (no partial), so the AR-tender row is only created when a hypothetical credit POS sale leaves a balance.
 
 ## Reusable helpers — DO NOT duplicate
 
 | Helper | File | Purpose |
 |---|---|---|
 | `postContra(tx, { date, narration, lines, userId })` | `src/modules/accountancy/lib/postContra.ts` | Atomic Contra voucher + JE + balance deltas. Used for vault top-up + vault sweep. |
-| `postPosReceiptJe(tx, { invoiceId, ... })` | `src/modules/pos/lib/postPosReceiptJe.ts` | Settles AR on POS cash sales. |
-| `computeExpectedCash`, `computeVariance`, `sumPaise` | `src/modules/pos/lib/shiftMath.ts` | BigInt paise arithmetic for shift close. |
+| `postInvVoucherToGl(tx, { voucherId, voucher, userId })` | `src/modules/accountancy/lib/postInvVoucher.ts` | Single GL bridge for every trading voucher (SALE / POS / PURCHASE / SALE_RETURN / PURCHASE_RETURN). Reads `voucher.tenders[]` + `voucher.charges[]`. |
+| `computeExpectedCash`, `computeVariance`, `sumPaise`, `sumShiftCashSalesPaise` | `src/modules/pos/lib/shiftMath.ts` | BigInt paise arithmetic for shift close. `sumShiftCashSalesPaise` sums BOTH POS tender rows on the till AND office RECEIPT voucher lines in the shift window. |
 | `PosReturnDialog` | `src/modules/pos/components/PosReturnDialog.tsx` | Three-tab sale return dialog (by invoice #, by customer, lost invoice). Mount inside `PosScreen`; pass `open`, `onOpenChange`, `onDone`. |
 
 ## Seeds
@@ -184,4 +188,4 @@ Walk-ins (no customer account) are blocked on all tiers — `customerAccountId` 
 - Multiple partial-return guard: currently caps per-line at original qty but does not subtract qty already returned in prior return invoices.
 - Exchange as one atomic transaction (currently: issue credit note, then start new sale that draws down the advance).
 
-_Last updated: 2026-05-23 — shift report (`/office/pos/shifts`) date pickers migrated to `TallyDateInput` (dd/mm/yyyy + Tally shorthand parsing); no behaviour change. Previously (2026-05-21): `postPosReceiptJe` plus the shift-close + handover variance JEs now mint their reference through the `GL_POSTING` VoucherSeries (`GL-…` prefix) instead of the legacy `JE-…` series; user-facing behaviour unchanged. See [accountancy.md → Two engines](./accountancy.md) for the rationale._
+_Last updated: 2026-05-24 — POS sale collapsed to a single InvVoucher (type=POS) carrying its own tender rows; the separate Receipt voucher + VoucherAllocation detour is gone. `postPosReceiptJe` helper deleted; all GL posting now goes through `postInvVoucherToGl`. Same Day Book shape per sale (Sale row + per-tender Dr lines on the same JE), but one fewer voucher per cash POS. Sale-return refund target moved from `paymentMode`/`paymentAccountId` columns onto a `InvVoucherTender` row whose accountId is till (CASH) or customer AR (CREDIT)._

@@ -34,7 +34,7 @@ Individual buttons inside briefings use existing module permissions (e.g. `pos:s
   - `"P2"` → Customer Support (helpdesk / customer problem)
   - `"P4"` → Internal Management (admin request, e.g. pay electricity bill, order from vendor)
 - `PosShift` (`pos.prisma`) — counted for "open shifts" in ShowroomBriefing.
-- `Invoice` (`finance.prisma`) — counted/summed for today's counter sales in ShowroomBriefing. POS invoices = `{ shopOrderId: null, ticketId: null, status: not VOID, deletedAt: null }`.
+- `InvVoucher` (`inventory.prisma`) — counted/summed for today's counter sales in ShowroomBriefing. POS bills = `{ type: "POS", status: "POSTED", date >= startOfToday }` (Layer 3d, 2026-05-24 — switched off the legacy `Invoice` filter when that table was retired).
 - `Ticket` (`repair.prisma`) — counted in RepairBriefing + DespatchBriefing.
 
 ## Department → Briefing mapping
@@ -69,7 +69,7 @@ Users with multiple departments see all their briefings stacked. Users with zero
 
 - **CrmLead as generic pipeline item**: the same `CrmLead` model works for P2, P4, and P6. It has a `pipelineId` FK to `Pipeline`. The `POST /api/quick-log` uses `requireAuth()` (not `requirePermission(CRM_MANAGE)`) because this intake is staff-universal. Validation in the route was unified onto the shared zod-error pattern in commit `496f01d` (no public API change).
 - **Department.id as stable key**: departments use stable IDs (`DEP-REPAIR`, `DEP-SALES`, etc.) — no `slug` field was added. The home resolver does a `switch(id)` on these string values. Do not change department IDs after data is in production.
-- **ShowroomBriefing POS filter**: walk-in (POS) invoices = Invoice with `shopOrderId: null, ticketId: null, status != "VOID", deletedAt: null`. If a separate POS invoice model is ever added, update `ShowroomBriefing`.
+- **ShowroomBriefing POS filter**: walk-in (POS) bills = `InvVoucher` with `type=POS`, `status=POSTED`, `date >= startOfToday`. Cash sales sum derives from the bill's non-AR tender rows via the same shape used by `sumShiftCashSalesPaise` (see [pos.md](./pos.md)).
 - **Repair full dashboard**: the full repair module dashboard (TechnicianDashboard, FrontDeskDashboard, etc.) remains at `/office/repairing/`. The home page shows a lightweight briefing (counts + links) to avoid duplicating heavy data-fetch logic.
 
 ## Out of scope / deferred
@@ -77,4 +77,4 @@ Users with multiple departments see all their briefings stacked. Users with zero
 - Multi-department tab strip (planned): when a user has multiple departments, currently all briefings are stacked vertically. A tab strip allowing switching between them is deferred.
 - Position-level button permissions within briefings: currently `hasPermission()` guards are on individual module pages. Future iterations can add them inside briefing components too.
 
-_Last updated: 2026-05-20 — covers initial four-layer home page implementation + quick-log validation refactor._
+_Last updated: 2026-05-24 — **Layer 3d: ShowroomBriefing migrated off Invoice onto InvVoucher.** Today's POS bill count + cash sales sum now read `InvVoucher type=POS, status=POSTED` filtered by date; the legacy `Invoice` filter (`shopOrderId: null, ticketId: null, status != "VOID"`) is gone. Previously (2026-05-20): covers initial four-layer home page implementation + quick-log validation refactor._

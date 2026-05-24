@@ -1,12 +1,12 @@
 # Sales
 
-> Sale-side activity across **store** (walk-in retail), **online** (ecommerce / shop), and **wholesale** (planned). Each channel writes the same data: `ShopOrder` for online, `Invoice` for direct (in-store + wholesale), with stock movement reflected via `InvVoucher` (type=SALES) into `InvStockLedger`.
+> Sale-side activity across **store** (walk-in retail), **online** (ecommerce / shop), and **wholesale** (planned). Every sale — in-store POS, online order confirmation, wholesale, returns — writes a single `InvVoucher` row (type `SALE` / `POS` / `SALE_RETURN`) that owns its stock movement, GL JE, and settlement tenders. The legacy `Invoice` / `Payment` tables were dropped in the consolidation (Layers 2–5, 2026-05-23/24). Online orders additionally have `ShopOrder` + `ShopOrderLine` for the customer-facing checkout shape; the row links forward to the sale via `ShopOrder.invoiceId` (now pointing at the `InvVoucher` id, kept under the legacy field name).
 
 ## URLs
 
 ### UI pages — staff side (`src/app/(protected)/office/ecommerce/`)
 - `/office/ecommerce/orders` — online orders dashboard.
-- `/office/ecommerce/orders/[id]` — order detail (links to `Invoice` + `ShopOrder`).
+- `/office/ecommerce/orders/[id]` — order detail (links to the order's sale `InvVoucher` + `ShopOrder`).
 - `/office/ecommerce/products` — shop catalogue (subset of `InvProduct` where `isListedInShop = true`).
 - `/office/ecommerce/categories` — shop category management.
 - `/office/ecommerce/coupons` — discount codes.
@@ -33,9 +33,9 @@
 
 ## Prisma models
 
-- `ShopOrder` + `ShopOrderLine` (in `prisma/schema/shop.prisma`) — online orders. `ShopOrder.orderSource` distinguishes `online` / `phone` / `whatsapp` / `walkin`. Prices stored as integer paise. `ShopOrder.invoiceId` links to a posted `Invoice` once confirmed.
+- `ShopOrder` + `ShopOrderLine` (in `prisma/schema/shop.prisma`) — online orders. `ShopOrder.orderSource` distinguishes `online` / `phone` / `whatsapp` / `walkin`. Prices stored as integer paise. `ShopOrder.invoiceId` links to a DRAFT `InvVoucher` (type=SALE) auto-created at order-confirm time (Layer 2e, 2026-05-24). The field name is kept for back-compat; the FK target is `InvVoucher.id`.
 - `ShopCoupon` (in `prisma/schema/shop.prisma`) — discount codes (percent / fixed).
-- `Invoice` (in `prisma/schema/finance.prisma`) — covers in-store + wholesale + `ShopOrder` confirmations. `Invoice.shopOrderId` is the back-link.
+- `InvVoucher` (in `prisma/schema/inventory.prisma`) — covers in-store (POS), wholesale (SALE), and `ShopOrder` confirmations (SALE with `shopOrderId` set). See [inventory.md](./inventory.md) for the full schema, including `InvVoucherTender` (settlement legs) and `InvVoucherCharge` (additional ledger rows).
 - `InvProduct` (in `prisma/schema/inventory.prisma`) — the single product source of truth for catalogue + warehouse + POS. The separate `ShopProduct` model was merged into `InvProduct` on 2026-05-04.
 
 `ShopOrderLine.productId` references `InvProduct` directly.
@@ -49,15 +49,15 @@
 
 ## Common workflows (wiring)
 
-1. **Online order checkout** — `/shop/checkout` (customer) → POST `/api/shop/orders` → Razorpay init via `/api/shop/orders/[id]/razorpay` → customer pays → HMAC-verified webhook at `/api/shop/razorpay/webhook` confirms the order → emits a sale `InvVoucher` + `Invoice`. `Invoice.shopOrderId` links back.
-2. **In-store walk-in sale** — POS register at `/vouchers/pos` (see [pos.md](./pos.md)) writes `Invoice` directly + a `SALE` `InvVoucher`. No `ShopOrder` row.
-3. **Wholesale invoice** — staff creates an `Invoice` via Accountancy manually; `Invoice.accountId` points at the wholesale customer's GL ledger. No `ShopOrder`.
-4. **Return** — staff opens a return ticket against an order at `/office/ecommerce/orders/[id]/return-ticket` → upon approval, posts a credit note via Accountancy + reverses stock via `SALE_RETURN` `InvVoucher` (see [pos.md](./pos.md) for the same flow at the counter).
+1. **Online order checkout** — `/shop/checkout` (customer) → POST `/api/shop/orders` → Razorpay init via `/api/shop/orders/[id]/razorpay` → customer pays → HMAC-verified webhook at `/api/shop/razorpay/webhook` confirms the order. On Confirm the pipeline transition calls `createOrderInvVoucher` (in `orderStatus.ts`) which writes a **DRAFT SALE `InvVoucher`** with `shopOrderId` set, customer `accountId`, `creditPeriodDays=30`, `deliveryMode=SHIPPED`. An operator posts the voucher via the inventory lifecycle; `postInvVoucherToGl` then creates the JE (Dr Customer AR / Cr Shop Sales Revenue / Cr GST Output).
+2. **In-store walk-in sale** — POS register at `/vouchers/pos` (see [pos.md](./pos.md)) writes a single `InvVoucher` (type=POS) with its own tender rows. No `ShopOrder` row.
+3. **Wholesale sale** — staff creates a SALE `InvVoucher` via the `/vouchers/sale` form (TradingVoucherPage); the customer's GL ledger is the AR tender row's `accountId`. No `ShopOrder`.
+4. **Return** — staff opens a return ticket against an order at `/office/ecommerce/orders/[id]/return-ticket` → upon approval, a `SALE_RETURN` `InvVoucher` reverses stock and posts the credit-note JE in one shot (see [pos.md](./pos.md) for the same flow at the counter).
 
 ## Recent decisions / gotchas
 
 - **No separate ShopProduct** — `InvProduct.isListedInShop` flag controls visibility; same SKU flows through every channel. See [inventory.md](./inventory.md).
-- **Wholesale channel is planned but partial** — no dedicated UI yet. Use Accountancy invoices manually with the wholesale party's `Account`.
+- **Wholesale channel is planned but partial** — no dedicated UI yet. Use the SALE voucher form (`/vouchers/sale`) manually with the wholesale party's `Account` as the AR tender.
 - **Razorpay** is the only payment gateway today.
 
 ## Out of scope / deferred
@@ -76,4 +76,4 @@
 | `transitionShopOrderStatus`, `transitionOrderPipelineStatus` | `src/modules/ecommerce/lib/orderStatus.ts` | Write-side helpers that move a shop order between statuses (both the enum on the row and the pipeline state). Used by the webhook + manual status changes. |
 | `invProductToAdmin(invProduct)`, `ShopProductAdmin` (type) | `src/modules/ecommerce/lib/productAdmin.ts` | Reshape an `InvProduct` row into the admin-side shape used by the ecommerce products UI. |
 
-_Last updated: 2026-05-23 — online orders dashboard (`/office/ecommerce/orders`) date filter migrated to `TallyDateInput` (dd/mm/yyyy + Tally shorthand parsing); no behaviour change. Previously (2026-05-21): `postSaleJournal` inside `transitionShopOrderStatus` now mints its JE reference through the `GL_POSTING` VoucherSeries (`GL-…` prefix) instead of the legacy `JE-…` series; the JE itself is otherwise identical (Dr Bank / Cr Revenue). See [accountancy.md → Two engines](./accountancy.md) for the rationale._
+_Last updated: 2026-05-24 — **Layer 2e: ecommerce SALE on InvVoucher.** Order-confirm pipeline transition (`createOrderInvVoucher` in `orderStatus.ts`) now writes a DRAFT SALE `InvVoucher` with `shopOrderId` set, instead of the legacy DRAFT `Invoice`. `ShopOrder.invoiceId` now points at the new InvVoucher row (field name kept for back-compat). Posting still happens via the inventory voucher lifecycle. Previously (2026-05-23): online orders dashboard (`/office/ecommerce/orders`) date filter migrated to `TallyDateInput` (dd/mm/yyyy + Tally shorthand parsing); no behaviour change. Previously (2026-05-21): `postSaleJournal` inside `transitionShopOrderStatus` now mints its JE reference through the `GL_POSTING` VoucherSeries (`GL-…` prefix) instead of the legacy `JE-…` series; the JE itself is otherwise identical (Dr Bank / Cr Revenue). See [accountancy.md → Two engines](./accountancy.md) for the rationale._

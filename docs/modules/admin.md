@@ -106,4 +106,4 @@
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-22 — `OrgRegionsCreateDialog` form-key derivation switched from `setState`-in-effect to `useMemo` (React 19 hygiene; no behaviour change). Previously (2026-05-20): V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._
+_Last updated: 2026-05-24 — `/office/admin/branches` page got the structured-address / contact form refresh from the Organisation settings update (commit `b647e33`). `Branch` now carries structured address fields + `gstStateCode`; the branches page form is the canonical edit UI. No behaviour change to branch resolution / scoping. Previously (2026-05-22): `OrgRegionsCreateDialog` form-key derivation switched from `setState`-in-effect to `useMemo` (React 19 hygiene; no behaviour change). Previously (2026-05-20): V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._
