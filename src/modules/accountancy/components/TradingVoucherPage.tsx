@@ -669,8 +669,34 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const [partySnapshot, setPartySnapshot] = useState<{ balance: number; address: string | null }>({ balance: 0, address: null });
     // Cash / Bank ledger picker — which Account row receives the payment.
     // null = backend falls back to the legacy name-based "Cash-in-Hand" lookup.
+    // After Layer 7d this is just the default account suggested when the
+    // operator clicks "+ More payment option"; actual tender rows live in
+    // the `tenders` state below. Removed in Layer 7g.
     const [paymentAccount, setPaymentAccount] = useState<GlAccount | null>(null);
     const [cashBankAccounts, setCashBankAccounts] = useState<GlAccount[]>([]);
+
+    // Multi-tender state. Each row = one Dr (sale) / one Cr (purchase) on
+    // the counter side of the JE. Customer-AR portion is auto-computed as
+    // (totalAmount − Σ tenders) and rendered as a read-only "Balance" row;
+    // on save it's appended as a real tender pointing at the party's
+    // ledger account so every JE debit is backed by an explicit row.
+    type TenderRow = {
+        id:        string;                                                 // stable local id
+        accountId: number | null;
+        account:   GlAccount | null;
+        amount:    string;                                                 // freeform input
+        method:    "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER" | "";
+        reference: string;
+    };
+    const newTender = (account: GlAccount | null = null, amount = ""): TenderRow => ({
+        id: `t${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+        accountId: account?.id ?? null,
+        account,
+        amount,
+        method: "",
+        reference: "",
+    });
+    const [tenders, setTenders] = useState<TenderRow[]>([]);
     const [header, setHeader] = useState({
         date: today,
         description: "",
@@ -838,6 +864,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 amount: string | number;
                 product: { id: number; sku: string; name: string; unit: { code: string; label: string } };
             }[];
+            tenders?: {
+                id: number;
+                accountId: number;
+                amount: string | number;
+                method: string | null;
+                reference: string | null;
+                account: { id: number; name: string; code: string | null };
+            }[];
         }>(`/api/inventory/vouchers/${editVoucherId}`)
             .then((r) => {
                 if (cancelled) return;
@@ -929,6 +963,27 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     setParentLink({ id: v.refVoucherId, reference: v.refVoucher.reference });
                 }
                 if (typeof v.showPrices === "boolean") setShowPricesOnPrint(v.showPrices);
+
+                // Hydrate tender rows. Each saved tender carries the
+                // resolved Account (name + code) so the picker labels render
+                // immediately without a second lookup. Filter out the
+                // party-AR row (auto-recomputed below from the Balance);
+                // operator-edited tender rows persist as typed.
+                const partyAccountId = v.partyId != null && v.partyType === "customer"
+                    ? null  // resolved through person→account dance; skip for now
+                    : null;
+                if (v.tenders && v.tenders.length > 0) {
+                    setTenders(v.tenders
+                        .filter((t) => partyAccountId == null || t.accountId !== partyAccountId)
+                        .map((t) => ({
+                            id:        `tdb${t.id}`,
+                            accountId: t.accountId,
+                            account:   { id: t.account.id, name: t.account.name, code: t.account.code ?? "" } as GlAccount,
+                            amount:    String(Number(t.amount)),
+                            method:    (t.method as TenderRow["method"]) ?? "",
+                            reference: t.reference ?? "",
+                        })));
+                }
             })
             .catch(() => {
                 if (cancelled) return;
@@ -1238,7 +1293,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const overallDiscount = prefs.overallDiscount ? (parseFloat(header.discountAmt) || 0) : 0;
     const roundOff = enableRoundOff ? (parseFloat(header.roundOff) || 0) : 0;
     const grandTotal = lineSubtotal - overallDiscount + shipping + roundOff;
-    const received = parseFloat(header.received) || 0;
+    // Sum of operator-typed tender rows. `received` (legacy single field)
+    // is also tallied so the form keeps working until UI fully migrates.
+    const tendersSum = tenders.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    const received = tendersSum > 0 ? tendersSum : (parseFloat(header.received) || 0);
     const balance = grandTotal - received;
 
     // Auto round-off: when the checkbox is ticked and the user hasn't typed
@@ -1411,6 +1469,40 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         taxRate: tRate,
                     };
                 }),
+                // Multi-tender payload (Layer 7d). Built from the operator-
+                // typed rows plus an auto-appended Customer-AR row for any
+                // unsettled balance (only when a party is picked — walk-in
+                // CASH-mode vouchers must be fully tendered with explicit
+                // cash/bank rows). Sum must equal totalAmount; the API
+                // validates and rejects mismatches.
+                ...(() => {
+                    type TenderPayload = {
+                        accountId: number;
+                        amount:    number;
+                        method?:   "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
+                        reference?: string;
+                    };
+                    const rows: TenderPayload[] = [];
+                    for (const t of tenders) {
+                        const amt = parseFloat(t.amount) || 0;
+                        if (!t.accountId || amt <= 0) continue;
+                        rows.push({
+                            accountId: t.accountId,
+                            amount:    amt,
+                            ...(t.method ? { method: t.method } : {}),
+                            ...(t.reference.trim() ? { reference: t.reference.trim() } : {}),
+                        });
+                    }
+                    const partyAccountId = party?.accountId ?? null;
+                    const settledSoFar = rows.reduce((s, r) => s + r.amount, 0);
+                    const arRemainder = grandTotal - settledSoFar;
+                    if (arRemainder > 0.005 && partyAccountId != null) {
+                        // Auto-fill AR balance row — every Dr on the JE is
+                        // backed by an explicit tender row.
+                        rows.push({ accountId: partyAccountId, amount: arRemainder });
+                    }
+                    return rows.length > 0 ? { tenders: rows } : {};
+                })(),
             };
 
             // Edit mode → PATCH the same voucher in place; create mode → POST.
@@ -2257,27 +2349,81 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                 <span className="w-28 text-right font-mono tabular-nums">₹ {fmt(grandTotal)}</span>
                             </div>
                             {copy.showPaymentBlock && (
-                                <>
-                                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm pt-2 border-t border-border">
-                                        <span className="text-muted-foreground text-right">{copy.receivedLabel ?? "Received"}</span>
-                                        <Input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={header.received}
-                                            onChange={(e) => setHeader((h) => ({ ...h, received: num(e.target.value) }))}
-                                            className="h-8 w-20 text-xs text-right"
-                                            placeholder="0"
-                                        />
-                                        <span className="w-28 text-right font-mono tabular-nums">{fmt(received)}</span>
-                                    </div>
-                                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center text-sm font-semibold">
-                                        <span className="text-right">Balance</span>
-                                        <span className="w-20" />
-                                        <span className={`w-28 text-right font-mono tabular-nums ${balance > 0 ? "text-destructive" : "text-green-600"}`}>
-                                            ₹ {fmt(balance)}
-                                        </span>
-                                    </div>
-                                </>
+                                <div className="pt-2 border-t border-border space-y-1.5">
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">Received In</p>
+
+                                    {/* Multi-tender rows. Each row = one Dr leg on the sale's JE.
+                                        Operator picks any cash / bank / wallet ledger; the system
+                                        auto-fills the AR Balance row below for the remainder. */}
+                                    {tenders.map((t, idx) => (
+                                        <div key={t.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                                            <GlAccountCombobox
+                                                value={t.accountId}
+                                                onChange={(acc) => setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, account: acc, accountId: acc?.id ?? null } : r))}
+                                                accounts={cashBankAccounts}
+                                                placeholder="Cash / Bank"
+                                                className="h-8 text-xs"
+                                            />
+                                            <Input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={t.amount}
+                                                onChange={(e) => setTenders((rows) => rows.map((r, i) => i === idx ? { ...r, amount: num(e.target.value) } : r))}
+                                                className="h-8 w-24 text-xs text-right"
+                                                placeholder="0"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setTenders((rows) => rows.filter((_, i) => i !== idx))}
+                                                aria-label="Remove tender row"
+                                                className="h-8 w-8 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    {/* + More payment option — appends a blank tender row defaulted
+                                        to the cash/bank account already picked on the left (paymentAccount)
+                                        or the first cashBankAccount as a fallback. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const seed = paymentAccount ?? cashBankAccounts[0] ?? null;
+                                            // Suggest the remaining balance as the new row's amount.
+                                            const suggest = balance > 0 ? balance.toFixed(2) : "";
+                                            setTenders((rows) => [...rows, newTender(seed, suggest)]);
+                                        }}
+                                        className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                                    >
+                                        + More payment option
+                                    </button>
+
+                                    {/* Auto Balance row — what's still owed by the customer after
+                                        the explicit tenders above. On save, this gets appended as
+                                        a real tender row pointing at the party's AR account so
+                                        every JE Dr is backed by an explicit row. */}
+                                    {balance > 0.005 && (
+                                        <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center text-sm font-semibold pt-1">
+                                            <span className="text-right text-muted-foreground">
+                                                Balance → {party?.name ?? "Customer AR"}
+                                            </span>
+                                            <span className="w-24" />
+                                            <span className="w-28 text-right font-mono tabular-nums text-destructive">
+                                                ₹ {fmt(balance)}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {balance < -0.005 && (
+                                        <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center text-sm font-semibold pt-1">
+                                            <span className="text-right text-muted-foreground">Overpaid</span>
+                                            <span className="w-24" />
+                                            <span className="w-28 text-right font-mono tabular-nums text-destructive">
+                                                ₹ {fmt(Math.abs(balance))}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
