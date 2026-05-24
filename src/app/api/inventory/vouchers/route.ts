@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
         deliveryMode,
         placeOfSupply,
         lines = [],
-        expenseLines = [],
+        charges = [],
     } = body as {
         type:         InvVoucherType;
         date:         string;
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
             direction?:  "CONSUME" | "PRODUCE";
         }[];
         /// MANUFACTURING_JOURNAL Charges — expense allocation rows.
-        expenseLines?: {
+        charges?: {
             accountId:    number;
             description?: string;
             amount:       number;
@@ -253,7 +253,7 @@ export async function POST(req: NextRequest) {
     // Manufacturing Journal is allowed to have zero stock lines IF it has at
     // least one expense (Charges) line — covers pure-overhead allocations.
     // Every other type requires at least one line.
-    if (!lines.length && !(isManufacturingJournal && expenseLines.length > 0)) {
+    if (!lines.length && !(isManufacturingJournal && charges.length > 0)) {
         return NextResponse.json({ error: "At least one line item required" }, { status: 400 });
     }
 
@@ -280,10 +280,10 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    if (isManufacturingJournal && expenseLines.length > 0 && !paymentAccountId) {
+    if (isManufacturingJournal && charges.length > 0 && !paymentAccountId) {
         return NextResponse.json({ error: "Manufacturing Journal Charges require a payment account" }, { status: 400 });
     }
-    for (const e of expenseLines) {
+    for (const e of charges) {
         if (!e.accountId || !(e.amount > 0)) {
             return NextResponse.json({ error: "Each charge line needs an expense account and amount > 0" }, { status: 400 });
         }
@@ -419,9 +419,9 @@ export async function POST(req: NextRequest) {
                             amount:      l.amount,
                         })),
                     },
-                    ...(isManufacturingJournal && expenseLines.length > 0 ? {
-                        expenseLines: {
-                            create: expenseLines.map((e) => ({
+                    ...(isManufacturingJournal && charges.length > 0 ? {
+                        charges: {
+                            create: charges.map((e) => ({
                                 accountId:   e.accountId,
                                 description: e.description?.trim() || null,
                                 amount:      e.amount,

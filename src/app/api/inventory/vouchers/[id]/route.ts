@@ -102,7 +102,7 @@ export async function PATCH(req: Request, { params }: Params) {
         discountAmt,
         amountReceived,
         lines,
-        expenseLines,
+        charges,
     } = body as {
         date?:             string;
         description?:      string;
@@ -144,7 +144,7 @@ export async function PATCH(req: Request, { params }: Params) {
             taxRate?:     number;
             direction?:   "CONSUME" | "PRODUCE";
         }[];
-        expenseLines?: {
+        charges?: {
             accountId:    number;
             description?: string;
             amount:       number;
@@ -316,11 +316,11 @@ export async function PATCH(req: Request, { params }: Params) {
             if (computedLines) {
                 await tx.invVoucherLine.deleteMany({ where: { voucherId: id } });
             }
-            // Manufacturing Journal Charges: if `expenseLines` is provided
+            // Manufacturing Journal Charges: if `charges` is provided
             // (even as an empty array, signalling "I want no charges now"),
             // replace them in full.
-            if (expenseLines !== undefined) {
-                await tx.invVoucherExpenseLine.deleteMany({ where: { voucherId: id } });
+            if (charges !== undefined) {
+                await tx.invVoucherCharge.deleteMany({ where: { voucherId: id } });
             }
             // Status stays POSTED for posted edits; the re-post below sets a
             // fresh journalEntryId. For draft edits the row is unchanged.
@@ -370,9 +370,9 @@ export async function PATCH(req: Request, { params }: Params) {
                             })),
                         },
                     } : {}),
-                    ...(expenseLines && expenseLines.length > 0 ? {
-                        expenseLines: {
-                            create: expenseLines.map((e) => ({
+                    ...(charges && charges.length > 0 ? {
+                        charges: {
+                            create: charges.map((e) => ({
                                 accountId:   e.accountId,
                                 description: e.description?.trim() || null,
                                 amount:      e.amount,

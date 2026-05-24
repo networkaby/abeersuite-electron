@@ -42,7 +42,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 },
             },
             // Manufacturing Journal Charges → GL allocation on post.
-            expenseLines: {
+            charges: {
                 include: {
                     account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
                 },
@@ -331,9 +331,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         out.notes,
                     );
                 }
-            } else if (isManufacturingJournal && voucher.expenseLines.length > 0) {
+            } else if (isManufacturingJournal && voucher.charges.length > 0) {
                 // Build the JE: N expense debits + 1 payment-account credit.
-                const totalCharges = voucher.expenseLines.reduce(
+                const totalCharges = voucher.charges.reduce(
                     (s, e) => s + toNumber(e.amount),
                     0,
                 );
@@ -343,7 +343,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     throw new Error("Manufacturing Journal with Charges requires a payment account (cash / bank / sundry creditors).");
                 } else {
                     // Validate each expense account is an EXPENSE-type ledger.
-                    for (const e of voucher.expenseLines) {
+                    for (const e of voucher.charges) {
                         if (e.account?.group?.type !== "EXPENSE") {
                             throw new Error(`Charge line account "${e.account?.name ?? e.accountId}" must be an EXPENSE-type ledger.`);
                         }
@@ -359,7 +359,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             createdById: userId,
                             lines: {
                                 create: [
-                                    ...voucher.expenseLines.map((e) => ({
+                                    ...voucher.charges.map((e) => ({
                                         accountId: e.accountId,
                                         type:      "DEBIT" as const,
                                         amount:    toNumber(e.amount),
@@ -380,7 +380,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     // Apply balance deltas. Each ledger's balance direction
                     // follows normalBalance: a DEBIT line increments DEBIT-
                     // normal accounts and decrements CREDIT-normal ones.
-                    for (const e of voucher.expenseLines) {
+                    for (const e of voucher.charges) {
                         const acct = e.account!;
                         const debitDelta = toNumber(e.amount);
                         const delta = acct.normalBalance === "DEBIT" ? debitDelta : -debitDelta;
@@ -391,7 +391,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         const delta = voucher.paymentAccount.normalBalance === "CREDIT" ? credit : -credit;
                         await tx.account.update({ where: { id: voucher.paymentAccount.id }, data: { balance: { increment: delta } } });
                     }
-                    postNotes.push(`Posted JE ${jeRef}: ${voucher.expenseLines.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${voucher.paymentAccount?.name ?? "payment account"}.`);
+                    postNotes.push(`Posted JE ${jeRef}: ${voucher.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${voucher.paymentAccount?.name ?? "payment account"}.`);
                 }
             }
 

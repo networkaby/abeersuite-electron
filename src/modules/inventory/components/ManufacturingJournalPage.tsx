@@ -75,7 +75,7 @@ type ExistingVoucher = {
         description: string | null;
         product:     { id: number; sku: string; name: string; unit: { code: string } };
     }[];
-    expenseLines: {
+    charges: {
         accountId:   number;
         amount:      string | number;
         description: string | null;
@@ -175,7 +175,7 @@ export function ManufacturingJournalPage() {
                     paymentAccountId: v.paymentAccountId,
                     consume,
                     produce,
-                    charges:          v.expenseLines.map((e) => ({
+                    charges:          v.charges.map((e) => ({
                         accountId:   e.accountId,
                         amount:      String(Number(e.amount)),
                         description: e.description ?? "",
@@ -366,15 +366,15 @@ export function ManufacturingJournalPage() {
             if (l.productId > 0 && qty > 0) lines.push({ productId: l.productId, quantity: qty, rate, direction: "PRODUCE" });
         }
 
-        const expenseLines = form.charges
+        const charges = form.charges
             .map((c) => ({ accountId: c.accountId, amount: parseFloat(c.amount), description: c.description || undefined }))
             .filter((c) => c.accountId > 0 && Number.isFinite(c.amount) && c.amount > 0);
 
-        if (lines.length === 0 && expenseLines.length === 0) {
+        if (lines.length === 0 && charges.length === 0) {
             toast.error("Add at least one consumption / production line OR a charges line");
             return;
         }
-        if (expenseLines.length > 0 && !form.paymentAccountId) {
+        if (charges.length > 0 && !form.paymentAccountId) {
             toast.error("Choose a payment account (Cash / Bank) when adding Charges");
             return;
         }
@@ -390,7 +390,7 @@ export function ManufacturingJournalPage() {
                 bomId:            form.bomId ?? undefined,
                 paymentAccountId: form.paymentAccountId ?? undefined,
                 lines,
-                expenseLines,
+                charges,
             };
             let voucherId: number;
             if (editing) {

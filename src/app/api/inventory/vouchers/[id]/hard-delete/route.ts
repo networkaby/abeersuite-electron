@@ -82,7 +82,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // place we DO want to wipe those rows, so the voucher row can
             // actually be removed. The audit snapshot above already
             // captured the voucher state.
-            // (InvVoucherLine + InvVoucherExpenseLine cascade automatically.)
+            // (InvVoucherLine + InvVoucherCharge cascade automatically.)
             await tx.invStockLedger.deleteMany({ where: { voucherId: voucher.id } });
 
             await tx.invVoucher.delete({ where: { id: voucher.id } });
