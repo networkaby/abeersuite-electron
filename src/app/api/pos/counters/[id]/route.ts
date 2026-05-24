@@ -11,20 +11,25 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 // Nullable id = "clear this mapping" (method becomes not accepted at this counter).
 // Positive int = link to that Account ledger.
 const accountIdOrClear = z.union([z.number().int().positive(), z.null()]).optional();
+// Empty string from the form coerces to null — operator wiped the override.
+const labelOrClear     = z.union([z.string().trim().max(30), z.null()]).optional()
+    .transform((v) => (typeof v === "string" && v.length === 0) ? null : v);
 
 const updateSchema = z.object({
     name:                  z.string().trim().min(1).max(60).optional(),
     isActive:              z.boolean().optional(),
-    upiAccountId:          accountIdOrClear,
-    cardAccountId:         accountIdOrClear,
-    walletAccountId:       accountIdOrClear,
-    chequeAccountId:       accountIdOrClear,
-    bankTransferAccountId: accountIdOrClear,
+    upiAccountId:          accountIdOrClear, upiLabel:          labelOrClear,
+    cardAccountId:         accountIdOrClear, cardLabel:         labelOrClear,
+    walletAccountId:       accountIdOrClear, walletLabel:       labelOrClear,
+    chequeAccountId:       accountIdOrClear, chequeLabel:       labelOrClear,
+    bankTransferAccountId: accountIdOrClear, bankTransferLabel: labelOrClear,
 });
 
 // Helper: pull only the non-undefined mapping fields off the parsed body.
 const PAYMENT_MAP_FIELDS = ["upiAccountId", "cardAccountId", "walletAccountId", "chequeAccountId", "bankTransferAccountId"] as const;
 type PaymentMapField = typeof PAYMENT_MAP_FIELDS[number];
+const PAYMENT_LABEL_FIELDS = ["upiLabel", "cardLabel", "walletLabel", "chequeLabel", "bankTransferLabel"] as const;
+type PaymentLabelField = typeof PAYMENT_LABEL_FIELDS[number];
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
@@ -89,12 +94,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             for (const f of PAYMENT_MAP_FIELDS) {
                 if (data[f] !== undefined) mapUpdates[f] = data[f] as number | null;
             }
+            const labelUpdates: Partial<Record<PaymentLabelField, string | null>> = {};
+            for (const f of PAYMENT_LABEL_FIELDS) {
+                if (data[f] !== undefined) labelUpdates[f] = data[f] as string | null;
+            }
             return tx.posCounter.update({
                 where: { id },
                 data: {
                     ...(data.name     !== undefined && { name: data.name }),
                     ...(data.isActive !== undefined && { isActive: data.isActive }),
                     ...mapUpdates,
+                    ...labelUpdates,
                 },
                 include: {
                     tillAccount:         { select: { id: true, name: true, balance: true } },
@@ -119,11 +129,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 name:    updated.tillAccount.name,
                 balance: updated.tillAccount.balance.toString(),
             },
-            upiAccount:          updated.upiAccount,
-            cardAccount:         updated.cardAccount,
-            walletAccount:       updated.walletAccount,
-            chequeAccount:       updated.chequeAccount,
-            bankTransferAccount: updated.bankTransferAccount,
+            upiAccount:          updated.upiAccount,          upiLabel:          updated.upiLabel,
+            cardAccount:         updated.cardAccount,         cardLabel:         updated.cardLabel,
+            walletAccount:       updated.walletAccount,       walletLabel:       updated.walletLabel,
+            chequeAccount:       updated.chequeAccount,       chequeLabel:       updated.chequeLabel,
+            bankTransferAccount: updated.bankTransferAccount, bankTransferLabel: updated.bankTransferLabel,
         });
     } catch (e) {
         return handleApiError(e, "Failed to update counter");

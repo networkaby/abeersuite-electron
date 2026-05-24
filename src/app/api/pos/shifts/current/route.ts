@@ -27,6 +27,9 @@ export async function GET() {
                         tillAccount:         { select: { id: true, name: true, balance: true } },
                         // Per-method payment routing — drives which rows the
                         // checkout dialog renders. Null = method not accepted.
+                        // Labels (sibling cols on PosCounter) come back via
+                        // the default include — Prisma always returns scalar
+                        // columns; only relations need explicit `select`.
                         upiAccount:          { select: { id: true, name: true } },
                         cardAccount:         { select: { id: true, name: true } },
                         walletAccount:       { select: { id: true, name: true } },

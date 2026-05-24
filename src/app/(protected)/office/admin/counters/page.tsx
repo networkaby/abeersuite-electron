@@ -33,11 +33,11 @@ type Counter = {
     branch: { id: string; name: string };
     isActive: boolean;
     tillAccount: { id: number; name: string; balance: string };
-    upiAccount:          MappedAccount;
-    cardAccount:         MappedAccount;
-    walletAccount:       MappedAccount;
-    chequeAccount:       MappedAccount;
-    bankTransferAccount: MappedAccount;
+    upiAccount:          MappedAccount; upiLabel:          string | null;
+    cardAccount:         MappedAccount; cardLabel:         string | null;
+    walletAccount:       MappedAccount; walletLabel:       string | null;
+    chequeAccount:       MappedAccount; chequeLabel:       string | null;
+    bankTransferAccount: MappedAccount; bankTransferLabel: string | null;
     totalShifts: number;
     activeShift: { id: number; status: string; user: { name: string } } | null;
 };
@@ -57,15 +57,19 @@ const EMPTY_FORM = { branchId: "", name: "" };
 
 type EditForm = {
     name: string;
-    upiAccountId:          number | null;
-    cardAccountId:         number | null;
-    walletAccountId:       number | null;
-    chequeAccountId:       number | null;
-    bankTransferAccountId: number | null;
+    upiAccountId:          number | null; upiLabel:          string;
+    cardAccountId:         number | null; cardLabel:         string;
+    walletAccountId:       number | null; walletLabel:       string;
+    chequeAccountId:       number | null; chequeLabel:       string;
+    bankTransferAccountId: number | null; bankTransferLabel: string;
 };
 const EMPTY_EDIT: EditForm = {
     name: "",
-    upiAccountId: null, cardAccountId: null, walletAccountId: null, chequeAccountId: null, bankTransferAccountId: null,
+    upiAccountId: null, upiLabel: "",
+    cardAccountId: null, cardLabel: "",
+    walletAccountId: null, walletLabel: "",
+    chequeAccountId: null, chequeLabel: "",
+    bankTransferAccountId: null, bankTransferLabel: "",
 };
 
 export default function CountersAdminPage() {
@@ -118,11 +122,11 @@ export default function CountersAdminPage() {
     const startEdit = (c: Counter) => {
         setEditForm({
             name: c.name,
-            upiAccountId:          c.upiAccount?.id          ?? null,
-            cardAccountId:         c.cardAccount?.id         ?? null,
-            walletAccountId:       c.walletAccount?.id       ?? null,
-            chequeAccountId:       c.chequeAccount?.id       ?? null,
-            bankTransferAccountId: c.bankTransferAccount?.id ?? null,
+            upiAccountId:          c.upiAccount?.id          ?? null, upiLabel:          c.upiLabel          ?? "",
+            cardAccountId:         c.cardAccount?.id         ?? null, cardLabel:         c.cardLabel         ?? "",
+            walletAccountId:       c.walletAccount?.id       ?? null, walletLabel:       c.walletLabel       ?? "",
+            chequeAccountId:       c.chequeAccount?.id       ?? null, chequeLabel:       c.chequeLabel       ?? "",
+            bankTransferAccountId: c.bankTransferAccount?.id ?? null, bankTransferLabel: c.bankTransferLabel ?? "",
         });
         setEditId(c.id);
         setAddingNew(false);
@@ -155,11 +159,11 @@ export default function CountersAdminPage() {
         try {
             await axios.patch(`/api/pos/counters/${editId}`, {
                 name:                  editForm.name.trim(),
-                upiAccountId:          editForm.upiAccountId,
-                cardAccountId:         editForm.cardAccountId,
-                walletAccountId:       editForm.walletAccountId,
-                chequeAccountId:       editForm.chequeAccountId,
-                bankTransferAccountId: editForm.bankTransferAccountId,
+                upiAccountId:          editForm.upiAccountId,          upiLabel:          editForm.upiLabel.trim()          || null,
+                cardAccountId:         editForm.cardAccountId,         cardLabel:         editForm.cardLabel.trim()         || null,
+                walletAccountId:       editForm.walletAccountId,       walletLabel:       editForm.walletLabel.trim()       || null,
+                chequeAccountId:       editForm.chequeAccountId,       chequeLabel:       editForm.chequeLabel.trim()       || null,
+                bankTransferAccountId: editForm.bankTransferAccountId, bankTransferLabel: editForm.bankTransferLabel.trim() || null,
             });
             toast.success("Counter updated");
             cancel();
@@ -288,23 +292,34 @@ export default function CountersAdminPage() {
 
                                                 {/* Per-method ledger mapping. Empty picker = method not
                                                     accepted at this counter (hidden on POS checkout). Cash
-                                                    is intentionally absent — it always routes to till. */}
+                                                    is intentionally absent — it always routes to till.
+                                                    Optional custom label per row overrides the default
+                                                    method name in the POS checkout dialog (e.g. "PhonePe"
+                                                    instead of "UPI"). */}
                                                 <div className="space-y-2 pt-2 border-t border-border">
                                                     <p className="text-xs font-semibold text-muted-foreground">Payment options accepted at this counter</p>
                                                     <p className="text-[11px] text-muted-foreground">
-                                                        Pick a settlement ledger per method. Cash routes to <span className="font-mono">{c.tillAccount.name}</span> automatically.
+                                                        Pick a settlement ledger per method (and optionally rename it for the cashier — e.g. &ldquo;PhonePe&rdquo; instead of &ldquo;UPI&rdquo;).
+                                                        Cash routes to <span className="font-mono">{c.tillAccount.name}</span> automatically.
                                                         Methods left blank won&apos;t appear on the checkout dialog.
                                                     </p>
                                                     <div className="space-y-1.5">
                                                         {PAYMENT_METHOD_ROWS.map((m) => {
-                                                            const fieldKey = `${m.key}AccountId` as const;
-                                                            const value = editForm[fieldKey];
+                                                            const acctKey  = `${m.key}AccountId` as const;
+                                                            const labelKey = `${m.key}Label`     as const;
                                                             return (
-                                                                <div key={m.key} className="grid grid-cols-[110px_1fr] gap-2 items-center">
+                                                                <div key={m.key} className="grid grid-cols-[90px_160px_1fr] gap-2 items-center">
                                                                     <span className="text-xs font-medium">{m.label}</span>
+                                                                    <Input
+                                                                        value={editForm[labelKey]}
+                                                                        onChange={(e) => setEditForm((f) => ({ ...f, [labelKey]: e.target.value }))}
+                                                                        placeholder={`(default: ${m.label})`}
+                                                                        className="h-8 text-xs"
+                                                                        maxLength={30}
+                                                                    />
                                                                     <GlAccountCombobox
-                                                                        value={value}
-                                                                        onChange={(acc) => setEditForm((f) => ({ ...f, [fieldKey]: acc?.id ?? null }))}
+                                                                        value={editForm[acctKey]}
+                                                                        onChange={(acc) => setEditForm((f) => ({ ...f, [acctKey]: acc?.id ?? null }))}
                                                                         accounts={glAccounts}
                                                                         placeholder="(not accepted)"
                                                                         className="h-8 text-xs"
@@ -343,10 +358,11 @@ export default function CountersAdminPage() {
                                                     <div className="flex gap-1 mt-1.5 flex-wrap">
                                                         <Badge variant="outline" className="text-[10px] font-normal">Cash</Badge>
                                                         {PAYMENT_METHOD_ROWS.map((m) => {
-                                                            const acct = c[`${m.key}Account`];
+                                                            const acct  = c[`${m.key}Account`];
+                                                            const label = c[`${m.key}Label`] ?? null;
                                                             return acct ? (
                                                                 <Badge key={m.key} variant="outline" className="text-[10px] font-normal" title={acct.name}>
-                                                                    {m.label} → {acct.name}
+                                                                    {label || m.label} → {acct.name}
                                                                 </Badge>
                                                             ) : null;
                                                         })}

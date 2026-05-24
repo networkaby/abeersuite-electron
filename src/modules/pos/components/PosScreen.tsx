@@ -175,13 +175,29 @@ export default function PosScreen() {
             bankTransfer: c?.bankTransferAccount ?? null,
         };
     }, [activeShift]);
-    const allowedExtras = useMemo(() => EXTRA_METHODS.filter((m) => {
-        if (m.value === "CARD")          return counterMethods.card          != null;
-        if (m.value === "WALLET")        return counterMethods.wallet        != null;
-        if (m.value === "CHEQUE")        return counterMethods.cheque        != null;
-        if (m.value === "BANK_TRANSFER") return counterMethods.bankTransfer  != null;
-        return false;
-    }), [counterMethods]);
+    // Counter-supplied custom labels — "PhonePe", "HDFC POS Terminal", etc.
+    // Falls back to the built-in label in EXTRA_METHODS / the UPI fixed row.
+    const upiLabel = activeShift?.counter.upiLabel?.trim() || "UPI";
+    // Build the extras list with per-method label overrides applied so the
+    // cashier sees the operator's wording in the picker.
+    const allowedExtras = useMemo(() => EXTRA_METHODS
+        .filter((m) => {
+            if (m.value === "CARD")          return counterMethods.card          != null;
+            if (m.value === "WALLET")        return counterMethods.wallet        != null;
+            if (m.value === "CHEQUE")        return counterMethods.cheque        != null;
+            if (m.value === "BANK_TRANSFER") return counterMethods.bankTransfer  != null;
+            return false;
+        })
+        .map((m) => {
+            const c = activeShift?.counter;
+            const override =
+                m.value === "CARD"          ? c?.cardLabel :
+                m.value === "WALLET"        ? c?.walletLabel :
+                m.value === "CHEQUE"        ? c?.chequeLabel :
+                m.value === "BANK_TRANSFER" ? c?.bankTransferLabel : null;
+            const trimmed = override?.trim();
+            return trimmed ? { ...m, label: trimmed } : m;
+        }), [counterMethods, activeShift]);
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
@@ -821,14 +837,15 @@ export default function PosScreen() {
                                         </div>
                                     )}
 
-                                    {/* UPI — only shown when this counter accepts UPI */}
+                                    {/* UPI — only shown when this counter accepts UPI.
+                                        Counter may override the label (e.g. "PhonePe"). */}
                                     {counterMethods.upi && (
                                         <div className="grid grid-cols-[80px_1fr] items-center gap-2">
                                             <Label className="flex items-center gap-1 text-xs">
-                                                <Smartphone size={12} /> UPI
+                                                <Smartphone size={12} /> {upiLabel}
                                                 <button
                                                     type="button"
-                                                    title="Fill remaining amount in UPI"
+                                                    title={`Fill remaining amount in ${upiLabel}`}
                                                     onClick={() => {
                                                         const remaining = Math.max(0, +(total - cashNet - extrasSum).toFixed(2));
                                                         setPay((s) => ({ ...s, upi: remaining }));

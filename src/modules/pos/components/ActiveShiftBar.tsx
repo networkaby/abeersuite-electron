@@ -22,12 +22,13 @@ export type ActiveShift = {
         name: string;
         tillAccount: { id: number; name: string };
         // Per-method routing — null = method not accepted at this counter.
-        // Set under /office/admin/counters.
-        upiAccount:          { id: number; name: string } | null;
-        cardAccount:         { id: number; name: string } | null;
-        walletAccount:       { id: number; name: string } | null;
-        chequeAccount:       { id: number; name: string } | null;
-        bankTransferAccount: { id: number; name: string } | null;
+        // Set under /office/admin/counters. Labels override the built-in
+        // method name ("UPI", "Card", etc.) on the POS checkout dialog.
+        upiAccount:          { id: number; name: string } | null; upiLabel:          string | null;
+        cardAccount:         { id: number; name: string } | null; cardLabel:         string | null;
+        walletAccount:       { id: number; name: string } | null; walletLabel:       string | null;
+        chequeAccount:       { id: number; name: string } | null; chequeLabel:       string | null;
+        bankTransferAccount: { id: number; name: string } | null; bankTransferLabel: string | null;
     };
     branch: { id: string; name: string };
     openingFloatPaise: string;
