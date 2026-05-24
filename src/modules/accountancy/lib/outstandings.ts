@@ -219,7 +219,12 @@ async function loadOpenBills(
         .map((v) => v.journalEntryId)
         .filter((x): x is number => x !== null);
 
-    const [vchAllocs, jeAllocs] = await Promise.all([
+    // Tender rows for the InvVouchers in scope. Sum split by AR-vs-non-AR
+    // for each voucher: AR tender amount = the bill portion that landed
+    // on the customer's ledger (= what's still outstanding before later
+    // receipts apply); non-AR tender sum = paid up-front at sale time.
+    const invIdList = invVouchers.map((v) => v.id);
+    const [vchAllocs, jeAllocs, tenderRows] = await Promise.all([
         vchIds.length > 0
             ? prisma.voucherAllocation.findMany({
                 where: { targetType: "VOUCHER", targetId: { in: vchIds } },
@@ -232,10 +237,24 @@ async function loadOpenBills(
                 select: { targetId: true, amount: true },
             })
             : Promise.resolve([] as { targetId: number; amount: unknown }[]),
+        invIdList.length > 0
+            ? prisma.invVoucherTender.findMany({
+                where:  { voucherId: { in: invIdList } },
+                select: { voucherId: true, accountId: true, amount: true },
+            })
+            : Promise.resolve([] as { voucherId: number; accountId: number; amount: unknown }[]),
     ]);
 
     const paidByVch = sumByTarget(vchAllocs);
     const paidByJe  = sumByTarget(jeAllocs);
+
+    // Group tender rows by voucher for the per-voucher paid calculation.
+    const tendersByVoucher = new Map<number, { accountId: number; amount: number }[]>();
+    for (const t of tenderRows) {
+        const arr = tendersByVoucher.get(t.voucherId) ?? [];
+        arr.push({ accountId: t.accountId, amount: Number(t.amount) });
+        tendersByVoucher.set(t.voucherId, arr);
+    }
 
     const bills: RawBill[] = [];
 
@@ -271,10 +290,17 @@ async function loadOpenBills(
         const due = new Date(v.date);
         due.setDate(due.getDate() + (v.creditPeriodDays ?? DEFAULT_DUE_DAYS));
         const total = Number(v.totalAmount);
-        // Paid = up-front cash recorded on the voucher + any later receipts
-        // allocated against the linked GL journal entry.
+        // Paid at sale time — from explicit tender rows when present
+        // (Layer 7+), else the legacy single `amountReceived` field.
+        // Tender model: non-AR tenders (cash/bank/card) settle part of
+        // the bill; the AR tender row IS the unsettled remainder.
+        const vTenders = tendersByVoucher.get(v.id);
+        const paidAtSale = vTenders && vTenders.length > 0
+            ? vTenders.filter((t) => t.accountId !== accountId).reduce((s, t) => s + t.amount, 0)
+            : Number(v.amountReceived);
+        // Plus any later receipts allocated against the voucher's JE.
         const paid =
-            Number(v.amountReceived) +
+            paidAtSale +
             (v.journalEntryId !== null ? (paidByJe[v.journalEntryId] ?? 0) : 0);
         bills.push({
             kind:        v.type === "SALE" || v.type === "POS" ? "sale" : "purchase",
