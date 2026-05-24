@@ -28,7 +28,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
 import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 const closeSchema = z.object({
@@ -90,21 +90,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({ error: `Branch ${shift.branch.name} has no Vault account configured.` }, { status: 400 });
         }
 
-        // Cash-sales total.
-        const cashPayments = await prisma.payment.findMany({
-            where: {
-                method:      "CASH",
-                status:      "POSTED",
-                deletedAt:   null,
-                createdById: shift.userId,
-                createdAt:   { gte: shift.openedAt },
-            },
-            select: { amount: true },
+        // Cash-sales total — sum of debits to the counter till from receipt
+        // vouchers in this shift window (replaces the legacy Payment query).
+        const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
+            tillAccountId: shift.counter.tillAccountId,
+            openedAt:      shift.openedAt,
         });
-        const cashSalesPaise = cashPayments.reduce(
-            (s, p) => s + BigInt(Math.round(Number(p.amount) * 100)),
-            BigInt(0),
-        );
         const dropsPaise    = sumPaise(shift.drops);
         const expectedPaise = computeExpectedCash(shift.openingFloatPaise, cashSalesPaise, dropsPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);

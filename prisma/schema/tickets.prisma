@@ -59,7 +59,6 @@ model Ticket {
   ticketSubStatus TicketSubStatus?    @relation(fields: [subStatusId], references: [id])
   logs            TicketLog[]
   participants    TicketParticipant[]
-  invoices        Invoice[]           @relation("TicketInvoices")
   invVouchers     InvVoucher[]        @relation("TicketInvVouchers")
 
   @@index([status])

@@ -39,7 +39,6 @@ model ShopOrder {
   personId          Int?
   guestEmail        String?
   guestPhone        String?
-  // invoiceId lives on Invoice.shopOrderId (FK is on Invoice side)
   shippingName      String?
   shippingAddress   Json?
   totalPaise        Int             @default(0)
@@ -60,7 +59,6 @@ model ShopOrder {
   person       Person?         @relation(fields: [personId], references: [id])
   pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
   orderStatus  TicketStatus?   @relation(fields: [statusId], references: [id])
-  invoice      Invoice?        @relation("OrderInvoice")
   invVoucher   InvVoucher?     @relation("OrderInvVoucher")
   sourceCoupon ShopCoupon?     @relation(fields: [sourceCouponId], references: [id])
   lines        ShopOrderLine[]

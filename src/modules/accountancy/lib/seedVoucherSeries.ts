@@ -34,7 +34,6 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
     // existing JournalEntry count so new GL-… references don't collide with
     // legacy JE-… references in the same table.
     const glPostingCount = await prisma.journalEntry.count();
-    const invCount = await prisma.invoice.count();
     // Inventory voucher counts — needed for new-install continuity so the next
     // SV / PV / EV reference picks up where the legacy invNextRef left off.
     const saleCount     = await prisma.invVoucher.count({ where: { type: "SALE" } });
@@ -66,7 +65,9 @@ export async function seedVoucherSeries(prisma: PrismaClient) {
         // Reference prefix GL deliberately differs from the user-facing JV so the
         // two never collide in reports or in the Day Book.
         { kind: "GL_POSTING",  label: "GL Posting",      typeValue: "GL", nextSeq: glPostingCount },
-        { kind: "INVOICE",     label: "Sales Invoice",   typeValue: "INV", nextSeq: invCount },
+        // Legacy "INVOICE" series (typeValue INV) was retired with the
+        // Invoice → InvVoucher consolidation on 2026-05-24. SALE / POS
+        // below cover the same surface with their own SV / POS prefixes.
         // Inventory vouchers — same FY-aware convention managed from
         // /office/settings/year-ending. invNextRef() routes through nextRefFromSeries
         // to read these rows on every save.

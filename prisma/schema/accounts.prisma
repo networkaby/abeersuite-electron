@@ -60,7 +60,6 @@ model Account {
   billedTickets          Ticket[]                @relation("TicketBillingAccount")
   devices                Device[]
   shopOrders             ShopOrder[]
-  invoices               Invoice[]               @relation("AccountInvoices")
   voucherParty           Voucher[]               @relation("VoucherPartyAccount")
   invVouchers            InvVoucher[]            @relation("InvVoucherAccount")
   invVouchersAsPayment   InvVoucher[]            @relation("InvVoucherPaymentAccount")

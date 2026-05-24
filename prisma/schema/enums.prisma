@@ -62,14 +62,11 @@ enum EntryType {
   CREDIT
 }
 
-enum InvoiceStatus {
-  DRAFT
-  SENT
-  PARTIAL
-  PAID
-  VOID
-}
-
+// PaymentMethod survives the Invoice → InvVoucher consolidation because the
+// POS sale route still tags each tender (CASH / CARD / UPI / …) so the GL
+// description carries the channel through to the Day Book. The legacy
+// `InvoiceStatus` enum was dropped 2026-05-24 — InvVoucher uses the shared
+// VoucherStatus (DRAFT / POSTED / CANCELLED).
 enum PaymentMethod {
   CASH
   BANK_TRANSFER

@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW_BR);
@@ -65,21 +65,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "No access to this branch's shifts" }, { status: 403 });
         }
 
-        // Running cash-sales total — CASH Payment rows in this shift window,
-        // scoped to the same counter (via invoices created on the counter shift).
-        // We join via createdById (the cashier) + time window as a proxy.
-        const cashEnd = shift.closedAt ?? new Date();
-        const cashPayments = await prisma.payment.findMany({
-            where: {
-                method:      "CASH",
-                status:      "POSTED",
-                deletedAt:   null,
-                createdById: shift.userId,
-                createdAt:   { gte: shift.openedAt, lte: cashEnd },
-            },
-            select: { amount: true },
+        // Running cash-sales total — sum of debits to the counter till from
+        // receipt vouchers posted during the shift window. Replaces the
+        // legacy CASH Payment query (Payment table retired 2026-05-24).
+        const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
+            tillAccountId: shift.counter.tillAccount.id,
+            openedAt:      shift.openedAt,
+            closedAt:      shift.closedAt,
         });
-        const cashSalesPaise = cashPayments.reduce((s, p) => s + BigInt(Math.round(Number(p.amount) * 100)), BigInt(0));
         const dropsPaise = sumPaise(shift.drops);
 
         return NextResponse.json({

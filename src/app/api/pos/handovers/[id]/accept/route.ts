@@ -24,7 +24,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
 import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 const acceptSchema = z.object({
@@ -76,21 +76,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const counterId     = fromShift.counter.id;
         const branchId      = fromShift.branchId;
 
-        // Cash sales on A's shift.
-        const cashPayments = await prisma.payment.findMany({
-            where: {
-                method:      "CASH",
-                status:      "POSTED",
-                deletedAt:   null,
-                createdById: fromShift.userId,
-                createdAt:   { gte: fromShift.openedAt },
-            },
-            select: { amount: true },
+        // Cash sales on A's shift — sum of debits to the counter till from
+        // receipt vouchers in A's shift window (replaces the legacy CASH
+        // Payment query; Payment table retired 2026-05-24).
+        const cashSalesPaise = await sumShiftCashSalesPaise(prisma, {
+            tillAccountId,
+            openedAt: fromShift.openedAt,
         });
-        const cashSalesPaise = cashPayments.reduce(
-            (s, p) => s + BigInt(Math.round(Number(p.amount) * 100)),
-            BigInt(0),
-        );
         const dropsPaise    = sumPaise(fromShift.drops);
         const expectedPaise = computeExpectedCash(fromShift.openingFloatPaise, cashSalesPaise, dropsPaise);
 

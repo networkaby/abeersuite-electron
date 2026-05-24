@@ -50,8 +50,8 @@ const TRANSACTION_TABLES = [
     "pos_handovers", "pos_cash_drops", "pos_shifts",
     "JournalLine", "JournalEntry", "JournalEntryAudit",
     "VoucherAllocation", "VoucherLine", "Voucher", "VoucherAudit",
-    "Payment", "PaymentAudit",
-    "InvoiceLine", "Invoice", "InvoiceAudit",
+    // Invoice / InvoiceLine / InvoiceAudit / Payment / PaymentAudit tables
+    // were dropped on 2026-05-24 (Invoice → InvVoucher consolidation, Layer 5b).
     "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",
     "ShopOrderLine", "ShopOrder",
     "TicketLog", "TicketParticipant", "Ticket", "Device",

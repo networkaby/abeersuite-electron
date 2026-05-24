@@ -234,7 +234,6 @@ model InvProduct {
 
   orderLines   ShopOrderLine[]
   voucherLines InvVoucherLine[]
-  invoiceLines InvoiceLine[]      @relation("InvoiceLineProduct")
   stockEntries InvStockLedger[]
   branchStocks InvProductBranch[]
   bomOutputs   InvBom[]           @relation("BomOutput")
@@ -281,10 +280,13 @@ model InvVoucher {
   description         String
   /// Reuses VoucherStatus enum: DRAFT → POSTED → CANCELLED
   status              VoucherStatus  @default(DRAFT)
-  /// Single FK to the party's ledger account. Replaces the legacy
-  /// (partyType, partyId, partyName) triple. Nullable during the
-  /// Invoice→InvVoucher consolidation; becomes required in Layer 5
-  /// once all writers populate it.
+  /// Single FK to the party's ledger account. Required at the
+  /// application layer for trading vouchers (SALE / PURCHASE / POS /
+  /// SALE_RETURN / PURCHASE_RETURN) — replaces the legacy
+  /// (partyType, partyId, partyName) triple. Nullable in the schema
+  /// because non-trading types (MANUFACTURING_JOURNAL, PHYSICAL_STOCK,
+  /// BRANCH_TRANSFER, GRN, CHALLAN, REJECTION_*) legitimately have no
+  /// party.
   accountId           Int?
   account             Account?       @relation("InvVoucherAccount", fields: [accountId], references: [id])
   partyName           String?

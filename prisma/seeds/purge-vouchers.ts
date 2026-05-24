@@ -39,12 +39,8 @@ const TABLES = [
     "InvVoucherLine",
     "InvVoucher",
     "InvVoucherAudit",
-    // Invoice/payment side (POS path) — wipe so reports don't double-count
-    "Payment",
-    "PaymentAudit",
-    "InvoiceLine",
-    "Invoice",
-    "InvoiceAudit",
+    // Invoice / Payment family was dropped on 2026-05-24 (Invoice →
+    // InvVoucher consolidation, Layer 5b) and no longer exists.
 ];
 
 async function main(): Promise<void> {
