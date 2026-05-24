@@ -58,6 +58,7 @@ export const PERMISSIONS = {
     CUSTOMERS_DELETE_DEPARTMENT:        "customers:delete:department",
     CUSTOMERS_DELETE_ORG:               "customers:delete:org",
     CUSTOMERS_MANAGE:                   "customers:manage",
+    CUSTOMERS_HARD_DELETE:              "customers:hard-delete",
 
     // E-commerce
     ECOMMERCE_MANAGE:                   "ecommerce:manage",

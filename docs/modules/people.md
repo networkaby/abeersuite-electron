@@ -14,6 +14,7 @@
 - `/office/customers/companies/[id]` — company detail (own contacts + derived contacts from linked people)
 - `/office/customers/all` — combined view of people + companies
 - `/office/customers/leads` — CRM leads (was `/office/crm`, redirected)
+- `/office/settings/customer-tools` — convert a Person ↔ Company while keeping the same Account row; lists soft-deleted tombstones in a Trash section for admins.
 
 Compatibility redirects: `/office/companies/*` → `/office/customers/companies/*`.
 
@@ -28,12 +29,18 @@ Compatibility redirects: `/office/companies/*` → `/office/customers/companies/
 - `/api/crm/leads[/[id]]` — leads (CrmLead model). Body uses `personId` (was `customerId`).
 - `/api/accounts[/[id]]` — paginated account ledger; accepts both `personId` and legacy alias `customerId` filters.
 - `/api/pos/people/search`, `/api/pos/person-snapshot/[id]` — POS lookup helpers (was `/api/pos/customers/*`).
+- `/api/customer-tools/convert/preview` (GET) — returns mappable/lost fields, counts that will move, and any blockers (open shop orders, already-converted, etc.).
+- `/api/customer-tools/convert` (POST) — runs the conversion in a single `$transaction`; flips `Account.personId ↔ Account.companyId` and re-points `Phone` / `Email` / `CrmLead` / `ShopOrder.personId` rows onto the new row, drops `PersonCompany` links and `PersonPortalCredential`, soft-deletes the source with a `convertedTo*Id` back-link.
+- `/api/customer-tools/trash` (GET) — lists soft-deleted tombstones for the Trash view (env super-admin or `customers:hard-delete`).
+- `/api/customer-tools/trash/[type]/[id]` (DELETE) — hard-deletes a tombstone. Defensive residual-FK check returns 409 if any live reference still points at the row.
 
 ## Permissions (gate keys, unchanged)
 
 - `customers:view:own/branch/org`, `customers:create`, `customers:edit:*`, `customers:delete:*` — full CRUD matrix.
 - `companies:create`, `companies:edit:org`, `companies:delete:org`.
 - `crm:view`, `crm:manage`.
+- `customers:manage` + `companies:manage` — both required to use the Person ↔ Company converter at `/office/settings/customer-tools`.
+- `customers:hard-delete` — required (alongside env super-admin / `admin:bypass`) to hard-delete tombstone rows from the Trash view. Not granted to any role by default.
 
 The `customers:*` umbrella still gates Person and Company UI even though the model is now `Person`, since both remain "customers" semantically.
 
@@ -47,6 +54,7 @@ The `customers:*` umbrella still gates Person and Company UI even though the mod
 - `Account` — dual GL / party ledger; `glAccountType` enum (ASSET / LIABILITY / EQUITY / REVENUE / EXPENSE) is set for pure GL accounts, blank for party ledgers. Has new optional `creditLimit Decimal? @db.Decimal(14, 2)` (dormant; future use).
 - `PersonPortalCredential` (formerly `CustomerPortalCredential`) — phone/email-normalised B2C login.
 - `CrmLead` (in `prisma/schema/crm.prisma`) — sales leads, device-less. Reuses `Pipeline` + `TicketStatus` machinery; FK is `personId`.
+- Person / Company conversion fields — `Person.convertedToCompanyId` (+ `convertedAt`) and the mirror on `Company`. Set when the row was soft-deleted via the converter; null on a live row. Pure audit trail (nullable, not unique, no `onDelete`).
 
 ## Key components / library
 
@@ -103,5 +111,6 @@ These are module-scoped (consumed only by `customer/` routes + components). Don'
 | `getCrmPipeline(prisma)`, `assertCrmStatus(prisma, pipelineId, status)`, `CRM_PIPELINE_NAME` | `src/modules/customer/lib/crmPipeline.ts` | Name-based resolver for the seeded CRM-leads pipeline + status validator. Use these instead of hardcoding pipeline IDs (`P6` etc.). |
 | `getCompanyContacts(companyId)` | `src/modules/customer/lib/companyContacts.ts` | Returns the company's own phones/emails + derived contacts from linked persons. |
 | `ContactConflictError`, `contactValueSchema`, `createPhone`, `updatePhone`, `deletePhone`, `createEmail`, `updateEmail`, `deleteEmail` | `src/modules/customer/lib/contactWrite.ts` | All write paths for the `Phone` / `Email` polymorphic-owner rows. Centralises uniqueness checking, isPrimary toggling, and the `ContactConflictError` shape that routes catch + map to a 409 with `{ error, field }`. |
+| `previewConvert`, `convertParty`, `ConvertBlockedError`, `hardDeleteTombstone`, `TombstoneStillReferencedError`, `listTombstones` | `src/modules/customer/lib/convertParty.ts` | Person ↔ Company conversion + tombstone hard-delete. Keeps the same `Account.id` (flips `personId`↔`companyId`), re-points `Phone` / `Email` / `CrmLead` / `ShopOrder.personId`, drops `PersonCompany` links and `PersonPortalCredential`, soft-deletes the source. Hard-delete guards against residual FKs and returns a 409 with the conflict list. |
 
-_Last updated: 2026-05-24 — `GET /api/companies/[id]/transactions` + `/api/persons/[id]/transactions` migrated off the legacy `Invoice.amountReceived` field (Layer 3b / Layer 7g) — both endpoints now derive everything from InvVoucher rows (Invoice/Payment models dropped in Layer 5). Previously (2026-05-23): Transactions tab now opens voucher refs in the editable form via the shared `editFormUrl` helper (commit `4c2654e`); local `INV_VOUCHER_URLS` map deleted (AGENTS.md §2). Earlier: Transactions tab workflow (commits `db0fe45`, `7342b96`, `a687684`)._
+_Last updated: 2026-05-25 — Added Person ↔ Company converter at `/office/settings/customer-tools` plus `/api/customer-tools/convert*` and `/api/customer-tools/trash*` routes. New `customers:hard-delete` permission gates the Trash hard-delete (env super-admin always allowed). Schema: `Person.convertedToCompanyId` + mirror on `Company`, both nullable audit-only back-links. `/office/customers/[id]` now redirects via whichever side of the Account is currently set, so visiting an old account URL after conversion lands on the new live party. Previously (2026-05-24): `GET /api/companies/[id]/transactions` + `/api/persons/[id]/transactions` migrated off the legacy `Invoice.amountReceived` field (Layer 3b / Layer 7g) — both endpoints now derive everything from InvVoucher rows (Invoice/Payment models dropped in Layer 5). Earlier (2026-05-23): Transactions tab now opens voucher refs in the editable form via the shared `editFormUrl` helper (commit `4c2654e`); local `INV_VOUCHER_URLS` map deleted (AGENTS.md §2)._

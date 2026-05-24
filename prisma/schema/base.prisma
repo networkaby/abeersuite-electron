@@ -41,6 +41,15 @@ model Person {
   crmLeads         CrmLead[]
   phones           Phone[]
   emails           Email[]
+
+  // Set when this row was soft-deleted via the Person↔Company converter
+  // (see /office/settings/customer-tools). Pure audit trail — admins can
+  // later hard-delete from the Trash view; on hard-delete the back-link
+  // from the active partner simply dangles (no onDelete).
+  convertedToCompanyId Int?
+  convertedToCompany   Company?   @relation("PersonConvertedTo", fields: [convertedToCompanyId], references: [id])
+  convertedAt          DateTime?
+  convertedFromCompany Company[]  @relation("CompanyConvertedTo")
 }
 
 model Company {
@@ -70,6 +79,12 @@ model Company {
   crmLeads CrmLead[]
   phones   Phone[]
   emails   Email[]
+
+  // Mirror of Person.convertedToCompanyId — see comment there.
+  convertedToPersonId Int?
+  convertedToPerson   Person?  @relation("CompanyConvertedTo", fields: [convertedToPersonId], references: [id])
+  convertedAt         DateTime?
+  convertedFromPerson Person[] @relation("PersonConvertedTo")
 }
 
 model PersonCompany {

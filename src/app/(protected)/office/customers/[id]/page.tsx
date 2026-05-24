@@ -16,20 +16,17 @@ export default async function CustomerDetailPage({
 
     const account = await prisma.account.findUnique({
         where: { id: accountId },
-        select: {
-            personId: true,
-            companyId: true,
-            person:   { select: { isActive: true } },
-            company:  { select: { isActive: true } },
-        },
+        select: { personId: true, companyId: true },
     });
 
     if (!account) notFound();
 
-    if (account.personId && account.person?.isActive) {
+    // The Account row flips its personId↔companyId on conversion. Whichever
+    // side is currently set is the live party; route the URL there.
+    if (account.personId) {
         redirect(`/office/customers/all?personId=${account.personId}`);
     }
-    if (account.companyId && account.company?.isActive) {
+    if (account.companyId) {
         redirect(`/office/customers/all?companyId=${account.companyId}`);
     }
     notFound();

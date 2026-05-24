@@ -603,6 +603,8 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Voucher Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:manage" },
+    { label: "Customer Import", href: "/office/settings/customer-import", icon: Upload, permission: "customers:manage" },
+    { label: "Customer Tools", href: "/office/settings/customer-tools", icon: Users, permission: "customers:manage" },
 ];
 
 // ─── ButtonBar ────────────────────────────────────────────────────────────────

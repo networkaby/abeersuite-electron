@@ -103,6 +103,7 @@ const PERMISSIONS = [
     { id: "companies:create", label: "Create companies", module: "customers", description: "Create company records." },
     { id: "companies:edit:org", label: "Edit companies", module: "customers", description: "Edit company records." },
     { id: "companies:delete:org", label: "Delete companies", module: "customers", description: "Delete company records." },
+    { id: "customers:hard-delete", label: "Hard-delete converted customers", module: "customers", description: "Permanently remove soft-deleted (converted) Person / Company tombstone rows from the Trash view at /office/settings/customer-tools." },
 
     // tickets
     { id: "tickets:create", label: "Create tickets", module: "tickets", description: "Open and submit new tickets." },

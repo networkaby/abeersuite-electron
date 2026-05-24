@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, User, Smartphone, Eye } from "lucide-react";
+import { ArrowLeft, Building2, User, Smartphone, Eye, ArrowRight } from "lucide-react";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
@@ -44,10 +44,43 @@ export default async function CompanyProfileView({ companyId, backHref = "/offic
                     },
                 },
             },
+            convertedToPerson: { select: { id: true, name: true } },
         },
     });
 
-    if (!company || !company.isActive) notFound();
+    if (!company) notFound();
+    if (!company.isActive && company.convertedToPersonId != null && company.convertedToPerson) {
+        return (
+            <div>
+                <div className="flex items-center gap-3 mb-6">
+                    <Link href={backHref} className="text-muted-foreground hover:text-foreground">
+                        <ArrowLeft size={20} />
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <Building2 size={22} className="text-muted-foreground" />
+                        <div>
+                            <h1 className="text-2xl font-bold text-muted-foreground line-through">{company.name}</h1>
+                            <p className="text-muted-foreground text-sm">Company #{company.id} (converted)</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                    This company was converted to a person
+                    {company.convertedAt ? ` on ${formatDate(company.convertedAt.toISOString())}` : ""}.
+                    The live record is now{" "}
+                    <Link
+                        href={`/office/customers/people/${company.convertedToPerson.id}`}
+                        className="inline-flex items-center gap-1 font-medium underline"
+                    >
+                        Person #{company.convertedToPerson.id} — {company.convertedToPerson.name}
+                        <ArrowRight size={14} />
+                    </Link>
+                    .
+                </div>
+            </div>
+        );
+    }
+    if (!company.isActive) notFound();
 
     const contacts = await getCompanyContacts(companyId);
 
