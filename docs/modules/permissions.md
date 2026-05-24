@@ -36,6 +36,7 @@ The constant name mirrors the string: `INVENTORY_VOUCHER_HARD_DELETE = "inventor
 | `settings:manage` | Required for Branches / Departments / POS Counters admin pages. |
 | `pos:shift:open` | Required to open a POS shift. Also the gate for the cashier-side return flow. |
 | `pos:shift:manage` | Required for manager bypass on POS sale return (lost-invoice tab). |
+| `customers:hard-delete` | Required to hard-delete a converted-or-merged Person / Company tombstone from the Trash view at `/office/settings/customer-tools`. **Not granted to any role by default** — only the env super admin (`admin:bypass`) holds it implicitly; an admin must explicitly grant it via the Role Matrix. |
 
 ## Scope hierarchy
 
@@ -111,4 +112,4 @@ These string IDs are stable across the codebase. Renaming any of them is a break
 
 Customers don't carry permission keys. Portal sessions are discriminated by `session.kind === "customer"` and routed through `requirePortalAuth()`. See [customer-portal.md](./customer-portal.md).
 
-_Last updated: 2026-05-20 — `admin:bypass` reclassified as `systemOnly` (never auto-granted to R1, removed from Role Matrix UI); env super admin (`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`) added as the only entity that can hold the bypass at runtime._
+_Last updated: 2026-05-25 — Added `customers:hard-delete` for the Trash view on `/office/settings/customer-tools` (not granted to any role by default; env super admin holds it implicitly). Previously (2026-05-20): `admin:bypass` reclassified as `systemOnly` (never auto-granted to R1, removed from Role Matrix UI); env super admin (`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`) added as the only entity that can hold the bypass at runtime._

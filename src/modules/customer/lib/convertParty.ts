@@ -397,11 +397,12 @@ export async function hardDeleteTombstone(
     if (type === "person") {
         const p = await prisma.person.findUnique({
             where: { id },
-            select: { id: true, isActive: true, convertedToCompanyId: true },
+            select: { id: true, isActive: true, convertedToCompanyId: true, mergedIntoPersonId: true },
         });
         if (!p) throw new Error("Person not found");
-        if (p.isActive || p.convertedToCompanyId == null) {
-            throw new Error("Only converted (soft-deleted) persons can be hard-deleted");
+        // A row is a hard-delete candidate iff it's a tombstone of *some* kind.
+        if (p.isActive || (p.convertedToCompanyId == null && p.mergedIntoPersonId == null)) {
+            throw new Error("Only converted or merged (soft-deleted) persons can be hard-deleted");
         }
         const refs = await collectPersonRefs(id);
         if (refs.length > 0) throw new TombstoneStillReferencedError(refs);
@@ -410,11 +411,11 @@ export async function hardDeleteTombstone(
     }
     const c = await prisma.company.findUnique({
         where: { id },
-        select: { id: true, isActive: true, convertedToPersonId: true },
+        select: { id: true, isActive: true, convertedToPersonId: true, mergedIntoCompanyId: true },
     });
     if (!c) throw new Error("Company not found");
-    if (c.isActive || c.convertedToPersonId == null) {
-        throw new Error("Only converted (soft-deleted) companies can be hard-deleted");
+    if (c.isActive || (c.convertedToPersonId == null && c.mergedIntoCompanyId == null)) {
+        throw new Error("Only converted or merged (soft-deleted) companies can be hard-deleted");
     }
     const refs = await collectCompanyRefs(id);
     if (refs.length > 0) throw new TombstoneStillReferencedError(refs);
@@ -465,50 +466,426 @@ export type TombstoneRow = {
     id: number;
     type: "person" | "company";
     name: string;
-    convertedAt: Date;
+    /** "convert" — became a different party type; "merge" — duplicate merged into another row of the same type. */
+    reason: "convert" | "merge";
+    /** Date the tombstone was created (whichever of convertedAt/mergedAt is set). */
+    tombstonedAt: Date;
     target: { id: number; name: string; type: "person" | "company" } | null;
 };
 
 export async function listTombstones(): Promise<TombstoneRow[]> {
     const [persons, companies] = await Promise.all([
         prisma.person.findMany({
-            where: { isActive: false, convertedToCompanyId: { not: null } },
-            select: {
-                id: true, name: true, convertedAt: true, convertedToCompanyId: true,
-                convertedToCompany: { select: { id: true, name: true } },
+            where: {
+                isActive: false,
+                OR: [
+                    { convertedToCompanyId: { not: null } },
+                    { mergedIntoPersonId: { not: null } },
+                ],
             },
-            orderBy: { convertedAt: "desc" },
+            select: {
+                id: true, name: true,
+                convertedAt: true, convertedToCompanyId: true,
+                convertedToCompany: { select: { id: true, name: true } },
+                mergedAt: true, mergedIntoPersonId: true,
+                mergedIntoPerson: { select: { id: true, name: true } },
+            },
         }),
         prisma.company.findMany({
-            where: { isActive: false, convertedToPersonId: { not: null } },
-            select: {
-                id: true, name: true, convertedAt: true, convertedToPersonId: true,
-                convertedToPerson: { select: { id: true, name: true } },
+            where: {
+                isActive: false,
+                OR: [
+                    { convertedToPersonId: { not: null } },
+                    { mergedIntoCompanyId: { not: null } },
+                ],
             },
-            orderBy: { convertedAt: "desc" },
+            select: {
+                id: true, name: true,
+                convertedAt: true, convertedToPersonId: true,
+                convertedToPerson: { select: { id: true, name: true } },
+                mergedAt: true, mergedIntoCompanyId: true,
+                mergedIntoCompany: { select: { id: true, name: true } },
+            },
         }),
     ]);
 
     const rows: TombstoneRow[] = [
-        ...persons.map(p => ({
-            id: p.id,
-            type: "person" as const,
-            name: p.name,
-            convertedAt: p.convertedAt ?? new Date(0),
-            target: p.convertedToCompany
-                ? { id: p.convertedToCompany.id, name: p.convertedToCompany.name, type: "company" as const }
-                : null,
-        })),
-        ...companies.map(c => ({
-            id: c.id,
-            type: "company" as const,
-            name: c.name,
-            convertedAt: c.convertedAt ?? new Date(0),
-            target: c.convertedToPerson
-                ? { id: c.convertedToPerson.id, name: c.convertedToPerson.name, type: "person" as const }
-                : null,
-        })),
+        ...persons.map(p => {
+            const reason: "convert" | "merge" = p.mergedIntoPersonId != null ? "merge" : "convert";
+            const at = (reason === "merge" ? p.mergedAt : p.convertedAt) ?? new Date(0);
+            const target = reason === "merge"
+                ? (p.mergedIntoPerson
+                    ? { id: p.mergedIntoPerson.id, name: p.mergedIntoPerson.name, type: "person" as const }
+                    : null)
+                : (p.convertedToCompany
+                    ? { id: p.convertedToCompany.id, name: p.convertedToCompany.name, type: "company" as const }
+                    : null);
+            return { id: p.id, type: "person" as const, name: p.name, reason, tombstonedAt: at, target };
+        }),
+        ...companies.map(c => {
+            const reason: "convert" | "merge" = c.mergedIntoCompanyId != null ? "merge" : "convert";
+            const at = (reason === "merge" ? c.mergedAt : c.convertedAt) ?? new Date(0);
+            const target = reason === "merge"
+                ? (c.mergedIntoCompany
+                    ? { id: c.mergedIntoCompany.id, name: c.mergedIntoCompany.name, type: "company" as const }
+                    : null)
+                : (c.convertedToPerson
+                    ? { id: c.convertedToPerson.id, name: c.convertedToPerson.name, type: "person" as const }
+                    : null);
+            return { id: c.id, type: "company" as const, name: c.name, reason, tombstonedAt: at, target };
+        }),
     ];
-    rows.sort((a, b) => b.convertedAt.getTime() - a.convertedAt.getTime());
+    rows.sort((a, b) => b.tombstonedAt.getTime() - a.tombstonedAt.getTime());
     return rows;
+}
+
+// ── Merge two duplicate same-type customers ──────────────────────────────────
+//
+// Loser's Account is dissolved: every JournalLine / VoucherLine / InvVoucher{,Charge,Tender}
+// / Voucher.partyAccountId / Ticket.billingAccountId / Device.accountId / ShopOrder.accountId
+// is re-pointed at the winner's Account, then the loser Account row is deleted.
+// The loser party row is soft-deleted with a mergedInto*Id back-link and shows
+// up in the Trash view alongside conversion tombstones.
+
+export type MergeKind = "person" | "company";
+
+export type MergeBlocker =
+    | { kind: "notFound"; side: "winner" | "loser" }
+    | { kind: "sameId" }
+    | { kind: "sourceInactive"; side: "winner" | "loser" }
+    | { kind: "alreadyTombstoned"; side: "winner" | "loser" }
+    | { kind: "noAccount"; side: "winner" | "loser" }
+    | { kind: "accountIsTillOrVault"; usage: string }
+    | { kind: "accountIsParent"; childCount: number };
+
+export type MergePreview = {
+    kind: MergeKind;
+    winnerId: number;
+    loserId: number;
+    winnerName: string;
+    loserName: string;
+    winnerAccountId: number | null;
+    loserAccountId: number | null;
+    /** Account FK references that will be re-pointed onto the winner's Account. */
+    accountRefs: {
+        journalLines: number;
+        voucherParty: number;
+        voucherLines: number;
+        invVouchers: number;
+        invVoucherCharges: number;
+        invVoucherTenders: number;
+        tickets: number;
+        devices: number;
+        shopOrders: number;
+    };
+    /** Party FK references that will move from loser → winner (Phone, Email, CrmLead, links). */
+    partyRefs: {
+        phones: number;
+        emails: number;
+        crmLeads: number;
+        personCompanyLinks: number;
+        shopOrdersPersonId: number;
+        portalCredential: boolean;
+    };
+    blockers: MergeBlocker[];
+};
+
+export type MergeResult = {
+    kind: MergeKind;
+    winnerId: number;
+    winnerAccountId: number | null;
+    loserId: number;
+    loserAccountId: number;
+    movedCounts: MergePreview["accountRefs"] & {
+        phones: number;
+        emails: number;
+        crmLeads: number;
+        personCompanyLinks: number;
+        portalCredentialDropped: number;
+    };
+};
+
+export class MergeBlockedError extends Error {
+    status = 409;
+    constructor(public blockers: MergeBlocker[]) {
+        super(`Merge blocked: ${blockers.map(b => b.kind).join(", ")}`);
+    }
+}
+
+async function partyAccountUsage(accountId: number): Promise<MergeBlocker[]> {
+    const blockers: MergeBlocker[] = [];
+    const [vaultUse, tillUse, upiUse, cardUse, walletUse, chequeUse, btUse, children] = await Promise.all([
+        prisma.branch.count({ where: { vaultAccountId: accountId } }),
+        prisma.posCounter.count({ where: { tillAccountId: accountId } }),
+        prisma.posCounter.count({ where: { upiAccountId: accountId } }),
+        prisma.posCounter.count({ where: { cardAccountId: accountId } }),
+        prisma.posCounter.count({ where: { walletAccountId: accountId } }),
+        prisma.posCounter.count({ where: { chequeAccountId: accountId } }),
+        prisma.posCounter.count({ where: { bankTransferAccountId: accountId } }),
+        prisma.account.count({ where: { parentId: accountId } }),
+    ]);
+    const tags: string[] = [];
+    if (vaultUse) tags.push(`Branch.vaultAccountId×${vaultUse}`);
+    if (tillUse) tags.push(`PosCounter.tillAccountId×${tillUse}`);
+    if (upiUse) tags.push(`PosCounter.upiAccountId×${upiUse}`);
+    if (cardUse) tags.push(`PosCounter.cardAccountId×${cardUse}`);
+    if (walletUse) tags.push(`PosCounter.walletAccountId×${walletUse}`);
+    if (chequeUse) tags.push(`PosCounter.chequeAccountId×${chequeUse}`);
+    if (btUse) tags.push(`PosCounter.bankTransferAccountId×${btUse}`);
+    if (tags.length > 0) blockers.push({ kind: "accountIsTillOrVault", usage: tags.join(", ") });
+    if (children > 0) blockers.push({ kind: "accountIsParent", childCount: children });
+    return blockers;
+}
+
+async function loadPersonForMerge(id: number) {
+    return prisma.person.findUnique({
+        where: { id },
+        select: {
+            id: true, name: true, isActive: true,
+            convertedToCompanyId: true, mergedIntoPersonId: true,
+            account: { select: { id: true } },
+        },
+    });
+}
+
+async function loadCompanyForMerge(id: number) {
+    return prisma.company.findUnique({
+        where: { id },
+        select: {
+            id: true, name: true, isActive: true,
+            convertedToPersonId: true, mergedIntoCompanyId: true,
+            account: { select: { id: true } },
+        },
+    });
+}
+
+export async function previewMerge(
+    kind: MergeKind,
+    winnerId: number,
+    loserId: number,
+): Promise<MergePreview> {
+    const blockers: MergeBlocker[] = [];
+    if (winnerId === loserId) blockers.push({ kind: "sameId" });
+
+    const winner = kind === "person" ? await loadPersonForMerge(winnerId) : await loadCompanyForMerge(winnerId);
+    const loser = kind === "person" ? await loadPersonForMerge(loserId) : await loadCompanyForMerge(loserId);
+    if (!winner) blockers.push({ kind: "notFound", side: "winner" });
+    if (!loser) blockers.push({ kind: "notFound", side: "loser" });
+
+    const winnerName = winner?.name ?? "—";
+    const loserName = loser?.name ?? "—";
+    const winnerAccountId = winner?.account?.id ?? null;
+    const loserAccountId = loser?.account?.id ?? null;
+
+    if (winner && !winner.isActive) blockers.push({ kind: "sourceInactive", side: "winner" });
+    if (loser && !loser.isActive) blockers.push({ kind: "sourceInactive", side: "loser" });
+    if (winner && (winner.convertedToCompanyId != null
+        || (winner as { convertedToPersonId?: number | null }).convertedToPersonId != null
+        || winner.mergedIntoPersonId != null
+        || (winner as { mergedIntoCompanyId?: number | null }).mergedIntoCompanyId != null)) {
+        blockers.push({ kind: "alreadyTombstoned", side: "winner" });
+    }
+    if (loser && (loser.convertedToCompanyId != null
+        || (loser as { convertedToPersonId?: number | null }).convertedToPersonId != null
+        || loser.mergedIntoPersonId != null
+        || (loser as { mergedIntoCompanyId?: number | null }).mergedIntoCompanyId != null)) {
+        blockers.push({ kind: "alreadyTombstoned", side: "loser" });
+    }
+    if (winner && !winnerAccountId) blockers.push({ kind: "noAccount", side: "winner" });
+    if (loser && !loserAccountId) blockers.push({ kind: "noAccount", side: "loser" });
+
+    if (loserAccountId) {
+        blockers.push(...(await partyAccountUsage(loserAccountId)));
+    }
+
+    const partyWhere = kind === "person" ? { personId: loserId } : { companyId: loserId };
+    const linkWhere = kind === "person" ? { personId: loserId } : { companyId: loserId };
+    const leadWhere = kind === "person" ? { personId: loserId } : { companyId: loserId };
+
+    const [phones, emails, links, leads] = await Promise.all([
+        prisma.phone.count({ where: partyWhere }),
+        prisma.email.count({ where: partyWhere }),
+        prisma.personCompany.count({ where: linkWhere }),
+        prisma.crmLead.count({ where: leadWhere }),
+    ]);
+    const shopOrdersPerson = kind === "person"
+        ? await prisma.shopOrder.count({ where: { personId: loserId } })
+        : 0;
+    const portalCred = kind === "person"
+        ? (await prisma.personPortalCredential.count({ where: { personId: loserId } })) > 0
+        : false;
+
+    // Account-FK ref counts (loser side). Empty zeros if no loser account.
+    const accountRefs = loserAccountId
+        ? await countAccountRefs(loserAccountId)
+        : { journalLines: 0, voucherParty: 0, voucherLines: 0, invVouchers: 0, invVoucherCharges: 0, invVoucherTenders: 0, tickets: 0, devices: 0, shopOrders: 0 };
+
+    return {
+        kind, winnerId, loserId, winnerName, loserName, winnerAccountId, loserAccountId,
+        accountRefs,
+        partyRefs: { phones, emails, crmLeads: leads, personCompanyLinks: links, shopOrdersPersonId: shopOrdersPerson, portalCredential: portalCred },
+        blockers,
+    };
+}
+
+async function countAccountRefs(accountId: number) {
+    const [jl, vp, vl, iv, ivc, ivt, t, d, so] = await Promise.all([
+        prisma.journalLine.count({ where: { accountId } }),
+        prisma.voucher.count({ where: { partyAccountId: accountId } }),
+        prisma.voucherLine.count({ where: { accountId } }),
+        prisma.invVoucher.count({ where: { accountId } }),
+        prisma.invVoucherCharge.count({ where: { accountId } }),
+        prisma.invVoucherTender.count({ where: { accountId } }),
+        prisma.ticket.count({ where: { billingAccountId: accountId } }),
+        prisma.device.count({ where: { accountId } }),
+        prisma.shopOrder.count({ where: { accountId } }),
+    ]);
+    return {
+        journalLines: jl, voucherParty: vp, voucherLines: vl,
+        invVouchers: iv, invVoucherCharges: ivc, invVoucherTenders: ivt,
+        tickets: t, devices: d, shopOrders: so,
+    };
+}
+
+export async function mergeParty(
+    kind: MergeKind,
+    winnerId: number,
+    loserId: number,
+): Promise<MergeResult> {
+    const preview = await previewMerge(kind, winnerId, loserId);
+    if (preview.blockers.length > 0) throw new MergeBlockedError(preview.blockers);
+
+    const winnerAccountId = preview.winnerAccountId!;
+    const loserAccountId = preview.loserAccountId!;
+
+    return prisma.$transaction(async (tx) => {
+        // 1. Re-point every Account FK from loser's Account → winner's Account.
+        const [jl, vp, vl, iv, ivc, ivt, t, d, so] = await Promise.all([
+            tx.journalLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            tx.voucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
+            tx.voucherLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            tx.invVoucher.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            tx.invVoucherCharge.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            tx.invVoucherTender.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            tx.ticket.updateMany({ where: { billingAccountId: loserAccountId }, data: { billingAccountId: winnerAccountId } }),
+            tx.device.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+            tx.shopOrder.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
+        ]);
+
+        // 2. Roll the loser's cached balance into the winner's. Live balance
+        //    derivations use JournalLine sums (which we just moved), but the
+        //    cached `Account.balance` is read by dashboards — keep it sane.
+        const [winnerAcct, loserAcct] = await Promise.all([
+            tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: { balance: true } }),
+            tx.account.findUniqueOrThrow({ where: { id: loserAccountId }, select: { balance: true } }),
+        ]);
+        const summed = Number(winnerAcct.balance) + Number(loserAcct.balance);
+        await tx.account.update({
+            where: { id: winnerAccountId },
+            data: { balance: summed.toFixed(2) },
+        });
+
+        // 3. Move Phone / Email rows from loser onto winner. Global @unique on
+        //    `phone` / `email` is satisfied because duplicate parties don't
+        //    share contact values (that's how they ended up as two rows).
+        const partyKey = kind === "person" ? "personId" : "companyId";
+        const partyMoveData: Record<string, number | null> =
+            kind === "person"
+                ? { personId: winnerId, companyId: null }
+                : { companyId: winnerId, personId: null };
+
+        const phones = await tx.phone.updateMany({ where: { [partyKey]: loserId }, data: partyMoveData });
+        const emails = await tx.email.updateMany({ where: { [partyKey]: loserId }, data: partyMoveData });
+
+        // 4. PersonCompany links: move loser's onto winner. Dedupe by (personId,
+        //    companyId) since the same pair could now appear twice.
+        const links = await tx.personCompany.updateMany({
+            where: { [partyKey]: loserId },
+            data: { [partyKey]: winnerId },
+        });
+        await dedupePersonCompanyLinks(tx);
+
+        // 5. CrmLead: re-point.
+        const leads = await tx.crmLead.updateMany({
+            where: { [partyKey]: loserId },
+            data: { [partyKey]: winnerId },
+        });
+
+        // 6. ShopOrder.personId (Person merges only).
+        if (kind === "person") {
+            await tx.shopOrder.updateMany({
+                where: { personId: loserId },
+                data: { personId: winnerId },
+            });
+        }
+
+        // 7. PortalCredential — keep winner's, drop loser's (decision recorded
+        //    in commit history; see customer-tools plan).
+        let credDropped = 0;
+        if (kind === "person") {
+            const r = await tx.personPortalCredential.deleteMany({ where: { personId: loserId } });
+            credDropped = r.count;
+        }
+
+        // 8. Drop the loser's Account (now orphaned — every FK was moved).
+        await tx.account.delete({ where: { id: loserAccountId } });
+
+        // 9. Soft-delete the loser party with the merge back-link.
+        const stamp = { isActive: false, mergedAt: new Date() } as const;
+        if (kind === "person") {
+            await tx.person.update({
+                where: { id: loserId },
+                data: { ...stamp, mergedIntoPersonId: winnerId },
+            });
+        } else {
+            await tx.company.update({
+                where: { id: loserId },
+                data: { ...stamp, mergedIntoCompanyId: winnerId },
+            });
+        }
+
+        return {
+            kind,
+            winnerId, winnerAccountId,
+            loserId, loserAccountId,
+            movedCounts: {
+                journalLines: jl.count,
+                voucherParty: vp.count,
+                voucherLines: vl.count,
+                invVouchers: iv.count,
+                invVoucherCharges: ivc.count,
+                invVoucherTenders: ivt.count,
+                tickets: t.count,
+                devices: d.count,
+                shopOrders: so.count,
+                phones: phones.count,
+                emails: emails.count,
+                crmLeads: leads.count,
+                personCompanyLinks: links.count,
+                portalCredentialDropped: credDropped,
+            },
+        };
+    });
+}
+
+async function dedupePersonCompanyLinks(tx: Prisma.TransactionClient) {
+    // After a merge, the winner can hold two PersonCompany rows for the same
+    // (personId, companyId). Keep the earliest, drop the rest.
+    const dupes = await tx.$queryRaw<Array<{ personId: number; companyId: number }>>`
+        SELECT "personId", "companyId"
+        FROM "PersonCompany"
+        GROUP BY "personId", "companyId"
+        HAVING COUNT(*) > 1
+    `;
+    for (const d of dupes) {
+        const rows = await tx.personCompany.findMany({
+            where: { personId: d.personId, companyId: d.companyId },
+            orderBy: { id: "asc" },
+            select: { id: true },
+        });
+        const [, ...extras] = rows;
+        if (extras.length > 0) {
+            await tx.personCompany.deleteMany({ where: { id: { in: extras.map(r => r.id) } } });
+        }
+    }
 }

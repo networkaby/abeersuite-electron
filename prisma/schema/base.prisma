@@ -50,6 +50,15 @@ model Person {
   convertedToCompany   Company?   @relation("PersonConvertedTo", fields: [convertedToCompanyId], references: [id])
   convertedAt          DateTime?
   convertedFromCompany Company[]  @relation("CompanyConvertedTo")
+
+  // Set when this row was soft-deleted via the Merge tool. The merged-into row
+  // is the winner; this Person row is the loser whose ledger/contacts/links
+  // were re-pointed onto the winner. Same Trash + hard-delete surface as the
+  // converter tombstones — see /office/settings/customer-tools.
+  mergedIntoPersonId Int?
+  mergedIntoPerson   Person?  @relation("PersonMergedInto", fields: [mergedIntoPersonId], references: [id])
+  mergedFromPerson   Person[] @relation("PersonMergedInto")
+  mergedAt           DateTime?
 }
 
 model Company {
@@ -85,6 +94,12 @@ model Company {
   convertedToPerson   Person?  @relation("CompanyConvertedTo", fields: [convertedToPersonId], references: [id])
   convertedAt         DateTime?
   convertedFromPerson Person[] @relation("PersonConvertedTo")
+
+  // Mirror of Person.mergedIntoPersonId — same merge-tool semantics.
+  mergedIntoCompanyId Int?
+  mergedIntoCompany   Company?  @relation("CompanyMergedInto", fields: [mergedIntoCompanyId], references: [id])
+  mergedFromCompany   Company[] @relation("CompanyMergedInto")
+  mergedAt            DateTime?
 }
 
 model PersonCompany {
