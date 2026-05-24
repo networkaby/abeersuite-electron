@@ -46,14 +46,19 @@ export function sumPaise(rows: Array<{ amountPaise: bigint | number | string | n
 /**
  * Cash that hit the counter's till during a shift window.
  *
- * The till sees deposits from receipt vouchers (DR till / CR customer AR
- * on cash POS sales) and withdrawals from refunds (CR till) — net of the
- * two is the shift's takings. Filtered to receipt-side movements only by
- * joining through Voucher type=RECEIPT so the opening-Contra and any
- * cash drops (which are PosCashDrop log rows, no GL hit) are excluded.
+ * Sums tender rows pointing at the till from two sources:
  *
- * Replaces the legacy `prisma.payment.findMany({ method: CASH, ... })`
- * sweep that died with the Payment table on 2026-05-24.
+ *   • POS InvVouchers (type=POS) — the modern shape (Layer 7g):
+ *     the cashier rings up a sale, the InvVoucher carries the till
+ *     tender directly, and the JE debits the till for that amount.
+ *
+ *   • Office RECEIPT Vouchers — customer pays an old credit bill at
+ *     this counter. Posts Dr Till / Cr Customer AR. Counted only when
+ *     the receipt was created in the shift window.
+ *
+ * Opening Contra (vault → counter) and mid-shift cash drops are
+ * deliberately NOT counted: the Contra is a one-off transfer, and
+ * drops are PosCashDrop log rows with no GL hit.
  */
 export async function sumShiftCashSalesPaise(
     tx: Tx,
@@ -64,7 +69,23 @@ export async function sumShiftCashSalesPaise(
     },
 ): Promise<bigint> {
     const end = args.closedAt ?? new Date();
-    const lines = await tx.voucherLine.findMany({
+
+    // POS sale tenders → directly on the InvVoucher (no separate Receipt).
+    const posTenders = await tx.invVoucherTender.findMany({
+        where: {
+            accountId: args.tillAccountId,
+            voucher: {
+                type:      "POS",
+                status:    "POSTED",
+                deletedAt: null,
+                createdAt: { gte: args.openedAt, lte: end },
+            },
+        },
+        select: { amount: true },
+    });
+
+    // Office RECEIPT vouchers (Customer pays old credit bill).
+    const receiptLines = await tx.voucherLine.findMany({
         where: {
             accountId: args.tillAccountId,
             type:      "DEBIT",
@@ -77,8 +98,9 @@ export async function sumShiftCashSalesPaise(
         },
         select: { amount: true },
     });
-    return lines.reduce(
-        (s, l) => s + BigInt(Math.round(Number(l.amount) * 100)),
-        BigInt(0),
-    );
+
+    const sum = (rows: Array<{ amount: { toString(): string } }>): bigint =>
+        rows.reduce((s, r) => s + BigInt(Math.round(Number(r.amount) * 100)), BigInt(0));
+
+    return sum(posTenders) + sum(receiptLines);
 }

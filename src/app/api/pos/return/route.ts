@@ -117,20 +117,13 @@ export async function POST(req: Request) {
         const returnTotal = returnSubtotal + returnTaxAmount;
         if (returnTotal <= 0) return NextResponse.json({ error: "Return total must be > 0" }, { status: 400 });
 
-        // ── Pre-fetch payment account when CASH (postInvVoucherToGl reads it) ─
-        let paymentAccount: {
-            id: number; name: string;
-            normalBalance: "DEBIT" | "CREDIT" | null;
-            group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
-        } | null = null;
-        if (data.refundMode === "CASH" && tillAccountId !== null) {
-            paymentAccount = await prisma.account.findUnique({
-                where:  { id: tillAccountId },
-                select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } },
-            });
-        }
+        // ── Refund tender row — single Cr leg on the SALE_RETURN JE ─────
+        // CASH refund → tender.accountId = till (money leaves the drawer).
+        // CREDIT note → tender.accountId = customer AR (sits as a credit
+        //               on their ledger until next sale draws it down).
+        const refundAccountId = data.refundMode === "CASH" ? tillAccountId! : original.accountId!;
 
-        // ── Mirror partyType/partyId for legacy GL resolver ──────────────────
+        // ── Mirror partyType/partyId for legacy GL resolver fallbacks ────
         const partyType = original.account?.personId !== null && original.account?.personId !== undefined ? "customer"
                          : original.account?.companyId !== null && original.account?.companyId !== undefined ? "company"
                          : "account";
@@ -144,7 +137,7 @@ export async function POST(req: Request) {
         const result = await prisma.$transaction(async (tx) => {
             const today = new Date();
 
-            // 1. SALE_RETURN InvVoucher.
+            // 1. SALE_RETURN InvVoucher + refund tender row.
             const vRef = await invNextRef(tx, "SALE_RETURN");
             const stockLines = returnLines.filter((rl) => rl.voucherLine.productId !== null);
             const voucher = await tx.invVoucher.create({
@@ -162,14 +155,11 @@ export async function POST(req: Request) {
                     partyId,
                     refNumber:      original.reference,
                     refVoucherId:   original.id,
-                    paymentMode:    data.refundMode,
-                    paymentAccountId: data.refundMode === "CASH" ? tillAccountId : null,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     subtotal:       returnSubtotal,
                     taxAmount:      returnTaxAmount,
                     totalAmount:    returnTotal,
-                    amountReceived: data.refundMode === "CASH" ? returnTotal : 0,
                     createdById:    user!.id,
                     lines: {
                         create: stockLines.map(({ voucherLine, qty }) => ({
@@ -182,11 +172,21 @@ export async function POST(req: Request) {
                             amount:      qty * Number(voucherLine.rate),
                         })),
                     },
+                    tenders: {
+                        create: [{
+                            accountId: refundAccountId,
+                            amount:    returnTotal,
+                            method:    data.refundMode === "CASH" ? "CASH" : null,
+                            reference: null,
+                        }],
+                    },
                 },
-                include: { lines: true },
+                include: { lines: true, tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } } },
             });
 
-            // 2. GL post — SALE_RETURN posts Dr Sales Returns / (Dr GST reversal) / Cr (Cash or Customer AR).
+            // 2. GL post — SALE_RETURN is purchase-shape (counter Cr).
+            // Tender row's accountId gets credited; body legs (Dr Sales
+            // Returns / Dr GST reversal) come from goods + tax.
             const gl = await postInvVoucherToGl(tx, {
                 voucherId: voucher.id,
                 voucher: {
@@ -198,13 +198,16 @@ export async function POST(req: Request) {
                     partyName:   voucher.partyName,
                     partyType:   voucher.partyType,
                     partyId:     voucher.partyId,
-                    paymentMode: voucher.paymentMode,
                     subtotal:    voucher.subtotal,
                     taxAmount:   voucher.taxAmount,
                     shippingAmt: voucher.shippingAmt,
                     roundOff:    voucher.roundOff,
                     totalAmount: voucher.totalAmount,
-                    paymentAccount,
+                    tenders:     voucher.tenders.map((t) => ({
+                        accountId: t.accountId,
+                        amount:    Number(t.amount),
+                        account:   t.account,
+                    })),
                     sellerStateCode,
                     buyerStateCode: sellerStateCode,
                 },

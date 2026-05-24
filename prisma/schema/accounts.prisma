@@ -62,7 +62,6 @@ model Account {
   shopOrders             ShopOrder[]
   voucherParty           Voucher[]               @relation("VoucherPartyAccount")
   invVouchers            InvVoucher[]            @relation("InvVoucherAccount")
-  invVouchersAsPayment   InvVoucher[]            @relation("InvVoucherPaymentAccount")
   invVoucherCharges      InvVoucherCharge[]      @relation("InvVoucherChargeAccount")
   invVoucherTenders      InvVoucherTender[]      @relation("InvVoucherTenderAccount")
   // POS reverse rels

@@ -92,28 +92,6 @@ async function findLedgerByNames(tx: Tx, names: readonly string[]): Promise<Ledg
     return null;
 }
 
-async function findPartyAccount(
-    tx: Tx,
-    partyType: string | null | undefined,
-    partyId: number | null | undefined,
-): Promise<LedgerLite | null> {
-    if (!partyType || !partyId) return null;
-    let where: Record<string, number> | null = null;
-    if (partyType === "customer") where = { personId: partyId };
-    else if (partyType === "company") where = { companyId: partyId };
-    else if (partyType === "account") where = { id: partyId };
-    if (!where) return null;
-    const a = await tx.account.findFirst({
-        where: { ...where, isActive: true },
-        select: {
-            id: true, name: true, normalBalance: true,
-            group: { select: { type: true } },
-        },
-    });
-    if (!a) return null;
-    return { id: a.id, name: a.name, normalBalance: a.normalBalance, groupType: a.group?.type ?? null };
-}
-
 function effectiveNormalBalance(led: LedgerLite): "DEBIT" | "CREDIT" {
     if (led.normalBalance) return led.normalBalance;
     if (led.groupType)     return defaultNormalBalanceForGroupType(led.groupType);
@@ -132,7 +110,6 @@ export type PostVoucherInput = {
         partyName: string | null;
         partyType: string | null;
         partyId:   number | null;
-        paymentMode: string | null;
         subtotal:    Prisma.Decimal | number;
         taxAmount:   Prisma.Decimal | number;
         shippingAmt: Prisma.Decimal | number;
@@ -144,23 +121,6 @@ export type PostVoucherInput = {
         /// Per-line discount is already netted into line.amount and never
         /// reaches this helper as a separate field.
         discountAmt?: Prisma.Decimal | number | null;
-        /// Cash received upfront on a CREDIT sale / paid upfront on a CREDIT
-        /// purchase. When > 0 (and `paymentAccount` set) the JE splits the
-        /// counter side into two debits / credits so the cash leg actually
-        /// hits the till / bank ledger — fixes the GL hole where the form's
-        /// "Received in: Cash" field stored a number but never posted it.
-        /// Ignored when paymentMode = "CASH" (in that case the whole counter
-        /// total already routes to `paymentAccount`).
-        amountReceived?: Prisma.Decimal | number | null;
-        /// User-picked cash/bank ledger (Cash-in-Hand, HDFC, SBI, …).
-        /// When present, overrides the legacy name-based lookup so the
-        /// GL JE lands on the explicit choice. Null = fall back to NAMES.CASH.
-        paymentAccount?: {
-            id: number;
-            name: string;
-            normalBalance: "DEBIT" | "CREDIT" | null;
-            group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
-        } | null;
         /// Seller's state code (place of business — branch.gstStateCode,
         /// falling back to org.gstStateCode). Drives the CGST/SGST vs IGST
         /// split. Optional for back-compat: when blank we treat the sale as
@@ -219,11 +179,9 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     //   "purchase shape" — counter (party/cash) Cr, body Dr, tax Dr
     //                      → PURCHASE (body=Purchase, tax=Input GST)
     //                      → SALE_RETURN (body=Sales Returns, tax=Output GST reversal)
-    // POS shares the sale shape (counter Dr / body Cr) — the only difference
-    // is the counter-side settlement timing, which is handled outside this
-    // helper by `postReceiptVoucher`. Treating POS as a sale here lets the
-    // POS route reuse the same GST split + body/tax ledger resolution as
-    // office sales.
+    // POS shares the sale shape (counter Dr / body Cr) — same GST split,
+    // same body/tax resolution, and (since Layer 7g) the same tender
+    // shape — every Dr leg is an explicit tender row on the InvVoucher.
     const isPositiveSale     = voucher.type === "SALE" || voucher.type === "POS";
     const isPositivePurchase = voucher.type === "PURCHASE";
     const isSaleReturn       = voucher.type === "SALE_RETURN";
@@ -258,27 +216,6 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     }
 
     // ── Resolve ledgers ────────────────────────────────────────────────
-    const isCash = voucher.paymentMode === "CASH";
-
-    // Prefer the explicit paymentAccount the cashier picked at save time —
-    // this is how multi-bank-ledger users route receipts to the right bank
-    // (HDFC vs SBI vs Cash-in-Hand). Fall back to the legacy name-based
-    // lookup for older vouchers / API callers that don't pass it.
-    let cashLedger: LedgerLite | null = null;
-    if (isCash) {
-        if (voucher.paymentAccount) {
-            cashLedger = {
-                id:            voucher.paymentAccount.id,
-                name:          voucher.paymentAccount.name,
-                normalBalance: voucher.paymentAccount.normalBalance,
-                groupType:     voucher.paymentAccount.group?.type ?? null,
-            };
-        } else {
-            cashLedger = await findLedgerByNames(tx, NAMES.CASH);
-        }
-    }
-    const partyLedger   = !isCash ? await findPartyAccount(tx, voucher.partyType, voucher.partyId) : null;
-
     // Body ledger — Sales / Purchase / Sales Returns / Purchase Returns per kind.
     // Returns fall back to the parent ledger (Sales / Purchase) when the
     // dedicated returns ledger isn't seeded, so old installs keep working.
@@ -301,21 +238,17 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         ] };
     }
 
-    // Counter side: party (credit sale / credit purchase) or cash
-    let counterLedger: LedgerLite | null = isCash ? cashLedger : partyLedger;
-
-    // Fallback chain for credit side when no party linked
-    if (!counterLedger && !isCash) {
-        counterLedger = await findLedgerByNames(tx, isDebtorParty ? NAMES.SUNDRY_DEB : NAMES.SUNDRY_CRED);
-        if (!counterLedger) counterLedger = await findLedgerByNames(tx, NAMES.CASH);
-        if (counterLedger) notes.push(
-            `no party account linked — posted ${isSale ? "Dr" : "Cr"} to ${counterLedger.name}`,
-        );
-    }
-    if (!counterLedger) {
+    // Counter side comes entirely from `voucher.tenders[]` — one Dr leg
+    // per tender on a sale-shape voucher, one Cr leg on a purchase shape.
+    // The customer-AR portion is just another tender row whose accountId
+    // points at the party's ledger. Every Dr/Cr counter line is backed
+    // by an explicit InvVoucherTender row — no implicit math, no
+    // partyType+partyId resolution fallback.
+    const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
+    if (tenderRows.length === 0) {
         return { journalEntryId: null, notes: [
             ...notes,
-            `no counter ledger (party / cash) — skipping GL post`,
+            `no tender rows on voucher ${voucher.reference} — caller must supply at least one`,
         ] };
     }
 
@@ -428,77 +361,28 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     if (!discountLedger)    { bodyAmount -= discountAmt; }
     if (!roundOffLedger)    { bodyAmount += rndLineAmt; rndLineAmt = 0; }
 
-    // ── Counter side: tender rows OR legacy single-account fallback ─────
-    //
-    // When `voucher.tenders` is provided (Layer 7 multi-tender shape) we
-    // emit one JE leg per tender on the counter side — the caller controls
-    // every Dr (sale) / Cr (purchase). Customer AR is just another tender
-    // row whose accountId points at the party's ledger.
-    //
-    // When `tenders` is empty/missing we fall through to the Layer-6
-    // single-tender + upfront-cash split, so existing routes that haven't
-    // adopted the tender shape keep posting correctly. This back-compat
-    // branch is removed in Layer 7g.
-    const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
-    const useTenderShape = tenderRows.length > 0;
-
+    // ── Counter side: one JE leg per tender row ─────────────────────────
+    // Required since Layer 7g — every Dr (sale) / Cr (purchase) leg is
+    // backed by an explicit InvVoucherTender row. The empty-tender guard
+    // at the top of the function already rejected the no-tender case.
     const lines: JeLine[] = [];
     const extraLedgers: LedgerLite[] = [];
 
-    if (useTenderShape) {
-        for (const t of tenderRows) {
-            const amt = toNumber(t.amount);
-            lines.push({
-                accountId:   t.accountId,
-                type:        counterType,
-                amount:      amt,
-                description: voucher.partyName ?? voucher.description,
+    for (const t of tenderRows) {
+        const amt = toNumber(t.amount);
+        lines.push({
+            accountId:   t.accountId,
+            type:        counterType,
+            amount:      amt,
+            description: voucher.partyName ?? voucher.description,
+        });
+        if (t.account) {
+            extraLedgers.push({
+                id:            t.accountId,
+                name:          "", // resolved below if needed for balance delta
+                normalBalance: t.account.normalBalance,
+                groupType:     t.account.group?.type ?? null,
             });
-            if (t.account) {
-                extraLedgers.push({
-                    id:            t.accountId,
-                    name:          "", // resolved below if needed for balance delta
-                    normalBalance: t.account.normalBalance,
-                    groupType:     t.account.group?.type ?? null,
-                });
-            }
-        }
-    } else {
-        // Legacy single-tender + upfront-cash split path (back-compat).
-        // CREDIT sale / CREDIT purchase with cash received / paid upfront:
-        // the counter side (party AR / AP) takes the remainder; the
-        // upfront leg goes to the user-picked cash/bank ledger.
-        const upfront = Math.min(
-            Math.max(0, toNumber(voucher.amountReceived ?? 0)),
-            totalAmount,
-        );
-        const upfrontLedger: LedgerLite | null =
-            (!isCash && upfront > 0 && voucher.paymentAccount)
-                ? {
-                    id:            voucher.paymentAccount.id,
-                    name:          voucher.paymentAccount.name,
-                    normalBalance: voucher.paymentAccount.normalBalance,
-                    groupType:     voucher.paymentAccount.group?.type ?? null,
-                }
-                : null;
-        const upfrontAmount = upfrontLedger ? upfront : 0;
-        const counterAmount = totalAmount - upfrontAmount;
-        if (counterAmount > 0.005) {
-            lines.push({
-                accountId:   counterLedger.id,
-                type:        counterType,
-                amount:      counterAmount,
-                description: voucher.partyName ?? voucher.description,
-            });
-        }
-        if (upfrontLedger && upfrontAmount > 0) {
-            lines.push({
-                accountId:   upfrontLedger.id,
-                type:        counterType,
-                amount:      upfrontAmount,
-                description: `Received upfront — ${upfrontLedger.name}`,
-            });
-            extraLedgers.push(upfrontLedger);
         }
     }
     if (bodyAmount !== 0) {
@@ -621,7 +505,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     // side. effectiveNormalBalance falls back to group type when the
     // ledger's own normalBalance column is null (identity ledgers).
     const ledgerById = new Map<number, LedgerLite>();
-    for (const led of [counterLedger, bodyLedger, roundOffLedger, shippingLedger, discountLedger, ...extraLedgers]) {
+    for (const led of [bodyLedger, roundOffLedger, shippingLedger, discountLedger, ...extraLedgers]) {
         if (led) ledgerById.set(led.id, led);
     }
     for (const leg of taxLegs) {

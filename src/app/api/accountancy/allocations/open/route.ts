@@ -33,7 +33,9 @@ export async function GET(req: Request) {
         },
         select: {
             id: true, type: true, reference: true, date: true,
-            totalAmount: true, amountReceived: true,
+            totalAmount: true,
+            accountId: true,
+            tenders: { select: { accountId: true, amount: true } },
             journalEntryId: true, creditPeriodDays: true,
         },
         orderBy: [{ date: "asc" }],
@@ -53,7 +55,11 @@ export async function GET(req: Request) {
     const openInvoices = invVouchers
         .map((v) => {
             const total = Number(v.totalAmount);
-            const upfront = Number(v.amountReceived);
+            // Paid at sale time = non-AR tender rows (cash/bank/card).
+            // Later receipts add via the JE-allocation chain.
+            const upfront = v.tenders
+                .filter((t) => t.accountId !== v.accountId)
+                .reduce((s, t) => s + Number(t.amount), 0);
             const allocated = upfront + (v.journalEntryId !== null ? (jeAllocSum[v.journalEntryId] ?? 0) : 0);
             const due = new Date(v.date);
             due.setDate(due.getDate() + (v.creditPeriodDays ?? 30));

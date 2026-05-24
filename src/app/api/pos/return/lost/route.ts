@@ -97,20 +97,17 @@ export async function POST(req: Request) {
         const total    = subtotal + taxAmt;
         if (total <= 0) return NextResponse.json({ error: "Return total must be > 0" }, { status: 400 });
 
-        // ── Branch state for GST split + pre-fetch payment account if CASH ──
-        const [branch, paymentAccount] = await Promise.all([
-            prisma.branch.findUnique({
-                where:  { id: branchId },
-                select: { gstStateCode: true },
-            }),
-            data.refundMode === "CASH" && tillAccountId !== null
-                ? prisma.account.findUnique({
-                    where:  { id: tillAccountId },
-                    select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } },
-                })
-                : Promise.resolve(null),
-        ]);
+        // ── Branch state for GST split ─────────────────────────────────
+        const branch = await prisma.branch.findUnique({
+            where:  { id: branchId },
+            select: { gstStateCode: true },
+        });
         const sellerStateCode = (branch?.gstStateCode || "").trim() || null;
+
+        // Refund tender row — single Cr leg on the SALE_RETURN JE.
+        // CASH refund → till (money leaves the drawer).
+        // CREDIT note → customer AR (sits as credit on their ledger).
+        const refundAccountId = data.refundMode === "CASH" ? tillAccountId! : customerAcct.id;
 
         const partyType = customerAcct.personId !== null ? "customer"
                         : customerAcct.companyId !== null ? "company"
@@ -137,14 +134,11 @@ export async function POST(req: Request) {
                     partyId,
                     refNumber:      null,
                     refVoucherId:   null,
-                    paymentMode:    data.refundMode,
-                    paymentAccountId: data.refundMode === "CASH" ? tillAccountId : null,
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     subtotal,
                     taxAmount:      taxAmt,
                     totalAmount:    total,
-                    amountReceived: data.refundMode === "CASH" ? total : 0,
                     createdById:    user!.id,
                     lines: {
                         create: data.lines.map((l) => {
@@ -160,8 +154,16 @@ export async function POST(req: Request) {
                             };
                         }),
                     },
+                    tenders: {
+                        create: [{
+                            accountId: refundAccountId,
+                            amount:    total,
+                            method:    data.refundMode === "CASH" ? "CASH" : null,
+                            reference: null,
+                        }],
+                    },
                 },
-                include: { lines: true },
+                include: { lines: true, tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } } },
             });
 
             const gl = await postInvVoucherToGl(tx, {
@@ -175,13 +177,16 @@ export async function POST(req: Request) {
                     partyName:   voucher.partyName,
                     partyType:   voucher.partyType,
                     partyId:     voucher.partyId,
-                    paymentMode: voucher.paymentMode,
                     subtotal:    voucher.subtotal,
                     taxAmount:   voucher.taxAmount,
                     shippingAmt: voucher.shippingAmt,
                     roundOff:    voucher.roundOff,
                     totalAmount: voucher.totalAmount,
-                    paymentAccount,
+                    tenders:     voucher.tenders.map((t) => ({
+                        accountId: t.accountId,
+                        amount:    Number(t.amount),
+                        account:   t.account,
+                    })),
                     sellerStateCode,
                     buyerStateCode: sellerStateCode,
                 },

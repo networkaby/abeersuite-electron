@@ -48,8 +48,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     partyId:          source.partyId,
                     partyPhone:       source.partyPhone,
                     partyAddress:     source.partyAddress,
-                    paymentMode:      source.paymentMode,
-                    paymentAccountId: source.paymentAccountId,
                     creditPeriodDays: source.creditPeriodDays,
                     placeOfSupply:    source.placeOfSupply,
                     discountPct:      source.discountPct,
@@ -59,7 +57,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     subtotal:         source.subtotal,
                     taxAmount:        source.taxAmount,
                     totalAmount:      source.totalAmount,
-                    amountReceived:   0,              // fresh — nothing collected yet
                     showPrices:       source.showPrices,
                     // refNumber / refDate / refVoucherId intentionally null —
                     // a duplicate of a SALE is not a SALE_RETURN.

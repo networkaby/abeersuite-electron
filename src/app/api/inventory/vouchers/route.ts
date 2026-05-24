@@ -152,8 +152,6 @@ export async function POST(req: NextRequest) {
         partyId,
         partyPhone,
         partyAddress,
-        paymentMode,
-        paymentAccountId,
         creditPeriodDays,
         refNumber,
         refDate,
@@ -162,7 +160,6 @@ export async function POST(req: NextRequest) {
         destinationBranchId,
         shippingAmt    = 0,
         roundOff       = 0,
-        amountReceived = 0,
         discountPct,
         discountAmt,
         showPrices,
@@ -181,10 +178,6 @@ export async function POST(req: NextRequest) {
         partyId?:     number;
         partyPhone?:  string;
         partyAddress?: string;
-        paymentMode?:    string;
-        /// Cash / bank Account that received the money — drives postInvVoucher's
-        /// cash-leg ledger selection. Null falls back to the name-based lookup.
-        paymentAccountId?: number;
         /// Number of days from voucher date until payment is due (CREDIT mode only).
         creditPeriodDays?: number;
         /// Supplier-issued bill number on PURCHASE; original invoice / bill
@@ -200,7 +193,6 @@ export async function POST(req: NextRequest) {
         destinationBranchId?: string;
         shippingAmt?:    number;
         roundOff?:       number;
-        amountReceived?: number;
         /// Voucher-level discount (mutually-convertible with discountAmt)
         discountPct?:    number;
         discountAmt?:    number;
@@ -295,8 +287,8 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    if (isManufacturingJournal && charges.length > 0 && !paymentAccountId) {
-        return NextResponse.json({ error: "Manufacturing Journal Charges require a payment account" }, { status: 400 });
+    if (isManufacturingJournal && charges.length > 0 && tenders.length === 0) {
+        return NextResponse.json({ error: "Manufacturing Journal Charges require a payment tender (cash / bank / sundry creditors)." }, { status: 400 });
     }
     for (const e of charges) {
         // MJ enforces positive (Dr Expense); other voucher types allow
@@ -431,8 +423,6 @@ export async function POST(req: NextRequest) {
                     partyId:      partyId    || null,
                     partyPhone:   partyPhone || null,
                     partyAddress: partyAddress || null,
-                    paymentMode:     paymentMode || null,
-                    paymentAccountId: paymentAccountId ?? null,
                     creditPeriodDays: creditPeriodDays ?? null,
                     refNumber:       refNumber || null,
                     refDate:         refDate ? new Date(refDate) : null,
@@ -441,7 +431,6 @@ export async function POST(req: NextRequest) {
                     destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
                     shippingAmt,
                     roundOff,
-                    amountReceived,
                     discountPct: discountPct != null ? Number(discountPct) : null,
                     discountAmt: overallDiscount > 0 ? overallDiscount : null,
                     ...(typeof showPrices === "boolean" ? { showPrices } : {}),

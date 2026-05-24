@@ -42,7 +42,6 @@ export async function GET(
                     status: true,
                     date: true,
                     totalAmount: true,
-                    amountReceived: true,
                     branch:    { select: { name: true } },
                     createdBy: { select: { name: true } },
                 },

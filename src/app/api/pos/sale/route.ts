@@ -4,7 +4,6 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
-import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -14,20 +13,20 @@ import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/che
 
 // POST /api/pos/sale
 //
-// Atomic POS sale — writes a single InvVoucher (type=POS) carrying lines,
-// stock movement, GST routing, and a back-link to the customer's ledger
-// account. Posting flow:
-//   1. InvVoucher row + lines created (status=POSTED).
-//   2. postInvVoucherToGl → AR / Revenue / GST Output JournalEntry
-//      (Dr Customer AR / Cr Sales / Cr CGST+SGST or IGST).
-//   3. postReceiptVoucher → Voucher type=RECEIPT (Dr Till/Bank / Cr AR) +
-//      mirror JE + VoucherAllocation tying the receipt to the InvVoucher's
-//      JE so Receivables nets it out automatically.
-//   4. InvStockLedger rows + per-branch + org-wide stock decrement.
+// Atomic POS sale — single InvVoucher (type=POS) carrying items, multi-
+// tender settlement rows (Cash / UPI / Card / etc.), stock movement, and
+// GST routing. One balanced JE per voucher; no separate Receipt voucher
+// or VoucherAllocation. Same shape as office SALE post-Layer 7.
 //
-// Replaces the legacy three-table write (Invoice + InvoiceLine + Payment)
-// that ran here before 2026-05-24. See plan in
-// C:\Users\User\.claude\plans\from-earlier-massage-distributed-eclipse.md.
+// Posting flow (one $transaction):
+//   1. Resolve customer Account, branch state, validate tender total.
+//   2. Create InvVoucher + lines + tender rows in a single nested write.
+//   3. postInvVoucherToGl → one JE: Dr per tender (Till / Bank / AR) /
+//      Cr Sales / Cr CGST+SGST or IGST. Wire JE id back onto voucher.
+//   4. InvStockLedger + per-branch + org-wide stock decrement per line.
+//
+// Replaces the prior three-step write (Invoice + InvoiceLine + Payment),
+// later the receipt-voucher detour, with the unified tender shape.
 //
 // As of 2026-05-14 the route requires the cashier to have an OPEN PosShift
 // in the active branch. The CASH portion of any payment auto-debits the
@@ -173,11 +172,28 @@ export async function POST(req: Request) {
             // ── Credit limit check (inside tx so balance read is fresh) ────
             await checkCreditLimit(tx, body.accountId, onCredit);
 
-            // ── 1. InvVoucher (type=POS) + lines ──────────────────────────
-            // paymentMode="CREDIT" so postInvVoucherToGl routes the counter
-            // side to the customer AR ledger (not Cash directly). The cash
-            // settlement is layered on by the receipt voucher in step 3.
+            // ── 1. InvVoucher (type=POS) + lines + tender rows ───────────
+            // Single voucher carries the entire sale: items, tender rows
+            // (Cash / UPI / Card — one per resolved payment, plus an AR
+            // tender for any unsettled balance). postInvVoucherToGl posts
+            // a single balanced JE per voucher; no separate Receipt
+            // voucher / VoucherAllocation needed.
             const voucherRef = await invNextRef(tx, "POS");
+            // POS today enforces paymentTotal == totalAmount, so onCredit
+            // is always 0 and no AR tender is needed. Kept as a future-
+            // facing branch in case partial POS sales get enabled.
+            const arRemainder = totalAmount - paymentTotal;
+            const tenderPayload = [
+                ...resolvedPayments.map((p) => ({
+                    accountId: p.accountId,
+                    amount:    p.amount,
+                    method:    p.method,
+                    reference: p.reference ?? null,
+                })),
+                ...(arRemainder > 0.005
+                    ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
+                    : []),
+            ];
             const voucher = await tx.invVoucher.create({
                 data: {
                     type:           "POS",
@@ -191,13 +207,11 @@ export async function POST(req: Request) {
                     partyName,
                     partyType,
                     partyId,
-                    paymentMode:    "CREDIT",
                     deliveryMode:   "COUNTER",
                     placeOfSupply:  sellerStateCode,
                     subtotal,
                     taxAmount,
                     totalAmount,
-                    amountReceived: totalAmount,
                     createdById:    user!.id,
                     lines: {
                         create: computedLines.map((l) => ({
@@ -210,11 +224,21 @@ export async function POST(req: Request) {
                             amount:      l.amount,
                         })),
                     },
+                    tenders: {
+                        create: tenderPayload.map((t) => ({
+                            accountId: t.accountId,
+                            amount:    t.amount,
+                            method:    t.method,
+                            reference: t.reference,
+                        })),
+                    },
                 },
-                include: { lines: true },
+                include: { lines: true, tenders: { include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } } } },
             });
 
-            // ── 2. GL post (Dr Customer AR / Cr Sales / Cr GST Output) ────
+            // ── 2. GL post (Dr Till/Bank + (optional) Dr Customer AR / Cr Sales / Cr GST) ─
+            // postInvVoucherToGl reads the tender rows directly — one Dr
+            // leg per tender. No back-compat single-paymentAccount path.
             const gl = await postInvVoucherToGl(tx, {
                 voucherId: voucher.id,
                 voucher: {
@@ -226,13 +250,16 @@ export async function POST(req: Request) {
                     partyName:   voucher.partyName,
                     partyType:   voucher.partyType,
                     partyId:     voucher.partyId,
-                    paymentMode: voucher.paymentMode,
                     subtotal:    voucher.subtotal,
                     taxAmount:   voucher.taxAmount,
                     shippingAmt: voucher.shippingAmt,
                     roundOff:    voucher.roundOff,
                     totalAmount: voucher.totalAmount,
-                    paymentAccount: null,
+                    tenders:     voucher.tenders.map((t) => ({
+                        accountId: t.accountId,
+                        amount:    Number(t.amount),
+                        account:   t.account,
+                    })),
                     sellerStateCode,
                     buyerStateCode: sellerStateCode, // counter pickup → intra-state
                 },
@@ -247,21 +274,6 @@ export async function POST(req: Request) {
             await tx.invVoucher.update({
                 where: { id: voucher.id },
                 data:  { journalEntryId: gl.journalEntryId },
-            });
-
-            // ── 3. Receipt voucher (Dr till+bank / Cr AR) + allocation ────
-            const receiptDate = new Date();
-            const receipt = await postReceiptVoucher(tx, {
-                customerAccountId:        customerAccount.id,
-                tenders:                  resolvedPayments.map((p) => ({
-                    accountId:   p.accountId,
-                    amount:      p.amount,
-                    description: p.reference ? `${p.method} · ${p.reference}` : p.method,
-                })),
-                date:                     receiptDate,
-                userId:                   user!.id,
-                narration:                `POS receipt for ${voucherRef}`,
-                allocateToJournalEntryId: gl.journalEntryId,
             });
 
             // ── 4. Stock ledger + per-branch + org-wide stock decrement ───
@@ -293,19 +305,13 @@ export async function POST(req: Request) {
             }
 
             return {
-                // New canonical fields
-                voucherId:        voucher.id,
-                voucherRef:       voucher.reference,
-                journalEntryId:   gl.journalEntryId,
-                receiptVoucherId: receipt.voucherId,
-                receiptVoucherRef: receipt.voucherRef,
-                receiptJeId:      receipt.journalEntryId,
-                allocationId:     receipt.allocationId,
-                shiftId:          shift.id,
-                // Back-compat aliases — PosScreen reads these names today.
-                // Will be removed once Layer 4 swaps the UI to voucherId.
-                invoiceId:        voucher.id,
-                invoiceNumber:    voucher.reference,
+                voucherId:      voucher.id,
+                voucherRef:     voucher.reference,
+                journalEntryId: gl.journalEntryId,
+                shiftId:        shift.id,
+                // Back-compat aliases — PosScreen still reads these names.
+                invoiceId:      voucher.id,
+                invoiceNumber:  voucher.reference,
             };
         });
 

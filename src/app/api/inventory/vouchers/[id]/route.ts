@@ -97,8 +97,6 @@ export async function PATCH(req: Request, { params }: Params) {
         partyId,
         partyPhone,
         partyAddress,
-        paymentMode,
-        paymentAccountId,
         creditPeriodDays,
         refNumber,
         refDate,
@@ -111,7 +109,6 @@ export async function PATCH(req: Request, { params }: Params) {
         roundOff,
         discountPct,
         discountAmt,
-        amountReceived,
         lines,
         charges,
         tenders,
@@ -123,8 +120,6 @@ export async function PATCH(req: Request, { params }: Params) {
         partyId?:          number;
         partyPhone?:       string;
         partyAddress?:     string;
-        paymentMode?:      string;
-        paymentAccountId?: number | null;
         creditPeriodDays?: number | null;
         refNumber?:        string;
         refDate?:          string;
@@ -142,7 +137,6 @@ export async function PATCH(req: Request, { params }: Params) {
         roundOff?:         number;
         discountPct?:      number;
         discountAmt?:      number;
-        amountReceived?:   number;
         lines?: {
             productId:    number;
             description?: string;
@@ -359,8 +353,6 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(partyId          !== undefined ? { partyId:          partyId          || null } : {}),
                     ...(partyPhone       !== undefined ? { partyPhone:       partyPhone       || null } : {}),
                     ...(partyAddress     !== undefined ? { partyAddress:     partyAddress     || null } : {}),
-                    ...(paymentMode      !== undefined ? { paymentMode:      paymentMode      || null } : {}),
-                    ...(paymentAccountId  !== undefined ? { paymentAccountId:  paymentAccountId ?? null } : {}),
                     ...(creditPeriodDays  !== undefined ? { creditPeriodDays:  creditPeriodDays ?? null } : {}),
                     ...(refNumber        !== undefined ? { refNumber:        refNumber        || null } : {}),
                     ...(refDate          !== undefined ? { refDate:          refDate ? new Date(refDate) : null } : {}),
@@ -373,7 +365,6 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(roundOff         !== undefined ? { roundOff }        : {}),
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
                     ...(discountAmt      !== undefined ? { discountAmt }     : {}),
-                    ...(amountReceived   !== undefined ? { amountReceived }  : {}),
                     ...(totals ? totals : {}),
                     // Clear the link to the now-cancelled JE; re-post fills it.
                     ...(wasPosted ? { journalEntryId: null } : {}),
@@ -425,7 +416,6 @@ export async function PATCH(req: Request, { params }: Params) {
                     where: { id },
                     include: {
                         lines: { include: { product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } } } },
-                        paymentAccount: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
                         // Multi-tender + additional-charge rows flow through
                         // to postInvVoucherToGl so the re-posted JE has one
                         // leg per row.

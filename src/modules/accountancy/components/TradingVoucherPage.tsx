@@ -863,8 +863,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             partyId: number | null;
             partyPhone: string | null;
             partyAddress: string | null;
-            paymentMode: string | null;
-            paymentAccountId: number | null;
+            paymentMode?: string | null;
+            paymentAccountId?: number | null;
             creditPeriodDays: number | null;
             refNumber: string | null;
             refDate: string | null;
@@ -874,7 +874,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             roundOff: string | number;
             discountPct: string | number | null;
             discountAmt: string | number | null;
-            amountReceived: string | number;
+            amountReceived?: string | number;
             showPrices?: boolean;
             lines: {
                 id: number;
@@ -1480,13 +1480,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // free-text so the ledger isn't accidentally cluttered.
                 partyType: payMode === "CREDIT" ? party?.kind : undefined,
                 partyId: payMode === "CREDIT" ? party?.id : undefined,
-                paymentMode: payMode,
-                // Cash / bank ledger that the payment lands on. Only relevant
-                // when money actually changes hands at the till: every CASH sale,
-                // OR a CREDIT sale with an upfront Received amount.
-                paymentAccountId: (payMode === "CASH" || receivedForPayload > 0)
-                    ? paymentAccount?.id
-                    : undefined,
                 ...(copy.showPaymentTerms && payMode === "CREDIT" ? {
                     creditPeriodDays: header.creditPeriodDays ? Number(header.creditPeriodDays) : undefined,
                 } : {}),
@@ -1504,7 +1497,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 roundOff,
                 discountPct: prefs.overallDiscount ? (parseFloat(header.discountPct) || 0) : 0,
                 discountAmt: overallDiscount,
-                amountReceived: receivedForPayload,
                 lines: validLines.map((l) => {
                     const rawRate = parseFloat(l.rate) || 0;
                     const tRate = prefs.lineTax ? (parseFloat(l.taxRate) || 0) : 0;

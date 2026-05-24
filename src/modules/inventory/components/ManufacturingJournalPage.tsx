@@ -381,6 +381,10 @@ export function ManufacturingJournalPage() {
 
         const branchId = editing ? selectedBranchId : activeBranchId;
         setSaving(true);
+        // Payment account becomes a single tender row (Layer 7g — replaces
+        // the legacy `paymentAccountId` column). Total = sum of charge
+        // amounts; this is what gets credited to the payment ledger.
+        const totalCharges = charges.reduce((s, c) => s + c.amount, 0);
         try {
             const payload = {
                 type:             "MANUFACTURING_JOURNAL" as const,
@@ -388,9 +392,11 @@ export function ManufacturingJournalPage() {
                 date:             form.date,
                 description:      form.description.trim(),
                 bomId:            form.bomId ?? undefined,
-                paymentAccountId: form.paymentAccountId ?? undefined,
                 lines,
                 charges,
+                tenders: form.paymentAccountId && totalCharges > 0
+                    ? [{ accountId: form.paymentAccountId, amount: totalCharges }]
+                    : [],
             };
             let voucherId: number;
             if (editing) {

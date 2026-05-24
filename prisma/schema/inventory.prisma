@@ -294,13 +294,6 @@ model InvVoucher {
   partyId             Int?
   partyPhone          String?
   partyAddress        String?
-  /// "CASH" or "CREDIT" — affects GL auto-post account selection
-  paymentMode         String?
-  /// Cash / bank ledger that received the payment (CASH sale or upfront
-  /// received-amount on a CREDIT sale). FK to Account; null falls back to
-  /// postInvVoucher.ts's legacy name-based lookup ("Cash-in-Hand").
-  paymentAccountId    Int?
-  paymentAccount      Account?       @relation("InvVoucherPaymentAccount", fields: [paymentAccountId], references: [id])
   /// Supplier-issued bill number on a PURCHASE (we don't generate it — the
   /// supplier does). Also reused as the "original invoice / bill number"
   /// on SALE_RETURN / PURCHASE_RETURN to back-reference the source voucher.
@@ -331,7 +324,6 @@ model InvVoucher {
   subtotal            Decimal        @db.Decimal(14, 2)
   taxAmount           Decimal        @default(0) @db.Decimal(14, 2)
   totalAmount         Decimal        @db.Decimal(14, 2)
-  amountReceived      Decimal        @default(0) @db.Decimal(14, 2)
   /// Linked GL journal entry — auto-created on post
   journalEntryId      Int?
   postedAt            DateTime?

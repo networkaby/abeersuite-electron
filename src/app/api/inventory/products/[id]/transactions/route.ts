@@ -4,14 +4,6 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 
-function paymentStatus(totalAmount: { toString(): string }, amountReceived: { toString(): string }) {
-    const total = toNumber(totalAmount);
-    const recv = toNumber(amountReceived);
-    if (total <= 0) return "N/A";
-    if (recv >= total) return "PAID";
-    if (recv > 0) return "PARTIAL";
-    return "UNPAID";
-}
 
 // GET /api/inventory/products/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -75,7 +67,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         partyType: true,
                         partyId: true,
                         totalAmount: true,
-                        amountReceived: true,
                     },
                 },
             },
@@ -95,7 +86,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             rate: toNumber(line.rate),
             amount: toNumber(line.amount),
             unitCode: product.unit.code,
-            paymentStatus: paymentStatus(line.voucher.totalAmount, line.voucher.amountReceived),
         }));
 
         return NextResponse.json({ product, transactions });

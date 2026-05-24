@@ -55,17 +55,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
                 },
             },
-            // Resolved cash/bank Account picked at save time — postInvVoucher
-            // uses this in preference to the legacy name-based lookup so the
-            // GL JE lands on the ledger the cashier actually chose.
-            paymentAccount: {
-                select: {
-                    id: true,
-                    name: true,
-                    normalBalance: true,
-                    group: { select: { type: true } },
-                },
-            },
             // Branch state drives the seller-state in the CGST/SGST vs IGST split.
             branch: {
                 select: { id: true, gstStateCode: true },
@@ -341,14 +330,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 }
             } else if (isManufacturingJournal && voucher.charges.length > 0) {
                 // Build the JE: N expense debits + 1 payment-account credit.
+                // The payment account is the single tender row on the MJ
+                // voucher (Layer 7g — replaces the legacy `paymentAccountId`
+                // column). Total of all charges = total credited to that
+                // account.
                 const totalCharges = voucher.charges.reduce(
                     (s, e) => s + toNumber(e.amount),
                     0,
                 );
+                const paymentTender = voucher.tenders[0];
                 if (totalCharges <= 0) {
                     postNotes.push("Manufacturing Journal has expense lines but total charges = 0; skipping JE.");
-                } else if (!voucher.paymentAccountId) {
-                    throw new Error("Manufacturing Journal with Charges requires a payment account (cash / bank / sundry creditors).");
+                } else if (!paymentTender) {
+                    throw new Error("Manufacturing Journal with Charges requires a payment tender row (cash / bank / sundry creditors).");
                 } else {
                     // Validate each expense account is an EXPENSE-type ledger.
                     for (const e of voucher.charges) {
@@ -374,7 +368,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                                         description: e.description ?? `Manufacturing charge: ${e.account?.name ?? ""}`.trim(),
                                     })),
                                     {
-                                        accountId: voucher.paymentAccountId,
+                                        accountId: paymentTender.accountId,
                                         type:      "CREDIT" as const,
                                         amount:    totalCharges,
                                         description: `Charges paid for ${voucher.reference}`,
@@ -394,12 +388,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         const delta = acct.normalBalance === "DEBIT" ? debitDelta : -debitDelta;
                         await tx.account.update({ where: { id: acct.id }, data: { balance: { increment: delta } } });
                     }
-                    if (voucher.paymentAccount) {
+                    if (paymentTender.account) {
                         const credit = totalCharges;
-                        const delta = voucher.paymentAccount.normalBalance === "CREDIT" ? credit : -credit;
-                        await tx.account.update({ where: { id: voucher.paymentAccount.id }, data: { balance: { increment: delta } } });
+                        const delta = paymentTender.account.normalBalance === "CREDIT" ? credit : -credit;
+                        await tx.account.update({ where: { id: paymentTender.account.id }, data: { balance: { increment: delta } } });
                     }
-                    postNotes.push(`Posted JE ${jeRef}: ${voucher.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${voucher.paymentAccount?.name ?? "payment account"}.`);
+                    postNotes.push(`Posted JE ${jeRef}: ${voucher.charges.length} expense debit(s) totalling ${totalCharges.toFixed(2)} → ${paymentTender.account?.name ?? "payment account"}.`);
                 }
             }
 

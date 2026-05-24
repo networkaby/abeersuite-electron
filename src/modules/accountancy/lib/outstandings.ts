@@ -206,7 +206,7 @@ async function loadOpenBills(
         },
         select: {
             id: true, type: true, reference: true, date: true,
-            totalAmount: true, amountReceived: true,
+            totalAmount: true,
             accountId: true,
             partyType: true, partyId: true, journalEntryId: true,
             creditPeriodDays: true,
@@ -290,14 +290,14 @@ async function loadOpenBills(
         const due = new Date(v.date);
         due.setDate(due.getDate() + (v.creditPeriodDays ?? DEFAULT_DUE_DAYS));
         const total = Number(v.totalAmount);
-        // Paid at sale time — from explicit tender rows when present
-        // (Layer 7+), else the legacy single `amountReceived` field.
-        // Tender model: non-AR tenders (cash/bank/card) settle part of
-        // the bill; the AR tender row IS the unsettled remainder.
-        const vTenders = tendersByVoucher.get(v.id);
-        const paidAtSale = vTenders && vTenders.length > 0
-            ? vTenders.filter((t) => t.accountId !== accountId).reduce((s, t) => s + t.amount, 0)
-            : Number(v.amountReceived);
+        // Paid at sale time = sum of non-AR tenders on this voucher
+        // (cash / bank / card / wallet). The AR tender row IS the
+        // unsettled remainder; later Receipt vouchers chip away at it
+        // via the VoucherAllocation → journalEntryId chain (paidByJe).
+        const vTenders = tendersByVoucher.get(v.id) ?? [];
+        const paidAtSale = vTenders
+            .filter((t) => t.accountId !== accountId)
+            .reduce((s, t) => s + t.amount, 0);
         // Plus any later receipts allocated against the voucher's JE.
         const paid =
             paidAtSale +

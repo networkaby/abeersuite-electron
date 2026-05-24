@@ -57,30 +57,41 @@ export async function GET(req: NextRequest) {
                     reference:      true,
                     date:           true,
                     description:    true,
-                    paymentMode:    true,
                     totalAmount:    true,
-                    amountReceived: true,
+                    accountId:      true,
                     branch:         { select: { id: true, name: true } },
                     createdBy:      { select: { name: true } },
                     _count:         { select: { lines: true } },
+                    tenders:        { select: { accountId: true, amount: true, method: true } },
                 },
             }),
         ]);
 
         return NextResponse.json({
             total,
-            items: vouchers.map((v) => ({
-                id:             v.id,
-                reference:      v.reference,
-                date:           v.date,
-                description:    v.description,
-                paymentMode:    v.paymentMode,
-                totalAmount:    v.totalAmount.toString(),
-                amountReceived: v.amountReceived.toString(),
-                branch:         v.branch?.name ?? "—",
-                cashier:        v.createdBy?.name ?? "—",
-                lineCount:      v._count.lines,
-            })),
+            items: vouchers.map((v) => {
+                // Paid-at-counter = sum of non-AR tenders (cash/bank/card).
+                // The AR tender (if any) sits as customer credit going forward.
+                const paid = v.tenders
+                    .filter((t) => t.accountId !== v.accountId)
+                    .reduce((s, t) => s + Number(t.amount), 0);
+                // paymentMode equivalent: first tender's method, or "MIXED" when
+                // the cashier used more than one channel.
+                const methods = [...new Set(v.tenders.map((t) => t.method).filter((m): m is NonNullable<typeof m> => !!m))];
+                const paymentMode = methods.length > 1 ? "MIXED" : (methods[0] ?? null);
+                return {
+                    id:             v.id,
+                    reference:      v.reference,
+                    date:           v.date,
+                    description:    v.description,
+                    paymentMode,
+                    totalAmount:    v.totalAmount.toString(),
+                    amountReceived: paid.toFixed(2),
+                    branch:         v.branch?.name ?? "—",
+                    cashier:        v.createdBy?.name ?? "—",
+                    lineCount:      v._count.lines,
+                };
+            }),
         });
     } catch (e) {
         return handleApiError(e, "Failed to load POS sales");
