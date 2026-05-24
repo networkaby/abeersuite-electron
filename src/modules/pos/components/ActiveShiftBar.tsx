@@ -21,6 +21,13 @@ export type ActiveShift = {
         id:   number;
         name: string;
         tillAccount: { id: number; name: string };
+        // Per-method routing — null = method not accepted at this counter.
+        // Set under /office/admin/counters.
+        upiAccount:          { id: number; name: string } | null;
+        cardAccount:         { id: number; name: string } | null;
+        walletAccount:       { id: number; name: string } | null;
+        chequeAccount:       { id: number; name: string } | null;
+        bankTransferAccount: { id: number; name: string } | null;
     };
     branch: { id: string; name: string };
     openingFloatPaise: string;

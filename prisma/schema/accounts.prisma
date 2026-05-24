@@ -67,6 +67,11 @@ model Account {
   // POS reverse rels
   branchVaults           Branch[]                @relation("BranchVaultAccount")
   counterTills           PosCounter[]            @relation("CounterTill")
+  counterUpi             PosCounter[]            @relation("CounterUpi")
+  counterCard            PosCounter[]            @relation("CounterCard")
+  counterWallet          PosCounter[]            @relation("CounterWallet")
+  counterCheque          PosCounter[]            @relation("CounterCheque")
+  counterBankTransfer    PosCounter[]            @relation("CounterBankTransfer")
 
   @@index([isActive])
   @@index([personId])

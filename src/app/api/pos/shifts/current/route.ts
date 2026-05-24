@@ -23,7 +23,16 @@ export async function GET() {
             where:   { userId: user!.id, status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
             include: {
                 counter: {
-                    include: { tillAccount: { select: { id: true, name: true, balance: true } } },
+                    include: {
+                        tillAccount:         { select: { id: true, name: true, balance: true } },
+                        // Per-method payment routing — drives which rows the
+                        // checkout dialog renders. Null = method not accepted.
+                        upiAccount:          { select: { id: true, name: true } },
+                        cardAccount:         { select: { id: true, name: true } },
+                        walletAccount:       { select: { id: true, name: true } },
+                        chequeAccount:       { select: { id: true, name: true } },
+                        bankTransferAccount: { select: { id: true, name: true } },
+                    },
                 },
                 branch:  { select: { id: true, name: true, vaultAccountId: true } },
                 drops:   { orderBy: { droppedAt: "desc" }, select: { id: true, amountPaise: true, droppedAt: true, notes: true } },

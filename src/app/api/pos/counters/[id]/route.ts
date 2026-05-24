@@ -8,10 +8,23 @@ import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
+// Nullable id = "clear this mapping" (method becomes not accepted at this counter).
+// Positive int = link to that Account ledger.
+const accountIdOrClear = z.union([z.number().int().positive(), z.null()]).optional();
+
 const updateSchema = z.object({
-    name:     z.string().trim().min(1).max(60).optional(),
-    isActive: z.boolean().optional(),
+    name:                  z.string().trim().min(1).max(60).optional(),
+    isActive:              z.boolean().optional(),
+    upiAccountId:          accountIdOrClear,
+    cardAccountId:         accountIdOrClear,
+    walletAccountId:       accountIdOrClear,
+    chequeAccountId:       accountIdOrClear,
+    bankTransferAccountId: accountIdOrClear,
 });
+
+// Helper: pull only the non-undefined mapping fields off the parsed body.
+const PAYMENT_MAP_FIELDS = ["upiAccountId", "cardAccountId", "walletAccountId", "chequeAccountId", "bankTransferAccountId"] as const;
+type PaymentMapField = typeof PAYMENT_MAP_FIELDS[number];
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
@@ -27,6 +40,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const existing = await prisma.posCounter.findUnique({ where: { id }, include: { tillAccount: true, branch: { select: { name: true } } } });
         if (!existing) return NextResponse.json({ error: "Counter not found" }, { status: 404 });
+
+        // ── Validate any newly set payment-method mappings reference real ASSET ledgers.
+        // Null is fine ("clear mapping"). Each non-null id must resolve to an ASSET-type
+        // account so we don't accidentally route a Card receipt to, say, a Revenue ledger.
+        const mappingIdsToCheck: number[] = [];
+        for (const f of PAYMENT_MAP_FIELDS) {
+            const v = data[f];
+            if (typeof v === "number") mappingIdsToCheck.push(v);
+        }
+        if (mappingIdsToCheck.length > 0) {
+            const accounts = await prisma.account.findMany({
+                where: { id: { in: mappingIdsToCheck } },
+                select: { id: true, group: { select: { type: true } } },
+            });
+            const byId = new Map(accounts.map((a) => [a.id, a]));
+            for (const aid of mappingIdsToCheck) {
+                const a = byId.get(aid);
+                if (!a)                          return NextResponse.json({ error: `Account ${aid} not found` }, { status: 400 });
+                if (a.group?.type !== "ASSET")   return NextResponse.json({ error: `Account ${aid} is not an ASSET ledger (cash/bank-style) — cannot route payment receipts here.` }, { status: 400 });
+            }
+        }
 
         // If renaming, ensure no other counter in the same branch has that name.
         if (data.name && data.name !== existing.name) {
@@ -49,15 +83,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newTillName = `Cash – ${data.name} – ${existing.branch.name}`;
                 await tx.account.update({ where: { id: existing.tillAccountId }, data: { name: newTillName } });
             }
+            // Only include each mapping field if the caller actually sent it
+            // (undefined = leave as-is; null = clear; number = set).
+            const mapUpdates: Partial<Record<PaymentMapField, number | null>> = {};
+            for (const f of PAYMENT_MAP_FIELDS) {
+                if (data[f] !== undefined) mapUpdates[f] = data[f] as number | null;
+            }
             return tx.posCounter.update({
                 where: { id },
                 data: {
                     ...(data.name     !== undefined && { name: data.name }),
                     ...(data.isActive !== undefined && { isActive: data.isActive }),
+                    ...mapUpdates,
                 },
                 include: {
-                    tillAccount: { select: { id: true, name: true, balance: true } },
-                    branch:      { select: { id: true, name: true } },
+                    tillAccount:         { select: { id: true, name: true, balance: true } },
+                    branch:              { select: { id: true, name: true } },
+                    upiAccount:          { select: { id: true, name: true } },
+                    cardAccount:         { select: { id: true, name: true } },
+                    walletAccount:       { select: { id: true, name: true } },
+                    chequeAccount:       { select: { id: true, name: true } },
+                    bankTransferAccount: { select: { id: true, name: true } },
                 },
             });
         });
@@ -73,6 +119,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 name:    updated.tillAccount.name,
                 balance: updated.tillAccount.balance.toString(),
             },
+            upiAccount:          updated.upiAccount,
+            cardAccount:         updated.cardAccount,
+            walletAccount:       updated.walletAccount,
+            chequeAccount:       updated.chequeAccount,
+            bankTransferAccount: updated.bankTransferAccount,
         });
     } catch (e) {
         return handleApiError(e, "Failed to update counter");

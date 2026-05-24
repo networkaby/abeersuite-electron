@@ -28,6 +28,21 @@ model PosCounter {
   name          String // "Counter 1", "Billing Desk", "Service Counter"
   tillAccountId Int        @unique
   tillAccount   Account    @relation("CounterTill", fields: [tillAccountId], references: [id])
+  // Non-cash payment routing. Null = method not accepted at this counter
+  // (hidden in POS checkout). User-mapped via /office/admin/counters.
+  // Multiple counters may point at the same Account (shared settlement
+  // ledger) or unique ones (per-terminal). CASH always routes to
+  // tillAccountId above.
+  upiAccountId          Int?
+  upiAccount            Account? @relation("CounterUpi",          fields: [upiAccountId],          references: [id])
+  cardAccountId         Int?
+  cardAccount           Account? @relation("CounterCard",         fields: [cardAccountId],         references: [id])
+  walletAccountId       Int?
+  walletAccount         Account? @relation("CounterWallet",       fields: [walletAccountId],       references: [id])
+  chequeAccountId       Int?
+  chequeAccount         Account? @relation("CounterCheque",       fields: [chequeAccountId],       references: [id])
+  bankTransferAccountId Int?
+  bankTransferAccount   Account? @relation("CounterBankTransfer", fields: [bankTransferAccountId], references: [id])
   isActive      Boolean    @default(true)
   shifts        PosShift[]
 

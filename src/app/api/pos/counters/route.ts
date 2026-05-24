@@ -23,21 +23,29 @@ export async function GET(req: NextRequest) {
     try {
         const session = await auth();
         const sessionPerms = (session?.user as { permissions?: string[] })?.permissions ?? [];
-        const isAdmin = sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
+        // Seeded admins don't carry admin:bypass (env-super-admin only). The
+        // admin counter management page is gated by settings:manage, which
+        // is the same gate the layout + PATCH/POST already use.
+        const canManageCounters = sessionPerms.includes(PERMISSIONS.SETTINGS_MANAGE) || sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS);
 
         const { searchParams } = new URL(req.url);
         const scope = searchParams.get("scope");
 
         // ── Admin: full list across all branches (for /office/admin/counters) ─
         if (scope === "all") {
-            if (!isAdmin) {
-                return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+            if (!canManageCounters) {
+                return NextResponse.json({ error: "settings:manage permission required" }, { status: 403 });
             }
             const counters = await prisma.posCounter.findMany({
                 orderBy: [{ branchId: "asc" }, { name: "asc" }],
                 include: {
-                    tillAccount: { select: { id: true, name: true, balance: true } },
-                    branch:      { select: { id: true, name: true } },
+                    tillAccount:         { select: { id: true, name: true, balance: true } },
+                    branch:              { select: { id: true, name: true } },
+                    upiAccount:          { select: { id: true, name: true } },
+                    cardAccount:         { select: { id: true, name: true } },
+                    walletAccount:       { select: { id: true, name: true } },
+                    chequeAccount:       { select: { id: true, name: true } },
+                    bankTransferAccount: { select: { id: true, name: true } },
                     _count:      { select: { shifts: true } },
                     shifts: {
                         where:  { status: { in: ["OPEN", "AWAITING_HANDOVER"] } },
@@ -57,6 +65,11 @@ export async function GET(req: NextRequest) {
                     name:    c.tillAccount.name,
                     balance: c.tillAccount.balance.toString(),
                 },
+                upiAccount:          c.upiAccount,
+                cardAccount:         c.cardAccount,
+                walletAccount:       c.walletAccount,
+                chequeAccount:       c.chequeAccount,
+                bankTransferAccount: c.bankTransferAccount,
                 totalShifts: c._count.shifts,
                 activeShift: c.shifts[0] ?? null,
             })));
@@ -69,7 +82,7 @@ export async function GET(req: NextRequest) {
         } catch (e) {
             if (e instanceof BranchAccessError) {
                 // Admin with no branch cookie yet — fall back to the first active branch.
-                if (isAdmin && e.code === "no_active_branch") {
+                if (canManageCounters && e.code === "no_active_branch") {
                     const firstBranch = await prisma.branch.findFirst({
                         where: { isActive: true },
                         orderBy: { name: "asc" },

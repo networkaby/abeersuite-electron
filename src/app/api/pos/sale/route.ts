@@ -75,7 +75,20 @@ export async function POST(req: Request) {
     // without their active-branch cookie interfering.
     const shift = await prisma.posShift.findFirst({
         where:  { userId: user!.id, status: "OPEN" },
-        select: { id: true, branchId: true, counter: { select: { tillAccountId: true } } },
+        select: {
+            id: true, branchId: true,
+            counter: {
+                select: {
+                    name: true,
+                    tillAccountId:         true,
+                    upiAccountId:          true,
+                    cardAccountId:         true,
+                    walletAccountId:       true,
+                    chequeAccountId:       true,
+                    bankTransferAccountId: true,
+                },
+            },
+        },
     });
     if (!shift) {
         return NextResponse.json(
@@ -85,6 +98,18 @@ export async function POST(req: Request) {
     }
     const tillAccountId  = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;
+    // Per-method ledger map: server is the source of truth for which Account
+    // each non-CASH method settles into. Null = method not accepted at this
+    // counter. Operator configures these under /office/admin/counters.
+    const counterMethodMap: Record<typeof body.payments[number]["method"], number | null> = {
+        CASH:           tillAccountId,   // always — auto-routed
+        MOBILE_PAYMENT: shift.counter.upiAccountId,
+        CARD:           shift.counter.cardAccountId,
+        OTHER:          shift.counter.walletAccountId,    // "Wallet" surface label
+        CHEQUE:         shift.counter.chequeAccountId,
+        BANK_TRANSFER:  shift.counter.bankTransferAccountId,
+    };
+    const counterName = shift.counter.name;
 
     // ── Resolve customer account (party ledger) ───────────────────────────
     // The new schema stores `accountId` directly on InvVoucher. We also
@@ -138,20 +163,24 @@ export async function POST(req: Request) {
         );
     }
 
-    // Auto-route CASH to till; require accountId on non-CASH methods.
+    // Resolve each payment line's settlement ledger via the counter's mapping.
+    // The client-supplied `accountId` (if any) is ignored — the counter owns
+    // routing so the same UPI transaction always lands on the same ledger no
+    // matter which cashier is at the counter. Unmapped methods are rejected
+    // here (the PosScreen also hides them, so this is a guardrail).
+    const METHOD_LABEL: Record<typeof body.payments[number]["method"], string> = {
+        CASH: "Cash", MOBILE_PAYMENT: "UPI", CARD: "Card", CHEQUE: "Cheque", BANK_TRANSFER: "Bank Transfer", OTHER: "Wallet",
+    };
     const resolvedPayments: { method: typeof body.payments[number]["method"]; accountId: number; amount: number; reference?: string }[] = [];
     for (const p of body.payments) {
-        if (p.method === "CASH") {
-            resolvedPayments.push({ method: "CASH", accountId: tillAccountId, amount: p.amount, reference: p.reference });
-        } else {
-            if (!p.accountId) {
-                return NextResponse.json(
-                    { error: `Non-cash payment (${p.method}) needs an account selected.` },
-                    { status: 422 },
-                );
-            }
-            resolvedPayments.push({ method: p.method, accountId: p.accountId, amount: p.amount, reference: p.reference });
+        const mappedAccountId = counterMethodMap[p.method];
+        if (mappedAccountId == null) {
+            return NextResponse.json(
+                { error: `Counter "${counterName}" does not accept ${METHOD_LABEL[p.method]}. Map it under /office/admin/counters first.`, code: "PAYMENT_METHOD_NOT_MAPPED" },
+                { status: 422 },
+            );
         }
+        resolvedPayments.push({ method: p.method, accountId: mappedAccountId, amount: p.amount, reference: p.reference });
     }
 
     // Amount that will increase the customer's AR balance (onCredit portion).

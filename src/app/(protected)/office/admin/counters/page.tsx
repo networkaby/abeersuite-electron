@@ -19,8 +19,12 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
+import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 type Branch = { id: string; name: string; isActive: boolean };
+
+type MappedAccount = { id: number; name: string } | null;
 
 type Counter = {
     id: number;
@@ -29,21 +33,65 @@ type Counter = {
     branch: { id: string; name: string };
     isActive: boolean;
     tillAccount: { id: number; name: string; balance: string };
+    upiAccount:          MappedAccount;
+    cardAccount:         MappedAccount;
+    walletAccount:       MappedAccount;
+    chequeAccount:       MappedAccount;
+    bankTransferAccount: MappedAccount;
     totalShifts: number;
     activeShift: { id: number; status: string; user: { name: string } } | null;
 };
 
+// One row per non-cash payment method. The schema column on PosCounter is
+// `<key>AccountId`, the API field is `<key>Account`. Label is what the
+// operator sees in both the admin form and the POS checkout dialog.
+const PAYMENT_METHOD_ROWS: { key: "upi" | "card" | "wallet" | "cheque" | "bankTransfer"; label: string }[] = [
+    { key: "upi",          label: "UPI" },
+    { key: "card",         label: "Card" },
+    { key: "wallet",       label: "Wallet" },
+    { key: "cheque",       label: "Cheque" },
+    { key: "bankTransfer", label: "Bank Transfer" },
+];
+
 const EMPTY_FORM = { branchId: "", name: "" };
+
+type EditForm = {
+    name: string;
+    upiAccountId:          number | null;
+    cardAccountId:         number | null;
+    walletAccountId:       number | null;
+    chequeAccountId:       number | null;
+    bankTransferAccountId: number | null;
+};
+const EMPTY_EDIT: EditForm = {
+    name: "",
+    upiAccountId: null, cardAccountId: null, walletAccountId: null, chequeAccountId: null, bankTransferAccountId: null,
+};
 
 export default function CountersAdminPage() {
     const [counters, setCounters] = useState<Counter[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
+    const [glAccounts, setGlAccounts] = useState<GlAccount[]>([]);
     const [loading, setLoading]   = useState(true);
     const [addingNew, setAddingNew] = useState(false);
     const [editId, setEditId]     = useState<number | null>(null);
     const [form, setForm]         = useState(EMPTY_FORM);
-    const [editForm, setEditForm] = useState({ name: "" });
+    const [editForm, setEditForm] = useState<EditForm>(EMPTY_EDIT);
     const [saving, setSaving]     = useState(false);
+
+    const loadGlAccounts = async () => {
+        try {
+            const { data } = await axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false");
+            // Filter to ASSET-style ledgers — only Cash-in-Hand + Bank Accounts
+            // can sensibly receive POS payment proceeds.
+            setGlAccounts(data.filter((a) =>
+                a.group?.name === ACCOUNT_GROUPS.CASH_IN_HAND ||
+                a.group?.name === ACCOUNT_GROUPS.BANK_ACCOUNTS,
+            ));
+        } catch {
+            setGlAccounts([]);
+        }
+    };
 
     const load = async () => {
         setLoading(true);
@@ -60,7 +108,7 @@ export default function CountersAdminPage() {
             setLoading(false);
         }
     };
-    useEffect(() => { void load(); }, []);
+    useEffect(() => { void load(); void loadGlAccounts(); }, []);
 
     const startAdd = () => {
         setForm({ ...EMPTY_FORM, branchId: branches[0]?.id ?? "" });
@@ -68,7 +116,14 @@ export default function CountersAdminPage() {
         setAddingNew(true);
     };
     const startEdit = (c: Counter) => {
-        setEditForm({ name: c.name });
+        setEditForm({
+            name: c.name,
+            upiAccountId:          c.upiAccount?.id          ?? null,
+            cardAccountId:         c.cardAccount?.id         ?? null,
+            walletAccountId:       c.walletAccount?.id       ?? null,
+            chequeAccountId:       c.chequeAccount?.id       ?? null,
+            bankTransferAccountId: c.bankTransferAccount?.id ?? null,
+        });
         setEditId(c.id);
         setAddingNew(false);
     };
@@ -99,7 +154,12 @@ export default function CountersAdminPage() {
         setSaving(true);
         try {
             await axios.patch(`/api/pos/counters/${editId}`, {
-                name: editForm.name.trim(),
+                name:                  editForm.name.trim(),
+                upiAccountId:          editForm.upiAccountId,
+                cardAccountId:         editForm.cardAccountId,
+                walletAccountId:       editForm.walletAccountId,
+                chequeAccountId:       editForm.chequeAccountId,
+                bankTransferAccountId: editForm.bankTransferAccountId,
             });
             toast.success("Counter updated");
             cancel();
@@ -211,7 +271,7 @@ export default function CountersAdminPage() {
                                         } bg-card`}
                                     >
                                         {editId === c.id ? (
-                                            <div className="p-4 space-y-3">
+                                            <div className="p-4 space-y-4">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     <div>
                                                         <label className="text-xs font-medium text-muted-foreground">Name *</label>
@@ -225,6 +285,36 @@ export default function CountersAdminPage() {
                                                 <p className="text-xs text-muted-foreground">
                                                     Renaming the counter also renames its till GL account.
                                                 </p>
+
+                                                {/* Per-method ledger mapping. Empty picker = method not
+                                                    accepted at this counter (hidden on POS checkout). Cash
+                                                    is intentionally absent — it always routes to till. */}
+                                                <div className="space-y-2 pt-2 border-t border-border">
+                                                    <p className="text-xs font-semibold text-muted-foreground">Payment options accepted at this counter</p>
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Pick a settlement ledger per method. Cash routes to <span className="font-mono">{c.tillAccount.name}</span> automatically.
+                                                        Methods left blank won&apos;t appear on the checkout dialog.
+                                                    </p>
+                                                    <div className="space-y-1.5">
+                                                        {PAYMENT_METHOD_ROWS.map((m) => {
+                                                            const fieldKey = `${m.key}AccountId` as const;
+                                                            const value = editForm[fieldKey];
+                                                            return (
+                                                                <div key={m.key} className="grid grid-cols-[110px_1fr] gap-2 items-center">
+                                                                    <span className="text-xs font-medium">{m.label}</span>
+                                                                    <GlAccountCombobox
+                                                                        value={value}
+                                                                        onChange={(acc) => setEditForm((f) => ({ ...f, [fieldKey]: acc?.id ?? null }))}
+                                                                        accounts={glAccounts}
+                                                                        placeholder="(not accepted)"
+                                                                        className="h-8 text-xs"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
                                                 <div className="flex gap-2">
                                                     <Button size="sm" onClick={handleUpdate} disabled={saving}><Check size={14} /> Save</Button>
                                                     <Button size="sm" variant="outline" onClick={cancel}><X size={14} /> Cancel</Button>
@@ -247,6 +337,19 @@ export default function CountersAdminPage() {
                                                                 · {c.activeShift.status === "AWAITING_HANDOVER" ? "awaiting handover" : `in use — ${c.activeShift.user.name}`}
                                                             </span>
                                                         )}
+                                                    </div>
+                                                    {/* Compact mapped-method summary so the operator can see what's
+                                                        wired without opening the edit form. CASH is always there. */}
+                                                    <div className="flex gap-1 mt-1.5 flex-wrap">
+                                                        <Badge variant="outline" className="text-[10px] font-normal">Cash</Badge>
+                                                        {PAYMENT_METHOD_ROWS.map((m) => {
+                                                            const acct = c[`${m.key}Account`];
+                                                            return acct ? (
+                                                                <Badge key={m.key} variant="outline" className="text-[10px] font-normal" title={acct.name}>
+                                                                    {m.label} → {acct.name}
+                                                                </Badge>
+                                                            ) : null;
+                                                        })}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">

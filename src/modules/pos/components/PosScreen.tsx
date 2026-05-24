@@ -160,15 +160,28 @@ export default function PosScreen() {
         refreshActiveShift();
     }, [refreshActiveShift]);
 
-    // Lookup the first BANK account once — used as the default destination
-    // for UPI / Card / Cheque / Bank Transfer payment lines until a per-row
-    // account picker lands (plan TODO). CASH lines auto-route to till.
-    const [defaultBankAccountId, setDefaultBankAccountId] = useState<number | null>(null);
-    useEffect(() => {
-        axios.get<{ id: number; name: string; group?: { name: string } | null }[]>("/api/accountancy/accounts?group=Bank+Accounts")
-            .then((r) => { if (r.data[0]) setDefaultBankAccountId(r.data[0].id); })
-            .catch(() => { /* non-blocking — submit will 422 if user tries non-CASH */ });
-    }, []);
+    // Accepted non-cash methods are derived from the active shift's counter
+    // (each counter wires UPI / Card / Wallet / Cheque / Bank Transfer to a
+    // specific ledger under /office/admin/counters). Null mapping = method
+    // not accepted at this counter → hidden in checkout. Cash is always
+    // accepted (routes to till).
+    const counterMethods = useMemo(() => {
+        const c = activeShift?.counter;
+        return {
+            upi:          c?.upiAccount          ?? null,
+            card:         c?.cardAccount         ?? null,
+            wallet:       c?.walletAccount       ?? null,
+            cheque:       c?.chequeAccount       ?? null,
+            bankTransfer: c?.bankTransferAccount ?? null,
+        };
+    }, [activeShift]);
+    const allowedExtras = useMemo(() => EXTRA_METHODS.filter((m) => {
+        if (m.value === "CARD")          return counterMethods.card          != null;
+        if (m.value === "WALLET")        return counterMethods.wallet        != null;
+        if (m.value === "CHEQUE")        return counterMethods.cheque        != null;
+        if (m.value === "BANK_TRANSFER") return counterMethods.bankTransfer  != null;
+        return false;
+    }), [counterMethods]);
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
@@ -343,23 +356,19 @@ export default function PosScreen() {
                     arrearPaid > 0 ? ` | Cleared arrear ${fmtINR(arrearPaid)}` :
                         "";
 
-            // Build structured payments array. CASH auto-routes to till on the
-            // server (omit accountId). Non-cash methods need an accountId —
-            // until the per-row account picker lands, we use the first BANK
-            // account as a sensible default. WALLET (legacy UI value) maps to
-            // schema's OTHER enum.
-            type PayLine = { method: "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER"; amount: number; accountId?: number; reference?: string };
+            // Build structured payments array. The server resolves each
+            // non-CASH method's settlement Account from the counter mapping
+            // (set under /office/admin/counters) — no accountId sent from
+            // the client. CASH auto-routes to till. WALLET (legacy UI value)
+            // maps to schema's OTHER enum.
+            type PayLine = { method: "CASH" | "MOBILE_PAYMENT" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "OTHER"; amount: number; reference?: string };
             const paymentsList: PayLine[] = [];
             if (cashNet > 0)  paymentsList.push({ method: "CASH",           amount: cashNet });
-            if (pay.upi > 0)  {
-                if (!defaultBankAccountId) { toast.error("No bank account configured. Add one under Chart of Accounts → Bank Accounts."); setSubmitting(false); return; }
-                paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi, accountId: defaultBankAccountId });
-            }
+            if (pay.upi > 0)  paymentsList.push({ method: "MOBILE_PAYMENT", amount: pay.upi });
             for (const e of extras) {
                 if (e.amount <= 0) continue;
-                if (!defaultBankAccountId) { toast.error("No bank account configured. Add one under Chart of Accounts → Bank Accounts."); setSubmitting(false); return; }
                 const method = e.method === "WALLET" ? "OTHER" : e.method;
-                paymentsList.push({ method, amount: e.amount, reference: e.reference || undefined, accountId: defaultBankAccountId });
+                paymentsList.push({ method, amount: e.amount, reference: e.reference || undefined });
             }
             // On-credit (unpaid) portion stays as AR — the user pays later. We
             // only send the COLLECTED portion as payments; if the entire bill
@@ -489,16 +498,12 @@ export default function PosScreen() {
             <ShiftOpenDialog
                 open={shiftOpenDialogOpen}
                 onOpenChange={setShiftOpenDialogOpen}
-                onOpened={(s: OpenedShift) => {
-                    setActiveShift({
-                        id:                s.id,
-                        status:            "OPEN",
-                        openedAt:          new Date().toISOString(),
-                        counter:           s.counter,
-                        branch:            s.branch,
-                        openingFloatPaise: s.openingFloatPaise,
-                    });
+                onOpened={(_s: OpenedShift) => {
+                    // Re-fetch via /api/pos/shifts/current so we get the full
+                    // counter info including per-method payment mappings (the
+                    // dialog's payload only carries id/name/tillAccount).
                     setShiftOpenDialogOpen(false);
+                    refreshActiveShift();
                 }}
             />
 
@@ -816,35 +821,38 @@ export default function PosScreen() {
                                         </div>
                                     )}
 
-                                    {/* UPI — single amount field, no reference */}
-                                    <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                                        <Label className="flex items-center gap-1 text-xs">
-                                            <Smartphone size={12} /> UPI
-                                            <button
-                                                type="button"
-                                                title="Fill remaining amount in UPI"
-                                                onClick={() => {
-                                                    const remaining = Math.max(0, +(total - cashNet - extrasSum).toFixed(2));
-                                                    setPay((s) => ({ ...s, upi: remaining }));
-                                                    setTimeout(() => upiAmountRef.current?.select(), 0);
-                                                }}
-                                                className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
-                                            >
-                                                <Check size={11} strokeWidth={2.5} />
-                                            </button>
-                                        </Label>
-                                        <Input
-                                            ref={upiAmountRef}
-                                            value={pay.upi || ""}
-                                            onChange={(e) => setPay((s) => ({ ...s, upi: Number(e.target.value) || 0 }))}
-                                            onKeyDown={enterToSubmit}
-                                            placeholder="₹ amount"
-                                            inputMode="decimal"
-                                            className="text-right"
-                                        />
-                                    </div>
+                                    {/* UPI — only shown when this counter accepts UPI */}
+                                    {counterMethods.upi && (
+                                        <div className="grid grid-cols-[80px_1fr] items-center gap-2">
+                                            <Label className="flex items-center gap-1 text-xs">
+                                                <Smartphone size={12} /> UPI
+                                                <button
+                                                    type="button"
+                                                    title="Fill remaining amount in UPI"
+                                                    onClick={() => {
+                                                        const remaining = Math.max(0, +(total - cashNet - extrasSum).toFixed(2));
+                                                        setPay((s) => ({ ...s, upi: remaining }));
+                                                        setTimeout(() => upiAmountRef.current?.select(), 0);
+                                                    }}
+                                                    className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
+                                                >
+                                                    <Check size={11} strokeWidth={2.5} />
+                                                </button>
+                                            </Label>
+                                            <Input
+                                                ref={upiAmountRef}
+                                                value={pay.upi || ""}
+                                                onChange={(e) => setPay((s) => ({ ...s, upi: Number(e.target.value) || 0 }))}
+                                                onKeyDown={enterToSubmit}
+                                                placeholder="₹ amount"
+                                                inputMode="decimal"
+                                                className="text-right"
+                                            />
+                                        </div>
+                                    )}
 
-                                    {/* Extras — Card / Cheque / Bank Transfer / Wallet (added on demand) */}
+                                    {/* Extras — Card / Cheque / Bank Transfer / Wallet (added on demand,
+                                        only methods mapped on this counter appear in the picker) */}
                                     {extras.map((e) => (
                                         <div key={e.id} className="grid grid-cols-[160px_1fr_1fr_auto] items-center gap-2">
                                             <Select
@@ -855,7 +863,7 @@ export default function PosScreen() {
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {EXTRA_METHODS.map((m) => (
+                                                    {allowedExtras.map((m) => (
                                                         <SelectItem key={m.value} value={m.value}>
                                                             <span className="flex items-center gap-2">{m.icon} {m.label}</span>
                                                         </SelectItem>
@@ -903,7 +911,13 @@ export default function PosScreen() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setExtras((prev) => [...prev, { id: crypto.randomUUID(), method: "CARD", amount: 0, reference: "" }])}
+                                            disabled={allowedExtras.length === 0}
+                                            title={allowedExtras.length === 0 ? "This counter only accepts Cash (+ UPI if mapped). Map more methods under /office/admin/counters." : undefined}
+                                            onClick={() => {
+                                                const seed = allowedExtras[0]?.value;
+                                                if (!seed) return;
+                                                setExtras((prev) => [...prev, { id: crypto.randomUUID(), method: seed, amount: 0, reference: "" }]);
+                                            }}
                                         >
                                             <Plus size={14} /> Add payment line
                                         </Button>

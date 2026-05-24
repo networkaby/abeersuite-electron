@@ -14,7 +14,7 @@
 - `/office/admin/role` — Roles UI (the **Enterprise Permission Matrix** lives here)
 - `/office/admin/branches`, `/office/admin/departments`, `/office/admin/positions`
 - `/office/admin/org-chart` — visual hierarchy
-- `/office/admin/counters` — POS counter management (see [pos.md](./pos.md))
+- `/office/admin/counters` — POS counter management — create / rename / activate / delete, plus per-method ledger mapping (UPI / Card / Wallet / Cheque / Bank Transfer → Account). See [pos.md](./pos.md).
 
 > 2026-05-11: route groups `(admin)`, `(core)`, `(message)`, `(roadmap)`, `(social)` were promoted to real URL segments. Sub-paths now carry their module prefix (e.g. `/office/branches` → `/office/admin/branches`, `/office/users` → `/office/admin/users`, profile pages `/office/users/[id]` → `/office/social/users/[id]`).
 
@@ -106,4 +106,4 @@
 - A "permissions UI" that adds new permission rows from the app — does not exist; reseed is required.
 - A `permissions:edit` permission gate — no, since changes happen via seed file edits + reseed, not at runtime.
 
-_Last updated: 2026-05-24 — `/office/admin/branches` page got the structured-address / contact form refresh from the Organisation settings update (commit `b647e33`). `Branch` now carries structured address fields + `gstStateCode`; the branches page form is the canonical edit UI. No behaviour change to branch resolution / scoping. Previously (2026-05-22): `OrgRegionsCreateDialog` form-key derivation switched from `setState`-in-effect to `useMemo` (React 19 hygiene; no behaviour change). Previously (2026-05-20): V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._
+_Last updated: 2026-05-24 — `/office/admin/counters` edit form gained a "Payment options accepted at this counter" section: 5 mapping rows (UPI / Card / Wallet / Cheque / Bank Transfer) each backed by `GlAccountCombobox` (inline ledger create supported). Each mapping is a nullable `accountId` column on `PosCounter`; null = method hidden in POS checkout. `PATCH /api/pos/counters/[id]` accepts the 5 new fields and validates each id resolves to an ASSET ledger. See [pos.md](./pos.md) for the POS-side wiring. Earlier today: `/office/admin/branches` page got the structured-address / contact form refresh from the Organisation settings update (commit `b647e33`). `Branch` now carries structured address fields + `gstStateCode`; the branches page form is the canonical edit UI. No behaviour change to branch resolution / scoping. Previously (2026-05-22): `OrgRegionsCreateDialog` form-key derivation switched from `setState`-in-effect to `useMemo` (React 19 hygiene; no behaviour change). Previously (2026-05-20): V1.5 in-section nav (`layout.tsx`, `AdminNav`, `loading.tsx`); grouped tabs from `ADMIN_NAV`._
