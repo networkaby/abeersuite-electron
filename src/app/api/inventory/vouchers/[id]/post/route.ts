@@ -41,8 +41,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } },
                 },
             },
-            // Manufacturing Journal Charges → GL allocation on post.
+            // Additional GL legs ("+ Add Account" rows + MJ Charges) +
+            // multi-tender settlement rows. Both passed through to
+            // postInvVoucherToGl so the JE includes one leg per row.
             charges: {
+                include: {
+                    account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
+                },
+            },
+            tenders: {
+                orderBy: { id: "asc" },
                 include: {
                     account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
                 },

@@ -30,6 +30,17 @@ export async function GET(_req: Request, { params }: Params) {
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, reference: true, type: true } },
+            // Multi-tender + additional charges so the form's edit-mode
+            // hydration (?voucherId=) can rebuild the rows it presented
+            // to the operator on the original save.
+            tenders: {
+                orderBy: { id: "asc" },
+                include: { account: { select: { id: true, name: true, code: true } } },
+            },
+            charges: {
+                orderBy: { id: "asc" },
+                include: { account: { select: { id: true, name: true, code: true } } },
+            },
         },
     });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -103,6 +114,7 @@ export async function PATCH(req: Request, { params }: Params) {
         amountReceived,
         lines,
         charges,
+        tenders,
     } = body as {
         date?:             string;
         description?:      string;
@@ -149,6 +161,12 @@ export async function PATCH(req: Request, { params }: Params) {
             description?: string;
             amount:       number;
         }[];
+        tenders?: {
+            accountId: number;
+            amount:    number;
+            method?:   "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
+            reference?: string;
+        }[];
     };
 
     const isPhysicalStock = existing.type === "PHYSICAL_STOCK";
@@ -181,11 +199,13 @@ export async function PATCH(req: Request, { params }: Params) {
             });
             return { ...l, rate, discountAmt: lineDiscountAmt, taxAmount, amount };
         });
+        const chargesNet = (charges ?? []).reduce((s, c) => s + Number(c.amount), 0);
         totals = calcVoucherTotals(
             computedLines,
             shippingAmt ?? Number(existing.shippingAmt),
             discountAmt ?? (existing.discountAmt != null ? Number(existing.discountAmt) : 0),
             roundOff    ?? Number(existing.roundOff),
+            chargesNet,
         );
     }
 
@@ -316,11 +336,16 @@ export async function PATCH(req: Request, { params }: Params) {
             if (computedLines) {
                 await tx.invVoucherLine.deleteMany({ where: { voucherId: id } });
             }
-            // Manufacturing Journal Charges: if `charges` is provided
-            // (even as an empty array, signalling "I want no charges now"),
-            // replace them in full.
+            // Additional Charges + Tenders — delete-and-recreate when
+            // provided (even as empty arrays, signalling "clear them all").
+            // The same pattern the lines block uses above. Keeps the
+            // post → reverse → re-post lifecycle simple: every PATCH that
+            // touches these sections fully replaces the rows.
             if (charges !== undefined) {
                 await tx.invVoucherCharge.deleteMany({ where: { voucherId: id } });
+            }
+            if (tenders !== undefined) {
+                await tx.invVoucherTender.deleteMany({ where: { voucherId: id } });
             }
             // Status stays POSTED for posted edits; the re-post below sets a
             // fresh journalEntryId. For draft edits the row is unchanged.
@@ -379,6 +404,16 @@ export async function PATCH(req: Request, { params }: Params) {
                             })),
                         },
                     } : {}),
+                    ...(tenders && tenders.length > 0 ? {
+                        tenders: {
+                            create: tenders.map((t) => ({
+                                accountId: t.accountId,
+                                amount:    t.amount,
+                                method:    t.method ?? null,
+                                reference: t.reference?.trim() || null,
+                            })),
+                        },
+                    } : {}),
                 },
             });
 
@@ -391,6 +426,16 @@ export async function PATCH(req: Request, { params }: Params) {
                     include: {
                         lines: { include: { product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } } } },
                         paymentAccount: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } },
+                        // Multi-tender + additional-charge rows flow through
+                        // to postInvVoucherToGl so the re-posted JE has one
+                        // leg per row.
+                        tenders: {
+                            orderBy: { id: "asc" },
+                            include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } },
+                        },
+                        charges: {
+                            include: { account: { select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } } } },
+                        },
                     },
                 });
                 if (!fresh) throw new Error("Voucher disappeared mid-transaction");

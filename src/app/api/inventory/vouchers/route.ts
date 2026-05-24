@@ -170,6 +170,7 @@ export async function POST(req: NextRequest) {
         placeOfSupply,
         lines = [],
         charges = [],
+        tenders = [],
     } = body as {
         type:         InvVoucherType;
         date:         string;
@@ -228,11 +229,25 @@ export async function POST(req: NextRequest) {
             /// "CONSUME" | "PRODUCE" — required for MANUFACTURING_JOURNAL lines.
             direction?:  "CONSUME" | "PRODUCE";
         }[];
-        /// MANUFACTURING_JOURNAL Charges — expense allocation rows.
+        /// Additional GL allocation rows ("+ Add Account" below items).
+        /// MANUFACTURING_JOURNAL uses these as expense charges (Dr only,
+        /// always positive). SALE / PURCHASE etc. accept signed amounts
+        /// (positive = body direction, negative = opposite). See
+        /// InvVoucherCharge in inventory.prisma.
         charges?: {
             accountId:    number;
             description?: string;
             amount:       number;
+        }[];
+        /// Multi-tender settlement rows. When provided, replaces the legacy
+        /// single `paymentAccountId` + `amountReceived` shape. Each row =
+        /// one Dr (sale) / Cr (purchase) on the counter side. AR portion =
+        /// a tender row whose accountId points at the customer's ledger.
+        tenders?: {
+            accountId: number;
+            amount:    number;
+            method?:   "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
+            reference?: string;
         }[];
     };
 
@@ -284,8 +299,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Manufacturing Journal Charges require a payment account" }, { status: 400 });
     }
     for (const e of charges) {
-        if (!e.accountId || !(e.amount > 0)) {
-            return NextResponse.json({ error: "Each charge line needs an expense account and amount > 0" }, { status: 400 });
+        // MJ enforces positive (Dr Expense); other voucher types allow
+        // signed amounts (sign determines direction via postInvVoucher).
+        if (!e.accountId) {
+            return NextResponse.json({ error: "Each charge line needs an account" }, { status: 400 });
+        }
+        if (isManufacturingJournal && !(e.amount > 0)) {
+            return NextResponse.json({ error: "Each Manufacturing Journal charge needs amount > 0" }, { status: 400 });
+        }
+        if (!Number.isFinite(e.amount) || Math.abs(e.amount) < 0.005) {
+            return NextResponse.json({ error: "Each charge line needs a non-zero amount" }, { status: 400 });
+        }
+    }
+    for (const t of tenders) {
+        if (!t.accountId || !(t.amount > 0)) {
+            return NextResponse.json({ error: "Each tender row needs an account and amount > 0" }, { status: 400 });
         }
     }
 
@@ -324,12 +352,32 @@ export async function POST(req: NextRequest) {
                 ? (lineSubtotal * Number(discountPct)) / 100
                 : 0;
 
+    // chargesNet — signed sum of all charge rows. Positive on a sale-side
+    // voucher means body-direction (Cr Income → bill goes UP); negative
+    // means opposite (Dr Expense → bill goes DOWN). Mirror on purchase.
+    const chargesNet = charges.reduce((s, c) => s + Number(c.amount), 0);
+
     const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(
         computedLines,
         Number(shippingAmt),
         overallDiscount,
         Number(roundOff),
+        chargesNet,
     );
+
+    // Validate tenders sum to totalAmount when supplied. Operator UX: when
+    // the form's "Balance" auto-fill row was rendered, it's included in
+    // the tenders[] array as the customer-AR row, so the sum should match
+    // the total exactly. Tolerate ±₹0.01 for rounding.
+    if (tenders.length > 0) {
+        const tSum = tenders.reduce((s, t) => s + Number(t.amount), 0);
+        if (Math.abs(tSum - totalAmount) > 0.01) {
+            return NextResponse.json(
+                { error: `Tenders sum (₹${tSum.toFixed(2)}) does not match voucher total (₹${totalAmount.toFixed(2)}).` },
+                { status: 400 },
+            );
+        }
+    }
 
     // Resolve place-of-supply for the GST routing. The client (TradingVoucherPage)
     // can send `placeOfSupply` directly when the cashier picked a state override;
@@ -419,12 +467,22 @@ export async function POST(req: NextRequest) {
                             amount:      l.amount,
                         })),
                     },
-                    ...(isManufacturingJournal && charges.length > 0 ? {
+                    ...(charges.length > 0 ? {
                         charges: {
                             create: charges.map((e) => ({
                                 accountId:   e.accountId,
                                 description: e.description?.trim() || null,
                                 amount:      e.amount,
+                            })),
+                        },
+                    } : {}),
+                    ...(tenders.length > 0 ? {
+                        tenders: {
+                            create: tenders.map((t) => ({
+                                accountId: t.accountId,
+                                amount:    t.amount,
+                                method:    t.method ?? null,
+                                reference: t.reference?.trim() || null,
                             })),
                         },
                     } : {}),
