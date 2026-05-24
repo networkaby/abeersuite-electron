@@ -130,6 +130,14 @@ export type PostVoucherInput = {
         shippingAmt: Prisma.Decimal | number;
         roundOff:    Prisma.Decimal | number;
         totalAmount: Prisma.Decimal | number;
+        /// Cash received upfront on a CREDIT sale / paid upfront on a CREDIT
+        /// purchase. When > 0 (and `paymentAccount` set) the JE splits the
+        /// counter side into two debits / credits so the cash leg actually
+        /// hits the till / bank ledger — fixes the GL hole where the form's
+        /// "Received in: Cash" field stored a number but never posted it.
+        /// Ignored when paymentMode = "CASH" (in that case the whole counter
+        /// total already routes to `paymentAccount`).
+        amountReceived?: Prisma.Decimal | number | null;
         /// User-picked cash/bank ledger (Cash-in-Hand, HDFC, SBI, …).
         /// When present, overrides the legacy name-based lookup so the
         /// GL JE lands on the explicit choice. Null = fall back to NAMES.CASH.
@@ -344,13 +352,51 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     if (unledgered > 0)  { bodyAmount += unledgered; }
     if (!roundOffLedger) { bodyAmount += rndLineAmt; rndLineAmt = 0; }
 
+    // Partial-tender split — CREDIT sale / CREDIT purchase with cash
+    // received / paid upfront. The counter side (party AR / AP) takes the
+    // remainder; the upfront leg goes to the user-picked cash/bank ledger.
+    // Posts ONE balanced JE per voucher (no separate Receipt/Payment voucher)
+    // and closes the GL hole where `amountReceived` was stored but never
+    // posted.
+    //
+    // Skipped when: paymentMode is CASH (whole counter is already cash);
+    // no paymentAccount linked; amountReceived ≤ 0 or ≥ totalAmount.
+    const upfront = Math.min(
+        Math.max(0, toNumber(voucher.amountReceived ?? 0)),
+        totalAmount,
+    );
+    const upfrontLedger: LedgerLite | null =
+        (!isCash && upfront > 0 && voucher.paymentAccount)
+            ? {
+                id:            voucher.paymentAccount.id,
+                name:          voucher.paymentAccount.name,
+                normalBalance: voucher.paymentAccount.normalBalance,
+                groupType:     voucher.paymentAccount.group?.type ?? null,
+            }
+            : null;
+    const upfrontAmount  = upfrontLedger ? upfront : 0;
+    const counterAmount  = totalAmount - upfrontAmount;
+
     const lines: JeLine[] = [];
-    lines.push({
-        accountId:   counterLedger.id,
-        type:        counterType,
-        amount:      totalAmount,
-        description: voucher.partyName ?? voucher.description,
-    });
+    if (counterAmount > 0.005) {
+        lines.push({
+            accountId:   counterLedger.id,
+            type:        counterType,
+            amount:      counterAmount,
+            description: voucher.partyName ?? voucher.description,
+        });
+    }
+    if (upfrontLedger && upfrontAmount > 0) {
+        // For a SALE: Dr cash/bank (counterType=DEBIT). For a PURCHASE:
+        // Cr cash/bank (counterType=CREDIT). Same direction as the party
+        // line because both represent money flowing on the same side.
+        lines.push({
+            accountId:   upfrontLedger.id,
+            type:        counterType,
+            amount:      upfrontAmount,
+            description: `Received upfront — ${upfrontLedger.name}`,
+        });
+    }
     if (bodyAmount !== 0) {
         lines.push({
             accountId:   bodyLedger.id,
@@ -413,7 +459,7 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
 
     // Update Account.balance for each line
     const ledgerById = new Map<number, LedgerLite>();
-    for (const led of [counterLedger, bodyLedger, roundOffLedger]) {
+    for (const led of [counterLedger, bodyLedger, roundOffLedger, upfrontLedger]) {
         if (led) ledgerById.set(led.id, led);
     }
     for (const leg of taxLegs) {
