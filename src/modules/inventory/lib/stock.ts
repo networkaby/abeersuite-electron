@@ -97,15 +97,23 @@ export function calcLineTotals(l: VoucherLineInput): {
     return { discountAmt: discAmt, taxAmount, amount };
 }
 
-/** Compute voucher-level totals from computed lines */
+/** Compute voucher-level totals from computed lines.
+ *
+ * `chargesNet` is the signed sum of additional GL legs (the "+ Add Account"
+ * rows below the items table — packing income, service charges, etc.).
+ * Positive amounts increase the bill on sale-side / our payment on
+ * purchase-side; negative amounts decrease it. See InvVoucherCharge in
+ * inventory.prisma for the direction convention.
+ */
 export function calcVoucherTotals(
     lines: { amount: number; taxAmount: number }[],
     shippingAmt = 0,
     discountAmt = 0,
     roundOff    = 0,
+    chargesNet  = 0,
 ): { subtotal: number; taxAmount: number; totalAmount: number } {
     const subtotal  = lines.reduce((s, l) => s + l.amount, 0);
     const taxAmount = lines.reduce((s, l) => s + l.taxAmount, 0);
-    const totalAmount = subtotal + shippingAmt - discountAmt + roundOff;
+    const totalAmount = subtotal + shippingAmt - discountAmt + roundOff + chargesNet;
     return { subtotal, taxAmount, totalAmount };
 }

@@ -170,6 +170,34 @@ export type PostVoucherInput = {
         /// caller via resolveBuyerStateCode(party, sellerState, deliveryMode).
         /// Defaults to sellerStateCode → intra-state when blank.
         buyerStateCode?:  string | null;
+        /// Multi-tender rows — when present, one JE leg per row replaces the
+        /// legacy single `paymentAccount` + `amountReceived` shape. Direction
+        /// is the voucher type's counter side (Dr on sale, Cr on purchase).
+        /// The customer-AR portion is just another tender row whose
+        /// `accountId` points at the party's ledger account; no implicit
+        /// "remainder" math here — the caller computes it.
+        tenders?: Array<{
+            accountId: number;
+            amount:    Prisma.Decimal | number;
+            account?: {
+                normalBalance: "DEBIT" | "CREDIT" | null;
+                group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
+            } | null;
+        }>;
+        /// Additional GL legs (the "+ Add Account" rows below the items
+        /// table). One JE leg per row. Direction = body's direction
+        /// (Cr on sale, Dr on purchase) when amount > 0; opposite when
+        /// amount < 0. Line amount is always |amount|. Contributes to
+        /// totalAmount via calcVoucherTotals(chargesNet = Σ amount).
+        charges?: Array<{
+            accountId:   number;
+            amount:      Prisma.Decimal | number;
+            description?: string | null;
+            account?: {
+                normalBalance: "DEBIT" | "CREDIT" | null;
+                group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | null } | null;
+            } | null;
+        }>;
     };
     userId: number;
 };
@@ -400,50 +428,78 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
     if (!discountLedger)    { bodyAmount -= discountAmt; }
     if (!roundOffLedger)    { bodyAmount += rndLineAmt; rndLineAmt = 0; }
 
-    // Partial-tender split — CREDIT sale / CREDIT purchase with cash
-    // received / paid upfront. The counter side (party AR / AP) takes the
-    // remainder; the upfront leg goes to the user-picked cash/bank ledger.
-    // Posts ONE balanced JE per voucher (no separate Receipt/Payment voucher)
-    // and closes the GL hole where `amountReceived` was stored but never
-    // posted.
+    // ── Counter side: tender rows OR legacy single-account fallback ─────
     //
-    // Skipped when: paymentMode is CASH (whole counter is already cash);
-    // no paymentAccount linked; amountReceived ≤ 0 or ≥ totalAmount.
-    const upfront = Math.min(
-        Math.max(0, toNumber(voucher.amountReceived ?? 0)),
-        totalAmount,
-    );
-    const upfrontLedger: LedgerLite | null =
-        (!isCash && upfront > 0 && voucher.paymentAccount)
-            ? {
-                id:            voucher.paymentAccount.id,
-                name:          voucher.paymentAccount.name,
-                normalBalance: voucher.paymentAccount.normalBalance,
-                groupType:     voucher.paymentAccount.group?.type ?? null,
-            }
-            : null;
-    const upfrontAmount  = upfrontLedger ? upfront : 0;
-    const counterAmount  = totalAmount - upfrontAmount;
+    // When `voucher.tenders` is provided (Layer 7 multi-tender shape) we
+    // emit one JE leg per tender on the counter side — the caller controls
+    // every Dr (sale) / Cr (purchase). Customer AR is just another tender
+    // row whose accountId points at the party's ledger.
+    //
+    // When `tenders` is empty/missing we fall through to the Layer-6
+    // single-tender + upfront-cash split, so existing routes that haven't
+    // adopted the tender shape keep posting correctly. This back-compat
+    // branch is removed in Layer 7g.
+    const tenderRows = (voucher.tenders ?? []).filter((t) => toNumber(t.amount) > 0.005);
+    const useTenderShape = tenderRows.length > 0;
 
     const lines: JeLine[] = [];
-    if (counterAmount > 0.005) {
-        lines.push({
-            accountId:   counterLedger.id,
-            type:        counterType,
-            amount:      counterAmount,
-            description: voucher.partyName ?? voucher.description,
-        });
-    }
-    if (upfrontLedger && upfrontAmount > 0) {
-        // For a SALE: Dr cash/bank (counterType=DEBIT). For a PURCHASE:
-        // Cr cash/bank (counterType=CREDIT). Same direction as the party
-        // line because both represent money flowing on the same side.
-        lines.push({
-            accountId:   upfrontLedger.id,
-            type:        counterType,
-            amount:      upfrontAmount,
-            description: `Received upfront — ${upfrontLedger.name}`,
-        });
+    const extraLedgers: LedgerLite[] = [];
+
+    if (useTenderShape) {
+        for (const t of tenderRows) {
+            const amt = toNumber(t.amount);
+            lines.push({
+                accountId:   t.accountId,
+                type:        counterType,
+                amount:      amt,
+                description: voucher.partyName ?? voucher.description,
+            });
+            if (t.account) {
+                extraLedgers.push({
+                    id:            t.accountId,
+                    name:          "", // resolved below if needed for balance delta
+                    normalBalance: t.account.normalBalance,
+                    groupType:     t.account.group?.type ?? null,
+                });
+            }
+        }
+    } else {
+        // Legacy single-tender + upfront-cash split path (back-compat).
+        // CREDIT sale / CREDIT purchase with cash received / paid upfront:
+        // the counter side (party AR / AP) takes the remainder; the
+        // upfront leg goes to the user-picked cash/bank ledger.
+        const upfront = Math.min(
+            Math.max(0, toNumber(voucher.amountReceived ?? 0)),
+            totalAmount,
+        );
+        const upfrontLedger: LedgerLite | null =
+            (!isCash && upfront > 0 && voucher.paymentAccount)
+                ? {
+                    id:            voucher.paymentAccount.id,
+                    name:          voucher.paymentAccount.name,
+                    normalBalance: voucher.paymentAccount.normalBalance,
+                    groupType:     voucher.paymentAccount.group?.type ?? null,
+                }
+                : null;
+        const upfrontAmount = upfrontLedger ? upfront : 0;
+        const counterAmount = totalAmount - upfrontAmount;
+        if (counterAmount > 0.005) {
+            lines.push({
+                accountId:   counterLedger.id,
+                type:        counterType,
+                amount:      counterAmount,
+                description: voucher.partyName ?? voucher.description,
+            });
+        }
+        if (upfrontLedger && upfrontAmount > 0) {
+            lines.push({
+                accountId:   upfrontLedger.id,
+                type:        counterType,
+                amount:      upfrontAmount,
+                description: `Received upfront — ${upfrontLedger.name}`,
+            });
+            extraLedgers.push(upfrontLedger);
+        }
     }
     if (bodyAmount !== 0) {
         lines.push({
@@ -494,6 +550,33 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         });
     }
 
+    // ── Additional charge legs (the "+ Add Account" rows below items) ──
+    // Each charge row posts one JE leg. Direction = body's direction
+    // (Cr on sale, Dr on purchase) when amount > 0; opposite direction
+    // when amount < 0. Line amount is always |amount|. These are
+    // independent of shipping/discount/round-off — they extend the JE
+    // with whatever the operator chose (Packing Income, Service Charges,
+    // Insurance, …).
+    for (const ch of voucher.charges ?? []) {
+        const raw = toNumber(ch.amount);
+        if (Math.abs(raw) < 0.005) continue;
+        const dir: "DEBIT" | "CREDIT" = raw > 0 ? bodyType : counterType;
+        lines.push({
+            accountId:   ch.accountId,
+            type:        dir,
+            amount:      Math.abs(raw),
+            description: ch.description ?? undefined,
+        });
+        if (ch.account) {
+            extraLedgers.push({
+                id:            ch.accountId,
+                name:          "",
+                normalBalance: ch.account.normalBalance,
+                groupType:     ch.account.group?.type ?? null,
+            });
+        }
+    }
+
     // Sanity: check balance
     const debSum = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
     const credSum = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
@@ -526,13 +609,38 @@ export async function postInvVoucherToGl(tx: Tx, input: PostVoucherInput): Promi
         select: { id: true },
     });
 
-    // Update Account.balance for each line
+    // Update Account.balance for each line.
+    //
+    // Pre-resolved ledgers (with normalBalance + groupType): counterLedger,
+    // bodyLedger, the optional shipping/discount/roundoff legs, and any
+    // ledger the caller passed inline on a tender/charge row (collected
+    // into `extraLedgers` while building the JE).
+    //
+    // For tender/charge rows where the caller didn't pre-resolve, we
+    // batch-fetch the missing accounts so balance deltas hit the right
+    // side. effectiveNormalBalance falls back to group type when the
+    // ledger's own normalBalance column is null (identity ledgers).
     const ledgerById = new Map<number, LedgerLite>();
-    for (const led of [counterLedger, bodyLedger, roundOffLedger, upfrontLedger, shippingLedger, discountLedger]) {
+    for (const led of [counterLedger, bodyLedger, roundOffLedger, shippingLedger, discountLedger, ...extraLedgers]) {
         if (led) ledgerById.set(led.id, led);
     }
     for (const leg of taxLegs) {
         ledgerById.set(leg.ledger.id, leg.ledger);
+    }
+    const unresolvedIds = [...new Set(lines.map((l) => l.accountId).filter((id) => !ledgerById.has(id)))];
+    if (unresolvedIds.length > 0) {
+        const rows = await tx.account.findMany({
+            where:  { id: { in: unresolvedIds } },
+            select: { id: true, name: true, normalBalance: true, group: { select: { type: true } } },
+        });
+        for (const r of rows) {
+            ledgerById.set(r.id, {
+                id:            r.id,
+                name:          r.name,
+                normalBalance: r.normalBalance,
+                groupType:     r.group?.type ?? null,
+            });
+        }
     }
     for (const l of lines) {
         const led = ledgerById.get(l.accountId);
