@@ -69,7 +69,7 @@ export function JournalEntriesRegister() {
             })
             .catch(() => toast.error("Failed to load journal entries"))
             .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [filters.showDeleted, tick]);
 
     const filtered = useMemo(

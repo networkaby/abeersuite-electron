@@ -82,7 +82,7 @@ export function GlVoucherList({
             })
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [type, filters.showDeleted, tick]);
 
     const filtered = useMemo(
