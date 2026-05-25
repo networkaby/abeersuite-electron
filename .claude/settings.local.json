@@ -147,7 +147,9 @@
       "Bash(pg_dump --version)",
       "Bash(pg_restore --version)",
       "PowerShell(git add PROJECT_BRAIN.md)",
-      "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\" -type f \\\\\\( -name \"page.tsx\" -o -name \"layout.tsx\" \\\\\\) | xargs grep -l \"PosScreen\\\\|PosSalesRegister\" 2>nul)"
+      "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\" -type f \\\\\\( -name \"page.tsx\" -o -name \"layout.tsx\" \\\\\\) | xargs grep -l \"PosScreen\\\\|PosSalesRegister\" 2>nul)",
+      "Bash(git cherry-pick *)",
+      "Bash(pnpm seed:dummy-shop)"
     ]
   }
 }

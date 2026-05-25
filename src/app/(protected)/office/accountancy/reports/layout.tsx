@@ -6,11 +6,11 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 // content is unchanged — this only prepends a breadcrumb strip.
 export default function AccountancyReportsLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="container max-w-7xl space-y-4">
+        <div className="space-y-4">
             <PathBreadcrumb
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
-                // Day Book is a full-bleed page (-m-8) with its own back-
-                // button header — the layout breadcrumb would render under it.
+                // Day Book renders its own back-button header inside the
+                // page — hide the layout breadcrumb so it doesn't duplicate.
                 hideOn={["/office/accountancy/reports/day-book"]}
                 labels={{
                     "reports": "Reports",
