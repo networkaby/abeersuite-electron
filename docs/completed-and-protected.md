@@ -1,13 +1,11 @@
 # Completed and protected surfaces
 
+Treat everything listed here as **preserve-first**. Refactors and styling are fine; behaviour or output changes require explicit user approval. If a protected surface is intentionally changed, update this file in the same commit.
+
 ## Completed list
 
-- [x] Day Book V1 (`/office/accountancy/reports/day-book`) (2026-05-18 13:13:20 IST). 2026-05-21 update — GL engine output is filtered server-side (every primary voucher now appears exactly once; engine-output JEs hidden). Accounting math (`effectiveLedgerBalance`, `aggregateClosingAsOf`, `aggregateRange`, `netProfitLoss`) unchanged.
-- [x] Admin module V1 (`/office/admin/*` — users, roles/matrix, branches, departments, posts, org-chart, counters) (2026-05-19; 2026-05-20 — settings pages carved out, see next entry)
-- [x] Admin module V1.5 — in-section nav (`office/admin/layout.tsx`, `AdminNav`, `admin/loading.tsx`) (2026-05-20). Grouped tab bar + permission filtering; preserve-first.
-- [x] Settings module V1 (`/office/settings/*` — pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings) extracted from Admin module on 2026-05-20. Same maturity as the V1 Admin pages it replaced — preserve-first.
-- [x] Settings module V1.5 — in-section nav (`office/settings/layout.tsx`, `SettingsNav`) (2026-05-20). Parent layout wraps all settings pages (including naming-convention and printer-settings, which still lack per-page `layout.tsx`). Preserve-first.
-
-## Protected-surface change log
-
-- **2026-05-22 — Balance Sheet drill URL migrated.** `goLedger` in `reports/balance-sheet/page.tsx` now pushes to `/office/accountancy/account-ledgers?accountId=N&asOf=...` (the new master-detail explorer) instead of the legacy single-page `/office/accountancy/account/[id]`. Behavior-equivalent — same destination data, new chrome. No math/output change. Same migration applied to Trial Balance, P&L, Cash Book, Bank Book in the same commit; routed through the new `accountLedgerUrl()` helper in `src/modules/accountancy/lib/accountLedgerUrl.ts`.
+- **Accountancy** — voucher engines (Sale, Purchase, Receipt, Payment, Contra, Journal Voucher, returns, GL postings), Day Book, Trial Balance, Balance Sheet, P&L, Receivables/Payables (bill-wise), Cash/Bank Book, Ratios, GST hub + HSN classification, ledger outstandings. Don't touch math paths (`effectiveLedgerBalance`, `aggregateClosingAsOf`, `aggregateRange`, `netProfitLoss`) without an explicit accounting task. See [docs/modules/accountancy.md](modules/accountancy.md).
+- **POS** — counter-based tills, shift lifecycle (open → sales → close with variance), tax-inclusive pricing default, thermal ESC/POS receipt printing, payment splits. **Pending:** POS return flow (sale-return voucher + receipt print page + multi-partial-return guard). See [docs/modules/pos.md](modules/pos.md).
+- **Inventory** — unified `InvProduct` master (shop + warehouse + POS + repair), attribute masters + `attrsJson`, multi-branch stock, GST/HSN cascade (product → group → org → null), Branch Transfer, Manufacturing Journals, Physical Stock, Bill of Materials, voucher top-bar/action-bar UX. See [docs/modules/inventory.md](modules/inventory.md).
+- **Admin** — branches, departments, posts, org-chart, RBAC permission matrix (`area:operation:scope`), in-section nav (`AdminNav`), dummy-org seeding. See [docs/modules/admin.md](modules/admin.md).
+- **Settings** — pipelines, statuses, sub-statuses, org-defaults, year-ending, naming-convention, printer-settings, in-section nav (`SettingsNav`). See [docs/modules/settings.md](modules/settings.md).
