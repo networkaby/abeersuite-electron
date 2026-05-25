@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X } from "lucide-react";
@@ -107,6 +108,14 @@ export default function PricingItemsPage() {
     const [filterBrand,     setFilterBrand]     = useState<string>("__all");
     const [filterGroup,     setFilterGroup]     = useState<string>("__all");
     const [filterMethod,    setFilterMethod]    = useState<string>("__all");
+    const [filterStrategy,  setFilterStrategy]  = useState<string>("__all");
+
+    // Pre-fill strategy filter from ?strategy=<id> (link from Strategies page).
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        const sid = searchParams.get("strategy");
+        if (sid) setFilterStrategy(sid);
+    }, [searchParams]);
     const [edits,           setEdits]           = useState<Record<number, RowEdit>>({});
     const [savingId,        setSavingId]        = useState<number | null>(null);
     const [applying,        setApplying]        = useState(false);
@@ -139,6 +148,11 @@ export default function PricingItemsPage() {
         for (const i of items) if (i.groupName) set.add(i.groupName);
         return [...set].sort();
     }, [items]);
+    const uniqueStrategies = useMemo(() => {
+        const map = new Map<number, string>();
+        for (const i of items) if (i.strategyId != null && i.strategyName) map.set(i.strategyId, i.strategyName);
+        return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [items]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -148,6 +162,7 @@ export default function PricingItemsPage() {
             if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
             if (filterGroup    !== "__all" && i.groupName    !== filterGroup)    return false;
             if (filterMethod   !== "__all" && i.costMethod   !== filterMethod)   return false;
+            if (filterStrategy !== "__all" && String(i.strategyId ?? "") !== filterStrategy) return false;
             if (!q) return true;
             return (
                 i.name.toLowerCase().includes(q) ||
@@ -156,7 +171,7 @@ export default function PricingItemsPage() {
                 (i.categoryName?.toLowerCase().includes(q) ?? false)
             );
         });
-    }, [items, search, onlyIncomplete, filterCategory, filterBrand, filterMethod]);
+    }, [items, search, onlyIncomplete, filterCategory, filterBrand, filterGroup, filterMethod, filterStrategy]);
 
     const hasActiveFilter =
         search.trim() !== "" ||
@@ -164,7 +179,8 @@ export default function PricingItemsPage() {
         filterCategory !== "__all" ||
         filterBrand !== "__all" ||
         filterGroup !== "__all" ||
-        filterMethod !== "__all";
+        filterMethod !== "__all" ||
+        filterStrategy !== "__all";
 
     const clearFilters = () => {
         setSearch("");
@@ -173,6 +189,7 @@ export default function PricingItemsPage() {
         setFilterBrand("__all");
         setFilterGroup("__all");
         setFilterMethod("__all");
+        setFilterStrategy("__all");
     };
 
     /**
@@ -407,6 +424,17 @@ export default function PricingItemsPage() {
                             <SelectItem value="__all">All methods</SelectItem>
                             {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
                                 <SelectItem key={v} value={v}>{l}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filterStrategy} onValueChange={setFilterStrategy}>
+                        <SelectTrigger className="h-8 w-[200px]">
+                            <SelectValue placeholder="Strategy" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All strategies</SelectItem>
+                            {uniqueStrategies.map((s) => (
+                                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>

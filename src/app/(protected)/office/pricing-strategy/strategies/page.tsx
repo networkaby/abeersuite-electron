@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Calculator } from "lucide-react";
@@ -82,11 +83,14 @@ function formatRounding(p: number): string {
     return `Nearest ${p}p`;
 }
 
+type ItemForCount = { strategyId: number | null };
+
 export default function PricingStrategiesPage() {
     const [rows,       setRows] = useState<Strategy[]>([]);
     const [categories, setCategories] = useState<Master[]>([]);
     const [groups,     setGroups] = useState<Master[]>([]);
     const [brands,     setBrands] = useState<Master[]>([]);
+    const [usage,      setUsage] = useState<Map<number, number>>(new Map());
     const [loading,    setLoading] = useState(true);
     const [adding,     setAdding] = useState(false);
     const [editId,     setEditId] = useState<number | null>(null);
@@ -100,12 +104,18 @@ export default function PricingStrategiesPage() {
             axios.get<Master[]>("/api/inventory/categories"),
             axios.get<Master[]>("/api/inventory/product-groups"),
             axios.get<Master[]>("/api/inventory/brands"),
+            axios.get<ItemForCount[]>("/api/pricing-strategy/items"),
         ])
-            .then(([s, c, g, b]) => {
+            .then(([s, c, g, b, items]) => {
                 setRows(s.data);
                 setCategories(c.data.filter((x) => "isActive" in x ? (x as Master & { isActive: boolean }).isActive : true));
                 setGroups(g.data.filter((x) => "isActive" in x ? (x as Master & { isActive: boolean }).isActive : true));
                 setBrands(b.data.filter((x) => "isActive" in x ? (x as Master & { isActive: boolean }).isActive : true));
+                const counts = new Map<number, number>();
+                for (const it of items.data) {
+                    if (it.strategyId != null) counts.set(it.strategyId, (counts.get(it.strategyId) ?? 0) + 1);
+                }
+                setUsage(counts);
             })
             .catch(() => toast.error("Failed to load pricing data"))
             .finally(() => setLoading(false));
@@ -347,14 +357,15 @@ export default function PricingStrategiesPage() {
                             <TableHead className="text-right">Flat</TableHead>
                             <TableHead>Rounding</TableHead>
                             <TableHead className="text-right">Priority</TableHead>
+                            <TableHead className="text-right">Used by</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableLoadingRow colSpan={8} />
+                            <TableLoadingRow colSpan={9} />
                         ) : rows.length === 0 ? (
-                            <TableEmptyRow colSpan={8} message="No pricing strategies yet." />
+                            <TableEmptyRow colSpan={9} message="No pricing strategies yet." />
                         ) : (
                             rows.map((s) => (
                                 <TableRow key={s.id}>
@@ -372,6 +383,21 @@ export default function PricingStrategiesPage() {
                                     <TableCell className="text-right">{formatPaise(s.markupFlatPaise)}</TableCell>
                                     <TableCell>{formatRounding(s.roundingPaise)}</TableCell>
                                     <TableCell className="text-right">{s.priority}</TableCell>
+                                    <TableCell className="text-right">
+                                        {(() => {
+                                            const n = usage.get(s.id) ?? 0;
+                                            if (n === 0) return <span className="text-muted-foreground">—</span>;
+                                            return (
+                                                <Link
+                                                    href={`/office/pricing-strategy/items?strategy=${s.id}`}
+                                                    className="underline text-blue-700 hover:text-blue-900"
+                                                    title="Open Items filtered to this strategy"
+                                                >
+                                                    {n} {n === 1 ? "product" : "products"}
+                                                </Link>
+                                            );
+                                        })()}
+                                    </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         <Button
                                             type="button"
