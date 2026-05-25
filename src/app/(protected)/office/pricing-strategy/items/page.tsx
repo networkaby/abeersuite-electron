@@ -67,6 +67,7 @@ type RowEdit = {
     costMethod:    CostMethod;
     marginPercent: string; // "" = clear override (use strategy)
     pricePaise:    string; // "" = no manual change
+    costPaise:     string; // baseline cost (paise) — writes to InvProduct.costPaise
     stdCostPaise:  string;
 };
 
@@ -145,6 +146,7 @@ export default function PricingItemsPage() {
             costMethod:    item.costMethod,
             marginPercent: item.marginPercent != null ? String(item.marginPercent) : "",
             pricePaise:    "",
+            costPaise:     item.lastPurchasePaise != null ? String(item.lastPurchasePaise) : "",
             stdCostPaise:  item.stdCostPaise != null ? String(item.stdCostPaise) : "",
         };
 
@@ -164,6 +166,11 @@ export default function PricingItemsPage() {
             const n = e.stdCostPaise.trim() === "" ? null : Number(e.stdCostPaise);
             if (n != null && (!Number.isInteger(n) || n < 0)) return toast.error("Std cost must be a non-negative integer (paise)");
             payload.stdCostPaise = n;
+        }
+        if (e.costPaise.trim() !== (item.lastPurchasePaise != null ? String(item.lastPurchasePaise) : "")) {
+            const n = e.costPaise.trim() === "" ? null : Number(e.costPaise);
+            if (n != null && (!Number.isInteger(n) || n < 0)) return toast.error("Cost must be a non-negative integer (paise)");
+            payload.costPaise = n;
         }
         if (e.pricePaise.trim() !== "") {
             const n = Number(e.pricePaise);
@@ -306,6 +313,7 @@ export default function PricingItemsPage() {
                                     e.costMethod !== item.costMethod ||
                                     e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
                                     e.stdCostPaise !== (item.stdCostPaise != null ? String(item.stdCostPaise) : "") ||
+                                    e.costPaise !== (item.lastPurchasePaise != null ? String(item.lastPurchasePaise) : "") ||
                                     e.pricePaise.trim() !== "";
                                 const att = attentionFor(item);
                                 return (
@@ -350,7 +358,18 @@ export default function PricingItemsPage() {
                                                 <div className="text-xs text-amber-600 mt-1">{item.resolvedCostFallback}</div>
                                             ) : null}
                                         </TableCell>
-                                        <TableCell className="text-right">{paise(item.resolvedCostPaise)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Input
+                                                inputMode="numeric"
+                                                placeholder="paise"
+                                                value={e.costPaise}
+                                                onChange={(ev) => setEdit(item.id, { costPaise: ev.target.value })}
+                                                className="h-8 w-24 text-right ml-auto"
+                                            />
+                                            <div className="text-xs text-muted-foreground mt-0.5">
+                                                resolves to {paise(item.resolvedCostPaise)}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <Input
                                                 inputMode="decimal"
@@ -438,9 +457,12 @@ export default function PricingItemsPage() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-                <strong>Cost</strong> uses the row&apos;s saved method. <strong>Computed</strong> applies the matched
-                strategy (or per-item margin override) and is capped at MRP — rows where the formula exceeded MRP
-                show an &quot;MRP cap&quot; badge. <strong>Manual ₹ (paise)</strong> sets pricePaise directly and
+                <strong>Cost (paise)</strong> writes to InvProduct.costPaise — the last-purchase-cost snapshot.
+                The resolver uses it directly for LAST_PURCHASE_COST and as a fallback for every other method
+                when no purchase history exists. &quot;Resolves to&quot; below the input shows the actual value
+                fed into the formula. <strong>Computed</strong> applies the matched strategy (or per-item
+                margin override) and is capped at MRP — rows where the formula exceeded MRP show an
+                &quot;MRP cap&quot; badge. <strong>Manual ₹ (paise)</strong> sets pricePaise directly and
                 locks the row; manual prices above MRP are rejected. Apply skips locked rows. Rows missing cost,
                 MRP, or price are flagged in the first column — red means &quot;cannot price&quot; (no cost),
                 amber means soft-missing data.

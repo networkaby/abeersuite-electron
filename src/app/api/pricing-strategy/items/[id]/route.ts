@@ -50,6 +50,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.marginPercent   !== undefined ? { marginPercent: data.marginPercent != null ? data.marginPercent.toString() : null } : {}),
                 ...(overrideFlag         !== undefined ? { priceOverridden: overrideFlag } : {}),
                 ...(data.pricePaise      !== undefined ? { pricePaise:    data.pricePaise } : {}),
+                ...(data.costPaise       !== undefined ? { costPaise:     data.costPaise } : {}),
                 ...(data.stdCostPaise    !== undefined ? { stdCostPaise:  data.stdCostPaise } : {}),
             },
             select: {
@@ -58,6 +59,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 marginPercent:    true,
                 priceOverridden:  true,
                 pricePaise:       true,
+                costPaise:        true,
                 stdCostPaise:     true,
             },
         });

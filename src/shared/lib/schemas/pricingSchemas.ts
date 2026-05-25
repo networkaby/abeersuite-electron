@@ -70,12 +70,18 @@ export type PricingStrategyUpdateInput = z.infer<typeof pricingStrategyUpdateSch
 // callers patch only the columns they're touching. Setting `pricePaise`
 // explicitly is what flips `priceOverridden=true`; the UI sends both
 // together when the user types a manual price.
+//
+// `costPaise` is the last-purchase-cost snapshot on InvProduct (normally
+// updated by PURCHASE voucher post). Letting the Items page patch it lets
+// admins fill in a baseline cost for products that have no purchase
+// history yet — the resolver falls back to costPaise for every method.
 export const pricingItemUpdateSchema = z
     .object({
         costMethod:      costMethodEnum.optional(),
         marginPercent:   z.number().gte(-100).lte(10_000).nullable().optional(),
         priceOverridden: z.boolean().optional(),
         pricePaise:      z.number().int().min(0).nullable().optional(),
+        costPaise:       z.number().int().min(0).nullable().optional(),
         stdCostPaise:    z.number().int().min(0).nullable().optional(),
     });
 
