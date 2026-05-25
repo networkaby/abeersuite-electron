@@ -1,4 +1,4 @@
-import { GlVoucherPage } from "@/modules/accountancy/components/preview/GlVoucherPage";
+import { GlVoucherPage } from "@/modules/accountancy/components/GlVoucherPage";
 
 export default function Page() {
     return <GlVoucherPage kind="CREDIT_NOTE" />;

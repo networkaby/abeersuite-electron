@@ -1,4 +1,4 @@
-import { JournalVoucherPage } from "@/modules/accountancy/components/preview/JournalVoucherPage";
+import { JournalVoucherPage } from "@/modules/accountancy/components/JournalVoucherPage";
 
 // Edit-mode entry for a Journal Voucher — prefills the form from the existing
 // JE and PATCHes on save (in-place reversal + re-apply for POSTED).

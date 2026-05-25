@@ -1,4 +1,4 @@
-import { GlVoucherPage } from "@/modules/accountancy/components/preview/GlVoucherPage";
+import { GlVoucherPage } from "@/modules/accountancy/components/GlVoucherPage";
 
 // Edit-mode entry for a Debit Note — prefills the form from the existing
 // voucher and PATCHes on save (in-place reversal + re-apply for POSTED).
