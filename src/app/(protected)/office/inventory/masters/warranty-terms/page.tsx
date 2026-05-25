@@ -23,11 +23,20 @@ type Row = {
     id: number;
     name: string;
     description: string | null;
-    durationMonths: number | null;
+    durationDays: number | null;
     isActive: boolean;
 };
 
-const empty = { name: "", description: "", durationMonths: "", isActive: true };
+const empty = { name: "", description: "", durationDays: "", isActive: true };
+
+/// Display a day count as "Nd" / "Nm" / "Ny" depending on what divides cleanly.
+/// Examples: 7 → "7d", 30 → "1m", 90 → "3m", 365 → "1y", 1825 → "5y".
+function formatDays(days: number | null): string {
+    if (days == null || days === 0) return "—";
+    if (days % 365 === 0) return `${days / 365}y`;
+    if (days % 30 === 0) return `${days / 30}m`;
+    return `${days}d`;
+}
 
 export default function InventoryWarrantyTermsPage() {
     const [rows, setRows] = useState<Row[]>([]);
@@ -60,10 +69,10 @@ export default function InventoryWarrantyTermsPage() {
             toast.error("Name is required");
             return;
         }
-        const dm = form.durationMonths.trim();
-        const durationMonths = dm === "" ? null : parseInt(dm, 10);
-        if (durationMonths != null && (!Number.isFinite(durationMonths) || durationMonths < 0)) {
-            toast.error("Duration months must be a non-negative number");
+        const dd = form.durationDays.trim();
+        const durationDays = dd === "" ? null : parseInt(dd, 10);
+        if (durationDays != null && (!Number.isFinite(durationDays) || durationDays < 0)) {
+            toast.error("Duration days must be a non-negative number");
             return;
         }
         setSaving(true);
@@ -71,7 +80,7 @@ export default function InventoryWarrantyTermsPage() {
             const payload = {
                 name: form.name.trim(),
                 description: form.description.trim() === "" ? null : form.description.trim(),
-                durationMonths,
+                durationDays,
                 isActive: form.isActive,
             };
             if (adding) {
@@ -123,8 +132,16 @@ export default function InventoryWarrantyTermsPage() {
                             <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Duration (months)</Label>
-                            <Input inputMode="numeric" placeholder="optional" value={form.durationMonths} onChange={(e) => setForm((f) => ({ ...f, durationMonths: e.target.value }))} />
+                            <Label>Duration (days)</Label>
+                            <Input
+                                inputMode="numeric"
+                                placeholder="e.g. 7, 30, 365, 1825"
+                                value={form.durationDays}
+                                onChange={(e) => setForm((f) => ({ ...f, durationDays: e.target.value }))}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Days from sale. Leave blank for lifetime / no-warranty / testing-only terms.
+                            </p>
                         </div>
                         <div className="flex items-end">
                             <label className="flex items-center gap-2 text-sm">
@@ -149,7 +166,7 @@ export default function InventoryWarrantyTermsPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Name</TableHead>
-                            <TableHead className="text-right">Months</TableHead>
+                            <TableHead className="text-right">Duration</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
@@ -170,7 +187,12 @@ export default function InventoryWarrantyTermsPage() {
                             rows.map((r) => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-medium">{r.name}</TableCell>
-                                    <TableCell className="text-right text-muted-foreground text-sm">{r.durationMonths ?? "—"}</TableCell>
+                                    <TableCell className="text-right text-muted-foreground text-sm">
+                                        {formatDays(r.durationDays)}
+                                        {r.durationDays != null && r.durationDays > 0 ? (
+                                            <span className="ml-1 text-xs opacity-70">({r.durationDays}d)</span>
+                                        ) : null}
+                                    </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button
@@ -184,7 +206,7 @@ export default function InventoryWarrantyTermsPage() {
                                                 setForm({
                                                     name: r.name,
                                                     description: r.description ?? "",
-                                                    durationMonths: r.durationMonths == null ? "" : String(r.durationMonths),
+                                                    durationDays: r.durationDays == null ? "" : String(r.durationDays),
                                                     isActive: r.isActive,
                                                 });
                                             }}

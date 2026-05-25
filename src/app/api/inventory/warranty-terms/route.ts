@@ -28,7 +28,7 @@ export async function POST(req: Request) {
             data: {
                 name: b.name,
                 description: b.description ?? null,
-                durationMonths: b.durationMonths ?? null,
+                durationDays: b.durationDays ?? null,
                 isActive: b.isActive ?? true,
             },
         });

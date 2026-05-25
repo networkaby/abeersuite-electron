@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
                 barcode1:          true,
                 unit:         { select: { code: true } },
                 brand:        { select: { name: true } },
-                warrantyTerm: { select: { name: true, durationMonths: true } },
+                warrantyTerm: { select: { name: true, durationDays: true } },
             },
         });
         if (!product) return NextResponse.json(null);
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
             barcode1:          true,
             unit:         { select: { code: true } },
             brand:        { select: { name: true } },
-            warrantyTerm: { select: { name: true, durationMonths: true } },
+            warrantyTerm: { select: { name: true, durationDays: true } },
         },
     });
 

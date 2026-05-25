@@ -83,13 +83,18 @@ model InvBrand {
 }
 
 model InvWarrantyTerm {
-  id             Int      @id @default(autoincrement())
-  name           String
-  description    String?
-  durationMonths Int?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  /// Coverage duration in days. 0 / null = no fixed duration (e.g. "lifetime" or
+  /// "testing only"). Days chosen over months so terms can express short DOA /
+  /// RMA windows (e.g. 7-day replacement) and long manufacturer warranties
+  /// (e.g. 1825 = 5 years) in the same unit. See memory todo_warranty_redesign
+  /// for the planned full redesign (provider / coverage / service-mode enums).
+  durationDays Int?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   products InvProduct[]
 }

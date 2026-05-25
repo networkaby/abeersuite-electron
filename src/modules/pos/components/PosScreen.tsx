@@ -64,7 +64,7 @@ type ProductOption = {
     taxRate?: number | null;
     hsnCode?: string | null;
     unit?: { code: string };
-    warrantyTerm?: { name: string; durationMonths: number | null } | null;
+    warrantyTerm?: { name: string; durationDays: number | null } | null;
 };
 type CartLine = {
     productId: number; sku: string; name: string;
@@ -364,10 +364,12 @@ export default function PosScreen() {
         const taxRate = p.taxRate ?? 0;
         const defaultPrice = taxRate > 0 ? inclusivePrice / (1 + taxRate / 100) : inclusivePrice;
         const warrantyLabel = p.warrantyTerm
-            ? (p.warrantyTerm.durationMonths
-                ? (p.warrantyTerm.durationMonths >= 12
-                    ? `${Math.floor(p.warrantyTerm.durationMonths / 12)}y${p.warrantyTerm.durationMonths % 12 ? ` ${p.warrantyTerm.durationMonths % 12}m` : ""}`
-                    : `${p.warrantyTerm.durationMonths}m`)
+            ? (p.warrantyTerm.durationDays
+                ? (p.warrantyTerm.durationDays % 365 === 0
+                    ? `${p.warrantyTerm.durationDays / 365}y`
+                    : p.warrantyTerm.durationDays % 30 === 0
+                        ? `${p.warrantyTerm.durationDays / 30}m`
+                        : `${p.warrantyTerm.durationDays}d`)
                 : p.warrantyTerm.name)
             : null;
         setCart((prev) => {

@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: {
                 ...(b.name !== undefined ? { name: b.name } : {}),
                 ...(b.description !== undefined ? { description: b.description } : {}),
-                ...(b.durationMonths !== undefined ? { durationMonths: b.durationMonths } : {}),
+                ...(b.durationDays !== undefined ? { durationDays: b.durationDays } : {}),
                 ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
             },
         });

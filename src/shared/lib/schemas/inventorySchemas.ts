@@ -49,7 +49,8 @@ export const invBrandUpdateSchema = invBrandCreateSchema.partial();
 
 export const invWarrantyTermCreateSchema = nameIsActiveSchema.extend({
     description: zOptStr(2000),
-    durationMonths: z.number().int().min(0).max(1200).nullish(),
+    // Days, not months. Max 100y = 36500 days. 0 / null = no fixed duration.
+    durationDays: z.number().int().min(0).max(36500).nullish(),
 });
 
 export const invWarrantyTermUpdateSchema = invWarrantyTermCreateSchema.partial();
