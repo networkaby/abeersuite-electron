@@ -772,17 +772,53 @@ export async function mergeParty(
             tx.shopOrder.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
         ]);
 
-        // 2. Roll the loser's cached balance into the winner's. Live balance
-        //    derivations use JournalLine sums (which we just moved), but the
-        //    cached `Account.balance` is read by dashboards — keep it sane.
+        // 2. Roll the loser's cached balance + opening balance into the winner.
+        //    Cached `Account.balance` is read by dashboards. `openingBalance`
+        //    (signed by `openingBalanceType` Dr/Cr) is the master figure
+        //    re-posted at books-beginning; merging duplicates must sum it too
+        //    or the winner's "started with X" line would silently lose Y.
+        const accountSelect = {
+            balance: true,
+            openingBalance: true,
+            openingBalanceType: true,
+            openingBalanceDate: true,
+        } as const;
         const [winnerAcct, loserAcct] = await Promise.all([
-            tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: { balance: true } }),
-            tx.account.findUniqueOrThrow({ where: { id: loserAccountId }, select: { balance: true } }),
+            tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: accountSelect }),
+            tx.account.findUniqueOrThrow({ where: { id: loserAccountId }, select: accountSelect }),
         ]);
-        const summed = Number(winnerAcct.balance) + Number(loserAcct.balance);
+
+        // Cached balance — straight sum (both are already signed in the same direction).
+        const summedBalance = Number(winnerAcct.balance) + Number(loserAcct.balance);
+
+        // Opening balance — signed sum using EntryType. DEBIT counts +,
+        // CREDIT counts −. Reconstruct the type from the sign of the result.
+        const signed = (amount: unknown, type: "DEBIT" | "CREDIT" | null | undefined) => {
+            if (amount == null || type == null) return 0;
+            const n = Number(amount);
+            if (!Number.isFinite(n) || n === 0) return 0;
+            return type === "DEBIT" ? n : -n;
+        };
+        const openSigned = signed(winnerAcct.openingBalance, winnerAcct.openingBalanceType)
+            + signed(loserAcct.openingBalance, loserAcct.openingBalanceType);
+        const openMag = Math.abs(openSigned);
+        const openType: "DEBIT" | "CREDIT" | null = openMag === 0 ? null : openSigned > 0 ? "DEBIT" : "CREDIT";
+
+        // Date: prefer the earlier non-null opening date so historical entries
+        // stay anchored to whichever party started keeping books first.
+        const dates = [winnerAcct.openingBalanceDate, loserAcct.openingBalanceDate].filter((d): d is Date => d != null);
+        const openDate = dates.length > 0
+            ? new Date(Math.min(...dates.map(d => d.getTime())))
+            : null;
+
         await tx.account.update({
             where: { id: winnerAccountId },
-            data: { balance: summed.toFixed(2) },
+            data: {
+                balance: summedBalance.toFixed(2),
+                openingBalance: openMag === 0 ? null : openMag.toFixed(2),
+                openingBalanceType: openType,
+                openingBalanceDate: openDate,
+            },
         });
 
         // 3. Move Phone / Email rows from loser onto winner. Global @unique on
