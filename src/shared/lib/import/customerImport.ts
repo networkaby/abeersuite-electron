@@ -536,7 +536,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                     // ── Update existing record ──
                     if (v.kind === "person") {
                         await tx.person.update({
-                            where: { id: v.existingId },
+                            where: { id: v.existingId! },
                             data: {
                                 name: v.data.name,
                                 ...(v.data.address != null && { address: v.data.address }),
@@ -554,7 +554,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                         });
                     } else {
                         await tx.company.update({
-                            where: { id: v.existingId },
+                            where: { id: v.existingId! },
                             data: {
                                 name: v.data.name,
                                 ...(v.data.address != null && { address: v.data.address }),

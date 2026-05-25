@@ -11,7 +11,7 @@
 // remove it once they're sure the conversion is correct.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import type { Prisma } from "@/generated/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 export type ConvertDirection = "personToCompany" | "companyToPerson";
 
@@ -679,17 +679,29 @@ export async function previewMerge(
 
     if (winner && !winner.isActive) blockers.push({ kind: "sourceInactive", side: "winner" });
     if (loser && !loser.isActive) blockers.push({ kind: "sourceInactive", side: "loser" });
-    if (winner && (winner.convertedToCompanyId != null
-        || (winner as { convertedToPersonId?: number | null }).convertedToPersonId != null
-        || winner.mergedIntoPersonId != null
-        || (winner as { mergedIntoCompanyId?: number | null }).mergedIntoCompanyId != null)) {
-        blockers.push({ kind: "alreadyTombstoned", side: "winner" });
+    type Tombstoned = {
+        convertedToCompanyId?: number | null;
+        convertedToPersonId?:  number | null;
+        mergedIntoPersonId?:   number | null;
+        mergedIntoCompanyId?:  number | null;
+    };
+    if (winner) {
+        const w = winner as Tombstoned;
+        if (w.convertedToCompanyId != null
+            || w.convertedToPersonId != null
+            || w.mergedIntoPersonId != null
+            || w.mergedIntoCompanyId != null) {
+            blockers.push({ kind: "alreadyTombstoned", side: "winner" });
+        }
     }
-    if (loser && (loser.convertedToCompanyId != null
-        || (loser as { convertedToPersonId?: number | null }).convertedToPersonId != null
-        || loser.mergedIntoPersonId != null
-        || (loser as { mergedIntoCompanyId?: number | null }).mergedIntoCompanyId != null)) {
-        blockers.push({ kind: "alreadyTombstoned", side: "loser" });
+    if (loser) {
+        const l = loser as Tombstoned;
+        if (l.convertedToCompanyId != null
+            || l.convertedToPersonId != null
+            || l.mergedIntoPersonId != null
+            || l.mergedIntoCompanyId != null) {
+            blockers.push({ kind: "alreadyTombstoned", side: "loser" });
+        }
     }
     if (winner && !winnerAccountId) blockers.push({ kind: "noAccount", side: "winner" });
     if (loser && !loserAccountId) blockers.push({ kind: "noAccount", side: "loser" });
@@ -921,7 +933,7 @@ async function dedupePersonCompanyLinks(tx: Prisma.TransactionClient) {
         });
         const [, ...extras] = rows;
         if (extras.length > 0) {
-            await tx.personCompany.deleteMany({ where: { id: { in: extras.map(r => r.id) } } });
+            await tx.personCompany.deleteMany({ where: { id: { in: extras.map((r: { id: number }) => r.id) } } });
         }
     }
 }
