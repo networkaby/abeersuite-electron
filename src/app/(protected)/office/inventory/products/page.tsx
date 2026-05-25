@@ -10,13 +10,13 @@
 // The existing PATCH already accepts every classification field this grid touches —
 // no batch endpoint needed.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     Plus, Pencil, Trash2, Box, Search, Save, RotateCcw, Wand2,
-    Eye, ListChecks,
+    Eye, ListChecks, Filter, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+import {
+    buildOfflineName,
+    DEFAULT_NAMING_CONFIG,
+    type NamingConfigShape,
+    type NamingMasters,
+} from "@/modules/inventory/lib/productName";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -77,6 +83,12 @@ type Patch = Partial<{
 
 type Mode = "view" | "edit";
 
+type SortField =
+    | "sku" | "name" | "categoryName" | "brandName" | "groupName"
+    | "warrantyName" | "unitCode" | "modelNo" | "barcode1" | "stock" | "isActive";
+
+type FilterField = "categoryId" | "brandId" | "groupId" | "warrantyTermId" | "unitId" | "isActive";
+
 function optLabel(o: Opt | undefined | null): string {
     if (!o) return "—";
     if (o.name) return o.name;
@@ -97,6 +109,7 @@ export default function InventoryProductsPage() {
     const [brands, setBrands] = useState<Opt[]>([]);
     const [groups, setGroups] = useState<Opt[]>([]);
     const [warrantyTerms, setWarrantyTerms] = useState<Opt[]>([]);
+    const [namingConfig, setNamingConfig] = useState<NamingConfigShape | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -105,6 +118,14 @@ export default function InventoryProductsPage() {
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [pageSize, setPageSize] = useState<number>(100);
     const [pageIndex, setPageIndex] = useState<number>(0);
+
+    /// Sort state. null = the natural order returned by the API.
+    /// Click cycles null → asc → desc → null.
+    const [sort, setSort] = useState<{ field: SortField; dir: "asc" | "desc" } | null>(null);
+
+    /// Per-column multi-select filters keyed by the row field name. Values are
+    /// option ids stringified; "__none__" represents null/missing relations.
+    const [colFilters, setColFilters] = useState<Map<FilterField, Set<string>>>(new Map());
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogEditId, setDialogEditId] = useState<number | null>(null);
@@ -118,18 +139,20 @@ export default function InventoryProductsPage() {
 
     const loadMasters = useCallback(async () => {
         try {
-            const [u, c, b, g, w] = await Promise.all([
+            const [u, c, b, g, w, n] = await Promise.all([
                 axios.get<Opt[]>("/api/inventory/units"),
                 axios.get<Opt[]>("/api/inventory/categories"),
                 axios.get<Opt[]>("/api/inventory/brands"),
                 axios.get<Opt[]>("/api/inventory/product-groups"),
                 axios.get<Opt[]>("/api/inventory/warranty-terms"),
+                axios.get<Partial<NamingConfigShape>>("/api/inventory/naming-config").catch(() => ({ data: {} as Partial<NamingConfigShape> })),
             ]);
             setUnits(u.data);
             setCategories(c.data);
             setBrands(b.data);
             setGroups(g.data);
             setWarrantyTerms(w.data);
+            setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...(n.data ?? {}) });
         } catch {
             toast.error("Failed to load reference data");
         }
@@ -188,18 +211,102 @@ export default function InventoryProductsPage() {
         });
     }
 
+    /// Create a new master row by name (POST /api/inventory/<endpoint>),
+    /// refresh that master list, and return the new id. Returns null if the
+    /// user cancelled the prompt or the request failed.
+    async function createMaster(
+        endpoint: "categories" | "brands" | "product-groups" | "warranty-terms" | "units",
+        label: string,
+    ): Promise<number | null> {
+        const name = window.prompt(`New ${label} name`)?.trim();
+        if (!name) return null;
+        try {
+            const body = endpoint === "units"
+                ? { code: name.toUpperCase().slice(0, 12), label: name }
+                : { name };
+            const res = await axios.post<{ id: number }>(`/api/inventory/${endpoint}`, body);
+            await loadMasters();
+            toast.success(`Created ${label} "${name}"`);
+            return res.data.id;
+        } catch (e: unknown) {
+            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
+            toast.error(msg ?? `Failed to create ${label}`);
+            return null;
+        }
+    }
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return rows;
-        return rows.filter((r) =>
+        // 1. free-text search across SKU/name/model/barcode
+        let out = !q ? rows : rows.filter((r) =>
             r.sku.toLowerCase().includes(q) ||
             r.name.toLowerCase().includes(q) ||
             (r.modelNo ?? "").toLowerCase().includes(q) ||
             (r.barcode1 ?? "").toLowerCase().includes(q),
         );
-    }, [rows, search]);
+        // 2. per-column multi-select filters
+        for (const [field, allowed] of colFilters) {
+            if (allowed.size === 0) continue;
+            out = out.filter((r) => {
+                const v = r[field];
+                const key = v == null ? "__none__" : String(v);
+                return allowed.has(key);
+            });
+        }
+        // 3. sort
+        if (sort) {
+            const dirMul = sort.dir === "asc" ? 1 : -1;
+            const key = (r: Row): string | number => {
+                switch (sort.field) {
+                    case "sku":           return r.sku;
+                    case "name":          return r.name.toLowerCase();
+                    case "categoryName":  return r.category?.name?.toLowerCase() ?? "";
+                    case "brandName":     return r.brand?.name?.toLowerCase() ?? "";
+                    case "groupName":     return r.group?.name?.toLowerCase() ?? "";
+                    case "warrantyName":  return r.warrantyTerm?.name?.toLowerCase() ?? "";
+                    case "unitCode":      return r.unit.code;
+                    case "modelNo":       return (r.modelNo ?? "").toLowerCase();
+                    case "barcode1":      return r.barcode1 ?? "";
+                    case "stock":         return r.stock ?? -1;
+                    case "isActive":      return r.isActive ? 1 : 0;
+                }
+            };
+            out = [...out].sort((a, b) => {
+                const ka = key(a), kb = key(b);
+                if (ka < kb) return -1 * dirMul;
+                if (ka > kb) return  1 * dirMul;
+                return 0;
+            });
+        }
+        return out;
+    }, [rows, search, colFilters, sort]);
 
-    useEffect(() => { setPageIndex(0); }, [search, pageSize, mode]);
+    function cycleSort(field: SortField) {
+        setSort((cur) => {
+            if (!cur || cur.field !== field) return { field, dir: "asc" };
+            if (cur.dir === "asc") return { field, dir: "desc" };
+            return null;
+        });
+    }
+
+    function toggleColFilter(field: FilterField, key: string) {
+        setColFilters((prev) => {
+            const next = new Map(prev);
+            const cur = new Set(next.get(field) ?? new Set<string>());
+            if (cur.has(key)) cur.delete(key); else cur.add(key);
+            if (cur.size === 0) next.delete(field); else next.set(field, cur);
+            return next;
+        });
+    }
+    function clearColFilter(field: FilterField) {
+        setColFilters((prev) => {
+            const next = new Map(prev);
+            next.delete(field);
+            return next;
+        });
+    }
+
+    useEffect(() => { setPageIndex(0); }, [search, pageSize, mode, colFilters, sort]);
 
     const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
     const safePage = Math.min(pageIndex, totalPages - 1);
@@ -306,6 +413,39 @@ export default function InventoryProductsPage() {
         setDialogOpen(true);
     }
 
+    /// Rebuild the offline name for one row from its current (dirty-or-saved)
+    /// classification fields, using the org-wide InvNamingConfig. Patches the
+    /// row's name field with the result. No-op if the naming config hasn't
+    /// loaded yet.
+    function regenerateName(r: Row) {
+        if (!namingConfig) {
+            toast.error("Naming config not loaded yet");
+            return;
+        }
+        const findOpt = (list: Opt[], id: number | null | undefined) =>
+            id == null ? null : list.find((o) => o.id === id) ?? null;
+        const cat   = findOpt(categories,    val(r, "categoryId")     as number | null);
+        const brand = findOpt(brands,        val(r, "brandId")        as number | null);
+        const grp   = findOpt(groups,        val(r, "groupId")        as number | null);
+        const war   = findOpt(warrantyTerms, val(r, "warrantyTermId") as number | null);
+        const unit  = findOpt(units,         val(r, "unitId")         as number);
+        const masters: NamingMasters = {
+            brand:    brand ? { name: brand.name ?? "" } : null,
+            category: cat   ? { name: cat.name ?? "" } : null,
+            group:    grp   ? { name: grp.name ?? "" } : null,
+            warranty: war   ? { name: war.name ?? "" } : null,
+            unit:     unit  ? { code: unit.code ?? "" } : null,
+            modelNo:  (val(r, "modelNo") as string | null) || null,
+            attrs:    null,
+        };
+        const next = buildOfflineName(masters, namingConfig).trim();
+        if (!next) {
+            toast.error("Naming config produced an empty name — pick more masters first");
+            return;
+        }
+        patch(r.id, { name: next });
+    }
+
     const isEdit = mode === "edit";
 
     return (
@@ -385,11 +525,11 @@ export default function InventoryProductsPage() {
                         </button>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                        <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} />
-                        <BulkApply label="Brand"    options={brands}     field="brandId"    onApply={applyToSelected} />
-                        <BulkApply label="Group"    options={groups}     field="groupId"    onApply={applyToSelected} />
-                        <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} />
-                        <BulkApply label="Unit"     options={units}      field="unitId"     onApply={applyToSelected} clearable={false} />
+                        <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("categories", "category")} />
+                        <BulkApply label="Brand"    options={brands}     field="brandId"    onApply={applyToSelected} onCreate={() => createMaster("brands", "brand")} />
+                        <BulkApply label="Group"    options={groups}     field="groupId"    onApply={applyToSelected} onCreate={() => createMaster("product-groups", "group")} />
+                        <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty-terms", "warranty term")} />
+                        <BulkApply label="Unit"     options={units}      field="unitId"     onApply={applyToSelected} clearable={false} onCreate={() => createMaster("units", "unit")} />
                     </div>
                 </div>
             ) : null}
@@ -407,19 +547,49 @@ export default function InventoryProductsPage() {
                                     />
                                 </TableHead>
                             ) : null}
-                            <TableHead className="w-12">#</TableHead>
-                            <TableHead>SKU</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Category</TableHead>
-                            <TableHead>Brand</TableHead>
-                            <TableHead>Group</TableHead>
-                            <TableHead>Warranty</TableHead>
-                            <TableHead>Unit</TableHead>
-                            <TableHead>Model No</TableHead>
-                            <TableHead>Barcode</TableHead>
-                            <TableHead className="text-right">Stock</TableHead>
-                            <TableHead className="text-center">Active</TableHead>
-                            {!isEdit ? <TableHead className="text-right"> </TableHead> : null}
+                            <TableHead className="w-10">#</TableHead>
+                            <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead>
+                            <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead>
+                            <TableHead className="min-w-44">
+                                <div className="flex items-center gap-1">
+                                    <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
+                                    <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                </div>
+                            </TableHead>
+                            <TableHead className="min-w-36">
+                                <div className="flex items-center gap-1">
+                                    <SortHead field="brandName" sort={sort} onSort={cycleSort}>Brand</SortHead>
+                                    <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                </div>
+                            </TableHead>
+                            <TableHead className="min-w-36">
+                                <div className="flex items-center gap-1">
+                                    <SortHead field="groupName" sort={sort} onSort={cycleSort}>Group</SortHead>
+                                    <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                </div>
+                            </TableHead>
+                            <TableHead className="min-w-36">
+                                <div className="flex items-center gap-1">
+                                    <SortHead field="warrantyName" sort={sort} onSort={cycleSort}>Warranty</SortHead>
+                                    <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                </div>
+                            </TableHead>
+                            <TableHead className="w-24">
+                                <div className="flex items-center gap-1">
+                                    <SortHead field="unitCode" sort={sort} onSort={cycleSort}>Unit</SortHead>
+                                    <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                </div>
+                            </TableHead>
+                            <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead>
+                            <TableHead className="min-w-36"><SortHead field="barcode1" sort={sort} onSort={cycleSort}>Barcode</SortHead></TableHead>
+                            <TableHead className="w-20 text-right"><SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead></TableHead>
+                            <TableHead className="w-20 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                    <SortHead field="isActive" sort={sort} onSort={cycleSort}>Active</SortHead>
+                                    <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField />
+                                </div>
+                            </TableHead>
+                            {!isEdit ? <TableHead className="w-24 text-right"> </TableHead> : null}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -453,29 +623,41 @@ export default function InventoryProductsPage() {
                                                 />
                                             </TableCell>
                                         ) : null}
-                                        <TableCell className="text-muted-foreground text-sm">{pageStart + i + 1}</TableCell>
-                                        <TableCell className="font-mono text-sm">{r.sku}</TableCell>
+                                        <TableCell className="text-muted-foreground text-sm align-top">{pageStart + i + 1}</TableCell>
+                                        <TableCell className="font-mono text-xs align-top whitespace-nowrap">{r.sku}</TableCell>
 
                                         {/* Name */}
-                                        <TableCell className={isEdit ? "min-w-48" : "font-medium"}>
+                                        <TableCell className={isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}>
                                             {isEdit ? (
-                                                <Input
-                                                    value={val(r, "name") as string}
-                                                    onChange={(e) => patch(r.id, { name: e.target.value })}
-                                                    className="h-8"
-                                                />
+                                                <div className="flex items-start gap-1">
+                                                    <div className="flex-1 min-w-0">
+                                                        <AutoGrowInput
+                                                            value={val(r, "name") as string}
+                                                            onChange={(v) => patch(r.id, { name: v })}
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => regenerateName(r)}
+                                                        title="Regenerate name from masters (per naming config)"
+                                                        className="shrink-0 inline-flex items-center justify-center size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <RefreshCw className="size-3.5" />
+                                                    </button>
+                                                </div>
                                             ) : (
                                                 r.name
                                             )}
                                         </TableCell>
 
                                         {/* Category */}
-                                        <TableCell className={isEdit ? "min-w-40" : "text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                             {isEdit ? (
                                                 <CellSelect
                                                     value={val(r, "categoryId") as number | null}
                                                     options={categories}
                                                     onChange={(v) => patch(r.id, { categoryId: v })}
+                                                    onCreate={() => createMaster("categories", "category")}
                                                 />
                                             ) : (
                                                 r.category?.name ?? "—"
@@ -483,12 +665,13 @@ export default function InventoryProductsPage() {
                                         </TableCell>
 
                                         {/* Brand */}
-                                        <TableCell className={isEdit ? "min-w-40" : "text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                             {isEdit ? (
                                                 <CellSelect
                                                     value={val(r, "brandId") as number | null}
                                                     options={brands}
                                                     onChange={(v) => patch(r.id, { brandId: v })}
+                                                    onCreate={() => createMaster("brands", "brand")}
                                                 />
                                             ) : (
                                                 r.brand?.name ?? "—"
@@ -496,12 +679,13 @@ export default function InventoryProductsPage() {
                                         </TableCell>
 
                                         {/* Group */}
-                                        <TableCell className={isEdit ? "min-w-40" : "text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                             {isEdit ? (
                                                 <CellSelect
                                                     value={val(r, "groupId") as number | null}
                                                     options={groups}
                                                     onChange={(v) => patch(r.id, { groupId: v })}
+                                                    onCreate={() => createMaster("product-groups", "group")}
                                                 />
                                             ) : (
                                                 r.group?.name ?? "—"
@@ -509,12 +693,13 @@ export default function InventoryProductsPage() {
                                         </TableCell>
 
                                         {/* Warranty */}
-                                        <TableCell className={isEdit ? "min-w-40" : "text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                             {isEdit ? (
                                                 <CellSelect
                                                     value={val(r, "warrantyTermId") as number | null}
                                                     options={warrantyTerms}
                                                     onChange={(v) => patch(r.id, { warrantyTermId: v })}
+                                                    onCreate={() => createMaster("warranty-terms", "warranty term")}
                                                 />
                                             ) : (
                                                 r.warrantyTerm?.name ?? "—"
@@ -522,13 +707,14 @@ export default function InventoryProductsPage() {
                                         </TableCell>
 
                                         {/* Unit */}
-                                        <TableCell className={isEdit ? "min-w-28" : "text-muted-foreground text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-28 align-top" : "text-muted-foreground text-sm align-top whitespace-normal break-words"}>
                                             {isEdit ? (
                                                 <CellSelect
                                                     value={val(r, "unitId") as number}
                                                     options={units}
                                                     onChange={(v) => v != null && patch(r.id, { unitId: v })}
                                                     clearable={false}
+                                                    onCreate={() => createMaster("units", "unit")}
                                                 />
                                             ) : (
                                                 r.unit.code
@@ -536,7 +722,7 @@ export default function InventoryProductsPage() {
                                         </TableCell>
 
                                         {/* Model No */}
-                                        <TableCell className={isEdit ? "min-w-32" : "text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-32 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
                                             {isEdit ? (
                                                 <Input
                                                     value={(val(r, "modelNo") as string | null) ?? ""}
@@ -549,7 +735,7 @@ export default function InventoryProductsPage() {
                                         </TableCell>
 
                                         {/* Barcode */}
-                                        <TableCell className={isEdit ? "min-w-32 font-mono" : "font-mono text-sm"}>
+                                        <TableCell className={isEdit ? "min-w-32 font-mono align-top whitespace-nowrap" : "font-mono text-sm align-top whitespace-nowrap"}>
                                             {isEdit ? (
                                                 <Input
                                                     value={(val(r, "barcode1") as string | null) ?? ""}
@@ -660,30 +846,193 @@ export default function InventoryProductsPage() {
     );
 }
 
+/// Clickable header cell — cycles null → asc → desc → null on each click and
+/// shows a tiny arrow when sort is active on this column.
+function SortHead({
+    field, sort, onSort, children, align = "left",
+}: {
+    field: SortField;
+    sort: { field: SortField; dir: "asc" | "desc" } | null;
+    onSort: (f: SortField) => void;
+    children: React.ReactNode;
+    align?: "left" | "right";
+}) {
+    const active = sort?.field === field;
+    const arrow = !active ? "↕" : sort!.dir === "asc" ? "↑" : "↓";
+    return (
+        <button
+            type="button"
+            onClick={() => onSort(field)}
+            className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""} hover:text-primary`}
+        >
+            <span>{children}</span>
+            <span className={`text-xs ${active ? "text-primary" : "text-muted-foreground/60"}`}>{arrow}</span>
+        </button>
+    );
+}
+
+/// Per-column multi-select filter. Renders a funnel button that opens a
+/// checklist of unique values from the master list (plus "(none)" if any row
+/// has a null relation). For booleanField (isActive), shows ✓ / inactive.
+function ColFilter({
+    field, options, rows, colFilters, onToggle, onClear, booleanField = false,
+}: {
+    field: FilterField;
+    options: Opt[];
+    rows: Row[];
+    colFilters: Map<FilterField, Set<string>>;
+    onToggle: (f: FilterField, key: string) => void;
+    onClear: (f: FilterField) => void;
+    booleanField?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        if (!open) return;
+        function onDocClick(e: MouseEvent) {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+        }
+        function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onDocClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [open]);
+
+    const active = (colFilters.get(field)?.size ?? 0) > 0;
+    const selected = colFilters.get(field) ?? new Set<string>();
+
+    // Build the option list. For booleanField, two fixed options.
+    const items: { key: string; label: string }[] = booleanField
+        ? [{ key: "true", label: "Active" }, { key: "false", label: "Inactive" }]
+        : (() => {
+            const list = options.map((o) => ({ key: String(o.id), label: optLabel(o) }));
+            // "(none)" only if any row has null for this field
+            const anyNull = rows.some((r) => (r as unknown as Record<string, unknown>)[field] == null);
+            if (anyNull) list.unshift({ key: "__none__", label: "(none)" });
+            return list;
+        })();
+
+    return (
+        <div ref={wrapRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                aria-label="Filter column"
+                title={active ? `Filter (${selected.size})` : "Filter"}
+                className={`inline-flex items-center justify-center size-5 rounded hover:bg-muted ${active ? "text-primary" : "text-muted-foreground/60"}`}
+            >
+                <Filter className="size-3.5" />
+            </button>
+            {open ? (
+                <div className="absolute z-20 mt-1 left-0 min-w-48 max-h-72 overflow-auto rounded-md border border-border bg-popover text-popover-foreground p-2 shadow-md">
+                    <div className="flex items-center justify-between mb-1 text-xs">
+                        <span className="text-muted-foreground">Filter</span>
+                        {active ? (
+                            <button type="button" className="hover:underline" onClick={() => onClear(field)}>
+                                clear
+                            </button>
+                        ) : null}
+                    </div>
+                    <ul className="space-y-1">
+                        {items.map((it) => (
+                            <li key={it.key}>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selected.has(it.key)}
+                                        onChange={() => onToggle(field, it.key)}
+                                    />
+                                    <span className="truncate">{it.label}</span>
+                                </label>
+                            </li>
+                        ))}
+                        {items.length === 0 ? (
+                            <li className="text-xs text-muted-foreground italic">no values</li>
+                        ) : null}
+                    </ul>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/// Single-line by default, grows vertically as the text wraps. Used for the
+/// Name cell so a long product name shows in full while still feeling like
+/// an input. Sets rows={1} and resizes on every render to the scrollHeight.
+function AutoGrowInput({
+    value,
+    onChange,
+    className,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    className?: string;
+}) {
+    const ref = useRef<HTMLTextAreaElement | null>(null);
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+    }, [value]);
+    return (
+        <textarea
+            ref={ref}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            rows={1}
+            className={
+                "block w-full resize-none rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring " +
+                (className ?? "")
+            }
+        />
+    );
+}
+
 /// Native <select> — Radix Select renders a portal per instance, which chokes
 /// the renderer when the grid has hundreds of cells. Native select is fast,
 /// accessible, and adequate for a dense bulk-edit screen.
+///
+/// onCreate (when supplied) renders a "+ New …" option at the top; choosing it
+/// fires onCreate, which is expected to prompt the user, POST to the master
+/// endpoint, refresh the master list, and return the new id (or null on cancel).
 function CellSelect({
     value,
     options,
     onChange,
     clearable = true,
+    onCreate,
+    createLabel = "+ New",
 }: {
     value: number | null;
     options: Opt[];
     onChange: (v: number | null) => void;
     clearable?: boolean;
+    onCreate?: () => Promise<number | null>;
+    createLabel?: string;
 }) {
     return (
         <select
             value={value == null ? "" : String(value)}
-            onChange={(e) => {
+            onChange={async (e) => {
                 const v = e.target.value;
+                if (v === "__new__" && onCreate) {
+                    const id = await onCreate();
+                    if (id != null) onChange(id);
+                    // If create was cancelled or failed, restore previous selection
+                    // by re-emitting the original value (React controls keep the DOM
+                    // in sync via the value prop on next render).
+                    return;
+                }
                 onChange(v === "" ? null : Number(v));
             }}
             className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
             {clearable ? <option value="">— clear —</option> : null}
+            {onCreate ? <option value="__new__">{createLabel}</option> : null}
             {options.map((o) => (
                 <option key={o.id} value={String(o.id)}>
                     {optLabel(o)}
@@ -701,23 +1050,37 @@ function BulkApply({
     field,
     onApply,
     clearable = true,
+    onCreate,
 }: {
     label: string;
     options: Opt[];
     field: keyof Patch;
     onApply: (field: keyof Patch, raw: string) => void;
     clearable?: boolean;
+    onCreate?: () => Promise<number | null>;
 }) {
     const [v, setV] = useState<string>("");
     const CLEAR = "__clear__";
+    const NEW = "__new__";
     return (
         <div className="flex items-center gap-1">
-            <Select value={v} onValueChange={setV}>
+            <Select
+                value={v}
+                onValueChange={async (next) => {
+                    if (next === NEW && onCreate) {
+                        const id = await onCreate();
+                        if (id != null) setV(String(id));
+                        return;
+                    }
+                    setV(next);
+                }}
+            >
                 <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder={label} />
                 </SelectTrigger>
                 <SelectContent>
                     {clearable ? <SelectItem value={CLEAR}>— clear —</SelectItem> : null}
+                    {onCreate ? <SelectItem value={NEW}>+ New {label.toLowerCase()}</SelectItem> : null}
                     {options.map((o) => (
                         <SelectItem key={o.id} value={String(o.id)}>
                             {optLabel(o)}
