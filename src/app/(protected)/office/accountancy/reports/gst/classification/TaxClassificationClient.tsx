@@ -17,11 +17,11 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
-import { RateWiseTab } from "@/modules/accountancy/components/tax-classification/RateWiseTab";
-import { HsnWiseTab } from "@/modules/accountancy/components/tax-classification/HsnWiseTab";
-import { GroupHierarchyTab } from "@/modules/accountancy/components/tax-classification/GroupHierarchyTab";
-import { ItemWiseTab } from "@/modules/accountancy/components/tax-classification/ItemWiseTab";
-import type { GstClassificationPayload } from "@/modules/accountancy/components/tax-classification/types";
+import { RateWiseTab } from "./_components/RateWiseTab";
+import { HsnWiseTab } from "./_components/HsnWiseTab";
+import { GroupHierarchyTab } from "./_components/GroupHierarchyTab";
+import { ItemWiseTab } from "./_components/ItemWiseTab";
+import type { GstClassificationPayload } from "./_components/types";
 
 interface Props {
     canEdit: boolean;
