@@ -1046,9 +1046,13 @@ async function main() {
     console.log("[7/7] Inventory naming convention");
     const namingDefaults = {
         nameFields: [
-            { kind: "brand",   enabled: true, defaultValue: null },
-            { kind: "group",   enabled: true, defaultValue: "General" },
-            { kind: "modelNo", enabled: true, defaultValue: null },
+            { kind: "brand",    enabled: true, defaultValue: null },
+            { kind: "group",    enabled: true, defaultValue: "General" },
+            { kind: "modelNo",  enabled: true, defaultValue: null },
+            // Operator-curated free text (InvProduct.namePart). Sits after the
+            // master-driven tokens so the regenerate button rebuilds masters
+            // around it without ever overwriting it.
+            { kind: "userPart", enabled: true, defaultValue: null },
         ],
         separator: " ",
         onlineNameFields: [

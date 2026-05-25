@@ -87,6 +87,9 @@ const productOpening = {
 export const invProductCreateSchema = z.object({
     sku: z.string().trim().min(1).max(64),
     name: z.string().trim().min(1).max(500),
+    /// Operator-curated free text rendered by the `userPart` token in the
+    /// naming-convention template. Survives every name regeneration.
+    namePart: zOptStr(500),
     unitId: z.coerce.number().int().positive(),
     categoryId: z.number().int().positive().nullish(),
     groupId: z.number().int().positive().nullish(),

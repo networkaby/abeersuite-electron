@@ -42,6 +42,7 @@ export type InvProductRow = {
     id: number;
     sku: string;
     name: string;
+    namePart: string | null;
     isActive: boolean;
     shopSubheading: string | null;
     slug: string | null;
@@ -93,6 +94,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
     return {
         sku: p.sku,
         name: p.name,
+        namePart: p.namePart ?? "",
         shopSubheading: p.shopSubheading ?? "",
         slug: p.slug ?? "",
         unitId: String(p.unitId),
@@ -237,6 +239,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         const payload = {
             sku: form.sku.trim(),
             name: form.name.trim(),
+            namePart: optionalStr(form.namePart),
             shopSubheading: optionalStr(form.shopSubheading),
             slug: optionalStr(form.slug),
             unitId: unitId!,

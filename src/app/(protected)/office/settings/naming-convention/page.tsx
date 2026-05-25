@@ -29,9 +29,10 @@ const TOKEN_LABEL: Record<TokenKind, string> = {
     unit:     "Unit",
     literal:  "Literal text",
     attr:     "Custom attribute",
+    userPart: "Custom (user part)",
 };
 
-const ALL_KINDS: TokenKind[] = ["brand", "category", "group", "modelNo", "warranty", "unit", "attr"];
+const ALL_KINDS: TokenKind[] = ["brand", "category", "group", "modelNo", "warranty", "unit", "attr", "userPart"];
 
 // Sample product for the live preview — fixed so the owner sees consistent
 // output across saves. Mirrors the InvProduct master shape passed to the
@@ -43,6 +44,7 @@ const PREVIEW_MASTERS: NamingMasters = {
     warranty: { name: "1-Year" },
     unit:     { code: "PCS" },
     modelNo:  "250-G9",
+    userPart: "1.5M Special",
 };
 
 function move<T>(list: T[], from: number, dir: -1 | 1): T[] {

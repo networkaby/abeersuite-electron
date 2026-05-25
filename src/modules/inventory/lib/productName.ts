@@ -17,7 +17,12 @@ export type TokenKind =
     | "warranty"
     | "unit"
     | "literal"
-    | "attr";
+    | "attr"
+    /// Operator-curated free text from InvProduct.namePart. Survives every
+    /// regenerate-name pass — the auto-built tokens never overwrite it. Place
+    /// this token in the template wherever the curated portion should appear
+    /// (e.g. between brand and model, or at the end).
+    | "userPart";
 
 export interface NamingToken {
     kind: TokenKind;
@@ -44,6 +49,8 @@ export interface NamingMasters {
     modelNo?: string | null;
     /** Custom attribute bag from InvProduct.attrsJson — flat key→value. */
     attrs?: Record<string, string> | null;
+    /** Operator-curated free text from InvProduct.namePart. */
+    userPart?: string | null;
 }
 
 export interface NamingConfigShape {
@@ -66,6 +73,7 @@ function primarySource(kind: TokenKind, m: NamingMasters): string {
         case "warranty": return m.warranty?.name?.trim() ?? "";
         case "unit":     return m.unit?.code?.trim() ?? "";
         case "modelNo":  return (m.modelNo ?? "").trim();
+        case "userPart": return (m.userPart ?? "").trim();
         case "literal":
         case "attr":     return ""; // handled directly in resolveToken
     }

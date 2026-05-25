@@ -165,6 +165,13 @@ model InvProduct {
   id             Int      @id @default(autoincrement())
   sku            String   @unique
   name           String
+
+  /// Free-text user portion that survives name regeneration. Rendered
+  /// wherever the InvNamingConfig places the `userPart` token. Lets the
+  /// operator curate values like "1.5M Special", "Compatible", "m100"
+  /// once and have the regenerate button rebuild the full name around
+  /// it instead of clobbering it. null = nothing.
+  namePart       String?
   unitId         Int
   categoryId     Int?
   groupId        Int?

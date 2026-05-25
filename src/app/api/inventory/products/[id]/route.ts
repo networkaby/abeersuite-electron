@@ -91,6 +91,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: {
                 ...(b.sku !== undefined ? { sku } : {}),
                 ...(b.name !== undefined ? { name: b.name } : {}),
+                ...(b.namePart !== undefined ? { namePart: b.namePart } : {}),
                 ...(b.unitId !== undefined ? { unitId: b.unitId } : {}),
                 ...(b.categoryId !== undefined ? { categoryId: b.categoryId } : {}),
                 ...(b.groupId !== undefined ? { groupId: b.groupId } : {}),

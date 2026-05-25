@@ -51,6 +51,7 @@ type Row = {
     id: number;
     sku: string;
     name: string;
+    namePart: string | null;
     isActive: boolean;
     stock: number | null;
     lowStockThreshold: number;
@@ -71,6 +72,7 @@ type Row = {
 /// Patch payload — only the fields the editable grid touches.
 type Patch = Partial<{
     name: string;
+    namePart: string | null;
     modelNo: string | null;
     barcode1: string | null;
     isActive: boolean;
@@ -84,7 +86,7 @@ type Patch = Partial<{
 type Mode = "view" | "edit";
 
 type SortField =
-    | "sku" | "name" | "categoryName" | "brandName" | "groupName"
+    | "sku" | "name" | "namePart" | "categoryName" | "brandName" | "groupName"
     | "warrantyName" | "unitCode" | "modelNo" | "barcode1" | "stock" | "isActive";
 
 type FilterField = "categoryId" | "brandId" | "groupId" | "warrantyTermId" | "unitId" | "isActive";
@@ -237,10 +239,11 @@ export default function InventoryProductsPage() {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        // 1. free-text search across SKU/name/model/barcode
+        // 1. free-text search across SKU/name/namePart/model/barcode
         let out = !q ? rows : rows.filter((r) =>
             r.sku.toLowerCase().includes(q) ||
             r.name.toLowerCase().includes(q) ||
+            (r.namePart ?? "").toLowerCase().includes(q) ||
             (r.modelNo ?? "").toLowerCase().includes(q) ||
             (r.barcode1 ?? "").toLowerCase().includes(q),
         );
@@ -260,6 +263,7 @@ export default function InventoryProductsPage() {
                 switch (sort.field) {
                     case "sku":           return r.sku;
                     case "name":          return r.name.toLowerCase();
+                    case "namePart":      return (r.namePart ?? "").toLowerCase();
                     case "categoryName":  return r.category?.name?.toLowerCase() ?? "";
                     case "brandName":     return r.brand?.name?.toLowerCase() ?? "";
                     case "groupName":     return r.group?.name?.toLowerCase() ?? "";
@@ -437,6 +441,10 @@ export default function InventoryProductsPage() {
             unit:     unit  ? { code: unit.code ?? "" } : null,
             modelNo:  (val(r, "modelNo") as string | null) || null,
             attrs:    null,
+            // userPart survives every regenerate — the template inserts it
+            // wherever the `userPart` token sits. Operator edits the Custom
+            // column, never the auto-built portions.
+            userPart: (val(r, "namePart") as string | null) || null,
         };
         const next = buildOfflineName(masters, namingConfig).trim();
         if (!next) {
@@ -550,6 +558,7 @@ export default function InventoryProductsPage() {
                             <TableHead className="w-10">#</TableHead>
                             <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead>
                             <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead>
+                            <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead>
                             <TableHead className="min-w-44">
                                 <div className="flex items-center gap-1">
                                     <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
@@ -595,11 +604,11 @@ export default function InventoryProductsPage() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={isEdit ? 13 : 13} className="text-muted-foreground">Loading…</TableCell>
+                                <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">Loading…</TableCell>
                             </TableRow>
                         ) : pageRows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={isEdit ? 13 : 13} className="text-muted-foreground">
+                                <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">
                                     {rows.length === 0 ? "No products yet. Create a unit first, then add a product." : "No products match the search."}
                                 </TableCell>
                             </TableRow>
@@ -639,7 +648,7 @@ export default function InventoryProductsPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => regenerateName(r)}
-                                                        title="Regenerate name from masters (per naming config)"
+                                                        title="Regenerate name from masters + Custom (per naming config)"
                                                         className="shrink-0 inline-flex items-center justify-center size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                                                     >
                                                         <RefreshCw className="size-3.5" />
@@ -647,6 +656,20 @@ export default function InventoryProductsPage() {
                                                 </div>
                                             ) : (
                                                 r.name
+                                            )}
+                                        </TableCell>
+
+                                        {/* Custom (namePart) — operator-curated portion that survives regenerate */}
+                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                            {isEdit ? (
+                                                <Input
+                                                    value={(val(r, "namePart") as string | null) ?? ""}
+                                                    onChange={(e) => patch(r.id, { namePart: e.target.value.trim() === "" ? null : e.target.value })}
+                                                    placeholder="1.5M Special…"
+                                                    className="h-8"
+                                                />
+                                            ) : (
+                                                r.namePart ?? <span className="text-muted-foreground">—</span>
                                             )}
                                         </TableCell>
 

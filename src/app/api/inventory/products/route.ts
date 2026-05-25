@@ -119,6 +119,7 @@ export async function POST(req: Request) {
             data: {
                 sku,
                 name: b.name,
+                namePart: b.namePart ?? null,
                 unitId: b.unitId,
                 categoryId: b.categoryId ?? null,
                 groupId: b.groupId ?? null,

@@ -34,6 +34,10 @@ import {
 export type InvProductFormState = {
     sku: string;
     name: string;
+    /** Operator-curated free text that survives name regeneration. Written
+     *  to InvProduct.namePart and rendered by the `userPart` token in the
+     *  naming-convention template. */
+    namePart: string;
     /** Online (storefront) display name — written to InvProduct.shopSubheading. */
     shopSubheading: string;
     /** URL slug — written to InvProduct.slug. */
@@ -77,6 +81,7 @@ export type InvProductFormState = {
 export const emptyInvProductForm: InvProductFormState = {
     sku: "",
     name: "",
+    namePart: "",
     shopSubheading: "",
     slug: "",
     unitId: "",
@@ -201,6 +206,7 @@ export function InvProductFormFields({
         attrs:    form.attrs.length > 0
             ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
             : null,
+        userPart: form.namePart || null,
     });
 
     // Re-generate a single field on demand (used by the refresh buttons in
@@ -235,7 +241,7 @@ export function InvProductFormFields({
         }));
     }, [
         form.brandId, form.categoryId, form.groupId, form.warrantyTermId,
-        form.unitId, form.modelNo, form.attrs,
+        form.unitId, form.modelNo, form.attrs, form.namePart,
         brands, categories, groups, warrantyTerms, units,
         namingConfig, setForm,
     ]);
@@ -309,6 +315,19 @@ export function InvProductFormFields({
                         {namingConfig && !nameDirty.current ? (
                             <p className="text-[11px] text-muted-foreground">Auto-filled from naming convention. Type to override.</p>
                         ) : null}
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                        <Label>Custom name part</Label>
+                        <Input
+                            value={form.namePart}
+                            onChange={(e) => setForm((f) => ({ ...f, namePart: e.target.value }))}
+                            placeholder="e.g. 1.5M Special, Compatible Xerox"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            Operator-curated free text. The <strong>regenerate</strong> button rebuilds the
+                            Name from masters around this value — it survives every regeneration.
+                            Renders wherever the <code>userPart</code> token sits in the naming-convention template.
+                        </p>
                     </div>
                     <div className="space-y-2">
                         <Label>Unit</Label>
