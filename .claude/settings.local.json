@@ -149,7 +149,22 @@
       "PowerShell(git add PROJECT_BRAIN.md)",
       "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\" -type f \\\\\\( -name \"page.tsx\" -o -name \"layout.tsx\" \\\\\\) | xargs grep -l \"PosScreen\\\\|PosSalesRegister\" 2>nul)",
       "Bash(git cherry-pick *)",
-      "Bash(pnpm seed:dummy-shop)"
+      "Bash(pnpm seed:dummy-shop)",
+      "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\prisma\\\\schema\" -name \"*.prisma\" -type f 2>nul)",
+      "Bash(grep -n \"PricingStrategy\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\prisma\\\\schema\\\\inventory.prisma\" 2>nul | head -40)",
+      "Bash(grep -n \"pricing\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\shared\\\\lib\\\\constants\\\\permissions.ts\" 2>nul)",
+      "Bash(grep -n \"PricingStrategy\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\prisma\\\\bootstrap-seed.ts\" 2>nul | head -20)",
+      "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\docs\" -name \"*pricing*\" -o -name \"*price*\" 2>nul)",
+      "Bash(grep -n \"pricing\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\docs\\\\modules\\\\inventory.md\" -i 2>nul | head -20)",
+      "Bash(ls \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\docs\\\\completed-and-protected.md\" 2>nul && echo \"File exists\" || echo \"File not found\")",
+      "Bash(grep -r \"resolveCost\\\\|resolvePrice\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\" --include=\"*.ts\" --include=\"*.tsx\" 2>nul | grep -v \".next\" | wc -l)",
+      "Bash(find \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\" -name \"*.ts\" -o -name \"*.tsx\" 2>nul | wc -l)",
+      "Bash(grep -r \"pricing-strategy\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\shared\\\\components\" --include=\"*.ts\" --include=\"*.tsx\" 2>nul)",
+      "Bash(grep -A 3 \"pricing-strategy\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\shared\\\\components\\\\Sidebar.tsx\" 2>nul)",
+      "Bash(grep -B 5 -A 5 \"pricing-strategy\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\shared\\\\components\\\\Sidebar.tsx\" 2>nul | head -20)",
+      "Bash(grep -n \"TODO\\\\|FIXME\\\\|BUG\\\\|XXX\\\\|HACK\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\\\\lib\\\\resolveCost.ts\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\\\\lib\\\\resolvePrice.ts\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\pricing-strategy\\\\apply\\\\route.ts\" 2>nul)",
+      "Bash(grep -n \"priceOverridden\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\pricing-strategy\\\\apply\\\\route.ts\" 2>nul)",
+      "Bash(grep -n \"test\\\\|spec\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\" -i 2>nul)"
     ]
   }
 }
