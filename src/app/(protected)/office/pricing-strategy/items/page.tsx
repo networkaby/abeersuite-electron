@@ -1,0 +1,450 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
+
+type CostMethod =
+    | "WEIGHTED_AVG_COST"
+    | "FIFO"
+    | "LAST_PURCHASE_COST"
+    | "MONTHLY_AVG_COST"
+    | "STD_COST";
+
+const COST_METHOD_LABEL: Record<CostMethod, string> = {
+    WEIGHTED_AVG_COST:  "Weighted Avg",
+    FIFO:               "FIFO",
+    LAST_PURCHASE_COST: "Last Purchase",
+    MONTHLY_AVG_COST:   "Monthly Avg",
+    STD_COST:           "Standard",
+};
+
+type Item = {
+    id:                    number;
+    sku:                   string;
+    name:                  string;
+    categoryName:          string | null;
+    groupName:             string | null;
+    brandName:             string | null;
+    costMethod:            CostMethod;
+    marginPercent:         number | null;
+    priceOverridden:       boolean;
+    pricePaise:            number | null;
+    mrpPaise:              number | null;
+    stdCostPaise:          number | null;
+    lastPurchasePaise:     number | null;
+    resolvedCostPaise:     number | null;
+    resolvedCostFallback:  string | null;
+    computedPricePaise:    number | null;
+    rawComputedPricePaise: number | null;
+    cappedAtMrp:           boolean;
+    strategyId:            number | null;
+    strategyName:          string | null;
+    appliedMarkupPct:      number;
+};
+
+type RowEdit = {
+    costMethod:    CostMethod;
+    marginPercent: string; // "" = clear override (use strategy)
+    pricePaise:    string; // "" = no manual change
+    stdCostPaise:  string;
+};
+
+function paise(p: number | null): string {
+    if (p == null) return "—";
+    return `₹${(p / 100).toFixed(2)}`;
+}
+
+interface Attention {
+    /** True for any missing field. */
+    needs:    boolean;
+    /** True when cost is missing — blocker, can't price the item at all. */
+    critical: boolean;
+    /** Human-readable list of missing fields. */
+    missing:  string[];
+}
+
+function attentionFor(item: Item): Attention {
+    const missing: string[] = [];
+    const noCost  = item.resolvedCostPaise == null;
+    const noMrp   = item.mrpPaise == null || item.mrpPaise <= 0;
+    const noPrice = item.pricePaise == null;
+    if (noCost)  missing.push("cost");
+    if (noMrp)   missing.push("MRP");
+    if (noPrice) missing.push("price");
+    return { needs: missing.length > 0, critical: noCost, missing };
+}
+
+export default function PricingItemsPage() {
+    const [items,           setItems]           = useState<Item[]>([]);
+    const [loading,         setLoading]         = useState(true);
+    const [search,          setSearch]          = useState("");
+    const [onlyIncomplete,  setOnlyIncomplete]  = useState(false);
+    const [edits,           setEdits]           = useState<Record<number, RowEdit>>({});
+    const [savingId,        setSavingId]        = useState<number | null>(null);
+    const [applying,        setApplying]        = useState(false);
+
+    const load = () => {
+        setLoading(true);
+        axios
+            .get<Item[]>("/api/pricing-strategy/items")
+            .then((r) => setItems(r.data))
+            .catch(() => toast.error("Failed to load pricing items"))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        load();
+    }, []);
+
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return items.filter((i) => {
+            if (onlyIncomplete && !attentionFor(i).needs) return false;
+            if (!q) return true;
+            return (
+                i.name.toLowerCase().includes(q) ||
+                i.sku.toLowerCase().includes(q) ||
+                (i.brandName?.toLowerCase().includes(q) ?? false) ||
+                (i.categoryName?.toLowerCase().includes(q) ?? false)
+            );
+        });
+    }, [items, search, onlyIncomplete]);
+
+    const attentionCount = useMemo(
+        () => items.reduce((n, i) => (attentionFor(i).needs ? n + 1 : n), 0),
+        [items],
+    );
+    const criticalCount = useMemo(
+        () => items.reduce((n, i) => (attentionFor(i).critical ? n + 1 : n), 0),
+        [items],
+    );
+
+    const editFor = (item: Item): RowEdit =>
+        edits[item.id] ?? {
+            costMethod:    item.costMethod,
+            marginPercent: item.marginPercent != null ? String(item.marginPercent) : "",
+            pricePaise:    "",
+            stdCostPaise:  item.stdCostPaise != null ? String(item.stdCostPaise) : "",
+        };
+
+    const setEdit = (id: number, patch: Partial<RowEdit>) =>
+        setEdits((prev) => ({ ...prev, [id]: { ...editFor({ id } as Item), ...prev[id], ...patch } }));
+
+    const saveRow = async (item: Item) => {
+        const e = editFor(item);
+        const payload: Record<string, unknown> = {};
+        if (e.costMethod !== item.costMethod) payload.costMethod = e.costMethod;
+        if (e.marginPercent.trim() !== (item.marginPercent != null ? String(item.marginPercent) : "")) {
+            const n = e.marginPercent.trim() === "" ? null : Number(e.marginPercent);
+            if (n != null && !Number.isFinite(n)) return toast.error("Margin % must be a number");
+            payload.marginPercent = n;
+        }
+        if (e.stdCostPaise.trim() !== (item.stdCostPaise != null ? String(item.stdCostPaise) : "")) {
+            const n = e.stdCostPaise.trim() === "" ? null : Number(e.stdCostPaise);
+            if (n != null && (!Number.isInteger(n) || n < 0)) return toast.error("Std cost must be a non-negative integer (paise)");
+            payload.stdCostPaise = n;
+        }
+        if (e.pricePaise.trim() !== "") {
+            const n = Number(e.pricePaise);
+            if (!Number.isInteger(n) || n < 0) return toast.error("Manual price must be a non-negative integer (paise)");
+            if (item.mrpPaise != null && item.mrpPaise > 0 && n > item.mrpPaise) {
+                return toast.error(
+                    `Manual price ₹${(n / 100).toFixed(2)} exceeds MRP ₹${(item.mrpPaise / 100).toFixed(2)}.`,
+                );
+            }
+            payload.pricePaise = n;
+            payload.priceOverridden = true;
+        }
+        if (Object.keys(payload).length === 0) {
+            toast.info("No changes");
+            return;
+        }
+        setSavingId(item.id);
+        try {
+            await axios.patch(`/api/pricing-strategy/items/${item.id}`, payload);
+            toast.success("Saved");
+            setEdits((prev) => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+            });
+            load();
+        } catch (err: unknown) {
+            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Save failed" : "Save failed");
+        } finally {
+            setSavingId(null);
+        }
+    };
+
+    const toggleOverride = async (item: Item) => {
+        setSavingId(item.id);
+        try {
+            await axios.patch(`/api/pricing-strategy/items/${item.id}`, {
+                priceOverridden: !item.priceOverridden,
+            });
+            toast.success(item.priceOverridden ? "Override cleared" : "Override locked");
+            load();
+        } catch (err: unknown) {
+            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Update failed" : "Update failed");
+        } finally {
+            setSavingId(null);
+        }
+    };
+
+    const applyAll = async () => {
+        if (!confirm("Recompute and write pricePaise for every non-overridden product?")) return;
+        setApplying(true);
+        try {
+            const r = await axios.post<{ updated: number; skipped: number; errors: Array<{ productId: number; reason: string }> }>(
+                "/api/pricing-strategy/apply",
+                {},
+            );
+            toast.success(`Updated ${r.data.updated}, skipped ${r.data.skipped}${r.data.errors.length ? `, ${r.data.errors.length} errors` : ""}`);
+            load();
+        } catch (err: unknown) {
+            toast.error(axios.isAxiosError(err) ? err.response?.data?.error ?? "Apply failed" : "Apply failed");
+        } finally {
+            setApplying(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                    <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+                        <Boxes className="size-5" aria-hidden />
+                        Items
+                    </h2>
+                    {attentionCount > 0 ? (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <AlertTriangle className="size-4 text-amber-600" aria-hidden />
+                            {attentionCount} of {items.length} need attention
+                            {criticalCount > 0 ? (
+                                <>
+                                    {" · "}
+                                    <span className="text-red-700">{criticalCount} blocked (no cost)</span>
+                                </>
+                            ) : null}
+                        </span>
+                    ) : items.length > 0 ? (
+                        <span className="text-xs text-muted-foreground">All {items.length} items have cost, MRP, and price set.</span>
+                    ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                    <label className="text-xs flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={onlyIncomplete}
+                            onChange={(e) => setOnlyIncomplete(e.target.checked)}
+                        />
+                        Only incomplete
+                    </label>
+                    <Input
+                        placeholder="Search name / SKU / brand…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-64"
+                    />
+                    <Button type="button" variant="outline" onClick={load}>
+                        <RefreshCw className="size-4" />
+                        Reload
+                    </Button>
+                    <Button type="button" onClick={applyAll} disabled={applying}>
+                        <Wand2 className="size-4" />
+                        Apply to non-overridden
+                    </Button>
+                </div>
+            </div>
+
+            <div className="overflow-x-auto border border-border">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-8"> </TableHead>
+                            <TableHead>Product</TableHead>
+                            <TableHead>Cost method</TableHead>
+                            <TableHead className="text-right">Cost</TableHead>
+                            <TableHead className="text-right">Margin %</TableHead>
+                            <TableHead>Strategy</TableHead>
+                            <TableHead className="text-right">Computed</TableHead>
+                            <TableHead className="text-right">Current</TableHead>
+                            <TableHead className="text-right">Manual ₹ (paise)</TableHead>
+                            <TableHead className="text-right"> </TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {loading ? (
+                            <TableLoadingRow colSpan={10} />
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={10} message="No products match." />
+                        ) : (
+                            filtered.map((item) => {
+                                const e = editFor(item);
+                                const dirty =
+                                    e.costMethod !== item.costMethod ||
+                                    e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
+                                    e.stdCostPaise !== (item.stdCostPaise != null ? String(item.stdCostPaise) : "") ||
+                                    e.pricePaise.trim() !== "";
+                                const att = attentionFor(item);
+                                return (
+                                    <TableRow key={item.id} className={att.critical ? "bg-red-50/40" : att.needs ? "bg-amber-50/40" : undefined}>
+                                        <TableCell>
+                                            {att.needs ? (
+                                                <span
+                                                    title={`Missing: ${att.missing.join(", ")}`}
+                                                    className={att.critical ? "text-red-700" : "text-amber-700"}
+                                                >
+                                                    {att.critical ? (
+                                                        <AlertCircle className="size-4" aria-label="Critical" />
+                                                    ) : (
+                                                        <AlertTriangle className="size-4" aria-label="Needs attention" />
+                                                    )}
+                                                </span>
+                                            ) : null}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="font-medium">{item.name}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {item.sku}
+                                                {item.brandName ? ` · ${item.brandName}` : ""}
+                                                {item.categoryName ? ` · ${item.categoryName}` : ""}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Select
+                                                value={e.costMethod}
+                                                onValueChange={(v) => setEdit(item.id, { costMethod: v as CostMethod })}
+                                            >
+                                                <SelectTrigger className="h-8 w-[160px]">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
+                                                        <SelectItem key={v} value={v}>{l}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {item.resolvedCostFallback ? (
+                                                <div className="text-xs text-amber-600 mt-1">{item.resolvedCostFallback}</div>
+                                            ) : null}
+                                        </TableCell>
+                                        <TableCell className="text-right">{paise(item.resolvedCostPaise)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Input
+                                                inputMode="decimal"
+                                                placeholder="strategy"
+                                                value={e.marginPercent}
+                                                onChange={(ev) => setEdit(item.id, { marginPercent: ev.target.value })}
+                                                className="h-8 w-20 text-right"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className="text-xs">
+                                                {item.strategyName ?? "—"}
+                                            </span>
+                                            <div className="text-xs text-muted-foreground">
+                                                @{item.appliedMarkupPct.toFixed(2)}%
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-right font-medium">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {paise(item.computedPricePaise)}
+                                                {item.cappedAtMrp ? (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-amber-700 border-amber-500"
+                                                        title={`Cost+margin would be ${paise(item.rawComputedPricePaise)} — capped to MRP ${paise(item.mrpPaise)}.`}
+                                                    >
+                                                        <ShieldAlert className="size-3 mr-1" />
+                                                        MRP cap
+                                                    </Badge>
+                                                ) : null}
+                                            </div>
+                                            {item.mrpPaise != null && item.mrpPaise > 0 ? (
+                                                <div className="text-xs text-muted-foreground">
+                                                    MRP {paise(item.mrpPaise)}
+                                                </div>
+                                            ) : null}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {paise(item.pricePaise)}
+                                            {item.priceOverridden ? (
+                                                <Badge variant="outline" className="ml-2">
+                                                    <Lock className="size-3 mr-1" />
+                                                    manual
+                                                </Badge>
+                                            ) : null}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Input
+                                                inputMode="numeric"
+                                                placeholder="—"
+                                                value={e.pricePaise}
+                                                onChange={(ev) => setEdit(item.id, { pricePaise: ev.target.value })}
+                                                className="h-8 w-24 text-right"
+                                            />
+                                        </TableCell>
+                                        <TableCell className="text-right space-x-1 whitespace-nowrap">
+                                            {dirty ? (
+                                                <Button
+                                                    type="button"
+                                                    size="icon-sm"
+                                                    aria-label="Save"
+                                                    onClick={() => saveRow(item)}
+                                                    disabled={savingId === item.id}
+                                                >
+                                                    <Save className="size-4" />
+                                                </Button>
+                                            ) : null}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon-sm"
+                                                aria-label={item.priceOverridden ? "Clear override" : "Lock manual"}
+                                                onClick={() => toggleOverride(item)}
+                                                disabled={savingId === item.id}
+                                            >
+                                                {item.priceOverridden ? <Unlock className="size-4" /> : <Lock className="size-4" />}
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+                <strong>Cost</strong> uses the row&apos;s saved method. <strong>Computed</strong> applies the matched
+                strategy (or per-item margin override) and is capped at MRP — rows where the formula exceeded MRP
+                show an &quot;MRP cap&quot; badge. <strong>Manual ₹ (paise)</strong> sets pricePaise directly and
+                locks the row; manual prices above MRP are rejected. Apply skips locked rows. Rows missing cost,
+                MRP, or price are flagged in the first column — red means &quot;cannot price&quot; (no cost),
+                amber means soft-missing data.
+            </p>
+        </div>
+    );
+}

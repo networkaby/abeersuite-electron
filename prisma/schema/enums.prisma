@@ -155,6 +155,36 @@ enum Taxability {
   NON_GST // outside GST regime entirely (alcohol, fuel)
 }
 
+// ── Pricing-strategy enums ────────────────────────────────────────────────────
+
+// Cost-basis method used by the pricing-strategy resolver, selected per
+// InvProduct. Each method derives the unit cost in paise as follows:
+//   WEIGHTED_AVG_COST  → Σ(amount) / Σ(qty) over every IN row in InvStockLedger (default)
+//   FIFO               → perpetual: oldest remaining lot's rate after replaying OUT rows
+//   LAST_PURCHASE_COST → snapshot stored on InvProduct.costPaise (existing column,
+//                        updated on every PURCHASE voucher post)
+//   MONTHLY_AVG_COST   → weighted avg of IN rows in the current calendar month
+//   STD_COST           → manually-set per item via InvProduct.stdCostPaise
+// If no IN history exists for the chosen method, the resolver falls back
+// to InvProduct.costPaise.
+enum CostMethod {
+  WEIGHTED_AVG_COST
+  FIFO
+  LAST_PURCHASE_COST
+  MONTHLY_AVG_COST
+  STD_COST
+}
+
+// Scope of a PricingStrategy row. ORG = default for the whole company;
+// CATEGORY / GROUP / BRAND = scoped to that master record via scopeId.
+// Resolution walks BRAND → GROUP → CATEGORY → ORG with priority as tiebreaker.
+enum PricingScope {
+  ORG
+  CATEGORY
+  GROUP
+  BRAND
+}
+
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────
 
 enum OrderSource {

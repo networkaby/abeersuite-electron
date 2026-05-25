@@ -207,6 +207,19 @@ model InvProduct {
   /// Last purchase cost in paise — set on PURCHASE voucher post, used for COGS on SALE
   costPaise         Int?
 
+  // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
+  /// Cost-basis method consumed by the pricing-strategy resolver. See
+  /// `enum CostMethod`. Default WEIGHTED_AVG_COST mirrors how most distribution
+  /// businesses think about unit cost.
+  costMethod        CostMethod @default(WEIGHTED_AVG_COST)
+  /// Manually-entered standard cost in paise. Only read when costMethod == STD_COST.
+  stdCostPaise      Int?
+  /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
+  /// PricingStrategy chain (BRAND → GROUP → CATEGORY → ORG).
+  marginPercent     Decimal?   @db.Decimal(6, 2)
+  /// True when a user has manually set pricePaise — bulk recompute skips this row.
+  priceOverridden   Boolean    @default(false)
+
   // ── Tally-style opening stock — entered on the master, dated at booksBeginningFrom.
   // Mismatch between Σ(openingValue) and the "Stock-in-Hand" line on the
   // opening journal auto-parks to "Difference in Opening Balances".
@@ -553,4 +566,37 @@ model InvVoucherTender {
 
   @@index([voucherId])
   @@index([accountId])
+}
+
+// ── Pricing strategy (cost + margin → sale price) ────────────────────────────
+//
+// Margin rules layered by scope. Resolution walks BRAND → GROUP → CATEGORY →
+// ORG for a given InvProduct; within the same scope, the highest `priority`
+// wins. The matched strategy supplies markupPercent + markupFlatPaise +
+// roundingPaise; the product's InvProduct.marginPercent (if not null)
+// overrides markupPercent at the very top of the chain.
+
+model PricingStrategy {
+  id              Int          @id @default(autoincrement())
+  name            String
+  scope           PricingScope
+  /// FK semantics depend on scope: CATEGORY → InvCategory.id, GROUP →
+  /// InvProductGroup.id, BRAND → InvBrand.id, ORG → null. App layer enforces
+  /// the FK; no relation is declared so deletes of the parent master don't
+  /// cascade-delete pricing config.
+  scopeId         Int?
+  /// Margin in percent (e.g. 25.00 = +25%).
+  markupPercent   Decimal      @default(0) @db.Decimal(6, 2)
+  /// Flat amount in paise added to cost before the percent markup.
+  markupFlatPaise Int          @default(0)
+  /// Round resulting sell price to nearest N paise (0 = exact, 100 = ₹1, 1000 = ₹10).
+  roundingPaise   Int          @default(0)
+  /// Tiebreaker within the same scope — higher wins.
+  priority        Int          @default(0)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([scope, scopeId, isActive])
+  @@map("pricing_strategies")
 }

@@ -63,6 +63,9 @@ const TRANSACTION_TABLES = [
 // Phase 5 — inventory masters that are dummy-only.
 // NOTE: InvUnit + InvBrand are intentionally excluded — they are now seeded
 // by bootstrap-seed.ts (section 9 + 10) and must survive a hard-clean.
+// Same exclusion applies to pricing_strategies (section 16: default ORG
+// markup) — config table, never truncated. Users can drop extra rows
+// manually if they want a clean slate.
 const INVENTORY_MASTERS = [
     "InvStockLedger", "InvVoucherExpenseLine", "InvVoucherLine", "InvVoucher", "InvVoucherAudit",  // re-listed defensively
     "InvBomLine", "InvBom",

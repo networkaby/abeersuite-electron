@@ -162,7 +162,7 @@ const PERMISSIONS = [
     { id: "settings:pipelines:edit", label: "Edit pipelines", module: "admin", description: "Edit pipelines." },
     { id: "settings:pipelines:delete", label: "Delete pipelines", module: "admin", description: "Delete pipelines." },
     { id: "ecommerce:manage", label: "Manage ecommerce catalog & orders", module: "admin", description: "Create shop products and view customer orders." },
-    { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters." },
+    { id: "inventory:manage", label: "Manage inventory masters", module: "admin", description: "Maintain units, categories, brands, warranty terms, and inventory product masters. Also gates pricing-strategy CRUD." },
 
     // crm
     { id: "crm:view", label: "View CRM leads", module: "crm", description: "View the CRM leads list and lead details." },
@@ -1182,12 +1182,12 @@ async function main() {
     console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
-    console.log("[12/15] VoucherSeries (all GL + inventory series)");
+    console.log("[12/16] VoucherSeries (all GL + inventory series)");
     await seedVoucherSeries(prisma);
     console.log(`      ✓ VoucherSeries seeded\n`);
 
     // ── Section 13: Voucher print templates ───────────────────────────
-    console.log("[13/15] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
+    console.log("[13/16] VoucherPrintTemplate (per-kind thermal/A4 print templates)");
     // Create payload uses the full per-kind defaults so a fresh DB starts in
     // the right place. On re-seed we only force `defaultPaper` back to its
     // per-kind baseline (POS = THERMAL_80MM, everything else = A4); all
@@ -1203,7 +1203,7 @@ async function main() {
     console.log(`      ✓ ${VOUCHER_TEMPLATE_KINDS.length} voucher print templates seeded\n`);
 
     // ── Section 14: Organisation singleton ────────────────────────────
-    console.log("[14/15] Organisation (your own business / legal entity)");
+    console.log("[14/16] Organisation (your own business / legal entity)");
     // Create-only on re-seed (mirrors VoucherSeries / VoucherPrintTemplate
     // pattern) so admin edits via /office/settings/organisation survive a
     // re-run of `pnpm prisma db seed`. Initial values come from
@@ -1239,7 +1239,7 @@ async function main() {
     console.log(`      ✓ Organisation singleton seeded (id=1)\n`);
 
     // ── Section 15: GSTIN ↔ gstStateCode integrity fixup ─────────────────
-    console.log("[15/15] GSTIN ↔ state-code integrity fixup");
+    console.log("[15/16] GSTIN ↔ state-code integrity fixup");
     // Idempotent: for every Branch / Person / Company / Organisation row
     // with a non-empty GSTIN, force gstStateCode = gstin[:2]. Safe to re-run.
     // (Doesn't touch the human-readable `state` text — admins clean those
@@ -1252,6 +1252,33 @@ async function main() {
     const fixedTotal = (branchFix.rowCount ?? 0) + (personFix.rowCount ?? 0)
                      + (companyFix.rowCount ?? 0) + (orgFix.rowCount ?? 0);
     console.log(`      ✓ Re-aligned gstStateCode on ${fixedTotal} row(s) where it disagreed with GSTIN\n`);
+
+    // ── Section 16: PricingStrategy default ──────────────────────────────────
+    // One ORG-scope strategy with 25% markup so the pricing-strategy module
+    // resolves to a sensible default for every product out of the box.
+    // Idempotent via findFirst-then-upsert (no @unique on name lets users
+    // add multiple ORG strategies later and tier them by priority).
+    console.log("[16/16] Pricing strategy default (ORG, +25% markup)");
+    const defaultStrategy = await prisma.pricingStrategy.findFirst({
+        where: { scope: "ORG", scopeId: null, name: "Default ORG markup" },
+    });
+    if (!defaultStrategy) {
+        await prisma.pricingStrategy.create({
+            data: {
+                name: "Default ORG markup",
+                scope: "ORG",
+                scopeId: null,
+                markupPercent: "25.00",
+                markupFlatPaise: 0,
+                roundingPaise: 0,
+                priority: 0,
+                isActive: true,
+            },
+        });
+        console.log(`      ✓ Created "Default ORG markup" (+25%)\n`);
+    } else {
+        console.log(`      ✓ "Default ORG markup" already present, skipped\n`);
+    }
 
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");
