@@ -111,6 +111,7 @@ export default function PricingItemsPage() {
     const [loading,         setLoading]         = useState(true);
     const [search,          setSearch]          = useState("");
     const [onlyIncomplete,  setOnlyIncomplete]  = useState(false);
+    const [hideEmpty,       setHideEmpty]       = useState(false);
     const [filterCategory,  setFilterCategory]  = useState<string>("__all");
     const [filterBrand,     setFilterBrand]     = useState<string>("__all");
     const [filterGroup,     setFilterGroup]     = useState<string>("__all");
@@ -165,6 +166,7 @@ export default function PricingItemsPage() {
         const q = search.trim().toLowerCase();
         return items.filter((i) => {
             if (onlyIncomplete && !attentionFor(i).needs) return false;
+            if (hideEmpty && i.resolvedCostPaise == null) return false;
             if (filterCategory !== "__all" && i.categoryName !== filterCategory) return false;
             if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
             if (filterGroup    !== "__all" && i.groupName    !== filterGroup)    return false;
@@ -178,11 +180,12 @@ export default function PricingItemsPage() {
                 (i.categoryName?.toLowerCase().includes(q) ?? false)
             );
         });
-    }, [items, search, onlyIncomplete, filterCategory, filterBrand, filterGroup, filterMethod, filterStrategy]);
+    }, [items, search, onlyIncomplete, hideEmpty, filterCategory, filterBrand, filterGroup, filterMethod, filterStrategy]);
 
     const hasActiveFilter =
         search.trim() !== "" ||
         onlyIncomplete ||
+        hideEmpty ||
         filterCategory !== "__all" ||
         filterBrand !== "__all" ||
         filterGroup !== "__all" ||
@@ -210,6 +213,7 @@ export default function PricingItemsPage() {
     const clearFilters = () => {
         setSearch("");
         setOnlyIncomplete(false);
+        setHideEmpty(false);
         setFilterCategory("__all");
         setFilterBrand("__all");
         setFilterGroup("__all");
@@ -475,6 +479,14 @@ export default function PricingItemsPage() {
                             onChange={(e) => setOnlyIncomplete(e.target.checked)}
                         />
                         Only incomplete
+                    </label>
+                    <label className="text-xs flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={hideEmpty}
+                            onChange={(e) => setHideEmpty(e.target.checked)}
+                        />
+                        Hide empty
                     </label>
                     {hasActiveFilter ? (
                         <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="ml-auto h-7">
