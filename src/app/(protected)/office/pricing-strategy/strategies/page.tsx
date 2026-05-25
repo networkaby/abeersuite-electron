@@ -29,6 +29,13 @@ import { useDeleteWithConfirm } from "@/shared/hooks";
 
 type Scope = "ORG" | "CATEGORY" | "GROUP" | "BRAND";
 
+type CostMethod =
+    | "WEIGHTED_AVG_COST"
+    | "FIFO"
+    | "LAST_PURCHASE_COST"
+    | "MONTHLY_AVG_COST"
+    | "STD_COST";
+
 type Strategy = {
     id:              number;
     name:            string;
@@ -38,6 +45,7 @@ type Strategy = {
     markupFlatPaise: number;
     roundingPaise:   number;
     priority:        number;
+    costMethod:      CostMethod | null;
     isActive:        boolean;
 };
 
@@ -51,6 +59,7 @@ type FormState = {
     markupFlatPaise: string;
     roundingPaise:   string;
     priority:        string;
+    costMethod:      string; // "__none" sentinel = null
     isActive:        boolean;
 };
 
@@ -62,6 +71,7 @@ const emptyForm: FormState = {
     markupFlatPaise: "0",
     roundingPaise:   "0",
     priority:        "0",
+    costMethod:      "__none",
     isActive:        true,
 };
 
@@ -70,6 +80,14 @@ const SCOPE_LABEL: Record<Scope, string> = {
     CATEGORY: "Category",
     GROUP:    "Product group",
     BRAND:    "Brand",
+};
+
+const COST_METHOD_LABEL: Record<CostMethod, string> = {
+    WEIGHTED_AVG_COST:  "Weighted Avg",
+    FIFO:               "FIFO",
+    LAST_PURCHASE_COST: "Last Purchase",
+    MONTHLY_AVG_COST:   "Monthly Avg",
+    STD_COST:           "Standard",
 };
 
 function formatPaise(p: number): string {
@@ -177,6 +195,7 @@ export default function PricingStrategiesPage() {
             markupFlatPaise: markupFlat,
             roundingPaise:   rounding,
             priority,
+            costMethod:      form.costMethod === "__none" ? null : (form.costMethod as CostMethod),
             isActive:        form.isActive,
         };
 
@@ -217,6 +236,7 @@ export default function PricingStrategiesPage() {
             markupFlatPaise: String(s.markupFlatPaise),
             roundingPaise:   String(s.roundingPaise),
             priority:        String(s.priority),
+            costMethod:      s.costMethod ?? "__none",
             isActive:        s.isActive,
         });
     };
@@ -326,6 +346,23 @@ export default function PricingStrategiesPage() {
                                 onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
                             />
                         </div>
+                        <div className="space-y-2">
+                            <Label>Default cost method</Label>
+                            <Select
+                                value={form.costMethod}
+                                onValueChange={(v) => setForm((f) => ({ ...f, costMethod: v }))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none">— Use item&apos;s own —</SelectItem>
+                                    {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
+                                        <SelectItem key={v} value={v}>{l}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <label className="flex items-center gap-2 text-sm pb-2 self-end">
                             <input
                                 type="checkbox"
@@ -357,15 +394,16 @@ export default function PricingStrategiesPage() {
                             <TableHead className="text-right">Flat</TableHead>
                             <TableHead>Rounding</TableHead>
                             <TableHead className="text-right">Priority</TableHead>
+                            <TableHead>Cost method</TableHead>
                             <TableHead className="text-right">Used by</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableLoadingRow colSpan={9} />
+                            <TableLoadingRow colSpan={10} />
                         ) : rows.length === 0 ? (
-                            <TableEmptyRow colSpan={9} message="No pricing strategies yet." />
+                            <TableEmptyRow colSpan={10} message="No pricing strategies yet." />
                         ) : (
                             rows.map((s) => (
                                 <TableRow key={s.id}>
@@ -383,6 +421,9 @@ export default function PricingStrategiesPage() {
                                     <TableCell className="text-right">{formatPaise(s.markupFlatPaise)}</TableCell>
                                     <TableCell>{formatRounding(s.roundingPaise)}</TableCell>
                                     <TableCell className="text-right">{s.priority}</TableCell>
+                                    <TableCell>
+                                        {s.costMethod ? COST_METHOD_LABEL[s.costMethod] : <span className="text-muted-foreground">—</span>}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         {(() => {
                                             const n = usage.get(s.id) ?? 0;

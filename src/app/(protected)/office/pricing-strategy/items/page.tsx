@@ -48,7 +48,12 @@ type Item = {
     categoryName:          string | null;
     groupName:             string | null;
     brandName:             string | null;
-    costMethod:            CostMethod;
+    /** Per-item override. null = inherit from strategy. */
+    costMethod:            CostMethod | null;
+    /** What was actually used: product.costMethod ?? strategy.costMethod ?? WA. */
+    effectiveCostMethod:   CostMethod;
+    /** Strategy's default cost method (informational). */
+    strategyCostMethod:    CostMethod | null;
     marginPercent:         number | null;
     priceOverridden:       boolean;
     pricePaise:            number | null;
@@ -68,7 +73,8 @@ type Item = {
 };
 
 type RowEdit = {
-    costMethod:    CostMethod;
+    /** "__inherit" sentinel = null (use strategy default). */
+    costMethod:    CostMethod | "__inherit";
     marginPercent: string; // "" = clear override (use strategy)
     pricePaise:    string; // "" = no manual change
     costPaise:     string; // baseline cost (paise) — writes to InvProduct.costPaise
@@ -162,7 +168,7 @@ export default function PricingItemsPage() {
             if (filterCategory !== "__all" && i.categoryName !== filterCategory) return false;
             if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
             if (filterGroup    !== "__all" && i.groupName    !== filterGroup)    return false;
-            if (filterMethod   !== "__all" && i.costMethod   !== filterMethod)   return false;
+            if (filterMethod   !== "__all" && i.effectiveCostMethod !== filterMethod) return false;
             if (filterStrategy !== "__all" && String(i.strategyId ?? "") !== filterStrategy) return false;
             if (!q) return true;
             return (
@@ -264,7 +270,7 @@ export default function PricingItemsPage() {
 
     const editFor = (item: Item): RowEdit =>
         edits[item.id] ?? {
-            costMethod:    item.costMethod,
+            costMethod:    item.costMethod ?? "__inherit",
             marginPercent: item.marginPercent != null ? String(item.marginPercent) : "",
             pricePaise:    "",
             costPaise:     item.lastPurchasePaise != null ? String(item.lastPurchasePaise) : "",
@@ -277,7 +283,10 @@ export default function PricingItemsPage() {
     const saveRow = async (item: Item) => {
         const e = editFor(item);
         const payload: Record<string, unknown> = {};
-        if (e.costMethod !== item.costMethod) payload.costMethod = e.costMethod;
+        // Translate "__inherit" sentinel → null. Compare current edit to item value.
+        const editMethod    = e.costMethod === "__inherit" ? null : e.costMethod;
+        const currentMethod = item.costMethod;
+        if (editMethod !== currentMethod) payload.costMethod = editMethod;
         if (e.marginPercent.trim() !== (item.marginPercent != null ? String(item.marginPercent) : "")) {
             const n = e.marginPercent.trim() === "" ? null : Number(e.marginPercent);
             if (n != null && !Number.isFinite(n)) return toast.error("Margin % must be a number");
@@ -505,8 +514,9 @@ export default function PricingItemsPage() {
                                 {virtualItems.map((vi) => {
                                     const item = filtered[vi.index];
                                     const e = editFor(item);
+                                const itemMethodValue = item.costMethod ?? "__inherit";
                                 const dirty =
-                                    e.costMethod !== item.costMethod ||
+                                    e.costMethod !== itemMethodValue ||
                                     e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
                                     e.stdCostPaise !== (item.stdCostPaise != null ? String(item.stdCostPaise) : "") ||
                                     e.costPaise !== (item.lastPurchasePaise != null ? String(item.lastPurchasePaise) : "") ||
@@ -544,17 +554,25 @@ export default function PricingItemsPage() {
                                         <TableCell>
                                             <Select
                                                 value={e.costMethod}
-                                                onValueChange={(v) => setEdit(item.id, { costMethod: v as CostMethod })}
+                                                onValueChange={(v) => setEdit(item.id, { costMethod: v as RowEdit["costMethod"] })}
                                             >
-                                                <SelectTrigger className="h-8 w-[160px]">
+                                                <SelectTrigger className="h-8 w-[180px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                    <SelectItem value="__inherit">
+                                                        Inherit{item.strategyCostMethod ? ` (${COST_METHOD_LABEL[item.strategyCostMethod]})` : " (Weighted Avg)"}
+                                                    </SelectItem>
                                                     {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
                                                         <SelectItem key={v} value={v}>{l}</SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
+                                            {e.costMethod === "__inherit" ? (
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                    using {COST_METHOD_LABEL[item.effectiveCostMethod]}
+                                                </div>
+                                            ) : null}
                                             {item.resolvedCostFallback ? (
                                                 <div className="text-xs text-amber-600 mt-1">{item.resolvedCostFallback}</div>
                                             ) : null}

@@ -33,6 +33,7 @@ export async function POST(req: Request) {
                 markupFlatPaise: data.markupFlatPaise,
                 roundingPaise:   data.roundingPaise,
                 priority:        data.priority,
+                costMethod:      data.costMethod ?? null,
                 isActive:        data.isActive ?? true,
             },
         });

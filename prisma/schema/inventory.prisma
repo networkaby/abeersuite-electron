@@ -208,10 +208,11 @@ model InvProduct {
   costPaise         Int?
 
   // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
-  /// Cost-basis method consumed by the pricing-strategy resolver. See
-  /// `enum CostMethod`. Default WEIGHTED_AVG_COST mirrors how most distribution
-  /// businesses think about unit cost.
-  costMethod        CostMethod @default(WEIGHTED_AVG_COST)
+  /// Per-item cost-basis method consumed by the pricing-strategy resolver.
+  /// See `enum CostMethod`. Null = inherit from the matched strategy
+  /// (which itself may inherit to the hard-coded WEIGHTED_AVG_COST fallback).
+  /// Resolution: product.costMethod ?? strategy.costMethod ?? WEIGHTED_AVG_COST.
+  costMethod        CostMethod?
   /// Manually-entered standard cost in paise. Only read when costMethod == STD_COST.
   stdCostPaise      Int?
   /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
@@ -593,6 +594,12 @@ model PricingStrategy {
   roundingPaise   Int          @default(0)
   /// Tiebreaker within the same scope — higher wins.
   priority        Int          @default(0)
+  /// Default cost-basis method for products matched by this strategy.
+  /// Null = no strategy-level default; products use their own
+  /// InvProduct.costMethod (or fall through to WEIGHTED_AVG_COST).
+  /// Per-item costMethod always wins when set — strategy's value only
+  /// applies to products whose InvProduct.costMethod is null.
+  costMethod      CostMethod?
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt

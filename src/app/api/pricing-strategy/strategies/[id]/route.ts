@@ -64,6 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.markupFlatPaise !== undefined ? { markupFlatPaise: data.markupFlatPaise } : {}),
                 ...(data.roundingPaise   !== undefined ? { roundingPaise:   data.roundingPaise } : {}),
                 ...(data.priority        !== undefined ? { priority:        data.priority } : {}),
+                ...(data.costMethod      !== undefined ? { costMethod:      data.costMethod } : {}),
                 ...(data.isActive        !== undefined ? { isActive:        data.isActive } : {}),
             },
         });

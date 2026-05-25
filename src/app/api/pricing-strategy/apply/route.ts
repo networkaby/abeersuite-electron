@@ -42,12 +42,33 @@ export async function POST(req: Request) {
         });
         const strategies = await prisma.pricingStrategy.findMany({ where: { isActive: true } });
 
-        // Batch resolve costs grouped by method.
-        const byMethod = new Map<string, typeof products>();
+        // Pre-compute matched strategy + effective cost method per product
+        // (product.costMethod ?? strategy.costMethod ?? hard fallback).
+        type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
+        const matched = new Map<number, { strategy: typeof strategies[number] | null; effectiveMethod: EffectiveMethod }>();
+        for (const p of products) {
+            const s = pickStrategy(
+                {
+                    id:            p.id,
+                    categoryId:    p.categoryId,
+                    groupId:       p.groupId,
+                    brandId:       p.brandId,
+                    marginPercent: p.marginPercent,
+                },
+                strategies,
+            );
+            const effective: EffectiveMethod =
+                p.costMethod ?? s?.costMethod ?? "WEIGHTED_AVG_COST";
+            matched.set(p.id, { strategy: s, effectiveMethod: effective });
+        }
+
+        // Batch resolve costs grouped by effective method.
+        const byMethod = new Map<EffectiveMethod, typeof products>();
         for (const p of products) {
             if (!data.forceOverridden && p.priceOverridden && (!data.productIds || data.productIds.length === 0)) continue;
-            const arr = byMethod.get(p.costMethod);
-            if (arr) arr.push(p); else byMethod.set(p.costMethod, [p]);
+            const m = matched.get(p.id)!.effectiveMethod;
+            const arr = byMethod.get(m);
+            if (arr) arr.push(p); else byMethod.set(m, [p]);
         }
         const costById = new Map<number, number | null>();
         for (const [method, group] of byMethod.entries()) {
@@ -58,7 +79,7 @@ export async function POST(req: Request) {
                     costPaise:    g.costPaise,
                     stdCostPaise: g.stdCostPaise,
                 })),
-                method as Parameters<typeof resolveCostBatch>[1],
+                method,
             );
             for (const [id, r] of resolved) costById.set(id, r.costPaise);
         }
@@ -76,16 +97,7 @@ export async function POST(req: Request) {
                 const priced = applyStrategy(
                     cost,
                     p.marginPercent != null ? Number(p.marginPercent) : null,
-                    pickStrategy(
-                        {
-                            id:            p.id,
-                            categoryId:    p.categoryId,
-                            groupId:       p.groupId,
-                            brandId:       p.brandId,
-                            marginPercent: p.marginPercent,
-                        },
-                        strategies,
-                    ),
+                    matched.get(p.id)!.strategy,
                     p.mrpPaise,
                 );
                 if (priced.pricePaise == null) {

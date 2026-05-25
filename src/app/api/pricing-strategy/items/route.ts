@@ -13,7 +13,12 @@ export interface PricingItem {
     categoryName:     string | null;
     groupName:        string | null;
     brandName:        string | null;
-    costMethod:       string;
+    /** Per-item cost method override. null = inherit from strategy. */
+    costMethod:           string | null;
+    /** Resolved method actually used: product.costMethod ?? strategy.costMethod ?? WEIGHTED_AVG_COST. */
+    effectiveCostMethod:  string;
+    /** Strategy's default cost method, surfaced for the UI to show "from strategy" hints. */
+    strategyCostMethod:   string | null;
     marginPercent:    number | null;
     priceOverridden:  boolean;
     pricePaise:       number | null;
@@ -70,30 +75,13 @@ export async function GET() {
             prisma.pricingStrategy.findMany({ where: { isActive: true } }),
         ]);
 
-        // Group products by costMethod so we issue one batch per method.
-        const byMethod = new Map<string, typeof products>();
+        // Effective cost method per product: product.costMethod ?? matched
+        // strategy's costMethod ?? hard fallback. Precompute so we can both
+        // group-batch the resolver and surface the source on the response.
+        type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
+        type Match = { effectiveMethod: EffectiveMethod; strategyId: number | null; strategyName: string | null };
+        const matches = new Map<number, Match>();
         for (const p of products) {
-            const arr = byMethod.get(p.costMethod);
-            if (arr) arr.push(p); else byMethod.set(p.costMethod, [p]);
-        }
-        const costById = new Map<number, { paise: number | null; fallback: string | null }>();
-        for (const [method, group] of byMethod.entries()) {
-            const resolved = await resolveCostBatch(
-                group.map((g) => ({
-                    id:           g.id,
-                    stock:        g.stock,
-                    costPaise:    g.costPaise,
-                    stdCostPaise: g.stdCostPaise,
-                })),
-                method as Parameters<typeof resolveCostBatch>[1],
-            );
-            for (const [id, r] of resolved) {
-                costById.set(id, { paise: r.costPaise, fallback: r.fallback ?? null });
-            }
-        }
-
-        const items: PricingItem[] = products.map((p) => {
-            const cost = costById.get(p.id) ?? { paise: p.costPaise, fallback: null };
             const matched = pickStrategy(
                 {
                     id:            p.id,
@@ -104,6 +92,42 @@ export async function GET() {
                 },
                 strategies,
             );
+            const effective: EffectiveMethod =
+                p.costMethod ?? matched?.costMethod ?? "WEIGHTED_AVG_COST";
+            matches.set(p.id, {
+                effectiveMethod: effective,
+                strategyId:      matched?.id ?? null,
+                strategyName:    matched?.name ?? null,
+            });
+        }
+
+        // Group products by effective cost method so we issue one batch per method.
+        const byMethod = new Map<EffectiveMethod, typeof products>();
+        for (const p of products) {
+            const m = matches.get(p.id)!.effectiveMethod;
+            const arr = byMethod.get(m);
+            if (arr) arr.push(p); else byMethod.set(m, [p]);
+        }
+        const costById = new Map<number, { paise: number | null; fallback: string | null }>();
+        for (const [method, group] of byMethod.entries()) {
+            const resolved = await resolveCostBatch(
+                group.map((g) => ({
+                    id:           g.id,
+                    stock:        g.stock,
+                    costPaise:    g.costPaise,
+                    stdCostPaise: g.stdCostPaise,
+                })),
+                method,
+            );
+            for (const [id, r] of resolved) {
+                costById.set(id, { paise: r.costPaise, fallback: r.fallback ?? null });
+            }
+        }
+
+        const items: PricingItem[] = products.map((p) => {
+            const cost  = costById.get(p.id) ?? { paise: p.costPaise, fallback: null };
+            const meta  = matches.get(p.id)!;
+            const matched = strategies.find((s) => s.id === meta.strategyId) ?? null;
             const priced = applyStrategy(
                 cost.paise,
                 p.marginPercent != null ? Number(p.marginPercent) : null,
@@ -117,7 +141,9 @@ export async function GET() {
                 categoryName:      p.category?.name ?? null,
                 groupName:         p.group?.name ?? null,
                 brandName:         p.brand?.name ?? null,
-                costMethod:        p.costMethod,
+                costMethod:           p.costMethod,
+                effectiveCostMethod:  meta.effectiveMethod,
+                strategyCostMethod:   matched?.costMethod ?? null,
                 marginPercent:     p.marginPercent != null ? Number(p.marginPercent) : null,
                 priceOverridden:   p.priceOverridden,
                 pricePaise:        p.pricePaise,
@@ -129,8 +155,8 @@ export async function GET() {
                 computedPricePaise:    priced.pricePaise,
                 rawComputedPricePaise: priced.rawPricePaise,
                 cappedAtMrp:           priced.cappedAtMrp,
-                strategyId:            matched?.id ?? null,
-                strategyName:          matched?.name ?? null,
+                strategyId:            meta.strategyId,
+                strategyName:          meta.strategyName,
                 appliedMarkupPct:      priced.appliedMarkupPct,
                 appliedFlatPaise:      priced.appliedFlatPaise,
                 appliedRoundingPaise:  priced.appliedRoundingPaise,

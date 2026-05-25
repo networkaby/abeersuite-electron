@@ -20,6 +20,8 @@ const baseStrategyShape = z.object({
     markupFlatPaise: z.number().int().min(0),
     roundingPaise:   z.number().int().min(0),
     priority:        z.number().int(),
+    /** Strategy-level default cost method. null = no override, products use their own. */
+    costMethod:      costMethodEnum.nullable().optional(),
     isActive:        z.boolean().optional(),
 });
 
@@ -77,7 +79,8 @@ export type PricingStrategyUpdateInput = z.infer<typeof pricingStrategyUpdateSch
 // history yet — the resolver falls back to costPaise for every method.
 export const pricingItemUpdateSchema = z
     .object({
-        costMethod:      costMethodEnum.optional(),
+        /** Per-item cost method. null = inherit from matched strategy. */
+        costMethod:      costMethodEnum.nullable().optional(),
         marginPercent:   z.number().gte(-100).lte(10_000).nullable().optional(),
         priceOverridden: z.boolean().optional(),
         pricePaise:      z.number().int().min(0).nullable().optional(),
