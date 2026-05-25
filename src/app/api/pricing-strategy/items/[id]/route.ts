@@ -52,6 +52,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.pricePaise      !== undefined ? { pricePaise:    data.pricePaise } : {}),
                 ...(data.costPaise       !== undefined ? { costPaise:     data.costPaise } : {}),
                 ...(data.stdCostPaise    !== undefined ? { stdCostPaise:  data.stdCostPaise } : {}),
+                ...(data.mrpPaise        !== undefined ? { mrpPaise:      data.mrpPaise } : {}),
             },
             select: {
                 id:               true,
@@ -59,6 +60,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 marginPercent:    true,
                 priceOverridden:  true,
                 pricePaise:       true,
+                mrpPaise:         true,
                 costPaise:        true,
                 stdCostPaise:     true,
             },

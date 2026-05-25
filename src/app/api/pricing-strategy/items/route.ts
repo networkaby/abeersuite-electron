@@ -5,11 +5,15 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { pickStrategy, applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
+import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 
 export interface PricingItem {
     id:               number;
     sku:              string;
     name:             string;
+    categoryId:       number | null;
+    groupId:          number | null;
+    brandId:          number | null;
     categoryName:     string | null;
     groupName:        string | null;
     brandName:        string | null;
@@ -44,12 +48,17 @@ export interface PricingItem {
     appliedFlatPaise:     number;
     /** Strategy's rounding step (paise) — same. */
     appliedRoundingPaise: number;
+    /** Resolved GST rate % (0 when no tax set anywhere in the cascade). */
+    gstRatePct:           number;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
     try {
+        const { searchParams } = new URL(req.url);
+        const onlyAttention = searchParams.get("onlyAttention") === "1";
+
         const [products, strategies] = await Promise.all([
             prisma.invProduct.findMany({
                 where:   { isActive: true },
@@ -76,6 +85,10 @@ export async function GET() {
             }),
             prisma.pricingStrategy.findMany({ where: { isActive: true } }),
         ]);
+
+        // Resolve GST rates for all products in 3 queries (cascade: product → group chain → org default).
+        const taxResult = await resolveProductTaxBatch({});
+        const taxByProduct = taxResult.products;
 
         // Effective cost method per product: product.costMethod ?? matched
         // strategy's costMethod ?? hard fallback. Precompute so we can both
@@ -126,7 +139,7 @@ export async function GET() {
             }
         }
 
-        const items: PricingItem[] = products.map((p) => {
+        let items: PricingItem[] = products.map((p) => {
             const cost  = costById.get(p.id) ?? { paise: p.costPaise, fallback: null };
             const meta  = matches.get(p.id)!;
             const matched = strategies.find((s) => s.id === meta.strategyId) ?? null;
@@ -136,10 +149,14 @@ export async function GET() {
                 matched,
                 p.mrpPaise,
             );
+            const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
             return {
                 id:                p.id,
                 sku:               p.sku,
                 name:              p.name,
+                categoryId:        p.categoryId,
+                groupId:           p.groupId,
+                brandId:           p.brandId,
                 categoryName:      p.category?.name ?? null,
                 groupName:         p.group?.name ?? null,
                 brandName:         p.brand?.name ?? null,
@@ -163,8 +180,18 @@ export async function GET() {
                 appliedMarkupPct:      priced.appliedMarkupPct,
                 appliedFlatPaise:      priced.appliedFlatPaise,
                 appliedRoundingPaise:  priced.appliedRoundingPaise,
+                gstRatePct,
             };
         });
+
+        if (onlyAttention) {
+            items = items.filter(
+                (i) =>
+                    i.resolvedCostPaise == null ||
+                    i.mrpPaise == null || i.mrpPaise <= 0 ||
+                    i.pricePaise == null,
+            );
+        }
 
         return NextResponse.json(items);
     } catch (e) {

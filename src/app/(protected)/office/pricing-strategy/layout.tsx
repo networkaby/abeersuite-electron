@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ChartArea, Calculator, Boxes } from "lucide-react";
+import { ChartArea, Calculator, Boxes, AlertTriangle } from "lucide-react";
 
 const NAV = [
-    { label: "Overview",   icon: ChartArea,  href: "/office/pricing-strategy" },
-    { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
-    { label: "Items",      icon: Boxes,      href: "/office/pricing-strategy/items" },
+    { label: "Overview",      icon: ChartArea,     href: "/office/pricing-strategy" },
+    { label: "Strategies",    icon: Calculator,    href: "/office/pricing-strategy/strategies" },
+    { label: "Items",         icon: Boxes,         href: "/office/pricing-strategy/items" },
+    { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
 ];
 
 export default function PricingStrategyLayout({ children }: { children: React.ReactNode }) {

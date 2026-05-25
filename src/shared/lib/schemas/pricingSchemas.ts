@@ -84,6 +84,7 @@ export const pricingItemUpdateSchema = z
         marginPercent:   z.number().gte(-100).lte(10_000).nullable().optional(),
         priceOverridden: z.boolean().optional(),
         pricePaise:      z.number().int().min(0).nullable().optional(),
+        mrpPaise:        z.number().int().min(0).nullable().optional(),
         costPaise:       z.number().int().min(0).nullable().optional(),
         stdCostPaise:    z.number().int().min(0).nullable().optional(),
     });
