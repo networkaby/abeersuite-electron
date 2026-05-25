@@ -61,6 +61,8 @@ type Item = {
     strategyId:            number | null;
     strategyName:          string | null;
     appliedMarkupPct:      number;
+    appliedFlatPaise:      number;
+    appliedRoundingPaise:  number;
 };
 
 type RowEdit = {
@@ -103,6 +105,7 @@ export default function PricingItemsPage() {
     const [onlyIncomplete,  setOnlyIncomplete]  = useState(false);
     const [filterCategory,  setFilterCategory]  = useState<string>("__all");
     const [filterBrand,     setFilterBrand]     = useState<string>("__all");
+    const [filterGroup,     setFilterGroup]     = useState<string>("__all");
     const [filterMethod,    setFilterMethod]    = useState<string>("__all");
     const [edits,           setEdits]           = useState<Record<number, RowEdit>>({});
     const [savingId,        setSavingId]        = useState<number | null>(null);
@@ -131,6 +134,11 @@ export default function PricingItemsPage() {
         for (const i of items) if (i.brandName) set.add(i.brandName);
         return [...set].sort();
     }, [items]);
+    const uniqueGroups = useMemo(() => {
+        const set = new Set<string>();
+        for (const i of items) if (i.groupName) set.add(i.groupName);
+        return [...set].sort();
+    }, [items]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -138,6 +146,7 @@ export default function PricingItemsPage() {
             if (onlyIncomplete && !attentionFor(i).needs) return false;
             if (filterCategory !== "__all" && i.categoryName !== filterCategory) return false;
             if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
+            if (filterGroup    !== "__all" && i.groupName    !== filterGroup)    return false;
             if (filterMethod   !== "__all" && i.costMethod   !== filterMethod)   return false;
             if (!q) return true;
             return (
@@ -154,6 +163,7 @@ export default function PricingItemsPage() {
         onlyIncomplete ||
         filterCategory !== "__all" ||
         filterBrand !== "__all" ||
+        filterGroup !== "__all" ||
         filterMethod !== "__all";
 
     const clearFilters = () => {
@@ -161,8 +171,51 @@ export default function PricingItemsPage() {
         setOnlyIncomplete(false);
         setFilterCategory("__all");
         setFilterBrand("__all");
+        setFilterGroup("__all");
         setFilterMethod("__all");
     };
+
+    /**
+     * Replays the server-side applyStrategy() formula using the row's current
+     * edit state. Returns the live computed price + cap status so the Computed
+     * column can show the in-progress value before save.
+     *
+     *   raw = (cost + flatPaise) × (1 + markup% / 100)
+     *   rounded = round to nearest roundingPaise (or exact if 0)
+     *   final = min(rounded, mrpPaise) when mrp set, else rounded
+     */
+    function livePreview(item: Item, e: RowEdit): {
+        pricePaise:   number | null;
+        cappedAtMrp:  boolean;
+        markupPct:    number;
+        usedCost:     number | null;
+        dirty:        boolean;
+    } {
+        // Cost: typed value wins if numeric. Empty input → null → fall back to resolved.
+        let cost: number | null = item.resolvedCostPaise;
+        if (e.costPaise.trim() !== "") {
+            const typed = Number(e.costPaise);
+            if (Number.isFinite(typed) && typed >= 0) cost = typed;
+        }
+        // Margin: typed value wins if numeric. Empty input means "no per-item
+        // override" → use strategy's effective markup as visible in appliedMarkupPct.
+        let markup: number = item.appliedMarkupPct;
+        if (e.marginPercent.trim() !== "") {
+            const typed = Number(e.marginPercent);
+            if (Number.isFinite(typed)) markup = typed;
+        }
+        if (cost == null) {
+            return { pricePaise: null, cappedAtMrp: false, markupPct: markup, usedCost: null, dirty: false };
+        }
+        const raw     = (cost + item.appliedFlatPaise) * (1 + markup / 100);
+        const rounding = item.appliedRoundingPaise;
+        const rounded = rounding > 0 ? Math.round(raw / rounding) * rounding : Math.round(raw);
+        const cap     = item.mrpPaise != null && item.mrpPaise > 0 ? item.mrpPaise : null;
+        const capped  = cap != null && rounded > cap;
+        const finalP  = capped ? cap! : rounded;
+        const dirty   = finalP !== item.computedPricePaise;
+        return { pricePaise: finalP, cappedAtMrp: capped, markupPct: markup, usedCost: cost, dirty };
+    }
 
     const attentionCount = useMemo(
         () => items.reduce((n, i) => (attentionFor(i).needs ? n + 1 : n), 0),
@@ -335,6 +388,17 @@ export default function PricingItemsPage() {
                             ))}
                         </SelectContent>
                     </Select>
+                    <Select value={filterGroup} onValueChange={setFilterGroup}>
+                        <SelectTrigger className="h-8 w-[180px]">
+                            <SelectValue placeholder="Group" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All groups</SelectItem>
+                            {uniqueGroups.map((g) => (
+                                <SelectItem key={g} value={g}>{g}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Select value={filterMethod} onValueChange={setFilterMethod}>
                         <SelectTrigger className="h-8 w-[180px]">
                             <SelectValue placeholder="Cost method" />
@@ -466,24 +530,48 @@ export default function PricingItemsPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right font-medium">
-                                            <div className="flex items-center justify-end gap-1">
-                                                {paise(item.computedPricePaise)}
-                                                {item.cappedAtMrp ? (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="text-amber-700 border-amber-500"
-                                                        title={`Cost+margin would be ${paise(item.rawComputedPricePaise)} — capped to MRP ${paise(item.mrpPaise)}.`}
-                                                    >
-                                                        <ShieldAlert className="size-3 mr-1" />
-                                                        MRP cap
-                                                    </Badge>
-                                                ) : null}
-                                            </div>
-                                            {item.mrpPaise != null && item.mrpPaise > 0 ? (
-                                                <div className="text-xs text-muted-foreground">
-                                                    MRP {paise(item.mrpPaise)}
-                                                </div>
-                                            ) : null}
+                                            {(() => {
+                                                const lp = livePreview(item, e);
+                                                const showLive = lp.dirty;
+                                                return (
+                                                    <>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <span className={showLive ? "text-blue-700" : undefined}>
+                                                                {paise(lp.pricePaise)}
+                                                            </span>
+                                                            {lp.cappedAtMrp ? (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-amber-700 border-amber-500"
+                                                                    title={`Cost+margin exceeds MRP — capped to ${paise(item.mrpPaise)}.`}
+                                                                >
+                                                                    <ShieldAlert className="size-3 mr-1" />
+                                                                    MRP cap
+                                                                </Badge>
+                                                            ) : null}
+                                                            {showLive ? (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-blue-700 border-blue-400"
+                                                                    title={`Saved: ${paise(item.computedPricePaise)}. Updates on Save.`}
+                                                                >
+                                                                    preview
+                                                                </Badge>
+                                                            ) : null}
+                                                        </div>
+                                                        {item.mrpPaise != null && item.mrpPaise > 0 ? (
+                                                            <div className="text-xs text-muted-foreground">
+                                                                MRP {paise(item.mrpPaise)}
+                                                            </div>
+                                                        ) : null}
+                                                        {showLive ? (
+                                                            <div className="text-xs text-muted-foreground">
+                                                                was {paise(item.computedPricePaise)}
+                                                            </div>
+                                                        ) : null}
+                                                    </>
+                                                );
+                                            })()}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             {paise(item.pricePaise)}

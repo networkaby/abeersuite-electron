@@ -33,6 +33,10 @@ export interface PricingItem {
     strategyId:           number | null;
     strategyName:         string | null;
     appliedMarkupPct:     number;
+    /** Strategy's flat add (paise) — exposed so the client can replay the formula live. */
+    appliedFlatPaise:     number;
+    /** Strategy's rounding step (paise) — same. */
+    appliedRoundingPaise: number;
 }
 
 export async function GET() {
@@ -128,6 +132,8 @@ export async function GET() {
                 strategyId:            matched?.id ?? null,
                 strategyName:          matched?.name ?? null,
                 appliedMarkupPct:      priced.appliedMarkupPct,
+                appliedFlatPaise:      priced.appliedFlatPaise,
+                appliedRoundingPaise:  priced.appliedRoundingPaise,
             };
         });
 
