@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { parseRange } from "@/modules/accountancy/lib/period";
-import { resolveSourceBatch } from "@/modules/accountancy/lib/refResolver";
+import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { parsePagination } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";

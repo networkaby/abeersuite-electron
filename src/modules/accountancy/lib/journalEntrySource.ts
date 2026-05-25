@@ -4,8 +4,14 @@
 // Pre-2026-05-24 this also recognised legacy Invoice rows via the `INV-`
 // reference prefix. After the Invoice → InvVoucher consolidation the
 // Invoice writers are retired and the fallback has been removed.
+//
+// URL routing is delegated to `voucherUrls.referenceHref` so the inventory
+// edit-URL map lives in exactly one place (VoucherActionsMenu's
+// EDIT_FORM_URLS).
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { referenceHref } from "./voucherUrls";
+import type { InvVoucherType } from "@/generated/prisma/client";
 
 export type SourceDoc =
     | { kind: "sale";            id: number; reference: string; url: string }
@@ -14,51 +20,6 @@ export type SourceDoc =
     | { kind: "estimate";        id: number; reference: string; url: string }
     | { kind: "sale-return";     id: number; reference: string; url: string }
     | { kind: "purchase-return"; id: number; reference: string; url: string };
-
-import type { InvVoucherType } from "@/generated/prisma/client";
-
-const VOUCHER_SEG: Record<InvVoucherType, string> = {
-    PURCHASE:         "purchases",
-    SALE:             "sales",
-    POS:              "pos",
-    ESTIMATE:         "estimates",
-    SALE_RETURN:      "sale-returns",
-    PURCHASE_RETURN:  "purchase-returns",
-    MANUFACTURING_JOURNAL: "manufacturing-journals",
-    PHYSICAL_STOCK:   "physical-stock",
-    BRANCH_TRANSFER:  "branch-transfers",
-    GRN:              "grn",
-    CHALLAN:          "challans",
-    REJECTION_IN:     "rejections-in",
-    REJECTION_OUT:    "rejections-out",
-    SALES_ORDER:      "sales-orders",
-    PURCHASE_ORDER:   "purchase-orders",
-};
-
-// All voucher editors live under /vouchers/<seg>/... Trading kinds — SALE,
-// PURCHASE, SALE_RETURN, PURCHASE_RETURN, ESTIMATE — re-use their `/new`
-// page with a `?voucherId=<id>` query param because there is no separate
-// `/[id]` route (see DayBookActionsMenu's `newFormUrl` comment for the
-// canonical pattern). POS sales are sale-shape: they edit via the SALES
-// form (`/vouchers/sales/new?voucherId=…`) so the operator gets the same
-// line/tax/totals UI the SALE form already provides.
-const VOUCHER_BASE = "/vouchers";
-
-const EDIT_VIA_NEW_QUERY: ReadonlySet<InvVoucherType> = new Set([
-    "SALE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN", "ESTIMATE",
-]);
-
-function buildEditUrl(type: InvVoucherType, id: number): string {
-    // POS edits route to the SALE form — POS is a sale flavour and the
-    // sales form handles the shape (party / lines / GST / totals) without
-    // change. The POS register at /vouchers/pos is for *ringing up new*
-    // counter sales, not editing existing ones.
-    if (type === "POS") return `${VOUCHER_BASE}/${VOUCHER_SEG.SALE}/new?voucherId=${id}`;
-    const seg = VOUCHER_SEG[type];
-    return EDIT_VIA_NEW_QUERY.has(type)
-        ? `${VOUCHER_BASE}/${seg}/new?voucherId=${id}`
-        : `${VOUCHER_BASE}/${seg}/${id}`;
-}
 
 function kindForVoucherType(type: InvVoucherType): SourceDoc["kind"] | null {
     switch (type) {
@@ -81,7 +42,9 @@ export async function resolveSource(journalEntryId: number): Promise<SourceDoc |
     if (!v) return null;
     const kind = kindForVoucherType(v.type);
     if (!kind) return null;
-    return { kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id) };
+    const url = referenceHref("inv", v.id, v.type);
+    if (!url) return null;
+    return { kind, id: v.id, reference: v.reference, url };
 }
 
 /** Bulk resolver — efficient for tables/reports listing many JEs. */
@@ -97,9 +60,9 @@ export async function resolveSourceBatch(journalEntryIds: number[]): Promise<Map
         if (v.journalEntryId === null) continue;
         const kind = kindForVoucherType(v.type);
         if (!kind) continue;
-        out.set(v.journalEntryId, {
-            kind, id: v.id, reference: v.reference, url: buildEditUrl(v.type, v.id),
-        });
+        const url = referenceHref("inv", v.id, v.type);
+        if (!url) continue;
+        out.set(v.journalEntryId, { kind, id: v.id, reference: v.reference, url });
     }
     return out;
 }
