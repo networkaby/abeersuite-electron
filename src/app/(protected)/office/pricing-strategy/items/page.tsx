@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle } from "lucide-react";
+import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +101,9 @@ export default function PricingItemsPage() {
     const [loading,         setLoading]         = useState(true);
     const [search,          setSearch]          = useState("");
     const [onlyIncomplete,  setOnlyIncomplete]  = useState(false);
+    const [filterCategory,  setFilterCategory]  = useState<string>("__all");
+    const [filterBrand,     setFilterBrand]     = useState<string>("__all");
+    const [filterMethod,    setFilterMethod]    = useState<string>("__all");
     const [edits,           setEdits]           = useState<Record<number, RowEdit>>({});
     const [savingId,        setSavingId]        = useState<number | null>(null);
     const [applying,        setApplying]        = useState(false);
@@ -118,10 +121,24 @@ export default function PricingItemsPage() {
         load();
     }, []);
 
+    const uniqueCategories = useMemo(() => {
+        const set = new Set<string>();
+        for (const i of items) if (i.categoryName) set.add(i.categoryName);
+        return [...set].sort();
+    }, [items]);
+    const uniqueBrands = useMemo(() => {
+        const set = new Set<string>();
+        for (const i of items) if (i.brandName) set.add(i.brandName);
+        return [...set].sort();
+    }, [items]);
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return items.filter((i) => {
             if (onlyIncomplete && !attentionFor(i).needs) return false;
+            if (filterCategory !== "__all" && i.categoryName !== filterCategory) return false;
+            if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
+            if (filterMethod   !== "__all" && i.costMethod   !== filterMethod)   return false;
             if (!q) return true;
             return (
                 i.name.toLowerCase().includes(q) ||
@@ -130,7 +147,22 @@ export default function PricingItemsPage() {
                 (i.categoryName?.toLowerCase().includes(q) ?? false)
             );
         });
-    }, [items, search, onlyIncomplete]);
+    }, [items, search, onlyIncomplete, filterCategory, filterBrand, filterMethod]);
+
+    const hasActiveFilter =
+        search.trim() !== "" ||
+        onlyIncomplete ||
+        filterCategory !== "__all" ||
+        filterBrand !== "__all" ||
+        filterMethod !== "__all";
+
+    const clearFilters = () => {
+        setSearch("");
+        setOnlyIncomplete(false);
+        setFilterCategory("__all");
+        setFilterBrand("__all");
+        setFilterMethod("__all");
+    };
 
     const attentionCount = useMemo(
         () => items.reduce((n, i) => (attentionFor(i).needs ? n + 1 : n), 0),
@@ -238,29 +270,83 @@ export default function PricingItemsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                    <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
-                        <Boxes className="size-5" aria-hidden />
-                        Items
-                    </h2>
-                    {attentionCount > 0 ? (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <AlertTriangle className="size-4 text-amber-600" aria-hidden />
-                            {attentionCount} of {items.length} need attention
-                            {criticalCount > 0 ? (
-                                <>
-                                    {" · "}
-                                    <span className="text-red-700">{criticalCount} blocked (no cost)</span>
-                                </>
-                            ) : null}
+            <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+                            <Boxes className="size-5" aria-hidden />
+                            Items
+                        </h2>
+                        <span className="text-xs text-muted-foreground">
+                            Showing <strong>{filtered.length}</strong> of {items.length}
                         </span>
-                    ) : items.length > 0 ? (
-                        <span className="text-xs text-muted-foreground">All {items.length} items have cost, MRP, and price set.</span>
-                    ) : null}
+                        {attentionCount > 0 ? (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <AlertTriangle className="size-4 text-amber-600" aria-hidden />
+                                {attentionCount} need attention
+                                {criticalCount > 0 ? (
+                                    <>
+                                        {" · "}
+                                        <span className="text-red-700">{criticalCount} blocked (no cost)</span>
+                                    </>
+                                ) : null}
+                            </span>
+                        ) : items.length > 0 ? (
+                            <span className="text-xs text-muted-foreground">All complete.</span>
+                        ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" onClick={load}>
+                            <RefreshCw className="size-4" />
+                            Reload
+                        </Button>
+                        <Button type="button" onClick={applyAll} disabled={applying}>
+                            <Wand2 className="size-4" />
+                            Apply to non-overridden
+                        </Button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-xs flex items-center gap-1.5 cursor-pointer select-none">
+                <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/30 p-2">
+                    <Input
+                        placeholder="Search name / SKU / brand…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-8 w-64"
+                    />
+                    <Select value={filterCategory} onValueChange={setFilterCategory}>
+                        <SelectTrigger className="h-8 w-[180px]">
+                            <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All categories</SelectItem>
+                            {uniqueCategories.map((c) => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filterBrand} onValueChange={setFilterBrand}>
+                        <SelectTrigger className="h-8 w-[180px]">
+                            <SelectValue placeholder="Brand" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All brands</SelectItem>
+                            {uniqueBrands.map((b) => (
+                                <SelectItem key={b} value={b}>{b}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filterMethod} onValueChange={setFilterMethod}>
+                        <SelectTrigger className="h-8 w-[180px]">
+                            <SelectValue placeholder="Cost method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All methods</SelectItem>
+                            {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
+                                <SelectItem key={v} value={v}>{l}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <label className="text-xs flex items-center gap-1.5 cursor-pointer select-none ml-2">
                         <input
                             type="checkbox"
                             checked={onlyIncomplete}
@@ -268,20 +354,12 @@ export default function PricingItemsPage() {
                         />
                         Only incomplete
                     </label>
-                    <Input
-                        placeholder="Search name / SKU / brand…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-64"
-                    />
-                    <Button type="button" variant="outline" onClick={load}>
-                        <RefreshCw className="size-4" />
-                        Reload
-                    </Button>
-                    <Button type="button" onClick={applyAll} disabled={applying}>
-                        <Wand2 className="size-4" />
-                        Apply to non-overridden
-                    </Button>
+                    {hasActiveFilter ? (
+                        <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="ml-auto h-7">
+                            <X className="size-3.5" />
+                            Clear filters
+                        </Button>
+                    ) : null}
                 </div>
             </div>
 
