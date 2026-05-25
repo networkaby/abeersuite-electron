@@ -9,7 +9,7 @@ const NAV = [
 
 export default function PricingStrategyLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="container max-w-7xl py-6 space-y-6">
+        <div className="w-full px-6 py-6 space-y-6">
             <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Pricing Strategy</h1>
                 <p className="text-muted-foreground text-sm">
