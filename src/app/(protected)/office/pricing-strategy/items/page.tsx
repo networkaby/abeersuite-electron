@@ -48,6 +48,8 @@ type Item = {
     categoryName:          string | null;
     groupName:             string | null;
     brandName:             string | null;
+    /** Current cached stock balance. null = not tracked. */
+    stock:                 number | null;
     /** Per-item override. null = inherit from strategy. */
     costMethod:            CostMethod | null;
     /** What was actually used: product.costMethod ?? strategy.costMethod ?? WA. */
@@ -166,7 +168,9 @@ export default function PricingItemsPage() {
         const q = search.trim().toLowerCase();
         return items.filter((i) => {
             if (onlyIncomplete && !attentionFor(i).needs) return false;
-            if (hideEmpty && i.resolvedCostPaise == null) return false;
+            // "Empty" = zero stock on hand. Stock = null (not tracked, e.g.
+            // services) is left visible.
+            if (hideEmpty && i.stock != null && i.stock <= 0) return false;
             if (filterCategory !== "__all" && i.categoryName !== filterCategory) return false;
             if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
             if (filterGroup    !== "__all" && i.groupName    !== filterGroup)    return false;

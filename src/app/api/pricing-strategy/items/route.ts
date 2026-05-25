@@ -13,6 +13,8 @@ export interface PricingItem {
     categoryName:     string | null;
     groupName:        string | null;
     brandName:        string | null;
+    /** Current cached stock balance. null = stock not tracked (e.g. services). */
+    stock:                number | null;
     /** Per-item cost method override. null = inherit from strategy. */
     costMethod:           string | null;
     /** Resolved method actually used: product.costMethod ?? strategy.costMethod ?? WEIGHTED_AVG_COST. */
@@ -141,6 +143,7 @@ export async function GET() {
                 categoryName:      p.category?.name ?? null,
                 groupName:         p.group?.name ?? null,
                 brandName:         p.brand?.name ?? null,
+                stock:                p.stock,
                 costMethod:           p.costMethod,
                 effectiveCostMethod:  meta.effectiveMethod,
                 strategyCostMethod:   matched?.costMethod ?? null,
