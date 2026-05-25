@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import {
     VoucherRegisterTable,
     type VoucherRegisterRow,
+    type VoucherRegisterExtraColumn,
 } from "@/modules/accountancy/components/VoucherRegisterTable";
 import {
     useRegisterFilters,
@@ -24,38 +25,63 @@ import {
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import type { InvVoucherKind } from "./InvVoucherForm";
 
-export type InvVoucherListKind = InvVoucherKind | "BRANCH_TRANSFER";
+export type InvVoucherListKind =
+    | InvVoucherKind
+    | "BRANCH_TRANSFER"
+    | "SALE" | "PURCHASE"
+    | "SALE_RETURN" | "PURCHASE_RETURN"
+    | "ESTIMATE";
 
 type ListRow = {
-    id:           number;
-    type?:        string;
-    reference:    string;
-    date:         string;
-    description:  string;
-    partyName:    string | null;
-    totalAmount:  number;
-    status:       "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:    string | null;
-    cancelledAt?: string | null;
-    branch?:      { id: string; name: string } | null;
-    _count:       { lines: number };
-    createdBy:    { name: string };
+    id:              number;
+    type?:           string;
+    reference:       string;
+    date:            string;
+    description:     string;
+    partyName:       string | null;
+    partyAccountId?: number | null;
+    paymentMode?:    string | null;
+    totalAmount:     number | string;
+    amountReceived?: number | string;
+    status:          "DRAFT" | "POSTED" | "CANCELLED";
+    deletedAt:       string | null;
+    cancelledAt?:    string | null;
+    branch?:         { id: string; name: string } | null;
+    _count:          { lines: number };
+    createdBy:       { name: string };
 };
 
+/** Row shape extended with optional fields injected for caller-supplied
+ *  `extraColumns` to read (cast inside the cell callback). */
+export interface InvVoucherListRow extends VoucherRegisterRow {
+    paymentMode:    string | null;
+    lineCount:      number;
+    amountReceived: number;
+}
+
 export function InvVoucherList({
-    type, title, subtitle, basePath, newPath,
+    type, title, subtitle, basePath, newPath, newLabel, emptyLabel, extraColumns,
 }: {
     type:     InvVoucherListKind;
     title:    string;
     subtitle: string;
     /** Unused — kept for call-site compatibility. The shared table builds
      *  the reference link via referenceHref() now. */
-    basePath: string;
+    basePath?: string;
     /** Omit to hide the "New" button (read-only registers). */
-    newPath?: string;
+    newPath?:  string;
+    /** Override the auto-derived "New <singular>" button label. */
+    newLabel?: string;
+    /** Override the noun used in the empty-state text. Defaults to
+     *  `title.toLowerCase()`. e.g. for "Sales" pass "sale vouchers" to get
+     *  "No sale vouchers yet." instead of "No sales yet.". */
+    emptyLabel?: string;
+    /** Extra columns injected between Narration and Total. Cells receive
+     *  an `InvVoucherListRow` (cast inside the callback). */
+    extraColumns?: VoucherRegisterExtraColumn[];
 }) {
     void basePath;
-    const [allRows, setAllRows] = useState<VoucherRegisterRow[]>([]);
+    const [allRows, setAllRows] = useState<InvVoucherListRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [tick, setTick]       = useState(0);
     const reload                = useCallback(() => setTick((t) => t + 1), []);
@@ -69,22 +95,26 @@ export function InvVoucherList({
 
         axios.get<ListRow[]>(`/api/inventory/vouchers?${params}`)
             .then((r) => {
-                const mapped: VoucherRegisterRow[] = (r.data ?? []).map((v) => ({
-                    id:          `inv-${v.id}`,
-                    rawId:       v.id,
-                    source:      "inv",
-                    kind:        v.type ?? type,
-                    reference:   v.reference,
-                    date:        v.date,
-                    party:       v.partyName,
-                    narration:   v.description,
-                    totalAmount: Number(v.totalAmount),
-                    status:      v.status,
-                    deletedAt:   v.deletedAt ?? null,
-                    cancelledAt: v.cancelledAt ?? null,
-                    branchId:    v.branch?.id   ?? null,
-                    branchName:  v.branch?.name ?? null,
-                    createdBy:   v.createdBy?.name ?? null,
+                const mapped: InvVoucherListRow[] = (r.data ?? []).map((v) => ({
+                    id:             `inv-${v.id}`,
+                    rawId:          v.id,
+                    source:         "inv",
+                    kind:           v.type ?? type,
+                    reference:      v.reference,
+                    date:           v.date,
+                    party:          v.partyName,
+                    partyAccountId: v.partyAccountId ?? null,
+                    narration:      v.description,
+                    totalAmount:    Number(v.totalAmount),
+                    amountReceived: v.amountReceived != null ? Number(v.amountReceived) : 0,
+                    paymentMode:    v.paymentMode ?? null,
+                    lineCount:      v._count?.lines ?? 0,
+                    status:         v.status,
+                    deletedAt:      v.deletedAt ?? null,
+                    cancelledAt:    v.cancelledAt ?? null,
+                    branchId:       v.branch?.id   ?? null,
+                    branchName:     v.branch?.name ?? null,
+                    createdBy:      v.createdBy?.name ?? null,
                 }));
                 setAllRows(mapped);
             })
@@ -116,12 +146,12 @@ export function InvVoucherList({
         <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">{title}</h1>
+                    <h1 className="text-2xl font-bold text-foreground">{title}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
                 </div>
                 {newPath && (
                     <Link href={newPath}>
-                        <Button><Plus size={16} /> New {title.replace(/s$/, "")}</Button>
+                        <Button><Plus size={16} /> {newLabel ?? `New ${title.replace(/s$/, "")}`}</Button>
                     </Link>
                 )}
             </div>
@@ -147,10 +177,11 @@ export function InvVoucherList({
                     hideKind
                     statusInline
                     showBranch={availableBranches.length > 0}
+                    extraColumns={extraColumns}
                     emptyMessage={
                         filters.showDeleted
-                            ? `No deleted ${title.toLowerCase()}.`
-                            : `No ${title.toLowerCase()} yet.`
+                            ? `No deleted ${emptyLabel ?? title.toLowerCase()}.`
+                            : `No ${emptyLabel ?? title.toLowerCase()} yet.`
                     }
                 />
             )}
