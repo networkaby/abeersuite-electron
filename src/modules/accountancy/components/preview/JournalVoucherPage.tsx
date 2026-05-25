@@ -1,15 +1,14 @@
 "use client";
 
-// PREVIEW MIGRATION — Tally-finish full-page Journal Voucher.
-// Mirrors data + auto-balance behaviour of `JournalVoucherDialog.tsx` but
-// lays out as a Tally classic JV: sequential Dr/Cr line list, two amount
-// columns (Debit | Credit), balance indicator + amount-in-words, sticky
-// footer. Stock attachment per line under stock-eligible accounts
-// (Sales / Purchase ledgers). Create-only.
+// Tally-finish full-page Journal Voucher.
+// Layout: sequential Dr/Cr line list, two amount columns (Debit | Credit),
+// balance indicator + amount-in-words, sticky footer. Stock attachment per
+// line under stock-eligible accounts (Sales / Purchase ledgers).
+// Create-only.
 //
-// Backend: POST /api/accountancy/journal-vouchers (same endpoint the dialog
-// uses — writes Voucher + JournalEntry + optional MANUFACTURING_JOURNAL InvVoucher
-// in one transaction).
+// Backend: POST /api/accountancy/journal-vouchers — writes Voucher +
+// JournalEntry + optional MANUFACTURING_JOURNAL InvVoucher in one
+// transaction.
 
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";

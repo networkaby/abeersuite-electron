@@ -7,17 +7,6 @@ import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import ButtonBar from "@/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
-import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
-import {
-    PaymentDialog,
-    ReceiptDialog,
-    CreditNoteDialog,
-    DebitNoteDialog,
-} from "@/modules/accountancy/components/GlVoucherDialog";
-// Sale + Purchase moved to full-page routes (/sale, /purchase). Sale Return
-// + Purchase Return are full-page at /sale-return + /purchase-return.
-// Only Estimate keeps the dialog flow for now.
-import { EstimateDialog } from "@/modules/accountancy/components/TradingVoucherForm";
 
 export default async function ProtectedLayout({
     children,
@@ -71,12 +60,6 @@ export default async function ProtectedLayout({
                 </div>{/* end flex row */}
                 <Toaster richColors />
                 <QuickTicketButton />
-                <JournalVoucherDialog />
-                <PaymentDialog />
-                <ReceiptDialog />
-                <CreditNoteDialog />
-                <DebitNoteDialog />
-                <EstimateDialog />
                 <GlobalInboxListener currentUserId={userId} />
             </div>
         </SessionWrapper>

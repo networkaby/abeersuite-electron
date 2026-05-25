@@ -1042,8 +1042,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     }, [editVoucherId, isEditing]);
 
     // Load cash + bank ledgers once and pre-select "Cash-in-Hand" if present.
-    // Same fetch as GlVoucherDialog — Account rows enriched with their group
-    // so we can filter by ACCOUNT_GROUPS.CASH_IN_HAND / BANK_ACCOUNTS.
+    // Account rows are enriched with their group so we can filter by
+    // ACCOUNT_GROUPS.CASH_IN_HAND / BANK_ACCOUNTS.
     // In edit mode the default is skipped — a separate effect matches the
     // voucher's saved paymentAccountId once both fetches resolve.
     useEffect(() => {

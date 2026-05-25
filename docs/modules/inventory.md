@@ -109,7 +109,7 @@ For per-product stock-value display, **always use `productClosingValue(p)`** —
 2. **GRN inward** — `/office/inventory/grn` → "+ New" → POST `/api/inventory/vouchers` (type=GRN) → creates `InvVoucher` + `InvVoucherLine[]` + writes `InvStockLedger` qty+ rows + posts journal to AP.
 3. **Sale via shop** — `/shop/checkout` → `ShopOrder` → confirmed → emits `InvVoucher` (type=SALES) → ledger qty- + posts AR/Revenue journal.
 4. **Adjust on-hand stock** — `/office/inventory/physical-stock/new` → enter counted qty per product → POST handler treats qty as new on-hand value, computes delta, writes `InvStockLedger`, updates `InvProduct.stock` cache.
-5. **Tally journal voucher with inventory consumption** — `JournalVoucherDialog` (from accountancy module, accessible anywhere via `useJournalVoucherStore`) → POST `/api/accountancy/journal-vouchers` with `stockItems` per line → atomic Voucher + JE + STOCK_JOURNAL InvVoucher carrier + InvStockLedger entry. Items only allowed under INCOME/EXPENSE ledgers (gated by `isStockEligibleAccount` from accountancy).
+5. **Tally journal voucher with inventory consumption** — `/vouchers/journal` → `JournalVoucherPage` (Tally-finish full-page form, accountancy module) → POST `/api/accountancy/journal-vouchers` with `stockItems` per line → atomic Voucher + JE + STOCK_JOURNAL InvVoucher carrier + InvStockLedger entry. Items only allowed under INCOME/EXPENSE ledgers (gated by `isStockEligibleAccount` from accountancy).
 
 ## Recent decisions / gotchas
 

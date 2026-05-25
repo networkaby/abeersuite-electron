@@ -78,7 +78,7 @@ enum PaymentMethod {
 
 // ── Accounting voucher types ────────────────────────────────────────────────
 // JOURNAL is the catch-all "any GL adjustment" voucher used by the Tally-style
-// JournalVoucherDialog. The other five mirror Tally's classical kinds.
+// JournalVoucherPage. The other five mirror Tally's classical kinds.
 
 enum VoucherType {
   CONTRA

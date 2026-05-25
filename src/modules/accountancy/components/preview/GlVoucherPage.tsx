@@ -1,11 +1,10 @@
 "use client";
 
-// PREVIEW MIGRATION — Tally-finish full-page voucher form for the five
-// pure-GL voucher kinds (Payment, Receipt, Contra, Credit Note, Debit Note).
-// Mirrors the data model + per-kind COPY config of `GlVoucherDialog.tsx`
-// but lays out as a Tally classic voucher: compact top strip, two-column
-// Particulars / Amount body, balance indicator + amount-in-words, sticky
-// footer. Create-only (matches the existing dialogs' scope).
+// Tally-finish full-page voucher form for the five pure-GL voucher kinds
+// (Payment, Receipt, Contra, Credit Note, Debit Note). Per-kind COPY config
+// drives labels / Dr-Cr sides / account filters. Layout: compact top strip,
+// two-column Particulars / Amount body, balance indicator + amount-in-words,
+// sticky footer. Create-only.
 
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
