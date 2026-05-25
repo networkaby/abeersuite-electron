@@ -10,8 +10,8 @@
  *
  * Modes:
  *   • Single (default for all) — one top-account picker plus many
- *     particulars rows. Mirrors ContraDialog's UX: the top side equals the
- *     sum of particulars so the dialog auto-balances on every keystroke.
+ *     particulars rows. The top side equals the sum of particulars so the
+ *     dialog auto-balances on every keystroke (same UX as Tally Contra).
  *   • Multi — Payment / Receipt only. Many top rows AND many particulars
  *     rows, both totals must match. Use case: "cash 100 + bank 1500 paid
  *     to abc 500 + xyz 1100". Credit / debit notes are always single-party

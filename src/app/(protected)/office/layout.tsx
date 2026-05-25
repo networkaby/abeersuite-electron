@@ -8,7 +8,6 @@ import ButtonBar from "@/shared/components/ButtonBar";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
 import { JournalVoucherDialog } from "@/modules/accountancy/components/JournalVoucherDialog";
-import { ContraDialog } from "@/modules/accountancy/components/ContraDialog";
 import {
     PaymentDialog,
     ReceiptDialog,
@@ -73,7 +72,6 @@ export default async function ProtectedLayout({
                 <Toaster richColors />
                 <QuickTicketButton />
                 <JournalVoucherDialog />
-                <ContraDialog />
                 <PaymentDialog />
                 <ReceiptDialog />
                 <CreditNoteDialog />
