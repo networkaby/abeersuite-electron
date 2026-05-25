@@ -1,4 +1,4 @@
-import { JournalEntriesRegister } from "@/modules/accountancy/components/JournalEntriesRegister";
+import { JournalEntriesRegister } from "./_components/JournalEntriesRegister";
 
 export default function Page() {
     return <JournalEntriesRegister />;

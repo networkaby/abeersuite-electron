@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { VouchersRegistersNav } from "@/modules/accountancy/components/VouchersRegistersNav";
+import { VouchersRegistersNav } from "./_components/VouchersRegistersNav";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 export default async function VouchersRegistersLayout({ children }: { children: React.ReactNode }) {

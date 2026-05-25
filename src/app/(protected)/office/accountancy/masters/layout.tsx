@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
-import { MastersNav } from "@/modules/accountancy/components/MastersNav";
-import { MastersBreadcrumb } from "@/modules/accountancy/components/MastersBreadcrumb";
+import { MastersNav } from "./_components/MastersNav";
+import { MastersBreadcrumb } from "./_components/MastersBreadcrumb";
 
 export default async function AccountancyMastersLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();

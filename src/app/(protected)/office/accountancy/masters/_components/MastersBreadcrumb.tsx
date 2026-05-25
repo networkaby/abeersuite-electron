@@ -15,7 +15,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
-import { MASTERS_NAV_LINKS } from "@/modules/accountancy/masters-nav";
+import { MASTERS_NAV_LINKS } from "./masters-nav";
 
 const MASTERS_BASE = "/office/accountancy/masters";
 

@@ -7,7 +7,7 @@ import { cn } from "@/shared/lib/format/utils";
 import {
     filterVouchersRegisterNav,
     VOUCHERS_REGISTER_NAV_GROUPS,
-} from "@/modules/accountancy/vouchers-register-nav";
+} from "./vouchers-register-nav";
 
 type Props = {
     permissions: string[];

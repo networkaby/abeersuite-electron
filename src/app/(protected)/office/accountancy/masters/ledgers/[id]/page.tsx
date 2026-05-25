@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
-import { GroupCombobox } from "@/modules/accountancy/components/GroupCombobox";
+import { GroupCombobox } from "./_components/GroupCombobox";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
