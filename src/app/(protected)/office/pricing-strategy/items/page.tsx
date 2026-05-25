@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import axios from "axios";
 import { toast } from "sonner";
 import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X } from "lucide-react";
@@ -182,6 +183,24 @@ export default function PricingItemsPage() {
         filterMethod !== "__all" ||
         filterStrategy !== "__all";
 
+    // ── Virtual scrolling ────────────────────────────────────────────────────
+    // Only the rows currently visible in the scroll viewport get mounted.
+    // Padding tr's at top + bottom keep the scrollbar honest. estimateSize is
+    // approximate; react-virtual auto-measures with measureElement.
+    const parentRef = useRef<HTMLDivElement>(null);
+    const rowVirtualizer = useVirtualizer({
+        count:           filtered.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize:    () => 72,
+        overscan:        10,
+    });
+    const virtualItems = rowVirtualizer.getVirtualItems();
+    const totalSize    = rowVirtualizer.getTotalSize();
+    const paddingTop    = virtualItems.length > 0 ? virtualItems[0].start : 0;
+    const paddingBottom = virtualItems.length > 0
+        ? totalSize - virtualItems[virtualItems.length - 1].end
+        : 0;
+
     const clearFilters = () => {
         setSearch("");
         setOnlyIncomplete(false);
@@ -348,7 +367,9 @@ export default function PricingItemsPage() {
                             Items
                         </h2>
                         <span className="text-xs text-muted-foreground">
-                            Showing <strong>{filtered.length}</strong> of {items.length}
+                            {loading
+                                ? "Loading…"
+                                : <>Showing <strong>{filtered.length}</strong> of {items.length}</>}
                         </span>
                         {attentionCount > 0 ? (
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -455,9 +476,9 @@ export default function PricingItemsPage() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto border border-border">
+            <div ref={parentRef} className="max-h-[70vh] overflow-auto border border-border">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                         <TableRow>
                             <TableHead className="w-8"> </TableHead>
                             <TableHead>Product</TableHead>
@@ -477,8 +498,13 @@ export default function PricingItemsPage() {
                         ) : filtered.length === 0 ? (
                             <TableEmptyRow colSpan={10} message="No products match." />
                         ) : (
-                            filtered.map((item) => {
-                                const e = editFor(item);
+                            <>
+                                {paddingTop > 0 ? (
+                                    <tr aria-hidden><td colSpan={10} style={{ height: `${paddingTop}px` }} /></tr>
+                                ) : null}
+                                {virtualItems.map((vi) => {
+                                    const item = filtered[vi.index];
+                                    const e = editFor(item);
                                 const dirty =
                                     e.costMethod !== item.costMethod ||
                                     e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
@@ -487,7 +513,12 @@ export default function PricingItemsPage() {
                                     e.pricePaise.trim() !== "";
                                 const att = attentionFor(item);
                                 return (
-                                    <TableRow key={item.id} className={att.critical ? "bg-red-50/40" : att.needs ? "bg-amber-50/40" : undefined}>
+                                    <TableRow
+                                        key={item.id}
+                                        data-index={vi.index}
+                                        ref={rowVirtualizer.measureElement}
+                                        className={att.critical ? "bg-red-50/40" : att.needs ? "bg-amber-50/40" : undefined}
+                                    >
                                         <TableCell>
                                             {att.needs ? (
                                                 <span
@@ -644,7 +675,11 @@ export default function PricingItemsPage() {
                                         </TableCell>
                                     </TableRow>
                                 );
-                            })
+                            })}
+                                {paddingBottom > 0 ? (
+                                    <tr aria-hidden><td colSpan={10} style={{ height: `${paddingBottom}px` }} /></tr>
+                                ) : null}
+                            </>
                         )}
                     </TableBody>
                 </Table>
