@@ -1,0 +1,139 @@
+/* Print Labels page — screen + print stylesheet.
+ *
+ * Screen mode shows the toolbar + queue + an inline preview of the labels
+ * grid. Print mode hides everything except the labels grid and rescales each
+ * label to its real-world size (mm). The @page rule for thermal vs A4 is
+ * emitted inline by the page component (it varies per preset).
+ *
+ * The grid is driven by three CSS custom props set on `.label-sheet`:
+ *   --label-w     (CSS length, e.g. 50mm)
+ *   --label-h     (CSS length)
+ *   --label-cols  (integer)
+ */
+
+.label-sheet {
+    display: grid;
+    grid-template-columns: repeat(var(--label-cols, 3), var(--label-w, 63.5mm));
+    gap: 0;
+    justify-content: center;
+    /* On-screen preview only — a subtle backdrop so the labels are visible
+       against the card background. Removed in print. */
+    background: #fff;
+    padding: 4mm;
+    border: 1px dashed hsl(var(--border, 0 0% 80%));
+}
+
+.label {
+    width:  var(--label-w, 63.5mm);
+    height: var(--label-h, 33.9mm);
+    box-sizing: border-box;
+    padding: 2mm;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    /* Faint outline so users can see the cut lines on-screen. Removed in
+       print so it doesn't bleed onto the actual label paper. */
+    outline: 0.5px dashed #ccc;
+    color: #000;
+    background: #fff;
+    text-align: center;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.label-name {
+    font-size: 9pt;
+    font-weight: 600;
+    line-height: 1.1;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 1mm;
+}
+
+.label-barcode {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+}
+
+.label-barcode svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.label-meta {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    gap: 2mm;
+    font-size: 8pt;
+    margin-top: 1mm;
+}
+
+.label-sku {
+    font-family: ui-monospace, monospace;
+    color: #333;
+}
+
+.label-price {
+    font-weight: 700;
+    margin-left: auto;
+}
+
+/* ───────────────────────── print mode ─────────────────────────── */
+
+@media print {
+    /* Hide every chrome element. The route page wraps its own toolbar in
+       .print-hide; the surrounding app layout (sidebar, topbar) is hidden
+       via the body-level rule below. */
+    .print-hide {
+        display: none !important;
+    }
+
+    /* Hide everything on the page except the labels grid. We use the
+       common "hide all, then opt-in the print container" pattern. */
+    body * {
+        visibility: hidden;
+    }
+    .label-sheet,
+    .label-sheet * {
+        visibility: visible;
+    }
+    .label-sheet {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: transparent;
+    }
+    .label {
+        outline: none;
+        /* Break onto a new page per label when running on continuous
+           thermal media (1-per-page presets). For A4 sheet presets the
+           browser naturally fills rows then paginates. */
+    }
+    /* Thermal 1-up roll (1 column) — break after every label so each label
+       gets its own page-feed step on the continuous roll. Scoped to
+       data-page-mode="thermal" so any future 1-column A4 preset is not
+       affected. */
+    .label-sheet[data-page-mode="thermal"][style*="--label-cols: 1"] .label {
+        page-break-after: always;
+        break-after: page;
+    }
+    /* Thermal 2-up roll (2 columns, e.g. True-Ally 50×25 2-Ups) — break
+       after every PAIR of labels so the printer advances one row per page.
+       :nth-child(2n) targets labels 2, 4, 6… i.e. the right-side label of
+       each row. Combined with @page size = 100mm × 25mm this gives exactly
+       one printed page per row. */
+    .label-sheet[data-page-mode="thermal"][style*="--label-cols: 2"] .label:nth-child(2n) {
+        page-break-after: always;
+        break-after: page;
+    }
+}

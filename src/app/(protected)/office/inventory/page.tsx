@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Box, Layers, LayoutGrid, Ruler, ShieldCheck, Tag } from "lucide-react";
+import { Box, Layers, LayoutGrid, Printer, Ruler, ShieldCheck, Tag } from "lucide-react";
 
 const cards = [
     {
@@ -37,6 +37,12 @@ const cards = [
         href: "/office/inventory/products",
         description: "SKU master: model no., barcodes, EAN, UPC.",
         icon: Box,
+    },
+    {
+        title: "Print barcode labels",
+        href: "/office/inventory/print-labels",
+        description: "Generate CODE128 barcode labels for printing on A4 sheets or thermal rolls.",
+        icon: Printer,
     },
 ] as const;
 
