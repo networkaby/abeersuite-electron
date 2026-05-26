@@ -4,21 +4,31 @@
  * PrintLabelsPage — pick products + quantities and print sheets of CODE128
  * barcode labels for sticking onto stock.
  *
+ * Lives under the **Pricing Strategy** module (`/office/pricing-strategy/print-labels`)
+ * because labels are only meaningful once a product has a sale price set, and
+ * pricing-strategy is where that happens.
+ *
  * - Reuses `InvProductCombobox` for product picking; adding the same product
  *   again increments its qty.
  * - Barcode value per product resolves in this order: `barcode1` → `sku`.
  *   (EAN-13 fields aren't surfaced here yet because CODE128 happily encodes
  *   SKU/barcode strings as-is; revisit when an EAN-13 use case lands.)
- * - Three label presets cover the common cases: A4 sheet 3×8 / A4 sheet 4×10
- *   (laser / inkjet on Avery-style label sheets) and Thermal 50×25mm strip
- *   (DYMO / Zebra continuous roll, one label per page).
+ * - Four label presets cover the common cases: A4 sheet 3×8 / A4 sheet 4×10
+ *   (laser / inkjet on Avery-style label sheets), Thermal 50×25mm 1-up, and
+ *   Thermal 50×25mm 2-up (True-Ally-style 2-Ups rolls).
  * - `window.print()` is the print pipeline. Print stylesheet hides the page
  *   chrome and renders only the labels grid. No server round-trip.
+ *
+ * **Prefill from a voucher** — when the page is opened with `?fromVoucher=<id>`,
+ * the queue is seeded from the voucher's lines (`productId × ceil(quantity)`).
+ * Used by the "Print labels" action on GRN and Purchase vouchers so receiving
+ * goods → printing barcode stickers is a single hop.
  *
  * Permission: gated by `inventory:manage` via the parent route layout.
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Printer, Trash2, Plus, Minus } from "lucide-react";
@@ -33,6 +43,20 @@ import {
 } from "@/components/ui/table";
 import { InvProductCombobox, type SelectedProduct } from "./InvProductCombobox";
 import { BarcodeSvg } from "./BarcodeSvg";
+
+// ────────────────────────── prefill (voucher) ──────────────────────────
+
+type VoucherLineFromApi = {
+    productId: number;
+    quantity:  string | number;
+    product:   { id: number; sku: string; name: string };
+};
+type VoucherFromApi = {
+    id:        number;
+    type:      string;
+    reference: string;
+    lines:     VoucherLineFromApi[];
+};
 
 // ────────────────────────────── types ──────────────────────────────
 
@@ -118,18 +142,76 @@ export function PrintLabelsPage() {
     const [showSku,   setShowSku]   = useState(true);
     const [showPrice, setShowPrice] = useState(true);
 
+    // Banner shown after a successful voucher prefill — surfaces the source
+    // reference so the user knows where the queue came from. Set by the
+    // prefill effect below; cleared the moment the user changes the queue
+    // (so it doesn't become stale).
+    const [prefillSource, setPrefillSource] = useState<{ type: string; reference: string } | null>(null);
+
     // Lookup cache so we can resolve `barcode1` for products picked through
-    // the combobox (the SelectedProduct type doesn't carry it).
+    // the combobox (the SelectedProduct type doesn't carry it). The voucher
+    // prefill below also reads from this map.
     const [lookupById, setLookupById] = useState<Map<number, ProductLookupRow>>(new Map());
+    const [lookupLoaded, setLookupLoaded] = useState(false);
     useEffect(() => {
         axios.get<ProductLookupRow[]>("/api/inventory/products/lookup")
             .then((r) => {
                 const m = new Map<number, ProductLookupRow>();
                 for (const p of r.data) m.set(p.id, p);
                 setLookupById(m);
+                setLookupLoaded(true);
             })
             .catch(() => toast.error("Failed to load product lookup"));
     }, []);
+
+    // ── Prefill from voucher when `?fromVoucher=<id>` is set ────────────
+    // Waits for the product lookup so barcode1 / pricePaise resolve correctly
+    // per line. Lines with no qty (or qty ≤ 0) are skipped; non-integer
+    // quantities are rounded up so a "1.5 PCS" GRN row still yields 2 labels.
+    const search = useSearchParams();
+    const voucherIdParam = search.get("fromVoucher");
+    useEffect(() => {
+        if (!voucherIdParam || !lookupLoaded) return;
+        const voucherId = Number.parseInt(voucherIdParam, 10);
+        if (!Number.isFinite(voucherId)) return;
+        let cancelled = false;
+        axios.get<VoucherFromApi>(`/api/inventory/vouchers/${voucherId}`)
+            .then((r) => {
+                if (cancelled) return;
+                const v = r.data;
+                const rows: QueueRow[] = [];
+                for (const line of v.lines) {
+                    const qty = Math.ceil(Math.max(0, Number(line.quantity) || 0));
+                    if (qty <= 0) continue;
+                    const lookup = lookupById.get(line.productId);
+                    rows.push({
+                        productId:    line.productId,
+                        name:         line.product.name,
+                        sku:          line.product.sku,
+                        barcodeValue: resolveBarcodeValue({
+                            barcode1: lookup?.barcode1 ?? null,
+                            sku:      line.product.sku,
+                        }),
+                        pricePaise:   lookup?.pricePaise ?? null,
+                        qty:          Math.min(qty, 500),
+                    });
+                }
+                if (rows.length === 0) {
+                    toast.error(`Voucher ${v.reference} has no printable lines`);
+                    return;
+                }
+                setQueue(rows);
+                setPrefillSource({ type: v.type, reference: v.reference });
+                const missingPrice = rows.filter((r) => r.pricePaise == null).length;
+                if (missingPrice > 0) {
+                    toast.warning(
+                        `${missingPrice} product${missingPrice === 1 ? "" : "s"} have no sale price — set one in Pricing Strategy → Items before printing if you want prices on the labels.`,
+                    );
+                }
+            })
+            .catch(() => toast.error("Failed to load voucher"));
+        return () => { cancelled = true; };
+    }, [voucherIdParam, lookupLoaded, lookupById]);
 
     const preset = useMemo(
         () => PRESETS.find((p) => p.id === presetId) ?? PRESETS[0],
@@ -138,6 +220,7 @@ export function PrintLabelsPage() {
 
     function addProduct(sp: SelectedProduct | null) {
         if (!sp) return;
+        setPrefillSource(null);
         setQueue((rows) => {
             const existing = rows.findIndex((r) => r.productId === sp.id);
             if (existing >= 0) {
@@ -167,14 +250,17 @@ export function PrintLabelsPage() {
         setQueue((rows) =>
             rows.map((r) => (r.productId === productId ? { ...r, qty } : r)),
         );
+        setPrefillSource(null);
     }
 
     function removeRow(productId: number) {
         setQueue((rows) => rows.filter((r) => r.productId !== productId));
+        setPrefillSource(null);
     }
 
     function clearAll() {
         setQueue([]);
+        setPrefillSource(null);
     }
 
     const totalLabels = queue.reduce((acc, r) => acc + r.qty, 0);
@@ -209,6 +295,12 @@ export function PrintLabelsPage() {
         <div className="space-y-4">
             {/* Non-print toolbar / settings — hidden via .print-hide in CSS. */}
             <div className="print-hide space-y-4">
+                {prefillSource && (
+                    <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-2 text-sm">
+                        Queue prefilled from <strong>{prefillSource.type}</strong>{" "}
+                        <span className="font-mono">{prefillSource.reference}</span>. Adjust quantities below or clear to start over.
+                    </div>
+                )}
                 <div className="rounded-md border border-border bg-card p-4 space-y-3">
                     <h2 className="font-semibold">Add products</h2>
                     <div className="max-w-xl">

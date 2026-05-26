@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChartArea, Calculator, Boxes, AlertTriangle } from "lucide-react";
+import { ChartArea, Calculator, Boxes, AlertTriangle, Printer } from "lucide-react";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 const NAV = [
@@ -7,6 +7,7 @@ const NAV = [
     { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
     { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
     { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
+    { label: "Print labels", icon: Printer, href: "/office/pricing-strategy/print-labels" },
 ];
 
 export default function PricingStrategyLayout({ children }: { children: React.ReactNode }) {

@@ -13,7 +13,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { MoreVertical, Pencil, Ban, Trash2, Copy } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,6 +103,17 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     const [busy, setBusy] = useState(false);
 
     const hasEditableForm = voucherType in EDIT_FORM_URLS;
+
+    // "Print labels" — surfaces a shortcut on receiving / purchase vouchers
+    // to jump straight to the barcode-label print page with the voucher's
+    // lines preloaded (productId × ceil(qty)). Restricted to GRN / PURCHASE
+    // because those are the canonical "goods just arrived, sticker them up"
+    // workflows. Extend the allow-list when MJ / SALE_RETURN / etc. become
+    // sensible entry points.
+    const canPrintLabels = voucherType === "GRN" || voucherType === "PURCHASE";
+    const goPrintLabels = () => {
+        router.push(`/office/pricing-strategy/print-labels?fromVoucher=${voucherId}`);
+    };
 
     // Edit just navigates to the editable form with ?voucherId=. The form
     // prefills from the voucher and PATCHes on save. Server-side PATCH
@@ -196,6 +207,11 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
                     <DropdownMenuItem onSelect={duplicate} disabled={busy}>
                         <Copy className="size-4" /> Duplicate
                     </DropdownMenuItem>
+                    {canPrintLabels && (
+                        <DropdownMenuItem onSelect={goPrintLabels} disabled={busy}>
+                            <Printer className="size-4" /> Print labels
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
 
