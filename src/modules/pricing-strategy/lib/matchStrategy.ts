@@ -114,10 +114,20 @@ export function matches(
         if (s.maxStock != null && p.stock > s.maxStock) return false;
     }
 
-    // Stale-after-days — "no sale in N days". Never-sold matches.
-    if (s.staleAfterDays != null) {
+    // Last-sale-age range. Never-sold products have infinite age — they
+    // satisfy minStaleDays but fail maxStaleDays. ageDays = null in the ctx
+    // map means "never sold".
+    if (s.minStaleDays != null || s.maxStaleDays != null) {
         const ageDays = ctx.lastSaleAgeDays.get(p.id);
-        if (ageDays != null && ageDays < s.staleAfterDays) return false;
+        if (s.maxStaleDays != null) {
+            // Cap-from-above: never-sold (infinite) always fails the upper bound.
+            if (ageDays == null) return false;
+            if (ageDays > s.maxStaleDays) return false;
+        }
+        if (s.minStaleDays != null) {
+            // Floor: never-sold passes the lower bound trivially.
+            if (ageDays != null && ageDays < s.minStaleDays) return false;
+        }
     }
 
     return true;

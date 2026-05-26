@@ -609,9 +609,13 @@ model PricingStrategy {
   maxCostPaise    Int?
   minStock        Int?
   maxStock        Int?
-  /// "No sale in N days" — matches when (today - lastSaleDate) ≥ N OR the
-  /// product has never been sold. null = no staleness filter.
-  staleAfterDays  Int?
+  /// Range on "days since last SALE/POS voucher". Never-sold products
+  /// have infinite age and match minStaleDays but fail maxStaleDays.
+  ///   minStaleDays: matches when ageDays ≥ minStaleDays. null = unbounded below.
+  ///   maxStaleDays: matches when ageDays ≤ maxStaleDays. null = unbounded above.
+  /// Example: minStaleDays=30, maxStaleDays=90 → "stale 30–90 days".
+  minStaleDays    Int?
+  maxStaleDays    Int?
   // ── Markup formula ─────────────────────────────────────────────────────────
   /// Margin in percent (e.g. 25.00 = +25%).
   markupPercent   Decimal  @default(0) @db.Decimal(6, 2)

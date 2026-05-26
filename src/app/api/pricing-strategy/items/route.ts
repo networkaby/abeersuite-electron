@@ -95,7 +95,7 @@ export async function GET(req: Request) {
         // Build match context — only query lastSaleAgeDays when at least one
         // active strategy uses staleAfterDays, to skip the ledger groupBy in
         // the common case.
-        const needsStaleness = strategies.some((s) => s.staleAfterDays != null);
+        const needsStaleness = strategies.some((s) => s.minStaleDays != null || s.maxStaleDays != null);
         const matchCtx = await buildMatchContext({
             productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
         });

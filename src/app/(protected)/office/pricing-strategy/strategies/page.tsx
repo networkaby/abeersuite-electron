@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Calculator, X, Search, Tag, FolderTree, Boxes, Sliders } from "lucide-react";
+import { Plus, Pencil, Trash2, Calculator, X, Search, Tag, FolderTree, Boxes, IndianRupee, Package, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +55,8 @@ type Strategy = {
     maxCostPaise:    number | null;
     minStock:        number | null;
     maxStock:        number | null;
-    staleAfterDays:  number | null;
+    minStaleDays:    number | null;
+    maxStaleDays:    number | null;
     markupPercent:   string;
     markupFlatPaise: number;
     roundingPaise:   number;
@@ -82,7 +83,8 @@ type FormState = {
     maxCost:         string;
     minStock:        string;
     maxStock:        string;
-    staleAfterDays:  string;
+    minStaleDays:    string;
+    maxStaleDays:    string;
     markupPercent:   string;
     markupFlatPaise: string;
     roundingPaise:   string;
@@ -101,7 +103,8 @@ const emptyForm = (): FormState => ({
     maxCost:         "",
     minStock:        "",
     maxStock:        "",
-    staleAfterDays:  "",
+    minStaleDays:    "",
+    maxStaleDays:    "",
     markupPercent:   "25",
     markupFlatPaise: "0",
     roundingPaise:   "0",
@@ -241,6 +244,65 @@ function MultiSelectGroup({
     );
 }
 
+// ── Range filter segment ─────────────────────────────────────────────────
+// Bordered card with title + helper + min/max inputs. Each range concept
+// (cost, stock, last-sale-age) gets one segment so the visual grouping
+// matches the semantics instead of being one undifferentiated 5-column grid.
+
+function RangeSegment({
+    icon: Icon, title, helper,
+    minLabel, maxLabel,
+    minValue, maxValue,
+    onMin, onMax,
+    inputMode = "decimal",
+    placeholderMin, placeholderMax,
+}: {
+    icon:           React.ComponentType<{ className?: string }>;
+    title:          string;
+    helper:         string;
+    minLabel:       string;
+    maxLabel:       string;
+    minValue:       string;
+    maxValue:       string;
+    onMin:          (v: string) => void;
+    onMax:          (v: string) => void;
+    inputMode?:     "decimal" | "numeric";
+    placeholderMin?: string;
+    placeholderMax?: string;
+}) {
+    return (
+        <div className="border border-border rounded-sm bg-muted/20 p-3 space-y-2">
+            <div className="flex items-center gap-1.5">
+                <Icon className="size-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold uppercase tracking-wide">{title}</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">{helper}</p>
+            <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">{minLabel}</Label>
+                    <Input
+                        inputMode={inputMode}
+                        placeholder={placeholderMin}
+                        value={minValue}
+                        onChange={(e) => onMin(e.target.value)}
+                        className="h-8 font-mono text-xs"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">{maxLabel}</Label>
+                    <Input
+                        inputMode={inputMode}
+                        placeholder={placeholderMax}
+                        value={maxValue}
+                        onChange={(e) => onMax(e.target.value)}
+                        className="h-8 font-mono text-xs"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function PricingStrategiesPage() {
@@ -330,9 +392,14 @@ export default function PricingStrategiesPage() {
         if (minStock != null && maxStock != null && maxStock < minStock)
             return toast.error("Max stock must be ≥ min stock");
 
-        const stale = form.staleAfterDays.trim() === "" ? null : Number(form.staleAfterDays);
-        if (stale != null && (!Number.isFinite(stale) || stale < 0 || !Number.isInteger(stale)))
-            return toast.error("Stale-after days must be a non-negative integer");
+        const minStale = form.minStaleDays.trim() === "" ? null : Number(form.minStaleDays);
+        const maxStale = form.maxStaleDays.trim() === "" ? null : Number(form.maxStaleDays);
+        if (minStale != null && (!Number.isFinite(minStale) || minStale < 0 || !Number.isInteger(minStale)))
+            return toast.error("Min stale days must be a non-negative integer");
+        if (maxStale != null && (!Number.isFinite(maxStale) || maxStale < 0 || !Number.isInteger(maxStale)))
+            return toast.error("Max stale days must be a non-negative integer");
+        if (minStale != null && maxStale != null && maxStale < minStale)
+            return toast.error("Max stale days must be ≥ min stale days");
 
         const payload = {
             name:            form.name.trim(),
@@ -344,7 +411,8 @@ export default function PricingStrategiesPage() {
             maxCostPaise,
             minStock,
             maxStock,
-            staleAfterDays:  stale,
+            minStaleDays:    minStale,
+            maxStaleDays:    maxStale,
             markupPercent,
             markupFlatPaise: markupFlat,
             roundingPaise:   rounding,
@@ -398,7 +466,8 @@ export default function PricingStrategiesPage() {
             maxCost:         paiseToRupees(s.maxCostPaise),
             minStock:        s.minStock != null ? String(s.minStock) : "",
             maxStock:        s.maxStock != null ? String(s.maxStock) : "",
-            staleAfterDays:  s.staleAfterDays != null ? String(s.staleAfterDays) : "",
+            minStaleDays:    s.minStaleDays != null ? String(s.minStaleDays) : "",
+            maxStaleDays:    s.maxStaleDays != null ? String(s.maxStaleDays) : "",
             markupPercent:   s.markupPercent,
             markupFlatPaise: String(s.markupFlatPaise),
             roundingPaise:   String(s.roundingPaise),
@@ -443,8 +512,11 @@ export default function PricingStrategiesPage() {
             chips.push(<Badge key="cc" variant="outline" className="text-[10px]">cost {formatPaise(s.minCostPaise)}–{formatPaise(s.maxCostPaise)}</Badge>);
         if (s.minStock != null || s.maxStock != null)
             chips.push(<Badge key="ss" variant="outline" className="text-[10px]">stock {s.minStock ?? "—"}–{s.maxStock ?? "—"}</Badge>);
-        if (s.staleAfterDays != null)
-            chips.push(<Badge key="st" variant="outline" className="text-[10px]">stale ≥ {s.staleAfterDays}d</Badge>);
+        if (s.minStaleDays != null || s.maxStaleDays != null) {
+            const lo = s.minStaleDays ?? "—";
+            const hi = s.maxStaleDays ?? "∞";
+            chips.push(<Badge key="st" variant="outline" className="text-[10px]">last sale {lo}–{hi}d ago</Badge>);
+        }
         if (chips.length === 0) return <span className="text-xs text-muted-foreground italic">all products</span>;
         return <div className="flex flex-wrap gap-1">{chips}</div>;
     };
@@ -570,61 +642,50 @@ export default function PricingStrategiesPage() {
                         </div>
                     </div>
 
-                    {/* Range filters */}
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                            <Sliders className="size-3.5" />
-                            Range filters
-                        </p>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Min cost (₹)</Label>
-                                <Input
-                                    inputMode="decimal" placeholder="—"
-                                    value={form.minCost}
-                                    onChange={(e) => setForm((f) => ({ ...f, minCost: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Max cost (₹)</Label>
-                                <Input
-                                    inputMode="decimal" placeholder="—"
-                                    value={form.maxCost}
-                                    onChange={(e) => setForm((f) => ({ ...f, maxCost: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Min stock</Label>
-                                <Input
-                                    inputMode="numeric" placeholder="—"
-                                    value={form.minStock}
-                                    onChange={(e) => setForm((f) => ({ ...f, minStock: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Max stock</Label>
-                                <Input
-                                    inputMode="numeric" placeholder="—"
-                                    value={form.maxStock}
-                                    onChange={(e) => setForm((f) => ({ ...f, maxStock: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs" title="Matches products with no sale in the last N days (never-sold counts as stale).">
-                                    Stale after (days)
-                                </Label>
-                                <Input
-                                    inputMode="numeric" placeholder="—"
-                                    value={form.staleAfterDays}
-                                    onChange={(e) => setForm((f) => ({ ...f, staleAfterDays: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                        </div>
+                    {/* Range filters — three segments */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <RangeSegment
+                            icon={IndianRupee}
+                            title="Cost range"
+                            helper="Applied to InvProduct.costPaise (last-purchase snapshot). Both bounds optional."
+                            minLabel="Min ₹"
+                            maxLabel="Max ₹"
+                            minValue={form.minCost}
+                            maxValue={form.maxCost}
+                            onMin={(v) => setForm((f) => ({ ...f, minCost: v }))}
+                            onMax={(v) => setForm((f) => ({ ...f, maxCost: v }))}
+                            inputMode="decimal"
+                            placeholderMin="0.00"
+                            placeholderMax="∞"
+                        />
+                        <RangeSegment
+                            icon={Package}
+                            title="Stock range"
+                            helper="Units on hand (InvProduct.stock). Products with stock not tracked are excluded when this filter is set."
+                            minLabel="Min units"
+                            maxLabel="Max units"
+                            minValue={form.minStock}
+                            maxValue={form.maxStock}
+                            onMin={(v) => setForm((f) => ({ ...f, minStock: v }))}
+                            onMax={(v) => setForm((f) => ({ ...f, maxStock: v }))}
+                            inputMode="numeric"
+                            placeholderMin="0"
+                            placeholderMax="∞"
+                        />
+                        <RangeSegment
+                            icon={CalendarClock}
+                            title="Days since last sale"
+                            helper="Window for staleness. Never-sold products have infinite age — they match the lower bound and fail the upper bound."
+                            minLabel="From (days)"
+                            maxLabel="To (days)"
+                            minValue={form.minStaleDays}
+                            maxValue={form.maxStaleDays}
+                            onMin={(v) => setForm((f) => ({ ...f, minStaleDays: v }))}
+                            onMax={(v) => setForm((f) => ({ ...f, maxStaleDays: v }))}
+                            inputMode="numeric"
+                            placeholderMin="0"
+                            placeholderMax="∞"
+                        />
                     </div>
 
                     {/* Attribute filters */}

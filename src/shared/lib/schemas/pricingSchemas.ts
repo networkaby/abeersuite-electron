@@ -52,7 +52,8 @@ const baseStrategyShape = z.object({
     maxCostPaise:    z.number().int().min(0).nullable().optional(),
     minStock:        z.number().int().min(0).nullable().optional(),
     maxStock:        z.number().int().min(0).nullable().optional(),
-    staleAfterDays:  z.number().int().min(0).nullable().optional(),
+    minStaleDays:    z.number().int().min(0).nullable().optional(),
+    maxStaleDays:    z.number().int().min(0).nullable().optional(),
     markupPercent:   z.number().gte(-100).lte(10_000),
     markupFlatPaise: z.number().int().min(0),
     roundingPaise:   z.number().int().min(0),
@@ -69,6 +70,8 @@ function refineRanges(
         maxCostPaise?: number | null;
         minStock?:     number | null;
         maxStock?:     number | null;
+        minStaleDays?: number | null;
+        maxStaleDays?: number | null;
     },
     ctx: z.RefinementCtx,
 ): void {
@@ -77,6 +80,9 @@ function refineRanges(
     }
     if (value.minStock != null && value.maxStock != null && value.maxStock < value.minStock) {
         ctx.addIssue({ code: "custom", path: ["maxStock"], message: "maxStock must be ≥ minStock" });
+    }
+    if (value.minStaleDays != null && value.maxStaleDays != null && value.maxStaleDays < value.minStaleDays) {
+        ctx.addIssue({ code: "custom", path: ["maxStaleDays"], message: "maxStaleDays must be ≥ minStaleDays" });
     }
 }
 

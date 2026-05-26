@@ -45,7 +45,7 @@ export async function POST(req: Request) {
         const strategies = await prisma.pricingStrategy.findMany({ where: { isActive: true } });
 
         // Build match context once; query lastSaleAgeDays only when needed.
-        const needsStaleness = strategies.some((s) => s.staleAfterDays != null);
+        const needsStaleness = strategies.some((s) => s.minStaleDays != null || s.maxStaleDays != null);
         const matchCtx = await buildMatchContext({
             productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
         });
