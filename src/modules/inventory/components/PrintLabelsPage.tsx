@@ -49,6 +49,7 @@ import { BarcodeSvg } from "./BarcodeSvg";
 type VoucherLineFromApi = {
     productId: number;
     quantity:  string | number;
+    mrpPaise:  number | null;
     product:   { id: number; sku: string; name: string };
 };
 type VoucherFromApi = {
@@ -65,7 +66,8 @@ type QueueRow = {
     name:         string;
     sku:          string;
     barcodeValue: string;   // resolved barcode1 → sku
-    pricePaise:   number | null;
+    pricePaise:   number | null;   // sale / "Our Offer Price"
+    mrpPaise:     number | null;   // printed MRP
     qty:          number;
 };
 
@@ -75,7 +77,13 @@ type ProductLookupRow = {
     name:       string;
     barcode1:   string | null;
     pricePaise: number | null;
+    mrpPaise:   number | null;
 };
+
+// localStorage key for the persisted store header (business name + phone /
+// any tag-line) — set once per browser; survives reloads so the operator
+// doesn't re-type "NETWORK SERVICE, +91 8876996996" on every print run.
+const HEADER_STORAGE_KEY = "print-labels:header";
 
 type LabelPresetId = "a4-3x8" | "a4-4x10" | "thermal-50x25" | "thermal-50x25-2up";
 
@@ -109,11 +117,6 @@ const PRESETS: LabelPreset[] = [
 
 // ────────────────────────────── helpers ──────────────────────────────
 
-function formatINR(paise: number | null): string {
-    if (paise == null) return "";
-    return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 /**
  * Parse the qty text input. Empty → 0. Non-digits stripped. Clamped to a sane
  * range so a typo doesn't try to render 10,000 labels.
@@ -138,9 +141,29 @@ function resolveBarcodeValue(p: { barcode1: string | null; sku: string }): strin
 export function PrintLabelsPage() {
     const [queue, setQueue]       = useState<QueueRow[]>([]);
     const [presetId, setPresetId] = useState<LabelPresetId>("a4-3x8");
-    const [showName,  setShowName]  = useState(true);
-    const [showSku,   setShowSku]   = useState(true);
-    const [showPrice, setShowPrice] = useState(true);
+    const [showHeader, setShowHeader] = useState(true);
+    const [showName,   setShowName]   = useState(true);
+    const [showMrp,    setShowMrp]    = useState(true);
+    const [showPrice,  setShowPrice]  = useState(true);
+
+    // Store header — business name + phone / tagline. Persisted in
+    // localStorage so the operator types it once. Empty string = no header
+    // line on the label (toggle also hides it explicitly).
+    //
+    // Lazy initializer reads from localStorage on first client render. On
+    // the server `window` is undefined, so the SSR pass renders an empty
+    // header; React reconciles to the stored value on the client without a
+    // visible flash because the labels grid isn't rendered until the user
+    // adds a product (well after hydration).
+    const [headerText, setHeaderText] = useState<string>(() => {
+        if (typeof window === "undefined") return "";
+        try { return window.localStorage.getItem(HEADER_STORAGE_KEY) ?? ""; }
+        catch { return ""; }
+    });
+    useEffect(() => {
+        try { window.localStorage.setItem(HEADER_STORAGE_KEY, headerText); }
+        catch { /* ignore — private mode / disabled storage */ }
+    }, [headerText]);
 
     // Banner shown after a successful voucher prefill — surfaces the source
     // reference so the user knows where the queue came from. Set by the
@@ -193,6 +216,10 @@ export function PrintLabelsPage() {
                             sku:      line.product.sku,
                         }),
                         pricePaise:   lookup?.pricePaise ?? null,
+                        // PURCHASE / GRN lines snapshot MRP at receipt time —
+                        // prefer that over the product's current cached MRP so
+                        // the label matches what was just received.
+                        mrpPaise:     line.mrpPaise ?? lookup?.mrpPaise ?? null,
                         qty:          Math.min(qty, 500),
                     });
                 }
@@ -240,6 +267,7 @@ export function PrintLabelsPage() {
                         sku:      sp.sku,
                     }),
                     pricePaise:   sp.salePrice != null ? Math.round(sp.salePrice * 100) : null,
+                    mrpPaise:     sp.mrp       != null ? Math.round(sp.mrp       * 100) : null,
                     qty:          1,
                 },
             ];
@@ -340,20 +368,37 @@ export function PrintLabelsPage() {
                             <span className="text-sm font-medium">Show on label</span>
                             <div className="flex flex-wrap gap-4">
                                 <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showName}  onCheckedChange={(v) => setShowName(v === true)} />
+                                    <Checkbox checked={showHeader} onCheckedChange={(v) => setShowHeader(v === true)} />
+                                    Store header
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={showName}   onCheckedChange={(v) => setShowName(v === true)} />
                                     Product name
                                 </label>
                                 <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showSku}   onCheckedChange={(v) => setShowSku(v === true)} />
-                                    SKU
+                                    <Checkbox checked={showMrp}    onCheckedChange={(v) => setShowMrp(v === true)} />
+                                    MRP
                                 </label>
                                 <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showPrice} onCheckedChange={(v) => setShowPrice(v === true)} />
-                                    Price
+                                    <Checkbox checked={showPrice}  onCheckedChange={(v) => setShowPrice(v === true)} />
+                                    Offer price
                                 </label>
                             </div>
                         </div>
                     </div>
+                    <label className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">Store header text</span>
+                        <Input
+                            type="text"
+                            value={headerText}
+                            onChange={(e) => setHeaderText(e.target.value)}
+                            placeholder="e.g. NETWORK SERVICE, +91 8876996996"
+                            maxLength={80}
+                        />
+                        <span className="text-[11px] text-muted-foreground">
+                            Saved in this browser. Leave blank or untick &ldquo;Store header&rdquo; to omit.
+                        </span>
+                    </label>
                 </div>
 
                 <div className="rounded-md border border-border bg-card p-4 space-y-3">
@@ -461,25 +506,41 @@ export function PrintLabelsPage() {
                     ["--label-cols" as string]: String(preset.columns),
                 }}
             >
-                {labels.map((row, idx) => (
-                    <div key={`${row.productId}-${idx}`} className="label">
-                        {showName  && <div className="label-name">{row.name}</div>}
-                        <div className="label-barcode">
-                            <BarcodeSvg
-                                value={row.barcodeValue}
-                                height={preset.barHeight}
-                                fontSize={preset.fontSize}
-                                margin={2}
-                            />
-                        </div>
-                        <div className="label-meta">
-                            {showSku   && <span className="label-sku">{row.sku}</span>}
-                            {showPrice && row.pricePaise != null && (
-                                <span className="label-price">{formatINR(row.pricePaise)}</span>
+                {labels.map((row, idx) => {
+                    const hasMrp   = showMrp   && row.mrpPaise   != null;
+                    const hasPrice = showPrice && row.pricePaise != null;
+                    const hasMeta  = hasMrp || hasPrice;
+                    return (
+                        <div key={`${row.productId}-${idx}`} className="label">
+                            {showHeader && headerText.trim() && (
+                                <div className="label-header">{headerText}</div>
+                            )}
+                            <div className="label-barcode">
+                                <BarcodeSvg
+                                    value={row.barcodeValue}
+                                    height={preset.barHeight}
+                                    fontSize={preset.fontSize}
+                                    margin={2}
+                                />
+                            </div>
+                            {showName && <div className="label-name">{row.name}</div>}
+                            {hasMeta && (
+                                <div className="label-meta">
+                                    {hasMrp && (
+                                        <span className="label-mrp">
+                                            MRP ₹{(row.mrpPaise! / 100).toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+                                        </span>
+                                    )}
+                                    {hasPrice && (
+                                        <span className="label-price">
+                                            Our Offer Price ₹{Math.round(row.pricePaise! / 100)}/-
+                                        </span>
+                                    )}
+                                </div>
                             )}
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

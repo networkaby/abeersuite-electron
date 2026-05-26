@@ -27,11 +27,11 @@
     width:  var(--label-w, 63.5mm);
     height: var(--label-h, 33.9mm);
     box-sizing: border-box;
-    padding: 2mm;
+    padding: 1mm 1.5mm;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: space-between;
     overflow: hidden;
     /* Faint outline so users can see the cut lines on-screen. Removed in
        print so it doesn't bleed onto the actual label paper. */
@@ -42,15 +42,29 @@
     font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Store header — bold business name + phone across the top of every label.
+   Matches the sample (e.g. "NETWORK SERVICE, +91 8876996996"). Truncated
+   to a single line so a too-long header never blows the label height. */
+.label-header {
+    font-size: 7pt;
+    font-weight: 700;
+    line-height: 1.1;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.5mm;
+}
+
 .label-name {
-    font-size: 9pt;
+    font-size: 7pt;
     font-weight: 600;
     line-height: 1.1;
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 1mm;
+    margin: 0.5mm 0;
 }
 
 .label-barcode {
@@ -66,23 +80,40 @@
     height: auto;
 }
 
+/* Two-column footer — MRP on the left, "Our Offer Price ₹N/-" on the right.
+   space-between keeps them anchored to the label edges so the eye reads
+   "MRP … Offer" naturally. */
 .label-meta {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
     width: 100%;
-    gap: 2mm;
-    font-size: 8pt;
-    margin-top: 1mm;
+    gap: 1mm;
+    font-size: 7pt;
+    line-height: 1.1;
+    margin-top: 0.5mm;
 }
 
-.label-sku {
-    font-family: ui-monospace, monospace;
-    color: #333;
+.label-mrp {
+    font-weight: 600;
+    color: #000;
+    text-align: left;
 }
 
 .label-price {
     font-weight: 700;
+    text-align: right;
     margin-left: auto;
+}
+
+/* On the larger A4 3×8 preset (63.5×33.9mm) there is room for bigger
+   fonts — pump them up so the label fills the sticker nicely. */
+.label-sheet[data-page-mode="A4"][style*="--label-cols: 3"] .label-header,
+.label-sheet[data-page-mode="A4"][style*="--label-cols: 3"] .label-name {
+    font-size: 9pt;
+}
+.label-sheet[data-page-mode="A4"][style*="--label-cols: 3"] .label-meta {
+    font-size: 8.5pt;
 }
 
 /* ───────────────────────── print mode ─────────────────────────── */
