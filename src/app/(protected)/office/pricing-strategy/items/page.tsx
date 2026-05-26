@@ -398,6 +398,12 @@ export default function PricingItemsPage() {
                 ? `using ${COST_METHOD_LABEL[item.effectiveCostMethod]}`
                 : "";
         const productLabel = [item.sku, item.brandName, item.categoryName].filter(Boolean).join(" · ");
+        // Cost displayed inclusive of GST per user preference — both stored
+        // values are excl-GST so we gross up at display time only. Profit
+        // math below stays excl-vs-excl (still tax-adjusted).
+        const costInclPaise = item.resolvedCostPaise != null && item.gstRatePct > 0
+            ? Math.round(item.resolvedCostPaise * (1 + item.gstRatePct / 100))
+            : item.resolvedCostPaise;
         // Profit per unit (tax-adjusted): pricePaise and resolvedCostPaise are
         // both stored excl-GST, so the difference is the realised margin after
         // input-GST netting. Live preview uses the in-progress computed price.
@@ -446,7 +452,12 @@ export default function PricingItemsPage() {
                     ) : null}
                 </TableCell>
                 <TableCell className="text-right">
-                    <span className="text-sm font-mono">{paise(item.resolvedCostPaise)}</span>
+                    <span className="text-sm font-mono">{paise(costInclPaise)}</span>
+                    {item.gstRatePct > 0 && item.resolvedCostPaise != null ? (
+                        <div className="text-[10px] text-muted-foreground">
+                            {paise(item.resolvedCostPaise)} excl
+                        </div>
+                    ) : null}
                 </TableCell>
                 <TableCell className="text-right">
                     <Input
@@ -557,7 +568,7 @@ export default function PricingItemsPage() {
             <TableRow>
                 <TableHead className="text-xs">Product</TableHead>
                 <TableHead className="text-xs">Cost method</TableHead>
-                <TableHead className="text-right text-xs">Cost (₹)</TableHead>
+                <TableHead className="text-right text-xs">Cost (₹ incl GST)</TableHead>
                 <TableHead className="text-right text-xs">Margin %</TableHead>
                 <TableHead className="text-xs">Strategy</TableHead>
                 <TableHead className="text-right text-xs">Computed</TableHead>
