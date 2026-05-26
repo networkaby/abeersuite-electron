@@ -28,13 +28,16 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Printer, Trash2, Plus, Minus } from "lucide-react";
+import { Printer, Trash2, Plus, Minus, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -57,6 +60,17 @@ type VoucherFromApi = {
     type:      string;
     reference: string;
     lines:     VoucherLineFromApi[];
+};
+
+// Listing shape used by the "Pick from voucher" dialog. Matches the columns
+// `/api/inventory/vouchers` already returns (we read the subset we need).
+type VoucherListRow = {
+    id:        number;
+    type:      string;
+    reference: string;
+    date:      string;
+    partyName: string | null;
+    _count?:   { lines: number };
 };
 
 // ────────────────────────────── types ──────────────────────────────
@@ -139,8 +153,26 @@ function resolveBarcodeValue(p: { barcode1: string | null; sku: string }): strin
 // ────────────────────────────── component ──────────────────────────────
 
 export function PrintLabelsPage() {
+    const router   = useRouter();
+    const pathname = usePathname();
+
     const [queue, setQueue]       = useState<QueueRow[]>([]);
     const [presetId, setPresetId] = useState<LabelPresetId>("a4-3x8");
+
+    // Bumped after every successful add/scan so the combobox remounts and
+    // its internal `query` text resets to empty. Without this the combobox
+    // keeps showing the previously picked product's name and the next scan
+    // would land on top of stale text — useless for a scan-and-go workflow.
+    const [pickCount, setPickCount] = useState(0);
+
+    // Voucher picker state (the "Pick from GRN / Purchase" button). Loads on
+    // first open and re-uses the cached list for subsequent opens; the user
+    // can click "Refresh" inside the dialog to force a re-fetch.
+    const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
+    const [voucherList, setVoucherList]   = useState<VoucherListRow[] | null>(null);
+    const [voucherSearch, setVoucherSearch] = useState("");
+    const [voucherTypeFilter, setVoucherTypeFilter] = useState<"all" | "GRN" | "PURCHASE">("all");
+    const [voucherLoading, setVoucherLoading] = useState(false);
     const [showHeader, setShowHeader] = useState(true);
     const [showName,   setShowName]   = useState(true);
     const [showMrp,    setShowMrp]    = useState(true);
@@ -248,6 +280,9 @@ export function PrintLabelsPage() {
     function addProduct(sp: SelectedProduct | null) {
         if (!sp) return;
         setPrefillSource(null);
+        // Force the combobox to remount so its query text clears for the
+        // next scan / type — see `pickCount` declaration.
+        setPickCount((c) => c + 1);
         setQueue((rows) => {
             const existing = rows.findIndex((r) => r.productId === sp.id);
             if (existing >= 0) {
@@ -291,6 +326,63 @@ export function PrintLabelsPage() {
         setPrefillSource(null);
     }
 
+    // Lazy-fetch recent POSTED GRN + PURCHASE vouchers for the picker. We
+    // hit `/api/inventory/vouchers` twice (once per type) instead of relying
+    // on a multi-type endpoint to stay compatible with the existing single-
+    // type filter. POSTED-only so DRAFTs (which haven't moved stock) don't
+    // pollute the picker.
+    async function loadVoucherList(force = false) {
+        if (voucherList && !force) return;
+        setVoucherLoading(true);
+        try {
+            const [grnRes, purRes] = await Promise.all([
+                axios.get<VoucherListRow[]>("/api/inventory/vouchers", {
+                    params: { type: "GRN",      status: "POSTED" },
+                }),
+                axios.get<VoucherListRow[]>("/api/inventory/vouchers", {
+                    params: { type: "PURCHASE", status: "POSTED" },
+                }),
+            ]);
+            // Merge + sort newest first (date desc, id desc as tiebreak).
+            const merged = [...grnRes.data, ...purRes.data].sort((a, b) => {
+                if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+                return a.id < b.id ? 1 : -1;
+            });
+            setVoucherList(merged);
+        } catch {
+            toast.error("Failed to load vouchers");
+        } finally {
+            setVoucherLoading(false);
+        }
+    }
+
+    function openVoucherPicker() {
+        setVoucherPickerOpen(true);
+        loadVoucherList();
+    }
+
+    function pickVoucher(v: VoucherListRow) {
+        setVoucherPickerOpen(false);
+        // Navigate so the existing ?fromVoucher prefill effect runs. Same
+        // pathname → soft navigation; the searchParams effect re-fires and
+        // populates the queue.
+        router.push(`${pathname}?fromVoucher=${v.id}`);
+    }
+
+    // Client-side filter for the picker's search + type tabs.
+    const filteredVouchers = useMemo(() => {
+        if (!voucherList) return [];
+        const q = voucherSearch.trim().toLowerCase();
+        return voucherList.filter((v) => {
+            if (voucherTypeFilter !== "all" && v.type !== voucherTypeFilter) return false;
+            if (!q) return true;
+            return (
+                v.reference.toLowerCase().includes(q) ||
+                (v.partyName ?? "").toLowerCase().includes(q)
+            );
+        });
+    }, [voucherList, voucherSearch, voucherTypeFilter]);
+
     const totalLabels = queue.reduce((acc, r) => acc + r.qty, 0);
 
     // Flatten qty into individual label slots for the print grid.
@@ -330,12 +422,25 @@ export function PrintLabelsPage() {
                     </div>
                 )}
                 <div className="rounded-md border border-border bg-card p-4 space-y-3">
-                    <h2 className="font-semibold">Add products</h2>
+                    <div className="flex items-center justify-between gap-2">
+                        <h2 className="font-semibold">Add products</h2>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={openVoucherPicker}
+                        >
+                            <FileText className="size-4" />
+                            Pick from GRN / Purchase
+                        </Button>
+                    </div>
                     <div className="max-w-xl">
-                        {/* Each pick resets the combobox by calling addProduct
-                            and immediately clearing its own value (combobox
-                            internally re-syncs to value=null). */}
+                        {/* `key={pickCount}` forces a remount on every add so
+                            the input clears and autoFocus re-engages — letting
+                            the operator scan / search the next item without
+                            any manual reset. */}
                         <InvProductCombobox
+                            key={pickCount}
                             value={null}
                             onChange={addProduct}
                             placeholder="Search / scan a product to add to the print queue…"
@@ -344,7 +449,7 @@ export function PrintLabelsPage() {
                         />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Tip: scan a barcode with a USB scanner — the combobox matches by SKU / barcode and adds the product (re-scanning the same item increments qty by 1).
+                        Tip: scan a barcode with a USB scanner — the combobox matches by SKU / barcode and adds the product (re-scanning the same item increments qty by 1). Or use the button above to load every line of a recent GRN / Purchase in one click.
                     </p>
                 </div>
 
@@ -542,6 +647,94 @@ export function PrintLabelsPage() {
                     );
                 })}
             </div>
+
+            {/* "Pick from GRN / Purchase" — lazy-loaded list of POSTED
+                receiving vouchers. Click a row → soft-navigate to
+                ?fromVoucher=<id> so the existing prefill effect populates
+                the queue. Hidden in print mode by .print-hide (Dialog
+                portal escapes the wrapper, so we apply it inline below). */}
+            <Dialog open={voucherPickerOpen} onOpenChange={setVoucherPickerOpen}>
+                <DialogContent className="!max-w-3xl print-hide">
+                    <DialogHeader>
+                        <DialogTitle>Pick a GRN or Purchase voucher</DialogTitle>
+                        <DialogDescription>
+                            Picking a voucher loads every line as a label row (productId × ceiling of received qty). Only POSTED vouchers are listed.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                            type="text"
+                            value={voucherSearch}
+                            onChange={(e) => setVoucherSearch(e.target.value)}
+                            placeholder="Search by reference or party…"
+                            className="h-8 max-w-xs"
+                            autoFocus
+                        />
+                        <Select value={voucherTypeFilter} onValueChange={(v) => setVoucherTypeFilter(v as "all" | "GRN" | "PURCHASE")}>
+                            <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="GRN">GRN</SelectItem>
+                                <SelectItem value="PURCHASE">Purchase</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => loadVoucherList(true)}
+                            disabled={voucherLoading}
+                        >
+                            {voucherLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                            Refresh
+                        </Button>
+                    </div>
+
+                    <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border">
+                        {voucherLoading && !voucherList ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                                <Loader2 className="size-4 animate-spin mr-2" /> Loading…
+                            </div>
+                        ) : filteredVouchers.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-muted-foreground">
+                                No matching vouchers.
+                            </p>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[100px]">Date</TableHead>
+                                        <TableHead className="w-[90px]">Type</TableHead>
+                                        <TableHead>Reference</TableHead>
+                                        <TableHead>Party</TableHead>
+                                        <TableHead className="w-[70px] text-right">Lines</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredVouchers.map((v) => (
+                                        <TableRow
+                                            key={v.id}
+                                            className="cursor-pointer"
+                                            onClick={() => pickVoucher(v)}
+                                        >
+                                            <TableCell className="text-xs tabular-nums">
+                                                {new Date(v.date).toLocaleDateString("en-IN", { year: "2-digit", month: "short", day: "2-digit" })}
+                                            </TableCell>
+                                            <TableCell className="text-xs">{v.type}</TableCell>
+                                            <TableCell className="font-mono text-xs">{v.reference}</TableCell>
+                                            <TableCell className="text-xs">{v.partyName ?? "—"}</TableCell>
+                                            <TableCell className="text-right text-xs tabular-nums">{v._count?.lines ?? "—"}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
