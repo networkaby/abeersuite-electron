@@ -50,7 +50,7 @@ export default async function ProtectedLayout({
                         roleColor:   user.roleColor,
                         avatarUrl:   user.avatarUrl,
                     }} />
-                    <main className="flex-1 overflow-y-auto p-8">{children}</main>
+                    <main className="flex-1 overflow-y-auto p-2">{children}</main>
                     <ButtonBar user={{
                         name:        user.name,
                         role:        user.role,

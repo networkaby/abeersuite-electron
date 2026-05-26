@@ -520,29 +520,36 @@ export default function InventoryProductsPage() {
             </div>
 
             {isEdit && selected.size > 0 ? (
-                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                        <Wand2 className="size-4" />
-                        <span className="font-medium">Apply to {selected.size} selected</span>
-                        <button
-                            type="button"
-                            className="ml-auto text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                            onClick={() => setSelected(new Set())}
-                        >
-                            clear selection
-                        </button>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                // Floating bulk-apply bar — fixed to the bottom of the viewport so
+                // it stays reachable no matter how far the user has scrolled the
+                // product list. The pb-24 spacer on the table wrapper below keeps
+                // the last row from hiding under it.
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-[95vw]">
+                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-primary/40 bg-card/95 backdrop-blur px-3 py-1.5 shadow-lg">
+                        <span className="flex items-center gap-1.5 text-xs font-medium px-1">
+                            <Wand2 className="size-3.5" />
+                            Apply to <strong>{selected.size}</strong>
+                        </span>
+                        <span className="h-5 w-px bg-border" aria-hidden />
                         <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("categories", "category")} />
                         <BulkApply label="Brand"    options={brands}     field="brandId"    onApply={applyToSelected} onCreate={() => createMaster("brands", "brand")} />
                         <BulkApply label="Group"    options={groups}     field="groupId"    onApply={applyToSelected} onCreate={() => createMaster("product-groups", "group")} />
                         <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty-terms", "warranty term")} />
                         <BulkApply label="Unit"     options={units}      field="unitId"     onApply={applyToSelected} clearable={false} onCreate={() => createMaster("units", "unit")} />
+                        <span className="h-5 w-px bg-border" aria-hidden />
+                        <button
+                            type="button"
+                            className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline px-1.5"
+                            onClick={() => setSelected(new Set())}
+                            title="Clear selection"
+                        >
+                            clear
+                        </button>
                     </div>
                 </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-border">
+            <div className={`overflow-x-auto border border-border ${isEdit && selected.size > 0 ? "pb-20" : ""}`}>
                 <Table>
                     <TableHeader>
                         <TableRow>
