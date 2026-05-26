@@ -43,6 +43,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                   ? true
                   : undefined;
 
+        // openingRatePaise lands on three columns at once:
+        //   • openingRate (Decimal rupees) — the Tally-style master entry
+        //   • costPaise (Int paise)        — running cache the cost resolver reads
+        //   • openingValue (Decimal rupees) — qty × rate, recomputed if qty known
+        // We need openingStock to recompute openingValue, so fetch it when the
+        // patch touches openingRatePaise.
+        let openingPatch: Record<string, unknown> = {};
+        if (data.openingRatePaise !== undefined) {
+            const existing = await prisma.invProduct.findUnique({
+                where:  { id },
+                select: { openingStock: true },
+            });
+            if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+            const rateRupees = data.openingRatePaise != null ? data.openingRatePaise / 100 : null;
+            const stock = existing.openingStock != null ? Number(existing.openingStock) : null;
+            openingPatch = {
+                openingRate:  rateRupees,
+                openingValue: rateRupees != null && stock != null ? stock * rateRupees : null,
+                // Cache: keep costPaise in sync so the resolver picks it up
+                // immediately, unless the same patch also sets costPaise
+                // explicitly (let the explicit value win).
+                ...(data.costPaise === undefined
+                    ? { costPaise: data.openingRatePaise }
+                    : {}),
+            };
+        }
+
         const row = await prisma.invProduct.update({
             where: { id },
             data: {
@@ -53,6 +80,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.costPaise       !== undefined ? { costPaise:     data.costPaise } : {}),
                 ...(data.stdCostPaise    !== undefined ? { stdCostPaise:  data.stdCostPaise } : {}),
                 ...(data.mrpPaise        !== undefined ? { mrpPaise:      data.mrpPaise } : {}),
+                ...openingPatch,
             },
             select: {
                 id:               true,
@@ -63,6 +91,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 mrpPaise:         true,
                 costPaise:        true,
                 stdCostPaise:     true,
+                openingRate:      true,
+                openingStock:     true,
+                openingValue:     true,
             },
         });
         return NextResponse.json(row);

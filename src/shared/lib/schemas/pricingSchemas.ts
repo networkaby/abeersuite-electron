@@ -68,25 +68,30 @@ export const pricingStrategyUpdateSchema = baseStrategyShape
 export type PricingStrategyCreateInput = z.infer<typeof pricingStrategyCreateSchema>;
 export type PricingStrategyUpdateInput = z.infer<typeof pricingStrategyUpdateSchema>;
 
-// Per-product pricing fields editable from the Items table. All optional —
-// callers patch only the columns they're touching. Setting `pricePaise`
-// explicitly is what flips `priceOverridden=true`; the UI sends both
-// together when the user types a manual price.
+// Per-product pricing fields editable from the Items / Needs Attention pages.
+// All optional — callers patch only the columns they're touching.
 //
-// `costPaise` is the last-purchase-cost snapshot on InvProduct (normally
-// updated by PURCHASE voucher post). Letting the Items page patch it lets
-// admins fill in a baseline cost for products that have no purchase
-// history yet — the resolver falls back to costPaise for every method.
+// `pricePaise` flips `priceOverridden=true` when set (manual price lock).
+//
+// `openingRatePaise` is the Tally-style opening unit cost (excl-GST). It
+// writes to InvProduct.openingRate (Decimal rupees) AND mirrors into
+// InvProduct.costPaise so the cost resolver — which reads costPaise as its
+// last-purchase fallback — picks it up immediately. openingValue is
+// recomputed from openingStock × openingRate when stock is non-null.
+//
+// `costPaise` accepts a direct override of the cache for callers that
+// truly want to skip the opening-balance trail (rare).
 export const pricingItemUpdateSchema = z
     .object({
         /** Per-item cost method. null = inherit from matched strategy. */
-        costMethod:      costMethodEnum.nullable().optional(),
-        marginPercent:   z.number().gte(-100).lte(10_000).nullable().optional(),
-        priceOverridden: z.boolean().optional(),
-        pricePaise:      z.number().int().min(0).nullable().optional(),
-        mrpPaise:        z.number().int().min(0).nullable().optional(),
-        costPaise:       z.number().int().min(0).nullable().optional(),
-        stdCostPaise:    z.number().int().min(0).nullable().optional(),
+        costMethod:       costMethodEnum.nullable().optional(),
+        marginPercent:    z.number().gte(-100).lte(10_000).nullable().optional(),
+        priceOverridden:  z.boolean().optional(),
+        pricePaise:       z.number().int().min(0).nullable().optional(),
+        mrpPaise:         z.number().int().min(0).nullable().optional(),
+        costPaise:        z.number().int().min(0).nullable().optional(),
+        stdCostPaise:     z.number().int().min(0).nullable().optional(),
+        openingRatePaise: z.number().int().min(0).nullable().optional(),
     });
 
 export type PricingItemUpdateInput = z.infer<typeof pricingItemUpdateSchema>;

@@ -164,7 +164,10 @@
       "Bash(grep -B 5 -A 5 \"pricing-strategy\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\shared\\\\components\\\\Sidebar.tsx\" 2>nul | head -20)",
       "Bash(grep -n \"TODO\\\\|FIXME\\\\|BUG\\\\|XXX\\\\|HACK\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\\\\lib\\\\resolveCost.ts\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\\\\lib\\\\resolvePrice.ts\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\pricing-strategy\\\\apply\\\\route.ts\" 2>nul)",
       "Bash(grep -n \"priceOverridden\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\api\\\\pricing-strategy\\\\apply\\\\route.ts\" 2>nul)",
-      "Bash(grep -n \"test\\\\|spec\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\" -i 2>nul)"
+      "Bash(grep -n \"test\\\\|spec\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\" -i 2>nul)",
+      "Bash(node -e \"const p=require\\('@/generated/prisma/client'\\); new p.PrismaClient\\(\\).invProduct.count\\(\\).then\\(n=>{console.log\\(n\\); process.exit\\(0\\)}\\)\")",
+      "Bash(node -e \"const {PrismaClient}=require\\('./src/generated/prisma/client'\\); new PrismaClient\\(\\).invProduct.count\\(\\).then\\(n=>{console.log\\('products:',n\\); process.exit\\(0\\)}\\)\")",
+      "Bash(node -e 'const {PrismaClient}=require\\('\\\\''./src/generated/prisma/client'\\\\''\\); const p=new PrismaClient\\(\\); p.invProduct.count\\(\\).then\\(n=>{console.log\\('\\\\''products:'\\\\'',n\\); return p.$disconnect\\(\\)}\\).catch\\(e=>{console.error\\(e.message\\); process.exit\\(1\\)}\\)')"
     ]
   }
 }

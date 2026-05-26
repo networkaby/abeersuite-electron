@@ -51,6 +51,7 @@ import {
     Banknote,
     Database,
     Upload,
+    AlertTriangle,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -378,7 +379,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Products", icon: Box, href: "/office/inventory/products", permission: "inventory:manage" },
             // { label: "Stock Ledger", icon: BookOpen, href: "/office/inventory/stock-ledger", permission: "inventory:manage" },
             // { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary", permission: "inventory:manage" },
-            { label: "Inventory Details", icon: ClipboardList, href: "/office/inventory/inventory-details", permission: "inventory:manage" },
+            { label: "Item Ledger", icon: ClipboardList, href: "/office/inventory/inventory-details", permission: "inventory:manage" },
             {
                 label: "Masters",
                 icon: ChartArea,
@@ -559,9 +560,10 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/pricing-strategy",
         pathPrefixes: ["/office/pricing-strategy"],
         children: [
-            { label: "Overview",   icon: ChartArea,  href: "/office/pricing-strategy" },
+            { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
             { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
-            { label: "Items",      icon: Boxes,      href: "/office/pricing-strategy/items" },
+            { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
+            { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
         ],
     },
     // Complience

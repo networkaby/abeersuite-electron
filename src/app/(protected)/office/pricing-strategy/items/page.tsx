@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import axios from "axios";
 import { toast } from "sonner";
-import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X, ArrowRight, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
     Select,
     SelectContent,
@@ -80,10 +80,6 @@ type RowEdit = {
     marginPercent: string; // "" = clear override (use strategy)
     /** Rupees string entered by user (e.g. "296.61"). Empty = no manual change. */
     priceRupees:   string;
-    /** Rupees string entered by user (e.g. "296.61"). Sent ×100 to API as costPaise. */
-    costRupees:    string;
-    /** Rupees string entered by user (e.g. "296.61"). Sent ×100 to API as stdCostPaise. */
-    stdCostRupees: string;
 };
 
 function paise(p: number | null): string {
@@ -98,12 +94,6 @@ function rupeesToPaise(s: string): number | null {
     const n = parseFloat(trimmed);
     if (!isFinite(n) || n < 0) return null;
     return Math.round(n * 100);
-}
-
-/** Format paise as a rupees string for pre-filling inputs (no ₹ symbol). */
-function paiseToRupeesStr(p: number | null): string {
-    if (p == null) return "";
-    return (p / 100).toFixed(2);
 }
 
 interface Attention {
@@ -131,7 +121,6 @@ export default function PricingItemsPage() {
     const [loading,             setLoading]             = useState(true);
     const [search,              setSearch]              = useState("");
     const [hideEmpty,           setHideEmpty]           = useState(false);
-    const [showAttentionPanel,  setShowAttentionPanel]  = useState(true);
     const [filterCategory,  setFilterCategory]  = useState<string>("__all");
     const [filterBrand,     setFilterBrand]     = useState<string>("__all");
     const [filterGroup,     setFilterGroup]     = useState<string>("__all");
@@ -218,22 +207,42 @@ export default function PricingItemsPage() {
         filterMethod !== "__all" ||
         filterStrategy !== "__all";
 
-    // ── Virtual scrolling ────────────────────────────────────────────────────
-    // One virtualizer per scroll viewport. estimateSize is approximate;
-    // react-virtual auto-measures with measureElement.
-    const normalParentRef    = useRef<HTMLDivElement>(null);
-    const normalVirtualizer  = useVirtualizer({
+    // Virtualized against the office layout's <main> scroll container
+    // (the office shell uses `flex-1 overflow-y-auto p-8` on <main>, so the
+    // window itself doesn't scroll). We resolve that ancestor lazily — the
+    // page can't import a ref to it.
+    const ROW_PX = 73;
+    const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+    const [tableOffsetInScroll, setTableOffsetInScroll] = useState(0);
+    const tableContainerRef = useCallback((el: HTMLDivElement | null) => {
+        if (!el) return;
+        // Walk up to the first scrollable ancestor — the office layout's <main>.
+        let p: HTMLElement | null = el.parentElement;
+        while (p) {
+            const oy = window.getComputedStyle(p).overflowY;
+            if (oy === "auto" || oy === "scroll") break;
+            p = p.parentElement;
+        }
+        if (p) {
+            setScrollEl(p);
+            setTableOffsetInScroll(el.getBoundingClientRect().top - p.getBoundingClientRect().top + p.scrollTop);
+        }
+    }, []);
+    useLayoutEffect(() => {
+        if (!scrollEl) return;
+        const onResize = () => {
+            const el = document.getElementById("pricing-items-table");
+            if (el) setTableOffsetInScroll(el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop);
+        };
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, [scrollEl]);
+    const normalVirtualizer = useVirtualizer({
         count:            normalFiltered.length,
-        getScrollElement: () => normalParentRef.current,
-        estimateSize:     () => 72,
+        getScrollElement: () => scrollEl,
+        estimateSize:     () => ROW_PX,
         overscan:         10,
-    });
-    const attentionParentRef   = useRef<HTMLDivElement>(null);
-    const attentionVirtualizer = useVirtualizer({
-        count:            attentionFiltered.length,
-        getScrollElement: () => attentionParentRef.current,
-        estimateSize:     () => 72,
-        overscan:         5,
+        scrollMargin:     tableOffsetInScroll,
     });
 
     const clearFilters = () => {
@@ -262,10 +271,8 @@ export default function PricingItemsPage() {
         usedCost:     number | null;
         dirty:        boolean;
     } {
-        // Cost: typed rupee value wins if valid. Empty input → fall back to resolved.
-        let cost: number | null = item.resolvedCostPaise;
-        const typedCostPaise = rupeesToPaise(e.costRupees);
-        if (typedCostPaise !== null) cost = typedCostPaise;
+        // Cost is read-only in this UI (resolver-driven) — no typed override.
+        const cost: number | null = item.resolvedCostPaise;
         // Margin: typed value wins if numeric. Empty input means "no per-item
         // override" → use strategy's effective markup as visible in appliedMarkupPct.
         let markup: number = item.appliedMarkupPct;
@@ -291,8 +298,6 @@ export default function PricingItemsPage() {
             costMethod:    item.costMethod ?? "__inherit",
             marginPercent: item.marginPercent != null ? String(item.marginPercent) : "",
             priceRupees:   "",
-            costRupees:    paiseToRupeesStr(item.lastPurchasePaise),
-            stdCostRupees: paiseToRupeesStr(item.stdCostPaise),
         };
 
     const setEdit = (id: number, item: Item, patch: Partial<RowEdit>) =>
@@ -309,16 +314,6 @@ export default function PricingItemsPage() {
             const n = e.marginPercent.trim() === "" ? null : Number(e.marginPercent);
             if (n != null && !Number.isFinite(n)) return toast.error("Margin % must be a number");
             payload.marginPercent = n;
-        }
-        if (e.stdCostRupees !== paiseToRupeesStr(item.stdCostPaise)) {
-            const n = e.stdCostRupees.trim() === "" ? null : rupeesToPaise(e.stdCostRupees);
-            if (e.stdCostRupees.trim() !== "" && n == null) return toast.error("Std cost must be a valid number (e.g. 250.00)");
-            payload.stdCostPaise = n;
-        }
-        if (e.costRupees !== paiseToRupeesStr(item.lastPurchasePaise)) {
-            const n = e.costRupees.trim() === "" ? null : rupeesToPaise(e.costRupees);
-            if (e.costRupees.trim() !== "" && n == null) return toast.error("Cost must be a valid number (e.g. 250.00)");
-            payload.costPaise = n;
         }
         if (e.priceRupees.trim() !== "") {
             const n = rupeesToPaise(e.priceRupees);
@@ -390,44 +385,41 @@ export default function PricingItemsPage() {
     function renderItemRow(
         item: Item,
         dataIndex: number,
-        measureElement: (el: Element | null) => void,
-        showAlertCol: boolean,
     ) {
         const e    = editFor(item);
-        const att  = attentionFor(item);
         const itemMethodValue = item.costMethod ?? "__inherit";
         const dirty =
             e.costMethod !== itemMethodValue ||
             e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
-            e.stdCostRupees !== paiseToRupeesStr(item.stdCostPaise) ||
-            e.costRupees !== paiseToRupeesStr(item.lastPurchasePaise) ||
             e.priceRupees.trim() !== "";
+        // Hint shows only when inheriting — names the resolved method.
+        const methodHint =
+            e.costMethod === "__inherit"
+                ? `using ${COST_METHOD_LABEL[item.effectiveCostMethod]}`
+                : "";
+        const productLabel = [item.sku, item.brandName, item.categoryName].filter(Boolean).join(" · ");
+        // Profit per unit (tax-adjusted): pricePaise and resolvedCostPaise are
+        // both stored excl-GST, so the difference is the realised margin after
+        // input-GST netting. Live preview uses the in-progress computed price.
+        const lp = livePreview(item, e);
+        const effectivePricePaise = item.priceOverridden ? item.pricePaise : lp.pricePaise;
+        const costForProfit = item.resolvedCostPaise;
+        const profitPaise = effectivePricePaise != null && costForProfit != null
+            ? effectivePricePaise - costForProfit
+            : null;
+        const profitPct = profitPaise != null && costForProfit && costForProfit > 0
+            ? (profitPaise / costForProfit) * 100
+            : null;
         return (
             <TableRow
                 key={item.id}
                 data-index={dataIndex}
-                ref={measureElement}
+                style={{ height: ROW_PX }}
             >
-                {showAlertCol ? (
-                    <TableCell className="w-8">
-                        <span
-                            title={`Missing: ${att.missing.join(", ")}`}
-                            className={att.critical ? "text-red-700" : "text-amber-700"}
-                        >
-                            {att.critical ? (
-                                <AlertCircle className="size-4" aria-label="Critical — no cost" />
-                            ) : (
-                                <AlertTriangle className="size-4" aria-label="Needs attention" />
-                            )}
-                        </span>
-                    </TableCell>
-                ) : null}
-                <TableCell>
-                    <div className="font-medium">{item.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                        {item.sku}
-                        {item.brandName ? ` · ${item.brandName}` : ""}
-                        {item.categoryName ? ` · ${item.categoryName}` : ""}
+                <TableCell className="max-w-[260px]">
+                    <div className="font-medium text-sm truncate" title={item.name}>{item.name}</div>
+                    <div className="text-xs text-muted-foreground truncate" title={productLabel}>
+                        {productLabel}
                     </div>
                 </TableCell>
                 <TableCell>
@@ -435,38 +427,26 @@ export default function PricingItemsPage() {
                         value={e.costMethod}
                         onValueChange={(v) => setEdit(item.id, item, { costMethod: v as RowEdit["costMethod"] })}
                     >
-                        <SelectTrigger className="h-8 w-[180px]">
+                        <SelectTrigger className="h-7 w-[140px] text-xs">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="__inherit">
-                                Inherit{item.strategyCostMethod ? ` (${COST_METHOD_LABEL[item.strategyCostMethod]})` : " (Weighted Avg)"}
+                                Inherit · {COST_METHOD_LABEL[item.strategyCostMethod ?? "WEIGHTED_AVG_COST"]}
                             </SelectItem>
                             {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
                                 <SelectItem key={v} value={v}>{l}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    {e.costMethod === "__inherit" ? (
-                        <div className="text-xs text-muted-foreground mt-1">
-                            using {COST_METHOD_LABEL[item.effectiveCostMethod]}
+                    {methodHint ? (
+                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate" title={methodHint}>
+                            {methodHint}
                         </div>
-                    ) : null}
-                    {item.resolvedCostFallback ? (
-                        <div className="text-xs text-amber-600 mt-1">{item.resolvedCostFallback}</div>
                     ) : null}
                 </TableCell>
                 <TableCell className="text-right">
-                    <Input
-                        inputMode="decimal"
-                        placeholder="₹ e.g. 296.61"
-                        value={e.costRupees}
-                        onChange={(ev) => setEdit(item.id, item, { costRupees: ev.target.value })}
-                        className="h-8 w-28 text-right ml-auto"
-                    />
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                        resolves to {paise(item.resolvedCostPaise)}
-                    </div>
+                    <span className="text-sm font-mono">{paise(item.resolvedCostPaise)}</span>
                 </TableCell>
                 <TableCell className="text-right">
                     <Input
@@ -474,75 +454,75 @@ export default function PricingItemsPage() {
                         placeholder="strategy"
                         value={e.marginPercent}
                         onChange={(ev) => setEdit(item.id, item, { marginPercent: ev.target.value })}
-                        className="h-8 w-20 text-right"
+                        className="h-7 w-16 text-right text-xs font-mono"
                     />
                 </TableCell>
                 <TableCell>
-                    <span className="text-xs">{item.strategyName ?? "—"}</span>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs truncate" title={item.strategyName ?? "—"}>{item.strategyName ?? "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">
                         @{item.appliedMarkupPct.toFixed(2)}%
                     </div>
                 </TableCell>
-                <TableCell className="text-right font-medium">
+                <TableCell className="text-right">
                     {(() => {
-                        const lp = livePreview(item, e);
                         const showLive = lp.dirty;
                         return (
                             <>
                                 <div className="flex items-center justify-end gap-1">
-                                    <span className={showLive ? "text-blue-700" : undefined}>
+                                    <span className={`text-sm font-medium ${showLive ? "text-blue-700" : ""}`}>
                                         {paise(lp.pricePaise)}
                                     </span>
                                     {lp.cappedAtMrp ? (
-                                        <Badge
-                                            variant="outline"
-                                            className="text-amber-700 border-amber-500"
-                                            title={`Cost+margin exceeds MRP — capped to ${paise(item.mrpPaise)}.`}
-                                        >
-                                            <ShieldAlert className="size-3 mr-1" />
-                                            MRP cap
-                                        </Badge>
-                                    ) : null}
-                                    {showLive ? (
-                                        <Badge
-                                            variant="outline"
-                                            className="text-blue-700 border-blue-400"
-                                            title={`Saved: ${paise(item.computedPricePaise)}. Updates on Save.`}
-                                        >
-                                            preview
-                                        </Badge>
+                                        <ShieldAlert
+                                            className="size-3.5 text-amber-600"
+                                            aria-label={`Capped at MRP ${paise(item.mrpPaise)}`}
+                                            title={`Capped at MRP ${paise(item.mrpPaise)}`}
+                                        />
                                     ) : null}
                                 </div>
-                                {item.mrpPaise != null && item.mrpPaise > 0 ? (
-                                    <div className="text-xs text-muted-foreground">
-                                        MRP {paise(item.mrpPaise)}
-                                    </div>
-                                ) : null}
-                                {showLive ? (
-                                    <div className="text-xs text-muted-foreground">
-                                        was {paise(item.computedPricePaise)}
-                                    </div>
-                                ) : null}
+                                <div className="text-[10px] text-muted-foreground">
+                                    {showLive ? <>was {paise(item.computedPricePaise)}</>
+                                              : item.mrpPaise && item.mrpPaise > 0 ? <>MRP {paise(item.mrpPaise)}</>
+                                              : null}
+                                </div>
                             </>
                         );
                     })()}
                 </TableCell>
                 <TableCell className="text-right">
-                    {paise(item.pricePaise)}
+                    {profitPaise == null ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                        <>
+                            <div className="flex items-center justify-end gap-1">
+                                {profitPaise < 0 ? (
+                                    <TrendingDown className="size-3 text-red-600" aria-hidden />
+                                ) : null}
+                                <span className={`text-sm font-mono ${profitPaise < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                                    {paise(profitPaise)}
+                                </span>
+                            </div>
+                            {profitPct != null ? (
+                                <div className={`text-[10px] ${profitPaise < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                    {profitPct.toFixed(1)}%
+                                </div>
+                            ) : null}
+                        </>
+                    )}
+                </TableCell>
+                <TableCell className="text-right">
+                    <span className="text-sm font-mono">{paise(item.pricePaise)}</span>
                     {item.priceOverridden ? (
-                        <Badge variant="outline" className="ml-2">
-                            <Lock className="size-3 mr-1" />
-                            manual
-                        </Badge>
+                        <Lock className="size-3 inline ml-1 text-muted-foreground" aria-label="Manual override" />
                     ) : null}
                 </TableCell>
                 <TableCell className="text-right">
                     <Input
                         inputMode="decimal"
-                        placeholder="₹ e.g. 450.00"
+                        placeholder="₹ 0.00"
                         value={e.priceRupees}
                         onChange={(ev) => setEdit(item.id, item, { priceRupees: ev.target.value })}
-                        className="h-8 w-28 text-right"
+                        className="h-7 w-24 text-right text-xs font-mono"
                     />
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
@@ -572,230 +552,178 @@ export default function PricingItemsPage() {
         );
     }
 
-    // Reusable table header — normal table omits the alert column.
-    function TableColumns({ showAlertCol }: { showAlertCol: boolean }) {
+    function TableColumns() {
         return (
             <TableRow>
-                {showAlertCol ? <TableHead className="w-8" /> : null}
-                <TableHead>Product</TableHead>
-                <TableHead>Cost method</TableHead>
-                <TableHead className="text-right">Cost (₹)</TableHead>
-                <TableHead className="text-right">Margin %</TableHead>
-                <TableHead>Strategy</TableHead>
-                <TableHead className="text-right">Computed</TableHead>
-                <TableHead className="text-right">Current</TableHead>
-                <TableHead className="text-right">Manual price (₹)</TableHead>
-                <TableHead className="text-right" />
+                <TableHead className="text-xs">Product</TableHead>
+                <TableHead className="text-xs">Cost method</TableHead>
+                <TableHead className="text-right text-xs">Cost (₹)</TableHead>
+                <TableHead className="text-right text-xs">Margin %</TableHead>
+                <TableHead className="text-xs">Strategy</TableHead>
+                <TableHead className="text-right text-xs">Computed</TableHead>
+                <TableHead className="text-right text-xs">Profit</TableHead>
+                <TableHead className="text-right text-xs">Current</TableHead>
+                <TableHead className="text-right text-xs">Manual price (₹)</TableHead>
+                <TableHead className="text-right w-20" />
             </TableRow>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-3">
 
-            {/* ── Toolbar ─────────────────────────────────────────────────── */}
-            <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-wrap">
-                        <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
-                            <Boxes className="size-5" aria-hidden />
-                            Items
-                        </h2>
-                        <span className="text-xs text-muted-foreground">
-                            {loading ? "Loading…" : (
-                                <>
-                                    <strong>{normalFiltered.length}</strong> ready
-                                    {attentionFiltered.length > 0
-                                        ? <> · <span className={criticalCount > 0 ? "text-red-700 font-medium" : "text-amber-700 font-medium"}>{attentionFiltered.length} need attention</span></>
-                                        : <> · <span className="text-green-700">all complete</span></>
-                                    }
-                                </>
-                            )}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" onClick={load}>
-                            <RefreshCw className="size-4" />
-                            Reload
-                        </Button>
-                        <Button type="button" onClick={applyAll} disabled={applying}>
-                            <Wand2 className="size-4" />
-                            Apply to non-overridden
-                        </Button>
-                    </div>
+            {/* ── Header row ────────────────────────────────────────────── */}
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+                        <Boxes className="size-5" aria-hidden />
+                        Items
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        {loading ? "Loading…" : (
+                            <>
+                                <strong>{normalFiltered.length}</strong> ready
+                                {attentionFiltered.length > 0
+                                    ? <> · <span className={criticalCount > 0 ? "text-red-700 font-medium" : "text-amber-700 font-medium"}>{attentionFiltered.length} need attention</span></>
+                                    : <> · <span className="text-green-700">all complete</span></>
+                                }
+                            </>
+                        )}
+                    </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/30 p-2">
-                    <Input
-                        placeholder="Search name / SKU / brand…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="h-8 w-64"
-                    />
-                    <Select value={filterCategory} onValueChange={setFilterCategory}>
-                        <SelectTrigger className="h-8 w-[180px]">
-                            <SelectValue placeholder="Category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All categories</SelectItem>
-                            {uniqueCategories.map((c) => (
-                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterBrand} onValueChange={setFilterBrand}>
-                        <SelectTrigger className="h-8 w-[180px]">
-                            <SelectValue placeholder="Brand" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All brands</SelectItem>
-                            {uniqueBrands.map((b) => (
-                                <SelectItem key={b} value={b}>{b}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterGroup} onValueChange={setFilterGroup}>
-                        <SelectTrigger className="h-8 w-[180px]">
-                            <SelectValue placeholder="Group" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All groups</SelectItem>
-                            {uniqueGroups.map((g) => (
-                                <SelectItem key={g} value={g}>{g}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterMethod} onValueChange={setFilterMethod}>
-                        <SelectTrigger className="h-8 w-[180px]">
-                            <SelectValue placeholder="Cost method" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All methods</SelectItem>
-                            {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
-                                <SelectItem key={v} value={v}>{l}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterStrategy} onValueChange={setFilterStrategy}>
-                        <SelectTrigger className="h-8 w-[200px]">
-                            <SelectValue placeholder="Strategy" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All strategies</SelectItem>
-                            {uniqueStrategies.map((s) => (
-                                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <label className="text-xs flex items-center gap-1.5 cursor-pointer select-none ml-2">
-                        <input
-                            type="checkbox"
-                            checked={hideEmpty}
-                            onChange={(e) => setHideEmpty(e.target.checked)}
-                        />
-                        Hide empty
-                    </label>
-                    {hasActiveFilter ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="ml-auto h-7">
-                            <X className="size-3.5" />
-                            Clear filters
-                        </Button>
-                    ) : null}
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={load}>
+                        <RefreshCw className="size-4" />
+                        Reload
+                    </Button>
+                    <Button type="button" size="sm" onClick={applyAll} disabled={applying}>
+                        <Wand2 className="size-4" />
+                        Apply to non-overridden
+                    </Button>
                 </div>
             </div>
 
-            {/* ── Needs Attention panel ────────────────────────────────────── */}
-            {!loading && attentionFiltered.length > 0 ? (
-                <div className="border border-amber-300 bg-amber-50/40 rounded-sm">
-                    {/* Collapsible header */}
-                    <button
-                        type="button"
-                        onClick={() => setShowAttentionPanel((v) => !v)}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-amber-900 hover:bg-amber-100/60 transition-colors"
-                    >
-                        {showAttentionPanel
-                            ? <ChevronDown className="size-4 shrink-0" aria-hidden />
-                            : <ChevronRight className="size-4 shrink-0" aria-hidden />
-                        }
-                        <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
-                        Needs Attention — {attentionFiltered.length} item{attentionFiltered.length !== 1 ? "s" : ""}
-                        {criticalCount > 0 ? (
-                            <span className="ml-2 inline-flex items-center gap-1 text-red-700 font-semibold">
-                                <AlertCircle className="size-3.5" aria-hidden />
-                                {criticalCount} blocked (no cost)
-                            </span>
-                        ) : null}
-                        <span className="ml-auto text-xs text-amber-700 font-normal">
-                            Fill in the missing fields below, then Save — the row will move to the main table.
-                        </span>
-                    </button>
-
-                    {showAttentionPanel ? (() => {
-                        const vi     = attentionVirtualizer.getVirtualItems();
-                        const total  = attentionVirtualizer.getTotalSize();
-                        const padTop = vi.length > 0 ? vi[0].start : 0;
-                        const padBot = vi.length > 0 ? total - vi[vi.length - 1].end : 0;
-                        return (
-                            <div
-                                ref={attentionParentRef}
-                                className="max-h-[40vh] overflow-auto border-t border-amber-200"
-                            >
-                                <Table>
-                                    <TableHeader className="sticky top-0 z-10 bg-amber-50">
-                                        <TableColumns showAlertCol />
-                                    </TableHeader>
-                                    <TableBody>
-                                        {attentionFiltered.length === 0 ? (
-                                            <TableEmptyRow colSpan={10} message="No items match filters." />
-                                        ) : (
-                                            <>
-                                                {padTop > 0 ? <tr aria-hidden><td colSpan={10} style={{ height: `${padTop}px` }} /></tr> : null}
-                                                {vi.map((v) => renderItemRow(
-                                                    attentionFiltered[v.index],
-                                                    v.index,
-                                                    attentionVirtualizer.measureElement,
-                                                    true,
-                                                ))}
-                                                {padBot > 0 ? <tr aria-hidden><td colSpan={10} style={{ height: `${padBot}px` }} /></tr> : null}
-                                            </>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        );
-                    })() : null}
+            {/* ── Filter card (voucher-register style: labels above) ────── */}
+            <div className="flex flex-wrap items-end gap-3 rounded-sm border border-border bg-card p-3">
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Search</label>
+                    <Input
+                        placeholder="Name / SKU / brand…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-8 w-56 text-xs"
+                    />
                 </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Category</label>
+                    <Select value={filterCategory} onValueChange={setFilterCategory}>
+                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All categories</SelectItem>
+                            {uniqueCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Brand</label>
+                    <Select value={filterBrand} onValueChange={setFilterBrand}>
+                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Brand" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All brands</SelectItem>
+                            {uniqueBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Group</label>
+                    <Select value={filterGroup} onValueChange={setFilterGroup}>
+                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Group" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All groups</SelectItem>
+                            {uniqueGroups.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Cost method</label>
+                    <Select value={filterMethod} onValueChange={setFilterMethod}>
+                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Method" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All methods</SelectItem>
+                            {Object.entries(COST_METHOD_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Strategy</label>
+                    <Select value={filterStrategy} onValueChange={setFilterStrategy}>
+                        <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Strategy" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">All strategies</SelectItem>
+                            {uniqueStrategies.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none h-8 text-xs">
+                    <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
+                    Hide empty
+                </label>
+                {hasActiveFilter ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-8">
+                        <X className="size-3.5" />
+                        Clear
+                    </Button>
+                ) : null}
+            </div>
+
+            {/* ── Needs Attention banner (no expand — link to dedicated page) */}
+            {!loading && attentionFiltered.length > 0 ? (
+                <Link
+                    href="/office/pricing-strategy/needs-attention"
+                    className="flex items-center gap-2 rounded-sm border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100/60 transition-colors dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+                >
+                    <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
+                    <span className="font-medium">
+                        Needs Attention — {attentionFiltered.length} item{attentionFiltered.length !== 1 ? "s" : ""}
+                    </span>
+                    {criticalCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400 font-semibold">
+                            <AlertCircle className="size-3.5" aria-hidden />
+                            {criticalCount} blocked (no cost)
+                        </span>
+                    ) : null}
+                    <span className="ml-auto inline-flex items-center gap-1 text-xs font-normal">
+                        Fix on Needs Attention page
+                        <ArrowRight className="size-3.5" aria-hidden />
+                    </span>
+                </Link>
             ) : null}
 
-            {/* ── Main clean table ─────────────────────────────────────────── */}
-            <div ref={normalParentRef} className="max-h-[70vh] overflow-auto border border-border">
+            {/* ── Main table (page-scrolled, window-virtualized) ─────────── */}
+            <div id="pricing-items-table" ref={tableContainerRef} className="rounded-sm border border-border bg-card overflow-hidden">
                 <Table>
-                    <TableHeader className="sticky top-0 z-10 bg-background">
-                        <TableColumns showAlertCol={false} />
+                    <TableHeader className="bg-muted/40 sticky top-0 z-10">
+                        <TableColumns />
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableLoadingRow colSpan={9} />
+                            <TableLoadingRow colSpan={10} />
                         ) : normalFiltered.length === 0 ? (
-                            <TableEmptyRow colSpan={9} message={
+                            <TableEmptyRow colSpan={10} message={
                                 items.length > 0 && attentionFiltered.length === items.length
-                                    ? "All products need attention — see the panel above."
+                                    ? "All products need attention — see the banner above."
                                     : "No products match."
                             } />
                         ) : (() => {
-                            const vi     = normalVirtualizer.getVirtualItems();
-                            const total  = normalVirtualizer.getTotalSize();
-                            const padTop = vi.length > 0 ? vi[0].start : 0;
-                            const padBot = vi.length > 0 ? total - vi[vi.length - 1].end : 0;
+                            const vi    = normalVirtualizer.getVirtualItems();
+                            const total = normalVirtualizer.getTotalSize();
+                            const padTop = vi.length > 0 ? vi[0].start - tableOffsetInScroll : 0;
+                            const padBot = vi.length > 0 ? (total + tableOffsetInScroll) - vi[vi.length - 1].end : 0;
                             return (
                                 <>
-                                    {padTop > 0 ? <tr aria-hidden><td colSpan={9} style={{ height: `${padTop}px` }} /></tr> : null}
-                                    {vi.map((v) => renderItemRow(
-                                        normalFiltered[v.index],
-                                        v.index,
-                                        normalVirtualizer.measureElement,
-                                        false,
-                                    ))}
-                                    {padBot > 0 ? <tr aria-hidden><td colSpan={9} style={{ height: `${padBot}px` }} /></tr> : null}
+                                    {padTop > 0 ? <tr aria-hidden><td colSpan={10} style={{ height: `${padTop}px` }} /></tr> : null}
+                                    {vi.map((v) => renderItemRow(normalFiltered[v.index], v.index))}
+                                    {padBot > 0 ? <tr aria-hidden><td colSpan={10} style={{ height: `${padBot}px` }} /></tr> : null}
                                 </>
                             );
                         })()}
@@ -803,14 +731,11 @@ export default function PricingItemsPage() {
                 </Table>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-                <strong>Cost (₹)</strong> writes to InvProduct.costPaise — the last-purchase-cost snapshot.
-                The resolver uses it directly for LAST_PURCHASE_COST and as a fallback for every other method
-                when no purchase history exists. <em>Resolves to</em> shows the value actually fed into the formula.{" "}
-                <strong>Computed</strong> = (cost + strategy flat) × (1 + markup%), rounded, capped at MRP.{" "}
-                <strong>Manual price</strong> sets pricePaise directly and locks the row — Apply will skip it.
-                Items missing cost, MRP, or a saved price are held in the <em>Needs Attention</em> panel above
-                until those fields are filled in and saved.
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <strong>Cost</strong> is resolved per the row&apos;s cost method (opening + purchases) — read-only here; manual entry lives on the <em>Needs Attention</em> page.{" "}
+                <strong>Computed</strong> = (cost + flat) × (1 + markup%), rounded, capped at MRP.{" "}
+                <strong>Profit</strong> = price − cost (both excl-GST, so tax-adjusted).{" "}
+                <strong>Manual price</strong> sets <code>pricePaise</code> directly and locks the row.
             </p>
         </div>
     );

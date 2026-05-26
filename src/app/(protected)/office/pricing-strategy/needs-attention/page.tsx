@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -12,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+
+const ROW_GRID = "grid gap-3 items-center grid-cols-[minmax(180px,1fr)_84px_84px_84px_72px]";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -61,8 +63,7 @@ type RowEdit = {
     /** Cost – stored as excl paise; both fields kept in sync. */
     costExcl: string;
     costIncl: string;
-    /** MRP – stored as incl paise; both fields kept in sync. */
-    mrpExcl:  string;
+    /** MRP – stored as incl paise (Indian sticker price). */
     mrpIncl:  string;
 };
 
@@ -78,14 +79,12 @@ function emptyEdit(item: PricingItem): RowEdit {
     }
 
     // MRP: mrpPaise is incl paise
-    let mrpExcl = "";
     let mrpIncl = "";
     if (item.mrpPaise != null && item.mrpPaise > 0) {
         mrpIncl = (item.mrpPaise / 100).toFixed(2);
-        mrpExcl = inclToExcl(mrpIncl, gst);
     }
 
-    return { costExcl, costIncl, mrpExcl, mrpIncl };
+    return { costExcl, costIncl, mrpIncl };
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
@@ -100,6 +99,14 @@ export default function NeedsAttentionPage() {
     const [edits,    setEdits]    = useState<Record<number, RowEdit>>({});
     const [savingId, setSavingId] = useState<number | null>(null);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+    const [editProductId, setEditProductId] = useState<number | null>(null);
+    const [dialogOpen,    setDialogOpen]    = useState(false);
+
+    const openEdit = (id: number) => {
+        setEditProductId(id);
+        setDialogOpen(true);
+    };
 
     const load = () => {
         setLoading(true);
@@ -162,11 +169,8 @@ export default function NeedsAttentionPage() {
     const onCostInclChange = (item: PricingItem, val: string) =>
         setEdit(item, { costIncl: val, costExcl: inclToExcl(val, item.gstRatePct) });
 
-    const onMrpExclChange = (item: PricingItem, val: string) =>
-        setEdit(item, { mrpExcl: val, mrpIncl: exclToIncl(val, item.gstRatePct) });
-
     const onMrpInclChange = (item: PricingItem, val: string) =>
-        setEdit(item, { mrpIncl: val, mrpExcl: inclToExcl(val, item.gstRatePct) });
+        setEdit(item, { mrpIncl: val });
 
     function isDirty(item: PricingItem): boolean {
         const e    = editFor(item);
@@ -183,8 +187,11 @@ export default function NeedsAttentionPage() {
 
         if (e.costExcl !== base.costExcl && e.costExcl.trim() !== "") {
             const v = parseFloat(e.costExcl);
-            if (!isFinite(v) || v < 0) return toast.error("Invalid cost");
-            payload.costPaise = Math.round(v * 100);
+            if (!isFinite(v) || v < 0) return toast.error("Invalid opening rate");
+            // Lands on InvProduct.openingRate (Tally-style opening cost) and
+            // mirrors into costPaise on the server side so the cost resolver
+            // picks it up immediately.
+            payload.openingRatePaise = Math.round(v * 100);
         }
         if (e.mrpIncl !== base.mrpIncl && e.mrpIncl.trim() !== "") {
             const v = parseFloat(e.mrpIncl);
@@ -321,136 +328,128 @@ export default function NeedsAttentionPage() {
 
                                 {/* product rows */}
                                 {isOpen && (
-                                    <div className="divide-y divide-border">
-                                        {groupItems.map((item) => {
-                                            const att   = attention(item);
-                                            const e     = editFor(item);
-                                            const dirty = isDirty(item);
-                                            const gst   = item.gstRatePct;
+                                    <div>
+                                        <div className={`${ROW_GRID} bg-muted/30 px-3 py-1.5 border-b border-border text-[10px] font-medium uppercase tracking-wide text-muted-foreground`}>
+                                            <div>Product</div>
+                                            <div className="text-right" title="Tally-style opening unit cost (excl-GST). Lands on InvProduct.openingRate.">Opening rate excl</div>
+                                            <div className="text-right" title="Opening rate including GST — derived from excl × (1 + GST%).">Opening rate incl</div>
+                                            <div className="text-right">MRP</div>
+                                            <div className="text-right">{/* actions */}</div>
+                                        </div>
+                                        <div className="divide-y divide-border">
+                                            {groupItems.map((item) => {
+                                                const att   = attention(item);
+                                                const e     = editFor(item);
+                                                const dirty = isDirty(item);
+                                                const gst   = item.gstRatePct;
+                                                const savedCostExcl = item.resolvedCostPaise != null ? fmt(item.resolvedCostPaise) : null;
+                                                const savedCostIncl = item.resolvedCostPaise != null ? fmt(item.resolvedCostPaise, gst) : null;
+                                                const savedMrpIncl  = item.mrpPaise != null && item.mrpPaise > 0 ? fmt(item.mrpPaise) : null;
 
-                                            return (
-                                                <div
-                                                    key={item.id}
-                                                    className={`px-3 py-2.5 flex flex-wrap items-start gap-3 ${att.includes("cost") ? "bg-red-50/30" : ""}`}
-                                                >
-                                                    {/* product info */}
-                                                    <div className="flex-1 min-w-[180px]">
-                                                        <div className="text-sm font-medium leading-tight">{item.name}</div>
-                                                        <div className="text-xs text-muted-foreground mt-0.5">
-                                                            {item.sku}
-                                                            {item.brandName ? ` · ${item.brandName}` : ""}
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className={`${ROW_GRID} px-3 py-2 ${att.includes("cost") ? "bg-red-50/40" : ""}`}
+                                                    >
+                                                        {/* product */}
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-medium leading-tight">{item.name}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5 font-mono">{item.sku}</div>
+                                                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                                                                {item.brandName && (
+                                                                    <span className="text-[10px] text-muted-foreground">{item.brandName}</span>
+                                                                )}
+                                                                {gst > 0 && (
+                                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-normal">
+                                                                        GST {gst}%
+                                                                    </Badge>
+                                                                )}
+                                                                {att.includes("cost") && (
+                                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">no cost</Badge>
+                                                                )}
+                                                                {att.includes("mrp") && (
+                                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-700 border-amber-400 bg-amber-50">
+                                                                        no MRP
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div className="flex flex-wrap gap-1 mt-1">
-                                                            {att.includes("cost") && (
-                                                                <span className="text-[10px] font-medium text-red-700 bg-red-100 px-1.5 py-0.5 rounded">
-                                                                    no cost
-                                                                </span>
+
+                                                        {/* cost excl */}
+                                                        <div>
+                                                            <Input
+                                                                inputMode="decimal"
+                                                                placeholder={savedCostExcl ?? "—"}
+                                                                value={e.costExcl}
+                                                                onChange={(ev) => onCostExclChange(item, ev.target.value)}
+                                                                className="h-8 w-full text-right text-sm font-mono"
+                                                            />
+                                                            {savedCostExcl && (
+                                                                <div className="text-[10px] text-muted-foreground text-right mt-0.5 truncate">
+                                                                    {savedCostExcl}
+                                                                </div>
                                                             )}
-                                                            {att.includes("mrp") && (
-                                                                <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                                                                    no MRP
-                                                                </span>
+                                                        </div>
+
+                                                        {/* cost incl */}
+                                                        <div>
+                                                            <Input
+                                                                inputMode="decimal"
+                                                                placeholder={savedCostIncl ?? "—"}
+                                                                value={e.costIncl}
+                                                                onChange={(ev) => onCostInclChange(item, ev.target.value)}
+                                                                className="h-8 w-full text-right text-sm font-mono"
+                                                            />
+                                                            {savedCostIncl && (
+                                                                <div className="text-[10px] text-muted-foreground text-right mt-0.5 truncate">
+                                                                    {savedCostIncl}
+                                                                </div>
                                                             )}
-                                                            {gst > 0 && (
-                                                                <span className="text-[10px] text-muted-foreground">
-                                                                    GST {gst}%
-                                                                </span>
+                                                        </div>
+
+                                                        {/* mrp */}
+                                                        <div>
+                                                            <Input
+                                                                inputMode="decimal"
+                                                                placeholder={savedMrpIncl ?? "—"}
+                                                                value={e.mrpIncl}
+                                                                onChange={(ev) => onMrpInclChange(item, ev.target.value)}
+                                                                className="h-8 w-full text-right text-sm font-mono"
+                                                            />
+                                                            {savedMrpIncl && (
+                                                                <div className="text-[10px] text-muted-foreground text-right mt-0.5 truncate">
+                                                                    {savedMrpIncl}
+                                                                </div>
                                                             )}
                                                         </div>
-                                                    </div>
 
-                                                    {/* cost inputs: excl ↔ incl */}
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
-                                                            Cost{gst > 0 ? ` (GST ${gst}%)` : ""}
-                                                        </span>
-                                                        <div className="flex items-end gap-1">
-                                                            <div className="flex flex-col gap-0.5 w-[88px]">
-                                                                <span className="text-[10px] text-muted-foreground">Excl</span>
-                                                                <Input
-                                                                    inputMode="decimal"
-                                                                    placeholder="₹ excl"
-                                                                    value={e.costExcl}
-                                                                    onChange={(ev) => onCostExclChange(item, ev.target.value)}
-                                                                    className="h-8 text-right text-sm"
-                                                                />
-                                                            </div>
-                                                            <div className="flex flex-col gap-0.5 w-[88px]">
-                                                                <span className="text-[10px] text-muted-foreground">Incl</span>
-                                                                <Input
-                                                                    inputMode="decimal"
-                                                                    placeholder="₹ incl"
-                                                                    value={e.costIncl}
-                                                                    onChange={(ev) => onCostInclChange(item, ev.target.value)}
-                                                                    className="h-8 text-right text-sm"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        {item.resolvedCostPaise != null && (
-                                                            <span className="text-[10px] text-muted-foreground">
-                                                                {fmt(item.resolvedCostPaise)} excl / {fmt(item.resolvedCostPaise, gst)} incl saved
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* MRP inputs: excl ↔ incl */}
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
-                                                            MRP{gst > 0 ? ` (GST ${gst}%)` : ""}
-                                                        </span>
-                                                        <div className="flex items-end gap-1">
-                                                            <div className="flex flex-col gap-0.5 w-[88px]">
-                                                                <span className="text-[10px] text-muted-foreground">Excl</span>
-                                                                <Input
-                                                                    inputMode="decimal"
-                                                                    placeholder="₹ excl"
-                                                                    value={e.mrpExcl}
-                                                                    onChange={(ev) => onMrpExclChange(item, ev.target.value)}
-                                                                    className="h-8 text-right text-sm"
-                                                                />
-                                                            </div>
-                                                            <div className="flex flex-col gap-0.5 w-[88px]">
-                                                                <span className="text-[10px] text-muted-foreground">Incl</span>
-                                                                <Input
-                                                                    inputMode="decimal"
-                                                                    placeholder="₹ incl"
-                                                                    value={e.mrpIncl}
-                                                                    onChange={(ev) => onMrpInclChange(item, ev.target.value)}
-                                                                    className="h-8 text-right text-sm"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        {item.mrpPaise != null && item.mrpPaise > 0 && (
-                                                            <span className="text-[10px] text-muted-foreground">
-                                                                {fmt(item.mrpPaise / (1 + gst / 100))} excl / {fmt(item.mrpPaise)} incl saved
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* actions */}
-                                                    <div className="flex items-end gap-1.5 pb-0.5 self-end">
-                                                        {dirty && (
+                                                        {/* actions */}
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            {dirty && (
+                                                                <Button
+                                                                    size="icon-sm"
+                                                                    aria-label="Save"
+                                                                    onClick={() => saveRow(item)}
+                                                                    disabled={savingId === item.id}
+                                                                >
+                                                                    <Save className="size-4" />
+                                                                </Button>
+                                                            )}
                                                             <Button
+                                                                type="button"
+                                                                variant="outline"
                                                                 size="icon-sm"
-                                                                aria-label="Save"
-                                                                onClick={() => saveRow(item)}
-                                                                disabled={savingId === item.id}
+                                                                aria-label="Edit product"
+                                                                title="Edit product"
+                                                                onClick={() => openEdit(item.id)}
                                                             >
-                                                                <Save className="size-4" />
+                                                                <Pencil className="size-4" />
                                                             </Button>
-                                                        )}
-                                                        <Link
-                                                            href={`/office/inventory/products?edit=${item.id}`}
-                                                            title="Edit product"
-                                                            aria-label="Edit product"
-                                                            className="inline-flex items-center justify-center size-7 border border-border rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                                        >
-                                                            <Pencil className="size-4" />
-                                                        </Link>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -462,11 +461,18 @@ export default function NeedsAttentionPage() {
             {/* legend */}
             {!loading && filtered.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                    <strong>Cost</strong> — enter excl or incl; the other auto-fills. Stored net of tax.{" "}
-                    <strong>MRP</strong> — sticker price (incl GST per Indian law); enter either side.{" "}
+                    <strong>Opening rate</strong> — enter excl or incl; the other auto-fills. Saves to <code>InvProduct.openingRate</code> (Tally-style opening) and mirrors into the cost cache so the resolver picks it up.{" "}
+                    <strong>MRP</strong> — sticker price (incl GST per Indian law).{" "}
                     <strong>Pencil</strong> — open the full product edit form.
                 </p>
             )}
+
+            <InvProductDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                editId={editProductId}
+                onSaved={load}
+            />
         </div>
     );
 }
