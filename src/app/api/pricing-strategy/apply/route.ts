@@ -5,7 +5,8 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { pricingApplySchema } from "@/shared/lib/schemas/pricingSchemas";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
-import { pickStrategy, applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
+import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
+import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
 
 interface ApplyResult {
     updated: number;
@@ -35,12 +36,19 @@ export async function POST(req: Request) {
                 categoryId:    true,
                 groupId:       true,
                 brandId:       true,
+                attrsJson:     true,
                 costMethod:    true,
                 marginPercent: true,
                 priceOverridden: true,
             },
         });
         const strategies = await prisma.pricingStrategy.findMany({ where: { isActive: true } });
+
+        // Build match context once; query lastSaleAgeDays only when needed.
+        const needsStaleness = strategies.some((s) => s.staleAfterDays != null);
+        const matchCtx = await buildMatchContext({
+            productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
+        });
 
         // Pre-compute matched strategy + effective cost method per product
         // (product.costMethod ?? strategy.costMethod ?? hard fallback).
@@ -49,13 +57,16 @@ export async function POST(req: Request) {
         for (const p of products) {
             const s = pickStrategy(
                 {
-                    id:            p.id,
-                    categoryId:    p.categoryId,
-                    groupId:       p.groupId,
-                    brandId:       p.brandId,
-                    marginPercent: p.marginPercent,
+                    id:         p.id,
+                    brandId:    p.brandId,
+                    groupId:    p.groupId,
+                    categoryId: p.categoryId,
+                    costPaise:  p.costPaise,
+                    stock:      p.stock,
+                    attrsJson:  (p.attrsJson ?? null) as Record<string, unknown> | null,
                 },
                 strategies,
+                matchCtx,
             );
             const effective: EffectiveMethod =
                 p.costMethod ?? s?.costMethod ?? "WEIGHTED_AVG_COST";

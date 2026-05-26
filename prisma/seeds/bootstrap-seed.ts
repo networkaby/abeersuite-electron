@@ -1258,25 +1258,28 @@ async function main() {
     console.log(`      ✓ Re-aligned gstStateCode on ${fixedTotal} row(s) where it disagreed with GSTIN\n`);
 
     // ── Section 16: PricingStrategy default ──────────────────────────────────
-    // One ORG-scope strategy with 25% markup so the pricing-strategy module
-    // resolves to a sensible default for every product out of the box.
+    // One strategy with no conditions — matches every product as the fallback.
+    // Users add more specific strategies later (brand/group/category/attr/range
+    // filters) and they win by `priority`.
     // Idempotent via findFirst-then-upsert (no @unique on name lets users
-    // add multiple ORG strategies later and tier them by priority).
-    console.log("[16/16] Pricing strategy default (ORG, +25% markup)");
+    // add multiple all-match strategies later and tier them by priority).
+    console.log("[16/16] Pricing strategy default (all-match, +25% markup)");
     const defaultStrategy = await prisma.pricingStrategy.findFirst({
-        where: { scope: "ORG", scopeId: null, name: "Default ORG markup" },
+        where: { name: "Default ORG markup" },
     });
     if (!defaultStrategy) {
         await prisma.pricingStrategy.create({
             data: {
                 name: "Default ORG markup",
-                scope: "ORG",
-                scopeId: null,
-                markupPercent: "25.00",
+                brandIds:        [],
+                groupIds:        [],
+                categoryIds:     [],
+                attrFilters:     undefined,
+                markupPercent:   "25.00",
                 markupFlatPaise: 0,
-                roundingPaise: 0,
-                priority: 0,
-                isActive: true,
+                roundingPaise:   0,
+                priority:        0,
+                isActive:        true,
             },
         });
         console.log(`      ✓ Created "Default ORG markup" (+25%)\n`);

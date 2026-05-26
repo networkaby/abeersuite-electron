@@ -583,39 +583,54 @@ model InvVoucherTender {
 
 // ── Pricing strategy (cost + margin → sale price) ────────────────────────────
 //
-// Margin rules layered by scope. Resolution walks BRAND → GROUP → CATEGORY →
-// ORG for a given InvProduct; within the same scope, the highest `priority`
-// wins. The matched strategy supplies markupPercent + markupFlatPaise +
-// roundingPaise; the product's InvProduct.marginPercent (if not null)
-// overrides markupPercent at the very top of the chain.
+// Multi-condition margin rules. A strategy AND-matches every condition that
+// is specified; an empty conditions set matches all products (the ORG-default).
+// Among strategies that match a given product, the highest `priority` wins
+// (ties broken by createdAt ASC). A future conflict report flags rows where
+// multiple equal-priority strategies match.
 
 model PricingStrategy {
-  id              Int          @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   name            String
-  scope           PricingScope
-  /// FK semantics depend on scope: CATEGORY → InvCategory.id, GROUP →
-  /// InvProductGroup.id, BRAND → InvBrand.id, ORG → null. App layer enforces
-  /// the FK; no relation is declared so deletes of the parent master don't
-  /// cascade-delete pricing config.
-  scopeId         Int?
+  // ── Taxonomy filters ───────────────────────────────────────────────────────
+  // Empty array = "any" (filter not specified). Non-empty = product must
+  // match at least one. For groupIds / categoryIds, the matcher also walks
+  // descendants of each selected id, so picking "Networking" matches every
+  // sub-group too.
+  brandIds        Int[]    @default([])
+  groupIds        Int[]    @default([])
+  categoryIds    Int[]    @default([])
+  /// Attribute-value spec evaluated against InvProduct.attrsJson. Shape:
+  ///   { "<attrKey>": { op: "eq"|"in"|"gte"|"lte"|"between", value: ... } }
+  /// null = no attribute filter.
+  attrFilters     Json?
+  // ── Range filters (null on either end = unbounded) ─────────────────────────
+  minCostPaise    Int?
+  maxCostPaise    Int?
+  minStock        Int?
+  maxStock        Int?
+  /// "No sale in N days" — matches when (today - lastSaleDate) ≥ N OR the
+  /// product has never been sold. null = no staleness filter.
+  staleAfterDays  Int?
+  // ── Markup formula ─────────────────────────────────────────────────────────
   /// Margin in percent (e.g. 25.00 = +25%).
-  markupPercent   Decimal      @default(0) @db.Decimal(6, 2)
+  markupPercent   Decimal  @default(0) @db.Decimal(6, 2)
   /// Flat amount in paise added to cost before the percent markup.
-  markupFlatPaise Int          @default(0)
+  markupFlatPaise Int      @default(0)
   /// Round resulting sell price to nearest N paise (0 = exact, 100 = ₹1, 1000 = ₹10).
-  roundingPaise   Int          @default(0)
-  /// Tiebreaker within the same scope — higher wins.
-  priority        Int          @default(0)
+  roundingPaise   Int      @default(0)
+  /// Higher wins among strategies that match the same product.
+  priority        Int      @default(0)
   /// Default cost-basis method for products matched by this strategy.
   /// Null = no strategy-level default; products use their own
   /// InvProduct.costMethod (or fall through to WEIGHTED_AVG_COST).
   /// Per-item costMethod always wins when set — strategy's value only
   /// applies to products whose InvProduct.costMethod is null.
   costMethod      CostMethod?
-  isActive        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([scope, scopeId, isActive])
+  @@index([isActive, priority])
   @@map("pricing_strategies")
 }

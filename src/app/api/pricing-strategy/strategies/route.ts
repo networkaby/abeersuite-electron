@@ -10,7 +10,7 @@ export async function GET() {
     if (response) return response;
     try {
         const rows = await prisma.pricingStrategy.findMany({
-            orderBy: [{ scope: "asc" }, { priority: "desc" }, { id: "asc" }],
+            orderBy: [{ priority: "desc" }, { id: "asc" }],
         });
         return NextResponse.json(rows);
     } catch (e) {
@@ -27,8 +27,15 @@ export async function POST(req: Request) {
         const row = await prisma.pricingStrategy.create({
             data: {
                 name:            data.name,
-                scope:           data.scope,
-                scopeId:         data.scopeId,
+                brandIds:        data.brandIds,
+                groupIds:        data.groupIds,
+                categoryIds:     data.categoryIds,
+                attrFilters:     data.attrFilters ?? undefined,
+                minCostPaise:    data.minCostPaise ?? null,
+                maxCostPaise:    data.maxCostPaise ?? null,
+                minStock:        data.minStock ?? null,
+                maxStock:        data.maxStock ?? null,
+                staleAfterDays:  data.staleAfterDays ?? null,
                 markupPercent:   data.markupPercent.toString(),
                 markupFlatPaise: data.markupFlatPaise,
                 roundingPaise:   data.roundingPaise,

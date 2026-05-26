@@ -4,7 +4,8 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
-import { pickStrategy, applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
+import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
+import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 
 export interface PricingItem {
@@ -78,6 +79,7 @@ export async function GET(req: Request) {
                     marginPercent:    true,
                     priceOverridden:  true,
                     stdCostPaise:     true,
+                    attrsJson:        true,
                     category: { select: { name: true } },
                     group:    { select: { name: true } },
                     brand:    { select: { name: true } },
@@ -90,6 +92,14 @@ export async function GET(req: Request) {
         const taxResult = await resolveProductTaxBatch({});
         const taxByProduct = taxResult.products;
 
+        // Build match context — only query lastSaleAgeDays when at least one
+        // active strategy uses staleAfterDays, to skip the ledger groupBy in
+        // the common case.
+        const needsStaleness = strategies.some((s) => s.staleAfterDays != null);
+        const matchCtx = await buildMatchContext({
+            productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
+        });
+
         // Effective cost method per product: product.costMethod ?? matched
         // strategy's costMethod ?? hard fallback. Precompute so we can both
         // group-batch the resolver and surface the source on the response.
@@ -99,13 +109,16 @@ export async function GET(req: Request) {
         for (const p of products) {
             const matched = pickStrategy(
                 {
-                    id:            p.id,
-                    categoryId:    p.categoryId,
-                    groupId:       p.groupId,
-                    brandId:       p.brandId,
-                    marginPercent: p.marginPercent,
+                    id:         p.id,
+                    brandId:    p.brandId,
+                    groupId:    p.groupId,
+                    categoryId: p.categoryId,
+                    costPaise:  p.costPaise,
+                    stock:      p.stock,
+                    attrsJson:  (p.attrsJson ?? null) as Record<string, unknown> | null,
                 },
                 strategies,
+                matchCtx,
             );
             const effective: EffectiveMethod =
                 p.costMethod ?? matched?.costMethod ?? "WEIGHTED_AVG_COST";

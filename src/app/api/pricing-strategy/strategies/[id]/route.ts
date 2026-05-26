@@ -33,33 +33,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, pricingStrategyUpdateSchema);
         if (error) return error;
 
-        // Cross-field validation after merging with existing row: a patch that
-        // changes scope without also setting scopeId must be checked against
-        // the merged result, not the partial payload.
         const existing = await prisma.pricingStrategy.findUnique({ where: { id } });
         if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-        const mergedScope   = data.scope   ?? existing.scope;
-        const mergedScopeId = data.scopeId !== undefined ? data.scopeId : existing.scopeId;
-        if (mergedScope === "ORG" && mergedScopeId != null) {
-            return NextResponse.json(
-                { error: "ORG scope must not have a scopeId" },
-                { status: 400 },
-            );
-        }
-        if (mergedScope !== "ORG" && mergedScopeId == null) {
-            return NextResponse.json(
-                { error: `${mergedScope} scope requires a scopeId` },
-                { status: 400 },
-            );
-        }
 
         const row = await prisma.pricingStrategy.update({
             where: { id },
             data: {
                 ...(data.name            !== undefined ? { name:            data.name } : {}),
-                ...(data.scope           !== undefined ? { scope:           data.scope } : {}),
-                ...(data.scopeId         !== undefined ? { scopeId:         data.scopeId } : {}),
+                ...(data.brandIds        !== undefined ? { brandIds:        data.brandIds } : {}),
+                ...(data.groupIds        !== undefined ? { groupIds:        data.groupIds } : {}),
+                ...(data.categoryIds     !== undefined ? { categoryIds:     data.categoryIds } : {}),
+                ...(data.attrFilters     !== undefined ? { attrFilters:     data.attrFilters ?? undefined } : {}),
+                ...(data.minCostPaise    !== undefined ? { minCostPaise:    data.minCostPaise } : {}),
+                ...(data.maxCostPaise    !== undefined ? { maxCostPaise:    data.maxCostPaise } : {}),
+                ...(data.minStock        !== undefined ? { minStock:        data.minStock } : {}),
+                ...(data.maxStock        !== undefined ? { maxStock:        data.maxStock } : {}),
+                ...(data.staleAfterDays  !== undefined ? { staleAfterDays:  data.staleAfterDays } : {}),
                 ...(data.markupPercent   !== undefined ? { markupPercent:   data.markupPercent.toString() } : {}),
                 ...(data.markupFlatPaise !== undefined ? { markupFlatPaise: data.markupFlatPaise } : {}),
                 ...(data.roundingPaise   !== undefined ? { roundingPaise:   data.roundingPaise } : {}),

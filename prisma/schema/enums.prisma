@@ -175,15 +175,10 @@ enum CostMethod {
   STD_COST
 }
 
-// Scope of a PricingStrategy row. ORG = default for the whole company;
-// CATEGORY / GROUP / BRAND = scoped to that master record via scopeId.
-// Resolution walks BRAND → GROUP → CATEGORY → ORG with priority as tiebreaker.
-enum PricingScope {
-  ORG
-  CATEGORY
-  GROUP
-  BRAND
-}
+// PricingScope removed 2026-05-26 — PricingStrategy now uses multi-condition
+// matching (brandIds[], groupIds[], categoryIds[], attrFilters, cost/stock/
+// staleness ranges) instead of a single scope dimension. See
+// prisma/schema/inventory.prisma#PricingStrategy.
 
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────
 

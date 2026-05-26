@@ -1,8 +1,5 @@
 import { z } from "zod";
 
-/** Allowed PricingScope values — mirrors prisma enum PricingScope. */
-export const pricingScopeEnum = z.enum(["ORG", "CATEGORY", "GROUP", "BRAND"]);
-
 /** Allowed CostMethod values — mirrors prisma enum CostMethod. */
 export const costMethodEnum = z.enum([
     "WEIGHTED_AVG_COST",
@@ -12,10 +9,50 @@ export const costMethodEnum = z.enum([
     "STD_COST",
 ]);
 
+// ── Attribute-filter spec ─────────────────────────────────────────────────
+// A strategy can gate matches on InvProduct.attrsJson values. Shape:
+//   { "<attrKey>": { op: "eq", value: "Black" } }
+//   { "<attrKey>": { op: "in", value: ["Black", "White"] } }
+//   { "<attrKey>": { op: "gte", value: 100 } }
+//   { "<attrKey>": { op: "lte", value: 500 } }
+//   { "<attrKey>": { op: "between", value: [100, 500] } }
+//
+// Multiple keys AND together. Missing keys on the product fail the match
+// (the attribute filter is an explicit positive assertion).
+export const attrFilterOpEnum = z.enum(["eq", "in", "gte", "lte", "between"]);
+
+const attrFilterValueSchema = z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.array(z.union([z.string(), z.number()])),
+]);
+
+export const attrFilterEntrySchema = z.object({
+    op:    attrFilterOpEnum,
+    value: attrFilterValueSchema,
+});
+
+export const attrFiltersSchema = z.record(z.string(), attrFilterEntrySchema);
+
+export type AttrFilterEntry = z.infer<typeof attrFilterEntrySchema>;
+export type AttrFilters     = z.infer<typeof attrFiltersSchema>;
+
+// ── Strategy create/update ────────────────────────────────────────────────
+
 const baseStrategyShape = z.object({
     name:            z.string().trim().min(1).max(120),
-    scope:           pricingScopeEnum,
-    scopeId:         z.number().int().positive().nullable(),
+    // Taxonomy multi-match — empty = "any". For group/category, the matcher
+    // walks descendants so the user only picks roots.
+    brandIds:        z.array(z.number().int().positive()).default([]),
+    groupIds:        z.array(z.number().int().positive()).default([]),
+    categoryIds:     z.array(z.number().int().positive()).default([]),
+    attrFilters:     attrFiltersSchema.nullable().optional(),
+    minCostPaise:    z.number().int().min(0).nullable().optional(),
+    maxCostPaise:    z.number().int().min(0).nullable().optional(),
+    minStock:        z.number().int().min(0).nullable().optional(),
+    maxStock:        z.number().int().min(0).nullable().optional(),
+    staleAfterDays:  z.number().int().min(0).nullable().optional(),
     markupPercent:   z.number().gte(-100).lte(10_000),
     markupFlatPaise: z.number().int().min(0),
     roundingPaise:   z.number().int().min(0),
@@ -25,45 +62,29 @@ const baseStrategyShape = z.object({
     isActive:        z.boolean().optional(),
 });
 
-// ORG → scopeId must be null. Other scopes → scopeId must be a positive int.
-function refineScopeId<T extends { scope: string; scopeId: number | null | undefined }>(
-    value: T,
+// Cross-field: max ≥ min on every range.
+function refineRanges(
+    value: {
+        minCostPaise?: number | null;
+        maxCostPaise?: number | null;
+        minStock?:     number | null;
+        maxStock?:     number | null;
+    },
     ctx: z.RefinementCtx,
 ): void {
-    if (value.scope === "ORG") {
-        if (value.scopeId != null) {
-            ctx.addIssue({
-                code: "custom",
-                path: ["scopeId"],
-                message: "ORG scope must not have a scopeId",
-            });
-        }
-    } else {
-        if (value.scopeId == null) {
-            ctx.addIssue({
-                code: "custom",
-                path: ["scopeId"],
-                message: `${value.scope} scope requires a scopeId`,
-            });
-        }
+    if (value.minCostPaise != null && value.maxCostPaise != null && value.maxCostPaise < value.minCostPaise) {
+        ctx.addIssue({ code: "custom", path: ["maxCostPaise"], message: "maxCostPaise must be ≥ minCostPaise" });
+    }
+    if (value.minStock != null && value.maxStock != null && value.maxStock < value.minStock) {
+        ctx.addIssue({ code: "custom", path: ["maxStock"], message: "maxStock must be ≥ minStock" });
     }
 }
 
-export const pricingStrategyCreateSchema = baseStrategyShape.superRefine(refineScopeId);
+export const pricingStrategyCreateSchema = baseStrategyShape.superRefine(refineRanges);
 
 export const pricingStrategyUpdateSchema = baseStrategyShape
     .partial()
-    .superRefine((value, ctx) => {
-        // Only validate scope/scopeId pairing if BOTH are present in the patch
-        // (caller may update one without the other; the API endpoint reads the
-        // existing row and re-validates against the merged result).
-        if (value.scope !== undefined && value.scopeId !== undefined) {
-            refineScopeId(
-                { scope: value.scope, scopeId: value.scopeId },
-                ctx,
-            );
-        }
-    });
+    .superRefine(refineRanges);
 
 export type PricingStrategyCreateInput = z.infer<typeof pricingStrategyCreateSchema>;
 export type PricingStrategyUpdateInput = z.infer<typeof pricingStrategyUpdateSchema>;
