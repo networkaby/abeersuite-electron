@@ -44,6 +44,7 @@ import {
     type NamingConfigShape,
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -137,7 +138,7 @@ export default function InventoryProductsPage() {
             .get<Row[]>("/api/inventory/products")
             .then((r) => setRows(r.data))
             .catch(() => toast.error("Failed to load products"))
-    , []);
+        , []);
 
     const loadMasters = useCallback(async () => {
         try {
@@ -261,24 +262,24 @@ export default function InventoryProductsPage() {
             const dirMul = sort.dir === "asc" ? 1 : -1;
             const key = (r: Row): string | number => {
                 switch (sort.field) {
-                    case "sku":           return r.sku;
-                    case "name":          return r.name.toLowerCase();
-                    case "namePart":      return (r.namePart ?? "").toLowerCase();
-                    case "categoryName":  return r.category?.name?.toLowerCase() ?? "";
-                    case "brandName":     return r.brand?.name?.toLowerCase() ?? "";
-                    case "groupName":     return r.group?.name?.toLowerCase() ?? "";
-                    case "warrantyName":  return r.warrantyTerm?.name?.toLowerCase() ?? "";
-                    case "unitCode":      return r.unit.code;
-                    case "modelNo":       return (r.modelNo ?? "").toLowerCase();
-                    case "barcode1":      return r.barcode1 ?? "";
-                    case "stock":         return r.stock ?? -1;
-                    case "isActive":      return r.isActive ? 1 : 0;
+                    case "sku": return r.sku;
+                    case "name": return r.name.toLowerCase();
+                    case "namePart": return (r.namePart ?? "").toLowerCase();
+                    case "categoryName": return r.category?.name?.toLowerCase() ?? "";
+                    case "brandName": return r.brand?.name?.toLowerCase() ?? "";
+                    case "groupName": return r.group?.name?.toLowerCase() ?? "";
+                    case "warrantyName": return r.warrantyTerm?.name?.toLowerCase() ?? "";
+                    case "unitCode": return r.unit.code;
+                    case "modelNo": return (r.modelNo ?? "").toLowerCase();
+                    case "barcode1": return r.barcode1 ?? "";
+                    case "stock": return r.stock ?? -1;
+                    case "isActive": return r.isActive ? 1 : 0;
                 }
             };
             out = [...out].sort((a, b) => {
                 const ka = key(a), kb = key(b);
                 if (ka < kb) return -1 * dirMul;
-                if (ka > kb) return  1 * dirMul;
+                if (ka > kb) return 1 * dirMul;
                 return 0;
             });
         }
@@ -428,19 +429,19 @@ export default function InventoryProductsPage() {
         }
         const findOpt = (list: Opt[], id: number | null | undefined) =>
             id == null ? null : list.find((o) => o.id === id) ?? null;
-        const cat   = findOpt(categories,    val(r, "categoryId")     as number | null);
-        const brand = findOpt(brands,        val(r, "brandId")        as number | null);
-        const grp   = findOpt(groups,        val(r, "groupId")        as number | null);
-        const war   = findOpt(warrantyTerms, val(r, "warrantyTermId") as number | null);
-        const unit  = findOpt(units,         val(r, "unitId")         as number);
+        const cat = findOpt(categories, val(r, "categoryId") as number | null);
+        const brand = findOpt(brands, val(r, "brandId") as number | null);
+        const grp = findOpt(groups, val(r, "groupId") as number | null);
+        const war = findOpt(warrantyTerms, val(r, "warrantyTermId") as number | null);
+        const unit = findOpt(units, val(r, "unitId") as number);
         const masters: NamingMasters = {
-            brand:    brand ? { name: brand.name ?? "" } : null,
-            category: cat   ? { name: cat.name ?? "" } : null,
-            group:    grp   ? { name: grp.name ?? "" } : null,
-            warranty: war   ? { name: war.name ?? "" } : null,
-            unit:     unit  ? { code: unit.code ?? "" } : null,
-            modelNo:  (val(r, "modelNo") as string | null) || null,
-            attrs:    null,
+            brand: brand ? { name: brand.name ?? "" } : null,
+            category: cat ? { name: cat.name ?? "" } : null,
+            group: grp ? { name: grp.name ?? "" } : null,
+            warranty: war ? { name: war.name ?? "" } : null,
+            unit: unit ? { code: unit.code ?? "" } : null,
+            modelNo: (val(r, "modelNo") as string | null) || null,
+            attrs: null,
             // userPart survives every regenerate — the template inserts it
             // wherever the `userPart` token sits. Operator edits the Custom
             // column, never the auto-built portions.
@@ -457,8 +458,8 @@ export default function InventoryProductsPage() {
     const isEdit = mode === "edit";
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                         <Box className="size-5" aria-hidden />
@@ -497,7 +498,7 @@ export default function InventoryProductsPage() {
                 onSaved={loadProducts}
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-2">
                 <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
@@ -532,10 +533,10 @@ export default function InventoryProductsPage() {
                         </span>
                         <span className="h-5 w-px bg-border" aria-hidden />
                         <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("categories", "category")} />
-                        <BulkApply label="Brand"    options={brands}     field="brandId"    onApply={applyToSelected} onCreate={() => createMaster("brands", "brand")} />
-                        <BulkApply label="Group"    options={groups}     field="groupId"    onApply={applyToSelected} onCreate={() => createMaster("product-groups", "group")} />
+                        <BulkApply label="Brand" options={brands} field="brandId" onApply={applyToSelected} onCreate={() => createMaster("brands", "brand")} />
+                        <BulkApply label="Group" options={groups} field="groupId" onApply={applyToSelected} onCreate={() => createMaster("product-groups", "group")} />
                         <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty-terms", "warranty term")} />
-                        <BulkApply label="Unit"     options={units}      field="unitId"     onApply={applyToSelected} clearable={false} onCreate={() => createMaster("units", "unit")} />
+                        <BulkApply label="Unit" options={units} field="unitId" onApply={applyToSelected} clearable={false} onCreate={() => createMaster("units", "unit")} />
                         <span className="h-5 w-px bg-border" aria-hidden />
                         <button
                             type="button"
@@ -548,280 +549,283 @@ export default function InventoryProductsPage() {
                     </div>
                 </div>
             ) : null}
-
-            <div className={`overflow-x-auto border border-border ${isEdit && selected.size > 0 ? "pb-20" : ""}`}>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            {isEdit ? (
-                                <TableHead className="w-10">
-                                    <Checkbox
-                                        checked={allPageSelected}
-                                        onCheckedChange={toggleAllPage}
-                                        aria-label="Select all on page"
-                                    />
+            <ScrollArea className="min-h-0 flex-1 border border-border">
+                <div className={isEdit && selected.size > 0 ? "pb-20" : ""}>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                {isEdit ? (
+                                    <TableHead className="w-10">
+                                        <Checkbox
+                                            checked={allPageSelected}
+                                            onCheckedChange={toggleAllPage}
+                                            aria-label="Select all on page"
+                                        />
+                                    </TableHead>
+                                ) : null}
+                                <TableHead className="w-10">#</TableHead>
+                                <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead>
+                                <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead>
+                                <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead>
+                                <TableHead className="min-w-44">
+                                    <div className="flex items-center gap-1">
+                                        <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
+                                        <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                    </div>
                                 </TableHead>
-                            ) : null}
-                            <TableHead className="w-10">#</TableHead>
-                            <TableHead className="w-28"><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead>
-                            <TableHead className="min-w-64"><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead>
-                            <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead>
-                            <TableHead className="min-w-44">
-                                <div className="flex items-center gap-1">
-                                    <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
-                                    <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
-                                </div>
-                            </TableHead>
-                            <TableHead className="min-w-36">
-                                <div className="flex items-center gap-1">
-                                    <SortHead field="brandName" sort={sort} onSort={cycleSort}>Brand</SortHead>
-                                    <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
-                                </div>
-                            </TableHead>
-                            <TableHead className="min-w-36">
-                                <div className="flex items-center gap-1">
-                                    <SortHead field="groupName" sort={sort} onSort={cycleSort}>Group</SortHead>
-                                    <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
-                                </div>
-                            </TableHead>
-                            <TableHead className="min-w-36">
-                                <div className="flex items-center gap-1">
-                                    <SortHead field="warrantyName" sort={sort} onSort={cycleSort}>Warranty</SortHead>
-                                    <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
-                                </div>
-                            </TableHead>
-                            <TableHead className="w-24">
-                                <div className="flex items-center gap-1">
-                                    <SortHead field="unitCode" sort={sort} onSort={cycleSort}>Unit</SortHead>
-                                    <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
-                                </div>
-                            </TableHead>
-                            <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead>
-                            <TableHead className="min-w-36"><SortHead field="barcode1" sort={sort} onSort={cycleSort}>Barcode</SortHead></TableHead>
-                            <TableHead className="w-20 text-right"><SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead></TableHead>
-                            <TableHead className="w-20 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                    <SortHead field="isActive" sort={sort} onSort={cycleSort}>Active</SortHead>
-                                    <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField />
-                                </div>
-                            </TableHead>
-                            {!isEdit ? <TableHead className="w-24 text-right"> </TableHead> : null}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">Loading…</TableCell>
+                                <TableHead className="min-w-36">
+                                    <div className="flex items-center gap-1">
+                                        <SortHead field="brandName" sort={sort} onSort={cycleSort}>Brand</SortHead>
+                                        <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="min-w-36">
+                                    <div className="flex items-center gap-1">
+                                        <SortHead field="groupName" sort={sort} onSort={cycleSort}>Group</SortHead>
+                                        <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="min-w-36">
+                                    <div className="flex items-center gap-1">
+                                        <SortHead field="warrantyName" sort={sort} onSort={cycleSort}>Warranty</SortHead>
+                                        <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="w-24">
+                                    <div className="flex items-center gap-1">
+                                        <SortHead field="unitCode" sort={sort} onSort={cycleSort}>Unit</SortHead>
+                                        <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                    </div>
+                                </TableHead>
+                                <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead>
+                                <TableHead className="min-w-36"><SortHead field="barcode1" sort={sort} onSort={cycleSort}>Barcode</SortHead></TableHead>
+                                <TableHead className="w-20 text-right"><SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead></TableHead>
+                                <TableHead className="w-20 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                        <SortHead field="isActive" sort={sort} onSort={cycleSort}>Active</SortHead>
+                                        <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField />
+                                    </div>
+                                </TableHead>
+                                {!isEdit ? <TableHead className="w-24 text-right"> </TableHead> : null}
                             </TableRow>
-                        ) : pageRows.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">
-                                    {rows.length === 0 ? "No products yet. Create a unit first, then add a product." : "No products match the search."}
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            pageRows.map((r, i) => {
-                                const isDirty = dirty.has(r.id);
-                                const isSelected = selected.has(r.id);
-                                const isLow = r.stock != null && r.stock <= r.lowStockThreshold;
-                                return (
-                                    <TableRow
-                                        key={r.id}
-                                        data-state={isSelected ? "selected" : undefined}
-                                        className={isDirty ? "bg-amber-50/50 dark:bg-amber-950/20" : undefined}
-                                    >
-                                        {isEdit ? (
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => toggleRow(r.id)}
-                                                    aria-label="Select row"
-                                                />
-                                            </TableCell>
-                                        ) : null}
-                                        <TableCell className="text-muted-foreground text-sm align-top">{pageStart + i + 1}</TableCell>
-                                        <TableCell className="font-mono text-xs align-top whitespace-nowrap">{r.sku}</TableCell>
-
-                                        {/* Name */}
-                                        <TableCell className={isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                <TableRow>
+                                    <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">Loading…</TableCell>
+                                </TableRow>
+                            ) : pageRows.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={isEdit ? 14 : 14} className="text-muted-foreground">
+                                        {rows.length === 0 ? "No products yet. Create a unit first, then add a product." : "No products match the search."}
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                pageRows.map((r, i) => {
+                                    const isDirty = dirty.has(r.id);
+                                    const isSelected = selected.has(r.id);
+                                    const isLow = r.stock != null && r.stock <= r.lowStockThreshold;
+                                    return (
+                                        <TableRow
+                                            key={r.id}
+                                            data-state={isSelected ? "selected" : undefined}
+                                            className={isDirty ? "bg-amber-50/50 dark:bg-amber-950/20" : undefined}
+                                        >
                                             {isEdit ? (
-                                                <div className="flex items-start gap-1">
-                                                    <div className="flex-1 min-w-0">
-                                                        <AutoGrowInput
-                                                            value={val(r, "name") as string}
-                                                            onChange={(v) => patch(r.id, { name: v })}
-                                                        />
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => toggleRow(r.id)}
+                                                        aria-label="Select row"
+                                                    />
+                                                </TableCell>
+                                            ) : null}
+                                            <TableCell className="text-muted-foreground text-sm align-top">{pageStart + i + 1}</TableCell>
+                                            <TableCell className="font-mono text-xs align-top whitespace-nowrap">{r.sku}</TableCell>
+
+                                            {/* Name */}
+                                            <TableCell className={isEdit ? "min-w-48 align-top whitespace-normal break-words" : "font-medium align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <div className="flex items-start gap-1">
+                                                        <div className="flex-1 min-w-0">
+                                                            <AutoGrowInput
+                                                                value={val(r, "name") as string}
+                                                                onChange={(v) => patch(r.id, { name: v })}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => regenerateName(r)}
+                                                            title="Regenerate name from masters + Custom (per naming config)"
+                                                            className="shrink-0 inline-flex items-center justify-center size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                        >
+                                                            <RefreshCw className="size-3.5" />
+                                                        </button>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => regenerateName(r)}
-                                                        title="Regenerate name from masters + Custom (per naming config)"
-                                                        className="shrink-0 inline-flex items-center justify-center size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                                    >
-                                                        <RefreshCw className="size-3.5" />
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                r.name
-                                            )}
-                                        </TableCell>
-
-                                        {/* Custom (namePart) — operator-curated portion that survives regenerate */}
-                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <Input
-                                                    value={(val(r, "namePart") as string | null) ?? ""}
-                                                    onChange={(e) => patch(r.id, { namePart: e.target.value.trim() === "" ? null : e.target.value })}
-                                                    placeholder="1.5M Special…"
-                                                    className="h-8"
-                                                />
-                                            ) : (
-                                                r.namePart ?? <span className="text-muted-foreground">—</span>
-                                            )}
-                                        </TableCell>
-
-                                        {/* Category */}
-                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <CellSelect
-                                                    value={val(r, "categoryId") as number | null}
-                                                    options={categories}
-                                                    onChange={(v) => patch(r.id, { categoryId: v })}
-                                                    onCreate={() => createMaster("categories", "category")}
-                                                />
-                                            ) : (
-                                                r.category?.name ?? "—"
-                                            )}
-                                        </TableCell>
-
-                                        {/* Brand */}
-                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <CellSelect
-                                                    value={val(r, "brandId") as number | null}
-                                                    options={brands}
-                                                    onChange={(v) => patch(r.id, { brandId: v })}
-                                                    onCreate={() => createMaster("brands", "brand")}
-                                                />
-                                            ) : (
-                                                r.brand?.name ?? "—"
-                                            )}
-                                        </TableCell>
-
-                                        {/* Group */}
-                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <CellSelect
-                                                    value={val(r, "groupId") as number | null}
-                                                    options={groups}
-                                                    onChange={(v) => patch(r.id, { groupId: v })}
-                                                    onCreate={() => createMaster("product-groups", "group")}
-                                                />
-                                            ) : (
-                                                r.group?.name ?? "—"
-                                            )}
-                                        </TableCell>
-
-                                        {/* Warranty */}
-                                        <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <CellSelect
-                                                    value={val(r, "warrantyTermId") as number | null}
-                                                    options={warrantyTerms}
-                                                    onChange={(v) => patch(r.id, { warrantyTermId: v })}
-                                                    onCreate={() => createMaster("warranty-terms", "warranty term")}
-                                                />
-                                            ) : (
-                                                r.warrantyTerm?.name ?? "—"
-                                            )}
-                                        </TableCell>
-
-                                        {/* Unit */}
-                                        <TableCell className={isEdit ? "min-w-28 align-top" : "text-muted-foreground text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <CellSelect
-                                                    value={val(r, "unitId") as number}
-                                                    options={units}
-                                                    onChange={(v) => v != null && patch(r.id, { unitId: v })}
-                                                    clearable={false}
-                                                    onCreate={() => createMaster("units", "unit")}
-                                                />
-                                            ) : (
-                                                r.unit.code
-                                            )}
-                                        </TableCell>
-
-                                        {/* Model No */}
-                                        <TableCell className={isEdit ? "min-w-32 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
-                                            {isEdit ? (
-                                                <Input
-                                                    value={(val(r, "modelNo") as string | null) ?? ""}
-                                                    onChange={(e) => patch(r.id, { modelNo: e.target.value.trim() === "" ? null : e.target.value })}
-                                                    className="h-8"
-                                                />
-                                            ) : (
-                                                r.modelNo ?? "—"
-                                            )}
-                                        </TableCell>
-
-                                        {/* Barcode */}
-                                        <TableCell className={isEdit ? "min-w-32 font-mono align-top whitespace-nowrap" : "font-mono text-sm align-top whitespace-nowrap"}>
-                                            {isEdit ? (
-                                                <Input
-                                                    value={(val(r, "barcode1") as string | null) ?? ""}
-                                                    onChange={(e) => patch(r.id, { barcode1: e.target.value.trim() === "" ? null : e.target.value })}
-                                                    className="h-8 font-mono"
-                                                />
-                                            ) : (
-                                                r.barcode1 ?? "—"
-                                            )}
-                                        </TableCell>
-
-                                        {/* Stock (read-only in both modes — adjusted via vouchers / opening) */}
-                                        <TableCell className="text-right">
-                                            {r.stock == null ? (
-                                                <span className="text-muted-foreground text-xs">—</span>
-                                            ) : (
-                                                <span className={`font-mono text-sm font-semibold ${isLow ? "text-destructive" : ""}`}>
-                                                    {r.stock}
-                                                    {isLow && <Badge variant="destructive" className="ml-1.5 text-xs py-0 px-1">Low</Badge>}
-                                                </span>
-                                            )}
-                                        </TableCell>
-
-                                        {/* Active */}
-                                        <TableCell className="text-center">
-                                            {isEdit ? (
-                                                <Checkbox
-                                                    checked={val(r, "isActive") as boolean}
-                                                    onCheckedChange={(v) => patch(r.id, { isActive: !!v })}
-                                                    aria-label="Active"
-                                                />
-                                            ) : (
-                                                !r.isActive ? <Badge variant="outline">inactive</Badge> : <span className="text-muted-foreground text-xs">✓</span>
-                                            )}
-                                        </TableCell>
-
-                                        {/* Actions — view mode only (full-field edit + delete) */}
-                                        {!isEdit ? (
-                                            <TableCell className="text-right space-x-1 whitespace-nowrap">
-                                                <Button type="button" variant="outline" size="icon-sm" aria-label="Edit" onClick={() => openEdit(r.id)}>
-                                                    <Pencil className="size-4" />
-                                                </Button>
-                                                <Button type="button" variant="outline" size="icon-sm" aria-label="Delete" onClick={() => del(r.id)}>
-                                                    <Trash2 className="size-4" />
-                                                </Button>
+                                                ) : (
+                                                    r.name
+                                                )}
                                             </TableCell>
-                                        ) : null}
-                                    </TableRow>
-                                );
-                            })
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
 
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background/95 backdrop-blur px-4 py-2 text-sm">
+                                            {/* Custom (namePart) — operator-curated portion that survives regenerate */}
+                                            <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <Input
+                                                        value={(val(r, "namePart") as string | null) ?? ""}
+                                                        onChange={(e) => patch(r.id, { namePart: e.target.value.trim() === "" ? null : e.target.value })}
+                                                        placeholder="1.5M Special…"
+                                                        className="h-8"
+                                                    />
+                                                ) : (
+                                                    r.namePart ?? <span className="text-muted-foreground">—</span>
+                                                )}
+                                            </TableCell>
+
+                                            {/* Category */}
+                                            <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <CellSelect
+                                                        value={val(r, "categoryId") as number | null}
+                                                        options={categories}
+                                                        onChange={(v) => patch(r.id, { categoryId: v })}
+                                                        onCreate={() => createMaster("categories", "category")}
+                                                    />
+                                                ) : (
+                                                    r.category?.name ?? "—"
+                                                )}
+                                            </TableCell>
+
+                                            {/* Brand */}
+                                            <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <CellSelect
+                                                        value={val(r, "brandId") as number | null}
+                                                        options={brands}
+                                                        onChange={(v) => patch(r.id, { brandId: v })}
+                                                        onCreate={() => createMaster("brands", "brand")}
+                                                    />
+                                                ) : (
+                                                    r.brand?.name ?? "—"
+                                                )}
+                                            </TableCell>
+
+                                            {/* Group */}
+                                            <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <CellSelect
+                                                        value={val(r, "groupId") as number | null}
+                                                        options={groups}
+                                                        onChange={(v) => patch(r.id, { groupId: v })}
+                                                        onCreate={() => createMaster("product-groups", "group")}
+                                                    />
+                                                ) : (
+                                                    r.group?.name ?? "—"
+                                                )}
+                                            </TableCell>
+
+                                            {/* Warranty */}
+                                            <TableCell className={isEdit ? "min-w-40 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <CellSelect
+                                                        value={val(r, "warrantyTermId") as number | null}
+                                                        options={warrantyTerms}
+                                                        onChange={(v) => patch(r.id, { warrantyTermId: v })}
+                                                        onCreate={() => createMaster("warranty-terms", "warranty term")}
+                                                    />
+                                                ) : (
+                                                    r.warrantyTerm?.name ?? "—"
+                                                )}
+                                            </TableCell>
+
+                                            {/* Unit */}
+                                            <TableCell className={isEdit ? "min-w-28 align-top" : "text-muted-foreground text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <CellSelect
+                                                        value={val(r, "unitId") as number}
+                                                        options={units}
+                                                        onChange={(v) => v != null && patch(r.id, { unitId: v })}
+                                                        clearable={false}
+                                                        onCreate={() => createMaster("units", "unit")}
+                                                    />
+                                                ) : (
+                                                    r.unit.code
+                                                )}
+                                            </TableCell>
+
+                                            {/* Model No */}
+                                            <TableCell className={isEdit ? "min-w-32 align-top whitespace-normal break-words" : "text-sm align-top whitespace-normal break-words"}>
+                                                {isEdit ? (
+                                                    <Input
+                                                        value={(val(r, "modelNo") as string | null) ?? ""}
+                                                        onChange={(e) => patch(r.id, { modelNo: e.target.value.trim() === "" ? null : e.target.value })}
+                                                        className="h-8"
+                                                    />
+                                                ) : (
+                                                    r.modelNo ?? "—"
+                                                )}
+                                            </TableCell>
+
+                                            {/* Barcode */}
+                                            <TableCell className={isEdit ? "min-w-32 font-mono align-top whitespace-nowrap" : "font-mono text-sm align-top whitespace-nowrap"}>
+                                                {isEdit ? (
+                                                    <Input
+                                                        value={(val(r, "barcode1") as string | null) ?? ""}
+                                                        onChange={(e) => patch(r.id, { barcode1: e.target.value.trim() === "" ? null : e.target.value })}
+                                                        className="h-8 font-mono"
+                                                    />
+                                                ) : (
+                                                    r.barcode1 ?? "—"
+                                                )}
+                                            </TableCell>
+
+                                            {/* Stock (read-only in both modes — adjusted via vouchers / opening) */}
+                                            <TableCell className="text-right">
+                                                {r.stock == null ? (
+                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                ) : (
+                                                    <span className={`font-mono text-sm font-semibold ${isLow ? "text-destructive" : ""}`}>
+                                                        {r.stock}
+                                                        {isLow && <Badge variant="destructive" className="ml-1.5 text-xs py-0 px-1">Low</Badge>}
+                                                    </span>
+                                                )}
+                                            </TableCell>
+
+                                            {/* Active */}
+                                            <TableCell className="text-center">
+                                                {isEdit ? (
+                                                    <Checkbox
+                                                        checked={val(r, "isActive") as boolean}
+                                                        onCheckedChange={(v) => patch(r.id, { isActive: !!v })}
+                                                        aria-label="Active"
+                                                    />
+                                                ) : (
+                                                    !r.isActive ? <Badge variant="outline">inactive</Badge> : <span className="text-muted-foreground text-xs">✓</span>
+                                                )}
+                                            </TableCell>
+
+                                            {/* Actions — view mode only (full-field edit + delete) */}
+                                            {!isEdit ? (
+                                                <TableCell className="text-right space-x-1 whitespace-nowrap">
+                                                    <Button type="button" variant="outline" size="icon-sm" aria-label="Edit" onClick={() => openEdit(r.id)}>
+                                                        <Pencil className="size-4" />
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="icon-sm" aria-label="Delete" onClick={() => del(r.id)}>
+                                                        <Trash2 className="size-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            ) : null}
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
+
+                </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+
+            <div className="-mt-4 flex flex-none flex-wrap items-center justify-between gap-2 border-t border-border bg-background py-1 text-sm">
                 <div className="flex items-center gap-3 text-muted-foreground">
                     <span>{filtered.length} match / {rows.length} total</span>
                     {isEdit && dirty.size > 0 ? <Badge variant="secondary">{dirty.size} pending</Badge> : null}
@@ -957,7 +961,8 @@ function ColFilter({
                 <Filter className="size-3.5" />
             </button>
             {open ? (
-                <div className="absolute z-20 mt-1 left-0 min-w-48 max-h-72 overflow-auto rounded-md border border-border bg-popover text-popover-foreground p-2 shadow-md">
+                <div className="absolute z-20 mt-1 left-0 min-w-48 max-h-72  rounded-md border border-border bg-popover text-popover-foreground p-2 shadow-md">
+                    {/* <div className="absolute z-20 mt-1 left-0 min-w-48 max-h-72 overflow-auto rounded-md border border-border bg-popover text-popover-foreground p-2 shadow-md"> */}
                     <div className="flex items-center justify-between mb-1 text-xs">
                         <span className="text-muted-foreground">Filter</span>
                         {active ? (

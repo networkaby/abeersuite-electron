@@ -41,20 +41,21 @@ export default async function ProtectedLayout({
                 <FinanceTopBar permissions={user.permissions ?? []} />
                 <div className="flex flex-1 overflow-hidden">
                     <Sidebar user={{
-                        id:          user.id,
-                        name:        user.name,
-                        role:        user.role,
-                        roles:       user.roles,
+                        id: user.id,
+                        name: user.name,
+                        role: user.role,
+                        roles: user.roles,
                         permissions: user.permissions,
-                        roleLabel:   user.roleLabel,
-                        roleColor:   user.roleColor,
-                        avatarUrl:   user.avatarUrl,
+                        roleLabel: user.roleLabel,
+                        roleColor: user.roleColor,
+                        avatarUrl: user.avatarUrl,
                     }} />
-                    <main className="flex-1 overflow-y-auto p-2">{children}</main>
+                    <main className="flex-1 p-2 overflow-hidden">{children}</main>
+                    {/* <main className="flex-1 overflow-y-auto p-2">{children}</main> */}
                     <ButtonBar user={{
-                        name:        user.name,
-                        role:        user.role,
-                        roles:       user.roles,
+                        name: user.name,
+                        role: user.role,
+                        roles: user.roles,
                         permissions: user.permissions,
                     }} />
                 </div>{/* end flex row */}
