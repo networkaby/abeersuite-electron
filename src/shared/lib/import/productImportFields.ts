@@ -4,6 +4,11 @@
  * without pulling Node-only modules into the browser bundle.
  */
 
+// `costPrice` (running cost cache) is intentionally **excluded** from the
+// importer. Cost is derived from `openingRate` at books-beginning by the
+// import (via syncProductCacheFromOpening) and updated thereafter by Purchase
+// voucher posts (weighted-avg method). Letting the operator overwrite cost
+// via CSV would bypass that flow and silently drift inventory valuation.
 export const PRODUCT_IMPORT_FIELDS = [
     "name",
     "sku",
@@ -17,7 +22,6 @@ export const PRODUCT_IMPORT_FIELDS = [
     "hsnCode",
     "gstRate",
     "taxability",
-    "costPrice",
     "salePrice",
     "mrp",
     "openingStock",

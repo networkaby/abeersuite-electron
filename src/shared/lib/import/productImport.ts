@@ -1,5 +1,4 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { generateSku } from "@/modules/inventory/lib/sku";
 import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
 import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "./productImportFields";
 
@@ -24,7 +23,20 @@ export interface ProductImportRowInput {
     values: Partial<Record<ProductImportField, string>>;
 }
 
-export type ImportMode = "skip" | "update";
+/// Three behaviours when a row's SKU matches an existing product:
+///   • "skip"   — leave the existing product untouched
+///   • "update" — full-row replace (writes every mapped column, NULLs columns
+///                that aren't in the CSV — the legacy behaviour, useful when
+///                the CSV is a full snapshot)
+///   • "patch"  — write only the columns present in the CSV, leave the rest
+///                bit-identical. Use when uploading partial updates like
+///                `sku,openingStock,openingRate` to refresh stock counts
+///                without touching brand/category/etc.
+///
+/// `patch` mode skips the name+unit required-field checks (only SKU is
+/// required) and emits a Prisma-partial update payload so unmapped columns
+/// never get NULLed.
+export type ImportMode = "skip" | "update" | "patch";
 
 export interface ProductImportRequest {
     rows: ProductImportRowInput[];
@@ -169,21 +181,42 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     // FK resolution finds them. Their own small transaction so a later product
     // failure leaves the masters behind (acceptable: empty masters are easy to
     // clean up; partial product writes are not).
+    //
+    // Use `createMany` (one query per master type) instead of looping individual
+    // `create` calls — a CSV that introduces 80+ new groups would otherwise
+    // exceed the default 5s interactive-tx timeout (~60ms per round-trip to
+    // Supabase × 80 = ~5s). `skipDuplicates: true` keeps re-runs idempotent if
+    // a sibling row created the master between loadMasters() and now.
     if (!req.dryRun && req.autoCreateMasters) {
-        await prisma.$transaction(async (tx) => {
-            for (const name of missingCategories.values()) {
-                await tx.invCategory.create({ data: { name } });
-            }
-            for (const name of missingGroups.values()) {
-                await tx.invProductGroup.create({ data: { name } });
-            }
-            for (const name of missingBrands.values()) {
-                await tx.invBrand.create({ data: { name } });
-            }
-            for (const name of missingWarrantyTerms.values()) {
-                await tx.invWarrantyTerm.create({ data: { name } });
-            }
-        });
+        await prisma.$transaction(
+            async (tx) => {
+                if (missingCategories.size > 0) {
+                    await tx.invCategory.createMany({
+                        data: [...missingCategories.values()].map((name) => ({ name })),
+                        skipDuplicates: true,
+                    });
+                }
+                if (missingGroups.size > 0) {
+                    await tx.invProductGroup.createMany({
+                        data: [...missingGroups.values()].map((name) => ({ name })),
+                        skipDuplicates: true,
+                    });
+                }
+                if (missingBrands.size > 0) {
+                    await tx.invBrand.createMany({
+                        data: [...missingBrands.values()].map((name) => ({ name })),
+                        skipDuplicates: true,
+                    });
+                }
+                if (missingWarrantyTerms.size > 0) {
+                    await tx.invWarrantyTerm.createMany({
+                        data: [...missingWarrantyTerms.values()].map((name) => ({ name })),
+                        skipDuplicates: true,
+                    });
+                }
+            },
+            { timeout: 60_000, maxWait: 30_000 },
+        );
         masters = await loadMasters();
     }
 
@@ -211,10 +244,14 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     const validRows: Array<{
         rowIndex: number;
         existingId: number | null;
+        /// CSV columns this row carried a non-empty value for. Used by
+        /// buildPatchPayload to write only the touched columns.
+        present: Set<ProductImportField>;
         data: {
             sku: string;
-            name: string;
-            unitId: number;
+            // Patch rows may have these unset; non-patch rows always do.
+            name: string | null;
+            unitId: number | null;
             categoryId: number | null;
             groupId: number | null;
             brandId: number | null;
@@ -224,7 +261,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             hsnCode: string | null;
             gstRateId: number | null;
             taxability: Taxability | null;
-            costPaise: number | null;
             pricePaise: number | null;
             mrpPaise: number | null;
             openingStock: number | null;
@@ -233,17 +269,35 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         };
     }> = [];
 
+    /// Returns the set of CSV columns that carried a non-empty value for this
+    /// row. Patch mode uses this to write only those columns and leave the
+    /// rest of the product untouched. For non-patch modes it's ignored.
+    const presentIn = (vals: Partial<Record<ProductImportField, string>>): Set<ProductImportField> => {
+        const s = new Set<ProductImportField>();
+        for (const k of Object.keys(vals) as ProductImportField[]) {
+            const v = vals[k];
+            if (typeof v === "string" && v.trim() !== "") s.add(k);
+        }
+        return s;
+    };
+
     for (const row of req.rows) {
         const errors: string[] = [];
         const v = row.values;
+        const present = presentIn(v);
+        const isPatch = req.mode === "patch";
 
         const name = v.name?.trim();
-        if (!name) errors.push("name is required");
+        // In patch mode, name is optional — only required for creates (which
+        // patch mode disallows; see existence check below). Other modes still
+        // require it because they perform a full-row write.
+        if (!name && !isPatch) errors.push("name is required");
 
         let unitId: number | null = null;
         const unitRaw = v.unit?.trim();
         if (!unitRaw) {
-            errors.push("unit is required");
+            // Same logic — only the full-write modes need a unit.
+            if (!isPatch) errors.push("unit is required");
         } else {
             const u = masters.units.get(norm(unitRaw));
             if (!u) errors.push(`unit "${unitRaw}" not found in masters`);
@@ -251,7 +305,13 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         }
 
         const skuRaw = v.sku?.trim().toUpperCase();
+        if (!skuRaw) errors.push("SKU is required — auto-SKU generation is disabled on bulk import");
         const existing = skuRaw ? existingBySku.get(skuRaw) ?? null : null;
+        // Patch mode targets existing products only — creating from a partial
+        // CSV would produce broken rows (no name / no unit).
+        if (isPatch && skuRaw && !existing) {
+            errors.push(`SKU "${skuRaw}" not found — patch mode only updates existing products`);
+        }
 
         let categoryId: number | null = null;
         if (v.category?.trim()) {
@@ -296,18 +356,25 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             }
         }
 
-        const costPaise = rupeesToPaise(v.costPrice);
-        if (costPaise === null) errors.push(`costPrice "${v.costPrice}" is not a valid number`);
+        // costPrice is intentionally not importable — see productImportFields.ts.
+        // The running cost cache (`costPaise`) is set from `openingRate` at
+        // books-beginning by syncProductCacheFromOpening, then updated by
+        // Purchase vouchers thereafter.
+        //
+        // In patch mode, only validate a numeric cell when it was actually
+        // provided. The existing `toNumber` already returns null for both
+        // "field absent" and "field present but unparseable" — we distinguish
+        // via the `present` set so an absent column never errors.
         const pricePaise = rupeesToPaise(v.salePrice);
-        if (pricePaise === null) errors.push(`salePrice "${v.salePrice}" is not a valid number`);
+        if (pricePaise === null && present.has("salePrice")) errors.push(`salePrice "${v.salePrice}" is not a valid number`);
         const mrpPaise = rupeesToPaise(v.mrp);
-        if (mrpPaise === null) errors.push(`mrp "${v.mrp}" is not a valid number`);
+        if (mrpPaise === null && present.has("mrp")) errors.push(`mrp "${v.mrp}" is not a valid number`);
         const openingStock = toNumber(v.openingStock);
-        if (openingStock === null) errors.push(`openingStock "${v.openingStock}" is not a valid number`);
+        if (openingStock === null && present.has("openingStock")) errors.push(`openingStock "${v.openingStock}" is not a valid number`);
         const openingRate = toNumber(v.openingRate);
-        if (openingRate === null) errors.push(`openingRate "${v.openingRate}" is not a valid number`);
+        if (openingRate === null && present.has("openingRate")) errors.push(`openingRate "${v.openingRate}" is not a valid number`);
         const openingDate = toDate(v.openingDate);
-        if (openingDate === null) errors.push(`openingDate "${v.openingDate}" must be YYYY-MM-DD`);
+        if (openingDate === null && present.has("openingDate")) errors.push(`openingDate "${v.openingDate}" must be YYYY-MM-DD`);
 
         const resolved = {
             unitCode: unitId != null ? masters.units.get(norm(unitRaw ?? ""))?.code : null,
@@ -344,16 +411,24 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             resolved,
         });
 
-        if (willSkip || !name || unitId == null) continue;
+        if (willSkip || !skuRaw) continue;
+        // Patch mode permits null name+unit (they're left untouched on the
+        // existing row); other modes already errored above if either was
+        // missing.
+        if (!isPatch && (!name || unitId == null)) continue;
 
-        const finalSku = skuRaw && skuRaw.length > 0 ? skuRaw : generateSku();
+        // SKU is now required (validated above) — drop the auto-generate fallback.
+        // Operators must supply SKU explicitly so imports cannot create phantom
+        // random codes that drift from the supplier's catalog.
+        const finalSku = skuRaw;
 
         validRows.push({
             rowIndex: row.rowIndex,
             existingId: existing?.id ?? null,
+            present,
             data: {
                 sku: finalSku,
-                name,
+                name: name ?? null,
                 unitId,
                 categoryId,
                 groupId,
@@ -364,7 +439,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 hsnCode: v.hsnCode?.trim() || null,
                 gstRateId,
                 taxability,
-                costPaise: costPaise ?? null,
                 pricePaise: pricePaise ?? null,
                 mrpPaise: mrpPaise ?? null,
                 openingStock: openingStock ?? null,
@@ -400,8 +474,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         const openingValueComputed = productOpeningValue(opening);
         return {
             sku: v.data.sku,
-            name: v.data.name,
-            unitId: v.data.unitId,
+            name: v.data.name!,
+            unitId: v.data.unitId!,
             categoryId: v.data.categoryId,
             groupId: v.data.groupId,
             brandId: v.data.brandId,
@@ -418,14 +492,57 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             openingValue: openingValueComputed,
             openingStockDate: v.data.openingDate ? new Date(v.data.openingDate) : null,
             // `cachePatch` provides `costPaise` (derived from openingRate) and
-            // `stock`. Listing it after the explicit fields keeps that intent
-            // and avoids TS2783 about the previous duplicate `costPaise` key.
+            // `stock`. `costPaise` is not importable directly (see
+            // productImportFields.ts) — opening rate is the only path in.
             ...cachePatch,
         };
     };
 
+    /// Partial update payload — only the columns the operator brought in the
+    /// CSV. Empty cells stay untouched on the existing product row. Opening-
+    /// related derivatives (openingValue, costPaise cache, stock cache) are
+    /// re-computed only when an opening field was provided.
+    const buildPatchPayload = (v: (typeof validRows)[number]) => {
+        const p = v.present;
+        const out: Record<string, unknown> = {};
+        if (p.has("name") && v.data.name) out.name = v.data.name;
+        if (p.has("sku")) out.sku = v.data.sku;
+        if (p.has("unit") && v.data.unitId != null) out.unitId = v.data.unitId;
+        if (p.has("category")) out.categoryId = v.data.categoryId;
+        if (p.has("group")) out.groupId = v.data.groupId;
+        if (p.has("brand")) out.brandId = v.data.brandId;
+        if (p.has("warrantyTerm")) out.warrantyTermId = v.data.warrantyTermId;
+        if (p.has("modelNo")) out.modelNo = v.data.modelNo;
+        if (p.has("barcode1")) out.barcode1 = v.data.barcode1;
+        if (p.has("hsnCode")) out.hsnCode = v.data.hsnCode;
+        if (p.has("gstRate")) out.gstRateId = v.data.gstRateId;
+        if (p.has("taxability")) out.taxability = v.data.taxability;
+        if (p.has("salePrice")) out.pricePaise = v.data.pricePaise;
+        if (p.has("mrp")) out.mrpPaise = v.data.mrpPaise;
+        // Opening fields move as a group — if any are touched, recompute the
+        // derived openingValue + cache columns. Untouched openings stay null
+        // here (not written) so the existing stored values survive.
+        const openingTouched = p.has("openingStock") || p.has("openingRate") || p.has("openingDate");
+        if (openingTouched) {
+            if (p.has("openingStock")) out.openingStock = v.data.openingStock;
+            if (p.has("openingRate"))  out.openingRate  = v.data.openingRate;
+            if (p.has("openingDate"))  out.openingStockDate = v.data.openingDate ? new Date(v.data.openingDate) : null;
+            // Recompute openingValue + cache only when we have BOTH opening
+            // stock and opening rate (either from this CSV or already on the
+            // row). Safe approximation: only write the derivatives when both
+            // values are present in this row.
+            if (v.data.openingStock != null && v.data.openingRate != null) {
+                const opening = { openingStock: v.data.openingStock, openingRate: v.data.openingRate };
+                out.openingValue = productOpeningValue(opening);
+                Object.assign(out, syncProductCacheFromOpening(opening));
+            }
+        }
+        return out;
+    };
+
     const newRows = validRows.filter((v) => v.existingId == null).map(buildPayload);
     const updateRows = validRows.filter((v) => v.existingId != null);
+    const writeOne = req.mode === "patch" ? buildPatchPayload : buildPayload;
 
     const CHUNK = 500;
     await prisma.$transaction(
@@ -434,7 +551,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 await tx.invProduct.createMany({ data: newRows.slice(i, i + CHUNK) });
             }
             for (const v of updateRows) {
-                await tx.invProduct.update({ where: { id: v.existingId! }, data: buildPayload(v) });
+                await tx.invProduct.update({ where: { id: v.existingId! }, data: writeOne(v) });
             }
         },
         { timeout: 10 * 60 * 1000, maxWait: 30_000 },

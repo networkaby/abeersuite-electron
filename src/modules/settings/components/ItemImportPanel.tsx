@@ -11,28 +11,39 @@ import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "@/shared/lib/imp
 
 const FIELD_LABELS: Record<ProductImportField, string> = {
     name: "Name (required)",
-    sku: "SKU (auto if empty)",
+    sku: "SKU (required)",
     unit: "Unit (code or label)",
-    category: "Category (by name)",
-    group: "Group (by name)",
-    brand: "Brand (by name)",
-    warrantyTerm: "Warranty term (by name)",
+    category: "Category — by name",
+    group: "Group — by name (HSN / tax bucket)",
+    brand: "Brand — by name",
+    warrantyTerm: "Warranty term — by name",
     modelNo: "Model number",
     barcode1: "Barcode",
     hsnCode: "HSN code",
     gstRate: "GST rate (e.g. 18)",
-    taxability: "Taxability (TAXABLE/EXEMPT/NIL_RATED/NON_GST)",
-    costPrice: "Cost price (₹)",
+    taxability: "Taxability (TAXABLE / EXEMPT / NIL_RATED / NON_GST)",
     salePrice: "Sale price (₹)",
-    mrp: "MRP (₹)",
-    openingStock: "Opening stock (qty)",
-    openingRate: "Opening rate (₹)",
-    openingDate: "Opening date (YYYY-MM-DD)",
+    mrp: "MRP / Max retail price (₹)",
+    openingStock: "Opening stock qty — books-beginning physical count",
+    openingRate: "Opening rate (₹/unit) — books-beginning rate",
+    openingDate: "Opening date (YYYY-MM-DD) — books-beginning",
 };
+
+/// Visual groups in the mapping dropdown — `<optgroup>` headers so the
+/// operator scans 5 short lists instead of one 18-row list. Order = each
+/// product-import field name; the type system catches any drift.
+const FIELD_GROUPS: Array<{ label: string; fields: ProductImportField[] }> = [
+    { label: "Identification",   fields: ["name", "sku", "unit"] },
+    { label: "Classification",   fields: ["category", "group", "brand", "warrantyTerm"] },
+    { label: "Identifiers",      fields: ["modelNo", "barcode1"] },
+    { label: "Tax",              fields: ["hsnCode", "gstRate", "taxability"] },
+    { label: "Pricing",          fields: ["salePrice", "mrp"] },
+    { label: "Opening stock (books-beginning)", fields: ["openingStock", "openingRate", "openingDate"] },
+];
 
 const IGNORE = "__ignore__" as const;
 type Mapping = Record<string, ProductImportField | typeof IGNORE>;
-type Mode = "skip" | "update";
+type Mode = "skip" | "update" | "patch";
 
 interface RowResult {
     rowIndex: number;
@@ -74,26 +85,39 @@ function toCsv(rows: string[][]): string {
     return rows.map((r) => r.map(escape).join(",")).join("\r\n");
 }
 
+/// Header → field auto-suggest. Patterns are tested case-insensitive after
+/// stripping whitespace / underscores / dashes. Match anywhere unless anchored.
+/// Order matters: more specific patterns must come first (e.g. `defaultmrp`
+/// before generic `mrp`, `purchaseprice` before generic `price`).
 function autoSuggestField(header: string): ProductImportField | typeof IGNORE {
     const h = header.toLowerCase().replace(/[\s_-]/g, "");
+    // Required + identification
     if (/^(name|productname|itemname|description)$/.test(h)) return "name";
-    if (/^(sku|code|itemcode|productcode)$/.test(h)) return "sku";
-    if (/^(unit|uom|measure)$/.test(h)) return "unit";
-    if (/^(category|cat)$/.test(h)) return "category";
-    if (/^(group|productgroup|itemgroup)$/.test(h)) return "group";
-    if (/^(brand|make|manufacturer)$/.test(h)) return "brand";
-    if (/^(warranty|warrantyterm)$/.test(h)) return "warrantyTerm";
-    if (/^(model|modelno|modelnumber)$/.test(h)) return "modelNo";
-    if (/^(barcode|ean|upc)/.test(h)) return "barcode1";
-    if (/^(hsn|hsncode|sac)$/.test(h)) return "hsnCode";
-    if (/^(gst|gstrate|tax|taxrate)$/.test(h)) return "gstRate";
-    if (/^(taxability)$/.test(h)) return "taxability";
-    if (/^(cost|costprice|purchaseprice|buyingprice|costrate)$/.test(h)) return "costPrice";
-    if (/^(price|saleprice|sellingprice|sellrate)$/.test(h)) return "salePrice";
-    if (/^(mrp|maxretailprice|listprice)$/.test(h)) return "mrp";
-    if (/^(openingstock|stock|qty|openingqty|stockonhand)$/.test(h)) return "openingStock";
+    if (/^(sku|code|itemcode|productcode|skucode)$/.test(h)) return "sku";
+    if (/^(unit|uom|measure|baseunit)$/.test(h)) return "unit";
+    // Classification (must come before "code" / "id" generic matches)
+    if (/^(category|cat|categoryname|itemcategory)$/.test(h)) return "category";
+    if (/^(group|productgroup|itemgroup|stockgroup|groupname)$/.test(h)) return "group";
+    if (/^(brand|make|manufacturer|brandname|company)$/.test(h)) return "brand";
+    if (/^(warranty|warrantyterm|warrantyperiod)$/.test(h)) return "warrantyTerm";
+    if (/^(model|modelno|modelnumber|modelcode)$/.test(h)) return "modelNo";
+    if (/^(barcode|ean|upc|barcode1)/.test(h)) return "barcode1";
+    // Tax (specific HSN/GST patterns before generic "tax")
+    if (/^(hsn|hsncode|sac|saccode|hsnsac)$/.test(h)) return "hsnCode";
+    if (/^(gst|gstrate|taxrate|gstpercent|gstpercentage)$/.test(h)) return "gstRate";
+    if (/^(taxability|gststatus|taxstatus)$/.test(h)) return "taxability";
+    // Pricing (specific patterns first; "defaultmrp"/"maxretailprice" before "mrp",
+    // "onlinestoreprice" / "saleprice" before generic "price")
+    if (/^(defaultmrp|mrp|maxretailprice|listprice|maximumretailprice)$/.test(h)) return "mrp";
+    // Note: any "cost / purchase price" column should be mapped to `openingRate`
+    // (books-beginning) instead. Running cost is managed by Purchase vouchers.
+    if (/^(saleprice|sellingprice|sellrate|retailprice|onlinestoreprice|shopprice|price)$/.test(h)) return "salePrice";
+    if (/^(cost|costprice|purchaseprice|buyingprice|costrate|purchaserate|purrate|costperunit|rateperunit)$/.test(h)) return "openingRate";
+    // Opening stock (books-beginning) — accept "current stock", "stock on hand"
+    // since most supplier CSVs use those names for the physical count.
+    if (/^(openingstock|stock|qty|quantity|openingqty|stockonhand|currentstock|currentstockqty|currentstockquantity|onhand)$/.test(h)) return "openingStock";
     if (/^(openingrate|stockrate|stockvalue)$/.test(h)) return "openingRate";
-    if (/^(openingdate|stockdate|date|asofdate)$/.test(h)) return "openingDate";
+    if (/^(openingdate|stockdate|asofdate|booksbeginning|booksbeginningdate)$/.test(h)) return "openingDate";
     return IGNORE;
 }
 
@@ -117,7 +141,7 @@ export function ItemImportPanel() {
         return set;
     }, [mapping]);
 
-    const hasRequired = mappedFields.has("name") && mappedFields.has("unit");
+    const hasRequired = mappedFields.has("name") && mappedFields.has("unit") && mappedFields.has("sku");
 
     async function handleFile(f: File | null) {
         setFile(f);
@@ -291,7 +315,7 @@ export function ItemImportPanel() {
                                         </td>
                                         <td className="py-1.5 px-2">
                                             <select
-                                                className="h-8 rounded border bg-background px-2 text-xs"
+                                                className="h-8 rounded border bg-background px-2 text-xs min-w-[280px]"
                                                 value={mapping[h] ?? IGNORE}
                                                 onChange={(e) =>
                                                     setMapping((m) => ({
@@ -301,10 +325,14 @@ export function ItemImportPanel() {
                                                 }
                                             >
                                                 <option value={IGNORE}>— Ignore —</option>
-                                                {PRODUCT_IMPORT_FIELDS.map((f) => (
-                                                    <option key={f} value={f}>
-                                                        {FIELD_LABELS[f]}
-                                                    </option>
+                                                {FIELD_GROUPS.map((grp) => (
+                                                    <optgroup key={grp.label} label={grp.label}>
+                                                        {grp.fields.map((f) => (
+                                                            <option key={f} value={f}>
+                                                                {FIELD_LABELS[f]}
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
                                                 ))}
                                             </select>
                                         </td>
@@ -315,7 +343,7 @@ export function ItemImportPanel() {
                     </div>
                     {!hasRequired && (
                         <p className="text-[11px] text-amber-600">
-                            Map at least <strong>Name</strong> and <strong>Unit</strong> to continue.
+                            Map at least <strong>Name</strong>, <strong>SKU</strong> and <strong>Unit</strong> to continue.
                         </p>
                     )}
                 </section>
@@ -332,7 +360,7 @@ export function ItemImportPanel() {
                     </div>
                     <div className="space-y-1">
                         <Label className="text-xs">When SKU already exists</Label>
-                        <div className="flex gap-4 text-xs">
+                        <div className="flex flex-wrap gap-4 text-xs">
                             <label className="flex items-center gap-1.5">
                                 <input
                                     type="radio"
@@ -347,9 +375,22 @@ export function ItemImportPanel() {
                                     checked={mode === "update"}
                                     onChange={() => setMode("update")}
                                 />
-                                Update the existing product
+                                Replace (full-row update)
+                            </label>
+                            <label className="flex items-center gap-1.5">
+                                <input
+                                    type="radio"
+                                    checked={mode === "patch"}
+                                    onChange={() => setMode("patch")}
+                                />
+                                Patch (only mapped columns)
                             </label>
                         </div>
+                        <p className="text-[10px] text-muted-foreground">
+                            {mode === "skip" && "Existing SKUs are left untouched. Only new products are created."}
+                            {mode === "update" && "Existing rows are fully replaced — columns not in your CSV become NULL. Upload a complete snapshot."}
+                            {mode === "patch" && "Only the columns you mapped are written. Other fields stay untouched. Patch mode never creates — SKUs not in the DB error out. Useful for opening-stock refresh, brand fixes, etc."}
+                        </p>
                     </div>
                     <div className="space-y-1">
                         <Label className="text-xs">Missing masters</Label>

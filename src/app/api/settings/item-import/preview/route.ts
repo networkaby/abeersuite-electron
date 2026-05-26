@@ -15,7 +15,7 @@ const rowSchema = z.object({
 
 const previewSchema = z.object({
     rows: z.array(rowSchema).max(10000),
-    mode: z.enum(["skip", "update"]),
+    mode: z.enum(["skip", "update", "patch"]),
     autoCreateMasters: z.boolean().optional().default(true),
 });
 
