@@ -36,7 +36,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                     </Link>
                 ))}
             </nav>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-hidden">
                 {children}
             </div>
         </div>

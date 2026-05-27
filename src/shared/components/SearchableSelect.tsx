@@ -146,7 +146,10 @@ export function SearchableSelect<V extends string | number>({
                 </span>
             </button>
             {open ? (
-                <div className="absolute z-50 left-0 right-0 mt-1 rounded-md border border-border bg-popover text-popover-foreground shadow-md">
+                // Popover anchored at the trigger's left but free to grow wider
+                // than it (min-w-full guarantees at-least-trigger-width; max-w
+                // keeps very long labels from blowing past the viewport edge).
+                <div className="absolute z-50 left-0 mt-1 min-w-full w-max max-w-[min(28rem,90vw)] rounded-md border border-border bg-popover text-popover-foreground shadow-md">
                     <div className="p-1 border-b border-border">
                         <input
                             ref={inputRef}
@@ -194,7 +197,7 @@ export function SearchableSelect<V extends string | number>({
                                             onMouseEnter={() => setHighlight(i)}
                                             onClick={() => commit(o.value)}
                                             className={
-                                                "block w-full px-2 py-1 text-left text-sm " +
+                                                "block w-full whitespace-nowrap px-2 py-1 text-left text-sm " +
                                                 (isHighlighted ? "bg-muted " : "") +
                                                 (isSelected ? "font-medium" : "")
                                             }

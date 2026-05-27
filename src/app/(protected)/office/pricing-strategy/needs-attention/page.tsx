@@ -4,24 +4,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    AlertCircle, AlertTriangle, ChevronDown, ChevronRight,
-    Pencil, RefreshCw, Save,
+    AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown,
+    ChevronDown, ChevronRight, Pencil, RefreshCw, Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+import { ScrollBar } from "@/components/ui/scroll-area";
 
-const ROW_GRID = "grid gap-3 items-center grid-cols-[minmax(180px,1fr)_84px_84px_84px_72px]";
+const ROW_GRID = "grid gap-2 items-center grid-cols-[minmax(180px,1fr)_84px_84px_84px_72px]";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-type View = "group" | "category" | "brand";
+type View = "group" | "category" | "brand" | "item";
+type SortKey = "name" | "group" | "category" | "brand" | "cost" | "mrp";
+type SortDir = "asc" | "desc";
 
 function groupKey(item: PricingItem, view: View): string {
     if (view === "category") return item.categoryName ?? "— No category —";
-    if (view === "brand")    return item.brandName    ?? "— No brand —";
+    if (view === "brand") return item.brandName ?? "— No brand —";
+    // view === "item" never uses groupKey; fall through to groupName for safety.
     return item.groupName ?? "— No group —";
 }
 
@@ -52,8 +57,8 @@ type AttentionType = "cost" | "mrp";
 
 function attention(item: PricingItem): AttentionType[] {
     const out: AttentionType[] = [];
-    if (item.resolvedCostPaise == null)               out.push("cost");
-    if (item.mrpPaise == null || item.mrpPaise <= 0)  out.push("mrp");
+    if (item.resolvedCostPaise == null) out.push("cost");
+    if (item.mrpPaise == null || item.mrpPaise <= 0) out.push("mrp");
     return out;
 }
 
@@ -64,7 +69,7 @@ type RowEdit = {
     costExcl: string;
     costIncl: string;
     /** MRP – stored as incl paise (Indian sticker price). */
-    mrpIncl:  string;
+    mrpIncl: string;
 };
 
 function emptyEdit(item: PricingItem): RowEdit {
@@ -87,21 +92,55 @@ function emptyEdit(item: PricingItem): RowEdit {
     return { costExcl, costIncl, mrpIncl };
 }
 
+// ── sortable header cell (item-wise view) ─────────────────────────────────────
+
+function SortHeader({
+    k, label, sortKey, sortDir, onToggle, align = "left",
+}: {
+    k: SortKey;
+    label: string;
+    sortKey: SortKey;
+    sortDir: SortDir;
+    onToggle: (k: SortKey) => void;
+    align?: "left" | "right";
+}) {
+    const active = sortKey === k;
+    const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+    return (
+        <th className={`px-2 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
+            <button
+                type="button"
+                onClick={() => onToggle(k)}
+                className={`inline-flex items-center gap-1 uppercase hover:text-foreground ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+            >
+                <span>{label}</span>
+                <Icon size={11} className={active ? "" : "opacity-40"} />
+            </button>
+        </th>
+    );
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function NeedsAttentionPage() {
-    const [items,   setItems]   = useState<PricingItem[]>([]);
+    const [items, setItems] = useState<PricingItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [view,    setView]    = useState<View>("group");
+    const [view, setView] = useState<View>("group");
     const [showCost, setShowCost] = useState(true);
-    const [showMrp,  setShowMrp]  = useState(true);
+    const [showMrp, setShowMrp] = useState(true);
+    const [sortKey, setSortKey] = useState<SortKey>("name");
+    const [sortDir, setSortDir] = useState<SortDir>("asc");
+    const toggleSort = (k: SortKey) => {
+        if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        else { setSortKey(k); setSortDir("asc"); }
+    };
 
-    const [edits,    setEdits]    = useState<Record<number, RowEdit>>({});
+    const [edits, setEdits] = useState<Record<number, RowEdit>>({});
     const [savingId, setSavingId] = useState<number | null>(null);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     const [editProductId, setEditProductId] = useState<number | null>(null);
-    const [dialogOpen,    setDialogOpen]    = useState(false);
+    const [dialogOpen, setDialogOpen] = useState(false);
 
     const openEdit = (id: number) => {
         setEditProductId(id);
@@ -135,14 +174,14 @@ export default function NeedsAttentionPage() {
     // ── counts ─────────────────────────────────────────────────────────────────
 
     const costCount = useMemo(() => items.filter((i) => i.resolvedCostPaise == null).length, [items]);
-    const mrpCount  = useMemo(() => items.filter((i) => !i.mrpPaise || i.mrpPaise <= 0).length, [items]);
+    const mrpCount = useMemo(() => items.filter((i) => !i.mrpPaise || i.mrpPaise <= 0).length, [items]);
 
     // ── filtered + grouped ────────────────────────────────────────────────────
 
     const filtered = useMemo(() => items.filter((i) => {
         const att = attention(i);
         if (showCost && att.includes("cost")) return true;
-        if (showMrp  && att.includes("mrp"))  return true;
+        if (showMrp && att.includes("mrp")) return true;
         return false;
     }), [items, showCost, showMrp]);
 
@@ -155,6 +194,26 @@ export default function NeedsAttentionPage() {
         }
         return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
     }, [filtered, view]);
+
+    // Flat sortable list for the Item-wise view. Numeric nulls sort to the
+    // top in ASC (-Infinity) so missing-data rows bubble up — that's the
+    // whole point of this page.
+    const sortedItems = useMemo(() => {
+        const arr = filtered.slice();
+        const dir = sortDir === "asc" ? 1 : -1;
+        const num = (n: number | null | undefined) => (n == null ? -Infinity : n);
+        arr.sort((a, b) => {
+            switch (sortKey) {
+                case "name": return dir * a.name.localeCompare(b.name);
+                case "group": return dir * (a.groupName ?? "").localeCompare(b.groupName ?? "");
+                case "category": return dir * (a.categoryName ?? "").localeCompare(b.categoryName ?? "");
+                case "brand": return dir * (a.brandName ?? "").localeCompare(b.brandName ?? "");
+                case "cost": return dir * (num(a.resolvedCostPaise) - num(b.resolvedCostPaise));
+                case "mrp": return dir * (num(a.mrpPaise) - num(b.mrpPaise));
+            }
+        });
+        return arr;
+    }, [filtered, sortKey, sortDir]);
 
     // ── edit helpers ──────────────────────────────────────────────────────────
 
@@ -173,7 +232,7 @@ export default function NeedsAttentionPage() {
         setEdit(item, { mrpIncl: val });
 
     function isDirty(item: PricingItem): boolean {
-        const e    = editFor(item);
+        const e = editFor(item);
         const base = emptyEdit(item);
         return e.costExcl !== base.costExcl || e.mrpIncl !== base.mrpIncl;
     }
@@ -181,7 +240,7 @@ export default function NeedsAttentionPage() {
     // ── save row ──────────────────────────────────────────────────────────────
 
     const saveRow = async (item: PricingItem) => {
-        const e    = editFor(item);
+        const e = editFor(item);
         const base = emptyEdit(item);
         const payload: Record<string, unknown> = {};
 
@@ -226,10 +285,10 @@ export default function NeedsAttentionPage() {
     // ── render ────────────────────────────────────────────────────────────────
 
     return (
-        <div className="space-y-4">
+        <div className="flex h-full flex-col gap-2">
 
             {/* header */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                         <AlertTriangle className="size-5 text-amber-600" aria-hidden />
@@ -248,19 +307,18 @@ export default function NeedsAttentionPage() {
             </div>
 
             {/* view toggle + filter pills */}
-            <div className="flex flex-wrap items-center gap-2 border border-border bg-muted/30 p-2">
-                <span className="text-xs text-muted-foreground font-medium mr-1">Group by:</span>
-                {(["group", "category", "brand"] as View[]).map((v) => (
+            <div className="flex flex-none flex-wrap items-center gap-2 border border-border bg-muted/30 p-2">
+                <span className="text-xs text-muted-foreground font-medium mr-1">View:</span>
+                {(["group", "category", "brand", "item"] as View[]).map((v) => (
                     <button
                         key={v}
                         onClick={() => setView(v)}
-                        className={`text-xs px-2.5 py-1 border rounded transition-colors ${
-                            view === v
+                        className={`text-xs px-2.5 py-1 border rounded transition-colors ${view === v
                                 ? "bg-foreground text-background border-foreground"
                                 : "border-border hover:bg-muted"
-                        }`}
+                            }`}
                     >
-                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                        {v === "item" ? "Item-wise" : v.charAt(0).toUpperCase() + v.slice(1)}
                     </button>
                 ))}
 
@@ -269,22 +327,20 @@ export default function NeedsAttentionPage() {
                 <span className="text-xs text-muted-foreground font-medium mr-1">Show:</span>
                 <button
                     onClick={() => setShowCost((p) => !p)}
-                    className={`text-xs px-2.5 py-1 border rounded transition-colors ${
-                        showCost
+                    className={`text-xs px-2.5 py-1 border rounded transition-colors ${showCost
                             ? "bg-red-100 border-red-400 text-red-800"
                             : "border-border text-muted-foreground hover:bg-muted"
-                    }`}
+                        }`}
                 >
                     <AlertCircle className="size-3 inline mr-1" />
                     No cost ({costCount})
                 </button>
                 <button
                     onClick={() => setShowMrp((p) => !p)}
-                    className={`text-xs px-2.5 py-1 border rounded transition-colors ${
-                        showMrp
+                    className={`text-xs px-2.5 py-1 border rounded transition-colors ${showMrp
                             ? "bg-amber-100 border-amber-400 text-amber-800"
                             : "border-border text-muted-foreground hover:bg-muted"
-                    }`}
+                        }`}
                 >
                     <AlertTriangle className="size-3 inline mr-1" />
                     No MRP ({mrpCount})
@@ -298,58 +354,207 @@ export default function NeedsAttentionPage() {
                 <p className="text-sm text-muted-foreground py-8 text-center">
                     All products have cost and MRP set. ✓
                 </p>
+            ) : view === "item" ? (
+                <TableScrollArea className="-mb-8 rounded-b-none border-b-0">
+                    <table className="w-full text-sm">
+                        <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
+                            <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                                <SortHeader k="name"     label="Product"      sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                                <SortHeader k="group"    label="Group"        sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                                <SortHeader k="category" label="Category"     sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                                <SortHeader k="brand"    label="Brand"        sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                                <SortHeader k="cost"     label="Opening excl" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} align="right" />
+                                <th className="px-2 py-2 text-right font-medium uppercase">Opening incl</th>
+                                <SortHeader k="mrp"      label="MRP"          sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} align="right" />
+                                <th className="px-2 py-2 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {sortedItems.map((item) => {
+                                const att = attention(item);
+                                const e = editFor(item);
+                                const dirty = isDirty(item);
+                                const gst = item.gstRatePct;
+                                const savedCostExcl = item.resolvedCostPaise != null ? fmt(item.resolvedCostPaise) : null;
+                                const savedCostIncl = item.resolvedCostPaise != null ? fmt(item.resolvedCostPaise, gst) : null;
+                                const savedMrpIncl = item.mrpPaise != null && item.mrpPaise > 0 ? fmt(item.mrpPaise) : null;
+
+                                return (
+                                    <tr
+                                        key={item.id}
+                                        className={att.includes("cost") ? "bg-red-50/40 hover:bg-red-100/40 dark:bg-red-950/10" : "hover:bg-muted/30"}
+                                    >
+                                        {/* product */}
+                                        <td className="px-2 py-1.5 max-w-[220px] align-top">
+                                            <div className="text-sm font-medium leading-tight truncate" title={item.name}>{item.name}</div>
+                                            <div className="text-xs text-muted-foreground mt-0.5 font-mono truncate">{item.sku}</div>
+                                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                                                {gst > 0 && (
+                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-normal">
+                                                        GST {gst}%
+                                                    </Badge>
+                                                )}
+                                                {att.includes("cost") && (
+                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">no cost</Badge>
+                                                )}
+                                                {att.includes("mrp") && (
+                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-700 border-amber-400 bg-amber-50">
+                                                        no MRP
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        {/* group / category / brand */}
+                                        <td className="px-2 py-1.5 text-xs text-muted-foreground align-top max-w-[120px]">
+                                            <span className="block truncate" title={item.groupName ?? "—"}>
+                                                {item.groupName ?? <span className="text-muted-foreground/50">—</span>}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-1.5 text-xs text-muted-foreground align-top max-w-[140px]">
+                                            <span className="block truncate" title={item.categoryName ?? "—"}>
+                                                {item.categoryName ?? <span className="text-muted-foreground/50">—</span>}
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-1.5 text-xs text-muted-foreground align-top max-w-[100px]">
+                                            <span className="block truncate" title={item.brandName ?? "—"}>
+                                                {item.brandName ?? <span className="text-muted-foreground/50">—</span>}
+                                            </span>
+                                        </td>
+
+                                        {/* cost excl */}
+                                        <td className="px-2 py-1.5 align-top text-right">
+                                            <Input
+                                                inputMode="decimal"
+                                                placeholder={savedCostExcl ?? "—"}
+                                                value={e.costExcl}
+                                                onChange={(ev) => onCostExclChange(item, ev.target.value)}
+                                                className="h-8 w-20 text-right text-sm font-mono"
+                                            />
+                                            {savedCostExcl && (
+                                                <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                                                    {savedCostExcl}
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* cost incl */}
+                                        <td className="px-2 py-1.5 align-top text-right">
+                                            <Input
+                                                inputMode="decimal"
+                                                placeholder={savedCostIncl ?? "—"}
+                                                value={e.costIncl}
+                                                onChange={(ev) => onCostInclChange(item, ev.target.value)}
+                                                className="h-8 w-20 text-right text-sm font-mono"
+                                            />
+                                            {savedCostIncl && (
+                                                <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                                                    {savedCostIncl}
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* mrp */}
+                                        <td className="px-2 py-1.5 align-top text-right">
+                                            <Input
+                                                inputMode="decimal"
+                                                placeholder={savedMrpIncl ?? "—"}
+                                                value={e.mrpIncl}
+                                                onChange={(ev) => onMrpInclChange(item, ev.target.value)}
+                                                className="h-8 w-20 text-right text-sm font-mono"
+                                            />
+                                            {savedMrpIncl && (
+                                                <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                                                    {savedMrpIncl}
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* actions */}
+                                        <td className="px-1 py-1.5 align-top whitespace-nowrap text-right">
+                                            {dirty && (
+                                                <Button
+                                                    size="icon-sm"
+                                                    aria-label="Save"
+                                                    onClick={() => saveRow(item)}
+                                                    disabled={savingId === item.id}
+                                                >
+                                                    <Save className="size-4" />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon-sm"
+                                                aria-label="Edit product"
+                                                title="Edit product"
+                                                onClick={() => openEdit(item.id)}
+                                                className="ml-1"
+                                            >
+                                                <Pencil className="size-4" />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    <ScrollBar orientation="horizontal" />
+                    <ScrollBar orientation="vertical" />
+                </TableScrollArea>
             ) : (
-                <div className="space-y-2">
-                    {grouped.map(([key, groupItems]) => {
-                        const isOpen  = expanded.has(key);
-                        const noCost  = groupItems.filter((i) => i.resolvedCostPaise == null).length;
-                        const noMrp   = groupItems.filter((i) => !i.mrpPaise || i.mrpPaise <= 0).length;
+                <TableScrollArea className="-mb-8 rounded-b-none border-b-0">
+                    {/* sticky top column header — shared by every group */}
+                    <div className={`${ROW_GRID} sticky top-0 z-10 bg-muted/40 backdrop-blur-sm px-2 py-2 border-b border-border text-[10px] font-medium uppercase tracking-wide text-muted-foreground`}>
+                        <div>Product</div>
+                        <div className="text-right" title="Tally-style opening unit cost (excl-GST). Lands on InvProduct.openingRate.">Opening excl</div>
+                        <div className="text-right" title="Opening rate including GST — derived from excl × (1 + GST%).">Opening incl</div>
+                        <div className="text-right">MRP</div>
+                        <div className="text-right">{/* actions */}</div>
+                    </div>
+                    <div className="divide-y divide-border">
+                        {grouped.map(([key, groupItems]) => {
+                            const isOpen = expanded.has(key);
+                            const noCost = groupItems.filter((i) => i.resolvedCostPaise == null).length;
+                            const noMrp = groupItems.filter((i) => !i.mrpPaise || i.mrpPaise <= 0).length;
 
-                        return (
-                            <div key={key} className="border border-border">
-                                {/* group header */}
-                                <button
-                                    className="w-full flex items-center gap-3 px-3 py-2 bg-muted/40 hover:bg-muted/70 transition-colors text-left"
-                                    onClick={() => toggleGroup(key)}
-                                >
-                                    {isOpen
-                                        ? <ChevronDown  className="size-4 shrink-0 text-muted-foreground" />
-                                        : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                                    }
-                                    <span className="font-medium text-sm">{key}</span>
-                                    <span className="text-xs text-muted-foreground ml-1">
-                                        {groupItems.length} item{groupItems.length !== 1 ? "s" : ""}
-                                    </span>
-                                    <span className="ml-auto flex items-center gap-1.5">
-                                        {noCost > 0 && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">{noCost} no cost</Badge>}
-                                        {noMrp  > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-700 border-amber-400">{noMrp} no MRP</Badge>}
-                                    </span>
-                                </button>
+                            return (
+                                <div key={key}>
+                                    {/* group header */}
+                                    <button
+                                        className="w-full flex items-center gap-2 px-2 py-2 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                                        onClick={() => toggleGroup(key)}
+                                    >
+                                        {isOpen
+                                            ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                                            : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                                        }
+                                        <span className="font-medium text-sm">{key}</span>
+                                        <span className="text-xs text-muted-foreground ml-1">
+                                            {groupItems.length} item{groupItems.length !== 1 ? "s" : ""}
+                                        </span>
+                                        <span className="ml-auto flex items-center gap-1.5">
+                                            {noCost > 0 && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">{noCost} no cost</Badge>}
+                                            {noMrp > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-700 border-amber-400">{noMrp} no MRP</Badge>}
+                                        </span>
+                                    </button>
 
-                                {/* product rows */}
-                                {isOpen && (
-                                    <div>
-                                        <div className={`${ROW_GRID} bg-muted/30 px-3 py-1.5 border-b border-border text-[10px] font-medium uppercase tracking-wide text-muted-foreground`}>
-                                            <div>Product</div>
-                                            <div className="text-right" title="Tally-style opening unit cost (excl-GST). Lands on InvProduct.openingRate.">Opening rate excl</div>
-                                            <div className="text-right" title="Opening rate including GST — derived from excl × (1 + GST%).">Opening rate incl</div>
-                                            <div className="text-right">MRP</div>
-                                            <div className="text-right">{/* actions */}</div>
-                                        </div>
+                                    {/* product rows */}
+                                    {isOpen && (
                                         <div className="divide-y divide-border">
                                             {groupItems.map((item) => {
-                                                const att   = attention(item);
-                                                const e     = editFor(item);
+                                                const att = attention(item);
+                                                const e = editFor(item);
                                                 const dirty = isDirty(item);
-                                                const gst   = item.gstRatePct;
+                                                const gst = item.gstRatePct;
                                                 const savedCostExcl = item.resolvedCostPaise != null ? fmt(item.resolvedCostPaise) : null;
                                                 const savedCostIncl = item.resolvedCostPaise != null ? fmt(item.resolvedCostPaise, gst) : null;
-                                                const savedMrpIncl  = item.mrpPaise != null && item.mrpPaise > 0 ? fmt(item.mrpPaise) : null;
+                                                const savedMrpIncl = item.mrpPaise != null && item.mrpPaise > 0 ? fmt(item.mrpPaise) : null;
 
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        className={`${ROW_GRID} px-3 py-2 ${att.includes("cost") ? "bg-red-50/40" : ""}`}
+                                                        className={`${ROW_GRID} px-2 py-1.5 ${att.includes("cost") ? "bg-red-50/40" : ""}`}
                                                     >
                                                         {/* product */}
                                                         <div className="min-w-0">
@@ -450,17 +655,17 @@ export default function NeedsAttentionPage() {
                                                 );
                                             })}
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </TableScrollArea>
             )}
 
-            {/* legend */}
-            {!loading && filtered.length > 0 && (
-                <p className="text-xs text-muted-foreground">
+            {/* legend — hidden in item-wise view so the full-bleed table can extend */}
+            {!loading && filtered.length > 0 && view !== "item" && (
+                <p className="flex-none text-xs text-muted-foreground">
                     <strong>Opening rate</strong> — enter excl or incl; the other auto-fills. Saves to <code>InvProduct.openingRate</code> (Tally-style opening) and mirrors into the cost cache so the resolver picks it up.{" "}
                     <strong>MRP</strong> — sticker price (incl GST per Indian law).{" "}
                     <strong>Pencil</strong> — open the full product edit form.

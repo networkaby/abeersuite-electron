@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import axios from "axios";
 import { toast } from "sonner";
 import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X, ArrowRight, TrendingDown } from "lucide-react";
@@ -26,6 +25,8 @@ import {
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { TableScrollArea } from "@/shared/components/TableScrollArea";
+import { flattenTree, treeLabel, InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
 type CostMethod =
     | "WEIGHTED_AVG_COST"
@@ -138,6 +139,61 @@ export default function PricingItemsPage() {
     const [savingId,        setSavingId]        = useState<number | null>(null);
     const [applying,        setApplying]        = useState(false);
 
+    /// Shared master quick-add. Reachable from the "+ New X…" item at the top
+    /// of each filter dropdown. After-create we just toast + refresh the
+    /// parent-picker reference lists — the filter list itself stays as-is
+    /// because the filter is built from item.categoryName strings, and the
+    /// new master won't surface until a product is assigned to it.
+    const [masterDialogOpen, setMasterDialogOpen] = useState(false);
+    const [masterKind, setMasterKind] = useState<MasterKind>("category");
+    const masterResolveRef = useRef<((id: number | null) => void) | null>(null);
+
+    type ParentOpt = { id: number; name: string; parentId?: number | null };
+    type GstRateOpt = { id: number; rate: string | number; label: string };
+    type StrategyOpt = { id: number; name: string; isActive?: boolean };
+    const [refCategories, setRefCategories] = useState<ParentOpt[]>([]);
+    const [refGroups, setRefGroups] = useState<ParentOpt[]>([]);
+    const [refBrands, setRefBrands] = useState<ParentOpt[]>([]);
+    const [refGstRates, setRefGstRates] = useState<GstRateOpt[]>([]);
+    const [refStrategies, setRefStrategies] = useState<StrategyOpt[]>([]);
+    const refsLoadedRef = useRef(false);
+
+    /// Eagerly load master reference data on mount so every filter dropdown
+    /// (Category / Brand / Group / Strategy) reads from the real master
+    /// collections instead of unique-ing item.<name> strings. Also powers the
+    /// Parent picker (category / group) and GST rate dropdown inside the
+    /// InventoryMasterDropdownQuickDialog.
+    const ensureRefs = useCallback(async () => {
+        if (refsLoadedRef.current) return;
+        refsLoadedRef.current = true;
+        try {
+            const [c, g, b, gst, s] = await Promise.all([
+                axios.get<ParentOpt[]>("/api/inventory/categories"),
+                axios.get<ParentOpt[]>("/api/inventory/product-groups"),
+                axios.get<ParentOpt[]>("/api/inventory/brands"),
+                axios.get<GstRateOpt[]>("/api/inventory/gst-rates").catch(() => ({ data: [] as GstRateOpt[] })),
+                axios.get<StrategyOpt[]>("/api/pricing-strategy/strategies").catch(() => ({ data: [] as StrategyOpt[] })),
+            ]);
+            setRefCategories(c.data);
+            setRefGroups(g.data);
+            setRefBrands(b.data);
+            setRefGstRates(gst.data);
+            setRefStrategies(s.data);
+        } catch {
+            toast.error("Failed to load master reference data");
+            refsLoadedRef.current = false; // allow retry on next open
+        }
+    }, []);
+
+    const createMaster = useCallback((kind: MasterKind): Promise<number | null> => {
+        void ensureRefs();
+        return new Promise((resolve) => {
+            masterResolveRef.current = resolve;
+            setMasterKind(kind);
+            setMasterDialogOpen(true);
+        });
+    }, [ensureRefs]);
+
     const load = () => {
         setLoading(true);
         axios
@@ -149,6 +205,12 @@ export default function PricingItemsPage() {
 
     useEffect(() => {
         load();
+        // Load master reference data so the Category / Group dropdowns can
+        // render the parent-child hierarchy (Office Paper → -Copier Paper)
+        // instead of a flat alphabetical list. The same refs power the
+        // InventoryMasterDropdownQuickDialog when the user picks "+ New".
+        void ensureRefs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const uniqueCategories = useMemo(() => {
@@ -156,21 +218,73 @@ export default function PricingItemsPage() {
         for (const i of items) if (i.categoryName) set.add(i.categoryName);
         return [...set].sort();
     }, [items]);
-    const uniqueBrands = useMemo(() => {
-        const set = new Set<string>();
-        for (const i of items) if (i.brandName) set.add(i.brandName);
-        return [...set].sort();
-    }, [items]);
+
+    /// Hierarchy-aware option list for the Category filter. Built from the
+    /// master records (`refCategories`) so children sit under their parents
+    /// with treeLabel's "-/--/---" prefix. Falls back to the flat
+    /// items-derived list while refs are still loading on first paint.
+    const categoryFilterOptions = useMemo(() => {
+        if (refCategories.length === 0) {
+            return uniqueCategories.map((c) => ({ value: c, label: c }));
+        }
+        return flattenTree(refCategories).map((r) => ({
+            value: r.name,           // filter value stays a name string so the
+                                      // existing items.categoryName === filterCategory
+                                      // comparison keeps working
+            label: treeLabel(r),     // indented in the open list
+            leaf: r.name,            // bare name in the closed trigger
+            searchText: r.name,      // search matches the bare name
+        }));
+    }, [refCategories, uniqueCategories]);
+    /// Brand filter options sourced from the brand master (no hierarchy).
+    /// Brief fallback to items-derived names while refBrands is still loading.
+    const brandFilterOptions = useMemo(() => {
+        if (refBrands.length === 0) {
+            const set = new Set<string>();
+            for (const i of items) if (i.brandName) set.add(i.brandName);
+            return [...set].sort().map((b) => ({ value: b, label: b }));
+        }
+        return refBrands
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((b) => ({ value: b.name, label: b.name }));
+    }, [refBrands, items]);
     const uniqueGroups = useMemo(() => {
         const set = new Set<string>();
         for (const i of items) if (i.groupName) set.add(i.groupName);
         return [...set].sort();
     }, [items]);
-    const uniqueStrategies = useMemo(() => {
-        const map = new Map<number, string>();
-        for (const i of items) if (i.strategyId != null && i.strategyName) map.set(i.strategyId, i.strategyName);
-        return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-    }, [items]);
+
+    /// Same hierarchy-aware shape as `categoryFilterOptions`, for the Group
+    /// filter. Children appear under their parents instead of alphabetically
+    /// at the top level.
+    const groupFilterOptions = useMemo(() => {
+        if (refGroups.length === 0) {
+            return uniqueGroups.map((g) => ({ value: g, label: g }));
+        }
+        return flattenTree(refGroups).map((r) => ({
+            value: r.name,
+            label: treeLabel(r),
+            leaf: r.name,
+            searchText: r.name,
+        }));
+    }, [refGroups, uniqueGroups]);
+    /// Strategy filter options sourced from the strategy master so even
+    /// strategies that haven't been assigned to any item yet show up.
+    /// Falls back to items-derived during the load window.
+    const strategyFilterOptions = useMemo(() => {
+        if (refStrategies.length === 0) {
+            const map = new Map<number, string>();
+            for (const i of items) if (i.strategyId != null && i.strategyName) map.set(i.strategyId, i.strategyName);
+            return [...map.entries()]
+                .map(([id, name]) => ({ id, name }))
+                .sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return refStrategies
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((s) => ({ id: s.id, name: s.name }));
+    }, [refStrategies, items]);
 
     // Base filter — no attention split yet.
     const baseFiltered = useMemo(() => {
@@ -207,44 +321,6 @@ export default function PricingItemsPage() {
         filterGroup !== "__all" ||
         filterMethod !== "__all" ||
         filterStrategy !== "__all";
-
-    // Virtualized against the office layout's <main> scroll container
-    // (the office shell uses `flex-1 overflow-y-auto p-8` on <main>, so the
-    // window itself doesn't scroll). We resolve that ancestor lazily — the
-    // page can't import a ref to it.
-    const ROW_PX = 73;
-    const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
-    const [tableOffsetInScroll, setTableOffsetInScroll] = useState(0);
-    const tableContainerRef = useCallback((el: HTMLDivElement | null) => {
-        if (!el) return;
-        // Walk up to the first scrollable ancestor — the office layout's <main>.
-        let p: HTMLElement | null = el.parentElement;
-        while (p) {
-            const oy = window.getComputedStyle(p).overflowY;
-            if (oy === "auto" || oy === "scroll") break;
-            p = p.parentElement;
-        }
-        if (p) {
-            setScrollEl(p);
-            setTableOffsetInScroll(el.getBoundingClientRect().top - p.getBoundingClientRect().top + p.scrollTop);
-        }
-    }, []);
-    useLayoutEffect(() => {
-        if (!scrollEl) return;
-        const onResize = () => {
-            const el = document.getElementById("pricing-items-table");
-            if (el) setTableOffsetInScroll(el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop);
-        };
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
-    }, [scrollEl]);
-    const normalVirtualizer = useVirtualizer({
-        count:            normalFiltered.length,
-        getScrollElement: () => scrollEl,
-        estimateSize:     () => ROW_PX,
-        overscan:         10,
-        scrollMargin:     tableOffsetInScroll,
-    });
 
     const clearFilters = () => {
         setSearch("");
@@ -381,12 +457,7 @@ export default function PricingItemsPage() {
     };
 
     // ── Shared row renderer ──────────────────────────────────────────────────
-    // Used by both the normal table and the attention panel so the row JSX
-    // lives in exactly one place.
-    function renderItemRow(
-        item: Item,
-        dataIndex: number,
-    ) {
+    function renderItemRow(item: Item) {
         const e    = editFor(item);
         const itemMethodValue = item.costMethod ?? "__inherit";
         const dirty =
@@ -418,11 +489,7 @@ export default function PricingItemsPage() {
             ? (profitPaise / costForProfit) * 100
             : null;
         return (
-            <TableRow
-                key={item.id}
-                data-index={dataIndex}
-                style={{ height: ROW_PX }}
-            >
+            <TableRow key={item.id}>
                 <TableCell className="max-w-[260px]">
                     <div className="font-medium text-sm truncate" title={item.name}>{item.name}</div>
                     <div className="text-xs text-muted-foreground truncate" title={productLabel}>
@@ -582,10 +649,10 @@ export default function PricingItemsPage() {
     }
 
     return (
-        <div className="space-y-3">
+        <div className="flex h-full flex-col gap-2">
 
             {/* ── Header row ────────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-none flex-wrap items-end justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                         <Boxes className="size-5" aria-hidden />
@@ -616,7 +683,7 @@ export default function PricingItemsPage() {
             </div>
 
             {/* ── Filter card (voucher-register style: labels above) ────── */}
-            <div className="flex flex-wrap items-end gap-3 rounded-sm border border-border bg-card p-3">
+            <div className="flex flex-none flex-wrap items-end gap-3 rounded-sm border border-border bg-card p-3">
                 <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Search</label>
                     <Input
@@ -630,12 +697,22 @@ export default function PricingItemsPage() {
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Category</label>
                     <SearchableSelect
                         value={filterCategory}
-                        onChange={(v) => setFilterCategory(v ?? "__all")}
+                        onChange={(v) => {
+                            // "__new__" is a sentinel — open the quick-add dialog
+                            // instead of changing the filter. The filter list is
+                            // built from item.categoryName strings, so a newly
+                            // created category won't appear here until a product
+                            // is assigned to it (visit /office/inventory/products
+                            // to do that).
+                            if (v === "__new__") { void createMaster("category"); return; }
+                            setFilterCategory(v ?? "__all");
+                        }}
                         clearable={false}
                         triggerClassName="h-8 w-[150px] text-xs"
                         options={[
                             { value: "__all", label: "All categories" },
-                            ...uniqueCategories.map((c) => ({ value: c, label: c })),
+                            { value: "__new__", label: "+ New category…" },
+                            ...categoryFilterOptions,
                         ]}
                         ariaLabel="Filter by category"
                     />
@@ -644,12 +721,16 @@ export default function PricingItemsPage() {
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Brand</label>
                     <SearchableSelect
                         value={filterBrand}
-                        onChange={(v) => setFilterBrand(v ?? "__all")}
+                        onChange={(v) => {
+                            if (v === "__new__") { void createMaster("brand"); return; }
+                            setFilterBrand(v ?? "__all");
+                        }}
                         clearable={false}
                         triggerClassName="h-8 w-[150px] text-xs"
                         options={[
                             { value: "__all", label: "All brands" },
-                            ...uniqueBrands.map((b) => ({ value: b, label: b })),
+                            { value: "__new__", label: "+ New brand…" },
+                            ...brandFilterOptions,
                         ]}
                         ariaLabel="Filter by brand"
                     />
@@ -658,12 +739,16 @@ export default function PricingItemsPage() {
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Group</label>
                     <SearchableSelect
                         value={filterGroup}
-                        onChange={(v) => setFilterGroup(v ?? "__all")}
+                        onChange={(v) => {
+                            if (v === "__new__") { void createMaster("group"); return; }
+                            setFilterGroup(v ?? "__all");
+                        }}
                         clearable={false}
                         triggerClassName="h-8 w-[150px] text-xs"
                         options={[
                             { value: "__all", label: "All groups" },
-                            ...uniqueGroups.map((g) => ({ value: g, label: g })),
+                            { value: "__new__", label: "+ New group…" },
+                            ...groupFilterOptions,
                         ]}
                         ariaLabel="Filter by group"
                     />
@@ -684,7 +769,7 @@ export default function PricingItemsPage() {
                         <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Strategy" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="__all">All strategies</SelectItem>
-                            {uniqueStrategies.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                            {strategyFilterOptions.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
@@ -704,7 +789,7 @@ export default function PricingItemsPage() {
             {!loading && attentionFiltered.length > 0 ? (
                 <Link
                     href="/office/pricing-strategy/needs-attention"
-                    className="flex items-center gap-2 rounded-sm border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100/60 transition-colors dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+                    className="flex flex-none items-center gap-2 rounded-sm border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100/60 transition-colors dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
                 >
                     <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
                     <span className="font-medium">
@@ -723,8 +808,8 @@ export default function PricingItemsPage() {
                 </Link>
             ) : null}
 
-            {/* ── Main table (page-scrolled, window-virtualized) ─────────── */}
-            <div id="pricing-items-table" ref={tableContainerRef} className="rounded-sm border border-border bg-card overflow-hidden">
+            {/* ── Main table (contained scroll, no virtualization) ───────── */}
+            <TableScrollArea>
                 <Table>
                     <TableHeader className="bg-muted/40 sticky top-0 z-10">
                         <TableColumns />
@@ -738,29 +823,61 @@ export default function PricingItemsPage() {
                                     ? "All products need attention — see the banner above."
                                     : "No products match."
                             } />
-                        ) : (() => {
-                            const vi    = normalVirtualizer.getVirtualItems();
-                            const total = normalVirtualizer.getTotalSize();
-                            const padTop = vi.length > 0 ? vi[0].start - tableOffsetInScroll : 0;
-                            const padBot = vi.length > 0 ? (total + tableOffsetInScroll) - vi[vi.length - 1].end : 0;
-                            return (
-                                <>
-                                    {padTop > 0 ? <tr aria-hidden><td colSpan={10} style={{ height: `${padTop}px` }} /></tr> : null}
-                                    {vi.map((v) => renderItemRow(normalFiltered[v.index], v.index))}
-                                    {padBot > 0 ? <tr aria-hidden><td colSpan={10} style={{ height: `${padBot}px` }} /></tr> : null}
-                                </>
-                            );
-                        })()}
+                        ) : (
+                            normalFiltered.map((item) => renderItemRow(item))
+                        )}
                     </TableBody>
                 </Table>
-            </div>
+            </TableScrollArea>
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="flex-none text-[11px] text-muted-foreground leading-relaxed">
                 <strong>Cost</strong> is resolved per the row&apos;s cost method (opening + purchases) — read-only here; manual entry lives on the <em>Needs Attention</em> page.{" "}
                 <strong>Computed</strong> = (cost + flat) × (1 + markup%), rounded, capped at MRP.{" "}
                 <strong>Profit</strong> = price − cost (both excl-GST, so tax-adjusted).{" "}
                 <strong>Manual price</strong> sets <code>pricePaise</code> directly and locks the row.
             </p>
+
+            <InventoryMasterDropdownQuickDialog
+                open={masterDialogOpen}
+                onOpenChange={(v) => {
+                    setMasterDialogOpen(v);
+                    if (!v && masterResolveRef.current) {
+                        masterResolveRef.current(null);
+                        masterResolveRef.current = null;
+                    }
+                }}
+                kind={masterKind}
+                siblings={
+                    masterKind === "category" ? refCategories
+                    : masterKind === "group" ? refGroups
+                    : undefined
+                }
+                gstRates={refGstRates}
+                onCreated={async (id) => {
+                    // Refresh just the reference list that grew so the next
+                    // open of the dialog shows the new row as a parent option.
+                    // We deliberately don't touch the items filter — that list
+                    // is built from item.<kind>Name strings, and the new master
+                    // won't surface there until a product is assigned to it.
+                    try {
+                        if (masterKind === "category") {
+                            const r = await axios.get<ParentOpt[]>("/api/inventory/categories");
+                            setRefCategories(r.data);
+                        } else if (masterKind === "group") {
+                            const r = await axios.get<ParentOpt[]>("/api/inventory/product-groups");
+                            setRefGroups(r.data);
+                        } else if (masterKind === "brand") {
+                            const r = await axios.get<ParentOpt[]>("/api/inventory/brands");
+                            setRefBrands(r.data);
+                        }
+                    } catch { /* non-fatal — toast already shown by the dialog */ }
+                    if (masterResolveRef.current) {
+                        masterResolveRef.current(id);
+                        masterResolveRef.current = null;
+                    }
+                    setMasterDialogOpen(false);
+                }}
+            />
         </div>
     );
 }

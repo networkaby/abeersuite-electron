@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
+import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
 type Category = { id: number; name: string };
 type Row = {
@@ -182,8 +183,8 @@ export default function AttributeMastersPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">All categories (global)</SelectItem>
-                                    {categories.map((c) => (
-                                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                    {flattenTree(categories).map((r) => (
+                                        <SelectItem key={r.id} value={String(r.id)}>{treeLabel(r)}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

@@ -25,6 +25,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -166,9 +167,9 @@ export default function InventoryProductGroupsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value={NONE}>None (top-level)</SelectItem>
-                                    {parentOptions.map((g) => (
-                                        <SelectItem key={g.id} value={String(g.id)}>
-                                            {g.name}
+                                    {flattenTree(parentOptions).map((r) => (
+                                        <SelectItem key={r.id} value={String(r.id)}>
+                                            {treeLabel(r)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

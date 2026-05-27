@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import {
     Loader2, ArrowLeft, AlertTriangle, ChevronRight, ChevronDown, Pencil,
+    ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,27 +21,28 @@ import { fmt } from "@/utils/constants";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { useEscape } from "@/shared/hooks";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { TableScrollArea } from "@/shared/components/TableScrollArea";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ValuationMethod = "LAST_COST" | "WEIGHTED_AVG" | "FIFO" | "LIFO";
 
 type Row = {
-    id:                number;
-    sku:               string;
-    name:              string;
-    stock:             number;
+    id: number;
+    sku: string;
+    name: string;
+    stock: number;
     lowStockThreshold: number;
-    costPaise:         number | null;
-    pricePaise:        number | null;
-    unit:     { code: string; label: string };
-    group:    { id: number; name: string } | null;
-    brand:    { id: number; name: string } | null;
+    costPaise: number | null;
+    pricePaise: number | null;
+    unit: { code: string; label: string };
+    group: { id: number; name: string } | null;
+    brand: { id: number; name: string } | null;
     category: { id: number; name: string } | null;
     valuation: {
         unitCost: number;
-        value:    number;
-        method:   ValuationMethod;
+        value: number;
+        method: ValuationMethod;
         fallback?: "no-receipt-history" | "no-cost-basis" | "not-implemented";
     };
     isLow: boolean;
@@ -48,13 +50,19 @@ type Row = {
 
 type Branch = { id: string; name: string };
 type Response = { method: ValuationMethod; branches: Branch[]; rows: Row[] };
-type View = "group" | "category" | "brand";
+type View = "group" | "category" | "brand" | "item";
+
+type SortKey =
+    | "name" | "group" | "category" | "brand"
+    | "quantity" | "rate" | "value"
+    | "saleRate" | "saleValue" | "profit" | "margin";
+type SortDir = "asc" | "desc";
 
 const METHOD_LABELS: Record<ValuationMethod, string> = {
-    LAST_COST:     "Last Cost",
-    WEIGHTED_AVG:  "Weighted Avg",
-    FIFO:          "FIFO",
-    LIFO:          "LIFO",
+    LAST_COST: "Last Cost",
+    WEIGHTED_AVG: "Weighted Avg",
+    FIFO: "FIFO",
+    LIFO: "LIFO",
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -69,8 +77,14 @@ export default function StockSummaryPage() {
     // URL-synced state
     const [view, setViewState] = useState<View>(() => {
         const v = params.get("view");
-        return v === "category" || v === "brand" ? v : "group";
+        return v === "category" || v === "brand" || v === "item" ? v : "group";
     });
+    const [sortKey, setSortKey] = useState<SortKey>("name");
+    const [sortDir, setSortDir] = useState<SortDir>("asc");
+    const toggleSort = (k: SortKey) => {
+        if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        else { setSortKey(k); setSortDir("asc"); }
+    };
     const [method, setMethodState] = useState<ValuationMethod>(() => {
         const m = params.get("method");
         return m === "WEIGHTED_AVG" || m === "FIFO" || m === "LIFO" ? m : "LAST_COST";
@@ -91,10 +105,10 @@ export default function StockSummaryPage() {
     const pushUrl = useCallback(
         (next: { view?: View; method?: ValuationMethod; showProfit?: boolean; branchId?: string }) => {
             const qs = new URLSearchParams(params.toString());
-            const v = next.view      ?? view;
-            const m = next.method    ?? method;
+            const v = next.view ?? view;
+            const m = next.method ?? method;
             const p = next.showProfit ?? showProfit;
-            const b = next.branchId  ?? branchId;
+            const b = next.branchId ?? branchId;
             if (v === "group") qs.delete("view"); else qs.set("view", v);
             if (m === "LAST_COST") qs.delete("method"); else qs.set("method", m);
             if (p) qs.set("profit", "1"); else qs.delete("profit");
@@ -127,9 +141,9 @@ export default function StockSummaryPage() {
     // ── Group + roll up (client side) ─────────────────────────────────────────
     const grouped = useMemo(() => {
         const keyName = (r: Row): string =>
-            view === "group"    ? r.group?.name    ?? "Ungrouped"
-          : view === "category" ? r.category?.name ?? "Uncategorised"
-          /* brand */            : r.brand?.name    ?? "No brand";
+            view === "group" ? r.group?.name ?? "Ungrouped"
+                : view === "category" ? r.category?.name ?? "Uncategorised"
+          /* brand */ : r.brand?.name ?? "No brand";
 
         const map = new Map<string, Row[]>();
         for (const r of rows) {
@@ -141,9 +155,9 @@ export default function StockSummaryPage() {
             .map(([name, items]) => {
                 items.sort((a, b) => a.name.localeCompare(b.name));
                 const totalValue = items.reduce((s, r) => s + (r.valuation.value ?? 0), 0);
-                const totalQty   = items.reduce((s, r) => s + (r.stock > 0 ? r.stock : 0), 0);
+                const totalQty = items.reduce((s, r) => s + (r.stock > 0 ? r.stock : 0), 0);
                 const unitCodes = new Set(items.map((r) => r.unit.code));
-                const unitCode  = unitCodes.size === 1 ? items[0].unit.code : null;
+                const unitCode = unitCodes.size === 1 ? items[0].unit.code : null;
 
                 // Profit roll-up — only rows where both costPaise and pricePaise are set
                 const profitRows = items.filter((r) => r.costPaise != null && r.pricePaise != null && r.stock > 0);
@@ -153,7 +167,7 @@ export default function StockSummaryPage() {
                 const totalCostValue = profitRows.reduce(
                     (s, r) => s + (r.stock * (r.costPaise ?? 0)) / 100, 0,
                 );
-                const totalProfit    = totalSaleValue - totalCostValue;
+                const totalProfit = totalSaleValue - totalCostValue;
                 const margin = totalSaleValue > 0 ? (totalProfit / totalSaleValue) * 100 : null;
 
                 return { name, items, totalValue, totalQty, unitCode, totalSaleValue, totalProfit, margin, profitRows: profitRows.length };
@@ -161,6 +175,45 @@ export default function StockSummaryPage() {
             .sort((a, b) => a.name.localeCompare(b.name));
         return groups;
     }, [rows, view]);
+
+    // Flat sortable list for the Item-wise view.
+    const sortedItems = useMemo(() => {
+        const arr = rows.slice();
+        const dir = sortDir === "asc" ? 1 : -1;
+        const num = (n: number | null | undefined) => (n == null ? -Infinity : n);
+        arr.sort((a, b) => {
+            switch (sortKey) {
+                case "name": return dir * a.name.localeCompare(b.name);
+                case "group": return dir * (a.group?.name ?? "").localeCompare(b.group?.name ?? "");
+                case "category": return dir * (a.category?.name ?? "").localeCompare(b.category?.name ?? "");
+                case "brand": return dir * (a.brand?.name ?? "").localeCompare(b.brand?.name ?? "");
+                case "quantity": return dir * (a.stock - b.stock);
+                case "rate": return dir * (a.valuation.unitCost - b.valuation.unitCost);
+                case "value": return dir * (a.valuation.value - b.valuation.value);
+                case "saleRate": return dir * (num(a.pricePaise) - num(b.pricePaise));
+                case "saleValue": {
+                    const av = a.pricePaise != null && a.stock > 0 ? (a.stock * a.pricePaise) / 100 : -Infinity;
+                    const bv = b.pricePaise != null && b.stock > 0 ? (b.stock * b.pricePaise) / 100 : -Infinity;
+                    return dir * (av - bv);
+                }
+                case "profit": {
+                    const ap = a.costPaise != null && a.pricePaise != null && a.stock > 0
+                        ? ((a.pricePaise - a.costPaise) * a.stock) / 100 : -Infinity;
+                    const bp = b.costPaise != null && b.pricePaise != null && b.stock > 0
+                        ? ((b.pricePaise - b.costPaise) * b.stock) / 100 : -Infinity;
+                    return dir * (ap - bp);
+                }
+                case "margin": {
+                    const am = a.costPaise != null && a.pricePaise != null && a.pricePaise > 0
+                        ? ((a.pricePaise - a.costPaise) / a.pricePaise) * 100 : -Infinity;
+                    const bm = b.costPaise != null && b.pricePaise != null && b.pricePaise > 0
+                        ? ((b.pricePaise - b.costPaise) / b.pricePaise) * 100 : -Infinity;
+                    return dir * (am - bm);
+                }
+            }
+        });
+        return arr;
+    }, [rows, sortKey, sortDir]);
 
     // Auto-expand every group whenever the underlying group set changes
     // (initial load, view switch, refetch after save). User can collapse
@@ -226,9 +279,27 @@ export default function StockSummaryPage() {
     // Trailing edit cell is always present.
     const showCatBrandCols = !showProfit;
 
+    // ── Render helpers ────────────────────────────────────────────────────────
+    const SortHeader = ({ k, label, align = "left" }: { k: SortKey; label: string; align?: "left" | "right" }) => {
+        const active = sortKey === k;
+        const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+        return (
+            <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
+                <button
+                    type="button"
+                    onClick={() => toggleSort(k)}
+                    className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+                >
+                    <span>{label}</span>
+                    <Icon size={11} className={active ? "" : "opacity-40"} />
+                </button>
+            </th>
+        );
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="space-y-4">
+        <div className="flex h-full flex-col gap-2">
             {/* Breadcrumb bar — uniform with the other inventory pages */}
             <BreadcrumbBar>
                 <Breadcrumb>
@@ -249,8 +320,8 @@ export default function StockSummaryPage() {
             {/* Header */}
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                    <h2 className="text-xl font-semibold tracking-tight">Stock Summary</h2>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    {/* <h2 className="text-xl font-semibold tracking-tight">Stock Summary</h2> */}
+                    {/* <p className="text-sm text-muted-foreground mt-0.5">
                         Live valuation
                         {asOf && (
                             <span className="ml-1">
@@ -258,7 +329,7 @@ export default function StockSummaryPage() {
                                 {new Date(asOf).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                             </span>
                         )}
-                    </p>
+                    </p> */}
                 </div>
                 {refSource === "balance-sheet" && (
                     <Button
@@ -273,21 +344,20 @@ export default function StockSummaryPage() {
             </div>
 
             {/* Control bar */}
-            <div className="flex items-center gap-3 flex-wrap text-sm">
+            <div className="flex items-center gap-3 flex-wrap text-sm -mt-2">
                 {/* View */}
                 <div className="inline-flex items-center rounded-md border border-border p-0.5 bg-card">
-                    {(["group", "category", "brand"] as View[]).map((v) => (
+                    {(["group", "category", "brand", "item"] as View[]).map((v) => (
                         <button
                             key={v}
                             type="button"
                             onClick={() => setView(v)}
-                            className={`px-3 py-1 rounded-sm capitalize ${
-                                view === v
-                                    ? "bg-primary text-primary-foreground"
-                                    : "text-muted-foreground hover:bg-muted"
-                            }`}
+                            className={`px-3 py-1 rounded-sm capitalize ${view === v
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:bg-muted"
+                                }`}
                         >
-                            {v}
+                            {v === "item" ? "Item-wise" : v}
                         </button>
                     ))}
                 </div>
@@ -325,17 +395,19 @@ export default function StockSummaryPage() {
                     </div>
                 )}
 
-                {/* Expand / Collapse all */}
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={toggleAll}
-                    disabled={grouped.length === 0}
-                >
-                    {allExpanded ? <ChevronDown size={14} className="mr-1" /> : <ChevronRight size={14} className="mr-1" />}
-                    {allExpanded ? "Collapse all" : "Expand all"}
-                </Button>
+                {/* Expand / Collapse all (not meaningful in item view) */}
+                {view !== "item" && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={toggleAll}
+                        disabled={grouped.length === 0}
+                    >
+                        {allExpanded ? <ChevronDown size={14} className="mr-1" /> : <ChevronRight size={14} className="mr-1" />}
+                        {allExpanded ? "Collapse all" : "Expand all"}
+                    </Button>
+                )}
 
                 {/* Show Profit */}
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none ml-auto">
@@ -356,11 +428,11 @@ export default function StockSummaryPage() {
                 </div>
             )}
 
-            {(!loading || rows.length > 0) && (
-                <div className="rounded-lg border border-border overflow-x-auto">
+            {(!loading || rows.length > 0) && view !== "item" && (
+                <TableScrollArea className="-mx-6 -mb-6 rounded-lg">
                     <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-muted/40 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                        <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
+                            <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
                                 <th className="px-3 py-2 text-left font-medium">Particulars</th>
                                 {showCatBrandCols && (
                                     <>
@@ -553,7 +625,148 @@ export default function StockSummaryPage() {
                             </tr>
                         </tfoot>
                     </table>
-                </div>
+                </TableScrollArea>
+            )}
+
+            {/* Item-wise view — flat, sortable, no group rollups */}
+            {(!loading || rows.length > 0) && view === "item" && (
+                <TableScrollArea className="-mx-6 -mb-6 rounded-lg ">
+                    <table className="w-full text-sm">
+                        <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
+                            <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                                <SortHeader k="name" label="Name" />
+                                <SortHeader k="group" label="Group" />
+                                <SortHeader k="category" label="Category" />
+                                <SortHeader k="brand" label="Brand" />
+                                <SortHeader k="quantity" label="Quantity" align="right" />
+                                <SortHeader k="rate" label="Rate" align="right" />
+                                <SortHeader k="value" label="Value" align="right" />
+                                {showProfit && (
+                                    <>
+                                        <SortHeader k="saleRate" label="Sale Rate" align="right" />
+                                        <SortHeader k="saleValue" label="Sale Value" align="right" />
+                                        <SortHeader k="profit" label="Profit" align="right" />
+                                        <SortHeader k="margin" label="Margin %" align="right" />
+                                    </>
+                                )}
+                                <th className="px-3 py-2 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {sortedItems.length === 0 && (
+                                <tr>
+                                    <td colSpan={showProfit ? 12 : 8} className="px-3 py-10 text-center text-muted-foreground">
+                                        No active products found.
+                                    </td>
+                                </tr>
+                            )}
+                            {sortedItems.map((r) => {
+                                const saleValue = r.pricePaise != null && r.stock > 0 ? (r.stock * r.pricePaise) / 100 : null;
+                                const profit = r.costPaise != null && r.pricePaise != null && r.stock > 0
+                                    ? ((r.pricePaise - r.costPaise) * r.stock) / 100
+                                    : null;
+                                const margin = r.costPaise != null && r.pricePaise != null && r.pricePaise > 0
+                                    ? ((r.pricePaise - r.costPaise) / r.pricePaise) * 100
+                                    : null;
+                                return (
+                                    <tr
+                                        key={r.id}
+                                        className={r.isLow ? "bg-amber-50/40 hover:bg-amber-100/60 dark:bg-amber-950/10 dark:hover:bg-amber-900/20" : "hover:bg-muted/30"}
+                                    >
+                                        <td className="px-3 py-1.5">
+                                            <Link
+                                                href={`/office/inventory/inventory-details?productId=${r.id}`}
+                                                className="text-foreground hover:text-primary hover:underline"
+                                            >
+                                                {r.name}
+                                            </Link>
+                                            <span className="ml-2 font-mono text-xs text-muted-foreground/70">{r.sku}</span>
+                                            {r.isLow && (
+                                                <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400 text-xs">
+                                                    <AlertTriangle size={11} />
+                                                    Low
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                                            {r.group?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                                            {r.category?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                                            {r.brand?.name ?? <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        <td className="px-3 py-1.5 text-right font-mono">
+                                            {r.stock} {r.unit.code}
+                                        </td>
+                                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                                            {r.valuation.unitCost > 0
+                                                ? fmt(r.valuation.unitCost)
+                                                : <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        <td className="px-3 py-1.5 text-right font-mono">
+                                            {r.valuation.value > 0
+                                                ? fmt(r.valuation.value)
+                                                : <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        {showProfit && (
+                                            <>
+                                                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                                                    {r.pricePaise != null ? fmt(r.pricePaise / 100) : <span className="text-muted-foreground/50">—</span>}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-right font-mono">
+                                                    {saleValue != null ? fmt(saleValue) : <span className="text-muted-foreground/50">—</span>}
+                                                </td>
+                                                <td className={`px-3 py-1.5 text-right font-mono ${profit != null && profit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                                                    {profit != null ? fmt(profit) : <span className="text-muted-foreground/50">—</span>}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-right font-mono">
+                                                    {margin != null ? `${margin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                                </td>
+                                            </>
+                                        )}
+                                        <td className="px-2 py-1 text-right">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                onClick={() => openEdit(r.id)}
+                                                title="Edit product master"
+                                                aria-label={`Edit ${r.name}`}
+                                            >
+                                                <Pencil className="size-3.5" />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        <tfoot>
+                            <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                                <td className="px-3 py-2" colSpan={4}>Grand Total ({sortedItems.length} item{sortedItems.length === 1 ? "" : "s"})</td>
+                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                <td className="px-3 py-2 text-right font-mono">{fmt(grandTotalValue)}</td>
+                                {showProfit && (
+                                    <>
+                                        <td className="px-3 py-2 text-right font-mono text-muted-foreground/50">—</td>
+                                        <td className="px-3 py-2 text-right font-mono">
+                                            {grandSaleValue > 0 ? fmt(grandSaleValue) : <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        <td className={`px-3 py-2 text-right font-mono ${grandProfit < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                                            {grandSaleValue > 0 ? fmt(grandProfit) : <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-mono">
+                                            {grandMargin != null ? `${grandMargin.toFixed(2)}%` : <span className="text-muted-foreground/50">—</span>}
+                                        </td>
+                                    </>
+                                )}
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </TableScrollArea>
             )}
 
             {/* Fallback footnote */}

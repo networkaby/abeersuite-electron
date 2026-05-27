@@ -167,7 +167,10 @@
       "Bash(grep -n \"test\\\\|spec\" \"D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\modules\\\\pricing-strategy\" -i 2>nul)",
       "Bash(node -e \"const p=require\\('@/generated/prisma/client'\\); new p.PrismaClient\\(\\).invProduct.count\\(\\).then\\(n=>{console.log\\(n\\); process.exit\\(0\\)}\\)\")",
       "Bash(node -e \"const {PrismaClient}=require\\('./src/generated/prisma/client'\\); new PrismaClient\\(\\).invProduct.count\\(\\).then\\(n=>{console.log\\('products:',n\\); process.exit\\(0\\)}\\)\")",
-      "Bash(node -e 'const {PrismaClient}=require\\('\\\\''./src/generated/prisma/client'\\\\''\\); const p=new PrismaClient\\(\\); p.invProduct.count\\(\\).then\\(n=>{console.log\\('\\\\''products:'\\\\'',n\\); return p.$disconnect\\(\\)}\\).catch\\(e=>{console.error\\(e.message\\); process.exit\\(1\\)}\\)')"
+      "Bash(node -e 'const {PrismaClient}=require\\('\\\\''./src/generated/prisma/client'\\\\''\\); const p=new PrismaClient\\(\\); p.invProduct.count\\(\\).then\\(n=>{console.log\\('\\\\''products:'\\\\'',n\\); return p.$disconnect\\(\\)}\\).catch\\(e=>{console.error\\(e.message\\); process.exit\\(1\\)}\\)')",
+      "Bash(grep -n \"^export default\\\\|^}$\" src/app/\\\\\\(protected\\\\\\)/office/pricing-strategy/items/page.tsx)",
+      "Bash(powershell -Command \"Select-String -Path 'D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\inventory\\\\products\\\\page.tsx' -Pattern 'useMemo|\\\\.map\\\\\\(|\\\\.filter\\\\\\(' | Select-Object -First 50\")",
+      "Bash(npx --no-install tsc --noEmit --jsx preserve --target es2022 --module esnext --moduleResolution bundler --strict false --skipLibCheck 'src/app/\\(protected\\)/office/pricing-strategy/needs-attention/page.tsx')"
     ]
   }
 }

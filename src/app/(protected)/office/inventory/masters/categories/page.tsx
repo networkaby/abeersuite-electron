@@ -25,6 +25,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
 type InvCategory = {
     id: number;
@@ -141,9 +142,9 @@ export default function InventoryCategoriesPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="__none__">None</SelectItem>
-                                    {parentOptions.map((c) => (
-                                        <SelectItem key={c.id} value={String(c.id)}>
-                                            {c.name}
+                                    {flattenTree(parentOptions).map((r) => (
+                                        <SelectItem key={r.id} value={String(r.id)}>
+                                            {treeLabel(r)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
