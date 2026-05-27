@@ -27,6 +27,14 @@ import {
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -45,87 +53,118 @@ interface AttrFilterEntry {
 }
 
 type Strategy = {
-    id:              number;
-    name:            string;
-    brandIds:        number[];
-    groupIds:        number[];
-    categoryIds:     number[];
-    attrFilters:     Record<string, AttrFilterEntry> | null;
-    minCostPaise:    number | null;
-    maxCostPaise:    number | null;
-    minStock:        number | null;
-    maxStock:        number | null;
-    minStaleDays:    number | null;
-    maxStaleDays:    number | null;
-    markupPercent:   string;
+    id: number;
+    name: string;
+    brandIds: number[];
+    groupIds: number[];
+    categoryIds: number[];
+    attrFilters: Record<string, AttrFilterEntry> | null;
+    minCostPaise: number | null;
+    maxCostPaise: number | null;
+    minStock: number | null;
+    maxStock: number | null;
+    minStaleDays: number | null;
+    maxStaleDays: number | null;
+    markupPercent: string;
     markupFlatPaise: number;
-    roundingPaise:   number;
-    priority:        number;
-    costMethod:      CostMethod | null;
-    isActive:        boolean;
-    createdAt:       string;
-    updatedAt:       string;
+    roundingPaise: number;
+    priority: number;
+    costMethod: CostMethod | null;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
 };
 
-type Master = { id: number; name: string };
+type Master = { id: number; name: string; parentId?: number | null };
+
+/// Depth-first sort with depth markers so the list shows parents above their
+/// children. Items with a missing parent (parentId pointing to nothing in the
+/// list) surface at the end so they remain pickable.
+function buildHierarchy(rows: Master[]): (Master & { depth: number })[] {
+    const byParent = new Map<number | null, Master[]>();
+    for (const r of rows) {
+        const pid: number | null = r.parentId ?? null;
+        const arr = byParent.get(pid) ?? [];
+        arr.push(r);
+        byParent.set(pid, arr);
+    }
+    const out: (Master & { depth: number })[] = [];
+    const seen = new Set<number>();
+    function walk(parent: number | null, depth: number) {
+        const kids = (byParent.get(parent) ?? [])
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name));
+        for (const k of kids) {
+            if (seen.has(k.id)) continue;
+            seen.add(k.id);
+            out.push({ ...k, depth });
+            walk(k.id, depth + 1);
+        }
+    }
+    walk(null, 0);
+    for (const r of rows) {
+        if (!seen.has(r.id)) out.push({ ...r, depth: 0 });
+    }
+    return out;
+}
 
 // AttrRow is the editable form representation — value is always a string for
 // the user to type freely; we parse to the right shape on save.
 type AttrRow = { key: string; op: AttrOp; value: string };
 
 type FormState = {
-    name:            string;
-    brandIds:        Set<number>;
-    groupIds:        Set<number>;
-    categoryIds:     Set<number>;
-    attrs:           AttrRow[];
-    minCost:         string; // rupees decimal (user-facing); paise on save
-    maxCost:         string;
-    minStock:        string;
-    maxStock:        string;
-    minStaleDays:    string;
-    maxStaleDays:    string;
-    markupPercent:   string;
+    name: string;
+    brandIds: Set<number>;
+    groupIds: Set<number>;
+    categoryIds: Set<number>;
+    attrs: AttrRow[];
+    minCost: string; // rupees decimal (user-facing); paise on save
+    maxCost: string;
+    minStock: string;
+    maxStock: string;
+    minStaleDays: string;
+    maxStaleDays: string;
+    markupPercent: string;
     markupFlatPaise: string;
-    roundingPaise:   string;
-    priority:        string;
-    costMethod:      string; // "__none" sentinel = null
-    isActive:        boolean;
+    roundingPaise: string;
+    priority: string;
+    costMethod: string; // "__none" sentinel = null
+    isActive: boolean;
 };
 
 const emptyForm = (): FormState => ({
-    name:            "",
-    brandIds:        new Set(),
-    groupIds:        new Set(),
-    categoryIds:     new Set(),
-    attrs:           [],
-    minCost:         "",
-    maxCost:         "",
-    minStock:        "",
-    maxStock:        "",
-    minStaleDays:    "",
-    maxStaleDays:    "",
-    markupPercent:   "25",
+    name: "",
+    brandIds: new Set(),
+    groupIds: new Set(),
+    categoryIds: new Set(),
+    attrs: [],
+    minCost: "",
+    maxCost: "",
+    minStock: "",
+    maxStock: "",
+    minStaleDays: "",
+    maxStaleDays: "",
+    markupPercent: "25",
     markupFlatPaise: "0",
-    roundingPaise:   "0",
-    priority:        "0",
-    costMethod:      "__none",
-    isActive:        true,
+    roundingPaise: "0",
+    priority: "0",
+    costMethod: "__none",
+    isActive: true,
 });
 
 const COST_METHOD_LABEL: Record<CostMethod, string> = {
-    WEIGHTED_AVG_COST:  "Weighted Avg",
-    FIFO:               "FIFO",
+    WEIGHTED_AVG_COST: "Weighted Avg",
+    FIFO: "FIFO",
     LAST_PURCHASE_COST: "Last Purchase",
-    MONTHLY_AVG_COST:   "Monthly Avg",
-    STD_COST:           "Standard",
+    MONTHLY_AVG_COST: "Monthly Avg",
+    STD_COST: "Standard",
 };
 
 const ATTR_OP_LABEL: Record<AttrOp, string> = {
-    eq:      "equals",
-    in:      "in",
-    gte:     "≥",
-    lte:     "≤",
+    eq: "equals",
+    in: "in",
+    gte: "≥",
+    lte: "≤",
     between: "between",
 };
 
@@ -165,12 +204,12 @@ type ItemForCount = { strategyId: number | null };
 function MultiSelectGroup({
     label, helper, items, selected, onChange, icon: Icon,
 }: {
-    label:    string;
-    helper?:  string;
-    items:    Master[];
+    label: string;
+    helper?: string;
+    items: (Master & { depth?: number })[];
     selected: Set<number>;
     onChange: (next: Set<number>) => void;
-    icon:     React.ComponentType<{ className?: string }>;
+    icon: React.ComponentType<{ className?: string }>;
 }) {
     const [q, setQ] = useState("");
     const filtered = useMemo(() => {
@@ -229,11 +268,17 @@ function MultiSelectGroup({
                             <label
                                 key={m.id}
                                 className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/50 cursor-pointer"
+                                style={m.depth ? { paddingLeft: 8 + m.depth * 14 } : undefined}
                             >
                                 <Checkbox
                                     checked={selected.has(m.id)}
                                     onCheckedChange={() => toggle(m.id)}
                                 />
+                                {m.depth ? (
+                                    <span className="text-muted-foreground/60 select-none" aria-hidden>
+                                        {"└─"}
+                                    </span>
+                                ) : null}
                                 <span className="truncate">{m.name}</span>
                             </label>
                         ))
@@ -257,16 +302,16 @@ function RangeSegment({
     inputMode = "decimal",
     placeholderMin, placeholderMax,
 }: {
-    icon:           React.ComponentType<{ className?: string }>;
-    title:          string;
-    helper:         string;
-    minLabel:       string;
-    maxLabel:       string;
-    minValue:       string;
-    maxValue:       string;
-    onMin:          (v: string) => void;
-    onMax:          (v: string) => void;
-    inputMode?:     "decimal" | "numeric";
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    helper: string;
+    minLabel: string;
+    maxLabel: string;
+    minValue: string;
+    maxValue: string;
+    onMin: (v: string) => void;
+    onMax: (v: string) => void;
+    inputMode?: "decimal" | "numeric";
     placeholderMin?: string;
     placeholderMax?: string;
 }) {
@@ -306,16 +351,16 @@ function RangeSegment({
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function PricingStrategiesPage() {
-    const [rows,       setRows] = useState<Strategy[]>([]);
+    const [rows, setRows] = useState<Strategy[]>([]);
     const [categories, setCategories] = useState<Master[]>([]);
-    const [groups,     setGroups] = useState<Master[]>([]);
-    const [brands,     setBrands] = useState<Master[]>([]);
-    const [usage,      setUsage] = useState<Map<number, number>>(new Map());
-    const [loading,    setLoading] = useState(true);
-    const [adding,     setAdding] = useState(false);
-    const [editId,     setEditId] = useState<number | null>(null);
-    const [form,       setForm] = useState<FormState>(emptyForm());
-    const [saving,     setSaving] = useState(false);
+    const [groups, setGroups] = useState<Master[]>([]);
+    const [brands, setBrands] = useState<Master[]>([]);
+    const [usage, setUsage] = useState<Map<number, number>>(new Map());
+    const [loading, setLoading] = useState(true);
+    const [adding, setAdding] = useState(false);
+    const [editId, setEditId] = useState<number | null>(null);
+    const [form, setForm] = useState<FormState>(emptyForm());
+    const [saving, setSaving] = useState(false);
 
     const load = () => {
         setLoading(true);
@@ -353,9 +398,9 @@ export default function PricingStrategiesPage() {
         if (!form.name.trim()) return toast.error("Name is required");
 
         const markupPercent = Number(form.markupPercent);
-        const markupFlat    = Number(form.markupFlatPaise);
-        const rounding      = Number(form.roundingPaise);
-        const priority      = Number(form.priority);
+        const markupFlat = Number(form.markupFlatPaise);
+        const rounding = Number(form.roundingPaise);
+        const priority = Number(form.priority);
         if (!Number.isFinite(markupPercent)) return toast.error("Markup % must be a number");
         if (!Number.isFinite(markupFlat) || markupFlat < 0 || !Number.isInteger(markupFlat))
             return toast.error("Flat (paise) must be a non-negative integer");
@@ -402,23 +447,23 @@ export default function PricingStrategiesPage() {
             return toast.error("Max stale days must be ≥ min stale days");
 
         const payload = {
-            name:            form.name.trim(),
-            brandIds:        [...form.brandIds],
-            groupIds:        [...form.groupIds],
-            categoryIds:     [...form.categoryIds],
-            attrFilters:     Object.keys(attrFilters).length === 0 ? null : attrFilters,
+            name: form.name.trim(),
+            brandIds: [...form.brandIds],
+            groupIds: [...form.groupIds],
+            categoryIds: [...form.categoryIds],
+            attrFilters: Object.keys(attrFilters).length === 0 ? null : attrFilters,
             minCostPaise,
             maxCostPaise,
             minStock,
             maxStock,
-            minStaleDays:    minStale,
-            maxStaleDays:    maxStale,
+            minStaleDays: minStale,
+            maxStaleDays: maxStale,
             markupPercent,
             markupFlatPaise: markupFlat,
-            roundingPaise:   rounding,
+            roundingPaise: rounding,
             priority,
-            costMethod:      form.costMethod === "__none" ? null : (form.costMethod as CostMethod),
-            isActive:        form.isActive,
+            costMethod: form.costMethod === "__none" ? null : (form.costMethod as CostMethod),
+            isActive: form.isActive,
         };
 
         setSaving(true);
@@ -441,39 +486,39 @@ export default function PricingStrategiesPage() {
     };
 
     const { remove: del } = useDeleteWithConfirm({
-        url:          (id) => `/api/pricing-strategy/strategies/${id}`,
-        message:      () => "Delete this pricing strategy?",
+        url: (id) => `/api/pricing-strategy/strategies/${id}`,
+        message: () => "Delete this pricing strategy?",
         errorMessage: "Delete failed",
-        onSuccess:    () => load(),
+        onSuccess: () => load(),
     });
 
     const beginEdit = (s: Strategy) => {
         setAdding(false);
         setEditId(s.id);
         setForm({
-            name:            s.name,
-            brandIds:        new Set(s.brandIds),
-            groupIds:        new Set(s.groupIds),
-            categoryIds:     new Set(s.categoryIds),
-            attrs:           s.attrFilters
+            name: s.name,
+            brandIds: new Set(s.brandIds),
+            groupIds: new Set(s.groupIds),
+            categoryIds: new Set(s.categoryIds),
+            attrs: s.attrFilters
                 ? Object.entries(s.attrFilters).map(([key, e]) => ({
-                      key,
-                      op:    e.op,
-                      value: Array.isArray(e.value) ? e.value.join(", ") : String(e.value),
-                  }))
+                    key,
+                    op: e.op,
+                    value: Array.isArray(e.value) ? e.value.join(", ") : String(e.value),
+                }))
                 : [],
-            minCost:         paiseToRupees(s.minCostPaise),
-            maxCost:         paiseToRupees(s.maxCostPaise),
-            minStock:        s.minStock != null ? String(s.minStock) : "",
-            maxStock:        s.maxStock != null ? String(s.maxStock) : "",
-            minStaleDays:    s.minStaleDays != null ? String(s.minStaleDays) : "",
-            maxStaleDays:    s.maxStaleDays != null ? String(s.maxStaleDays) : "",
-            markupPercent:   s.markupPercent,
+            minCost: paiseToRupees(s.minCostPaise),
+            maxCost: paiseToRupees(s.maxCostPaise),
+            minStock: s.minStock != null ? String(s.minStock) : "",
+            maxStock: s.maxStock != null ? String(s.maxStock) : "",
+            minStaleDays: s.minStaleDays != null ? String(s.minStaleDays) : "",
+            maxStaleDays: s.maxStaleDays != null ? String(s.maxStaleDays) : "",
+            markupPercent: s.markupPercent,
             markupFlatPaise: String(s.markupFlatPaise),
-            roundingPaise:   String(s.roundingPaise),
-            priority:        String(s.priority),
-            costMethod:      s.costMethod ?? "__none",
-            isActive:        s.isActive,
+            roundingPaise: String(s.roundingPaise),
+            priority: String(s.priority),
+            costMethod: s.costMethod ?? "__none",
+            isActive: s.isActive,
         });
     };
 
@@ -522,8 +567,8 @@ export default function PricingStrategiesPage() {
     };
 
     return (
-        <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex h-full flex-col gap-3 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-3">
                 <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                     <Calculator className="size-5" aria-hidden />
                     Strategies
@@ -539,224 +584,233 @@ export default function PricingStrategiesPage() {
                 </Button>
             </div>
 
-            {adding || editId != null ? (
-                <div className="border border-border bg-card p-4 rounded-sm space-y-4">
-                    <p className="text-sm font-semibold">{adding ? "New strategy" : "Edit strategy"}</p>
+            <Dialog
+                open={adding || editId != null}
+                onOpenChange={(open) => { if (!open) cancel(); }}
+            >
+                <DialogContent className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-5xl">
+                    <DialogHeader className="border-b px-6 py-4">
+                        <DialogTitle>{adding ? "New strategy" : "Edit strategy"}</DialogTitle>
+                    </DialogHeader>
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <div className="space-y-4 px-6 py-4">
 
-                    {/* Basics */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div className="space-y-1.5 lg:col-span-2">
-                            <Label className="text-xs">Name</Label>
-                            <Input
-                                value={form.name}
-                                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                                className="h-8"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">Markup %</Label>
-                            <Input
-                                inputMode="decimal"
-                                value={form.markupPercent}
-                                onChange={(e) => setForm((f) => ({ ...f, markupPercent: e.target.value }))}
-                                className="h-8 font-mono text-xs"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">Priority (higher wins)</Label>
-                            <Input
-                                inputMode="numeric"
-                                value={form.priority}
-                                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                                className="h-8 font-mono text-xs"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">Flat add (paise)</Label>
-                            <Input
-                                inputMode="numeric"
-                                value={form.markupFlatPaise}
-                                onChange={(e) => setForm((f) => ({ ...f, markupFlatPaise: e.target.value }))}
-                                className="h-8 font-mono text-xs"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">Rounding (paise)</Label>
-                            <Input
-                                inputMode="numeric"
-                                value={form.roundingPaise}
-                                onChange={(e) => setForm((f) => ({ ...f, roundingPaise: e.target.value }))}
-                                className="h-8 font-mono text-xs"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">Default cost method</Label>
-                            <Select
-                                value={form.costMethod}
-                                onValueChange={(v) => setForm((f) => ({ ...f, costMethod: v }))}
-                            >
-                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none">— Use item&apos;s own —</SelectItem>
-                                    {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
-                                        <SelectItem key={v} value={v}>{l}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <label className="flex items-center gap-2 text-xs self-end pb-2">
-                            <Checkbox
-                                checked={form.isActive}
-                                onCheckedChange={(c) => setForm((f) => ({ ...f, isActive: c === true }))}
-                            />
-                            Active
-                        </label>
-                    </div>
-
-                    {/* Taxonomy filters (multi-select) */}
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            Match conditions <span className="font-normal normal-case">(empty = matches every product)</span>
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <MultiSelectGroup
-                                label="Brands" icon={Tag}
-                                items={brands}
-                                selected={form.brandIds}
-                                onChange={(ids) => setForm((f) => ({ ...f, brandIds: ids }))}
-                            />
-                            <MultiSelectGroup
-                                label="Groups" icon={FolderTree}
-                                helper="Auto-includes sub-groups."
-                                items={groups}
-                                selected={form.groupIds}
-                                onChange={(ids) => setForm((f) => ({ ...f, groupIds: ids }))}
-                            />
-                            <MultiSelectGroup
-                                label="Categories" icon={Boxes}
-                                helper="Auto-includes sub-categories."
-                                items={categories}
-                                selected={form.categoryIds}
-                                onChange={(ids) => setForm((f) => ({ ...f, categoryIds: ids }))}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Range filters — three segments */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <RangeSegment
-                            icon={IndianRupee}
-                            title="Cost range"
-                            helper="Applied to InvProduct.costPaise (last-purchase snapshot). Both bounds optional."
-                            minLabel="Min ₹"
-                            maxLabel="Max ₹"
-                            minValue={form.minCost}
-                            maxValue={form.maxCost}
-                            onMin={(v) => setForm((f) => ({ ...f, minCost: v }))}
-                            onMax={(v) => setForm((f) => ({ ...f, maxCost: v }))}
-                            inputMode="decimal"
-                            placeholderMin="0.00"
-                            placeholderMax="∞"
-                        />
-                        <RangeSegment
-                            icon={Package}
-                            title="Stock range"
-                            helper="Units on hand (InvProduct.stock). Products with stock not tracked are excluded when this filter is set."
-                            minLabel="Min units"
-                            maxLabel="Max units"
-                            minValue={form.minStock}
-                            maxValue={form.maxStock}
-                            onMin={(v) => setForm((f) => ({ ...f, minStock: v }))}
-                            onMax={(v) => setForm((f) => ({ ...f, maxStock: v }))}
-                            inputMode="numeric"
-                            placeholderMin="0"
-                            placeholderMax="∞"
-                        />
-                        <RangeSegment
-                            icon={CalendarClock}
-                            title="Days since last sale"
-                            helper="Window for staleness. Never-sold products have infinite age — they match the lower bound and fail the upper bound."
-                            minLabel="From (days)"
-                            maxLabel="To (days)"
-                            minValue={form.minStaleDays}
-                            maxValue={form.maxStaleDays}
-                            onMin={(v) => setForm((f) => ({ ...f, minStaleDays: v }))}
-                            onMax={(v) => setForm((f) => ({ ...f, maxStaleDays: v }))}
-                            inputMode="numeric"
-                            placeholderMin="0"
-                            placeholderMax="∞"
-                        />
-                    </div>
-
-                    {/* Attribute filters */}
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                Attribute filters (attrsJson)
-                            </p>
-                            <Button type="button" variant="outline" size="sm" onClick={addAttrRow}>
-                                <Plus className="size-3" />
-                                Add row
-                            </Button>
-                        </div>
-                        {form.attrs.length === 0 ? (
-                            <p className="text-[11px] text-muted-foreground italic">
-                                No attribute filters. Click <strong>Add row</strong> to gate on values in <code>InvProduct.attrsJson</code>.
-                            </p>
-                        ) : (
-                            <div className="space-y-1.5">
-                                {form.attrs.map((row, i) => (
-                                    <div key={i} className="grid grid-cols-[1fr_auto_1.5fr_auto] gap-2 items-start">
-                                        <Input
-                                            placeholder="key (e.g. ram, color)"
-                                            value={row.key}
-                                            onChange={(e) => updateAttrRow(i, { key: e.target.value })}
-                                            className="h-8 text-xs font-mono"
-                                        />
-                                        <Select
-                                            value={row.op}
-                                            onValueChange={(v) => updateAttrRow(i, { op: v as AttrOp })}
-                                        >
-                                            <SelectTrigger className="h-8 w-[110px] text-xs">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {(Object.keys(ATTR_OP_LABEL) as AttrOp[]).map((op) => (
-                                                    <SelectItem key={op} value={op}>{ATTR_OP_LABEL[op]}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Input
-                                            placeholder={attrValuePlaceholder(row.op)}
-                                            value={row.value}
-                                            onChange={(e) => updateAttrRow(i, { value: e.target.value })}
-                                            className="h-8 text-xs font-mono"
-                                        />
-                                        <Button
-                                            type="button" variant="ghost" size="icon-sm"
-                                            aria-label="Remove"
-                                            onClick={() => removeAttrRow(i)}
-                                        >
-                                            <X className="size-4" />
-                                        </Button>
-                                    </div>
-                                ))}
+                        {/* Basics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="space-y-1.5 lg:col-span-2">
+                                <Label className="text-xs">Name</Label>
+                                <Input
+                                    value={form.name}
+                                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                                    className="h-8"
+                                />
                             </div>
-                        )}
-                    </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Markup %</Label>
+                                <Input
+                                    inputMode="decimal"
+                                    value={form.markupPercent}
+                                    onChange={(e) => setForm((f) => ({ ...f, markupPercent: e.target.value }))}
+                                    className="h-8 font-mono text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Priority (higher wins)</Label>
+                                <Input
+                                    inputMode="numeric"
+                                    value={form.priority}
+                                    onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
+                                    className="h-8 font-mono text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Flat add (paise)</Label>
+                                <Input
+                                    inputMode="numeric"
+                                    value={form.markupFlatPaise}
+                                    onChange={(e) => setForm((f) => ({ ...f, markupFlatPaise: e.target.value }))}
+                                    className="h-8 font-mono text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Rounding (paise)</Label>
+                                <Input
+                                    inputMode="numeric"
+                                    value={form.roundingPaise}
+                                    onChange={(e) => setForm((f) => ({ ...f, roundingPaise: e.target.value }))}
+                                    className="h-8 font-mono text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Default cost method</Label>
+                                <Select
+                                    value={form.costMethod}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, costMethod: v }))}
+                                >
+                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none">— Use item&apos;s own —</SelectItem>
+                                        {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
+                                            <SelectItem key={v} value={v}>{l}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <label className="flex items-center gap-2 text-xs self-end pb-2">
+                                <Checkbox
+                                    checked={form.isActive}
+                                    onCheckedChange={(c) => setForm((f) => ({ ...f, isActive: c === true }))}
+                                />
+                                Active
+                            </label>
+                        </div>
 
-                    <div className="flex gap-2 pt-2">
-                        <Button type="button" size="sm" onClick={save} disabled={saving}>
-                            Save
-                        </Button>
+                        {/* Taxonomy filters (multi-select) */}
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                Match conditions <span className="font-normal normal-case">(empty = matches every product)</span>
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <MultiSelectGroup
+                                    label="Brands" icon={Tag}
+                                    items={brands}
+                                    selected={form.brandIds}
+                                    onChange={(ids) => setForm((f) => ({ ...f, brandIds: ids }))}
+                                />
+                                <MultiSelectGroup
+                                    label="Groups" icon={FolderTree}
+                                    helper="Auto-includes sub-groups."
+                                    items={buildHierarchy(groups)}
+                                    selected={form.groupIds}
+                                    onChange={(ids) => setForm((f) => ({ ...f, groupIds: ids }))}
+                                />
+                                <MultiSelectGroup
+                                    label="Categories" icon={Boxes}
+                                    helper="Auto-includes sub-categories."
+                                    items={buildHierarchy(categories)}
+                                    selected={form.categoryIds}
+                                    onChange={(ids) => setForm((f) => ({ ...f, categoryIds: ids }))}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Range filters — three segments */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <RangeSegment
+                                icon={IndianRupee}
+                                title="Cost range"
+                                helper="Applied to InvProduct.costPaise (last-purchase snapshot). Both bounds optional."
+                                minLabel="Min ₹"
+                                maxLabel="Max ₹"
+                                minValue={form.minCost}
+                                maxValue={form.maxCost}
+                                onMin={(v) => setForm((f) => ({ ...f, minCost: v }))}
+                                onMax={(v) => setForm((f) => ({ ...f, maxCost: v }))}
+                                inputMode="decimal"
+                                placeholderMin="0.00"
+                                placeholderMax="∞"
+                            />
+                            <RangeSegment
+                                icon={Package}
+                                title="Stock range"
+                                helper="Units on hand (InvProduct.stock). Products with stock not tracked are excluded when this filter is set."
+                                minLabel="Min units"
+                                maxLabel="Max units"
+                                minValue={form.minStock}
+                                maxValue={form.maxStock}
+                                onMin={(v) => setForm((f) => ({ ...f, minStock: v }))}
+                                onMax={(v) => setForm((f) => ({ ...f, maxStock: v }))}
+                                inputMode="numeric"
+                                placeholderMin="0"
+                                placeholderMax="∞"
+                            />
+                            <RangeSegment
+                                icon={CalendarClock}
+                                title="Days since last sale"
+                                helper="Window for staleness. Never-sold products have infinite age — they match the lower bound and fail the upper bound."
+                                minLabel="From (days)"
+                                maxLabel="To (days)"
+                                minValue={form.minStaleDays}
+                                maxValue={form.maxStaleDays}
+                                onMin={(v) => setForm((f) => ({ ...f, minStaleDays: v }))}
+                                onMax={(v) => setForm((f) => ({ ...f, maxStaleDays: v }))}
+                                inputMode="numeric"
+                                placeholderMin="0"
+                                placeholderMax="∞"
+                            />
+                        </div>
+
+                        {/* Attribute filters */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    Attribute filters (attrsJson)
+                                </p>
+                                <Button type="button" variant="outline" size="sm" onClick={addAttrRow}>
+                                    <Plus className="size-3" />
+                                    Add row
+                                </Button>
+                            </div>
+                            {form.attrs.length === 0 ? (
+                                <p className="text-[11px] text-muted-foreground italic">
+                                    No attribute filters. Click <strong>Add row</strong> to gate on values in <code>InvProduct.attrsJson</code>.
+                                </p>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    {form.attrs.map((row, i) => (
+                                        <div key={i} className="grid grid-cols-[1fr_auto_1.5fr_auto] gap-2 items-start">
+                                            <Input
+                                                placeholder="key (e.g. ram, color)"
+                                                value={row.key}
+                                                onChange={(e) => updateAttrRow(i, { key: e.target.value })}
+                                                className="h-8 text-xs font-mono"
+                                            />
+                                            <Select
+                                                value={row.op}
+                                                onValueChange={(v) => updateAttrRow(i, { op: v as AttrOp })}
+                                            >
+                                                <SelectTrigger className="h-8 w-[110px] text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(Object.keys(ATTR_OP_LABEL) as AttrOp[]).map((op) => (
+                                                        <SelectItem key={op} value={op}>{ATTR_OP_LABEL[op]}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <Input
+                                                placeholder={attrValuePlaceholder(row.op)}
+                                                value={row.value}
+                                                onChange={(e) => updateAttrRow(i, { value: e.target.value })}
+                                                className="h-8 text-xs font-mono"
+                                            />
+                                            <Button
+                                                type="button" variant="ghost" size="icon-sm"
+                                                aria-label="Remove"
+                                                onClick={() => removeAttrRow(i)}
+                                            >
+                                                <X className="size-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        </div>
+                    </div>
+                    <DialogFooter className="border-t px-6 py-3">
                         <Button type="button" variant="outline" size="sm" onClick={cancel}>
                             Cancel
                         </Button>
-                    </div>
-                </div>
-            ) : null}
+                        <Button type="button" size="sm" onClick={save} disabled={saving}>
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-            <div className="border border-border rounded-sm bg-card overflow-x-auto">
+            <ScrollArea className="min-h-0 flex-1 border border-border rounded-sm bg-card">
                 <Table>
                     <TableHeader className="bg-muted/40">
                         <TableRow>
@@ -821,9 +875,10 @@ export default function PricingStrategiesPage() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="flex-none text-[11px] text-muted-foreground leading-relaxed">
                 A strategy <strong>AND-matches</strong> every condition it specifies; an empty conditions set
                 matches all products (the org-wide fallback). When multiple strategies match a product,
                 the highest <strong>priority</strong> wins.
@@ -836,10 +891,10 @@ export default function PricingStrategiesPage() {
 
 function attrValuePlaceholder(op: AttrOp): string {
     switch (op) {
-        case "eq":      return "Black";
-        case "in":      return "Black, White, Silver";
+        case "eq": return "Black";
+        case "in": return "Black, White, Silver";
         case "gte":
-        case "lte":     return "100";
+        case "lte": return "100";
         case "between": return "100, 500";
     }
 }
@@ -867,7 +922,7 @@ function parseAttrValue(op: AttrOp, raw: string): AttrFilterEntry {
 /** "123" → 123, "Black" → "Black", "true"/"false" → boolean. */
 function coerce(s: string): string | number | boolean {
     const lower = s.toLowerCase();
-    if (lower === "true")  return true;
+    if (lower === "true") return true;
     if (lower === "false") return false;
     const n = Number(s);
     return Number.isFinite(n) && s.trim() !== "" ? n : s;

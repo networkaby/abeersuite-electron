@@ -28,7 +28,7 @@ import {
     type InvProductFormState,
     type InvProductFormTab,
 } from "@/modules/inventory/components/InvProductFormFields";
-import { MasterQuickDialog, type MasterKind } from "@/modules/inventory/components/MasterQuickDialog";
+import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
 import {
     DEFAULT_NAMING_CONFIG,
@@ -172,7 +172,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [refsLoaded, setRefsLoaded] = useState(false);
 
     /// Refreshes just the master lists (no naming-config / attribute-masters /
-    /// gst-rates) — called after MasterQuickDialog creates a new row so the
+    /// gst-rates) — called after InventoryMasterDropdownQuickDialog creates a new row so the
     /// new option shows up in the relevant Select.
     const refreshMaster = useCallback(async (kind: MasterKind) => {
         const url =
@@ -365,7 +365,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                     </Button>
                 </div>
             </DialogContent>
-            <MasterQuickDialog
+            <InventoryMasterDropdownQuickDialog
                 open={masterDialogOpen}
                 onOpenChange={(v) => {
                     setMasterDialogOpen(v);

@@ -9,7 +9,7 @@
 
 import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
-import type { MasterKind } from "@/modules/inventory/components/MasterQuickDialog";
+import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -185,7 +185,7 @@ export function InvProductFormFields({
      * Classification report → pencil) pass "tax" so the dialog opens on it. */
     defaultTab?: InvProductFormTab;
     /** When provided, renders a "+ New" button next to each master picker that
-     *  opens the MasterQuickDialog. Caller resolves with the new row id (or null
+     *  opens the InventoryMasterDropdownQuickDialog. Caller resolves with the new row id (or null
      *  if cancelled) — the form auto-selects it. */
     onCreateMaster?: (kind: MasterKind) => Promise<number | null>;
 }) {
@@ -385,9 +385,9 @@ export function InvProductFormFields({
                             <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
                                 {onCreateMaster ? <SelectItem value="__new__">+ New category…</SelectItem> : null}
-                                {categories.map((c) => (
-                                    <SelectItem key={c.id} value={String(c.id)}>
-                                        {label(c)}
+                                {flattenTree(categories).map((r) => (
+                                    <SelectItem key={r.id} value={String(r.id)}>
+                                        {treeLabel(r)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -412,9 +412,9 @@ export function InvProductFormFields({
                             <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
                                 {onCreateMaster ? <SelectItem value="__new__">+ New group…</SelectItem> : null}
-                                {groups.map((g) => (
-                                    <SelectItem key={g.id} value={String(g.id)}>
-                                        {label(g)}
+                                {flattenTree(groups).map((r) => (
+                                    <SelectItem key={r.id} value={String(r.id)}>
+                                        {treeLabel(r)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

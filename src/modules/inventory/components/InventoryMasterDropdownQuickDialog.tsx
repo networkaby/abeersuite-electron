@@ -20,6 +20,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import {
     Dialog,
     DialogContent,
@@ -39,7 +40,7 @@ import {
 
 export type MasterKind = "category" | "brand" | "group" | "warranty" | "unit";
 
-type Opt = { id: number; name?: string; code?: string; label?: string };
+type Opt = { id: number; name?: string; code?: string; label?: string; parentId?: number | null };
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
 
 const KIND_META: Record<MasterKind, { title: string; endpoint: string }> = {
@@ -63,7 +64,57 @@ function optLabel(o: Opt): string {
     return composed || `#${o.id}`;
 }
 
-export interface MasterQuickDialogProps {
+/// Walk a parented list (category / group) depth-first and emit each row
+/// with its own name + depth. Call sites format the visible label however
+/// they like — the most common is one "-" per depth level so the tree
+/// reads vertically:
+///
+///   grand father
+///   -father
+///   -father1
+///   --son
+///   --son1
+///   grand father1
+///   -father
+///
+/// Sort within siblings is alphabetical. Orphans (parentId points to a row
+/// that isn't in the list — usually a deactivated parent) bubble to the
+/// top at depth 0 so they're still pickable.
+export function flattenTree(rows: Opt[]): { id: number; name: string; depth: number }[] {
+    const byParent = new Map<number | null, Opt[]>();
+    for (const r of rows) {
+        const pid: number | null = r.parentId ?? null;
+        const arr = byParent.get(pid) ?? [];
+        arr.push(r);
+        byParent.set(pid, arr);
+    }
+    const out: { id: number; name: string; depth: number }[] = [];
+    const seen = new Set<number>();
+    function walk(parent: number | null, depth: number) {
+        const kids = (byParent.get(parent) ?? []).slice().sort((a, b) =>
+            optLabel(a).localeCompare(optLabel(b)),
+        );
+        for (const k of kids) {
+            if (seen.has(k.id)) continue;
+            seen.add(k.id);
+            out.push({ id: k.id, name: optLabel(k), depth });
+            walk(k.id, depth + 1);
+        }
+    }
+    walk(null, 0);
+    for (const r of rows) {
+        if (!seen.has(r.id)) out.push({ id: r.id, name: optLabel(r), depth: 0 });
+    }
+    return out;
+}
+
+/// Format helper that turns a `flattenTree` row into the indented label.
+/// Centralised so every picker draws the tree the same way.
+export function treeLabel(row: { name: string; depth: number }): string {
+    return row.depth === 0 ? row.name : `${"-".repeat(row.depth)}${row.name}`;
+}
+
+export interface InventoryMasterDropdownQuickDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     kind: MasterKind;
@@ -75,9 +126,9 @@ export interface MasterQuickDialogProps {
     onCreated: (id: number) => void | Promise<void>;
 }
 
-export function MasterQuickDialog({
+export function InventoryMasterDropdownQuickDialog({
     open, onOpenChange, kind, siblings, gstRates, onCreated,
-}: MasterQuickDialogProps) {
+}: InventoryMasterDropdownQuickDialogProps) {
     const [name, setName] = useState("");
     const [code, setCode] = useState("");
     const [decimals, setDecimals] = useState("0");
@@ -233,22 +284,24 @@ export function MasterQuickDialog({
                     {(kind === "category" || kind === "group") && siblings ? (
                         <div className="grid gap-1.5">
                             <Label>Parent {kind}</Label>
-                            <Select
-                                value={parentId || "__none__"}
-                                onValueChange={(v) => setParentId(v === "__none__" ? "" : v)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="— none —" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">— none —</SelectItem>
-                                    {siblings.map((p) => (
-                                        <SelectItem key={p.id} value={String(p.id)}>{optLabel(p)}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                value={parentId === "" ? null : Number(parentId)}
+                                options={flattenTree(siblings).map((r) => ({
+                                    value: r.id,
+                                    // Indented "-/--/---" prefix per depth in the open list.
+                                    label: treeLabel(r),
+                                    // Closed trigger shows just the bare name — indent only
+                                    // makes sense in the open tree context.
+                                    leaf: r.name,
+                                    // Search matches the bare name so typing "son" finds
+                                    // "--son" without the user typing the dashes.
+                                    searchText: r.name,
+                                }))}
+                                onChange={(id) => setParentId(id == null ? "" : String(id))}
+                                placeholder="— none —"
+                            />
                             {kind === "group" ? (
-                                <p className="text-xs text-muted-foreground">GST / HSN cascade down from parent when blank below.</p>
+                                <p className="text-xs text-muted-foreground">GST / HSN cascade down from parent when blank below. Path shown as Parent &gt; Child.</p>
                             ) : null}
                         </div>
                     ) : null}
@@ -359,3 +412,4 @@ export function MasterQuickDialog({
         </Dialog>
     );
 }
+

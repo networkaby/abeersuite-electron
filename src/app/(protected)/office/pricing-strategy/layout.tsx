@@ -12,7 +12,7 @@ const NAV = [
 
 export default function PricingStrategyLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="w-full space-y-3">
+        <div className="flex h-full w-full flex-col">
             <PathBreadcrumb
                 root={{ href: "/office/pricing-strategy", label: "Pricing Strategy" }}
                 labels={{
@@ -22,7 +22,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                 }}
             />
             <nav
-                className="flex flex-wrap gap-2 border-b border-border pb-2"
+                className="flex flex-none flex-wrap gap-2 border-b border-border pb-2 mb-3"
                 aria-label="Pricing strategy sections"
             >
                 {NAV.map(({ href, label, icon: Icon }) => (
@@ -36,7 +36,9 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                     </Link>
                 ))}
             </nav>
-            {children}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                {children}
+            </div>
         </div>
     );
 }

@@ -25,6 +25,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
 
 type CostMethod =
     | "WEIGHTED_AVG_COST"
@@ -627,33 +628,45 @@ export default function PricingItemsPage() {
                 </div>
                 <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Category</label>
-                    <Select value={filterCategory} onValueChange={setFilterCategory}>
-                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All categories</SelectItem>
-                            {uniqueCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        value={filterCategory}
+                        onChange={(v) => setFilterCategory(v ?? "__all")}
+                        clearable={false}
+                        triggerClassName="h-8 w-[150px] text-xs"
+                        options={[
+                            { value: "__all", label: "All categories" },
+                            ...uniqueCategories.map((c) => ({ value: c, label: c })),
+                        ]}
+                        ariaLabel="Filter by category"
+                    />
                 </div>
                 <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Brand</label>
-                    <Select value={filterBrand} onValueChange={setFilterBrand}>
-                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Brand" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All brands</SelectItem>
-                            {uniqueBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        value={filterBrand}
+                        onChange={(v) => setFilterBrand(v ?? "__all")}
+                        clearable={false}
+                        triggerClassName="h-8 w-[150px] text-xs"
+                        options={[
+                            { value: "__all", label: "All brands" },
+                            ...uniqueBrands.map((b) => ({ value: b, label: b })),
+                        ]}
+                        ariaLabel="Filter by brand"
+                    />
                 </div>
                 <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Group</label>
-                    <Select value={filterGroup} onValueChange={setFilterGroup}>
-                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="Group" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All groups</SelectItem>
-                            {uniqueGroups.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        value={filterGroup}
+                        onChange={(v) => setFilterGroup(v ?? "__all")}
+                        clearable={false}
+                        triggerClassName="h-8 w-[150px] text-xs"
+                        options={[
+                            { value: "__all", label: "All groups" },
+                            ...uniqueGroups.map((g) => ({ value: g, label: g })),
+                        ]}
+                        ariaLabel="Filter by group"
+                    />
                 </div>
                 <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Cost method</label>

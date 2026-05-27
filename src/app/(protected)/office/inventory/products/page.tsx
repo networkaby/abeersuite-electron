@@ -38,7 +38,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
-import { MasterQuickDialog, type MasterKind } from "@/modules/inventory/components/MasterQuickDialog";
+import { InventoryMasterDropdownQuickDialog, type MasterKind, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import {
     buildOfflineName,
     DEFAULT_NAMING_CONFIG,
@@ -235,9 +235,20 @@ export default function InventoryProductsPage() {
         });
     }
 
-    /// Create a new master row by name (POST /api/inventory/<endpoint>),
-    /// refresh that master list, and return the new id. Returns null if the
-    /// user cancelled the prompt or the request failed.
+    /// Inline-edit pickers for category / group show the hierarchy as
+    /// indented rows ("-father", "--son") so the operator can tell a
+    /// "Laptops" sub-of-Computers apart from a top-level "Laptops". The
+    /// CellSelect filters by substring against the label, which now carries
+    /// the depth prefix — typing "son" still matches "--son" via includes.
+    const categoryOptionsHier = useMemo(
+        () => flattenTree(categories).map((r) => ({ id: r.id, name: treeLabel(r) })),
+        [categories],
+    );
+    const groupOptionsHier = useMemo(
+        () => flattenTree(groups).map((r) => ({ id: r.id, name: treeLabel(r) })),
+        [groups],
+    );
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         // 1. free-text search across SKU/name/namePart/model/barcode
@@ -498,7 +509,7 @@ export default function InventoryProductsPage() {
                 onSaved={loadProducts}
             />
 
-            <MasterQuickDialog
+            <InventoryMasterDropdownQuickDialog
                 open={masterDialogOpen}
                 onOpenChange={(v) => {
                     setMasterDialogOpen(v);
@@ -712,7 +723,7 @@ export default function InventoryProductsPage() {
                                                 {isEdit ? (
                                                     <CellSelect
                                                         value={val(r, "categoryId") as number | null}
-                                                        options={categories}
+                                                        options={categoryOptionsHier}
                                                         onChange={(v) => patch(r.id, { categoryId: v })}
                                                         onCreate={() => createMaster("category")}
                                                     />
@@ -740,7 +751,7 @@ export default function InventoryProductsPage() {
                                                 {isEdit ? (
                                                     <CellSelect
                                                         value={val(r, "groupId") as number | null}
-                                                        options={groups}
+                                                        options={groupOptionsHier}
                                                         onChange={(v) => patch(r.id, { groupId: v })}
                                                         onCreate={() => createMaster("group")}
                                                     />
