@@ -7,10 +7,14 @@ export default async function AccountancyMastersLayout({ children }: { children:
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
 
     return (
-        <div className="container max-w-7xl">
+        <div className="flex h-full flex-col">
             <MastersBreadcrumb />
-            <MastersNav permissions={permissions} />
-            {children}
+            <div className="flex-none px-6">
+                <MastersNav permissions={permissions} />
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+                {children}
+            </div>
         </div>
     );
 }

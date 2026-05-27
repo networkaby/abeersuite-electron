@@ -22,7 +22,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                 }}
             />
             <nav
-                className="flex flex-none flex-wrap gap-2 border-b border-border pb-2 mb-3"
+                className="flex flex-none flex-wrap gap-2 border-b border-border px-6 pb-2 mb-3"
                 aria-label="Pricing strategy sections"
             >
                 {NAV.map(({ href, label, icon: Icon }) => (

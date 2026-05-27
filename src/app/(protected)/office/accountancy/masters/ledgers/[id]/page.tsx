@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { GroupCombobox } from "./_components/GroupCombobox";
@@ -160,7 +161,8 @@ export default function GroupLedgersPage() {
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
             {/* Header */}
             <div className="flex items-center gap-3">
                 <Button
@@ -347,6 +349,7 @@ export default function GroupLedgersPage() {
                     </div>
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
@@ -240,7 +241,8 @@ export default function StatusesPage() {
     const activePipeline = pipelines.find((pipeline) => pipeline.id === activePipelineId);
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold">Ticket Statuses</h1>
@@ -655,5 +657,6 @@ export default function StatusesPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </ScrollArea>
     );
 }

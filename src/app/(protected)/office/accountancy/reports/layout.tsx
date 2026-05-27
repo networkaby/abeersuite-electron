@@ -6,7 +6,7 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 // content is unchanged — this only prepends a breadcrumb strip.
 export default function AccountancyReportsLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="space-y-4">
+        <div className="flex h-full flex-col">
             <PathBreadcrumb
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
                 // Day Book renders its own back-button header inside the
@@ -35,7 +35,9 @@ export default function AccountancyReportsLayout({ children }: { children: React
                     "classification": "Classification",
                 }}
             />
-            {children}
+            <div className="min-h-0 flex-1 overflow-hidden">
+                {children}
+            </div>
         </div>
     );
 }

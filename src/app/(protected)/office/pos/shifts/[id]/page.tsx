@@ -12,6 +12,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, ArrowDownUp, Lock, ExternalLink, Monitor, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
 
@@ -75,7 +76,8 @@ export default function ShiftDetailPage() {
     const isHandover = shift.status === "AWAITING_HANDOVER";
 
     return (
-        <div className="space-y-6 max-w-4xl">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 max-w-4xl px-6 pt-3 pb-6">
             <div className="flex items-center gap-3 flex-wrap">
                 <Button variant="ghost" size="icon-sm" onClick={() => router.push("/office/pos/shifts")} aria-label="Back">
                     <ArrowLeft size={16} />
@@ -232,6 +234,7 @@ export default function ShiftDetailPage() {
                 )}
             </div>
         </div>
+        </ScrollArea>
     );
 }
 

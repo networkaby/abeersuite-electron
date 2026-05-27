@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -142,7 +143,8 @@ export default function LedgersPage() {
     );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -330,6 +332,7 @@ export default function LedgersPage() {
                     </tbody>
                 </table>
             </div>
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

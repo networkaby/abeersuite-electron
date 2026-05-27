@@ -13,6 +13,7 @@ import { Loader2, ChevronRight, ArrowDownUp, Clock, AlertTriangle, Users } from 
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -62,7 +63,8 @@ export default function ShiftsReportPage() {
     }, [status, branchScope, from, to]);
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-2xl font-bold">POS Shifts</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">Counter sessions, mid-shift drops, and cashier handovers.</p>
@@ -160,6 +162,7 @@ export default function ShiftsReportPage() {
                 </div>
             )}
         </div>
+        </ScrollArea>
     );
 }
 

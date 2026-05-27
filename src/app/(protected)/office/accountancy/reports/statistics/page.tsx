@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -57,7 +58,8 @@ export default function StatisticsPage() {
     useEffect(load, [load]);
 
     return (
-        <div className="max-w-6xl mx-auto space-y-5">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-6xl mx-auto space-y-5 px-6 pt-3 pb-6">
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Statistics</h1>
@@ -109,6 +111,7 @@ export default function StatisticsPage() {
                 </div>
             )}
         </div>
+        </ScrollArea>
     );
 }
 

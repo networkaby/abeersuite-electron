@@ -7,7 +7,7 @@ export default async function VouchersRegistersLayout({ children }: { children: 
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
 
     return (
-        <div className="container max-w-7xl py-0 space-y-0">
+        <div className="flex h-full flex-col">
             <PathBreadcrumb
                 root={{ href: "/office/accountancy", label: "Accountancy" }}
                 labels={{
@@ -28,8 +28,12 @@ export default async function VouchersRegistersLayout({ children }: { children: 
                     "grn": "GRN",
                 }}
             />
-            <VouchersRegistersNav permissions={permissions} />
-            {children}
+            <div className="flex-none px-0">
+                <VouchersRegistersNav permissions={permissions} />
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+                {children}
+            </div>
         </div>
     );
 }

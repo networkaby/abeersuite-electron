@@ -32,6 +32,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
@@ -573,7 +574,8 @@ export default function RolePage() {
     }
 
     return (
-        <div className="space-y-3 pb-8 text-xs">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-3 px-6 pt-3 pb-8 text-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-bold tracking-tight text-foreground">
@@ -729,7 +731,8 @@ export default function RolePage() {
                     setCopyFromRoleId(NO_COPY_ROLE);
                 }}
             />
-        </div>
+            </div>
+        </ScrollArea>
     );
 }
 

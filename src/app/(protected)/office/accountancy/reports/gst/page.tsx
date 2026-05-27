@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUpRight, ArrowDownRight, FileText, Hash, Construction, Tags } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const SECTIONS = [
     {
@@ -43,7 +44,8 @@ const SECTIONS = [
 
 export default function GstHubPage() {
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-2xl font-bold text-foreground">GST Reports</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
@@ -92,5 +94,6 @@ export default function GstHubPage() {
                 </div>
             </div>
         </div>
+        </ScrollArea>
     );
 }

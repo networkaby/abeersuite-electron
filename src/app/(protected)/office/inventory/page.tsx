@@ -42,7 +42,7 @@ const cards = [
 
 export default function InventoryOverviewPage() {
     return (
-        <div className="space-y-4 ">
+        <div className="space-y-4 p-6">
             <p className="text-muted-foreground text-sm">Choose a master list to create or edit records.</p>
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {cards.map(({ title, href, description, icon: Icon }) => (

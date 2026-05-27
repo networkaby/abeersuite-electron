@@ -127,7 +127,7 @@ export default function DayBookPage() {
 
     // ── Render ────────────────────────────────────────────────────────────
     return (
-        <div className="-m-8 flex h-full flex-col overflow-hidden">
+        <div className="flex h-full flex-col overflow-hidden">
 
             {/* Breadcrumb */}
             <header className="flex shrink-0 items-center gap-2 border-b bg-card px-4 py-2">

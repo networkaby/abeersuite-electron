@@ -36,7 +36,7 @@ function CardGrid({ cards }: { cards: readonly { title: string; href: string; de
 
 export default function InventoryOverviewPage() {
     return (
-        <section className="space-y-3">
+        <section className="space-y-3 p-6">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Masters</h2>
             <CardGrid cards={masterCards} />
         </section>

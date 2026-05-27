@@ -7,6 +7,7 @@ import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown } from "lucid
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -136,7 +137,8 @@ export default function ChartOfAccountsPage() {
     );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
@@ -235,7 +237,8 @@ export default function ChartOfAccountsPage() {
                     onStartEdit={startEdit} onSetEditName={setEditName} onSetEditDesc={setEditDesc}
                     onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} onToggleActive={toggleActive} />
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }
 

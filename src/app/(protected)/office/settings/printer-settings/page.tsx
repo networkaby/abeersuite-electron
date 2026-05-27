@@ -5,6 +5,7 @@ import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 
 const RELAY = "http://localhost:9191";
@@ -142,6 +143,7 @@ export default function PrinterSettingsPage() {
     };
 
     return (
+        <ScrollArea className="h-full" type="always">
         <div className="max-w-xl mx-auto space-y-6 py-6">
             <div className="flex items-center gap-2">
                 <Printer size={20} />
@@ -338,5 +340,6 @@ export default function PrinterSettingsPage() {
                 </div>
             </fieldset>
         </div>
+        </ScrollArea>
     );
 }

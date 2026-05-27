@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -63,7 +64,8 @@ export default function LedgerOutstandingsPage({
     };
 
     return (
-        <div className="max-w-7xl mx-auto space-y-5">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
                     <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2 -ml-2">
@@ -166,5 +168,6 @@ export default function LedgerOutstandingsPage({
                 </>
             )}
         </div>
+        </ScrollArea>
     );
 }

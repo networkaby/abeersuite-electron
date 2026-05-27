@@ -106,7 +106,7 @@ export default function SearchSlNoPage() {
     );
 
     return (
-        <div className="-m-8 flex h-screen">
+        <div className="flex h-full">
             <aside className="flex w-80 shrink-0 flex-col border-r bg-card">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                     <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function PricingStrategyOverviewPage() {
     return (
+        <div className="px-6 pb-6">
         <Card className="border-2 border-border">
             <CardHeader>
                 <CardTitle>Overview</CardTitle>
@@ -25,5 +26,6 @@ export default function PricingStrategyOverviewPage() {
                 </p>
             </CardContent>
         </Card>
+        </div>
     );
 }

@@ -1,3 +1,4 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
     VOUCHER_TEMPLATE_KINDS,
@@ -50,7 +51,8 @@ export default async function VoucherTemplatesPage() {
     });
 
     return (
-        <div className="space-y-4 p-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-4 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-xl font-semibold">Voucher Templates</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -64,5 +66,6 @@ export default async function VoucherTemplatesPage() {
             </div>
             <VoucherTemplatesPanel initialTemplates={templates} organisation={organisation} />
         </div>
+        </ScrollArea>
     );
 }

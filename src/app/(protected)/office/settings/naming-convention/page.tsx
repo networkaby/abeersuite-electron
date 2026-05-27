@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
     DEFAULT_NAMING_CONFIG,
@@ -298,7 +299,8 @@ export default function NamingConventionPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
                     <Wand2 className="size-5" aria-hidden />
@@ -412,5 +414,6 @@ export default function NamingConventionPage() {
                 </Button>
             </div>
         </div>
+        </ScrollArea>
     );
 }

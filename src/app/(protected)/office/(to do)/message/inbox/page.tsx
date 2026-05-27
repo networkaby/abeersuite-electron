@@ -10,7 +10,7 @@ export default async function InboxPage() {
 
     return (
         <Suspense fallback={
-            <div className="-m-8 flex h-screen items-center justify-center">
+            <div className="flex h-full items-center justify-center">
                 <Loader2 size={24} className="animate-spin text-muted-foreground" />
             </div>
         }>

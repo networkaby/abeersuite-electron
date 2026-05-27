@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
     DialogDescription, DialogFooter,
@@ -140,7 +141,8 @@ export default function PipelinesPage() {
     };
 
     return (
-        <div>
+        <ScrollArea className="h-full" type="always">
+        <div className="px-6 pt-3 pb-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold">Pipelines</h1>
@@ -351,5 +353,6 @@ export default function PipelinesPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </ScrollArea>
     );
 }

@@ -1,3 +1,4 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { getOrganisationRaw } from "@/shared/lib/org/getOrganisation";
 import { OrganisationForm } from "@/modules/settings/components/OrganisationForm";
 
@@ -6,7 +7,8 @@ export const metadata = { title: "Organisation" };
 export default async function OrganisationPage() {
     const initial = await getOrganisationRaw();
     return (
-        <div className="space-y-4 p-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-4 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-xl font-semibold">Organisation</h1>
                 <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
@@ -18,5 +20,6 @@ export default async function OrganisationPage() {
             </div>
             <OrganisationForm initial={initial} />
         </div>
+        </ScrollArea>
     );
 }

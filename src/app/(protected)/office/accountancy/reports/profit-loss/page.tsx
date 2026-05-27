@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
@@ -216,7 +217,8 @@ export default function ProfitLossPage() {
     const pnlCr = data ? data.pnl.credit.indirectIncomes + data.pnl.credit.grossProfitBrought : 0;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-5">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
             {/* Header */}
             <div className="flex items-end justify-between gap-3 flex-wrap print:hidden">
                 <div className="flex items-start gap-2">
@@ -390,5 +392,6 @@ export default function ProfitLossPage() {
                 </div>
             )}
         </div>
+        </ScrollArea>
     );
 }

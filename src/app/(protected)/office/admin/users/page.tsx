@@ -10,6 +10,7 @@ import Link from "next/link";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Dialog,
     DialogContent,
@@ -256,7 +257,8 @@ export default function UsersPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Users</h1>
                 <Button type="button" onClick={() => setShowForm(true)}>
@@ -354,6 +356,7 @@ export default function UsersPage() {
                     </Table>
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

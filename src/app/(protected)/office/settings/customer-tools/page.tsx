@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { CustomerToolsPanel } from "@/modules/settings/components/CustomerToolsPanel";
 
@@ -12,7 +13,8 @@ export default async function CustomerToolsPage() {
         permissions.includes(PERMISSIONS.CUSTOMERS_HARD_DELETE);
 
     return (
-        <div className="space-y-6 p-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-xl font-semibold">Customer Tools</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -23,5 +25,6 @@ export default async function CustomerToolsPage() {
             </div>
             <CustomerToolsPanel canHardDelete={canHardDelete} />
         </div>
+        </ScrollArea>
     );
 }

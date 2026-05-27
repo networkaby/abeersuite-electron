@@ -28,6 +28,7 @@
  */
 
 import { auth } from "@/auth";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import UniversalCustomerPanel from "@/modules/home/UniversalCustomerPanel";
@@ -94,7 +95,8 @@ export default async function OfficePage() {
                     "Good evening";
 
     return (
-        <div className="space-y-6 pb-8">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 px-6 pt-3 pb-6">
             {/* Greeting */}
             <div>
                 <h1 className="text-2xl font-bold text-foreground">
@@ -125,5 +127,6 @@ export default async function OfficePage() {
                 </div>
             )}
         </div>
+        </ScrollArea>
     );
 }

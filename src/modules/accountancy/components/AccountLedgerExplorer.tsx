@@ -221,9 +221,9 @@ export function AccountLedgerExplorer({
     const netMovement = detail ? detail.closingBalance - detail.openingBalance : 0;
 
     return (
-        <div className="-m-8 flex h-screen flex-col overflow-hidden bg-card">
+        <div className="flex h-full flex-col overflow-hidden bg-card">
             {/* Breadcrumb bar */}
-            <BreadcrumbBar escape={false}>
+            <BreadcrumbBar>
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>

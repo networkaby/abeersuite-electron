@@ -285,7 +285,7 @@ export default function NeedsAttentionPage() {
     // ── render ────────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex h-full flex-col gap-2">
+        <div className="flex h-full flex-col gap-2 px-6 pb-6">
 
             {/* header */}
             <div className="flex flex-none flex-wrap items-center justify-between gap-3">
@@ -355,7 +355,7 @@ export default function NeedsAttentionPage() {
                     All products have cost and MRP set. ✓
                 </p>
             ) : view === "item" ? (
-                <TableScrollArea className="-mb-8 rounded-b-none border-b-0">
+                <TableScrollArea>
                     <table className="w-full text-sm">
                         <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
                             <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
@@ -503,7 +503,7 @@ export default function NeedsAttentionPage() {
                     <ScrollBar orientation="vertical" />
                 </TableScrollArea>
             ) : (
-                <TableScrollArea className="-mb-8 rounded-b-none border-b-0">
+                <TableScrollArea>
                     {/* sticky top column header — shared by every group */}
                     <div className={`${ROW_GRID} sticky top-0 z-10 bg-muted/40 backdrop-blur-sm px-2 py-2 border-b border-border text-[10px] font-medium uppercase tracking-wide text-muted-foreground`}>
                         <div>Product</div>

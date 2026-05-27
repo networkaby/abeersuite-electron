@@ -18,6 +18,7 @@ import {
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 
 type AccountRow = {
@@ -95,7 +96,8 @@ export default function OpeningBalancePage() {
     const balanced = Math.abs(data.difference) < 0.005;
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-2xl font-bold">Opening Balance</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
@@ -150,7 +152,8 @@ export default function OpeningBalancePage() {
                 onProductListChanged={loadProducts}
                 openingStockTotal={data.openingStockTotal}
             />
-        </div>
+            </div>
+        </ScrollArea>
     );
 }
 

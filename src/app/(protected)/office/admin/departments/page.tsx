@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2, X, Check, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
@@ -156,7 +157,8 @@ export default function DepartmentsPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -227,6 +229,7 @@ export default function DepartmentsPage() {
                     ))}
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
@@ -484,7 +485,8 @@ export default function PositionsPage() {
     })).filter(g => g.positions.length > 0);
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-6 px-6 pt-3 pb-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -626,6 +628,7 @@ export default function PositionsPage() {
                     })}
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

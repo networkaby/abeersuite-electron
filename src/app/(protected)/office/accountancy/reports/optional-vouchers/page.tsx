@@ -15,6 +15,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -148,7 +149,8 @@ export default function OptionalVouchersPage() {
     const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-5">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Optional Vouchers</h1>
@@ -321,5 +323,6 @@ export default function OptionalVouchersPage() {
                 </>
             )}
         </div>
+        </ScrollArea>
     );
 }

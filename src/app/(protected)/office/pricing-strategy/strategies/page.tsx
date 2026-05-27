@@ -567,7 +567,7 @@ export default function PricingStrategiesPage() {
     };
 
     return (
-        <div className="flex h-full flex-col gap-3 overflow-hidden">
+        <div className="flex h-full flex-col gap-3 overflow-hidden px-6 pb-6">
             <div className="flex flex-none flex-wrap items-center justify-between gap-3">
                 <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                     <Calculator className="size-5" aria-hidden />

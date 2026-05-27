@@ -100,7 +100,7 @@ export default function InventoryUnitsPage() {
     });
 
     return (
-        <div className="flex h-full flex-col gap-4 overflow-hidden">
+        <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
             <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">

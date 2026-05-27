@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { TaxClassificationClient } from "./TaxClassificationClient";
@@ -18,6 +19,7 @@ export default async function TaxClassificationPage() {
         hasPermissionWithScope(perms, PERMISSIONS.ADMIN_BYPASS);
 
     return (
+        <ScrollArea className="h-full" type="always">
         <div className="mx-auto max-w-7xl space-y-5 p-1">
             <div>
                 <h1 className="text-2xl font-bold text-foreground">Tax Classification</h1>
@@ -28,5 +30,6 @@ export default async function TaxClassificationPage() {
             </div>
             <TaxClassificationClient canEdit={canEdit} />
         </div>
+        </ScrollArea>
     );
 }

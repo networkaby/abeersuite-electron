@@ -651,7 +651,7 @@ export default function PricingItemsPage() {
     }
 
     return (
-        <div className="flex h-full flex-col gap-2">
+        <div className="flex h-full flex-col gap-2 px-6 pb-6">
 
             {/* ── Header row ────────────────────────────────────────────── */}
             <div className="flex flex-none flex-wrap items-end justify-between gap-3">

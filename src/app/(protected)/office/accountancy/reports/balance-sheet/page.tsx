@@ -14,6 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -245,7 +246,8 @@ export default function BalanceSheetPage() {
     const assetsTotal = assetBaseline + synthOnAsset;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-5">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
             {/* Header */}
             <div className="flex items-end justify-between gap-3 flex-wrap print:hidden">
                 <div>
@@ -412,5 +414,6 @@ export default function BalanceSheetPage() {
             )}
 
         </div>
+        </ScrollArea>
     );
 }

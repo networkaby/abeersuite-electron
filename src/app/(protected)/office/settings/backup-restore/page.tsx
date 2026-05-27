@@ -1,10 +1,12 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { BackupRestorePanel } from "@/modules/settings/components/BackupRestorePanel";
 
 export const metadata = { title: "Backup & Restore" };
 
 export default function BackupRestorePage() {
     return (
-        <div className="space-y-6 p-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="space-y-6 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-xl font-semibold">Backup & Restore</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -14,5 +16,6 @@ export default function BackupRestorePage() {
             </div>
             <BackupRestorePanel />
         </div>
+        </ScrollArea>
     );
 }

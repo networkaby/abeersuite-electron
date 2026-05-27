@@ -299,7 +299,7 @@ export default function StockSummaryPage() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="flex h-full flex-col gap-2">
+        <div className="flex h-full flex-col">
             {/* Breadcrumb bar — uniform with the other inventory pages */}
             <BreadcrumbBar>
                 <Breadcrumb>
@@ -317,6 +317,7 @@ export default function StockSummaryPage() {
                 </Breadcrumb>
             </BreadcrumbBar>
 
+            <div className="flex min-h-0 flex-1 flex-col gap-2 px-6 pb-6 pt-4">
             {/* Header */}
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
@@ -775,6 +776,7 @@ export default function StockSummaryPage() {
                     Valued using {METHOD_LABELS[method]}. {fallbackCount} product{fallbackCount === 1 ? "" : "s"} fell back to last-purchase cost (no receipt history).
                 </p>
             )}
+            </div>
 
             {/* Inline edit dialog */}
             <InvProductDialog

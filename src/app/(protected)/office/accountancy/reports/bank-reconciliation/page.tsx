@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import { Landmark, Construction, ArrowRight } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ROADMAP = [
     "Import bank statement (CSV / Excel)",
@@ -20,7 +21,8 @@ const ROADMAP = [
 
 export default function BankReconciliationPlaceholderPage() {
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="max-w-4xl mx-auto space-y-6 px-6 pt-3 pb-6">
             <div>
                 <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
                     <Landmark size={22} /> Bank Reconciliation
@@ -63,5 +65,6 @@ export default function BankReconciliationPlaceholderPage() {
                 </div>
             </div>
         </div>
+        </ScrollArea>
     );
 }

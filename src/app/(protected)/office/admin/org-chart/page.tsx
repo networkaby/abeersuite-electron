@@ -6,6 +6,7 @@ import axios from "axios";
 import { Briefcase, Link as LinkIcon, Sparkles, Network, Landmark, Move } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { OrgStructure } from "@/shared/types/orgChart";
 import StructureTree from "@/modules/admin/components/StructureTree";
 import OrgExplorer from "@/modules/admin/components/OrgExplorer";
@@ -41,7 +42,8 @@ export default function OrgChartPage() {
     ];
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-start justify-between">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Org Chart</h1>
@@ -159,6 +161,7 @@ export default function OrgChartPage() {
                     <OrgCanvas structure={structure} />
                 )
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

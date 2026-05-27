@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -203,7 +204,8 @@ export default function CountersAdminPage() {
     }, {});
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -391,6 +393,7 @@ export default function CountersAdminPage() {
                     ))}
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

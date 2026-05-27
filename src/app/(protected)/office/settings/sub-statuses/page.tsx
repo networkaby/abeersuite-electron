@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
@@ -598,7 +599,8 @@ export default function SubStatusesPage() {
     const unassigned = subStatuses.filter((subStatus) => subStatus.applicableStatusIds.length === 0);
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6">
+        <ScrollArea className="h-full" type="always">
+        <div className="mx-auto max-w-5xl space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Sub-Statuses</h1>
@@ -904,5 +906,6 @@ export default function SubStatusesPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </ScrollArea>
     );
 }

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, FolderTree, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/utils/constants";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
@@ -93,7 +94,8 @@ export default function GroupDetailPage() {
     })();
 
     return (
-        <div className="max-w-5xl mx-auto space-y-5">
+        <ScrollArea className="h-full" type="always">
+            <div className="max-w-5xl mx-auto space-y-5 px-6 pt-3 pb-6">
             {/* Header */}
             <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon-sm" onClick={() => router.back()} title="Back (Esc)">
@@ -215,6 +217,7 @@ export default function GroupDetailPage() {
                     No sub-groups or ledger accounts in this group yet.
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }

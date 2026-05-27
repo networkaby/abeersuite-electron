@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { branchAddressSummary } from "@/shared/lib/org/formatBranchAddress";
 
 interface Branch {
@@ -164,7 +165,8 @@ export default function BranchesPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <ScrollArea className="h-full" type="always">
+            <div className="space-y-6 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -258,7 +260,8 @@ export default function BranchesPage() {
                     ))}
                 </div>
             )}
-        </div>
+            </div>
+        </ScrollArea>
     );
 }
 
