@@ -17,6 +17,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
 import { InvProductPicker } from "@/modules/inventory/components/InvProductPicker";
@@ -136,8 +137,8 @@ export default function InventoryBomsPage() {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                         <Workflow className="size-5" aria-hidden />
@@ -155,7 +156,7 @@ export default function InventoryBomsPage() {
             </div>
 
             {(adding || editId != null) && (
-                <div className="space-y-4 border-2 border-border bg-muted/30 p-4 rounded-lg">
+                <div className="flex-none space-y-4 border-2 border-border bg-muted/30 p-4 rounded-lg">
                     <p className="text-sm font-semibold">{adding ? "New BOM" : "Edit BOM"}</p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -258,7 +259,7 @@ export default function InventoryBomsPage() {
                 </div>
             )}
 
-            <div className="overflow-x-auto border border-border rounded">
+            <ScrollArea className="min-h-0 flex-1 border border-border rounded">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -306,7 +307,8 @@ export default function InventoryBomsPage() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
         </div>
     );
 }

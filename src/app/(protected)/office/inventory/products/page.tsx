@@ -38,6 +38,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
+import { MasterQuickDialog, type MasterKind } from "@/modules/inventory/components/MasterQuickDialog";
 import {
     buildOfflineName,
     DEFAULT_NAMING_CONFIG,
@@ -47,6 +48,7 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
+type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
 
 type Row = {
     id: number;
@@ -111,6 +113,7 @@ export default function InventoryProductsPage() {
     const [categories, setCategories] = useState<Opt[]>([]);
     const [brands, setBrands] = useState<Opt[]>([]);
     const [groups, setGroups] = useState<Opt[]>([]);
+    const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
     const [warrantyTerms, setWarrantyTerms] = useState<Opt[]>([]);
     const [namingConfig, setNamingConfig] = useState<NamingConfigShape | null>(null);
     const [loading, setLoading] = useState(true);
@@ -133,6 +136,22 @@ export default function InventoryProductsPage() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogEditId, setDialogEditId] = useState<number | null>(null);
 
+    /// Shared master quick-add dialog. One instance handles every kind —
+    /// `masterKind` switches the rendered fields. The Promise returned by
+    /// `createMaster` resolves with the new id (or null if cancelled), so
+    /// callers can pre-select what the user just made.
+    const [masterDialogOpen, setMasterDialogOpen] = useState(false);
+    const [masterKind, setMasterKind] = useState<MasterKind>("brand");
+    const masterResolveRef = useRef<((id: number | null) => void) | null>(null);
+
+    const createMaster = useCallback((kind: MasterKind): Promise<number | null> => {
+        return new Promise((resolve) => {
+            masterResolveRef.current = resolve;
+            setMasterKind(kind);
+            setMasterDialogOpen(true);
+        });
+    }, []);
+
     const loadProducts = useCallback(() =>
         axios
             .get<Row[]>("/api/inventory/products")
@@ -142,12 +161,13 @@ export default function InventoryProductsPage() {
 
     const loadMasters = useCallback(async () => {
         try {
-            const [u, c, b, g, w, n] = await Promise.all([
+            const [u, c, b, g, w, gst, n] = await Promise.all([
                 axios.get<Opt[]>("/api/inventory/units"),
                 axios.get<Opt[]>("/api/inventory/categories"),
                 axios.get<Opt[]>("/api/inventory/brands"),
                 axios.get<Opt[]>("/api/inventory/product-groups"),
                 axios.get<Opt[]>("/api/inventory/warranty-terms"),
+                axios.get<GstRateOpt[]>("/api/inventory/gst-rates").catch(() => ({ data: [] as GstRateOpt[] })),
                 axios.get<Partial<NamingConfigShape>>("/api/inventory/naming-config").catch(() => ({ data: {} as Partial<NamingConfigShape> })),
             ]);
             setUnits(u.data);
@@ -155,6 +175,7 @@ export default function InventoryProductsPage() {
             setBrands(b.data);
             setGroups(g.data);
             setWarrantyTerms(w.data);
+            setGstRates(gst.data);
             setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...(n.data ?? {}) });
         } catch {
             toast.error("Failed to load reference data");
@@ -217,27 +238,6 @@ export default function InventoryProductsPage() {
     /// Create a new master row by name (POST /api/inventory/<endpoint>),
     /// refresh that master list, and return the new id. Returns null if the
     /// user cancelled the prompt or the request failed.
-    async function createMaster(
-        endpoint: "categories" | "brands" | "product-groups" | "warranty-terms" | "units",
-        label: string,
-    ): Promise<number | null> {
-        const name = window.prompt(`New ${label} name`)?.trim();
-        if (!name) return null;
-        try {
-            const body = endpoint === "units"
-                ? { code: name.toUpperCase().slice(0, 12), label: name }
-                : { name };
-            const res = await axios.post<{ id: number }>(`/api/inventory/${endpoint}`, body);
-            await loadMasters();
-            toast.success(`Created ${label} "${name}"`);
-            return res.data.id;
-        } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? `Failed to create ${label}`);
-            return null;
-        }
-    }
-
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         // 1. free-text search across SKU/name/namePart/model/barcode
@@ -498,6 +498,32 @@ export default function InventoryProductsPage() {
                 onSaved={loadProducts}
             />
 
+            <MasterQuickDialog
+                open={masterDialogOpen}
+                onOpenChange={(v) => {
+                    setMasterDialogOpen(v);
+                    if (!v && masterResolveRef.current) {
+                        masterResolveRef.current(null);
+                        masterResolveRef.current = null;
+                    }
+                }}
+                kind={masterKind}
+                siblings={
+                    masterKind === "category" ? categories
+                    : masterKind === "group" ? groups
+                    : undefined
+                }
+                gstRates={gstRates}
+                onCreated={async (id) => {
+                    await loadMasters();
+                    if (masterResolveRef.current) {
+                        masterResolveRef.current(id);
+                        masterResolveRef.current = null;
+                    }
+                    setMasterDialogOpen(false);
+                }}
+            />
+
             <div className="flex flex-none flex-wrap items-center justify-between gap-2">
                 <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -532,11 +558,11 @@ export default function InventoryProductsPage() {
                             Apply to <strong>{selected.size}</strong>
                         </span>
                         <span className="h-5 w-px bg-border" aria-hidden />
-                        <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("categories", "category")} />
-                        <BulkApply label="Brand" options={brands} field="brandId" onApply={applyToSelected} onCreate={() => createMaster("brands", "brand")} />
-                        <BulkApply label="Group" options={groups} field="groupId" onApply={applyToSelected} onCreate={() => createMaster("product-groups", "group")} />
-                        <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty-terms", "warranty term")} />
-                        <BulkApply label="Unit" options={units} field="unitId" onApply={applyToSelected} clearable={false} onCreate={() => createMaster("units", "unit")} />
+                        <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("category")} />
+                        <BulkApply label="Brand" options={brands} field="brandId" onApply={applyToSelected} onCreate={() => createMaster("brand")} />
+                        <BulkApply label="Group" options={groups} field="groupId" onApply={applyToSelected} onCreate={() => createMaster("group")} />
+                        <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty")} />
+                        <BulkApply label="Unit" options={units} field="unitId" onApply={applyToSelected} clearable={false} onCreate={() => createMaster("unit")} />
                         <span className="h-5 w-px bg-border" aria-hidden />
                         <button
                             type="button"
@@ -570,31 +596,31 @@ export default function InventoryProductsPage() {
                                 <TableHead className="min-w-44">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
-                                        <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                        <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("category")} createLabel="category" />
                                     </div>
                                 </TableHead>
                                 <TableHead className="min-w-36">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="brandName" sort={sort} onSort={cycleSort}>Brand</SortHead>
-                                        <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                        <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("brand")} createLabel="brand" />
                                     </div>
                                 </TableHead>
                                 <TableHead className="min-w-36">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="groupName" sort={sort} onSort={cycleSort}>Group</SortHead>
-                                        <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                        <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("group")} createLabel="group" />
                                     </div>
                                 </TableHead>
                                 <TableHead className="min-w-36">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="warrantyName" sort={sort} onSort={cycleSort}>Warranty</SortHead>
-                                        <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                        <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("warranty")} createLabel="warranty term" />
                                     </div>
                                 </TableHead>
                                 <TableHead className="w-24">
                                     <div className="flex items-center gap-1">
                                         <SortHead field="unitCode" sort={sort} onSort={cycleSort}>Unit</SortHead>
-                                        <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} />
+                                        <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("unit")} createLabel="unit" />
                                     </div>
                                 </TableHead>
                                 <TableHead className="min-w-32"><SortHead field="modelNo" sort={sort} onSort={cycleSort}>Model No</SortHead></TableHead>
@@ -688,7 +714,7 @@ export default function InventoryProductsPage() {
                                                         value={val(r, "categoryId") as number | null}
                                                         options={categories}
                                                         onChange={(v) => patch(r.id, { categoryId: v })}
-                                                        onCreate={() => createMaster("categories", "category")}
+                                                        onCreate={() => createMaster("category")}
                                                     />
                                                 ) : (
                                                     r.category?.name ?? "—"
@@ -702,7 +728,7 @@ export default function InventoryProductsPage() {
                                                         value={val(r, "brandId") as number | null}
                                                         options={brands}
                                                         onChange={(v) => patch(r.id, { brandId: v })}
-                                                        onCreate={() => createMaster("brands", "brand")}
+                                                        onCreate={() => createMaster("brand")}
                                                     />
                                                 ) : (
                                                     r.brand?.name ?? "—"
@@ -716,7 +742,7 @@ export default function InventoryProductsPage() {
                                                         value={val(r, "groupId") as number | null}
                                                         options={groups}
                                                         onChange={(v) => patch(r.id, { groupId: v })}
-                                                        onCreate={() => createMaster("product-groups", "group")}
+                                                        onCreate={() => createMaster("group")}
                                                     />
                                                 ) : (
                                                     r.group?.name ?? "—"
@@ -730,7 +756,7 @@ export default function InventoryProductsPage() {
                                                         value={val(r, "warrantyTermId") as number | null}
                                                         options={warrantyTerms}
                                                         onChange={(v) => patch(r.id, { warrantyTermId: v })}
-                                                        onCreate={() => createMaster("warranty-terms", "warranty term")}
+                                                        onCreate={() => createMaster("warranty")}
                                                     />
                                                 ) : (
                                                     r.warrantyTerm?.name ?? "—"
@@ -745,7 +771,7 @@ export default function InventoryProductsPage() {
                                                         options={units}
                                                         onChange={(v) => v != null && patch(r.id, { unitId: v })}
                                                         clearable={false}
-                                                        onCreate={() => createMaster("units", "unit")}
+                                                        onCreate={() => createMaster("unit")}
                                                     />
                                                 ) : (
                                                     r.unit.code
@@ -910,6 +936,7 @@ function SortHead({
 /// has a null relation). For booleanField (isActive), shows ✓ / inactive.
 function ColFilter({
     field, options, rows, colFilters, onToggle, onClear, booleanField = false,
+    onCreate, createLabel,
 }: {
     field: FilterField;
     options: Opt[];
@@ -918,9 +945,13 @@ function ColFilter({
     onToggle: (f: FilterField, key: string) => void;
     onClear: (f: FilterField) => void;
     booleanField?: boolean;
+    onCreate?: () => Promise<number | null>;
+    createLabel?: string;
 }) {
     const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
     const wrapRef = useRef<HTMLDivElement | null>(null);
+    const inputRef = useRef<HTMLInputElement | null>(null);
     useEffect(() => {
         if (!open) return;
         function onDocClick(e: MouseEvent) {
@@ -933,6 +964,13 @@ function ColFilter({
             document.removeEventListener("mousedown", onDocClick);
             document.removeEventListener("keydown", onKey);
         };
+    }, [open]);
+
+    // Reset query + focus the search input each time the popover opens.
+    useEffect(() => {
+        if (!open) return;
+        setQuery("");
+        requestAnimationFrame(() => inputRef.current?.focus());
     }, [open]);
 
     const active = (colFilters.get(field)?.size ?? 0) > 0;
@@ -949,6 +987,10 @@ function ColFilter({
             return list;
         })();
 
+    // Filter by query (substring, case-insensitive). Empty query → all items.
+    const q = query.trim().toLowerCase();
+    const visibleItems = !q ? items : items.filter((it) => it.label.toLowerCase().includes(q));
+
     return (
         <div ref={wrapRef} className="relative">
             <button
@@ -961,9 +1003,8 @@ function ColFilter({
                 <Filter className="size-3.5" />
             </button>
             {open ? (
-                <div className="absolute z-20 mt-1 left-0 min-w-48 max-h-72  rounded-md border border-border bg-popover text-popover-foreground p-2 shadow-md">
-                    {/* <div className="absolute z-20 mt-1 left-0 min-w-48 max-h-72 overflow-auto rounded-md border border-border bg-popover text-popover-foreground p-2 shadow-md"> */}
-                    <div className="flex items-center justify-between mb-1 text-xs">
+                <div className="absolute z-20 mt-1 left-0 min-w-56 rounded-md border border-border bg-popover text-popover-foreground shadow-md">
+                    <div className="flex items-center justify-between px-2 pt-2 text-xs">
                         <span className="text-muted-foreground">Filter</span>
                         {active ? (
                             <button type="button" className="hover:underline" onClick={() => onClear(field)}>
@@ -971,8 +1012,33 @@ function ColFilter({
                             </button>
                         ) : null}
                     </div>
-                    <ul className="space-y-1">
-                        {items.map((it) => (
+                    {!booleanField ? (
+                        <div className="px-2 pt-1">
+                            <input
+                                ref={inputRef}
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Search…"
+                                className="h-7 w-full rounded border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            />
+                        </div>
+                    ) : null}
+                    {onCreate ? (
+                        <div className="px-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const id = await onCreate();
+                                    if (id != null) onToggle(field, String(id));
+                                }}
+                                className="block w-full rounded px-2 py-1 text-left text-sm text-primary hover:bg-muted"
+                            >
+                                + New {createLabel ?? "item"}
+                            </button>
+                        </div>
+                    ) : null}
+                    <ul className="max-h-60 overflow-auto p-2 space-y-1">
+                        {visibleItems.map((it) => (
                             <li key={it.key}>
                                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                                     <input
@@ -984,8 +1050,10 @@ function ColFilter({
                                 </label>
                             </li>
                         ))}
-                        {items.length === 0 ? (
-                            <li className="text-xs text-muted-foreground italic">no values</li>
+                        {visibleItems.length === 0 ? (
+                            <li className="text-xs text-muted-foreground italic">
+                                {items.length === 0 ? "no values" : "no matches"}
+                            </li>
                         ) : null}
                     </ul>
                 </div>
@@ -1293,3 +1361,4 @@ function BulkApply({
         </div>
     );
 }
+

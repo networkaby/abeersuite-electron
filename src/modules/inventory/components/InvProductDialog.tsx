@@ -13,7 +13,7 @@
 // edit a product master in-place — stock summary, products page, future
 // inventory-details page, etc.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import {
     type InvProductFormState,
     type InvProductFormTab,
 } from "@/modules/inventory/components/InvProductFormFields";
+import { MasterQuickDialog, type MasterKind } from "@/modules/inventory/components/MasterQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
 import {
     DEFAULT_NAMING_CONFIG,
@@ -170,6 +171,28 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [saving, setSaving] = useState(false);
     const [refsLoaded, setRefsLoaded] = useState(false);
 
+    /// Refreshes just the master lists (no naming-config / attribute-masters /
+    /// gst-rates) — called after MasterQuickDialog creates a new row so the
+    /// new option shows up in the relevant Select.
+    const refreshMaster = useCallback(async (kind: MasterKind) => {
+        const url =
+            kind === "category" ? "/api/inventory/categories"
+            : kind === "brand"  ? "/api/inventory/brands"
+            : kind === "group"  ? "/api/inventory/product-groups"
+            : kind === "warranty" ? "/api/inventory/warranty-terms"
+            : "/api/inventory/units";
+        try {
+            const res = await axios.get<Opt[]>(url);
+            if (kind === "category") setCategories(res.data);
+            else if (kind === "brand") setBrands(res.data);
+            else if (kind === "group") setGroups(res.data);
+            else if (kind === "warranty") setWarrantyTerms(res.data);
+            else setUnits(res.data);
+        } catch {
+            toast.error(`Failed to reload ${kind}s`);
+        }
+    }, []);
+
     // Lazy-load reference data once, on first open.
     useEffect(() => {
         if (!open || refsLoaded) return;
@@ -186,6 +209,21 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             .then(() => setRefsLoaded(true))
             .catch(() => toast.error("Failed to load reference data"));
     }, [open, refsLoaded]);
+
+    /// Shared master quick-add — opens from the "+ New" button next to each
+    /// master picker. Returns the new row's id (or null if cancelled) so the
+    /// form auto-selects it.
+    const [masterDialogOpen, setMasterDialogOpen] = useState(false);
+    const [masterKind, setMasterKind] = useState<MasterKind>("brand");
+    const masterResolveRef = useRef<((id: number | null) => void) | null>(null);
+
+    const createMaster = useCallback((kind: MasterKind): Promise<number | null> => {
+        return new Promise((resolve) => {
+            masterResolveRef.current = resolve;
+            setMasterKind(kind);
+            setMasterDialogOpen(true);
+        });
+    }, []);
 
     // Initialise form whenever the dialog opens (different mode or same mode
     // with a different editId).
@@ -315,6 +353,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         attrMasters={attrMasters}
                         isEditMode={editId != null}
                         defaultTab={defaultTab}
+                        onCreateMaster={createMaster}
                     />
                 </div>
                 <div className="flex justify-end gap-2 border-t bg-muted/30 px-6 py-3">
@@ -326,6 +365,31 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                     </Button>
                 </div>
             </DialogContent>
+            <MasterQuickDialog
+                open={masterDialogOpen}
+                onOpenChange={(v) => {
+                    setMasterDialogOpen(v);
+                    if (!v && masterResolveRef.current) {
+                        masterResolveRef.current(null);
+                        masterResolveRef.current = null;
+                    }
+                }}
+                kind={masterKind}
+                siblings={
+                    masterKind === "category" ? categories
+                    : masterKind === "group" ? groups
+                    : undefined
+                }
+                gstRates={gstRates}
+                onCreated={async (id) => {
+                    await refreshMaster(masterKind);
+                    if (masterResolveRef.current) {
+                        masterResolveRef.current(id);
+                        masterResolveRef.current = null;
+                    }
+                    setMasterDialogOpen(false);
+                }}
+            />
         </Dialog>
     );
 }

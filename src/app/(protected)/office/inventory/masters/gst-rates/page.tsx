@@ -16,6 +16,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
 
@@ -82,8 +83,8 @@ export default function GstRatesPage() {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                     <Percent className="size-5" aria-hidden />
                     GST Rates
@@ -135,7 +136,7 @@ export default function GstRatesPage() {
                 </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-border">
+            <ScrollArea className="min-h-0 flex-1 border border-border">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -185,7 +186,8 @@ export default function GstRatesPage() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
         </div>
     );
 }

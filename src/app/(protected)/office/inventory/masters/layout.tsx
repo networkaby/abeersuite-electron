@@ -16,7 +16,7 @@ export default async function InventoryMastersLayout({ children }: { children: R
     }
 
     return (
-        <div className="container max-w-7xl space-y-0 py-0">
+        <div className="container flex h-full max-w-7xl min-h-0 flex-col gap-2 py-0">
             <PathBreadcrumb
                 root={{ href: "/office/inventory", label: "Inventory" }}
                 labels={{
@@ -29,7 +29,7 @@ export default async function InventoryMastersLayout({ children }: { children: R
                 }}
             />
             <InventoryMastersNav permissions={permissions} />
-            {children}
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         </div>
     );
 }

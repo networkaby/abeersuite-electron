@@ -17,6 +17,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type InvUnit = {
     id: number;
@@ -99,8 +100,8 @@ export default function InventoryUnitsPage() {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                         <Ruler className="size-5" aria-hidden />
@@ -115,7 +116,7 @@ export default function InventoryUnitsPage() {
             </div>
 
             {adding || editId != null ? (
-                <div className="space-y-3 border-2 border-border bg-muted/30 p-4">
+                <div className="flex-none space-y-3 border-2 border-border bg-muted/30 p-4">
                     <p className="text-sm font-semibold">{adding ? "New unit" : "Edit unit"}</p>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
@@ -148,7 +149,7 @@ export default function InventoryUnitsPage() {
                 </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-border">
+            <ScrollArea className="min-h-0 flex-1 border border-border">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -206,7 +207,8 @@ export default function InventoryUnitsPage() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
         </div>
     );
 }

@@ -9,6 +9,7 @@
 
 import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
+import type { MasterKind } from "@/modules/inventory/components/MasterQuickDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -164,6 +165,7 @@ export function InvProductFormFields({
     /** true = edit mode; all dirty flags start true so existing values aren't clobbered. */
     isEditMode = false,
     defaultTab = "basics",
+    onCreateMaster,
 }: {
     form: InvProductFormState;
     setForm: React.Dispatch<React.SetStateAction<InvProductFormState>>;
@@ -182,6 +184,10 @@ export function InvProductFormFields({
     /** Initial tab. Callers that deep-link into a specific concern (e.g. Tax
      * Classification report → pencil) pass "tax" so the dialog opens on it. */
     defaultTab?: InvProductFormTab;
+    /** When provided, renders a "+ New" button next to each master picker that
+     *  opens the MasterQuickDialog. Caller resolves with the new row id (or null
+     *  if cancelled) — the form auto-selects it. */
+    onCreateMaster?: (kind: MasterKind) => Promise<number | null>;
 }) {
     const label = (o: Opt) => o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
 
@@ -331,12 +337,23 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Unit</Label>
-                        <Select value={form.unitId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, unitId: v === "__none__" ? "" : v }))}>
+                        <Select
+                            value={form.unitId || "__none__"}
+                            onValueChange={async (v) => {
+                                if (v === "__new__" && onCreateMaster) {
+                                    const id = await onCreateMaster("unit");
+                                    if (id != null) setForm((f) => ({ ...f, unitId: String(id) }));
+                                    return;
+                                }
+                                setForm((f) => ({ ...f, unitId: v === "__none__" ? "" : v }));
+                            }}
+                        >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select unit" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__none__">Select…</SelectItem>
+                                {onCreateMaster ? <SelectItem value="__new__">+ New unit…</SelectItem> : null}
                                 {units.map((u) => (
                                     <SelectItem key={u.id} value={String(u.id)}>
                                         {u.code} — {u.label}
@@ -351,12 +368,23 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Category</Label>
-                        <Select value={form.categoryId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "__none__" ? "" : v }))}>
+                        <Select
+                            value={form.categoryId || "__none__"}
+                            onValueChange={async (v) => {
+                                if (v === "__new__" && onCreateMaster) {
+                                    const id = await onCreateMaster("category");
+                                    if (id != null) setForm((f) => ({ ...f, categoryId: String(id) }));
+                                    return;
+                                }
+                                setForm((f) => ({ ...f, categoryId: v === "__none__" ? "" : v }));
+                            }}
+                        >
                             <SelectTrigger>
                                 <SelectValue placeholder="Optional" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
+                                {onCreateMaster ? <SelectItem value="__new__">+ New category…</SelectItem> : null}
                                 {categories.map((c) => (
                                     <SelectItem key={c.id} value={String(c.id)}>
                                         {label(c)}
@@ -367,12 +395,23 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Group</Label>
-                        <Select value={form.groupId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, groupId: v === "__none__" ? "" : v }))}>
+                        <Select
+                            value={form.groupId || "__none__"}
+                            onValueChange={async (v) => {
+                                if (v === "__new__" && onCreateMaster) {
+                                    const id = await onCreateMaster("group");
+                                    if (id != null) setForm((f) => ({ ...f, groupId: String(id) }));
+                                    return;
+                                }
+                                setForm((f) => ({ ...f, groupId: v === "__none__" ? "" : v }));
+                            }}
+                        >
                             <SelectTrigger>
                                 <SelectValue placeholder="Optional" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
+                                {onCreateMaster ? <SelectItem value="__new__">+ New group…</SelectItem> : null}
                                 {groups.map((g) => (
                                     <SelectItem key={g.id} value={String(g.id)}>
                                         {label(g)}
@@ -383,12 +422,23 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Brand</Label>
-                        <Select value={form.brandId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, brandId: v === "__none__" ? "" : v }))}>
+                        <Select
+                            value={form.brandId || "__none__"}
+                            onValueChange={async (v) => {
+                                if (v === "__new__" && onCreateMaster) {
+                                    const id = await onCreateMaster("brand");
+                                    if (id != null) setForm((f) => ({ ...f, brandId: String(id) }));
+                                    return;
+                                }
+                                setForm((f) => ({ ...f, brandId: v === "__none__" ? "" : v }));
+                            }}
+                        >
                             <SelectTrigger>
                                 <SelectValue placeholder="Optional" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
+                                {onCreateMaster ? <SelectItem value="__new__">+ New brand…</SelectItem> : null}
                                 {brands.map((b) => (
                                     <SelectItem key={b.id} value={String(b.id)}>
                                         {label(b)}
@@ -399,12 +449,23 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Warranty term</Label>
-                        <Select value={form.warrantyTermId || "__none__"} onValueChange={(v) => setForm((f) => ({ ...f, warrantyTermId: v === "__none__" ? "" : v }))}>
+                        <Select
+                            value={form.warrantyTermId || "__none__"}
+                            onValueChange={async (v) => {
+                                if (v === "__new__" && onCreateMaster) {
+                                    const id = await onCreateMaster("warranty");
+                                    if (id != null) setForm((f) => ({ ...f, warrantyTermId: String(id) }));
+                                    return;
+                                }
+                                setForm((f) => ({ ...f, warrantyTermId: v === "__none__" ? "" : v }));
+                            }}
+                        >
                             <SelectTrigger>
                                 <SelectValue placeholder="Optional" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
+                                {onCreateMaster ? <SelectItem value="__new__">+ New warranty term…</SelectItem> : null}
                                 {warrantyTerms.map((w) => (
                                     <SelectItem key={w.id} value={String(w.id)}>
                                         {label(w)}
@@ -800,3 +861,4 @@ export function InvProductFormFields({
         </Tabs>
     );
 }
+

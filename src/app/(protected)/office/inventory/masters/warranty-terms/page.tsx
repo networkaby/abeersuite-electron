@@ -18,6 +18,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type Row = {
     id: number;
@@ -107,8 +108,8 @@ export default function InventoryWarrantyTermsPage() {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                     <ShieldCheck className="size-5" aria-hidden />
                     Warranty terms
@@ -120,7 +121,7 @@ export default function InventoryWarrantyTermsPage() {
             </div>
 
             {adding || editId != null ? (
-                <div className="space-y-3 border-2 border-border bg-muted/30 p-4">
+                <div className="flex-none space-y-3 border-2 border-border bg-muted/30 p-4">
                     <p className="text-sm font-semibold">{adding ? "New warranty term" : "Edit warranty term"}</p>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2 sm:col-span-2">
@@ -161,7 +162,7 @@ export default function InventoryWarrantyTermsPage() {
                 </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-border">
+            <ScrollArea className="min-h-0 flex-1 border border-border">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -222,7 +223,8 @@ export default function InventoryWarrantyTermsPage() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
         </div>
     );
 }

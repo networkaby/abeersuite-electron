@@ -16,6 +16,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
 
@@ -79,8 +80,8 @@ export default function InventoryBrandsPage() {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-4">
                 <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                     <Tag className="size-5" aria-hidden />
                     Brands
@@ -92,7 +93,7 @@ export default function InventoryBrandsPage() {
             </div>
 
             {adding || editId != null ? (
-                <div className="space-y-3 border-2 border-border bg-muted/30 p-4">
+                <div className="flex-none space-y-3 border-2 border-border bg-muted/30 p-4">
                     <p className="text-sm font-semibold">{adding ? "New brand" : "Edit brand"}</p>
                     <div className="flex flex-wrap items-end gap-4">
                         <div className="space-y-2 min-w-[200px]">
@@ -115,7 +116,7 @@ export default function InventoryBrandsPage() {
                 </div>
             ) : null}
 
-            <div className="overflow-x-auto border border-border">
+            <ScrollArea className="min-h-0 flex-1 border border-border">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -156,7 +157,8 @@ export default function InventoryBrandsPage() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
         </div>
     );
 }
