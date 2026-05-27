@@ -108,6 +108,12 @@ model OrgDefaults {
   defaultHsnCode    String?
   defaultTaxability Taxability?
 
+  // Stock valuation default — drives BS closing stock, stock-summary, and the
+  // pricing-strategy fallback when product.costMethod and strategy.costMethod
+  // are both null. UI dropdowns (BS, stock-summary, pricing-strategy items)
+  // initialise from this value and can preview other methods per-session.
+  valuationMethod CostMethod @default(WEIGHTED_AVG)
+
   // Voucher defaults
   defaultSaleCreditPeriod     Int?
   defaultPurchaseCreditPeriod Int?

@@ -5,9 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import {
-    productOpeningValue, syncProductCacheFromOpening,
-} from "@/modules/inventory/lib/stockValue";
+import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
 
 // PUT /api/inventory/products/[id]/opening
 // Sets opening stock qty, rate, and value on a product master.
@@ -37,9 +35,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 openingRate:      data.rate,
                 openingValue:     productOpeningValue(opening),
                 openingStockDate: data.asOfDate ? new Date(data.asOfDate) : null,
-                // Sync running caches via shared helper. Clearing opening
-                // (qty = null) resets stock=0 and costPaise=null so the
-                // closingStock helper doesn't keep stale valuation.
+                // PR 3 simplified this to just `stock` — the opening rate
+                // seeds cost via the synthetic first lot in loadInwardLots,
+                // so no cache column needs touching.
                 ...syncProductCacheFromOpening(opening),
             },
         });

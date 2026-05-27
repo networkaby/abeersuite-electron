@@ -126,7 +126,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.openingStockDate !== undefined ? {
                     openingStockDate: b.openingStockDate ? new Date(b.openingStockDate) : null,
                 } : {}),
-                ...(b.costPaise !== undefined ? { costPaise: b.costPaise } : {}),
                 // GST classification — null clears the override and re-enables cascade.
                 ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),
                 ...(b.hsnCode    !== undefined ? { hsnCode:    b.hsnCode    } : {}),

@@ -157,22 +157,29 @@ enum Taxability {
 
 // ── Pricing-strategy enums ────────────────────────────────────────────────────
 
-// Cost-basis method used by the pricing-strategy resolver, selected per
-// InvProduct. Each method derives the unit cost in paise as follows:
-//   WEIGHTED_AVG_COST  → Σ(amount) / Σ(qty) over every IN row in InvStockLedger (default)
-//   FIFO               → perpetual: oldest remaining lot's rate after replaying OUT rows
-//   LAST_PURCHASE_COST → snapshot stored on InvProduct.costPaise (existing column,
-//                        updated on every PURCHASE voucher post)
-//   MONTHLY_AVG_COST   → weighted avg of IN rows in the current calendar month
-//   STD_COST           → manually-set per item via InvProduct.stdCostPaise
-// If no IN history exists for the chosen method, the resolver falls back
-// to InvProduct.costPaise.
+// Cost-basis method used by the pricing-strategy resolver and the BS valuation
+// dropdown. Selected per InvProduct (override) or org-wide via
+// OrgDefaults.valuationMethod. Each method derives the unit cost in paise as:
+//   WEIGHTED_AVG  → Σ(qty × rate) / Σ(qty) over every inward lot
+//                   (opening lot + all POSTED inward ledger rows). Default.
+//   SIMPLE_AVG    → Σ(rate) / N — plain arithmetic mean, qty doesn't weight.
+//                   Use when batch size shouldn't influence the cost basis.
+//   FIFO          → walk lots newest-first against current on-hand qty.
+//   LAST_INWARD   → most recent inward lot's rate (any inward type:
+//                   PURCHASE / GRN / SALE_RETURN / MJ-PRODUCE / PHYSICAL_STOCK).
+//   MONTHLY_AVG   → weighted avg restricted to the current calendar month;
+//                   fallback to LAST_INWARD when no purchases this month.
+// Cascading fallback for every method when there's no usable history:
+//   method-empty → LAST_INWARD → openingRate → no-cost-basis (Needs Attention).
+//
+// Renamed from LAST_PURCHASE_COST → LAST_INWARD in PR 3 of noble-boole.
+// STD_COST + LIFO dropped (STD was dead weight; LIFO banned for Indian tax).
 enum CostMethod {
-  WEIGHTED_AVG_COST
+  WEIGHTED_AVG
+  SIMPLE_AVG
   FIFO
-  LAST_PURCHASE_COST
-  MONTHLY_AVG_COST
-  STD_COST
+  LAST_INWARD
+  MONTHLY_AVG
 }
 
 // PricingScope removed 2026-05-26 — PricingStrategy now uses multi-condition

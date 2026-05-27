@@ -2,12 +2,11 @@
 // physical counts, manufacturing journal, POS sales/returns).
 //
 // One helper replaces the 9 voucher posters that each inlined the same three
-// writes (InvStockLedger row + InvProduct.stock null-aware delta + InvProductBranch
-// upsert) with subtly different rules for the costPaise/mrpPaise cache. PR 1
-// of the noble-boole plan preserves today's behavior bit-identically — the
-// `newCostPaise` / `newMrpPaise` knobs let each caller opt into the same
-// cache-refresh logic they had inline. PR 3 will drop the cache entirely and
-// remove those knobs.
+// writes (InvStockLedger row + InvProduct.stock delta + InvProductBranch upsert).
+// PR 3 dropped the costPaise/mrpPaise cache — cost now derives from the ledger
+// walk in valuation.ts, so this helper no longer refreshes any cache columns.
+// The `newMrpPaise` knob is kept so purchase posters can still stamp MRP onto
+// the master from supplier paperwork (MRP isn't derived, it's printed on the box).
 
 import type { Prisma } from "@/generated/prisma/client";
 import { toNumber } from "@/modules/accountancy/lib/balance";
@@ -24,21 +23,17 @@ export interface RecordStockMovementArgs {
     rate:      Numeric;
     amount:    Numeric;
     /**
-     * Pre-fetched InvProduct.stock value:
-     *   • number   → use plain { increment | decrement }
-     *   • null     → cache was uninitialized; overwrite with absolute delta
-     *                (Postgres NULL + n = NULL would otherwise silently no-op)
-     *   • undefined → skip null-detection, plain { increment | decrement }
-     *                 (matches POS sale / cancel paths that don't pre-fetch)
+     * Pre-fetched InvProduct.stock value. When null the cache was uninitialized
+     * and the helper overwrites with the absolute delta (Postgres NULL + n
+     * silently no-ops). When undefined, plain { increment | decrement } — the
+     * POS / cancel paths skip the pre-fetch.
      */
     productCurrentStock?: number | null;
     /** Default true. Set false for BRANCH_TRANSFER (org-wide cache unchanged). */
     updateOrgWideStock?:  boolean;
     /** Default true. Set false for routes that don't track per-branch balance. */
     updateBranchBalance?: boolean;
-    /** When provided, overwrite InvProduct.costPaise on the cache-refresh update. */
-    newCostPaise?: number;
-    /** When provided, overwrite InvProduct.mrpPaise on the cache-refresh update. */
+    /** When provided, overwrite InvProduct.mrpPaise (printed on the box, not derived). */
     newMrpPaise?:  number;
 }
 
@@ -66,7 +61,7 @@ export async function recordStockMovement(
     const updateOrgWide  = args.updateOrgWideStock  !== false;
     const updateBranch   = args.updateBranchBalance !== false;
 
-    // 2. Org-wide InvProduct cache (stock + optional cost/mrp refresh).
+    // 2. Org-wide InvProduct cache (stock + optional MRP stamp).
     if (updateOrgWide) {
         const productData: Prisma.InvProductUpdateInput = {};
         if (delta !== 0) {
@@ -79,8 +74,7 @@ export async function recordStockMovement(
                     : { decrement: -delta };
             }
         }
-        if (args.newCostPaise != null) productData.costPaise = args.newCostPaise;
-        if (args.newMrpPaise  != null) productData.mrpPaise  = args.newMrpPaise;
+        if (args.newMrpPaise != null) productData.mrpPaise = args.newMrpPaise;
         if (Object.keys(productData).length > 0) {
             await tx.invProduct.update({
                 where: { id: args.productId },

@@ -69,9 +69,10 @@ const productIdentifiers = {
     notes: zOptStr(5000),
 };
 
-// All three are stored in paise (₹500.00 → 50000) — the form converts in the UI.
+// All stored in paise (₹500.00 → 50000) — the form converts in the UI.
+// costPaise was dropped in PR 3 of noble-boole; cost now derives from the
+// ledger walk (opening rate is the synthetic first lot).
 const productPricing = {
-    costPaise:  z.number().int().nonnegative().nullish(),
     pricePaise: z.number().int().nonnegative().nullish(),
     mrpPaise:   z.number().int().nonnegative().nullish(),
 };

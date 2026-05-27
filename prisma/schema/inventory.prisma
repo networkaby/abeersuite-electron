@@ -216,17 +216,13 @@ model InvProduct {
   stock             Int?
   lowStockThreshold Int     @default(5)
   isListedInShop    Boolean @default(false)
-  /// Last purchase cost in paise — set on PURCHASE voucher post, used for COGS on SALE
-  costPaise         Int?
 
   // ── Pricing strategy (cost basis + per-item overrides) ─────────────────────
-  /// Per-item cost-basis method consumed by the pricing-strategy resolver.
-  /// See `enum CostMethod`. Null = inherit from the matched strategy
-  /// (which itself may inherit to the hard-coded WEIGHTED_AVG_COST fallback).
-  /// Resolution: product.costMethod ?? strategy.costMethod ?? WEIGHTED_AVG_COST.
+  /// Per-item cost-basis method consumed by the pricing-strategy resolver +
+  /// BS valuation. See `enum CostMethod`. Null = inherit from the matched
+  /// strategy (which itself may inherit to OrgDefaults.valuationMethod).
+  /// Resolution: product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod.
   costMethod        CostMethod?
-  /// Manually-entered standard cost in paise. Only read when costMethod == STD_COST.
-  stdCostPaise      Int?
   /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
   /// PricingStrategy chain (BRAND → GROUP → CATEGORY → ORG).
   marginPercent     Decimal?   @db.Decimal(6, 2)

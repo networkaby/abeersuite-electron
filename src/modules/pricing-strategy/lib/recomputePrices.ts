@@ -15,6 +15,7 @@ import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
 import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
+import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 
 export interface RecomputeResult {
     /** Products whose `pricePaise` was rewritten. */
@@ -37,14 +38,12 @@ export async function recomputePricesForProducts(
 
     const uniqueIds = [...new Set(productIds)];
 
-    const [products, strategies] = await Promise.all([
+    const [products, strategies, orgDefaults] = await Promise.all([
         prisma.invProduct.findMany({
             where:  { id: { in: uniqueIds }, isActive: true },
             select: {
                 id:              true,
                 stock:           true,
-                costPaise:       true,
-                stdCostPaise:    true,
                 mrpPaise:        true,
                 categoryId:      true,
                 groupId:         true,
@@ -56,9 +55,12 @@ export async function recomputePricesForProducts(
             },
         }),
         prisma.pricingStrategy.findMany({ where: { isActive: true } }),
+        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
     ]);
 
     if (products.length === 0) return result;
+
+    const orgDefault = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
 
     // Match context — same shape as /apply.
     const needsStaleness = strategies.some((s) => s.minStaleDays != null || s.maxStaleDays != null);
@@ -66,23 +68,34 @@ export async function recomputePricesForProducts(
         productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
     });
 
+    // Pre-resolve LAST_INWARD for the matcher's cost-range filter. Matches
+    // pre-PR3 behaviour where `costPaise` (the cache) drove min/maxCostPaise
+    // strategy gates; the cache itself was always overwritten with the most
+    // recent inward rate, so LAST_INWARD is the same signal.
+    const matcherCosts = await valueStockBatch(
+        products.map((p) => ({ id: p.id, stock: p.stock })),
+        "LAST_INWARD",
+    );
+
     type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
     const matched = new Map<number, { strategy: typeof strategies[number] | null; effectiveMethod: EffectiveMethod }>();
     for (const p of products) {
+        const mc = matcherCosts.get(p.id);
+        const matcherCostPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
         const s = pickStrategy(
             {
                 id:         p.id,
                 brandId:    p.brandId,
                 groupId:    p.groupId,
                 categoryId: p.categoryId,
-                costPaise:  p.costPaise,
+                costPaise:  matcherCostPaise,
                 stock:      p.stock,
                 attrsJson:  (p.attrsJson ?? null) as Record<string, unknown> | null,
             },
             strategies,
             matchCtx,
         );
-        const effective: EffectiveMethod = p.costMethod ?? s?.costMethod ?? "WEIGHTED_AVG_COST";
+        const effective: EffectiveMethod = p.costMethod ?? s?.costMethod ?? orgDefault;
         matched.set(p.id, { strategy: s, effectiveMethod: effective });
     }
 
@@ -97,12 +110,7 @@ export async function recomputePricesForProducts(
     const costById = new Map<number, number | null>();
     for (const [method, group] of byMethod.entries()) {
         const resolved = await resolveCostBatch(
-            group.map((g) => ({
-                id:           g.id,
-                stock:        g.stock,
-                costPaise:    g.costPaise,
-                stdCostPaise: g.stdCostPaise,
-            })),
+            group.map((g) => ({ id: g.id, stock: g.stock })),
             method,
         );
         for (const [id, r] of resolved) costById.set(id, r.costPaise);
@@ -118,7 +126,7 @@ export async function recomputePricesForProducts(
                 result.skipped += 1;
                 continue;
             }
-            const cost       = costById.get(p.id) ?? p.costPaise;
+            const cost       = costById.get(p.id) ?? null;
             const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
             const priced     = applyStrategy(
                 cost,

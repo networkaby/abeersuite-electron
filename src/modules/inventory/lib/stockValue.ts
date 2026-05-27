@@ -1,20 +1,19 @@
-// Stock-value helpers — single source of truth for any code that needs to
-// turn product master fields (stock, costPaise, openingStock, openingRate)
-// into rupee-denominated values.
+// Stock-value helpers.
+//
+// PR 3 of noble-boole removed `InvProduct.costPaise` — the cached "last
+// inward rate" column. Per-product closing value now comes from the ledger
+// walk in `valuation.ts#valueStockBatch` instead of a `stock × costPaise`
+// snapshot. The opening-value helper stays as-is (opening master fields are
+// still load-bearing).
 //
 // Pairs with `src/modules/accountancy/lib/effectiveBalance.ts` for the GL
 // side; see also `closingStock.ts` for the org-wide aggregate.
 
+import { valueStockBatch, type ValuationMethod } from "@/modules/inventory/lib/valuation";
+
 export type ProductOpeningInput = {
     openingStock?: number | null;
     openingRate?:  number | null;
-};
-
-export type ProductCacheFields = {
-    /** InvProduct.stock (qty cache, Int) */
-    stock: number;
-    /** InvProduct.costPaise (cost basis, Int paise) — null when no rate is known */
-    costPaise: number | null;
 };
 
 /**
@@ -27,31 +26,29 @@ export function productOpeningValue(o: ProductOpeningInput): number | null {
 }
 
 /**
- * Derive the running-cache fields (`stock`, `costPaise`) from opening qty &
- * rate so reports light up immediately after the master is saved. Same rule
- * shared by every write path (POST / PATCH / opening PUT). Subsequent
- * Purchase / Sale vouchers move from this baseline.
+ * Derive the running qty cache from opening qty. Returns a partial
+ * InvProduct shape ready to spread into a Prisma update. PR 3 reduced this
+ * to a single field (stock) — costPaise is no longer cached. The opening
+ * rate still seeds cost via the synthetic first lot in loadInwardLots.
  */
 export function syncProductCacheFromOpening(
     o: ProductOpeningInput,
-): ProductCacheFields {
-    return {
-        stock:     o.openingStock != null ? Math.round(o.openingStock) : 0,
-        costPaise: o.openingRate  != null ? Math.round(o.openingRate * 100) : null,
-    };
+): { stock: number } {
+    return { stock: o.openingStock != null ? Math.round(o.openingStock) : 0 };
 }
 
-export type ProductClosingInput = {
-    stock:     number | null;
-    costPaise: number | null;
-};
-
 /**
- * Per-product live closing value in rupees = stock × costPaise / 100. Returns
- * 0 when either field is missing or when stock is non-positive.
+ * Per-product live closing value in rupees. Walks the ledger via
+ * `valueStockBatch` for the chosen method. Defaults to LAST_INWARD so
+ * single-product callers that don't care about method match the BS at its
+ * legacy default. Heavy callers should batch via `valueStockBatch` directly.
  */
-export function productClosingValue(p: ProductClosingInput): number {
-    if (p.stock == null || p.costPaise == null) return 0;
-    if (p.stock <= 0) return 0;
-    return (p.stock * p.costPaise) / 100;
+export async function productClosingValue(
+    productId: number,
+    stock: number | null,
+    method: ValuationMethod = "LAST_INWARD",
+): Promise<number> {
+    if (stock == null || stock <= 0) return 0;
+    const m = await valueStockBatch([{ id: productId, stock }], method);
+    return m.get(productId)?.value ?? 0;
 }

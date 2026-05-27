@@ -29,7 +29,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 sku: true,
                 name: true,
                 stock: true,
-                costPaise: true,
                 pricePaise: true,
                 lowStockThreshold: true,
                 unit: { select: { code: true, label: true } },

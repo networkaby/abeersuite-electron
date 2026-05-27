@@ -151,11 +151,11 @@ export async function POST(req: Request) {
                 gstRateId:  b.gstRateId  ?? null,
                 hsnCode:    b.hsnCode    ?? null,
                 taxability: b.taxability ?? null,
-                // Sync running caches via shared helper so reports light up
-                // immediately. Explicit costPaise (Pricing tab) wins over the
-                // helper's opening-derived costPaise — see merge below.
+                // Sync the running qty cache from opening qty so list views
+                // light up immediately. PR 3 dropped the costPaise cache —
+                // cost now derives from the ledger walk (opening rate is the
+                // synthetic first lot).
                 ...syncProductCacheFromOpening(b),
-                ...(b.costPaise != null ? { costPaise: b.costPaise } : {}),
             },
             include: productInclude,
         });

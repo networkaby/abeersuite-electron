@@ -29,18 +29,18 @@ import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import { flattenTree, treeLabel, InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
 type CostMethod =
-    | "WEIGHTED_AVG_COST"
+    | "WEIGHTED_AVG"
+    | "SIMPLE_AVG"
     | "FIFO"
-    | "LAST_PURCHASE_COST"
-    | "MONTHLY_AVG_COST"
-    | "STD_COST";
+    | "LAST_INWARD"
+    | "MONTHLY_AVG";
 
 const COST_METHOD_LABEL: Record<CostMethod, string> = {
-    WEIGHTED_AVG_COST:  "Weighted Avg",
-    FIFO:               "FIFO",
-    LAST_PURCHASE_COST: "Last Purchase",
-    MONTHLY_AVG_COST:   "Monthly Avg",
-    STD_COST:           "Standard",
+    WEIGHTED_AVG: "Weighted Avg",
+    SIMPLE_AVG:   "Simple Avg",
+    FIFO:         "FIFO",
+    LAST_INWARD:  "Last Inward",
+    MONTHLY_AVG:  "Monthly Avg",
 };
 
 type Item = {
@@ -54,7 +54,7 @@ type Item = {
     stock:                 number | null;
     /** Per-item override. null = inherit from strategy. */
     costMethod:            CostMethod | null;
-    /** What was actually used: product.costMethod ?? strategy.costMethod ?? WA. */
+    /** What was actually used: product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod. */
     effectiveCostMethod:   CostMethod;
     /** Strategy's default cost method (informational). */
     strategyCostMethod:    CostMethod | null;
@@ -62,7 +62,7 @@ type Item = {
     priceOverridden:       boolean;
     pricePaise:            number | null;
     mrpPaise:              number | null;
-    stdCostPaise:          number | null;
+    /** Last-inward rate from the ledger walk (display only — PR 3 dropped the cache). */
     lastPurchasePaise:     number | null;
     resolvedCostPaise:     number | null;
     resolvedCostFallback:  string | null;
@@ -74,6 +74,8 @@ type Item = {
     appliedMarkupPct:      number;
     appliedFlatPaise:      number;
     appliedRoundingPaise:  number;
+    /** Resolved GST rate % (0 when no tax set anywhere in the cascade). */
+    gstRatePct:            number;
 };
 
 type RowEdit = {
@@ -506,7 +508,7 @@ export default function PricingItemsPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="__inherit">
-                                Inherit · {COST_METHOD_LABEL[item.strategyCostMethod ?? "WEIGHTED_AVG_COST"]}
+                                Inherit · {COST_METHOD_LABEL[item.strategyCostMethod ?? "WEIGHTED_AVG"]}
                             </SelectItem>
                             {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
                                 <SelectItem key={v} value={v}>{l}</SelectItem>

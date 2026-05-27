@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
@@ -41,7 +42,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         include: {
             lines: {
                 include: {
-                    product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } },
+                    product: { select: { id: true, mrpPaise: true, stock: true } },
                 },
             },
             // Additional GL legs ("+ Add Account" rows + MJ Charges) +
@@ -208,15 +209,27 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     }
 
                     if (inQty > 0 || outQty > 0) {
-                        // Update cost basis on inwards:
-                        //  • Purchase-family vouchers update costPaise from the
-                        //    supplier rate (existing behaviour).
-                        //  • Manufacturing Journal PRODUCE lines also update
-                        //    costPaise — the rate the operator entered (cost
-                        //    basis = consumed materials + overhead share) is
-                        //    the new cost price for the produced finished good.
-                        const updateCost = isPurchase
-                            || (isManufacturingJournal && line.direction === "PRODUCE" && toNumber(line.rate) > 0);
+                        // PHYSICAL_STOCK rate stamping: a counted-up delta
+                        // has no purchase price of its own, but the ledger
+                        // walk (valuation.ts) still treats it as a normal
+                        // inward lot. Stamp the current LAST_INWARD rate so
+                        // WA/SIMPLE/FIFO arrive at sensible costs. Outward
+                        // deltas don't need a rate (FIFO/WA only consume
+                        // inward lots).
+                        let stampedRate = line.rate as unknown as number | string;
+                        if (isPhysicalStock && inQty > 0) {
+                            const r = await valueStockBatch(
+                                [{ id: line.productId, stock: line.product.stock }],
+                                "LAST_INWARD",
+                            );
+                            const u = r.get(line.productId)?.unitCost ?? 0;
+                            stampedRate = u > 0 ? u : toNumber(line.rate);
+                        }
+
+                        // Cost basis is derived from the ledger walk — no
+                        // costPaise cache to refresh. MRP is printed on the
+                        // box, not derived, so we still stamp it from supplier
+                        // paperwork on purchase lines.
                         await recordStockMovement(tx, {
                             voucherId: voucher.id,
                             productId: line.productId,
@@ -224,11 +237,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                             date:      voucher.date,
                             inQty,
                             outQty,
-                            rate:      line.rate,
+                            rate:      stampedRate,
                             amount:    line.amount,
                             productCurrentStock: line.product.stock,
-                            newCostPaise: updateCost ? Math.round(toNumber(line.rate) * 100) : undefined,
-                            newMrpPaise:  isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
+                            newMrpPaise: isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
                         });
                     }
                 }

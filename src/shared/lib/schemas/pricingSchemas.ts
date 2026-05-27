@@ -2,11 +2,11 @@ import { z } from "zod";
 
 /** Allowed CostMethod values — mirrors prisma enum CostMethod. */
 export const costMethodEnum = z.enum([
-    "WEIGHTED_AVG_COST",
+    "WEIGHTED_AVG",
+    "SIMPLE_AVG",
     "FIFO",
-    "LAST_PURCHASE_COST",
-    "MONTHLY_AVG_COST",
-    "STD_COST",
+    "LAST_INWARD",
+    "MONTHLY_AVG",
 ]);
 
 // ── Attribute-filter spec ─────────────────────────────────────────────────
@@ -101,13 +101,9 @@ export type PricingStrategyUpdateInput = z.infer<typeof pricingStrategyUpdateSch
 // `pricePaise` flips `priceOverridden=true` when set (manual price lock).
 //
 // `openingRatePaise` is the Tally-style opening unit cost (excl-GST). It
-// writes to InvProduct.openingRate (Decimal rupees) AND mirrors into
-// InvProduct.costPaise so the cost resolver — which reads costPaise as its
-// last-purchase fallback — picks it up immediately. openingValue is
-// recomputed from openingStock × openingRate when stock is non-null.
-//
-// `costPaise` accepts a direct override of the cache for callers that
-// truly want to skip the opening-balance trail (rare).
+// writes to InvProduct.openingRate (Decimal rupees) and is picked up by the
+// cost resolver as the synthetic first lot. PR 3 dropped the costPaise
+// cache, so there's no separate cache field to mirror anymore.
 export const pricingItemUpdateSchema = z
     .object({
         /** Per-item cost method. null = inherit from matched strategy. */
@@ -116,8 +112,6 @@ export const pricingItemUpdateSchema = z
         priceOverridden:  z.boolean().optional(),
         pricePaise:       z.number().int().min(0).nullable().optional(),
         mrpPaise:         z.number().int().min(0).nullable().optional(),
-        costPaise:        z.number().int().min(0).nullable().optional(),
-        stdCostPaise:     z.number().int().min(0).nullable().optional(),
         openingRatePaise: z.number().int().min(0).nullable().optional(),
     });
 

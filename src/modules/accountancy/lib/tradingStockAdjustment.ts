@@ -38,20 +38,18 @@ export async function computeTradingStockAdjustment(
 
     const stockMoves = await prisma.invStockLedger.findMany({
         where: { date: { gte: from, lte: to } },
-        select: {
-            inQty:   true,
-            outQty:  true,
-            rate:    true,
-            product: { select: { costPaise: true } },
-        },
+        select: { inQty: true, outQty: true, rate: true },
     });
 
+    // PR 3 dropped product.costPaise — outward rows now use their own row
+    // rate as the cost basis (matches the ledger walk). This is an
+    // approximation; the trading P&L number it feeds is itself an estimate.
     let netInValue  = 0;
     let netOutValue = 0;
     for (const m of stockMoves) {
         const r = Number(m.rate);
         netInValue  += Number(m.inQty)  * r;
-        netOutValue += Number(m.outQty) * (m.product.costPaise ? m.product.costPaise / 100 : r);
+        netOutValue += Number(m.outQty) * r;
     }
 
     const closingStock = stockNow.computed;

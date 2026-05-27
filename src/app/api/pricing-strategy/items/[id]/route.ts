@@ -43,12 +43,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                   ? true
                   : undefined;
 
-        // openingRatePaise lands on three columns at once:
+        // openingRatePaise lands on two columns:
         //   • openingRate (Decimal rupees) — the Tally-style master entry
-        //   • costPaise (Int paise)        — running cache the cost resolver reads
         //   • openingValue (Decimal rupees) — qty × rate, recomputed if qty known
-        // We need openingStock to recompute openingValue, so fetch it when the
-        // patch touches openingRatePaise.
+        // PR 3 dropped the costPaise cache — cost is now derived from the
+        // ledger walk (which picks up openingRate as a synthetic first lot).
         let openingPatch: Record<string, unknown> = {};
         if (data.openingRatePaise !== undefined) {
             const existing = await prisma.invProduct.findUnique({
@@ -61,12 +60,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             openingPatch = {
                 openingRate:  rateRupees,
                 openingValue: rateRupees != null && stock != null ? stock * rateRupees : null,
-                // Cache: keep costPaise in sync so the resolver picks it up
-                // immediately, unless the same patch also sets costPaise
-                // explicitly (let the explicit value win).
-                ...(data.costPaise === undefined
-                    ? { costPaise: data.openingRatePaise }
-                    : {}),
             };
         }
 
@@ -77,8 +70,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.marginPercent   !== undefined ? { marginPercent: data.marginPercent != null ? data.marginPercent.toString() : null } : {}),
                 ...(overrideFlag         !== undefined ? { priceOverridden: overrideFlag } : {}),
                 ...(data.pricePaise      !== undefined ? { pricePaise:    data.pricePaise } : {}),
-                ...(data.costPaise       !== undefined ? { costPaise:     data.costPaise } : {}),
-                ...(data.stdCostPaise    !== undefined ? { stdCostPaise:  data.stdCostPaise } : {}),
                 ...(data.mrpPaise        !== undefined ? { mrpPaise:      data.mrpPaise } : {}),
                 ...openingPatch,
             },
@@ -89,8 +80,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 priceOverridden:  true,
                 pricePaise:       true,
                 mrpPaise:         true,
-                costPaise:        true,
-                stdCostPaise:     true,
                 openingRate:      true,
                 openingStock:     true,
                 openingValue:     true,

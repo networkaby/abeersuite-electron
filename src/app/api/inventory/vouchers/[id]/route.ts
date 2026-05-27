@@ -402,7 +402,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 const fresh = await tx.invVoucher.findUnique({
                     where: { id },
                     include: {
-                        lines: { include: { product: { select: { id: true, costPaise: true, mrpPaise: true, stock: true } } } },
+                        lines: { include: { product: { select: { id: true, mrpPaise: true, stock: true } } } },
                         // Multi-tender + additional-charge rows flow through
                         // to postInvVoucherToGl so the re-posted JE has one
                         // leg per row.
@@ -439,8 +439,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         rate:      line.rate,
                         amount:    line.amount,
                         productCurrentStock: line.product.stock,
-                        newCostPaise: isPurchase ? Math.round(toNumber(line.rate) * 100) : undefined,
-                        newMrpPaise:  isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
+                        newMrpPaise: isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
                     });
                 }
 

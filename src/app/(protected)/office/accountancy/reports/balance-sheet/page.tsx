@@ -7,6 +7,13 @@ import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { fmt } from "@/utils/constants";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -23,13 +30,37 @@ interface GroupNode {
     children: GroupNode[]; ledgers: LedgerNode[];
     rolledUpClosing: number;
 }
+type ValuationMethod =
+    | "WEIGHTED_AVG"
+    | "SIMPLE_AVG"
+    | "FIFO"
+    | "LAST_INWARD"
+    | "MONTHLY_AVG";
+
+const VALUATION_LABEL: Record<ValuationMethod, string> = {
+    WEIGHTED_AVG: "Weighted Average",
+    SIMPLE_AVG:   "Simple Average",
+    FIFO:         "FIFO",
+    LAST_INWARD:  "Last Inward",
+    MONTHLY_AVG:  "Monthly Average",
+};
+
+const VALUATION_OPTIONS: ValuationMethod[] = [
+    "WEIGHTED_AVG", "SIMPLE_AVG", "FIFO", "LAST_INWARD", "MONTHLY_AVG",
+];
+
+const ORG_DEFAULT = "__org_default__";
+
 interface BalanceSheetData {
     asOf: string;
     fyStart: string;
     liabilities: GroupNode[];
     assets: GroupNode[];
     netProfitLoss: number;
-    closingStock: { computed: number; postedToGl: number; diff: number; productCount: number };
+    closingStock: {
+        computed: number; postedToGl: number; diff: number; productCount: number;
+        method: ValuationMethod;
+    };
 }
 
 function fmtIndianDate(iso: string): string {
@@ -148,10 +179,14 @@ export default function BalanceSheetPage() {
     const [data, setData] = useState<BalanceSheetData | null>(null);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
+    /** ORG_DEFAULT sentinel = use OrgDefaults.valuationMethod (BS API default). */
+    const [valuationMethod, setValuationMethod] = useState<string>(ORG_DEFAULT);
 
     const load = useCallback(() => {
         setLoading(true);
-        axios.get<BalanceSheetData>(`/api/accountancy/reports/balance-sheet?asOf=${asOf}`)
+        const qs = new URLSearchParams({ asOf });
+        if (valuationMethod !== ORG_DEFAULT) qs.set("valuationMethod", valuationMethod);
+        axios.get<BalanceSheetData>(`/api/accountancy/reports/balance-sheet?${qs.toString()}`)
             .then((r) => {
                 setData(r.data);
                 // auto-expand top-level groups on first load
@@ -163,7 +198,7 @@ export default function BalanceSheetPage() {
             })
             .catch(() => toast.error("Failed to load balance sheet"))
             .finally(() => setLoading(false));
-    }, [asOf]);
+    }, [asOf, valuationMethod]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(load, [load]);
@@ -220,6 +255,22 @@ export default function BalanceSheetPage() {
                     </p>
                 </div>
                 <div className="flex items-end gap-2">
+                    <div className="space-y-1">
+                        <Label>Stock valuation</Label>
+                        <Select value={valuationMethod} onValueChange={setValuationMethod}>
+                            <SelectTrigger className="h-9 w-[180px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={ORG_DEFAULT}>
+                                    Org default{data ? ` · ${VALUATION_LABEL[data.closingStock.method]}` : ""}
+                                </SelectItem>
+                                {VALUATION_OPTIONS.map((m) => (
+                                    <SelectItem key={m} value={m}>{VALUATION_LABEL[m]}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-1">
                         <Label>As at</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />

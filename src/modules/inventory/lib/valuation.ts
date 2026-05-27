@@ -1,23 +1,36 @@
-// Pluggable stock valuation strategies.
+// Pluggable stock-valuation strategies. Single source of truth =
+// `InvStockLedger` rows (every voucher inward, including PHYSICAL_STOCK which
+// stamps a synthetic rate at post time) + opening master fields on
+// `InvProduct` (treated as a synthetic first lot). The cached
+// `InvProduct.costPaise` column was removed in PR 3 of noble-boole — every
+// method derives unit cost from the ledger walk now.
 //
-// `InvProduct.stock` and `costPaise` give a fast "last purchase cost" snapshot,
-// but real businesses need WA / FIFO / LIFO for trading P&L. This module is the
-// single entry point for any caller that needs per-product or org-wide stock
-// values. Consumers pick a method, we compute. Per-product math used to live in
-// `stockValue.ts#productClosingValue` — that helper still exists for the cached
-// LAST_COST case; this lib wraps it and adds ledger-walked strategies.
+// Methods:
+//   LAST_INWARD   — most recent inward lot's rate
+//   WEIGHTED_AVG  — Σ(qty × rate) / Σ(qty) across all inward lots
+//   SIMPLE_AVG    — Σ(rate) / N (plain arithmetic mean, qty doesn't weight)
+//   FIFO          — walk lots newest-first against on-hand qty
+//   MONTHLY_AVG   — WEIGHTED_AVG restricted to current calendar month
+//
+// Cascading fallback (shared by every method):
+//   method-empty → LAST_INWARD → openingRate → no-cost-basis (Needs Attention).
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { productClosingValue } from "@/modules/inventory/lib/stockValue";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 
-export type ValuationMethod = "LAST_COST" | "WEIGHTED_AVG" | "FIFO" | "LIFO";
+export type ValuationMethod =
+    | "LAST_INWARD"
+    | "WEIGHTED_AVG"
+    | "SIMPLE_AVG"
+    | "FIFO"
+    | "MONTHLY_AVG";
 
 export const VALUATION_METHODS: ValuationMethod[] = [
-    "LAST_COST",
+    "LAST_INWARD",
     "WEIGHTED_AVG",
+    "SIMPLE_AVG",
     "FIFO",
-    "LIFO",
+    "MONTHLY_AVG",
 ];
 
 export interface ProductValuation {
@@ -28,51 +41,42 @@ export interface ProductValuation {
     /** ₹ — qty × unitCost. 0 when qty ≤ 0. */
     value: number;
     method: ValuationMethod;
-    fallback?: "no-receipt-history" | "no-cost-basis" | "not-implemented";
+    fallback?: "no-receipt-history" | "no-cost-basis";
 }
 
 export interface ProductMaster {
     id: number;
     stock: number | null;
-    costPaise: number | null;
 }
-
-// ── LAST_COST ──────────────────────────────────────────────────────────────────
-// Cached last-purchase cost: unitCost = costPaise / 100. Matches the legacy
-// `productClosingValue()` exactly so Balance Sheet stays bit-identical.
-
-function lastCost(p: ProductMaster): ProductValuation {
-    const qty = p.stock ?? 0;
-    const value = productClosingValue(p);
-    const unitCost = p.costPaise != null ? p.costPaise / 100 : 0;
-    return {
-        productId: p.id,
-        qty,
-        unitCost,
-        value,
-        method: "LAST_COST",
-        ...(p.costPaise == null ? { fallback: "no-cost-basis" as const } : {}),
-    };
-}
-
-// ── Ledger-walked strategies ──────────────────────────────────────────────────
-// All three (WA / FIFO / LIFO) walk POSTED inward entries (inQty > 0) ordered
-// by date+id. We fetch all rows for the given productIds in one query and group
-// in memory.
 
 type Lot = { date: Date; id: number; qty: number; rate: number };
 
+/**
+ * Fetch every inward lot for the given products. Returns:
+ *   • All InvStockLedger rows with inQty > 0 from POSTED, non-deleted vouchers
+ *     (NO voucher.type filter — PHYSICAL_STOCK rows stamp a rate at post time).
+ *   • A synthetic first lot per product when openingStock > 0 && openingRate
+ *     is set, sorted oldest-first by date.
+ */
 async function loadInwardLots(productIds: number[]): Promise<Map<number, Lot[]>> {
     if (productIds.length === 0) return new Map();
-    const rows = await prisma.invStockLedger.findMany({
-        where:   {
-            productId: { in: productIds },
-            inQty:     { gt: 0 },
-            voucher:   { status: "POSTED", deletedAt: null },
-        },
-        select:  { id: true, productId: true, date: true, inQty: true, rate: true },
-        orderBy: [{ date: "asc" }, { id: "asc" }],
-    });
+
+    const [rows, masters] = await Promise.all([
+        prisma.invStockLedger.findMany({
+            where:   {
+                productId: { in: productIds },
+                inQty:     { gt: 0 },
+                voucher:   { status: "POSTED", deletedAt: null },
+            },
+            select:  { id: true, productId: true, date: true, inQty: true, rate: true },
+            orderBy: [{ date: "asc" }, { id: "asc" }],
+        }),
+        prisma.invProduct.findMany({
+            where:  { id: { in: productIds } },
+            select: { id: true, openingStock: true, openingRate: true, openingStockDate: true },
+        }),
+    ]);
+
     const map = new Map<number, Lot[]>();
     for (const r of rows) {
         const lot: Lot = {
@@ -84,15 +88,65 @@ async function loadInwardLots(productIds: number[]): Promise<Map<number, Lot[]>>
         const arr = map.get(r.productId);
         if (arr) arr.push(lot); else map.set(r.productId, [lot]);
     }
+
+    for (const m of masters) {
+        const openQty  = m.openingStock != null ? toNumber(m.openingStock) : 0;
+        const openRate = m.openingRate != null ? toNumber(m.openingRate) : 0;
+        if (!(openQty > 0) || !(openRate > 0)) continue;
+        const openingLot: Lot = {
+            date: m.openingStockDate ?? new Date(0),
+            id:   -1, // synthetic; never collides with InvStockLedger.id (positive)
+            qty:  openQty,
+            rate: openRate,
+        };
+        const arr = map.get(m.id);
+        if (arr) {
+            // Keep oldest first; opening goes to the front when same/earlier date.
+            arr.unshift(openingLot);
+            arr.sort((a, b) => {
+                const d = a.date.getTime() - b.date.getTime();
+                return d !== 0 ? d : a.id - b.id;
+            });
+        } else {
+            map.set(m.id, [openingLot]);
+        }
+    }
     return map;
+}
+
+/** Pull just the opening rate for a product (used as the lowest-level fallback). */
+async function loadOpeningRates(productIds: number[]): Promise<Map<number, number>> {
+    if (productIds.length === 0) return new Map();
+    const masters = await prisma.invProduct.findMany({
+        where:  { id: { in: productIds } },
+        select: { id: true, openingRate: true },
+    });
+    const map = new Map<number, number>();
+    for (const m of masters) {
+        if (m.openingRate != null) {
+            const n = toNumber(m.openingRate);
+            if (n > 0) map.set(m.id, n);
+        }
+    }
+    return map;
+}
+
+// ── Per-method math ─────────────────────────────────────────────────────────
+
+function lastInward(p: ProductMaster, lots: Lot[]): ProductValuation {
+    const qty = p.stock ?? 0;
+    const unitCost = lots[lots.length - 1].rate;
+    return {
+        productId: p.id,
+        qty,
+        unitCost,
+        value: qty > 0 ? qty * unitCost : 0,
+        method: "LAST_INWARD",
+    };
 }
 
 function weightedAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
     const qty = p.stock ?? 0;
-    if (lots.length === 0) {
-        const fb = lastCost(p);
-        return { ...fb, method: "WEIGHTED_AVG", fallback: "no-receipt-history" };
-    }
     let totalQty = 0;
     let totalValue = 0;
     for (const lot of lots) {
@@ -100,22 +154,35 @@ function weightedAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
         totalValue += lot.qty * lot.rate;
     }
     const unitCost = totalQty > 0 ? totalValue / totalQty : 0;
-    const value = qty > 0 ? qty * unitCost : 0;
-    return { productId: p.id, qty, unitCost, value, method: "WEIGHTED_AVG" };
+    return {
+        productId: p.id,
+        qty,
+        unitCost,
+        value: qty > 0 ? qty * unitCost : 0,
+        method: "WEIGHTED_AVG",
+    };
+}
+
+function simpleAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
+    const qty = p.stock ?? 0;
+    const sum = lots.reduce((s, l) => s + l.rate, 0);
+    const unitCost = lots.length > 0 ? sum / lots.length : 0;
+    return {
+        productId: p.id,
+        qty,
+        unitCost,
+        value: qty > 0 ? qty * unitCost : 0,
+        method: "SIMPLE_AVG",
+    };
 }
 
 // FIFO: oldest receipts consumed first by sales. Remaining on-hand qty is
-// priced at the most-recent surviving lots. We don't replay each sale —
-// instead we treat "remaining qty = current stock" and walk lots in REVERSE
+// priced at the most-recent surviving lots. We walk lots in REVERSE
 // chronological order, filling qty from the most recent lots backward.
 // This produces the same surviving-lot composition as a full FIFO replay
 // against perfectly matched inward/outward totals.
 function fifo(p: ProductMaster, lots: Lot[]): ProductValuation {
     const qty = p.stock ?? 0;
-    if (lots.length === 0) {
-        const fb = lastCost(p);
-        return { ...fb, method: "FIFO", fallback: "no-receipt-history" };
-    }
     if (qty <= 0) {
         return { productId: p.id, qty, unitCost: 0, value: 0, method: "FIFO" };
     }
@@ -136,31 +203,40 @@ function fifo(p: ProductMaster, lots: Lot[]): ProductValuation {
     return { productId: p.id, qty, unitCost, value: accValue, method: "FIFO" };
 }
 
-// LIFO scaffold — same shape as FIFO but consumes newest-first. Surviving lots
-// after such a replay would be the OLDEST inward entries. We approximate by
-// walking lots oldest-first and filling qty until exhausted.
-function lifo(p: ProductMaster, lots: Lot[]): ProductValuation {
+function monthlyAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
+    const since = startOfMonth();
+    const monthLots = lots.filter((l) => l.date >= since);
+    if (monthLots.length === 0) {
+        // Sentinel for the dispatcher — fall back to LAST_INWARD on all lots.
+        return {
+            productId: p.id,
+            qty: p.stock ?? 0,
+            unitCost: 0,
+            value: 0,
+            method: "MONTHLY_AVG",
+            fallback: "no-receipt-history",
+        };
+    }
     const qty = p.stock ?? 0;
-    if (lots.length === 0) {
-        const fb = lastCost(p);
-        return { ...fb, method: "LIFO", fallback: "no-receipt-history" };
+    let totalQty = 0;
+    let totalValue = 0;
+    for (const lot of monthLots) {
+        totalQty   += lot.qty;
+        totalValue += lot.qty * lot.rate;
     }
-    if (qty <= 0) {
-        return { productId: p.id, qty, unitCost: 0, value: 0, method: "LIFO" };
-    }
-    let remaining = qty;
-    let accValue = 0;
-    for (let i = 0; i < lots.length && remaining > 0; i += 1) {
-        const lot = lots[i];
-        const take = Math.min(remaining, lot.qty);
-        accValue  += take * lot.rate;
-        remaining -= take;
-    }
-    if (remaining > 0) {
-        accValue += remaining * lots[lots.length - 1].rate;
-    }
-    const unitCost = qty > 0 ? accValue / qty : 0;
-    return { productId: p.id, qty, unitCost, value: accValue, method: "LIFO" };
+    const unitCost = totalQty > 0 ? totalValue / totalQty : 0;
+    return {
+        productId: p.id,
+        qty,
+        unitCost,
+        value: qty > 0 ? qty * unitCost : 0,
+        method: "MONTHLY_AVG",
+    };
+}
+
+function startOfMonth(): Date {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 // ── Batch entry point ─────────────────────────────────────────────────────────
@@ -170,31 +246,75 @@ export async function valueStockBatch(
     method: ValuationMethod,
 ): Promise<Map<number, ProductValuation>> {
     const out = new Map<number, ProductValuation>();
-
-    if (method === "LAST_COST" || products.length === 0) {
-        for (const p of products) out.set(p.id, lastCost(p));
-        if (method !== "LAST_COST") {
-            // products array empty — still nothing to value; harmless
-        }
-        return out;
-    }
+    if (products.length === 0) return out;
 
     const lotsByProduct = await loadInwardLots(products.map((p) => p.id));
+
+    // Track products that need the opening-rate fallback (no lots at all,
+    // or MONTHLY_AVG with no month lots that fell back through LAST_INWARD
+    // and still produced 0).
+    const needsOpeningFallback: ProductMaster[] = [];
+
     for (const p of products) {
         const lots = lotsByProduct.get(p.id) ?? [];
+
+        // No history at all → fall through to opening-rate, then no-cost-basis.
+        if (lots.length === 0) {
+            needsOpeningFallback.push(p);
+            continue;
+        }
+
         let v: ProductValuation;
-        if (method === "WEIGHTED_AVG")     v = weightedAvg(p, lots);
-        else if (method === "FIFO")        v = fifo(p, lots);
-        else /* method === "LIFO" */       v = lifo(p, lots);
+        switch (method) {
+            case "LAST_INWARD":  v = lastInward(p, lots); break;
+            case "WEIGHTED_AVG": v = weightedAvg(p, lots); break;
+            case "SIMPLE_AVG":   v = simpleAvg(p, lots); break;
+            case "FIFO":         v = fifo(p, lots); break;
+            case "MONTHLY_AVG":  v = monthlyAvg(p, lots); break;
+        }
+
+        // MONTHLY_AVG with no month lots → degrade to LAST_INWARD over the
+        // full lot history (still inside the ledger walk; no extra query).
+        if (method === "MONTHLY_AVG" && v.fallback === "no-receipt-history") {
+            v = lastInward(p, lots);
+            v.method = "MONTHLY_AVG";
+            v.fallback = "no-receipt-history";
+        }
         out.set(p.id, v);
+    }
+
+    if (needsOpeningFallback.length > 0) {
+        const openingRates = await loadOpeningRates(needsOpeningFallback.map((p) => p.id));
+        for (const p of needsOpeningFallback) {
+            const qty = p.stock ?? 0;
+            const openingRate = openingRates.get(p.id);
+            if (openingRate != null) {
+                out.set(p.id, {
+                    productId: p.id,
+                    qty,
+                    unitCost: openingRate,
+                    value: qty > 0 ? qty * openingRate : 0,
+                    method,
+                    fallback: "no-receipt-history",
+                });
+            } else {
+                out.set(p.id, {
+                    productId: p.id,
+                    qty,
+                    unitCost: 0,
+                    value: 0,
+                    method,
+                    fallback: "no-cost-basis",
+                });
+            }
+        }
     }
     return out;
 }
 
 // ── Org-wide total ────────────────────────────────────────────────────────────
-// Drop-in replacement for `getClosingStockValue()` that supports any method.
-// Callers wanting the legacy behavior pass "LAST_COST" (or use the existing
-// `getClosingStockValue` wrapper, which is kept for back-compat).
+// Drop-in for the BS closing-stock calculation. Method is selected by the BS
+// dropdown (defaults to OrgDefaults.valuationMethod).
 
 export async function valueStockOrgTotal(method: ValuationMethod): Promise<{
     computed:     number;
@@ -203,7 +323,7 @@ export async function valueStockOrgTotal(method: ValuationMethod): Promise<{
 }> {
     const products = await prisma.invProduct.findMany({
         where: { stock: { not: null } },
-        select: { id: true, stock: true, costPaise: true },
+        select: { id: true, stock: true },
     });
     const values = await valueStockBatch(products, method);
     let total = 0;

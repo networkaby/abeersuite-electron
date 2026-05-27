@@ -36,6 +36,7 @@ interface OrgDefaults {
     defaultGstRateId: number | null;
     defaultHsnCode: string | null;
     defaultTaxability: string | null;
+    valuationMethod: string;
     defaultSaleCreditPeriod: number | null;
     defaultPurchaseCreditPeriod: number | null;
     defaultCurrencySymbol: string;
@@ -46,6 +47,14 @@ const TAXABILITY_OPTIONS = [
     { value: "EXEMPT", label: "Exempt" },
     { value: "NIL_RATED", label: "Nil Rated (0%)" },
     { value: "NON_GST", label: "Non-GST" },
+];
+
+const VALUATION_OPTIONS = [
+    { value: "WEIGHTED_AVG", label: "Weighted Average" },
+    { value: "SIMPLE_AVG",   label: "Simple Average" },
+    { value: "FIFO",         label: "FIFO" },
+    { value: "LAST_INWARD",  label: "Last Inward" },
+    { value: "MONTHLY_AVG",  label: "Monthly Average" },
 ];
 
 const NONE = "__none__";
@@ -84,6 +93,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 defaultGstRateId: draft.defaultGstRateId,
                 defaultHsnCode: draft.defaultHsnCode,
                 defaultTaxability: draft.defaultTaxability,
+                valuationMethod: draft.valuationMethod,
                 defaultSaleCreditPeriod: draft.defaultSaleCreditPeriod,
                 defaultPurchaseCreditPeriod: draft.defaultPurchaseCreditPeriod,
                 defaultCurrencySymbol: draft.defaultCurrencySymbol,
@@ -189,6 +199,37 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                             onChange={(e) => set("defaultHsnCode", e.target.value || null)}
                         />
                     </div>
+                </div>
+            </section>
+
+            {/* Stock valuation default */}
+            <section className="rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold">Stock valuation method</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Drives the Balance Sheet closing stock, stock-summary, and
+                        pricing fallback when a product or strategy doesn't pick its own method.
+                        BS / stock-summary pages can preview other methods without changing this default.
+                    </p>
+                </div>
+
+                <div className="max-w-[260px] space-y-1">
+                    <Label className="text-xs">Default method</Label>
+                    <Select
+                        value={draft.valuationMethod}
+                        onValueChange={(v) => set("valuationMethod", v)}
+                    >
+                        <SelectTrigger className="h-9">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {VALUATION_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                    {o.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </section>
 

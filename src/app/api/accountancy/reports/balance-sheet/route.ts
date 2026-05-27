@@ -8,14 +8,24 @@ import {
 } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { getClosingStockValue } from "@/modules/accountancy/lib/closingStock";
+import { VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 
-// GET /api/accountancy/reports/balance-sheet?asOf=YYYY-MM-DD
+// GET /api/accountancy/reports/balance-sheet?asOf=YYYY-MM-DD&valuationMethod=...
+//
+// `valuationMethod` overrides OrgDefaults.valuationMethod for this render.
+// Defaults to the org setting when omitted; lets the BS page preview other
+// methods without changing the persistent default.
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.ACCOUNTANCY_VIEW_ORG);
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
     const asOf = parseAsOf(searchParams);
+    const methodParam = searchParams.get("valuationMethod");
+    const overrideMethod: ValuationMethod | undefined =
+        methodParam && VALUATION_METHODS.includes(methodParam as ValuationMethod)
+            ? (methodParam as ValuationMethod)
+            : undefined;
 
     try {
         const nbMap = await loadNormalBalanceMap();
@@ -34,7 +44,7 @@ export async function GET(req: Request) {
         const assets      = tree.filter((n) => n.type === "ASSET");
 
         // ── Closing Stock (live valuation) ──────────────────────────────
-        const stockResult = await getClosingStockValue();
+        const stockResult = await getClosingStockValue(overrideMethod);
         const stockGlBalance = (() => {
             // Sum of GL balance for accounts under "Stock-in-Hand" group
             let s = 0;
@@ -100,6 +110,7 @@ export async function GET(req: Request) {
                 postedToGl:     stockGlBalance,
                 diff:           stockResult.computed - stockGlBalance,
                 productCount:   stockResult.productCount,
+                method:         stockResult.method,
             },
         });
     } catch (e) {

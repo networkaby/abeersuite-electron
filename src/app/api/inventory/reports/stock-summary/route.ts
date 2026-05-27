@@ -7,23 +7,31 @@ import {
     type ValuationMethod,
 } from "@/modules/inventory/lib/valuation";
 
-// GET /api/inventory/reports/stock-summary?method=LAST_COST|WEIGHTED_AVG|FIFO|LIFO&branchId=<id>
+// GET /api/inventory/reports/stock-summary?method=LAST_INWARD|WEIGHTED_AVG|SIMPLE_AVG|FIFO|MONTHLY_AVG&branchId=<id>
 //
 // Returns one row per active product with:
-//   - master fields (sku, name, stock, costPaise, pricePaise, low-stock flag)
+//   - master fields (sku, name, stock, pricePaise, low-stock flag)
 //   - grouping (group / category / brand) so the UI can pivot views client-side
 //   - valuation block computed via `valueStockBatch` for the requested method
 //   - stock is per-branch when branchId is supplied, otherwise global InvProduct.stock
 // Also returns `branches` (id+name list) for the UI branch picker.
+//
+// Default method = OrgDefaults.valuationMethod. PR 3 removed the costPaise
+// cache; cost is derived from the ledger walk in valuation.ts.
 export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
     const { searchParams } = new URL(req.url);
-    const methodParam = searchParams.get("method") ?? "LAST_COST";
-    const method: ValuationMethod = VALUATION_METHODS.includes(methodParam as ValuationMethod)
+    const methodParam = searchParams.get("method");
+    const orgDefaults = await prisma.orgDefaults.findUnique({
+        where:  { id: 1 },
+        select: { valuationMethod: true },
+    });
+    const orgDefault = (orgDefaults?.valuationMethod ?? "WEIGHTED_AVG") as ValuationMethod;
+    const method: ValuationMethod = methodParam && VALUATION_METHODS.includes(methodParam as ValuationMethod)
         ? (methodParam as ValuationMethod)
-        : "LAST_COST";
+        : orgDefault;
     const branchId = searchParams.get("branchId") ?? null;
 
     const [products, branches] = await Promise.all([
@@ -36,7 +44,6 @@ export async function GET(req: Request) {
                 name:              true,
                 stock:             true,
                 lowStockThreshold: true,
-                costPaise:         true,
                 pricePaise:        true,
                 unit:     { select: { code: true, label: true } },
                 group:    { select: { id: true, name: true } },
@@ -56,7 +63,7 @@ export async function GET(req: Request) {
     };
 
     const valuations = await valueStockBatch(
-        products.map((p) => ({ id: p.id, stock: effectiveStock(p), costPaise: p.costPaise })),
+        products.map((p) => ({ id: p.id, stock: effectiveStock(p) })),
         method,
     );
 
@@ -69,7 +76,6 @@ export async function GET(req: Request) {
             name:              p.name,
             stock,
             lowStockThreshold: p.lowStockThreshold,
-            costPaise:         p.costPaise,
             pricePaise:        p.pricePaise,
             unit:              p.unit,
             group:             p.group,

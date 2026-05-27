@@ -124,7 +124,7 @@ async function main(): Promise<void> {
     const skus = [...new Set(updates.map((u) => u.sku))];
     const existing = await prisma.invProduct.findMany({
         where: { sku: { in: skus } },
-        select: { id: true, sku: true, openingStock: true, openingRate: true, stock: true, costPaise: true },
+        select: { id: true, sku: true, openingStock: true, openingRate: true, stock: true },
     });
     const bySku = new Map(existing.map((p) => [p.sku, p]));
 

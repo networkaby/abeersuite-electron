@@ -297,7 +297,7 @@ async function main() {
             id: true, sku: true, name: true,
             modelNo: true, barcode1: true,
             hsnCode: true, taxability: true,
-            costPaise: true, pricePaise: true, mrpPaise: true,
+            pricePaise: true, mrpPaise: true,
             openingStock: true, openingRate: true, openingStockDate: true,
             unit:         { select: { code: true } },
             brand:        { select: { name: true } },

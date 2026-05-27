@@ -7,6 +7,7 @@ import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
 import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
+import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 
 export interface PricingItem {
     id:               number;
@@ -22,7 +23,7 @@ export interface PricingItem {
     stock:                number | null;
     /** Per-item cost method override. null = inherit from strategy. */
     costMethod:           string | null;
-    /** Resolved method actually used: product.costMethod ?? strategy.costMethod ?? WEIGHTED_AVG_COST. */
+    /** Resolved method actually used: product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod. */
     effectiveCostMethod:  string;
     /** Strategy's default cost method, surfaced for the UI to show "from strategy" hints. */
     strategyCostMethod:   string | null;
@@ -30,7 +31,9 @@ export interface PricingItem {
     priceOverridden:  boolean;
     pricePaise:       number | null;
     mrpPaise:         number | null;
+    /** Stays in the interface as null for back-compat; STD_COST was dropped in PR 3. */
     stdCostPaise:     number | null;
+    /** Last-inward rate (LAST_INWARD walk) for display only. PR 3 dropped the cache. */
     lastPurchasePaise: number | null;
     /** Cost resolved under the product's saved costMethod (null = no data). */
     resolvedCostPaise:    number | null;
@@ -60,7 +63,7 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const onlyAttention = searchParams.get("onlyAttention") === "1";
 
-        const [products, strategies] = await Promise.all([
+        const [products, strategies, orgDefaults] = await Promise.all([
             prisma.invProduct.findMany({
                 where:   { isActive: true },
                 orderBy: [{ name: "asc" }],
@@ -72,13 +75,11 @@ export async function GET(req: Request) {
                     groupId:          true,
                     brandId:          true,
                     stock:            true,
-                    costPaise:        true,
                     pricePaise:       true,
                     mrpPaise:         true,
                     costMethod:       true,
                     marginPercent:    true,
                     priceOverridden:  true,
-                    stdCostPaise:     true,
                     attrsJson:        true,
                     category: { select: { name: true } },
                     group:    { select: { name: true } },
@@ -86,7 +87,9 @@ export async function GET(req: Request) {
                 },
             }),
             prisma.pricingStrategy.findMany({ where: { isActive: true } }),
+            prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
         ]);
+        const orgDefault = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
 
         // Resolve GST rates for all products in 3 queries (cascade: product → group chain → org default).
         const taxResult = await resolveProductTaxBatch({});
@@ -100,28 +103,36 @@ export async function GET(req: Request) {
             productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
         });
 
+        // Pre-resolve LAST_INWARD for the matcher's cost-range filter +
+        // display column. Replaces the dropped costPaise cache.
+        const lastInwardCosts = await valueStockBatch(
+            products.map((p) => ({ id: p.id, stock: p.stock })),
+            "LAST_INWARD",
+        );
+
         // Effective cost method per product: product.costMethod ?? matched
-        // strategy's costMethod ?? hard fallback. Precompute so we can both
-        // group-batch the resolver and surface the source on the response.
+        // strategy's costMethod ?? OrgDefaults.valuationMethod. Precompute so
+        // we can both group-batch the resolver and surface the source on the response.
         type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
         type Match = { effectiveMethod: EffectiveMethod; strategyId: number | null; strategyName: string | null };
         const matches = new Map<number, Match>();
         for (const p of products) {
+            const mc = lastInwardCosts.get(p.id);
+            const matcherCostPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
             const matched = pickStrategy(
                 {
                     id:         p.id,
                     brandId:    p.brandId,
                     groupId:    p.groupId,
                     categoryId: p.categoryId,
-                    costPaise:  p.costPaise,
+                    costPaise:  matcherCostPaise,
                     stock:      p.stock,
                     attrsJson:  (p.attrsJson ?? null) as Record<string, unknown> | null,
                 },
                 strategies,
                 matchCtx,
             );
-            const effective: EffectiveMethod =
-                p.costMethod ?? matched?.costMethod ?? "WEIGHTED_AVG_COST";
+            const effective: EffectiveMethod = p.costMethod ?? matched?.costMethod ?? orgDefault;
             matches.set(p.id, {
                 effectiveMethod: effective,
                 strategyId:      matched?.id ?? null,
@@ -139,12 +150,7 @@ export async function GET(req: Request) {
         const costById = new Map<number, { paise: number | null; fallback: string | null }>();
         for (const [method, group] of byMethod.entries()) {
             const resolved = await resolveCostBatch(
-                group.map((g) => ({
-                    id:           g.id,
-                    stock:        g.stock,
-                    costPaise:    g.costPaise,
-                    stdCostPaise: g.stdCostPaise,
-                })),
+                group.map((g) => ({ id: g.id, stock: g.stock })),
                 method,
             );
             for (const [id, r] of resolved) {
@@ -153,10 +159,12 @@ export async function GET(req: Request) {
         }
 
         let items: PricingItem[] = products.map((p) => {
-            const cost  = costById.get(p.id) ?? { paise: p.costPaise, fallback: null };
+            const cost  = costById.get(p.id) ?? { paise: null, fallback: null };
             const meta  = matches.get(p.id)!;
             const matched = strategies.find((s) => s.id === meta.strategyId) ?? null;
             const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
+            const mc = lastInwardCosts.get(p.id);
+            const lastInwardPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
             const priced = applyStrategy(
                 cost.paise,
                 p.marginPercent != null ? Number(p.marginPercent) : null,
@@ -182,8 +190,8 @@ export async function GET(req: Request) {
                 priceOverridden:   p.priceOverridden,
                 pricePaise:        p.pricePaise,
                 mrpPaise:          p.mrpPaise,
-                stdCostPaise:      p.stdCostPaise,
-                lastPurchasePaise: p.costPaise,
+                stdCostPaise:      null,
+                lastPurchasePaise: lastInwardPaise,
                 resolvedCostPaise:     cost.paise,
                 resolvedCostFallback:  cost.fallback,
                 computedPricePaise:    priced.pricePaise,
