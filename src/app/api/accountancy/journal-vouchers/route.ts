@@ -5,6 +5,8 @@ import { z } from "zod";
 import { isBalanced, balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import * as Sentry from "@sentry/nextjs";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -249,6 +251,16 @@ export async function POST(req: NextRequest) {
 
             return { voucherId: voucher.id, reference, posted: true };
         });
+
+        const touchedProductIds = body.lines.flatMap((l) =>
+            (l.stockItems ?? []).map((s) => s.productId),
+        );
+        if (touchedProductIds.length > 0) {
+            await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.voucherId) } });
+                console.error("[price-recompute] failed for voucher", result.voucherId, err);
+            });
+        }
 
         return NextResponse.json(result, { status: 201 });
     } catch (e) {

@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
@@ -374,6 +376,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 },
             });
             return { result: updated, notes: postNotes };
+        });
+
+        // After-commit pricing recompute. Failure must NOT roll back the
+        // voucher — log + Sentry-capture and continue.
+        const touchedProductIds = voucher.lines.map((l) => l.productId);
+        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
+            console.error("[price-recompute] failed for voucher", voucher.id, err);
         });
 
         return NextResponse.json({ ...result, _postNotes: notes });

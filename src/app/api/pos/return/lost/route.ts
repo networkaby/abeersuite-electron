@@ -24,7 +24,9 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import * as Sentry from "@sentry/nextjs";
 
 const lostLineSchema = z.object({
     productId: z.number().int().positive(),
@@ -227,6 +229,12 @@ export async function POST(req: Request) {
                 returnInvoiceId: voucher.id,
                 returnNumber:    voucher.reference,
             };
+        });
+
+        const touchedProductIds = data.lines.map((l) => l.productId);
+        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.returnVoucherId) } });
+            console.error("[price-recompute] failed for voucher", result.returnVoucherId, err);
         });
 
         return NextResponse.json(result, { status: 201 });

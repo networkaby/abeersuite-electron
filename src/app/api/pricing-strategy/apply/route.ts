@@ -7,6 +7,7 @@ import { pricingApplySchema } from "@/shared/lib/schemas/pricingSchemas";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
 import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
+import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 
 interface ApplyResult {
     updated: number;
@@ -95,6 +96,10 @@ export async function POST(req: Request) {
             for (const [id, r] of resolved) costById.set(id, r.costPaise);
         }
 
+        // Resolve GST so the written pricePaise is inclusive of tax.
+        const taxResult = await resolveProductTaxBatch({ productIds: products.map((p) => p.id) });
+        const taxByProduct = taxResult.products;
+
         const result: ApplyResult = { updated: 0, skipped: 0, errors: [] };
 
         await prisma.$transaction(async (tx) => {
@@ -105,11 +110,13 @@ export async function POST(req: Request) {
                     continue;
                 }
                 const cost = costById.get(p.id) ?? p.costPaise;
+                const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
                 const priced = applyStrategy(
                     cost,
                     p.marginPercent != null ? Number(p.marginPercent) : null,
                     matched.get(p.id)!.strategy,
                     p.mrpPaise,
+                    gstRatePct,
                 );
                 if (priced.pricePaise == null) {
                     result.errors.push({ productId: p.id, reason: "No cost basis" });

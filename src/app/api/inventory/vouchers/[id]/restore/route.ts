@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -70,6 +72,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             });
             void user;
         });
+
+        if (isPosted(voucher)) {
+            const touchedProductIds = voucher.lines.map((l) => l.productId);
+            await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(voucher.id) } });
+                console.error("[price-recompute] failed for voucher", voucher.id, err);
+            });
+        }
 
         const restored = await prisma.invVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(restored);

@@ -156,13 +156,14 @@ export async function GET(req: Request) {
             const cost  = costById.get(p.id) ?? { paise: p.costPaise, fallback: null };
             const meta  = matches.get(p.id)!;
             const matched = strategies.find((s) => s.id === meta.strategyId) ?? null;
+            const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
             const priced = applyStrategy(
                 cost.paise,
                 p.marginPercent != null ? Number(p.marginPercent) : null,
                 matched,
                 p.mrpPaise,
+                gstRatePct,
             );
-            const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
             return {
                 id:                p.id,
                 sku:               p.sku,

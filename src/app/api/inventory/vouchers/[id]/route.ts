@@ -4,7 +4,9 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
@@ -470,6 +472,16 @@ export async function PATCH(req: Request, { params }: Params) {
                 },
             });
         }, { timeout: 30_000, maxWait: 10_000 });
+
+        // After-commit pricing recompute — union of old lines (just reversed)
+        // and new lines (just posted). Both sets can affect cost basis.
+        const touchedProductIds = new Set<number>();
+        for (const l of existing.lines) touchedProductIds.add(l.productId);
+        for (const l of computedLines ?? []) touchedProductIds.add(l.productId);
+        await recomputePricesForProducts([...touchedProductIds]).catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(id) } });
+            console.error("[price-recompute] failed for voucher", id, err);
+        });
 
         return NextResponse.json(updated);
     } catch (e) {

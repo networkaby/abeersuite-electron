@@ -4,7 +4,9 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
+import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -374,6 +376,12 @@ export async function POST(req: Request) {
                 invoiceId:      voucher.id,
                 invoiceNumber:  voucher.reference,
             };
+        });
+
+        const touchedProductIds = body.lines.map((l) => l.productId);
+        await recomputePricesForProducts(touchedProductIds).catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { source: "price-recompute", voucherId: String(result.voucherId) } });
+            console.error("[price-recompute] failed for voucher", result.voucherId, err);
         });
 
         return NextResponse.json(result, { status: 201 });
