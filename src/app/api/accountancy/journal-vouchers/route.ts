@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, balanceDelta, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { invNextRef } from "@/modules/inventory/lib/stock";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { isStockEligibleAccount } from "@/modules/accountancy/lib/stockEligibleAccount";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -221,37 +222,24 @@ export async function POST(req: NextRequest) {
                     const inQty       = item.side === "DEBIT" ? item.qty : 0;
                     const outQty      = item.side === "CREDIT" ? item.qty : 0;
 
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: item.productId,
-                            voucherId: carrier.id,
-                            branchId:  activeBranchId,
-                            date:      new Date(body.date),
-                            inQty,
-                            outQty,
-                            rate:      item.rate,
-                            amount:    item.amount,
-                        },
-                    });
-
-                    // Coalesce null → numeric. NULL + n = NULL in Postgres,
-                    // so increment/decrement silently no-op on untracked
-                    // products. Read current stock first; if null, set the
-                    // absolute delta; otherwise apply the delta.
+                    // NULL + n = NULL in Postgres, so increment/decrement
+                    // silently no-ops on untracked products. Pre-fetch the
+                    // cache to switch to absolute set when uninitialized.
                     const current = await tx.invProduct.findUnique({
                         where:  { id: item.productId },
                         select: { stock: true },
                     });
-                    const delta = inQty > 0 ? Math.round(inQty) : -Math.round(outQty);
-                    await tx.invProduct.update({
-                        where: { id: item.productId },
-                        data:  {
-                            stock: current?.stock === null
-                                ? delta
-                                : delta > 0
-                                    ? { increment: delta }
-                                    : { decrement: -delta },
-                        },
+                    await recordStockMovement(tx, {
+                        voucherId: carrier.id,
+                        productId: item.productId,
+                        branchId:  activeBranchId,
+                        date:      new Date(body.date),
+                        inQty,
+                        outQty,
+                        rate:      item.rate,
+                        amount:    item.amount,
+                        productCurrentStock: current?.stock ?? null,
+                        updateBranchBalance: false,
                     });
 
                     // Suppress unused-var lint for carrierLine — kept for readability.

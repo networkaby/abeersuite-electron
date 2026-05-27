@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { invNextRef, calcVoucherTotals } from "@/modules/inventory/lib/stock";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -352,26 +353,15 @@ export async function POST(req: Request) {
             for (const line of voucher.lines) {
                 const qty = Number(line.quantity);
                 if (qty <= 0) continue;
-                await tx.invStockLedger.create({
-                    data: {
-                        productId: line.productId,
-                        voucherId: voucher.id,
-                        branchId:  activeBranchId,
-                        date,
-                        inQty:  0,
-                        outQty: qty,
-                        rate:   line.rate,
-                        amount: line.amount,
-                    },
-                });
-                await tx.invProductBranch.upsert({
-                    where:  { productId_branchId: { productId: line.productId, branchId: activeBranchId } },
-                    create: { productId: line.productId, branchId: activeBranchId, stock: -Math.round(qty) },
-                    update: { stock: { decrement: Math.round(qty) } },
-                });
-                await tx.invProduct.update({
-                    where: { id: line.productId },
-                    data:  { stock: { decrement: Math.round(qty) } },
+                await recordStockMovement(tx, {
+                    voucherId: voucher.id,
+                    productId: line.productId,
+                    branchId:  activeBranchId,
+                    date,
+                    inQty:  0,
+                    outQty: qty,
+                    rate:   line.rate,
+                    amount: line.amount,
                 });
             }
 

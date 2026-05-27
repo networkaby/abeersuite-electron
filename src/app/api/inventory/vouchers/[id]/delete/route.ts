@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { recordStockMovement, reverseStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { ensureDeletable, deleteFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -37,98 +38,61 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await prisma.$transaction(async (tx) => {
             if (isPosted(voucher)) {
                 // Reverse stock + cached balance — same shape as cancel, but no counter-entry written.
+                const now = new Date();
                 if (isLedgerMirror) {
-                    // Mirror the original ledger rows in reverse; patch both
-                    // InvProductBranch.stock and InvProduct.stock by the
-                    // opposite of the original delta.
+                    // Mirror the original ledger rows in reverse via the helper.
                     const origRows = await tx.invStockLedger.findMany({
                         where:  { voucherId: voucher.id, amount: { gte: 0 } },
-                        select: { id: true, productId: true, branchId: true, inQty: true, outQty: true, rate: true, amount: true },
+                        select: { id: true, productId: true, branchId: true, voucherId: true, inQty: true, outQty: true, rate: true, amount: true },
                     });
                     for (const row of origRows) {
-                        const inN  = toNumber(row.inQty);
-                        const outN = toNumber(row.outQty);
-                        await tx.invStockLedger.create({
-                            data: {
-                                productId: row.productId,
-                                voucherId: voucher.id,
-                                branchId:  row.branchId,
-                                date:      new Date(),
-                                inQty:     outN,
-                                outQty:    inN,
-                                rate:      row.rate,
-                                amount:    -toNumber(row.amount),
-                            },
-                        });
-                        const originalDelta = Math.round(inN - outN);
-                        if (originalDelta !== 0) {
-                            const reverseDelta = -originalDelta;
-                            await tx.invProductBranch.upsert({
-                                where:  { productId_branchId: { productId: row.productId, branchId: row.branchId } },
-                                create: { productId: row.productId, branchId: row.branchId, stock: reverseDelta },
-                                update: { stock: reverseDelta > 0 ? { increment: reverseDelta } : { decrement: -reverseDelta } },
-                            });
-                            await tx.invProduct.update({
-                                where: { id: row.productId },
-                                data:  { stock: reverseDelta > 0 ? { increment: reverseDelta } : { decrement: -reverseDelta } },
-                            });
-                        }
+                        await reverseStockMovement(tx, { ledgerRow: row, reversalDate: now });
                     }
                 } else if (isBranchTransfer && voucher.destinationBranchId) {
                     for (const line of voucher.lines) {
                         const qty = toNumber(line.quantity);
                         if (!(qty > 0)) continue;
-                        const qInt = Math.round(qty);
-                        await tx.invStockLedger.create({
-                            data: { productId: line.productId, voucherId: voucher.id, branchId: voucher.branchId, date: new Date(), inQty: qty, outQty: 0, rate: line.rate, amount: -toNumber(line.amount) },
+                        await recordStockMovement(tx, {
+                            voucherId: voucher.id,
+                            productId: line.productId,
+                            branchId:  voucher.branchId,
+                            date:      now,
+                            inQty:     qty,
+                            outQty:    0,
+                            rate:      line.rate,
+                            amount:    -toNumber(line.amount),
+                            updateOrgWideStock: false,
                         });
-                        await tx.invProductBranch.upsert({
-                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
-                            create: { productId: line.productId, branchId: voucher.branchId, stock: qInt },
-                            update: { stock: { increment: qInt } },
-                        });
-                        await tx.invStockLedger.create({
-                            data: { productId: line.productId, voucherId: voucher.id, branchId: voucher.destinationBranchId, date: new Date(), inQty: 0, outQty: qty, rate: line.rate, amount: -toNumber(line.amount) },
-                        });
-                        await tx.invProductBranch.upsert({
-                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.destinationBranchId } },
-                            create: { productId: line.productId, branchId: voucher.destinationBranchId, stock: -qInt },
-                            update: { stock: { decrement: qInt } },
+                        await recordStockMovement(tx, {
+                            voucherId: voucher.id,
+                            productId: line.productId,
+                            branchId:  voucher.destinationBranchId,
+                            date:      now,
+                            inQty:     0,
+                            outQty:    qty,
+                            rate:      line.rate,
+                            amount:    -toNumber(line.amount),
+                            updateOrgWideStock: false,
                         });
                     }
                 } else {
-                for (const line of voucher.lines) {
-                    const qty = toNumber(line.quantity);
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: line.productId,
+                    for (const line of voucher.lines) {
+                        const qty = toNumber(line.quantity);
+                        // Non-sale, non-purchase types still write a zero-qty
+                        // audit row; the helper's delta === 0 guard skips the
+                        // cache updates.
+                        await recordStockMovement(tx, {
                             voucherId: voucher.id,
+                            productId: line.productId,
                             branchId:  voucher.branchId,
-                            date:      new Date(),
+                            date:      now,
                             inQty:     isSale     ? qty : 0,
                             outQty:    isPurchase ? qty : 0,
                             rate:      line.rate,
                             amount:    -toNumber(line.amount),
-                        },
-                    });
-                    await tx.invProduct.update({
-                        where: { id: line.productId },
-                        data:  {
-                            stock: isPurchase
-                                ? { decrement: Math.round(qty) }
-                                : isSale
-                                ? { increment: Math.round(qty) }
-                                : undefined,
-                        },
-                    });
-                    if (isPurchase || isSale) {
-                        await tx.invProductBranch.upsert({
-                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
-                            create: { productId: line.productId, branchId: voucher.branchId, stock: isPurchase ? -Math.round(qty) : Math.round(qty) },
-                            update: { stock: isPurchase ? { decrement: Math.round(qty) } : { increment: Math.round(qty) } },
+                            updateBranchBalance: isPurchase || isSale,
                         });
                     }
-                }
                 }
 
                 if (voucher.journalEntryId) {

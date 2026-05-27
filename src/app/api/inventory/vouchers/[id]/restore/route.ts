@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { ensureRestorable, restoreFields, isPosted, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -27,37 +28,22 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         await prisma.$transaction(async (tx) => {
             if (isPosted(voucher)) {
+                const now = new Date();
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: line.productId,
-                            voucherId: voucher.id,
-                            branchId:  voucher.branchId,
-                            date:      new Date(),
-                            inQty:     isPurchase ? qty : 0,
-                            outQty:    isSale     ? qty : 0,
-                            rate:      line.rate,
-                            amount:    toNumber(line.amount),
-                        },
+                    // Non-sale, non-purchase types still write a zero-qty audit
+                    // row; the helper's delta === 0 guard skips cache updates.
+                    await recordStockMovement(tx, {
+                        voucherId: voucher.id,
+                        productId: line.productId,
+                        branchId:  voucher.branchId,
+                        date:      now,
+                        inQty:     isPurchase ? qty : 0,
+                        outQty:    isSale     ? qty : 0,
+                        rate:      line.rate,
+                        amount:    toNumber(line.amount),
+                        updateBranchBalance: isPurchase || isSale,
                     });
-                    await tx.invProduct.update({
-                        where: { id: line.productId },
-                        data:  {
-                            stock: isPurchase
-                                ? { increment: Math.round(qty) }
-                                : isSale
-                                ? { decrement: Math.round(qty) }
-                                : undefined,
-                        },
-                    });
-                    if (isPurchase || isSale) {
-                        await tx.invProductBranch.upsert({
-                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
-                            create: { productId: line.productId, branchId: voucher.branchId, stock: isPurchase ? Math.round(qty) : -Math.round(qty) },
-                            update: { stock: isPurchase ? { increment: Math.round(qty) } : { decrement: Math.round(qty) } },
-                        });
-                    }
                 }
 
                 if (voucher.journalEntryId) {

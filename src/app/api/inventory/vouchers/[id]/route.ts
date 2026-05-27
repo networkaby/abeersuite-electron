@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -240,36 +241,20 @@ export async function PATCH(req: Request, { params }: Params) {
                     const totalQty = qty + freeQty;
                     if (totalQty <= 0) continue;
 
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: line.productId,
-                            voucherId: existing.id,
-                            branchId:  existing.branchId,
-                            date:      new Date(),
-                            // Counter direction
-                            inQty:     isSale     ? totalQty : 0,
-                            outQty:    isPurchase ? totalQty : 0,
-                            rate:      line.rate,
-                            amount:    -toNumber(line.amount),
-                        },
+                    // For non-purchase/non-sale types (e.g., POS POSTED edits)
+                    // we still write a zero-qty ledger row as audit trail; the
+                    // helper's internal `delta === 0` guard then skips the
+                    // product/branch updates.
+                    await recordStockMovement(tx, {
+                        voucherId: existing.id,
+                        productId: line.productId,
+                        branchId:  existing.branchId,
+                        date:      new Date(),
+                        inQty:     isSale     ? totalQty : 0,
+                        outQty:    isPurchase ? totalQty : 0,
+                        rate:      line.rate,
+                        amount:    -toNumber(line.amount),
                     });
-                    await tx.invProduct.update({
-                        where: { id: line.productId },
-                        data:  {
-                            stock: isPurchase
-                                ? { decrement: Math.round(totalQty) }
-                                : isSale
-                                ? { increment: Math.round(totalQty) }
-                                : undefined,
-                        },
-                    });
-                    if (isPurchase || isSale) {
-                        await tx.invProductBranch.upsert({
-                            where:  { productId_branchId: { productId: line.productId, branchId: existing.branchId } },
-                            create: { productId: line.productId, branchId: existing.branchId, stock: isPurchase ? -Math.round(totalQty) : Math.round(totalQty) },
-                            update: { stock: isPurchase ? { decrement: Math.round(totalQty) } : { increment: Math.round(totalQty) } },
-                        });
-                    }
                 }
 
                 // Reverse GL — post a reversal JE and cancel the original.
@@ -442,35 +427,18 @@ export async function PATCH(req: Request, { params }: Params) {
                     if (isPurchase) inQty = totalQty; else if (isSale) outQty = totalQty;
                     if (inQty === 0 && outQty === 0) continue;
 
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: line.productId,
-                            voucherId: fresh.id,
-                            branchId:  fresh.branchId,
-                            date:      fresh.date,
-                            inQty,
-                            outQty,
-                            rate:      line.rate,
-                            amount:    line.amount,
-                        },
-                    });
-                    const startsAtNull = line.product.stock === null;
-                    const delta = inQty > 0 ? Math.round(inQty) : -Math.round(outQty);
-                    await tx.invProduct.update({
-                        where: { id: line.productId },
-                        data:  {
-                            stock: startsAtNull
-                                ? delta
-                                : delta > 0
-                                    ? { increment: delta }
-                                    : { decrement: -delta },
-                            ...(isPurchase ? { costPaise: Math.round(toNumber(line.rate) * 100), ...(line.mrpPaise != null ? { mrpPaise: line.mrpPaise } : {}) } : {}),
-                        },
-                    });
-                    await tx.invProductBranch.upsert({
-                        where:  { productId_branchId: { productId: line.productId, branchId: fresh.branchId } },
-                        create: { productId: line.productId, branchId: fresh.branchId, stock: delta },
-                        update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
+                    await recordStockMovement(tx, {
+                        voucherId: fresh.id,
+                        productId: line.productId,
+                        branchId:  fresh.branchId,
+                        date:      fresh.date,
+                        inQty,
+                        outQty,
+                        rate:      line.rate,
+                        amount:    line.amount,
+                        productCurrentStock: line.product.stock,
+                        newCostPaise: isPurchase ? Math.round(toNumber(line.rate) * 100) : undefined,
+                        newMrpPaise:  isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
                     });
                 }
 

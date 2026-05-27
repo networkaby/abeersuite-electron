@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { toNumber, nextRefFromSeries } from "@/modules/accountancy/lib/balance";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 import { handleApiError } from "@/shared/lib/api";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
@@ -108,44 +109,31 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                 for (const line of voucher.lines) {
                     const qty = toNumber(line.quantity);
                     if (!(qty > 0)) continue;
-                    const qInt = Math.round(qty);
 
                     // Source side: OUT
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: line.productId,
-                            voucherId: voucher.id,
-                            branchId:  voucher.branchId,
-                            date:      voucher.date,
-                            inQty:     0,
-                            outQty:    qty,
-                            rate:      line.rate,
-                            amount:    line.amount,
-                        },
-                    });
-                    await tx.invProductBranch.upsert({
-                        where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
-                        create: { productId: line.productId, branchId: voucher.branchId, stock: -qInt },
-                        update: { stock: { decrement: qInt } },
+                    await recordStockMovement(tx, {
+                        voucherId: voucher.id,
+                        productId: line.productId,
+                        branchId:  voucher.branchId,
+                        date:      voucher.date,
+                        inQty:     0,
+                        outQty:    qty,
+                        rate:      line.rate,
+                        amount:    line.amount,
+                        updateOrgWideStock: false,
                     });
 
                     // Destination side: IN
-                    await tx.invStockLedger.create({
-                        data: {
-                            productId: line.productId,
-                            voucherId: voucher.id,
-                            branchId:  destBranchId,
-                            date:      voucher.date,
-                            inQty:     qty,
-                            outQty:    0,
-                            rate:      line.rate,
-                            amount:    line.amount,
-                        },
-                    });
-                    await tx.invProductBranch.upsert({
-                        where:  { productId_branchId: { productId: line.productId, branchId: destBranchId } },
-                        create: { productId: line.productId, branchId: destBranchId, stock: qInt },
-                        update: { stock: { increment: qInt } },
+                    await recordStockMovement(tx, {
+                        voucherId: voucher.id,
+                        productId: line.productId,
+                        branchId:  destBranchId,
+                        date:      voucher.date,
+                        inQty:     qty,
+                        outQty:    0,
+                        rate:      line.rate,
+                        amount:    line.amount,
+                        updateOrgWideStock: false,
                     });
                 }
             } else if (!isCommitment) {
@@ -218,24 +206,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                     }
 
                     if (inQty > 0 || outQty > 0) {
-                        await tx.invStockLedger.create({
-                            data: {
-                                productId: line.productId,
-                                voucherId: voucher.id,
-                                branchId:  voucher.branchId,
-                                date:      voucher.date,
-                                inQty,
-                                outQty,
-                                rate:      line.rate,
-                                amount:    line.amount,
-                            },
-                        });
-                        // Postgres `NULL + n = NULL` — Prisma's increment/
-                        // decrement silently no-ops on a null cache. If stock
-                        // is null, set the absolute value; otherwise apply the
-                        // delta. Keeps the closing-stock valuation accurate.
-                        const startsAtNull = line.product.stock === null;
-                        const delta = inQty > 0 ? Math.round(inQty) : -Math.round(outQty);
                         // Update cost basis on inwards:
                         //  • Purchase-family vouchers update costPaise from the
                         //    supplier rate (existing behaviour).
@@ -245,25 +215,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         //    the new cost price for the produced finished good.
                         const updateCost = isPurchase
                             || (isManufacturingJournal && line.direction === "PRODUCE" && toNumber(line.rate) > 0);
-                        await tx.invProduct.update({
-                            where: { id: line.productId },
-                            data:  {
-                                stock: startsAtNull
-                                    ? delta
-                                    : delta > 0
-                                        ? { increment: delta }
-                                        : { decrement: -delta },
-                                ...(updateCost ? { costPaise: Math.round(toNumber(line.rate) * 100) } : {}),
-                                ...(isPurchase && line.mrpPaise != null ? { mrpPaise: line.mrpPaise } : {}),
-                            },
-                        });
-                        // Per-branch balance — upsert so first transaction for a
-                        // (product, branch) pair creates the row, subsequent ones
-                        // increment/decrement.
-                        await tx.invProductBranch.upsert({
-                            where:  { productId_branchId: { productId: line.productId, branchId: voucher.branchId } },
-                            create: { productId: line.productId, branchId: voucher.branchId, stock: delta },
-                            update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
+                        await recordStockMovement(tx, {
+                            voucherId: voucher.id,
+                            productId: line.productId,
+                            branchId:  voucher.branchId,
+                            date:      voucher.date,
+                            inQty,
+                            outQty,
+                            rate:      line.rate,
+                            amount:    line.amount,
+                            productCurrentStock: line.product.stock,
+                            newCostPaise: updateCost ? Math.round(toNumber(line.rate) * 100) : undefined,
+                            newMrpPaise:  isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
                         });
                     }
                 }

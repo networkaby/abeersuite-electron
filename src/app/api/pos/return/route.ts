@@ -29,6 +29,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 
 const returnLineSchema = z.object({
@@ -228,26 +229,15 @@ export async function POST(req: Request) {
             for (const { voucherLine, qty } of stockLines) {
                 const productId = voucherLine.productId!;
                 const rate      = Number(voucherLine.rate);
-                await tx.invStockLedger.create({
-                    data: {
-                        productId,
-                        voucherId: voucher.id,
-                        branchId,
-                        date:   today,
-                        inQty:  qty,
-                        outQty: 0,
-                        rate,
-                        amount: qty * rate,
-                    },
-                });
-                await tx.invProductBranch.upsert({
-                    where:  { productId_branchId: { productId, branchId } },
-                    create: { productId, branchId, stock: Math.round(qty) },
-                    update: { stock: { increment: Math.round(qty) } },
-                });
-                await tx.invProduct.update({
-                    where: { id: productId },
-                    data:  { stock: { increment: Math.round(qty) } },
+                await recordStockMovement(tx, {
+                    voucherId: voucher.id,
+                    productId,
+                    branchId,
+                    date:   today,
+                    inQty:  qty,
+                    outQty: 0,
+                    rate,
+                    amount: qty * rate,
                 });
             }
 

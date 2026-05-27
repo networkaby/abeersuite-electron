@@ -23,6 +23,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef } from "@/modules/inventory/lib/stock";
+import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { postInvVoucherToGl } from "@/modules/accountancy/lib/postInvVoucher";
 
 const lostLineSchema = z.object({
@@ -205,26 +206,15 @@ export async function POST(req: Request) {
 
             // Stock IN.
             for (const l of data.lines) {
-                await tx.invStockLedger.create({
-                    data: {
-                        productId: l.productId,
-                        voucherId: voucher.id,
-                        branchId,
-                        date:   today,
-                        inQty:  l.qty,
-                        outQty: 0,
-                        rate:   l.unitPrice,
-                        amount: l.qty * l.unitPrice,
-                    },
-                });
-                await tx.invProductBranch.upsert({
-                    where:  { productId_branchId: { productId: l.productId, branchId } },
-                    create: { productId: l.productId, branchId, stock: Math.round(l.qty) },
-                    update: { stock: { increment: Math.round(l.qty) } },
-                });
-                await tx.invProduct.update({
-                    where: { id: l.productId },
-                    data:  { stock: { increment: Math.round(l.qty) } },
+                await recordStockMovement(tx, {
+                    voucherId: voucher.id,
+                    productId: l.productId,
+                    branchId,
+                    date:   today,
+                    inQty:  l.qty,
+                    outQty: 0,
+                    rate:   l.unitPrice,
+                    amount: l.qty * l.unitPrice,
                 });
             }
 
