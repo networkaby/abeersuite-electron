@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
+import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -30,7 +31,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             include: productInclude,
         });
         if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(row);
+        const lastInward = await loadLastInwardCostMap([{ id: row.id, stock: row.stock }]);
+        return NextResponse.json({
+            ...row,
+            lastPurchasePaise: lastInward.get(row.id) ?? null,
+        });
     } catch (e) {
         return handleApiError(e, "Failed to fetch product");
     }

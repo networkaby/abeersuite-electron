@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
+import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 
 /**
  * GET /api/inventory/products/lookup
@@ -58,10 +59,12 @@ export async function GET(req: NextRequest) {
         if (!product) return NextResponse.json(null);
         const { products: taxByProduct } = await resolveProductTaxBatch({ productIds: [product.id] });
         const resolved = taxByProduct.get(product.id);
+        const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
         return NextResponse.json({
             ...product,
             taxRate: resolved?.gstRate ?? null,
             hsnCode: resolved?.hsnCode ?? null,
+            lastPurchasePaise: lastInward.get(product.id) ?? null,
         });
     }
 
@@ -91,12 +94,20 @@ export async function GET(req: NextRequest) {
         productIds: products.map((p) => p.id),
     });
 
+    // lastPurchasePaise — derived from the LAST_INWARD walk (PR 3 dropped the
+    // costPaise cache). UI cost columns + manufacturing-journal rate seeds
+    // read from here.
+    const lastInward = await loadLastInwardCostMap(
+        products.map((p) => ({ id: p.id, stock: p.stock })),
+    );
+
     const enriched = products.map((p) => {
         const r = taxByProduct.get(p.id);
         return {
             ...p,
             taxRate: r?.gstRate ?? null,
             hsnCode: r?.hsnCode ?? null,
+            lastPurchasePaise: lastInward.get(p.id) ?? null,
         };
     });
 

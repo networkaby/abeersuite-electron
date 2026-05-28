@@ -57,7 +57,8 @@ export type InvProductRow = {
     ean1: string | null; ean2: string | null; ean3: string | null;
     upc1: string | null; upc2: string | null; upc3: string | null;
     notes: string | null;
-    costPaise: number | null;
+    /** Last inward rate (paise) from the ledger walk — read-only on the dialog. PR 3 dropped the costPaise column. */
+    lastPurchasePaise?: number | null;
     pricePaise: number | null;
     mrpPaise: number | null;
     openingStock: number | string | null;
@@ -115,7 +116,10 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         upc3: p.upc3 ?? "",
         notes: p.notes ?? "",
         isActive: p.isActive,
-        costRupees:  paiseToRupees(p.costPaise),
+        // Cost input removed in PR 4 — cost is set via Opening tab (openingRate)
+        // or accumulates from purchases. Keep costRupees="" for back-compat with
+        // form-state consumers that still reference it.
+        costRupees:  "",
         priceRupees: paiseToRupees(p.pricePaise),
         mrpRupees:   paiseToRupees(p.mrpPaise),
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
@@ -135,7 +139,9 @@ function rowToForm(p: InvProductRow): InvProductFormState {
 export type InvProductCreatedRow = {
     id: number; sku: string; name: string;
     stock: number | null; lowStockThreshold: number;
-    pricePaise: number | null; costPaise: number | null; mrpPaise: number | null;
+    pricePaise: number | null; mrpPaise: number | null;
+    /** PR 4 enriches the products POST response with this from a LAST_INWARD walk. */
+    lastPurchasePaise: number | null;
     unit: { code: string }; brand: { name: string } | null; barcode1: string | null;
 };
 
@@ -297,7 +303,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             upc3: optionalStr(form.upc3),
             notes: optionalStr(form.notes),
             isActive: form.isActive,
-            costPaise:  rupeesToPaise(form.costRupees),
+            // costPaise removed in PR 3; no longer sent.
             pricePaise: rupeesToPaise(form.priceRupees),
             mrpPaise:   rupeesToPaise(form.mrpRupees),
             openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),

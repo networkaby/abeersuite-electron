@@ -47,7 +47,7 @@ type LineForm = {
     name:      string;
     unitCode:  string;
     quantity:  string;
-    /** Per-unit rate in rupees — seeded from product.costPaise on scan/pick
+    /** Per-unit rate in rupees — seeded from product.lastPurchasePaise on scan/pick
      *  so consumption + production carry the product's cost basis. The
      *  operator can override to model variance (e.g. a custom production
      *  cost). Amount = qty × rate. */
@@ -199,7 +199,7 @@ export function ManufacturingJournalPage() {
                 next[existingIdx] = { ...next[existingIdx]!, quantity: String(curr + 1) };
                 return { ...f, [sectionKey]: next };
             }
-            const defaultRate = p.costPaise != null ? p.costPaise / 100 : 0;
+            const defaultRate = p.lastPurchasePaise != null ? p.lastPurchasePaise / 100 : 0;
             return {
                 ...f,
                 [sectionKey]: [
@@ -257,7 +257,7 @@ export function ManufacturingJournalPage() {
             bom.outputProductId,
         ]));
         Promise.all(ids.map((id) =>
-            axios.get<{ id: number; sku: string; name: string; costPaise?: number | null; unit?: { code: string } }>(`/api/inventory/products/${id}`)
+            axios.get<{ id: number; sku: string; name: string; lastPurchasePaise?: number | null; unit?: { code: string } }>(`/api/inventory/products/${id}`)
                 .then((r) => r.data)
                 .catch(() => null),
         )).then((results) => {
@@ -267,7 +267,7 @@ export function ManufacturingJournalPage() {
                     sku:      p.sku,
                     name:     p.name,
                     unitCode: p.unit?.code ?? "",
-                    rate:     p.costPaise != null ? p.costPaise / 100 : 0,
+                    rate:     p.lastPurchasePaise != null ? p.lastPurchasePaise / 100 : 0,
                 });
             }
             setForm((f) => ({

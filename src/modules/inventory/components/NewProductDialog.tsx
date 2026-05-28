@@ -43,7 +43,8 @@ export type CreatedProductOption = {
     stock: number | null;
     lowStockThreshold: number;
     pricePaise: number | null;
-    costPaise: number | null;
+    /** Last inward rate (paise) derived from the ledger walk — PR 3 dropped the costPaise cache. */
+    lastPurchasePaise: number | null;
     mrpPaise: number | null;
     unit: { code: string };
     brand: { name: string } | null;
@@ -155,15 +156,17 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
             const p = res.data as {
                 id: number; sku: string; name: string;
                 stock: number | null; lowStockThreshold: number;
-                pricePaise: number | null; costPaise: number | null; mrpPaise: number | null;
+                pricePaise: number | null; mrpPaise: number | null;
                 unit: { code: string };
                 brand: { name: string } | null;
                 barcode1?: string | null;
             };
+            // Fresh product has no purchase history yet → lastPurchasePaise=null.
+            // The combobox will pick it up via lookup on next refresh.
             onCreated({
                 id: p.id, sku: p.sku, name: p.name,
                 stock: p.stock, lowStockThreshold: p.lowStockThreshold,
-                pricePaise: p.pricePaise, costPaise: p.costPaise, mrpPaise: p.mrpPaise,
+                pricePaise: p.pricePaise, lastPurchasePaise: null, mrpPaise: p.mrpPaise,
                 unit: { code: p.unit.code },
                 brand: p.brand,
                 barcode1: p.barcode1 ?? null,

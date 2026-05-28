@@ -572,19 +572,10 @@ export function InvProductFormFields({
 
             <TabsContent value="pricing" className={tabPanel}>
                 <p className="text-xs text-muted-foreground mb-3">
-                    All amounts in rupees (₹). Cost auto-updates on every Purchase voucher; you can override here.
+                    All amounts in rupees (₹). Cost is derived from the Opening tab's
+                    opening rate + subsequent Purchase vouchers — set it there, not here.
                 </p>
-                <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="space-y-2">
-                        <Label>Cost price (₹)</Label>
-                        <Input
-                            type="text" inputMode="decimal"
-                            value={form.costRupees}
-                            onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))}
-                            placeholder="0.00"
-                        />
-                        <p className="text-[11px] text-muted-foreground">Last purchase rate; basis for COGS.</p>
-                    </div>
+                <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label>Sale price (₹)</Label>
                         <Input

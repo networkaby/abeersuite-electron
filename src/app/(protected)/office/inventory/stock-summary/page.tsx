@@ -25,7 +25,7 @@ import { TableScrollArea } from "@/shared/components/TableScrollArea";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ValuationMethod = "LAST_COST" | "WEIGHTED_AVG" | "FIFO" | "LIFO";
+type ValuationMethod = "LAST_INWARD" | "WEIGHTED_AVG" | "SIMPLE_AVG" | "FIFO" | "MONTHLY_AVG";
 
 type Row = {
     id: number;
@@ -33,17 +33,18 @@ type Row = {
     name: string;
     stock: number;
     lowStockThreshold: number;
-    costPaise: number | null;
     pricePaise: number | null;
     unit: { code: string; label: string };
     group: { id: number; name: string } | null;
     brand: { id: number; name: string } | null;
     category: { id: number; name: string } | null;
+    /** PR 3 dropped costPaise — cost comes from the ledger-walked valuation
+     *  block. unitCost is in rupees (not paise); value = stock × unitCost. */
     valuation: {
         unitCost: number;
         value: number;
         method: ValuationMethod;
-        fallback?: "no-receipt-history" | "no-cost-basis" | "not-implemented";
+        fallback?: "no-receipt-history" | "no-cost-basis";
     };
     isLow: boolean;
 };
@@ -59,10 +60,11 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 const METHOD_LABELS: Record<ValuationMethod, string> = {
-    LAST_COST: "Last Cost",
+    LAST_INWARD:  "Last Inward",
     WEIGHTED_AVG: "Weighted Avg",
-    FIFO: "FIFO",
-    LIFO: "LIFO",
+    SIMPLE_AVG:   "Simple Avg",
+    FIFO:         "FIFO",
+    MONTHLY_AVG:  "Monthly Avg",
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -87,7 +89,10 @@ export default function StockSummaryPage() {
     };
     const [method, setMethodState] = useState<ValuationMethod>(() => {
         const m = params.get("method");
-        return m === "WEIGHTED_AVG" || m === "FIFO" || m === "LIFO" ? m : "LAST_COST";
+        if (m === "WEIGHTED_AVG" || m === "SIMPLE_AVG" || m === "FIFO" || m === "LAST_INWARD" || m === "MONTHLY_AVG") {
+            return m;
+        }
+        return "WEIGHTED_AVG";
     });
     const [showProfit, setShowProfitState] = useState<boolean>(() => params.get("profit") === "1");
     const [branchId, setBranchIdState] = useState<string>(() => params.get("branch") ?? "all");
@@ -110,7 +115,7 @@ export default function StockSummaryPage() {
             const p = next.showProfit ?? showProfit;
             const b = next.branchId ?? branchId;
             if (v === "group") qs.delete("view"); else qs.set("view", v);
-            if (m === "LAST_COST") qs.delete("method"); else qs.set("method", m);
+            if (m === "WEIGHTED_AVG") qs.delete("method"); else qs.set("method", m);
             if (p) qs.set("profit", "1"); else qs.delete("profit");
             if (b === "all") qs.delete("branch"); else qs.set("branch", b);
             router.replace(`${pathname}?${qs.toString()}`);
@@ -159,13 +164,14 @@ export default function StockSummaryPage() {
                 const unitCodes = new Set(items.map((r) => r.unit.code));
                 const unitCode = unitCodes.size === 1 ? items[0].unit.code : null;
 
-                // Profit roll-up — only rows where both costPaise and pricePaise are set
-                const profitRows = items.filter((r) => r.costPaise != null && r.pricePaise != null && r.stock > 0);
+                // Profit roll-up — only rows with usable cost (valuation.value > 0)
+                // and sale price. valuation.value is already stock × unitCost in rupees.
+                const profitRows = items.filter((r) => r.valuation.value > 0 && r.pricePaise != null && r.stock > 0);
                 const totalSaleValue = profitRows.reduce(
                     (s, r) => s + (r.stock * (r.pricePaise ?? 0)) / 100, 0,
                 );
                 const totalCostValue = profitRows.reduce(
-                    (s, r) => s + (r.stock * (r.costPaise ?? 0)) / 100, 0,
+                    (s, r) => s + r.valuation.value, 0,
                 );
                 const totalProfit = totalSaleValue - totalCostValue;
                 const margin = totalSaleValue > 0 ? (totalProfit / totalSaleValue) * 100 : null;
@@ -197,17 +203,18 @@ export default function StockSummaryPage() {
                     return dir * (av - bv);
                 }
                 case "profit": {
-                    const ap = a.costPaise != null && a.pricePaise != null && a.stock > 0
-                        ? ((a.pricePaise - a.costPaise) * a.stock) / 100 : -Infinity;
-                    const bp = b.costPaise != null && b.pricePaise != null && b.stock > 0
-                        ? ((b.pricePaise - b.costPaise) * b.stock) / 100 : -Infinity;
+                    // valuation.unitCost is in rupees; pricePaise / 100 = sale rupees.
+                    const ap = a.valuation.unitCost > 0 && a.pricePaise != null && a.stock > 0
+                        ? (a.pricePaise / 100 - a.valuation.unitCost) * a.stock : -Infinity;
+                    const bp = b.valuation.unitCost > 0 && b.pricePaise != null && b.stock > 0
+                        ? (b.pricePaise / 100 - b.valuation.unitCost) * b.stock : -Infinity;
                     return dir * (ap - bp);
                 }
                 case "margin": {
-                    const am = a.costPaise != null && a.pricePaise != null && a.pricePaise > 0
-                        ? ((a.pricePaise - a.costPaise) / a.pricePaise) * 100 : -Infinity;
-                    const bm = b.costPaise != null && b.pricePaise != null && b.pricePaise > 0
-                        ? ((b.pricePaise - b.costPaise) / b.pricePaise) * 100 : -Infinity;
+                    const am = a.valuation.unitCost > 0 && a.pricePaise != null && a.pricePaise > 0
+                        ? ((a.pricePaise / 100 - a.valuation.unitCost) / (a.pricePaise / 100)) * 100 : -Infinity;
+                    const bm = b.valuation.unitCost > 0 && b.pricePaise != null && b.pricePaise > 0
+                        ? ((b.pricePaise / 100 - b.valuation.unitCost) / (b.pricePaise / 100)) * 100 : -Infinity;
                     return dir * (am - bm);
                 }
             }
@@ -231,15 +238,15 @@ export default function StockSummaryPage() {
     );
     const grandSaleValue = useMemo(
         () => rows
-            .filter((r) => r.costPaise != null && r.pricePaise != null && r.stock > 0)
+            .filter((r) => r.valuation.value > 0 && r.pricePaise != null && r.stock > 0)
             .reduce((s, r) => s + (r.stock * (r.pricePaise ?? 0)) / 100, 0),
         [rows],
     );
     const grandProfit = useMemo(
         () => rows
-            .filter((r) => r.costPaise != null && r.pricePaise != null && r.stock > 0)
+            .filter((r) => r.valuation.value > 0 && r.pricePaise != null && r.stock > 0)
             .reduce(
-                (s, r) => s + (((r.pricePaise ?? 0) - (r.costPaise ?? 0)) * r.stock) / 100,
+                (s, r) => s + ((r.pricePaise ?? 0) / 100 - r.valuation.unitCost) * r.stock,
                 0,
             ),
         [rows],
@@ -513,8 +520,8 @@ export default function StockSummaryPage() {
                                         {/* Item rows */}
                                         {isOpen && g.items.map((r) => {
                                             const saleValue = r.pricePaise != null && r.stock > 0 ? (r.stock * r.pricePaise) / 100 : null;
-                                            const profit = r.costPaise != null && r.pricePaise != null && r.stock > 0
-                                                ? ((r.pricePaise - r.costPaise) * r.stock) / 100
+                                            const profit = r.valuation.unitCost > 0 && r.pricePaise != null && r.stock > 0
+                                                ? ((r.pricePaise / 100) - r.valuation.unitCost) * r.stock
                                                 : null;
                                             const margin = saleValue != null && saleValue > 0 && profit != null ? (profit / saleValue) * 100 : null;
                                             return (
@@ -663,11 +670,11 @@ export default function StockSummaryPage() {
                             )}
                             {sortedItems.map((r) => {
                                 const saleValue = r.pricePaise != null && r.stock > 0 ? (r.stock * r.pricePaise) / 100 : null;
-                                const profit = r.costPaise != null && r.pricePaise != null && r.stock > 0
-                                    ? ((r.pricePaise - r.costPaise) * r.stock) / 100
+                                const profit = r.valuation.unitCost > 0 && r.pricePaise != null && r.stock > 0
+                                    ? ((r.pricePaise / 100) - r.valuation.unitCost) * r.stock
                                     : null;
-                                const margin = r.costPaise != null && r.pricePaise != null && r.pricePaise > 0
-                                    ? ((r.pricePaise - r.costPaise) / r.pricePaise) * 100
+                                const margin = r.valuation.unitCost > 0 && r.pricePaise != null && r.pricePaise > 0
+                                    ? ((r.pricePaise / 100 - r.valuation.unitCost) / (r.pricePaise / 100)) * 100
                                     : null;
                                 return (
                                     <tr
@@ -771,9 +778,9 @@ export default function StockSummaryPage() {
             )}
 
             {/* Fallback footnote */}
-            {!loading && method !== "LAST_COST" && fallbackCount > 0 && (
+            {!loading && fallbackCount > 0 && (
                 <p className="text-xs text-muted-foreground">
-                    Valued using {METHOD_LABELS[method]}. {fallbackCount} product{fallbackCount === 1 ? "" : "s"} fell back to last-purchase cost (no receipt history).
+                    Valued using {METHOD_LABELS[method]}. {fallbackCount} product{fallbackCount === 1 ? "" : "s"} fell back to opening rate (no inward history).
                 </p>
             )}
             </div>

@@ -31,7 +31,7 @@ type ProductOption = {
     stock:      number | null;
     lowStockThreshold: number;
     pricePaise: number | null;   // sale price
-    costPaise:  number | null;   // purchase / cost price
+    lastPurchasePaise: number | null;   // last inward rate (derived from ledger walk)
     mrpPaise:   number | null;
     unit:       { code: string };
     brand:      { name: string } | null;
@@ -81,7 +81,7 @@ function toSelected(p: ProductOption): SelectedProduct {
         unitCode:  p.unit.code,
         stock:     p.stock,
         salePrice: p.pricePaise != null ? p.pricePaise / 100 : null,
-        costPrice: p.costPaise  != null ? p.costPaise  / 100 : null,
+        costPrice: p.lastPurchasePaise != null ? p.lastPurchasePaise / 100 : null,
         mrp:       p.mrpPaise   != null ? p.mrpPaise   / 100 : null,
     };
 }
@@ -340,9 +340,9 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                             <span className="text-right text-xs tabular-nums self-center">
                                                 {formatINR(p.pricePaise)}
                                             </span>
-                                            {/* Cost price */}
+                                            {/* Cost price — derived from LAST_INWARD walk (PR 3) */}
                                             <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
-                                                {formatINR(p.costPaise)}
+                                                {formatINR(p.lastPurchasePaise)}
                                             </span>
                                             {/* MRP */}
                                             <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
@@ -405,7 +405,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                             stock: raw.stock,
                             lowStockThreshold: raw.lowStockThreshold,
                             pricePaise: raw.pricePaise,
-                            costPaise: raw.costPaise,
+                            lastPurchasePaise: raw.lastPurchasePaise,
                             mrpPaise: raw.mrpPaise,
                             unit: { code: raw.unit.code },
                             brand: raw.brand,

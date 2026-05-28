@@ -203,11 +203,31 @@ function fifo(p: ProductMaster, lots: Lot[]): ProductValuation {
     return { productId: p.id, qty, unitCost, value: accValue, method: "FIFO" };
 }
 
+// MONTHLY_AVG — weighted average of the most recent month that had any
+// inward lots. Walk backwards through `lots` (sorted oldest-first) to find
+// the latest (year, month) with at least one entry, then WA over just that
+// month's lots. Carries forward across quiet months without dragging in
+// older single events. Falls through to opening-rate via the dispatcher
+// when no inward history exists at all.
 function monthlyAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
-    const since = startOfMonth();
-    const monthLots = lots.filter((l) => l.date >= since);
-    if (monthLots.length === 0) {
-        // Sentinel for the dispatcher — fall back to LAST_INWARD on all lots.
+    let bestKey: string | null = null;
+    const bestMonthLots: Lot[] = [];
+    for (let i = lots.length - 1; i >= 0; i -= 1) {
+        const lot = lots[i];
+        const key = `${lot.date.getFullYear()}-${lot.date.getMonth()}`;
+        if (bestKey === null) {
+            bestKey = key;
+            bestMonthLots.push(lot);
+            continue;
+        }
+        if (key === bestKey) {
+            bestMonthLots.push(lot);
+        } else {
+            break;  // older month — we've collected the full latest month
+        }
+    }
+    if (bestMonthLots.length === 0) {
+        // Sentinel for the dispatcher — fall back to opening-rate path.
         return {
             productId: p.id,
             qty: p.stock ?? 0,
@@ -220,7 +240,7 @@ function monthlyAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
     const qty = p.stock ?? 0;
     let totalQty = 0;
     let totalValue = 0;
-    for (const lot of monthLots) {
+    for (const lot of bestMonthLots) {
         totalQty   += lot.qty;
         totalValue += lot.qty * lot.rate;
     }
@@ -232,11 +252,6 @@ function monthlyAvg(p: ProductMaster, lots: Lot[]): ProductValuation {
         value: qty > 0 ? qty * unitCost : 0,
         method: "MONTHLY_AVG",
     };
-}
-
-function startOfMonth(): Date {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 // ── Batch entry point ─────────────────────────────────────────────────────────
@@ -272,14 +287,9 @@ export async function valueStockBatch(
             case "FIFO":         v = fifo(p, lots); break;
             case "MONTHLY_AVG":  v = monthlyAvg(p, lots); break;
         }
-
-        // MONTHLY_AVG with no month lots → degrade to LAST_INWARD over the
-        // full lot history (still inside the ledger walk; no extra query).
-        if (method === "MONTHLY_AVG" && v.fallback === "no-receipt-history") {
-            v = lastInward(p, lots);
-            v.method = "MONTHLY_AVG";
-            v.fallback = "no-receipt-history";
-        }
+        // monthlyAvg() carries forward to the latest month with lots; only
+        // returns `no-receipt-history` when lots is empty (impossible here
+        // — we already filtered above), but kept as a defensive passthrough.
         out.set(p.id, v);
     }
 
@@ -308,6 +318,25 @@ export async function valueStockBatch(
                 });
             }
         }
+    }
+    return out;
+}
+
+// ── Last-inward cost helper (PR 4) ───────────────────────────────────────────
+// Convenience wrapper used by API routes that surface a `lastPurchasePaise`
+// field — combobox, product transactions, master GET. Same code path as
+// `valueStockBatch(., "LAST_INWARD")`; returns paise (Int) instead of rupees,
+// and skips the per-product `{ unitCost, value, ... }` envelope.
+
+export async function loadLastInwardCostMap(
+    products: ProductMaster[],
+): Promise<Map<number, number | null>> {
+    const out = new Map<number, number | null>();
+    if (products.length === 0) return out;
+    const valuations = await valueStockBatch(products, "LAST_INWARD");
+    for (const p of products) {
+        const v = valuations.get(p.id);
+        out.set(p.id, v && v.unitCost > 0 ? Math.round(v.unitCost * 100) : null);
     }
     return out;
 }

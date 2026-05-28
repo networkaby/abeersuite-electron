@@ -31,7 +31,6 @@ type ProductListItem = {
     name: string;
     stock: number;
     lowStockThreshold: number;
-    costPaise: number | null;
     isLow: boolean;
     unit: { code: string; label: string };
     brand: { name: string } | null;
@@ -59,7 +58,8 @@ type ProductDetail = {
     sku: string;
     name: string;
     stock: number | null;
-    costPaise: number | null;
+    /** Derived from LAST_INWARD ledger walk (PR 4 enrichment of the transactions API). */
+    lastPurchasePaise: number | null;
     pricePaise: number | null;
     lowStockThreshold: number;
     unit: { code: string; label: string };
@@ -295,7 +295,7 @@ export default function InventoryDetailsPage() {
                                 />
                                 <StatBox
                                     label="Cost Price"
-                                    value={detail.product.costPaise != null ? fmt(detail.product.costPaise / 100) : "—"}
+                                    value={detail.product.lastPurchasePaise != null ? fmt(detail.product.lastPurchasePaise / 100) : "—"}
                                 />
                                 <StatBox
                                     label="Stock Qty"
@@ -305,8 +305,8 @@ export default function InventoryDetailsPage() {
                                 <StatBox
                                     label="Stock Value"
                                     value={
-                                        detail.product.costPaise != null && (detail.product.stock ?? 0) > 0
-                                            ? fmt(((detail.product.stock ?? 0) * detail.product.costPaise) / 100)
+                                        detail.product.lastPurchasePaise != null && (detail.product.stock ?? 0) > 0
+                                            ? fmt(((detail.product.stock ?? 0) * detail.product.lastPurchasePaise) / 100)
                                             : "—"
                                     }
                                 />

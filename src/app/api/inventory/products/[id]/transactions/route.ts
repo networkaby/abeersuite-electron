@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 
 
 // GET /api/inventory/products/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -41,6 +42,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             },
         });
         if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+
+        const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
+        const lastPurchasePaise = lastInward.get(product.id) ?? null;
 
         const lines = await prisma.invVoucherLine.findMany({
             where: {
@@ -87,7 +91,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             unitCode: product.unit.code,
         }));
 
-        return NextResponse.json({ product, transactions });
+        return NextResponse.json({
+            product: { ...product, lastPurchasePaise },
+            transactions,
+        });
     } catch (e) {
         return handleApiError(e, "Failed to fetch product transactions");
     }

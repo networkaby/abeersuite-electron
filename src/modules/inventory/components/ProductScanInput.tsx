@@ -25,10 +25,11 @@ export type ScannedProduct = {
     sku:       string;
     name:      string;
     stock:     number | null;
-    /** Last purchase / cost price in paise — used to seed line rate on
-     *  manufacturing-style vouchers so consumption/production carry the
-     *  product's cost basis. null when no cost is tracked yet. */
-    costPaise: number | null;
+    /** Last inward rate in paise (LAST_INWARD walk) — used to seed line rate
+     *  on manufacturing-style vouchers so consumption/production carry the
+     *  product's cost basis. null when no inward history exists.
+     *  Renamed from `costPaise` in PR 4 of noble-boole. */
+    lastPurchasePaise: number | null;
     unit:      { code: string } | null;
 };
 
@@ -131,7 +132,7 @@ export function ProductScanInput({
     }, [open]);
 
     const pick = useCallback((p: Option) => {
-        onScan({ id: p.id, sku: p.sku, name: p.name, stock: p.stock, costPaise: p.costPaise ?? null, unit: p.unit });
+        onScan({ id: p.id, sku: p.sku, name: p.name, stock: p.stock, lastPurchasePaise: p.lastPurchasePaise ?? null, unit: p.unit });
         setQuery("");
         setOpen(false);
         setHighlighted(0);
@@ -161,7 +162,7 @@ export function ProductScanInput({
                 axios.get<ScannedProduct | null>("/api/inventory/products/lookup", { params: { code } })
                     .then((r) => {
                         if (r.data) {
-                            pick({ ...r.data, costPaise: r.data.costPaise ?? null, barcode1: null });
+                            pick({ ...r.data, lastPurchasePaise: r.data.lastPurchasePaise ?? null, barcode1: null });
                         } else {
                             toast.error(`No product matches "${code}"`);
                             inputRef.current?.select();

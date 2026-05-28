@@ -693,7 +693,7 @@ function QuickCreateProductDialog({
     const [units, setUnits] = useState<UnitOpt[]>([]);
     const [form, setForm] = useState({
         sku: "", name: "", unitId: "",
-        costRupees: "", priceRupees: "",
+        priceRupees: "",
         openingQty: "", openingRate: "", openingDate: new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
@@ -706,7 +706,7 @@ function QuickCreateProductDialog({
     }, [open]);
 
     const reset = () => setForm({
-        sku: "", name: "", unitId: "", costRupees: "", priceRupees: "",
+        sku: "", name: "", unitId: "", priceRupees: "",
         openingQty: "", openingRate: "", openingDate: new Date().toISOString().slice(0, 10),
     });
 
@@ -728,7 +728,6 @@ function QuickCreateProductDialog({
                 sku:        form.sku.trim(),
                 name:       form.name.trim(),
                 unitId:     Number(form.unitId),
-                costPaise:  rupeesToPaise(form.costRupees),
                 pricePaise: rupeesToPaise(form.priceRupees),
                 openingStock:     hasOpening ? openingQty                                           : null,
                 openingRate:      hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
@@ -773,17 +772,11 @@ function QuickCreateProductDialog({
                         <Label>Name</Label>
                         <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Envelope A4 — white" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label>Cost (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
-                            <Input type="text" inputMode="decimal" value={form.costRupees}
-                                onChange={(e) => setForm((f) => ({ ...f, costRupees: e.target.value }))} placeholder="0.00" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Sale price (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
-                            <Input type="text" inputMode="decimal" value={form.priceRupees}
-                                onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))} placeholder="0.00" />
-                        </div>
+                    <div className="space-y-1.5">
+                        <Label>Sale price (₹) <span className="text-muted-foreground text-xs">— optional</span></Label>
+                        <Input type="text" inputMode="decimal" value={form.priceRupees}
+                            onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))} placeholder="0.00" />
+                        <p className="text-[11px] text-muted-foreground">Cost comes from the Opening Rate below (or future Purchases).</p>
                     </div>
                     {/* Opening stock — written straight to InvProduct columns. */}
                     <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
