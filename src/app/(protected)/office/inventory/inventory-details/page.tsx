@@ -124,13 +124,18 @@ export default function InventoryDetailsPage() {
     const [from, setFrom] = useState(startOfYear());
     const [to, setTo] = useState(today());
     const [editOpen, setEditOpen] = useState(false);
+    const [createOpen, setCreateOpen] = useState(false);
 
-    useEffect(() => {
+    const loadProducts = useCallback(() => {
         axios
             .get<{ rows: ProductListItem[] }>("/api/inventory/reports/stock-summary")
             .then((r) => setProducts(r.data.rows))
             .catch(() => toast.error("Failed to load products"));
     }, []);
+
+    useEffect(() => {
+        loadProducts();
+    }, [loadProducts]);
 
     const loadDetail = useCallback((id: number, f: string, t: string) => {
         setDetailLoading(true);
@@ -211,7 +216,7 @@ export default function InventoryDetailsPage() {
                 search={search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Search name or SKU…"
-                onAdd={() => router.push("/office/inventory/products")}
+                onAdd={() => setCreateOpen(true)}
                 addLabel="Add Product"
                 isEmpty={filtered.length === 0}
                 emptyMessage={search ? "No matches" : "No products"}
@@ -483,6 +488,12 @@ export default function InventoryDetailsPage() {
                 onOpenChange={setEditOpen}
                 editId={selectedId}
                 onSaved={handleRefresh}
+            />
+            <InvProductDialog
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                editId={null}
+                onSaved={loadProducts}
             />
         </div>
     );
