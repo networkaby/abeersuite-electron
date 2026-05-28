@@ -97,61 +97,61 @@ export default function OpeningBalancePage() {
 
     return (
         <ScrollArea className="h-full" type="always">
-            <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
-            <div>
-                <h1 className="text-2xl font-bold">Opening Balance</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                    Per-account opening figures for migration from another system. Set <strong>Books Beginning From</strong>
-                    {" "}on the company, then enter balances here as of that date.
-                </p>
-            </div>
-
-            {balanced ? (
-                <div className="rounded-lg border border-green-200 bg-green-50 p-4 flex items-center gap-3 text-sm">
-                    <CheckCircle size={18} className="text-green-700" />
-                    <div>
-                        <p className="font-medium text-green-700">Opening balances reconciled</p>
-                        <p className="text-green-700/80 text-xs">Total debits equal total credits — no suspense balance.</p>
-                    </div>
+            <div className="max-w-5xl mx-auto space-y-6 px-0 pt-3 pb-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Opening Balance</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Per-account opening figures for migration from another system. Set <strong>Books Beginning From</strong>
+                        {" "}on the company, then enter balances here as of that date.
+                    </p>
                 </div>
-            ) : (
-                <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 flex items-start gap-3 text-sm">
-                    <AlertTriangle size={18} className="text-yellow-700 mt-0.5" />
-                    <div className="space-y-1">
-                        <p className="font-medium text-yellow-800">Opening balance unreconciled</p>
-                        <p className="text-yellow-800/80 text-xs">
-                            ₹ {fmt(data.suspenseAmount)} {data.suspenseSide} parked in <strong>Difference in Opening Balances</strong> suspense ledger.
-                            Reports show this as a balancing line. Reconcile by adding the missing capital / loan / equity entry below.
-                        </p>
+
+                {balanced ? (
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-4 flex items-center gap-3 text-sm">
+                        <CheckCircle size={18} className="text-green-700" />
+                        <div>
+                            <p className="font-medium text-green-700">Opening balances reconciled</p>
+                            <p className="text-green-700/80 text-xs">Total debits equal total credits — no suspense balance.</p>
+                        </div>
                     </div>
+                ) : (
+                    <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 flex items-start gap-3 text-sm">
+                        <AlertTriangle size={18} className="text-yellow-700 mt-0.5" />
+                        <div className="space-y-1">
+                            <p className="font-medium text-yellow-800">Opening balance unreconciled</p>
+                            <p className="text-yellow-800/80 text-xs">
+                                ₹ {fmt(data.suspenseAmount)} {data.suspenseSide} parked in <strong>Difference in Opening Balances</strong> suspense ledger.
+                                Reports show this as a balancing line. Reconcile by adding the missing capital / loan / equity entry below.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-4">
+                    <SummaryCard label="Opening Debits" value={data.openingDrTotal} color="text-blue-700" />
+                    <SummaryCard label="Opening Credits" value={data.openingCrTotal} color="text-orange-700" />
+                    <SummaryCard label="Opening Stock" value={data.openingStockTotal} color="text-foreground" />
                 </div>
-            )}
 
-            <div className="grid grid-cols-3 gap-4">
-                <SummaryCard label="Opening Debits"    value={data.openingDrTotal}    color="text-blue-700" />
-                <SummaryCard label="Opening Credits"   value={data.openingCrTotal}    color="text-orange-700" />
-                <SummaryCard label="Opening Stock"     value={data.openingStockTotal} color="text-foreground" />
-            </div>
+                <AccountOpeningSection
+                    accounts={data.accounts}
+                    allAccounts={allAccounts}
+                    onChanged={load}
+                    onAccountListChanged={loadAccounts}
+                    openingDrTotal={data.openingDrTotal}
+                    openingCrTotal={data.openingCrTotal}
+                    balanced={balanced}
+                    suspenseSide={data.suspenseSide}
+                    suspenseAmount={data.suspenseAmount}
+                />
 
-            <AccountOpeningSection
-                accounts={data.accounts}
-                allAccounts={allAccounts}
-                onChanged={load}
-                onAccountListChanged={loadAccounts}
-                openingDrTotal={data.openingDrTotal}
-                openingCrTotal={data.openingCrTotal}
-                balanced={balanced}
-                suspenseSide={data.suspenseSide}
-                suspenseAmount={data.suspenseAmount}
-            />
-
-            <ProductOpeningSection
-                products={data.products}
-                allProducts={allProducts}
-                onChanged={load}
-                onProductListChanged={loadProducts}
-                openingStockTotal={data.openingStockTotal}
-            />
+                <ProductOpeningSection
+                    products={data.products}
+                    allProducts={allProducts}
+                    onChanged={load}
+                    onProductListChanged={loadProducts}
+                    openingStockTotal={data.openingStockTotal}
+                />
             </div>
         </ScrollArea>
     );
@@ -169,23 +169,23 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
 function AccountOpeningSection({
     accounts, allAccounts, onChanged, onAccountListChanged, openingDrTotal, openingCrTotal, balanced, suspenseSide, suspenseAmount,
 }: {
-    accounts:             AccountRow[];
-    allAccounts:          AllAccount[];
-    onChanged:            () => void;
+    accounts: AccountRow[];
+    allAccounts: AllAccount[];
+    onChanged: () => void;
     onAccountListChanged: () => Promise<void> | void;
-    openingDrTotal:       number;
-    openingCrTotal:       number;
-    balanced:             boolean;
-    suspenseSide:         "DEBIT" | "CREDIT" | null;
-    suspenseAmount:       number;
+    openingDrTotal: number;
+    openingCrTotal: number;
+    balanced: boolean;
+    suspenseSide: "DEBIT" | "CREDIT" | null;
+    suspenseAmount: number;
 }) {
     const [showAdd, setShowAdd] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({
         accountId: 0,
-        amount:    "",
-        type:      "DEBIT" as "DEBIT" | "CREDIT",
-        asOfDate:  new Date().toISOString().slice(0, 10),
+        amount: "",
+        type: "DEBIT" as "DEBIT" | "CREDIT",
+        asOfDate: new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
 
@@ -203,8 +203,8 @@ function AccountOpeningSection({
         if (existing && existing.openingBalanceType) {
             setForm((f) => ({
                 ...f,
-                amount:   String(existing.openingBalance ?? ""),
-                type:     existing.openingBalanceType ?? "DEBIT",
+                amount: String(existing.openingBalance ?? ""),
+                type: existing.openingBalanceType ?? "DEBIT",
                 asOfDate: existing.openingBalanceDate?.slice(0, 10) ?? f.asOfDate,
             }));
         }
@@ -218,8 +218,8 @@ function AccountOpeningSection({
         setSaving(true);
         try {
             await axios.put(`/api/accountancy/accounts/${form.accountId}/opening`, {
-                amount:   amount === 0 ? null : amount,
-                type:     amount === 0 ? null : form.type,
+                amount: amount === 0 ? null : amount,
+                type: amount === 0 ? null : form.type,
                 asOfDate: amount === 0 ? null : form.asOfDate,
             });
             toast.success("Opening balance saved");
@@ -345,7 +345,7 @@ function AccountOpeningSection({
                         {!balanced && (
                             <tr>
                                 <td colSpan={2} className="px-5 py-2 text-muted-foreground italic">Difference in Opening Balances (suspense)</td>
-                                <td className="px-5 py-2 text-right font-mono">{suspenseSide === "DEBIT"  ? fmt(suspenseAmount) : ""}</td>
+                                <td className="px-5 py-2 text-right font-mono">{suspenseSide === "DEBIT" ? fmt(suspenseAmount) : ""}</td>
                                 <td className="px-5 py-2 text-right font-mono">{suspenseSide === "CREDIT" ? fmt(suspenseAmount) : ""}</td>
                             </tr>
                         )}
@@ -359,19 +359,19 @@ function AccountOpeningSection({
 function ProductOpeningSection({
     products, allProducts, onChanged, onProductListChanged, openingStockTotal,
 }: {
-    products:             ProductRow[];
-    allProducts:          AllProduct[];
-    onChanged:            () => void;
+    products: ProductRow[];
+    allProducts: AllProduct[];
+    onChanged: () => void;
     onProductListChanged: () => Promise<void> | void;
-    openingStockTotal:    number;
+    openingStockTotal: number;
 }) {
     const [showAdd, setShowAdd] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({
         productId: 0,
-        qty:       "",
-        rate:      "",
-        asOfDate:  new Date().toISOString().slice(0, 10),
+        qty: "",
+        rate: "",
+        asOfDate: new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
 
@@ -388,8 +388,8 @@ function ProductOpeningSection({
         if (existing) {
             setForm((f) => ({
                 ...f,
-                qty:      String(existing.openingStock ?? ""),
-                rate:     String(existing.openingRate ?? ""),
+                qty: String(existing.openingStock ?? ""),
+                rate: String(existing.openingRate ?? ""),
                 asOfDate: existing.openingStockDate?.slice(0, 10) ?? f.asOfDate,
             }));
         }
@@ -404,8 +404,8 @@ function ProductOpeningSection({
         setSaving(true);
         try {
             await axios.put(`/api/inventory/products/${form.productId}/opening`, {
-                qty:      qty === 0 ? null : qty,
-                rate:     qty === 0 ? null : (Number.isFinite(rate) ? rate : null),
+                qty: qty === 0 ? null : qty,
+                rate: qty === 0 ? null : (Number.isFinite(rate) ? rate : null),
                 asOfDate: qty === 0 ? null : form.asOfDate,
             });
             toast.success("Opening stock saved");
@@ -547,8 +547,8 @@ function QuickCreateAccountDialog({
         normalBalance: "DEBIT" as "DEBIT" | "CREDIT",
         // Optional opening balance — written straight to the new Account row.
         openingAmount: "",
-        openingType:   "DEBIT" as "DEBIT" | "CREDIT",
-        openingDate:   new Date().toISOString().slice(0, 10),
+        openingType: "DEBIT" as "DEBIT" | "CREDIT",
+        openingDate: new Date().toISOString().slice(0, 10),
     });
     const [saving, setSaving] = useState(false);
 
@@ -576,19 +576,19 @@ function QuickCreateAccountDialog({
 
     const save = async () => {
         if (!form.code.trim() || !form.name.trim()) { toast.error("Code and name required"); return; }
-        if (!form.groupId)                          { toast.error("Pick a group"); return; }
+        if (!form.groupId) { toast.error("Pick a group"); return; }
         const opening = parseFloat(form.openingAmount);
         const hasOpening = Number.isFinite(opening) && opening > 0;
         setSaving(true);
         try {
             const { data } = await axios.post<{ id: number }>("/api/accountancy/gl-accounts", {
-                code:          form.code.trim(),
-                name:          form.name.trim(),
-                groupId:       Number(form.groupId),
+                code: form.code.trim(),
+                name: form.name.trim(),
+                groupId: Number(form.groupId),
                 normalBalance: form.normalBalance,
-                openingBalance:     hasOpening ? opening               : null,
-                openingBalanceType: hasOpening ? form.openingType      : null,
-                openingBalanceDate: hasOpening ? form.openingDate      : null,
+                openingBalance: hasOpening ? opening : null,
+                openingBalanceType: hasOpening ? form.openingType : null,
+                openingBalanceDate: hasOpening ? form.openingDate : null,
             });
             toast.success(`Account "${form.name}" created`);
             reset();
@@ -718,20 +718,20 @@ function QuickCreateProductDialog({
 
     const save = async () => {
         if (!form.sku.trim() || !form.name.trim()) { toast.error("SKU and name required"); return; }
-        if (!form.unitId)                          { toast.error("Pick a unit"); return; }
-        const openingQty  = parseFloat(form.openingQty);
+        if (!form.unitId) { toast.error("Pick a unit"); return; }
+        const openingQty = parseFloat(form.openingQty);
         const openingRate = parseFloat(form.openingRate);
-        const hasOpening  = Number.isFinite(openingQty) && openingQty > 0;
+        const hasOpening = Number.isFinite(openingQty) && openingQty > 0;
         setSaving(true);
         try {
             const { data } = await axios.post<{ id: number }>("/api/inventory/products", {
-                sku:        form.sku.trim(),
-                name:       form.name.trim(),
-                unitId:     Number(form.unitId),
+                sku: form.sku.trim(),
+                name: form.name.trim(),
+                unitId: Number(form.unitId),
                 pricePaise: rupeesToPaise(form.priceRupees),
-                openingStock:     hasOpening ? openingQty                                           : null,
-                openingRate:      hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
-                openingStockDate: hasOpening ? form.openingDate                                     : null,
+                openingStock: hasOpening ? openingQty : null,
+                openingRate: hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
+                openingStockDate: hasOpening ? form.openingDate : null,
             });
             toast.success(`Product "${form.name}" created`);
             reset();
