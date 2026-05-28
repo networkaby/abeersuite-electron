@@ -208,7 +208,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                     <h2 className="text-sm font-semibold">Stock valuation method</h2>
                     <p className="text-xs text-muted-foreground">
                         Drives the Balance Sheet closing stock, stock-summary, and
-                        pricing fallback when a product or strategy doesn't pick its own method.
+                        pricing fallback when a product or strategy doesn&apos;t pick its own method.
                         BS / stock-summary pages can preview other methods without changing this default.
                     </p>
                 </div>

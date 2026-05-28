@@ -59,6 +59,32 @@ type SortKey =
     | "saleRate" | "saleValue" | "profit" | "margin";
 type SortDir = "asc" | "desc";
 
+function SortHeader({
+    k, label, align = "left", sortKey, sortDir, toggleSort,
+}: {
+    k: SortKey;
+    label: string;
+    align?: "left" | "right";
+    sortKey: SortKey;
+    sortDir: SortDir;
+    toggleSort: (k: SortKey) => void;
+}) {
+    const active = sortKey === k;
+    const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+    return (
+        <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
+            <button
+                type="button"
+                onClick={() => toggleSort(k)}
+                className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+            >
+                <span>{label}</span>
+                <Icon size={11} className={active ? "" : "opacity-40"} />
+            </button>
+        </th>
+    );
+}
+
 const METHOD_LABELS: Record<ValuationMethod, string> = {
     LAST_INWARD:  "Last Inward",
     WEIGHTED_AVG: "Weighted Avg",
@@ -74,7 +100,6 @@ export default function StockSummaryPage() {
     const pathname = usePathname();
     const params = useSearchParams();
     const refSource = params.get("ref");
-    const asOf = params.get("asOf");
 
     // URL-synced state
     const [view, setViewState] = useState<View>(() => {
@@ -287,22 +312,7 @@ export default function StockSummaryPage() {
     const showCatBrandCols = !showProfit;
 
     // ── Render helpers ────────────────────────────────────────────────────────
-    const SortHeader = ({ k, label, align = "left" }: { k: SortKey; label: string; align?: "left" | "right" }) => {
-        const active = sortKey === k;
-        const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
-        return (
-            <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
-                <button
-                    type="button"
-                    onClick={() => toggleSort(k)}
-                    className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
-                >
-                    <span>{label}</span>
-                    <Icon size={11} className={active ? "" : "opacity-40"} />
-                </button>
-            </th>
-        );
-    };
+    const sortProps = { sortKey, sortDir, toggleSort };
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
@@ -642,19 +652,19 @@ export default function StockSummaryPage() {
                     <table className="w-full text-sm">
                         <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
                             <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                <SortHeader k="name" label="Name" />
-                                <SortHeader k="group" label="Group" />
-                                <SortHeader k="category" label="Category" />
-                                <SortHeader k="brand" label="Brand" />
-                                <SortHeader k="quantity" label="Quantity" align="right" />
-                                <SortHeader k="rate" label="Rate" align="right" />
-                                <SortHeader k="value" label="Value" align="right" />
+                                <SortHeader k="name" label="Name" {...sortProps} />
+                                <SortHeader k="group" label="Group" {...sortProps} />
+                                <SortHeader k="category" label="Category" {...sortProps} />
+                                <SortHeader k="brand" label="Brand" {...sortProps} />
+                                <SortHeader k="quantity" label="Quantity" align="right" {...sortProps} />
+                                <SortHeader k="rate" label="Rate" align="right" {...sortProps} />
+                                <SortHeader k="value" label="Value" align="right" {...sortProps} />
                                 {showProfit && (
                                     <>
-                                        <SortHeader k="saleRate" label="Sale Rate" align="right" />
-                                        <SortHeader k="saleValue" label="Sale Value" align="right" />
-                                        <SortHeader k="profit" label="Profit" align="right" />
-                                        <SortHeader k="margin" label="Margin %" align="right" />
+                                        <SortHeader k="saleRate" label="Sale Rate" align="right" {...sortProps} />
+                                        <SortHeader k="saleValue" label="Sale Value" align="right" {...sortProps} />
+                                        <SortHeader k="profit" label="Profit" align="right" {...sortProps} />
+                                        <SortHeader k="margin" label="Margin %" align="right" {...sortProps} />
                                     </>
                                 )}
                                 <th className="px-3 py-2 w-10"></th>

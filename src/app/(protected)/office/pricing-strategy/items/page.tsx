@@ -554,11 +554,13 @@ export default function PricingItemsPage() {
                                         {paise(lp.pricePaise)}
                                     </span>
                                     {lp.cappedAtMrp ? (
-                                        <ShieldAlert
-                                            className="size-3.5 text-amber-600"
+                                        <span
+                                            className="inline-flex"
                                             aria-label={`Capped at MRP ${paise(item.mrpPaise)}`}
                                             title={`Capped at MRP ${paise(item.mrpPaise)}`}
-                                        />
+                                        >
+                                            <ShieldAlert className="size-3.5 text-amber-600" />
+                                        </span>
                                     ) : null}
                                 </div>
                                 <div className="text-[10px] text-muted-foreground">

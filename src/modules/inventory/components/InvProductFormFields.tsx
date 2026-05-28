@@ -572,7 +572,7 @@ export function InvProductFormFields({
 
             <TabsContent value="pricing" className={tabPanel}>
                 <p className="text-xs text-muted-foreground mb-3">
-                    All amounts in rupees (₹). Cost is derived from the Opening tab's
+                    All amounts in rupees (₹). Cost is derived from the Opening tab&apos;s
                     opening rate + subsequent Purchase vouchers — set it there, not here.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">

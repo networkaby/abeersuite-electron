@@ -903,7 +903,13 @@ function parseAttrValue(op: AttrOp, raw: string): AttrFilterEntry {
     if (op === "in") {
         const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
         if (parts.length === 0) throw new Error("'in' needs at least one value (comma-separated)");
-        return { op, value: parts.map(coerce) };
+        // `in` lists only hold scalars (string | number); a "true"/"false" entry
+        // stays a literal string rather than coercing to boolean.
+        const value: (string | number)[] = parts.map((p) => {
+            const c = coerce(p);
+            return typeof c === "boolean" ? p : c;
+        });
+        return { op, value };
     }
     if (op === "between") {
         const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);

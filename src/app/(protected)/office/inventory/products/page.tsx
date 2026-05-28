@@ -977,10 +977,10 @@ function ColFilter({
         };
     }, [open]);
 
-    // Reset query + focus the search input each time the popover opens.
+    // Focus the search input each time the popover opens. (Query is reset in the
+    // toggle handler so we don't call setState inside this effect.)
     useEffect(() => {
         if (!open) return;
-        setQuery("");
         requestAnimationFrame(() => inputRef.current?.focus());
     }, [open]);
 
@@ -1006,7 +1006,7 @@ function ColFilter({
         <div ref={wrapRef} className="relative">
             <button
                 type="button"
-                onClick={() => setOpen((o) => !o)}
+                onClick={() => { if (!open) setQuery(""); setOpen((o) => !o); }}
                 aria-label="Filter column"
                 title={active ? `Filter (${selected.size})` : "Filter"}
                 className={`inline-flex items-center justify-center size-5 rounded hover:bg-muted ${active ? "text-primary" : "text-muted-foreground/60"}`}
@@ -1170,17 +1170,13 @@ function CellSelect({
         };
     }, [open]);
 
-    // Reset query + focus the input each time the popover opens; reset highlight
-    // whenever the filter changes.
+    // Focus the input each time the popover opens. (Query + highlight are reset in
+    // the toggle/onChange handlers so we don't call setState inside this effect.)
     useEffect(() => {
-        if (open) {
-            setQuery("");
-            setHighlight(0);
-            // Focus on next tick so the input is mounted.
-            requestAnimationFrame(() => inputRef.current?.focus());
-        }
+        if (!open) return;
+        // Focus on next tick so the input is mounted.
+        requestAnimationFrame(() => inputRef.current?.focus());
     }, [open]);
-    useEffect(() => { setHighlight(0); }, [query]);
 
     // Scroll the highlighted item into view on arrow nav.
     useEffect(() => {
@@ -1208,7 +1204,7 @@ function CellSelect({
         <div ref={wrapRef} className="relative">
             <button
                 type="button"
-                onClick={() => setOpen((o) => !o)}
+                onClick={() => { if (!open) { setQuery(""); setHighlight(0); } setOpen((o) => !o); }}
                 className="flex h-8 w-full items-center justify-between gap-1 rounded-md border border-input bg-transparent px-2 text-left text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 aria-haspopup="listbox"
                 aria-expanded={open}
@@ -1237,7 +1233,7 @@ function CellSelect({
                         <input
                             ref={inputRef}
                             value={query}
-                            onChange={(e) => setQuery(e.target.value)}
+                            onChange={(e) => { setQuery(e.target.value); setHighlight(0); }}
                             onKeyDown={(e) => {
                                 if (e.key === "ArrowDown") {
                                     e.preventDefault();

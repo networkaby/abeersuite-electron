@@ -93,15 +93,12 @@ export function SearchableSelect<V extends string | number>({
         };
     }, [open]);
 
-    // Reset query + focus the search input each time the popover opens.
+    // Focus the search input each time the popover opens. (Query + highlight are
+    // reset in the toggle/onChange handlers so we don't call setState in an effect.)
     useEffect(() => {
         if (!open) return;
-        setQuery("");
-        setHighlight(0);
         requestAnimationFrame(() => inputRef.current?.focus());
     }, [open]);
-
-    useEffect(() => { setHighlight(0); }, [query]);
 
     useEffect(() => {
         if (!open || !listRef.current) return;
@@ -118,7 +115,7 @@ export function SearchableSelect<V extends string | number>({
         <div ref={wrapRef} className="relative">
             <button
                 type="button"
-                onClick={() => setOpen((o) => !o)}
+                onClick={() => { if (!open) { setQuery(""); setHighlight(0); } setOpen((o) => !o); }}
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={ariaLabel}
@@ -154,7 +151,7 @@ export function SearchableSelect<V extends string | number>({
                         <input
                             ref={inputRef}
                             value={query}
-                            onChange={(e) => setQuery(e.target.value)}
+                            onChange={(e) => { setQuery(e.target.value); setHighlight(0); }}
                             onKeyDown={(e) => {
                                 if (e.key === "ArrowDown") {
                                     e.preventDefault();
