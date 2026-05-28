@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDirectDatabaseUrl } from "@/shared/lib/backup/directDatabaseUrl";
+import { describeSpawnError } from "@/shared/lib/backup/spawnError";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,12 @@ export async function POST() {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    const result = await runPgDump(directUrl);
+    let result: { code: number | null; stdout: Buffer; stderr: string };
+    try {
+        result = await runPgDump(directUrl);
+    } catch (err) {
+        return Response.json({ error: describeSpawnError(err, "pg_dump") }, { status: 500 });
+    }
     if (result.code !== 0) {
         return Response.json(
             { error: `pg_dump exited with code ${result.code}`, stderr: result.stderr.slice(-4000) },

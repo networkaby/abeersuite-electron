@@ -6,6 +6,7 @@ import { join } from "path";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { getDirectDatabaseUrl } from "@/shared/lib/backup/directDatabaseUrl";
+import { describeSpawnError } from "@/shared/lib/backup/spawnError";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,8 @@ export async function POST(req: Request) {
             );
         }
         return Response.json({ ok: true, log: stderr.slice(-4000) });
+    } catch (err) {
+        return Response.json({ error: describeSpawnError(err, "pg_restore") }, { status: 500 });
     } finally {
         await unlink(tmpPath).catch(() => {});
     }
