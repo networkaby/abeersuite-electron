@@ -32,6 +32,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 stock: true,
                 pricePaise: true,
                 lowStockThreshold: true,
+                openingStock: true,
+                openingRate: true,
+                openingValue: true,
+                openingStockDate: true,
                 unit: { select: { code: true, label: true } },
                 category: { select: { name: true } },
                 brand: { select: { name: true } },
@@ -76,7 +80,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             orderBy: { voucher: { date: "desc" } },
         });
 
-        const transactions = lines.map((line) => ({
+        type TxRow = {
+            lineId:    number;
+            voucherId: number;
+            type:      string;
+            reference: string;
+            date:      Date;
+            partyName: string | null;
+            partyType: string | null;
+            partyId:   number | null;
+            quantity:  number;
+            rate:      number;
+            amount:    number;
+            unitCode:  string;
+            /** "N/A" for synthetic rows (opening); real rows leave it undefined
+             *  so the existing receivables/payables resolver can fill it in. */
+            paymentStatus?: "PAID" | "PARTIAL" | "UNPAID" | "N/A";
+        };
+        const transactions: TxRow[] = lines.map((line) => ({
             lineId: line.id,
             voucherId: line.voucher.id,
             type: line.voucher.type,
@@ -90,6 +111,39 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             amount: toNumber(line.amount),
             unitCode: product.unit.code,
         }));
+
+        // Synthetic opening-balance row — always prepended when openingStock > 0
+        // so the user can see where their on-hand baseline came from. Dated to
+        // openingStockDate (defaults to epoch when unset). Carries a negative
+        // lineId / voucherId so the row never collides with a real voucher row.
+        const openingQty = product.openingStock != null ? toNumber(product.openingStock) : 0;
+        if (openingQty > 0) {
+            const openingDate = product.openingStockDate ?? new Date(0);
+            // Honour the period filter when an explicit openingStockDate is set
+            // and falls fully outside the window; otherwise always show it.
+            const dateOk = product.openingStockDate == null
+                || ((!from || openingDate >= from) && (!to || openingDate <= to))
+                || (to && openingDate < to);
+            if (dateOk) {
+                transactions.push({
+                    lineId:    -product.id,           // unique synthetic key, never collides
+                    voucherId: -1,                    // no real voucher → editFormUrl returns null
+                    type:      "OPENING",
+                    reference: "Opening balance",
+                    date:      openingDate,
+                    partyName: null,
+                    partyType: null,
+                    partyId:   null,
+                    quantity:  openingQty,
+                    rate:      product.openingRate != null ? toNumber(product.openingRate) : 0,
+                    amount:    product.openingValue != null ? toNumber(product.openingValue) : 0,
+                    unitCode:  product.unit.code,
+                    paymentStatus: "N/A",   // suppress the receivables/payables badge
+                });
+                // Keep newest-first ordering; opening usually slides to the bottom.
+                transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+            }
+        }
 
         return NextResponse.json({
             product: { ...product, lastPurchasePaise },

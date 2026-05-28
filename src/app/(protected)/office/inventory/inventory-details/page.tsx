@@ -85,6 +85,7 @@ const TYPE_COLORS: Record<string, string> = {
     PURCHASE_RETURN: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
     GRN: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300",
     CHALLAN: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
+    OPENING: "bg-slate-200 text-slate-700 dark:bg-slate-700/40 dark:text-slate-300",
 };
 
 function typeLabel(type: string): string {
@@ -441,7 +442,9 @@ export default function InventoryDetailsPage() {
                                                             )}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                            {formatDate(tx.date)}
+                                                            {tx.type === "OPENING" && new Date(tx.date).getFullYear() === 1970
+                                                                ? <span className="text-muted-foreground/50">—</span>
+                                                                : formatDate(tx.date)}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-right font-mono text-xs">
                                                             {tx.quantity} {tx.unitCode}
