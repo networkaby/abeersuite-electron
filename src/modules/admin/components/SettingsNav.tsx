@@ -17,7 +17,7 @@ const GROUP_SLUGS: string[][] = [
     ["org-defaults", "year-ending"],           // org config
     ["statuses", "sub-statuses", "pipelines"], // workflow
     ["naming-convention"],                     // inventory
-    ["printer-settings"],                      // hardware
+    ["printer-settings", "qr-display-settings"], // hardware
 ];
 
 function isActive(pathname: string, href: string): boolean {

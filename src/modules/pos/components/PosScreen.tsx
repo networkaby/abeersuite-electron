@@ -33,6 +33,7 @@ import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/Activ
 import { ShiftOpenDialog, type OpenedShift } from "@/modules/pos/components/ShiftOpenDialog";
 import { HandoverAcceptDialog, type PendingHandover } from "@/modules/pos/components/HandoverAcceptDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
+import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -159,6 +160,10 @@ export default function PosScreen() {
     const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
     const [shippingAmtStr, setShippingAmtStr] = useState("");
     const [roundOffStr, setRoundOffStr] = useState("");
+    // Vyapar-style auto round-off: POS auto-derives the round-off to land Total
+    // on a whole rupee. Flips to true the moment the cashier types into the
+    // round-off field directly, so a manual override sticks.
+    const [roundOffManuallyEdited, setRoundOffManuallyEdited] = useState(false);
     const [charges, setCharges] = useState<ChargeRow[]>([]);
     const [chargeAccounts, setChargeAccounts] = useState<GlAccount[]>([]);
 
@@ -280,6 +285,18 @@ export default function PosScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cart.length, snapshot?.account, createDialogOpen, checkoutOpen]);
 
+    // Suppresses the display coordinator while the thank-you screen is holding.
+    // After a successful sale, we want the green "Thank You ₹X" frame to stay
+    // for thankyouDurationMs (relay-side default 4s); without this flag, the
+    // coordinator effect would immediately push the next screen (customer
+    // welcome) and overwrite it.
+    const [displayHold, setDisplayHold] = useState<"thankyou" | null>(null);
+
+    // Leaving the POS page → release the display back to its slideshow.
+    useEffect(() => {
+        return () => { void qrDisplay.idle(); };
+    }, []);
+
     // ── Computed ────────────────────────────────────────────────────────────
 
     const filteredProducts = useMemo(() => {
@@ -308,8 +325,13 @@ export default function PosScreen() {
     const discountPct = snapshot?.discountPct ?? 0;
     const discountAmount = (subtotal * discountPct) / 100;
     const shippingAmt = Math.max(0, parseAmt(shippingAmtStr));
-    const roundOff = parseAmt(roundOffStr);  // signed
     const chargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
+    // Auto round-off: figure out the round-off that lands Total on a whole
+    // rupee by computing the pre-round total first, then deriving the delta.
+    // If the cashier has manually typed a value, that override wins.
+    const naturalTotal = calcVoucherTotals(lineRows, shippingAmt, discountAmount, 0, chargesNet).totalAmount;
+    const autoRoundOff = Math.round(naturalTotal) - naturalTotal;
+    const roundOff = roundOffManuallyEdited ? parseAmt(roundOffStr) : autoRoundOff;
     // Single source of truth — matches /api/inventory/vouchers SALE math via
     // calcVoucherTotals, so server-side validation cannot disagree.
     const { totalAmount: total } = calcVoucherTotals(
@@ -523,11 +545,17 @@ export default function PosScreen() {
                 })),
             });
             toast.success(`Invoice ${data.voucherRef} · ${fmtINR(total)}`);
+            // Show "Thank You ₹X" on the customer display and hold it so the
+            // coordinator doesn't immediately overwrite it as state resets.
+            void qrDisplay.thankyou({ amount: total });
+            setDisplayHold("thankyou");
+            setTimeout(() => setDisplayHold(null), 4500);
             setCart([]);
             setPay({ cashTendered: 0, cashReturn: 0, upi: 0 });
             setExtras([]);
             setShippingAmtStr("");
             setRoundOffStr("");
+            setRoundOffManuallyEdited(false);
             setCharges([]);
             setAdjustmentsOpen(false);
             setCheckoutOpen(false);
@@ -579,6 +607,61 @@ export default function PosScreen() {
     const balanceDue = snapshot?.balanceDue ?? 0;
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
+
+    // ── QR display coordinator ──────────────────────────────────────────────
+    // Single source of truth for what the customer-facing DQ11 shows. Priority:
+    //   1. thank-you (held by displayHold after a successful sale)
+    //   2. UPI QR — checkout open and UPI amount entered
+    //   3. payment summary — checkout open with cash/extras entered
+    //   4. cart — items in cart
+    //   5. customer welcome — customer picked, cart empty
+    //   6. idle slideshow — nothing else
+    // Debounced — the DQ11 takes ~3s to transmit a frame at 921600 baud, so
+    // rapid keystrokes (typing/clearing UPI amount) would queue stale frames.
+    // Wait 250ms after the last state change before pushing.
+    // Fire-and-forget; relay-down never blocks POS.
+    useEffect(() => {
+        if (displayHold === "thankyou") return;
+
+        const timer = setTimeout(() => {
+            if (checkoutOpen && pay.upi > 0) {
+                void qrDisplay.upi({
+                    amount:  pay.upi,
+                    caption: `Pay ₹${pay.upi.toFixed(2)} via UPI`,
+                });
+            } else if (checkoutOpen && (cashNet > 0 || extrasSum > 0)) {
+                void qrDisplay.payment({
+                    total,
+                    cashPaid: cashNet,
+                    balance:  Math.max(0, total - collected),
+                });
+            } else if (cart.length > 0) {
+                void qrDisplay.cart({
+                    items:    cart.map((l) => ({ name: l.name, qty: l.qty, price: l.unitPrice })),
+                    subtotal,
+                    discount: discountAmount,
+                    total,
+                });
+            } else if (snapshot) {
+                void qrDisplay.customer({
+                    name:          snapshot.party.name,
+                    level:         snapshot.customerLevel,
+                    loyaltyPoints: snapshot.loyaltyPoints,
+                    lastVisitAt:   snapshot.lastVisitAt,
+                    discountPct:   snapshot.discountPct,
+                    balanceDue:    snapshot.balanceDue,
+                });
+            } else {
+                void qrDisplay.idle();
+            }
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [
+        displayHold, checkoutOpen, cart, snapshot,
+        cashNet, pay.upi, extrasSum, collected,
+        subtotal, discountAmount, total,
+    ]);
 
     // Credit-limit guard — true when the on-credit portion of this sale would
     // push the customer's outstanding balance past their credit limit.
@@ -886,16 +969,35 @@ export default function PosScreen() {
                                                     />
                                                 </div>
                                                 <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-                                                    <Label htmlFor="pos-roundoff" className="text-xs text-muted-foreground">Round-off</Label>
+                                                    <Label htmlFor="pos-roundoff" className="text-xs text-muted-foreground">
+                                                        Round-off
+                                                        {!roundOffManuallyEdited && Math.abs(autoRoundOff) >= 0.005 && (
+                                                            <span className="ml-1 text-[10px] text-emerald-600">auto</span>
+                                                        )}
+                                                    </Label>
                                                     <Input
                                                         id="pos-roundoff"
                                                         type="text"
                                                         inputMode="decimal"
-                                                        value={roundOffStr}
-                                                        onChange={(e) => setRoundOffStr(numSignedStr(e.target.value))}
-                                                        placeholder="0 (− to lower)"
+                                                        value={
+                                                            roundOffManuallyEdited
+                                                                ? roundOffStr
+                                                                : (Math.abs(autoRoundOff) >= 0.005 ? autoRoundOff.toFixed(2) : "")
+                                                        }
+                                                        onChange={(e) => {
+                                                            setRoundOffManuallyEdited(true);
+                                                            setRoundOffStr(numSignedStr(e.target.value));
+                                                        }}
+                                                        placeholder="auto"
                                                         className="h-7 w-28 text-right text-xs"
-                                                        title="Positive raises bill, negative lowers it"
+                                                        title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
+                                                        onBlur={(e) => {
+                                                            // Empty field → back to auto mode.
+                                                            if (e.target.value.trim() === "") {
+                                                                setRoundOffManuallyEdited(false);
+                                                                setRoundOffStr("");
+                                                            }
+                                                        }}
                                                     />
                                                 </div>
                                                 <div className="space-y-1.5 border-t border-border/60 pt-2">
