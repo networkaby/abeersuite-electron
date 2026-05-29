@@ -27,7 +27,7 @@ Replace paper/spreadsheets across the whole business with one app:
 
 ## 🔄 In flight
 
-_None._ Last batch (Admin + Settings V1.5 in-section nav, 2026-05-20). Pick the next item from §"Next up" below.
+- **2026-05-29 — Backup & Restore → Dropbox, fire-and-forget** (on `dev`, PR pending). `pg_dump`/`pg_restore` run in GitHub Actions; the dump is stored in / read from **Dropbox** instead of Supabase Storage; the UI only triggers the run and no longer polls (close the page anytime). Backup lands in Dropbox; restore picks from a Dropbox list. New `src/shared/lib/backup/dropbox.ts` + `/api/settings/restore/list`; removed `/backup/status`, `/restore/upload-url`, `/restore/status`, `backupStorage.ts`. **Pending before prod:** one-time Dropbox scoped-app setup (`DROPBOX_APP_KEY/SECRET/REFRESH_TOKEN`) in GitHub secrets + Vercel env, then merge `dev → main`.
 
 ---
 

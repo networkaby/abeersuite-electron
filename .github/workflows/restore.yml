@@ -1,17 +1,16 @@
 name: Database Restore
 
-# Triggered on demand by the app (POST /api/settings/restore) after the browser
-# has uploaded a dump to restores/<job_id>.dump in Supabase Storage. Runs
-# pg_restore on a GitHub runner and writes restores/<job_id>.status.json back to
-# Storage so the app can poll for the result.
+# Triggered on demand by the app (POST /api/settings/restore). Downloads the
+# chosen dump from Dropbox and runs pg_restore on a GitHub runner. Fire-and-forget:
+# the app does not wait — check this run's status in the Actions tab.
 #
-# WARNING: this REPLACES the entire database with the uploaded dump.
+# WARNING: this REPLACES the entire database with the selected dump.
 
 on:
   workflow_dispatch:
     inputs:
-      job_id:
-        description: Unique job id (Storage path key)
+      file_path:
+        description: Full Dropbox path of the dump to restore (e.g. /smx-backup-….dump)
         required: true
 
 concurrency:
@@ -24,10 +23,10 @@ jobs:
     timeout-minutes: 20
     env:
       DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      BUCKET: ${{ secrets.BACKUP_BUCKET || 'backups' }}
-      JOB_ID: ${{ github.event.inputs.job_id }}
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+      DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+      FILE_PATH: ${{ github.event.inputs.file_path }}
     steps:
       - name: Install PostgreSQL 17 client
         run: |
@@ -42,31 +41,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
 
-      - name: Ensure Storage bucket exists
+      - name: Download dump from Dropbox
         run: |
           set -euo pipefail
-          HTTP=$(curl -sS -o resp.txt -w "%{http_code}" -X POST \
-            "$SUPABASE_URL/storage/v1/bucket" \
-            -H "Authorization: Bearer $SERVICE_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"$BUCKET\",\"public\":false}")
-          echo "create bucket HTTP $HTTP"; cat resp.txt || true; echo
-          # 200 = created; otherwise OK only if it already exists.
-          if [ "$HTTP" -ge 400 ] && ! grep -qi "already exists" resp.txt; then exit 1; fi
+          ACCESS=$(curl -fsS https://api.dropbox.com/oauth2/token \
+            -d grant_type=refresh_token \
+            -d refresh_token="$DROPBOX_REFRESH_TOKEN" \
+            -u "$DROPBOX_APP_KEY:$DROPBOX_APP_SECRET" | jq -r .access_token)
+          if [ -z "$ACCESS" ] || [ "$ACCESS" = "null" ]; then echo "Dropbox token mint failed"; exit 1; fi
 
-      - name: Download dump from Supabase Storage
-        run: |
-          set -euo pipefail
-          curl -fsS \
-            "$SUPABASE_URL/storage/v1/object/$BUCKET/restores/$JOB_ID.dump" \
-            -H "Authorization: Bearer $SERVICE_KEY" \
-            -o restore.dump
+          HTTP=$(curl -sS -o restore.dump -w "%{http_code}" -X POST \
+            https://content.dropboxapi.com/2/files/download \
+            -H "Authorization: Bearer $ACCESS" \
+            -H "Dropbox-API-Arg: {\"path\":\"$FILE_PATH\"}")
+          echo "download HTTP $HTTP"
+          if [ "$HTTP" -ge 400 ]; then cat restore.dump || true; echo; exit 1; fi
           ls -lh restore.dump
 
       - name: Run pg_restore
-        id: restore
         run: |
-          set +e
+          set -euo pipefail
           # -j runs the data-load and index/constraint phases over several
           # parallel connections — the big win against the high round-trip
           # latency between the runner and the ap-south-1 database.
@@ -74,22 +68,4 @@ jobs:
             --clean --if-exists --no-owner --no-privileges \
             --jobs=4 \
             --dbname "$DIRECT_DATABASE_URL" \
-            restore.dump > restore.log 2>&1
-          echo "code=$?" >> "$GITHUB_OUTPUT"
-          cat restore.log
-
-      - name: Write status back to Storage
-        if: always()
-        run: |
-          set -euo pipefail
-          CODE="${{ steps.restore.outputs.code }}"
-          OK=$([ "$CODE" = "0" ] && echo true || echo false)
-          LOG=$(tail -c 4000 restore.log 2>/dev/null || echo "")
-          jq -n --argjson ok "$OK" --arg code "$CODE" --arg log "$LOG" \
-            '{ok:$ok, code:$code, log:$log}' > status.json
-          curl -fsS -X POST \
-            "$SUPABASE_URL/storage/v1/object/$BUCKET/restores/$JOB_ID.status.json" \
-            -H "Authorization: Bearer $SERVICE_KEY" \
-            -H "Content-Type: application/json" \
-            -H "x-upsert: true" \
-            --data-binary @status.json
+            restore.dump

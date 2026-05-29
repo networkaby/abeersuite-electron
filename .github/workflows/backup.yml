@@ -2,14 +2,14 @@ name: Database Backup
 
 # Triggered on demand by the app (POST /api/settings/backup). Runs pg_dump on a
 # GitHub runner — which has the Postgres client tools that Vercel functions lack
-# — and uploads the dump to a private Supabase Storage bucket. The app then polls
-# Storage for dumps/<job_id>.dump and serves it via a signed URL.
+# — and uploads the dump to Dropbox. Fire-and-forget: the app does not wait; the
+# file just appears in Dropbox a few minutes later.
 
 on:
   workflow_dispatch:
     inputs:
-      job_id:
-        description: Unique job id (Storage path key)
+      file_name:
+        description: Dump file name to create in Dropbox (e.g. smx-backup-….dump)
         required: true
 
 concurrency:
@@ -22,10 +22,11 @@ jobs:
     timeout-minutes: 15
     env:
       DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      BUCKET: ${{ secrets.BACKUP_BUCKET || 'backups' }}
-      JOB_ID: ${{ github.event.inputs.job_id }}
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+      DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+      DROPBOX_FOLDER: ${{ secrets.DROPBOX_FOLDER }}
+      FILE_NAME: ${{ github.event.inputs.file_name }}
     steps:
       - name: Install PostgreSQL 17 client
         run: |
@@ -49,27 +50,26 @@ jobs:
             -f backup.dump
           ls -lh backup.dump
 
-      - name: Ensure Storage bucket exists
+      - name: Upload dump to Dropbox
         run: |
           set -euo pipefail
-          HTTP=$(curl -sS -o resp.txt -w "%{http_code}" -X POST \
-            "$SUPABASE_URL/storage/v1/bucket" \
-            -H "Authorization: Bearer $SERVICE_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"$BUCKET\",\"public\":false}")
-          echo "create bucket HTTP $HTTP"; cat resp.txt || true; echo
-          # 200 = created; otherwise OK only if it already exists.
-          if [ "$HTTP" -ge 400 ] && ! grep -qi "already exists" resp.txt; then exit 1; fi
+          # Mint a short-lived access token from the long-lived refresh token.
+          ACCESS=$(curl -fsS https://api.dropbox.com/oauth2/token \
+            -d grant_type=refresh_token \
+            -d refresh_token="$DROPBOX_REFRESH_TOKEN" \
+            -u "$DROPBOX_APP_KEY:$DROPBOX_APP_SECRET" | jq -r .access_token)
+          if [ -z "$ACCESS" ] || [ "$ACCESS" = "null" ]; then echo "Dropbox token mint failed"; exit 1; fi
 
-      - name: Upload dump to Supabase Storage
-        run: |
-          set -euo pipefail
+          # Normalise folder: "" → app-folder root; otherwise ensure a leading "/".
+          FOLDER="${DROPBOX_FOLDER:-}"
+          if [ -n "$FOLDER" ] && [ "${FOLDER#/}" = "$FOLDER" ]; then FOLDER="/$FOLDER"; fi
+          DEST="$FOLDER/$FILE_NAME"
+
           HTTP=$(curl -sS -o resp.txt -w "%{http_code}" -X POST \
-            "$SUPABASE_URL/storage/v1/object/$BUCKET/dumps/$JOB_ID.dump" \
-            -H "Authorization: Bearer $SERVICE_KEY" \
+            https://content.dropboxapi.com/2/files/upload \
+            -H "Authorization: Bearer $ACCESS" \
+            -H "Dropbox-API-Arg: {\"path\":\"$DEST\",\"mode\":\"overwrite\",\"mute\":true}" \
             -H "Content-Type: application/octet-stream" \
-            -H "x-upsert: true" \
             --data-binary @backup.dump)
-          echo "HTTP $HTTP"
-          cat resp.txt || true
+          echo "upload HTTP $HTTP"; cat resp.txt || true; echo
           test "$HTTP" -lt 400
