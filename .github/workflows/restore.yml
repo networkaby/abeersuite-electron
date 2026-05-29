@@ -67,8 +67,12 @@ jobs:
         id: restore
         run: |
           set +e
+          # -j runs the data-load and index/constraint phases over several
+          # parallel connections — the big win against the high round-trip
+          # latency between the runner and the ap-south-1 database.
           /usr/lib/postgresql/17/bin/pg_restore \
             --clean --if-exists --no-owner --no-privileges \
+            --jobs=4 \
             --dbname "$DIRECT_DATABASE_URL" \
             restore.dump > restore.log 2>&1
           echo "code=$?" >> "$GITHUB_OUTPUT"

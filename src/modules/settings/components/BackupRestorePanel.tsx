@@ -51,7 +51,7 @@ export function BackupRestorePanel() {
                     if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
                     return j?.ready ? j.url ?? null : null;
                 },
-                { timeoutMs: 300_000, intervalMs: 3_000 },
+                { timeoutMs: 600_000, intervalMs: 3_000 },
             );
             if (!url) throw new Error("Timed out waiting for the backup. Check the GitHub Actions run.");
 
@@ -98,7 +98,7 @@ export function BackupRestorePanel() {
             if (!putRes.ok) throw new Error(`Upload failed (HTTP ${putRes.status}).`);
 
             // 2. Trigger the restore run.
-            toast.loading("Restoring… this can take a minute.", { id: progress });
+            toast.loading("Restoring… this can take several minutes. Keep this tab open.", { id: progress });
             const res = await fetch("/api/settings/restore", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -115,7 +115,7 @@ export function BackupRestorePanel() {
                     if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
                     return j?.done ? j : null;
                 },
-                { timeoutMs: 300_000, intervalMs: 4_000 },
+                { timeoutMs: 1_200_000, intervalMs: 5_000 },
             );
             if (!result) throw new Error("Timed out waiting for the restore. Check the GitHub Actions run.");
             if (!result.ok) throw new Error(result.log?.slice(-500) || "Restore failed on the runner.");
