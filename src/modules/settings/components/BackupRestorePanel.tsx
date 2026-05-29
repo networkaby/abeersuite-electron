@@ -51,7 +51,7 @@ export function BackupRestorePanel() {
                     if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
                     return j?.ready ? j.url ?? null : null;
                 },
-                { timeoutMs: 180_000, intervalMs: 3_000 },
+                { timeoutMs: 300_000, intervalMs: 3_000 },
             );
             if (!url) throw new Error("Timed out waiting for the backup. Check the GitHub Actions run.");
 

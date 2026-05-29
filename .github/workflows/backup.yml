@@ -30,10 +30,12 @@ jobs:
       - name: Install PostgreSQL 17 client
         run: |
           set -euo pipefail
-          sudo install -d /usr/share/postgresql-common/pgdg
+          # apt accepts the ASCII-armored key directly — avoids `gpg --dearmor`
+          # which fails under sudo on the runner (cannot open /dev/tty).
+          sudo install -d /usr/share/keyrings
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /usr/share/keyrings/pgdg.asc > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
