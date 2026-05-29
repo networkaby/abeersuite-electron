@@ -1,0 +1,77 @@
+name: Database Restore
+
+# Triggered on demand by the app (POST /api/settings/restore) after the browser
+# has uploaded a dump to restores/<job_id>.dump in Supabase Storage. Runs
+# pg_restore on a GitHub runner and writes restores/<job_id>.status.json back to
+# Storage so the app can poll for the result.
+#
+# WARNING: this REPLACES the entire database with the uploaded dump.
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Unique job id (Storage path key)
+        required: true
+
+concurrency:
+  group: db-restore
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BUCKET: ${{ secrets.BACKUP_BUCKET || 'backups' }}
+      JOB_ID: ${{ github.event.inputs.job_id }}
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Download dump from Supabase Storage
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            "$SUPABASE_URL/storage/v1/object/$BUCKET/restores/$JOB_ID.dump" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -o restore.dump
+          ls -lh restore.dump
+
+      - name: Run pg_restore
+        id: restore
+        run: |
+          set +e
+          /usr/lib/postgresql/17/bin/pg_restore \
+            --clean --if-exists --no-owner --no-privileges \
+            --dbname "$DIRECT_DATABASE_URL" \
+            restore.dump > restore.log 2>&1
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat restore.log
+
+      - name: Write status back to Storage
+        if: always()
+        run: |
+          set -euo pipefail
+          CODE="${{ steps.restore.outputs.code }}"
+          OK=$([ "$CODE" = "0" ] && echo true || echo false)
+          LOG=$(tail -c 4000 restore.log 2>/dev/null || echo "")
+          jq -n --argjson ok "$OK" --arg code "$CODE" --arg log "$LOG" \
+            '{ok:$ok, code:$code, log:$log}' > status.json
+          curl -fsS -X POST \
+            "$SUPABASE_URL/storage/v1/object/$BUCKET/restores/$JOB_ID.status.json" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "x-upsert: true" \
+            --data-binary @status.json

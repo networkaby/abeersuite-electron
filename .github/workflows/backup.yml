@@ -1,0 +1,58 @@
+name: Database Backup
+
+# Triggered on demand by the app (POST /api/settings/backup). Runs pg_dump on a
+# GitHub runner — which has the Postgres client tools that Vercel functions lack
+# — and uploads the dump to a private Supabase Storage bucket. The app then polls
+# Storage for dumps/<job_id>.dump and serves it via a signed URL.
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Unique job id (Storage path key)
+        required: true
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BUCKET: ${{ secrets.BACKUP_BUCKET || 'backups' }}
+      JOB_ID: ${{ github.event.inputs.job_id }}
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Run pg_dump
+        run: |
+          set -euo pipefail
+          /usr/lib/postgresql/17/bin/pg_dump \
+            --format=custom --no-owner --no-privileges \
+            --dbname "$DIRECT_DATABASE_URL" \
+            -f backup.dump
+          ls -lh backup.dump
+
+      - name: Upload dump to Supabase Storage
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            "$SUPABASE_URL/storage/v1/object/$BUCKET/dumps/$JOB_ID.dump" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/octet-stream" \
+            -H "x-upsert: true" \
+            --data-binary @backup.dump

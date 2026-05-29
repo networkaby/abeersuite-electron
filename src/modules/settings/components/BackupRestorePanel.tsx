@@ -7,6 +7,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// Polls `check` every intervalMs until it returns a non-null value or the
+// timeout elapses (then returns null).
+async function pollUntil<T>(
+    check: () => Promise<T | null>,
+    { timeoutMs, intervalMs }: { timeoutMs: number; intervalMs: number },
+): Promise<T | null> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const result = await check();
+        if (result !== null) return result;
+        await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return null;
+}
+
+function stamp() {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
 export function BackupRestorePanel() {
     const [downloading, setDownloading] = useState(false);
     const [file, setFile] = useState<File | null>(null);
@@ -15,28 +36,41 @@ export function BackupRestorePanel() {
 
     async function handleDownload() {
         setDownloading(true);
+        const progress = toast.loading("Preparing backup… this can take up to a minute.");
         try {
             const res = await fetch("/api/settings/backup", { method: "POST" });
-            if (!res.ok) {
-                const json = (await res.json().catch(() => null)) as { error?: string; stderr?: string } | null;
-                throw new Error(json?.stderr || json?.error || `HTTP ${res.status}`);
+            const json = (await res.json().catch(() => null)) as { jobId?: string; error?: string } | null;
+            if (!res.ok || !json?.jobId) {
+                throw new Error(json?.error || `HTTP ${res.status}`);
             }
-            const blob = await res.blob();
-            const disposition = res.headers.get("content-disposition") ?? "";
-            const match = /filename="?([^"]+)"?/i.exec(disposition);
-            const filename = match?.[1] ?? `smx-backup-${Date.now()}.dump`;
 
-            const url = URL.createObjectURL(blob);
+            const url = await pollUntil(
+                async () => {
+                    const r = await fetch(`/api/settings/backup/status?jobId=${json.jobId}`);
+                    const j = (await r.json().catch(() => null)) as { ready?: boolean; url?: string; error?: string } | null;
+                    if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+                    return j?.ready ? j.url ?? null : null;
+                },
+                { timeoutMs: 180_000, intervalMs: 3_000 },
+            );
+            if (!url) throw new Error("Timed out waiting for the backup. Check the GitHub Actions run.");
+
+            const fileRes = await fetch(url);
+            if (!fileRes.ok) throw new Error(`Could not download the dump (HTTP ${fileRes.status}).`);
+            const blob = await fileRes.blob();
+            const filename = `smx-backup-${stamp()}.dump`;
+
+            const objUrl = URL.createObjectURL(blob);
             const a = document.createElement("a");
-            a.href = url;
+            a.href = objUrl;
             a.download = filename;
             document.body.appendChild(a);
             a.click();
             a.remove();
-            URL.revokeObjectURL(url);
-            toast.success(`Downloaded ${filename} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+            URL.revokeObjectURL(objUrl);
+            toast.success(`Downloaded ${filename} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`, { id: progress });
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Backup failed");
+            toast.error(err instanceof Error ? err.message : "Backup failed", { id: progress });
         } finally {
             setDownloading(false);
         }
@@ -48,20 +82,49 @@ export function BackupRestorePanel() {
             return;
         }
         setRestoring(true);
+        const progress = toast.loading("Uploading backup…");
         try {
-            const fd = new FormData();
-            fd.append("dump", file);
-            fd.append("confirm", "RESTORE");
-            const res = await fetch("/api/settings/restore", { method: "POST", body: fd });
-            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; stderr?: string };
-            if (!res.ok) {
-                throw new Error(json.error || `HTTP ${res.status}`);
+            // 1. Get a signed URL and upload the dump straight to Storage.
+            const urlRes = await fetch("/api/settings/restore/upload-url", { method: "POST" });
+            const urlJson = (await urlRes.json().catch(() => null)) as { jobId?: string; uploadUrl?: string; error?: string } | null;
+            if (!urlRes.ok || !urlJson?.jobId || !urlJson.uploadUrl) {
+                throw new Error(urlJson?.error || `HTTP ${urlRes.status}`);
             }
-            toast.success("Restore complete — sign out and back in to refresh your session.");
+            const putRes = await fetch(urlJson.uploadUrl, {
+                method: "PUT",
+                body: file,
+                headers: { "Content-Type": "application/octet-stream" },
+            });
+            if (!putRes.ok) throw new Error(`Upload failed (HTTP ${putRes.status}).`);
+
+            // 2. Trigger the restore run.
+            toast.loading("Restoring… this can take a minute.", { id: progress });
+            const res = await fetch("/api/settings/restore", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jobId: urlJson.jobId, confirm: "RESTORE" }),
+            });
+            const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+            if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+
+            // 3. Poll for the result the workflow writes back to Storage.
+            const result = await pollUntil(
+                async () => {
+                    const r = await fetch(`/api/settings/restore/status?jobId=${urlJson.jobId}`);
+                    const j = (await r.json().catch(() => null)) as { done?: boolean; ok?: boolean; log?: string; error?: string } | null;
+                    if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+                    return j?.done ? j : null;
+                },
+                { timeoutMs: 300_000, intervalMs: 4_000 },
+            );
+            if (!result) throw new Error("Timed out waiting for the restore. Check the GitHub Actions run.");
+            if (!result.ok) throw new Error(result.log?.slice(-500) || "Restore failed on the runner.");
+
+            toast.success("Restore complete — sign out and back in to refresh your session.", { id: progress });
             setFile(null);
             setConfirmText("");
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Restore failed");
+            toast.error(err instanceof Error ? err.message : "Restore failed", { id: progress });
         } finally {
             setRestoring(false);
         }
