@@ -49,6 +49,18 @@ jobs:
             -f backup.dump
           ls -lh backup.dump
 
+      - name: Ensure Storage bucket exists
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sS -o resp.txt -w "%{http_code}" -X POST \
+            "$SUPABASE_URL/storage/v1/bucket" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"$BUCKET\",\"public\":false}")
+          echo "create bucket HTTP $HTTP"; cat resp.txt || true; echo
+          # 200 = created; otherwise OK only if it already exists.
+          if [ "$HTTP" -ge 400 ] && ! grep -qi "already exists" resp.txt; then exit 1; fi
+
       - name: Upload dump to Supabase Storage
         run: |
           set -euo pipefail

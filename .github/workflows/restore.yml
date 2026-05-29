@@ -42,6 +42,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
 
+      - name: Ensure Storage bucket exists
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sS -o resp.txt -w "%{http_code}" -X POST \
+            "$SUPABASE_URL/storage/v1/bucket" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"$BUCKET\",\"public\":false}")
+          echo "create bucket HTTP $HTTP"; cat resp.txt || true; echo
+          # 200 = created; otherwise OK only if it already exists.
+          if [ "$HTTP" -ge 400 ] && ! grep -qi "already exists" resp.txt; then exit 1; fi
+
       - name: Download dump from Supabase Storage
         run: |
           set -euo pipefail
