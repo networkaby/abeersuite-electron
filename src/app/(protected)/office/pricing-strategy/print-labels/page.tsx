@@ -45,7 +45,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LabelDesigner, type Item as LabelItem } from "@/modules/inventory/components/LabelDesigner";
+import { LabelDesigner, type Item as LabelItem, type AddedProduct } from "@/modules/inventory/components/LabelDesigner";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -533,6 +533,41 @@ export default function GeneratePage() {
         setSelected(new Set());
     };
 
+    // Products added from the Print tab (combobox / voucher) flow back into the
+    // shared set: an existing row (by barcode) is just selected; a new product
+    // becomes a fresh pricing row and is selected — so it shows in BOTH tabs.
+    const addProducts = (products: AddedProduct[]) => {
+        const byBarcode = new Map(rows.filter((r) => r.barcode).map((r) => [r.barcode, r]));
+        const additions: Row[] = [];
+        const selectIds: number[] = [];
+        for (const p of products) {
+            const existing = p.barcode ? byBarcode.get(p.barcode) : undefined;
+            if (existing) { selectIds.push(existing.id); continue; }
+            const id = nextId.current++;
+            const sale = p.salePrice != null ? String(p.salePrice) : "";
+            const row: Row = {
+                id, name: p.name, barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0",
+                method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", gst: "18",
+                margin: "25", strategyMargin: "30", charges: "0", salePrice: sale, baseline: sale,
+                mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", savedAt: "", savedProfit: "",
+            };
+            additions.push(row);
+            if (row.barcode) byBarcode.set(row.barcode, row); // dedupe within this batch
+            selectIds.push(id);
+        }
+        if (additions.length) setRows((prev) => [...prev, ...additions]);
+        setSelectionIds((prev) => new Set([...prev, ...selectIds]));
+    };
+
+    // Removing a label in the Print tab just drops it from the shared selection
+    // (the product stays in the All products catalog).
+    const removePrintItem = (id: number) =>
+        setSelectionIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+
     const update = (id: number, patch: Partial<Row>) =>
         setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     const remove = (id: number) => {
@@ -657,10 +692,10 @@ export default function GeneratePage() {
                 <span className="text-xs text-muted-foreground">
                     {selected.size > 0
                         ? `${selected.size} ticked`
-                        : dirtyCount === 0 ? "All saved" : `${dirtyCount} unsaved`}
+                        : dirtyCount === 0 ? "Barcodes current" : `${dirtyCount} to update`}
                 </span>
-                <Button type="button" size="sm" onClick={save} disabled={selected.size === 0}>
-                    <Save className="size-4" /> Save{selected.size > 0 ? ` (${selected.size})` : ""}
+                <Button type="button" size="sm" onClick={save} disabled={selected.size === 0} title="Freeze the sale price and stamp today's date — the printed barcode price + date code">
+                    <Save className="size-4" /> Update barcode{selected.size > 0 ? ` (${selected.size})` : ""}
                 </Button>
             </div>
 
@@ -974,11 +1009,11 @@ export default function GeneratePage() {
     return (
         <div className="h-full overflow-y-auto px-6 pt-4 pb-10">
             <div className="mb-3">
-                <h1 className="text-lg font-semibold">Generate — UI only</h1>
+                <h1 className="text-lg font-semibold">Print labels — UI only</h1>
                 <p className="text-sm text-muted-foreground">
-                    Three live price voices — <span className="font-medium">Strategy</span>,{" "}
-                    <span className="font-medium">Computed</span>, <span className="font-medium">Sale Price</span>.
-                    Click one to pick what sells (POS caps it at the barcode/MRP). Tick rows and Save. Nothing is persisted here.
+                    Pick products (here or from a voucher), set the barcode price across three voices —{" "}
+                    <span className="font-medium">Strategy</span>, <span className="font-medium">Computed</span>,{" "}
+                    <span className="font-medium">Sale Price</span> — then print. Selected product &amp; Print share one set. Nothing is persisted here.
                 </p>
             </div>
 
@@ -988,17 +1023,20 @@ export default function GeneratePage() {
                     <TabsTrigger value="selected">
                         Selected product{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
                     </TabsTrigger>
-                    <TabsTrigger value="print">Print</TabsTrigger>
+                    <TabsTrigger value="print">
+                        Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
+                    </TabsTrigger>
                 </TabsList>
                 <TabsContent value="all">{productBody}</TabsContent>
                 <TabsContent value="selected">{productBody}</TabsContent>
-                {/* forceMount keeps the designer's label edits alive across tab switches. */}
+                {/* forceMount keeps the designer's label settings alive across tab switches. */}
                 <TabsContent value="print" forceMount className="data-[state=inactive]:hidden">
                     <LabelDesigner
-                        seedItems={[]}
-                        externalItems={printItems}
+                        items={printItems}
+                        onAddProducts={addProducts}
+                        onRemoveItem={removePrintItem}
                         pageTitle="Print labels"
-                        pageSubtitle="Labels for the selected products. Edit, Update barcode, then Print."
+                        pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Selected product."
                         rootClassName="pb-10"
                     />
                 </TabsContent>

@@ -1,16 +1,13 @@
 "use client";
 
 /**
- * LabelDesigner (UI only) — the barcode-label design sandbox.
+ * LabelDesigner (UI only) — the barcode-label view of the Print tab.
  *
- * Extracted from the /print-labels/test page so it can be mounted in two places:
- *   1. The standalone /print-labels/test route (seeded with SAMPLE items).
- *   2. The "Print" tab of /print-labels/generate, fed by the product selection
- *      (each picked product flows in via `externalItems`).
- *
- * Nothing here is persisted or fetched for the label list itself — you edit a
- * small list of items and see (a) the computed "secret date code" per row and
- * (b) every row rendered as a real label in the grid below.
+ * It is a CONTROLLED view: the parent owns the product set and passes it in as
+ * `items`. The designer never holds its own product list — adding (search/scan
+ * or voucher) calls `onAddProducts`, removing calls `onRemoveItem`, so the same
+ * products stay in sync with the Selected product tab. Prices/dates are set in
+ * that tab; here the labels are read-only and just rendered + printed.
  *
  * Secret date code (staff-only, customer can't read it):
  *   - year   → omitted
@@ -19,7 +16,7 @@
  *   e.g. 2026-05-14 → "052"   (May, second third)
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/format/utils";
@@ -44,13 +41,17 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { FileText, Loader2, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { FileText, Loader2, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 
-// ── Item shape (one label) ───────────────────────────────────────────────────
+// ── Public types ──────────────────────────────────────────────────────────────
 
+/** One label, as rendered by the designer (all display strings, in ₹). */
 export type Item = { id: number; name: string; barcode: string; price: string; mrp: string; date: string };
+
+/** A product the designer asks the parent to add to the shared set (₹ values). */
+export type AddedProduct = { name: string; barcode: string; salePrice: number | null; costPrice: number | null; mrp: number | null };
 
 // ── Secret date code ─────────────────────────────────────────────────────────
 
@@ -85,21 +86,6 @@ const PRESETS: Preset[] = [
     { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, barHeight: 26, fontSize: 10 },
 ];
 
-// ── Default sample items (used by the standalone /test route) ─────────────────
-
-export const SAMPLE_ITEMS: Item[] = [
-    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", barcode: "4250593440769", price: "1550", mrp: "4200", date: "2026-05-14" },
-    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", barcode: "4250593443319", price: "1650", mrp: "4250", date: "2026-05-04" },
-    { id: 3, name: "Adapter 19v 40w 2.1mp", barcode: "38686599387", price: "600", mrp: "900", date: "2026-01-27" },
-    { id: 4, name: "30Pin Lvds Cable Universal Board", barcode: "38692809948", price: "242", mrp: "286", date: "2026-12-22" },
-];
-
-// Today as YYYY-MM-DD — stamped as the price date on a freshly added product.
-function todayISO(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 // ── Voucher prefill (Pick from GRN / Purchase) ────────────────────────────────
 type VoucherListRow = { id: number; type: string; reference: string; date: string; partyName: string | null; _count?: { lines: number } };
 type VoucherLineFromApi = { productId: number; quantity: string | number; mrpPaise: number | null; product: { id: number; sku: string; name: string } };
@@ -109,28 +95,28 @@ type ProductLookupRow = { id: number; sku: string; name: string; barcode1: strin
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 type LabelDesignerProps = {
-    /** Initial label list (defaults to SAMPLE_ITEMS for the standalone route). */
-    seedItems?: Item[];
-    /** Items pushed in from outside (e.g. the Generate selection). Merged additively, once per barcode. */
-    externalItems?: Item[];
+    /** The labels to render — owned by the parent (the shared product set). */
+    items: Item[];
+    /** Add products to the shared set (from search/scan or a voucher). */
+    onAddProducts: (products: AddedProduct[]) => void;
+    /** Drop a label from the shared set. */
+    onRemoveItem: (id: number) => void;
     pageTitle?: string;
     pageSubtitle?: string;
-    /** Root wrapper classes — the standalone route owns its scroll; embedded uses the parent's. */
+    /** Root wrapper classes — embedded panels use the parent's scroll/padding. */
     rootClassName?: string;
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function LabelDesigner({
-    seedItems = SAMPLE_ITEMS,
-    externalItems,
-    pageTitle = "Label test — UI only",
-    pageSubtitle = "Edit the list, watch the secret code, and preview every label. Nothing is saved.",
-    rootClassName = "h-full overflow-y-auto px-6 pt-4 pb-10",
+    items,
+    onAddProducts,
+    onRemoveItem,
+    pageTitle = "Print labels",
+    pageSubtitle = "Pick products, then print.",
+    rootClassName = "pb-10",
 }: LabelDesignerProps) {
-    const [items, setItems] = useState<Item[]>(seedItems);
-    const nextId = useRef((seedItems.reduce((mx, it) => Math.max(mx, it.id), 0)) + 1);
-
     // Global label options (apply to every label).
     const [showHeader, setShowHeader] = useState(true);
     const [header, setHeader] = useState("NETWORK SERVICE  ·  +91 8876996996");
@@ -144,61 +130,23 @@ export function LabelDesigner({
 
     const preset = PRESETS.find((p) => p.id === presetId) ?? PRESETS[0];
 
-    const update = (id: number, patch: Partial<Item>) =>
-        setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-    const remove = (id: number) => setItems((prev) => prev.filter((it) => it.id !== id));
-    const addRow = () =>
-        setItems((prev) => [
-            ...prev,
-            { id: nextId.current++, name: "New item", barcode: "0000000000000", price: "0", mrp: "0", date: todayISO() },
-        ]);
-
-    // Update barcode = re-stamp every label's price date to today, so the secret
-    // date code reflects a fresh print (the barcode "as of now").
-    const updateBarcodes = () => {
-        if (items.length === 0) return;
-        const today = todayISO();
-        setItems((prev) => prev.map((it) => ({ ...it, date: today })));
-        toast.success(`Updated ${items.length} barcode${items.length === 1 ? "" : "s"} — date code set to today`);
-    };
-
-    // ── Merge externally-supplied items (the Generate selection) ───────────────
-    // Additive, once per barcode — removing a row here won't make it re-appear.
-    const mergedBarcodes = useRef<Set<string>>(new Set(seedItems.map((i) => i.barcode)));
-    useEffect(() => {
-        if (!externalItems || externalItems.length === 0) return;
-        const adds = externalItems.filter((it) => it.barcode && !mergedBarcodes.current.has(it.barcode));
-        if (adds.length === 0) return;
-        adds.forEach((it) => mergedBarcodes.current.add(it.barcode));
-        setItems((prev) => {
-            const seen = new Set(prev.map((p) => p.barcode));
-            const fresh = adds.filter((a) => !seen.has(a.barcode)).map((a) => ({ ...a, id: nextId.current++ }));
-            return fresh.length ? [...prev, ...fresh] : prev;
-        });
-    }, [externalItems]);
-
     // ── Add product via the shared combobox (search + scan, real lookup) ───────
+    // pickCount remounts the combobox after each add so it clears + refocuses.
     const [pickCount, setPickCount] = useState(0);
     const addFromCombobox = (sp: SelectedProduct | null) => {
         if (!sp) return;
         setPickCount((c) => c + 1);
-        setItems((prev) => {
-            if (prev.some((it) => it.barcode === sp.sku)) return prev; // already in the list
-            return [
-                ...prev,
-                {
-                    id: nextId.current++,
-                    name: sp.name,
-                    barcode: sp.sku,
-                    price: sp.salePrice != null ? String(sp.salePrice) : "0",
-                    mrp: sp.mrp != null ? String(sp.mrp) : "0",
-                    date: todayISO(),
-                },
-            ];
-        });
+        onAddProducts([{
+            name: sp.name,
+            barcode: sp.sku,
+            salePrice: sp.salePrice ?? null,
+            costPrice: sp.costPrice ?? null,
+            mrp: sp.mrp ?? null,
+        }]);
     };
 
     // ── Pick from GRN / Purchase voucher ──────────────────────────────────────
+    // Product lookup map (resolves barcode1 + sale/MRP for voucher lines).
     const [lookupById, setLookupById] = useState<Map<number, ProductLookupRow>>(new Map());
     useEffect(() => {
         axios.get<ProductLookupRow[]>("/api/inventory/products/lookup")
@@ -235,31 +183,25 @@ export function LabelDesigner({
         setVoucherPickerOpen(false);
         try {
             const r = await axios.get<VoucherFromApi>(`/api/inventory/vouchers/${v.id}`);
-            const lines = r.data.lines;
-            let added = 0;
-            setItems((prev) => {
-                const next = [...prev];
-                const seen = new Set(next.map((it) => it.barcode));
-                for (const line of lines) {
-                    if ((Math.ceil(Math.max(0, Number(line.quantity) || 0))) <= 0) continue;
-                    const lookup = lookupById.get(line.productId);
-                    const barcode = (lookup?.barcode1 && lookup.barcode1.trim()) || line.product.sku;
-                    if (seen.has(barcode)) continue;
-                    seen.add(barcode);
-                    const mrpPaise = line.mrpPaise ?? lookup?.mrpPaise ?? null;
-                    next.push({
-                        id: nextId.current++,
-                        name: line.product.name,
-                        barcode,
-                        price: lookup?.pricePaise != null ? String(lookup.pricePaise / 100) : "0",
-                        mrp: mrpPaise != null ? String(mrpPaise / 100) : "0",
-                        date: todayISO(),
-                    });
-                    added += 1;
-                }
-                return next;
-            });
-            toast.success(added > 0 ? `Added ${added} product${added === 1 ? "" : "s"} from ${r.data.reference}` : `No new products in ${r.data.reference}`);
+            const seen = new Set<string>();
+            const products: AddedProduct[] = [];
+            for (const line of r.data.lines) {
+                if ((Math.ceil(Math.max(0, Number(line.quantity) || 0))) <= 0) continue;
+                const lookup = lookupById.get(line.productId);
+                const barcode = (lookup?.barcode1 && lookup.barcode1.trim()) || line.product.sku;
+                if (seen.has(barcode)) continue;
+                seen.add(barcode);
+                const mrpPaise = line.mrpPaise ?? lookup?.mrpPaise ?? null;
+                products.push({
+                    name: line.product.name,
+                    barcode,
+                    salePrice: lookup?.pricePaise != null ? lookup.pricePaise / 100 : null,
+                    costPrice: null,
+                    mrp: mrpPaise != null ? mrpPaise / 100 : null,
+                });
+            }
+            if (products.length) onAddProducts(products);
+            toast.success(products.length ? `Added ${products.length} product${products.length === 1 ? "" : "s"} from ${r.data.reference}` : `No products in ${r.data.reference}`);
         } catch {
             toast.error("Failed to load voucher");
         }
@@ -291,13 +233,10 @@ export function LabelDesigner({
                     <p className="text-sm text-muted-foreground">{pageSubtitle}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" onClick={updateBarcodes} disabled={items.length === 0}>
-                        <RefreshCw className="size-4" /> Update barcode
-                    </Button>
                     <Button type="button" variant={settingsOpen ? "secondary" : "outline"} onClick={() => setSettingsOpen((o) => !o)}>
                         <SlidersHorizontal className="size-4" /> {settingsOpen ? "Hide settings" : "Settings"}
                     </Button>
-                    <Button onClick={() => window.print()}>Print (real size)</Button>
+                    <Button onClick={() => window.print()} disabled={items.length === 0}>Print (real size)</Button>
                 </div>
             </div>
 
@@ -349,15 +288,15 @@ export function LabelDesigner({
                 </div>
             ) : null}
 
-            {/* ── Add product — same search/scan box as the real Print Labels ─ */}
-            <div className="print-hide m-4 flex items-center gap-2">
+            {/* ── Add product — search / scan + voucher pick ─────────────────── */}
+            <div className="print-hide mb-4 flex items-center gap-2">
                 <div className="flex h-11 flex-1 items-center gap-2 rounded-md border border-input bg-background px-3 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
                     <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <InvProductCombobox
                         key={pickCount}
                         value={null}
                         onChange={addFromCombobox}
-                        placeholder="Search / scan a product to add to the list…"
+                        placeholder="Search / scan a product to add…"
                         allowCreate={false}
                         autoFocus
                         className="flex-1"
@@ -368,7 +307,7 @@ export function LabelDesigner({
                 </Button>
             </div>
 
-            {/* ── Items table ──────────────────────────────────────────────── */}
+            {/* ── Items table (read-only — prices/dates are set in Selected product) ─ */}
             <div className="print-hide mb-6 rounded-sm border">
                 <Table>
                     <TableHeader>
@@ -387,7 +326,7 @@ export function LabelDesigner({
                         {items.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
-                                    No labels yet — add products above, or pick them in the Selected product tab.
+                                    No labels yet — search/scan above, pick a voucher, or add products in the Selected product tab.
                                 </TableCell>
                             </TableRow>
                         ) : null}
@@ -396,21 +335,11 @@ export function LabelDesigner({
                             return (
                                 <TableRow key={it.id}>
                                     <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
-                                    <TableCell>
-                                        <Input value={it.name} onChange={(e) => update(it.id, { name: e.target.value })} className="h-7 text-xs" />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input value={it.barcode} onChange={(e) => update(it.id, { barcode: e.target.value })} className="h-7 w-36 text-xs font-mono" />
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={it.price} onChange={(e) => update(it.id, { price: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={it.mrp} onChange={(e) => update(it.id, { mrp: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input type="date" value={it.date} onChange={(e) => update(it.id, { date: e.target.value })} className="h-7 w-36 text-xs" />
-                                    </TableCell>
+                                    <TableCell className="text-xs font-medium">{it.name}</TableCell>
+                                    <TableCell className="font-mono text-xs">{it.barcode || "—"}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs">₹{it.price}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs">{it.mrp && it.mrp !== "0" ? `₹${it.mrp}` : "—"}</TableCell>
+                                    <TableCell className="font-mono text-xs">{it.date || "—"}</TableCell>
                                     <TableCell className="text-center">
                                         <span className="font-mono text-sm font-semibold">{code || "—"}</span>
                                         {code ? (
@@ -420,7 +349,7 @@ export function LabelDesigner({
                                         ) : null}
                                     </TableCell>
                                     <TableCell>
-                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => remove(it.id)}>
+                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => onRemoveItem(it.id)}>
                                             <Trash2 className="size-4 text-muted-foreground" />
                                         </Button>
                                     </TableCell>
@@ -429,11 +358,6 @@ export function LabelDesigner({
                         })}
                     </TableBody>
                 </Table>
-                <div className="border-t p-2">
-                    <Button type="button" variant="outline" size="sm" onClick={addRow}>
-                        <Plus className="size-4" /> Add row
-                    </Button>
-                </div>
             </div>
 
             {/* ── Labels preview grid (screen) ─────────────────────────────── */}
@@ -461,13 +385,13 @@ export function LabelDesigner({
                 ))}
             </div>
 
-            {/* ── Pick from GRN / Purchase — loads voucher lines into the list ─ */}
+            {/* ── Pick from GRN / Purchase — adds voucher lines to the shared set ─ */}
             <Dialog open={voucherPickerOpen} onOpenChange={setVoucherPickerOpen}>
                 <DialogContent className="!max-w-3xl print-hide">
                     <DialogHeader>
                         <DialogTitle>Pick a GRN or Purchase voucher</DialogTitle>
                         <DialogDescription>
-                            Loads each line as a product in the list (deduped). Only POSTED vouchers are shown.
+                            Adds each line as a product (deduped) to the selection. Only POSTED vouchers are shown.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-wrap items-center gap-2">
@@ -543,7 +467,7 @@ function LabelCard({
                     <BarcodeSvg value={item.barcode} height={preset.barHeight} fontSize={preset.fontSize} margin={2} />
                 </div>
                 <div className="lt-meta">
-                    {showMrp && item.mrp ? <span className="lt-mrp">MRP ₹{item.mrp}</span> : <span />}
+                    {showMrp && item.mrp && item.mrp !== "0" ? <span className="lt-mrp">MRP ₹{item.mrp}</span> : <span />}
                     {item.price ? <span className="lt-price">₹{item.price}/-</span> : null}
                 </div>
             </div>
@@ -562,7 +486,7 @@ function Opt({ label, children }: { label: string; children: React.ReactNode }) 
     );
 }
 
-// ── Label styles (scoped, mirrors print-labels.css conventions) ──────────────
+// ── Label styles (scoped) ─────────────────────────────────────────────────────
 
 const labelCss = `
 .lt-grid { display: flex; flex-wrap: wrap; gap: 2mm; align-content: flex-start; }
