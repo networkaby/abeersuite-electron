@@ -2,31 +2,31 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { COMPANY_DETAILS } from "@/utils/constants-company-details";
 import {
     formatAddressBlock,
+    unpackOrgRow,
     type OrganisationView,
 } from "@/shared/lib/org/organisationView";
 
 // Re-export the pure pieces so existing imports `from "@/shared/lib/org/getOrganisation"`
 // keep working — server-only code can grab everything from one place.
-export { formatAddressBlock };
+export { formatAddressBlock, unpackOrgRow };
 export type { OrganisationView };
 
 function fallbackFromCompanyDetails(): OrganisationView {
+    const gstin = COMPANY_DETAILS.tax.gstin ?? "";
     return {
         brandName:    COMPANY_DETAILS.brandName,
         legalName:    COMPANY_DETAILS.legalName,
         tagline:      COMPANY_DETAILS.tagline,
         logoUrl:      "",
+        pan:          COMPANY_DETAILS.tax.pan,
         addressLine1: COMPANY_DETAILS.address.line1,
         addressLine2: COMPANY_DETAILS.address.line2 ?? "",
         city:         COMPANY_DETAILS.address.city,
         state:        COMPANY_DETAILS.address.state,
         pinCode:      COMPANY_DETAILS.address.pin,
         country:      COMPANY_DETAILS.address.country,
-        gstin:        COMPANY_DETAILS.tax.gstin,
-        pan:          COMPANY_DETAILS.tax.pan,
-        gstStateCode: COMPANY_DETAILS.tax.gstin.length >= 2
-            ? COMPANY_DETAILS.tax.gstin.slice(0, 2)
-            : "",
+        gstin,
+        gstStateCode: gstin.length >= 2 ? gstin.slice(0, 2) : "",
         email:        COMPANY_DETAILS.contact.email,
         supportEmail: COMPANY_DETAILS.contact.supportEmail,
         phone:        COMPANY_DETAILS.contact.phone,
@@ -48,34 +48,19 @@ export async function getOrganisation(): Promise<OrganisationView> {
         create: { id: 1 },
         update: {},
     });
-
+    const unpacked = unpackOrgRow(row);
     const fb = fallbackFromCompanyDetails();
-    return {
-        brandName:    row.brandName    || fb.brandName,
-        legalName:    row.legalName    || fb.legalName,
-        tagline:      row.tagline      || fb.tagline,
-        logoUrl:      row.logoUrl      || fb.logoUrl,
-        addressLine1: row.addressLine1 || fb.addressLine1,
-        addressLine2: row.addressLine2 || fb.addressLine2,
-        city:         row.city         || fb.city,
-        state:        row.state        || fb.state,
-        pinCode:      row.pinCode      || fb.pinCode,
-        country:      row.country      || fb.country,
-        gstin:        row.gstin        || fb.gstin,
-        pan:          row.pan          || fb.pan,
-        gstStateCode: row.gstStateCode || fb.gstStateCode,
-        email:        row.email        || fb.email,
-        supportEmail: row.supportEmail || fb.supportEmail,
-        phone:        row.phone        || fb.phone,
-        whatsapp:     row.whatsapp     || fb.whatsapp,
-        siteUrl:      row.siteUrl      || fb.siteUrl,
-        hours:        row.hours        || fb.hours,
-    };
+    // For every blank field, fall back to COMPANY_DETAILS so callers never
+    // need to nullish-coalesce.
+    return (Object.keys(fb) as (keyof OrganisationView)[]).reduce(
+        (acc, key) => ({ ...acc, [key]: unpacked[key] || fb[key] }),
+        unpacked,
+    );
 }
 
 /**
- * Returns the raw row (no COMPANY_DETAILS fallback) — used by the settings
- * form so it can show the admin exactly what's stored vs what's still empty.
+ * Returns the stored values with no COMPANY_DETAILS fallback — used by the
+ * settings form so it can show the admin exactly what's stored vs empty.
  */
 export async function getOrganisationRaw(): Promise<OrganisationView> {
     const row = await prisma.organisation.upsert({
@@ -83,25 +68,5 @@ export async function getOrganisationRaw(): Promise<OrganisationView> {
         create: { id: 1 },
         update: {},
     });
-    return {
-        brandName:    row.brandName,
-        legalName:    row.legalName,
-        tagline:      row.tagline,
-        logoUrl:      row.logoUrl,
-        addressLine1: row.addressLine1,
-        addressLine2: row.addressLine2,
-        city:         row.city,
-        state:        row.state,
-        pinCode:      row.pinCode,
-        country:      row.country,
-        gstin:        row.gstin,
-        pan:          row.pan,
-        gstStateCode: row.gstStateCode,
-        email:        row.email,
-        supportEmail: row.supportEmail,
-        phone:        row.phone,
-        whatsapp:     row.whatsapp,
-        siteUrl:      row.siteUrl,
-        hours:        row.hours,
-    };
+    return unpackOrgRow(row);
 }

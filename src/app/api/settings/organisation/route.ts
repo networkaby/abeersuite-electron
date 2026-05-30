@@ -6,11 +6,17 @@ import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { organisationUpdateSchema } from "@/shared/lib/schemas/organisationSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
+import {
+    unpackOrgRow,
+    parseIdentityJson,
+    parseAddressJson,
+    parseContactJson,
+    type OrganisationView,
+} from "@/shared/lib/org/organisationView";
 
 /**
- * Returns the raw Organisation row (id=1). Auto-upserts on first read so the
- * settings form always has something to bind to. Available to any signed-in
- * staff user — the data is non-sensitive and appears on every receipt.
+ * Returns the Organisation singleton as a flat OrganisationView (id=1).
+ * Auto-upserts on first read. Available to any signed-in staff user.
  */
 export async function GET() {
     const { response } = await requireAuth();
@@ -21,14 +27,13 @@ export async function GET() {
         create: { id: 1 },
         update: {},
     });
-    return NextResponse.json(row);
+    return NextResponse.json(unpackOrgRow(row));
 }
 
 /**
  * PATCH /api/settings/organisation — partial update of the singleton.
- * Gated by `settings:manage` (same as the other organisation-shape settings).
- * GSTIN entered by the admin auto-populates `gstStateCode` from the first
- * two digits so place-of-supply logic doesn't drift out of sync.
+ * Accepts and returns a flat OrganisationView — JSON grouping is an internal
+ * storage detail. GSTIN auto-populates gstStateCode; mismatches are rejected.
  */
 export async function PATCH(req: NextRequest) {
     const { user, response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
@@ -37,36 +42,47 @@ export async function PATCH(req: NextRequest) {
     const { data, error } = await validateRequest(req, organisationUpdateSchema);
     if (error) return error;
 
-    const patch = { ...data };
+    // Read current row (auto-upsert if missing) so we can merge the partial
+    // patch onto the full stored values before packing back into JSON blobs.
+    const current = await prisma.organisation.upsert({
+        where:  { id: 1 },
+        create: { id: 1 },
+        update: {},
+    });
+    const cur = unpackOrgRow(current);
 
-    // GSTIN ↔ state-code/state-name integrity guard. Only fires when the
-    // PATCH touches any of those three fields — otherwise the singleton's
-    // stored values stay untouched (PATCH semantics).
-    if (patch.gstin !== undefined || patch.gstStateCode !== undefined || patch.state !== undefined) {
-        // Load whatever's currently stored so we can validate the merged
-        // intent rather than just the patched-in fields. Example: user
-        // changes only `state` text → we still want to ensure it matches
-        // the existing GSTIN.
-        const current = await prisma.organisation.findUnique({ where: { id: 1 } });
+    // Merge patch onto current flat view.
+    const merged: OrganisationView = { ...cur, ...data };
+
+    // GSTIN ↔ state-code/state-name integrity guard. Only runs when the patch
+    // touches any of those three fields.
+    if (data.gstin !== undefined || data.gstStateCode !== undefined || data.state !== undefined) {
         const integrity = normaliseGstinState({
-            gstin:        patch.gstin        ?? current?.gstin        ?? "",
-            gstStateCode: patch.gstStateCode ?? current?.gstStateCode ?? "",
-            state:        patch.state        ?? current?.state        ?? "",
+            gstin:        merged.gstin,
+            gstStateCode: merged.gstStateCode,
+            state:        merged.state,
         });
         if (!integrity.ok) {
             return NextResponse.json({ error: integrity.error }, { status: 400 });
         }
-        // Force the canonical values back into the patch so the row never
-        // persists a mismatch even if the client tried to.
-        patch.gstin        = integrity.value.gstin;
-        patch.gstStateCode = integrity.value.gstStateCode;
-        if (patch.state !== undefined) patch.state = integrity.value.state;
+        merged.gstin        = integrity.value.gstin;
+        merged.gstStateCode = integrity.value.gstStateCode;
+        merged.state        = integrity.value.state;
     }
 
-    const row = await prisma.organisation.upsert({
-        where:  { id: 1 },
-        create: { id: 1, ...patch, updatedById: user.id || null },
-        update: { ...patch,        updatedById: user.id || null },
+    // Pack flat view back into the three JSON blobs + scalar columns.
+    const row = await prisma.organisation.update({
+        where: { id: 1 },
+        data: {
+            brandName:    merged.brandName,
+            legalName:    merged.legalName,
+            gstin:        merged.gstin,
+            gstStateCode: merged.gstStateCode,
+            identityJson: { tagline: merged.tagline, logoUrl: merged.logoUrl, pan: merged.pan } satisfies ReturnType<typeof parseIdentityJson>,
+            addressJson:  { addressLine1: merged.addressLine1, addressLine2: merged.addressLine2, city: merged.city, state: merged.state, pinCode: merged.pinCode, country: merged.country } satisfies ReturnType<typeof parseAddressJson>,
+            contactJson:  { email: merged.email, supportEmail: merged.supportEmail, phone: merged.phone, whatsapp: merged.whatsapp, siteUrl: merged.siteUrl, hours: merged.hours } satisfies ReturnType<typeof parseContactJson>,
+            updatedById:  user.id || null,
+        },
     });
-    return NextResponse.json(row);
+    return NextResponse.json(unpackOrgRow(row));
 }
