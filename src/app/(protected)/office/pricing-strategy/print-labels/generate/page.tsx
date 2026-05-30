@@ -44,6 +44,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LabelDesigner, type Item as LabelItem } from "@/modules/inventory/components/LabelDesigner";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -91,6 +93,7 @@ type SaleSource = "STRATEGY" | "MY" | "SAVED";
 type Row = {
     id: number;
     name: string;
+    barcode: string;        // scannable EAN/SKU printed on the label (feeds the Print tab)
     brand: string;          // taxonomy — for the Brand filter (mirrors InvProduct.brand)
     category: string;       // taxonomy — for the Category filter
     group: string;          // taxonomy — for the Group filter
@@ -106,13 +109,15 @@ type Row = {
     mrp: string;            // MRP ceiling (incl GST). "" = no MRP
     saleSource: SaleSource; // which voice actually sells
     savedAt: string;        // ISO date the Sale Price was last frozen → barcode date code
+    savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
 };
 
 const SAMPLE: Row[] = [
-    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", brand: "CP Plus", category: "Camera",  group: "CCTV",        stock: "12", method: "WA", costIncl: "992",  gst: "18", margin: "25", strategyMargin: "35", charges: "0", salePrice: "1240", baseline: "1240", mrp: "1400", saleSource: "SAVED",    savedAt: "2026-05-14" },
-    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", brand: "CP Plus", category: "Camera",  group: "CCTV",        stock: "0",  method: "WA", costIncl: "1349", gst: "18", margin: "25", strategyMargin: "30", charges: "0", salePrice: "1650", baseline: "1650", mrp: "1700", saleSource: "STRATEGY", savedAt: "2026-05-03" },
-    { id: 3, name: "Adapter 19v 40w 2.1mp",            brand: "Generic", category: "Adapter", group: "Spare Parts", stock: "5",  method: "LI", costIncl: "400",  gst: "18", margin: "30", strategyMargin: "20", charges: "0", salePrice: "",     baseline: "",     mrp: "600",  saleSource: "MY",       savedAt: "" },
-    { id: 4, name: "30Pin Lvds Cable Universal Board",  brand: "Generic", category: "Cable",   group: "Spare Parts", stock: "0",  method: "WA", costIncl: "229",  gst: "18", margin: "20", strategyMargin: "28", charges: "0", salePrice: "260",  baseline: "260",  mrp: "300",  saleSource: "SAVED",    savedAt: "2026-05-28" },
+    // savedProfit = profit decided when last printed; current cost edits make it drift (shrinking/over).
+    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", barcode: "4250593440769", brand: "CP Plus", category: "Camera",  group: "CCTV",        stock: "12", method: "WA", costIncl: "992",  gst: "18", margin: "25", strategyMargin: "35", charges: "0", salePrice: "1240", baseline: "1240", mrp: "1400", saleSource: "SAVED",    savedAt: "2026-05-14", savedProfit: "250" },
+    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", barcode: "4250593443319", brand: "CP Plus", category: "Camera",  group: "CCTV",        stock: "0",  method: "WA", costIncl: "1349", gst: "18", margin: "25", strategyMargin: "30", charges: "0", salePrice: "1650", baseline: "1650", mrp: "1700", saleSource: "STRATEGY", savedAt: "2026-05-03", savedProfit: "200" },
+    { id: 3, name: "Adapter 19v 40w 2.1mp",            barcode: "38686599387",   brand: "Generic", category: "Adapter", group: "Spare Parts", stock: "5",  method: "LI", costIncl: "400",  gst: "18", margin: "30", strategyMargin: "20", charges: "0", salePrice: "",     baseline: "",     mrp: "600",  saleSource: "MY",       savedAt: "",           savedProfit: "" },
+    { id: 4, name: "30Pin Lvds Cable Universal Board",  barcode: "38692809948",   brand: "Generic", category: "Cable",   group: "Spare Parts", stock: "0",  method: "WA", costIncl: "229",  gst: "18", margin: "20", strategyMargin: "28", charges: "0", salePrice: "260",  baseline: "260",  mrp: "300",  saleSource: "SAVED",    savedAt: "2026-05-28", savedProfit: "26.27" },
 ];
 
 // ── Compute ──────────────────────────────────────────────────────────────────
@@ -326,6 +331,36 @@ function rangeVal(r: Row, key: RangeKey): number | null {
     }
 }
 
+// ── Drift signals (computed against the frozen print-time snapshot) ────────────
+
+// Barcode gap shrink %: how far the (live) selling voice has climbed ABOVE the
+// frozen saved price, as % of the printed barcode. Bigger = the live price is
+// eating the barcode's headroom (heading toward stale). 0 when selling at SAVED.
+function barcodeShrinkPct(r: Row): number | null {
+    const saved = numOrNull(r.salePrice);
+    if (saved == null) return null;
+    const m = numOrNull(r.mrp);
+    const bc = barcodePrice(saved, m != null && m > 0 ? m : null).value;
+    if (bc == null || bc === 0) return null;
+    const live =
+        r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
+        : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+        : saved;
+    if (live == null) return null;
+    return ((live - saved) / bc) * 100;
+}
+
+// Profit gap %: current profit on the saved price vs the DECIDED profit frozen at
+// print. Negative = profit reduced, positive = profit increased.
+function profitGapPct(r: Row): number | null {
+    const decided = numOrNull(r.savedProfit);
+    const saved = numOrNull(r.salePrice);
+    if (decided == null || decided === 0 || saved == null) return null;
+    const cur = profitOf(saved, r.costIncl, r.charges, r.gst)?.amt;
+    if (cur == null) return null;
+    return ((cur - decided) / Math.abs(decided)) * 100;
+}
+
 // ── Voice cell (clickable price chip) ─────────────────────────────────────────
 
 function voiceClass(selected: boolean): string {
@@ -346,6 +381,9 @@ export default function GeneratePage() {
     const [rows, setRows] = useState<Row[]>(SAMPLE);
     const nextId = useRef(SAMPLE.length + 1);
     const [query, setQuery] = useState("");
+    // Active tab + the working "selection" (ids the user pushed into the Selected tab).
+    const [tab, setTab] = useState<"all" | "selected" | "print">("all");
+    const [selectionIds, setSelectionIds] = useState<Set<number>>(new Set());
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [fBrand, setFBrand] = useState("ALL");
     const [fCategory, setFCategory] = useState("ALL");
@@ -355,11 +393,18 @@ export default function GeneratePage() {
     const [fBarcodeCapped, setFBarcodeCapped] = useState(false);
     const [fSaleCapped, setFSaleCapped] = useState(false);
     const [fInStock, setFInStock] = useState(false);
+    // Threshold boxes: show rows where the metric exceeds x%.
+    const [tBarcodeShrink, setTBarcodeShrink] = useState("");
+    const [tProfitReduce, setTProfitReduceRaw] = useState("");
+    const [tProfitIncrease, setTProfitIncreaseRaw] = useState("");
+    // Profit reduced & increased contradict → typing in one empties the other.
+    const setTProfitReduce = (val: string) => { setTProfitReduceRaw(val); if (val.trim()) setTProfitIncreaseRaw(""); };
+    const setTProfitIncrease = (val: string) => { setTProfitIncreaseRaw(val); if (val.trim()) setTProfitReduceRaw(""); };
     const emptyRanges = (): Record<RangeKey, { min: string; max: string }> =>
         RANGE_FIELDS.reduce((a, f) => { a[f.key] = { min: "", max: "" }; return a; }, {} as Record<RangeKey, { min: string; max: string }>);
     const [ranges, setRanges] = useState<Record<RangeKey, { min: string; max: string }>>(emptyRanges);
     const setRange = (key: RangeKey, side: "min" | "max", val: string) =>
-        setRanges((prev) => ({ ...prev, [key]: { ...prev[key], [side]: val } }));
+        setRanges((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { min: "", max: "" }), [side]: val } }));
     const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
 
     // Dynamic filter options — distinct values present in the data.
@@ -398,9 +443,16 @@ export default function GeneratePage() {
         if (fBarcodeCapped) v = v.filter((r) => barcodeCapped(r));
         if (fSaleCapped) v = v.filter((r) => saleCapped(r));
         if (fInStock) v = v.filter((r) => stockQty(r) > 0);
+        const xShrink = numOrNull(tBarcodeShrink);
+        if (xShrink != null) v = v.filter((r) => { const s = barcodeShrinkPct(r); return s != null && s > xShrink; });
+        const xReduce = numOrNull(tProfitReduce);
+        if (xReduce != null) v = v.filter((r) => { const g = profitGapPct(r); return g != null && g < -xReduce; });
+        const xInc = numOrNull(tProfitIncrease);
+        if (xInc != null) v = v.filter((r) => { const g = profitGapPct(r); return g != null && g > xInc; });
         for (const f of RANGE_FIELDS) {
-            const lo = numOrNull(ranges[f.key].min);
-            const hi = numOrNull(ranges[f.key].max);
+            const cell = ranges[f.key] ?? { min: "", max: "" };
+            const lo = numOrNull(cell.min);
+            const hi = numOrNull(cell.max);
             if (lo == null && hi == null) continue;
             v = v.filter((r) => {
                 if (f.key === "margin") {
@@ -422,7 +474,30 @@ export default function GeneratePage() {
             });
         }
         return v;
-    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, sort]);
+    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort]);
+
+    // The Selected tab shows only the picked rows (still honouring the same filters/sort).
+    const selectionRows = useMemo(() => visible.filter((r) => selectionIds.has(r.id)), [visible, selectionIds]);
+    // The list the active tab actually renders. (Only the active tab's body mounts.)
+    const listRows = tab === "selected" ? selectionRows : visible;
+
+    // Selected rows → label items for the Print tab. The printed price is the
+    // barcode price (the band-buffered cap), falling back to the sale price.
+    const printItems = useMemo<LabelItem[]>(() =>
+        selectionRows.map((r) => {
+            const saved = numOrNull(r.salePrice);
+            const m = numOrNull(r.mrp);
+            const bc = saved != null ? barcodePrice(saved, m != null && m > 0 ? m : null).value : null;
+            const price = bc ?? saved ?? applicableSalePrice(r);
+            return {
+                id: r.id,
+                name: r.name,
+                barcode: r.barcode || String(r.id),
+                price: price != null ? String(Math.round(price)) : "0",
+                mrp: r.mrp || "0",
+                date: r.savedAt || todayISO(),
+            };
+        }), [selectionRows]);
 
     const toggleSort = (key: SortKey) =>
         setSort((s) => (s && s.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
@@ -434,14 +509,29 @@ export default function GeneratePage() {
             else next.add(id);
             return next;
         });
-    const allSelected = visible.length > 0 && visible.every((r) => selected.has(r.id));
+    const allSelected = listRows.length > 0 && listRows.every((r) => selected.has(r.id));
     const toggleAll = () =>
         setSelected((prev) => {
             const next = new Set(prev);
-            if (allSelected) visible.forEach((r) => next.delete(r.id));
-            else visible.forEach((r) => next.add(r.id));
+            if (allSelected) listRows.forEach((r) => next.delete(r.id));
+            else listRows.forEach((r) => next.add(r.id));
             return next;
         });
+
+    // Push the ticked rows into the selection (feeds the Selected product tab), then clear ticks.
+    const addToSelection = () => {
+        setSelectionIds((prev) => new Set([...prev, ...selected]));
+        setSelected(new Set());
+    };
+    // Drop the ticked rows from the selection (used in the Selected product tab).
+    const removeFromSelection = () => {
+        setSelectionIds((prev) => {
+            const next = new Set(prev);
+            selected.forEach((id) => next.delete(id));
+            return next;
+        });
+        setSelected(new Set());
+    };
 
     const update = (id: number, patch: Partial<Row>) =>
         setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -457,22 +547,30 @@ export default function GeneratePage() {
         setRows((prev) => [
             ...prev,
             {
-                id: nextId.current++, name: "New item", brand: "", category: "", group: "", stock: "0",
+                id: nextId.current++, name: "New item", barcode: "", brand: "", category: "", group: "", stock: "0",
                 method: "WA", costIncl: "0", gst: "18", margin: "25", strategyMargin: "30",
-                charges: "0", salePrice: "", baseline: "", mrp: "", saleSource: "SAVED", savedAt: "",
+                charges: "0", salePrice: "", baseline: "", mrp: "", saleSource: "SAVED", savedAt: "", savedProfit: "",
             },
         ]);
 
-    // Save = snapshot baseline ← salePrice for CHECKED rows, stamp the barcode date,
-    // then clear the ticks.
+    // Save = freeze price + date + the DECIDED PROFIT (profit on the saved price at
+    // today's cost) for CHECKED rows, then clear the ticks. Storing the decided
+    // profit avoids any historical-cost lookup later — the gap is current vs stored.
     const save = () => {
         const today = todayISO();
         setRows((prev) =>
-            prev.map((r) =>
-                selected.has(r.id)
-                    ? { ...r, baseline: r.salePrice, savedAt: r.salePrice.trim() ? today : r.savedAt }
-                    : r,
-            ),
+            prev.map((r) => {
+                if (!selected.has(r.id)) return r;
+                const sp = numOrNull(r.salePrice);
+                if (sp == null) return { ...r, baseline: r.salePrice };
+                const decided = profitOf(sp, r.costIncl, r.charges, r.gst)?.amt ?? null;
+                return {
+                    ...r,
+                    baseline: r.salePrice,
+                    savedAt: today,
+                    savedProfit: decided != null ? decided.toFixed(2) : "",
+                };
+            }),
         );
         setSelected(new Set());
     };
@@ -512,44 +610,58 @@ export default function GeneratePage() {
         <div className="space-y-1">
             <div className="text-[10px] font-medium text-muted-foreground">{label}</div>
             <div className="flex items-center gap-1">
-                <Input inputMode="decimal" value={ranges[key].min} onChange={(e) => setRange(key, "min", e.target.value)} placeholder="min" className="h-7 w-full text-right text-xs font-mono" />
+                <Input inputMode="decimal" value={ranges[key]?.min ?? ""} onChange={(e) => setRange(key, "min", e.target.value)} placeholder="min" className="h-7 w-full text-right text-xs font-mono" />
                 <span className="text-xs text-muted-foreground">–</span>
-                <Input inputMode="decimal" value={ranges[key].max} onChange={(e) => setRange(key, "max", e.target.value)} placeholder="max" className="h-7 w-full text-right text-xs font-mono" />
+                <Input inputMode="decimal" value={ranges[key]?.max ?? ""} onChange={(e) => setRange(key, "max", e.target.value)} placeholder="max" className="h-7 w-full text-right text-xs font-mono" />
+            </div>
+        </div>
+    );
+    // Single "more than x%" threshold box.
+    const thresholdInput = (label: string, value: string, onChange: (v: string) => void) => (
+        <div className="space-y-1">
+            <div className="text-[10px] font-medium text-muted-foreground">{label}</div>
+            <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">&gt;</span>
+                <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="any" className="h-7 w-20 text-right text-xs font-mono" />
+                <span className="text-xs text-muted-foreground">%</span>
             </div>
         </div>
     );
 
     const catActive = [fBrand, fCategory, fGroup, fMethod, fSource].filter((x) => x !== "ALL").length;
     const flagActive = [fBarcodeCapped, fSaleCapped, fInStock].filter(Boolean).length;
-    const rangeActive = RANGE_FIELDS.filter((f) => ranges[f.key].min.trim() || ranges[f.key].max.trim()).length;
-    const activeFilterCount = catActive + flagActive + rangeActive;
+    const thrActive = [tBarcodeShrink, tProfitReduce, tProfitIncrease].filter((x) => x.trim()).length;
+    const rangeActive = RANGE_FIELDS.filter((f) => ranges[f.key]?.min.trim() || ranges[f.key]?.max.trim()).length;
+    const activeFilterCount = catActive + flagActive + thrActive + rangeActive;
     const clearAllFilters = () => {
         setFBrand("ALL"); setFCategory("ALL"); setFGroup("ALL"); setFMethod("ALL"); setFSource("ALL");
         setFBarcodeCapped(false); setFSaleCapped(false); setFInStock(false);
+        setTBarcodeShrink(""); setTProfitReduceRaw(""); setTProfitIncreaseRaw("");
         setRanges(emptyRanges());
     };
 
-    return (
-        <div className="h-full overflow-y-auto px-6 pt-4 pb-10">
-            <div className="mb-3 flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Generate — UI only</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Three live price voices — <span className="font-medium">Strategy</span>,{" "}
-                        <span className="font-medium">Computed</span>, <span className="font-medium">Sale Price</span>.
-                        Click one to pick what sells (POS caps it at the barcode/MRP). Tick rows and Save. Nothing is persisted here.
-                    </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-xs text-muted-foreground">
-                        {selected.size > 0
-                            ? `${selected.size} ticked`
-                            : dirtyCount === 0 ? "All saved" : `${dirtyCount} unsaved`}
-                    </span>
-                    <Button type="button" size="sm" onClick={save} disabled={selected.size === 0}>
-                        <Save className="size-4" /> Save{selected.size > 0 ? ` (${selected.size})` : ""}
+    // The product table body — shared by the "All products" and "Selected product"
+    // tabs (same UI for now; "Selected product" will narrow the list later).
+    const productBody = (
+        <>
+            <div className="mb-3 flex items-center justify-end gap-3">
+                {tab === "all" ? (
+                    <Button type="button" variant="outline" size="sm" onClick={addToSelection} disabled={selected.size === 0}>
+                        <Plus className="size-4" /> Add to selection{selected.size > 0 ? ` (${selected.size})` : ""}
                     </Button>
-                </div>
+                ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={removeFromSelection} disabled={selected.size === 0}>
+                        <Trash2 className="size-4" /> Remove from selection{selected.size > 0 ? ` (${selected.size})` : ""}
+                    </Button>
+                )}
+                <span className="text-xs text-muted-foreground">
+                    {selected.size > 0
+                        ? `${selected.size} ticked`
+                        : dirtyCount === 0 ? "All saved" : `${dirtyCount} unsaved`}
+                </span>
+                <Button type="button" size="sm" onClick={save} disabled={selected.size === 0}>
+                    <Save className="size-4" /> Save{selected.size > 0 ? ` (${selected.size})` : ""}
+                </Button>
             </div>
 
             {/* Toolbar: search + filters toggle + columns */}
@@ -569,7 +681,9 @@ export default function GeneratePage() {
                         <span className="ml-1 rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">{activeFilterCount}</span>
                     ) : null}
                 </Button>
-                <span className="text-xs text-muted-foreground">{visible.length} / {rows.length} shown</span>
+                <span className="text-xs text-muted-foreground">
+                    {tab === "selected" ? `${listRows.length} in selection` : `${listRows.length} / ${rows.length} shown`}
+                </span>
                 {sort ? (
                     <button type="button" onClick={() => setSort(null)} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
                         clear sort
@@ -632,6 +746,11 @@ export default function GeneratePage() {
                             In stock only <span className="text-muted-foreground">(hide zero stock)</span>
                         </label>
                     </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {thresholdInput("Barcode gap shrunk", tBarcodeShrink, setTBarcodeShrink)}
+                        {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
+                        {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
+                    </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                         {RANGE_FIELDS.map((f) => <div key={f.key}>{rangeInput(f.label, f.key)}</div>)}
                     </div>
@@ -664,14 +783,16 @@ export default function GeneratePage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {visible.length === 0 ? (
+                        {listRows.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={colSpan} className="py-8 text-center text-sm text-muted-foreground">
-                                    No products match “{query}”.
+                                    {tab === "selected"
+                                        ? "No products in selection — tick rows in All products and click Add to selection."
+                                        : `No products match “${query}”.`}
                                 </TableCell>
                             </TableRow>
                         ) : null}
-                        {visible.map((r, i) => {
+                        {listRows.map((r, i) => {
                             const strategyPrice = priceWithMargin(r.costIncl, r.charges, r.strategyMargin);
                             const myPrice = priceWithMargin(r.costIncl, r.charges, r.margin);
                             const savedNum = parseFloat(r.salePrice);
@@ -847,6 +968,41 @@ export default function GeneratePage() {
                     </Button>
                 </div>
             </div>
+        </>
+    );
+
+    return (
+        <div className="h-full overflow-y-auto px-6 pt-4 pb-10">
+            <div className="mb-3">
+                <h1 className="text-lg font-semibold">Generate — UI only</h1>
+                <p className="text-sm text-muted-foreground">
+                    Three live price voices — <span className="font-medium">Strategy</span>,{" "}
+                    <span className="font-medium">Computed</span>, <span className="font-medium">Sale Price</span>.
+                    Click one to pick what sells (POS caps it at the barcode/MRP). Tick rows and Save. Nothing is persisted here.
+                </p>
+            </div>
+
+            <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "selected" | "print")}>
+                <TabsList>
+                    <TabsTrigger value="all">All products</TabsTrigger>
+                    <TabsTrigger value="selected">
+                        Selected product{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
+                    </TabsTrigger>
+                    <TabsTrigger value="print">Print</TabsTrigger>
+                </TabsList>
+                <TabsContent value="all">{productBody}</TabsContent>
+                <TabsContent value="selected">{productBody}</TabsContent>
+                {/* forceMount keeps the designer's label edits alive across tab switches. */}
+                <TabsContent value="print" forceMount className="data-[state=inactive]:hidden">
+                    <LabelDesigner
+                        seedItems={[]}
+                        externalItems={printItems}
+                        pageTitle="Print labels"
+                        pageSubtitle="Labels for the selected products. Edit, Update barcode, then Print."
+                        rootClassName="pb-10"
+                    />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

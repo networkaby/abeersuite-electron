@@ -170,7 +170,16 @@
       "Bash(node -e 'const {PrismaClient}=require\\('\\\\''./src/generated/prisma/client'\\\\''\\); const p=new PrismaClient\\(\\); p.invProduct.count\\(\\).then\\(n=>{console.log\\('\\\\''products:'\\\\'',n\\); return p.$disconnect\\(\\)}\\).catch\\(e=>{console.error\\(e.message\\); process.exit\\(1\\)}\\)')",
       "Bash(grep -n \"^export default\\\\|^}$\" src/app/\\\\\\(protected\\\\\\)/office/pricing-strategy/items/page.tsx)",
       "Bash(powershell -Command \"Select-String -Path 'D:\\\\our-own-website\\\\service-mgmt-experiment\\\\src\\\\app\\\\\\(protected\\)\\\\office\\\\inventory\\\\products\\\\page.tsx' -Pattern 'useMemo|\\\\.map\\\\\\(|\\\\.filter\\\\\\(' | Select-Object -First 50\")",
-      "Bash(npx --no-install tsc --noEmit --jsx preserve --target es2022 --module esnext --moduleResolution bundler --strict false --skipLibCheck 'src/app/\\(protected\\)/office/pricing-strategy/needs-attention/page.tsx')"
+      "Bash(npx --no-install tsc --noEmit --jsx preserve --target es2022 --module esnext --moduleResolution bundler --strict false --skipLibCheck 'src/app/\\(protected\\)/office/pricing-strategy/needs-attention/page.tsx')",
+      "PowerShell(pnpm self-update 2>&1)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); pnpm install 2>&1)",
+      "Bash(ls vercel.json next.config.* Dockerfile*)",
+      "Bash(grep -i \"output\" next.config.*)",
+      "PowerShell(npx eslint \"src/app/\\(protected\\)/office/pricing-strategy/items/page.tsx\" 2>&1)",
+      "PowerShell($f=\"C:\\\\Users\\\\User\\\\.claude\\\\projects\\\\D--our-own-website-service-mgmt-experiment\\\\memory\\\\permission_matrix.md\"; $b=[System.IO.File]::ReadAllBytes\\($f\\); \"Length: $\\($b.Length\\)\"; \"First 16 bytes: \" + \\(\\($b[0..15] | ForEach-Object { $_.ToString\\('X2'\\) }\\) -join ' '\\); \"As ascii start: \" + [System.Text.Encoding]::ASCII.GetString\\($b[0..40]\\))",
+      "Bash(cd \"C:/Users/User/.claude/projects/D--our-own-website-service-mgmt-experiment/memory/\"; rm tally_module_status.md && echo \"deleted tally_module_status.md\"; ls -1 | grep -E \"tally|accountancy|seeds_arch\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"pnpm prisma db push --force-reset && pnpm prisma db seed is good\" pnpm prisma db push --accept-data-loss)"
     ]
   }
 }

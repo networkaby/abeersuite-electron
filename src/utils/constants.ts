@@ -53,6 +53,9 @@ import {
     Database,
     Upload,
     AlertTriangle,
+    TicketPercent,
+    Gift,
+    Megaphone,
 } from "lucide-react";
 
 // Keys match the Priority enum: LOW | MEDIUM | HIGH | URGENT
@@ -539,20 +542,22 @@ export const MODULE_SECTIONS: ModuleSection[] = [
     //         { label: "Integrations", icon: Plug, href: "/office/roadmap/administration/integrations" },
     //     ],
     // },
+
     // Retention
-    // {
-    //     label: "Retention",
-    //     icon: TicketPercent,
-    //     key: "retention",
-    //     dashboardHref: "/office/roadmap/retention",
-    //     pathPrefixes: ["/office/roadmap/retention"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
-    //         { label: "Coupon programs", icon: BadgePercent, href: "/office/roadmap/retention/coupons" },
-    //         { label: "Loyalty", icon: Gift, href: "/office/roadmap/retention/loyalty" },
-    //         { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
-    //     ],
-    // },
+    {
+        label: "Retention",
+        icon: TicketPercent,
+        key: "retention",
+        dashboardHref: "/office/roadmap/retention",
+        pathPrefixes: ["/office/roadmap/retention"],
+        children: [
+            // { label: "Overview", icon: ChartArea, href: "/office/roadmap/retention" },
+            { label: "Coupon programs", icon: BadgePercent, href: "/office/roadmap/retention/coupons" },
+            { label: "Loyalty", icon: Gift, href: "/office/roadmap/retention/loyalty" },
+            { label: "Campaigns", icon: Megaphone, href: "/office/roadmap/retention/campaigns" },
+        ],
+    },
+
     // Pricing Strategy
     {
         label: "Pricing Strategy",
@@ -565,6 +570,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
             { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
             { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
+            { label: "Print labels", icon: Printer, href: "/office/pricing-strategy/print-labels" },
         ],
     },
     // Complience

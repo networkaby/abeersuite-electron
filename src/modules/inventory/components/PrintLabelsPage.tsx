@@ -31,12 +31,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Printer, Trash2, Plus, Minus, FileText, Loader2 } from "lucide-react";
+import { Printer, Trash2, Plus, Minus, FileText, Loader2, Search, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -150,6 +150,51 @@ function resolveBarcodeValue(p: { barcode1: string | null; sku: string }): strin
     return (p.barcode1 && p.barcode1.trim()) || p.sku;
 }
 
+// ── Persisted label settings ────────────────────────────────────────────
+// Layout preset + which fields print on each label. Persisted in
+// localStorage (like the store header) so the operator's choices survive
+// reloads and the next print run uses the same layout without re-picking.
+const SETTINGS_STORAGE_KEY = "print-labels:settings";
+
+type PersistedSettings = {
+    presetId:   LabelPresetId;
+    showHeader: boolean;
+    showName:   boolean;
+    showMrp:    boolean;
+    showPrice:  boolean;
+};
+
+const DEFAULT_SETTINGS: PersistedSettings = {
+    presetId:   "a4-3x8",
+    showHeader: true,
+    showName:   true,
+    showMrp:    true,
+    showPrice:  true,
+};
+
+/** Read persisted settings, falling back to defaults for missing / invalid
+ *  fields. SSR-safe (returns defaults when `window` is undefined). */
+function loadSettings(): PersistedSettings {
+    if (typeof window === "undefined") return DEFAULT_SETTINGS;
+    try {
+        const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (!raw) return DEFAULT_SETTINGS;
+        const parsed = JSON.parse(raw) as Partial<PersistedSettings>;
+        const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+        return {
+            presetId:   PRESETS.some((p) => p.id === parsed.presetId)
+                ? (parsed.presetId as LabelPresetId)
+                : DEFAULT_SETTINGS.presetId,
+            showHeader: bool(parsed.showHeader, DEFAULT_SETTINGS.showHeader),
+            showName:   bool(parsed.showName,   DEFAULT_SETTINGS.showName),
+            showMrp:    bool(parsed.showMrp,    DEFAULT_SETTINGS.showMrp),
+            showPrice:  bool(parsed.showPrice,  DEFAULT_SETTINGS.showPrice),
+        };
+    } catch {
+        return DEFAULT_SETTINGS;
+    }
+}
+
 // ────────────────────────────── component ──────────────────────────────
 
 export function PrintLabelsPage() {
@@ -157,7 +202,18 @@ export function PrintLabelsPage() {
     const pathname = usePathname();
 
     const [queue, setQueue]       = useState<QueueRow[]>([]);
-    const [presetId, setPresetId] = useState<LabelPresetId>("a4-3x8");
+
+    // Layout + show-on-label choices, persisted to localStorage (see
+    // loadSettings). One object so a single effect re-persists any change.
+    const [settings, setSettings] = useState<PersistedSettings>(loadSettings);
+    const { presetId, showHeader, showName, showMrp, showPrice } = settings;
+    useEffect(() => {
+        try { window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)); }
+        catch { /* ignore — private mode / disabled storage */ }
+    }, [settings]);
+
+    // Label-settings dialog (layout, show-on-label toggles, store header).
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     // Bumped after every successful add/scan so the combobox remounts and
     // its internal `query` text resets to empty. Without this the combobox
@@ -173,10 +229,6 @@ export function PrintLabelsPage() {
     const [voucherSearch, setVoucherSearch] = useState("");
     const [voucherTypeFilter, setVoucherTypeFilter] = useState<"all" | "GRN" | "PURCHASE">("all");
     const [voucherLoading, setVoucherLoading] = useState(false);
-    const [showHeader, setShowHeader] = useState(true);
-    const [showName,   setShowName]   = useState(true);
-    const [showMrp,    setShowMrp]    = useState(true);
-    const [showPrice,  setShowPrice]  = useState(true);
 
     // Store header — business name + phone / tagline. Persisted in
     // localStorage so the operator types it once. Empty string = no header
@@ -411,102 +463,91 @@ export function PrintLabelsPage() {
             ? `@page { size: ${preset.pageWidth ?? preset.width} ${preset.pageHeight ?? preset.height}; margin: 0; }`
             : `@page { size: A4; margin: 8mm; }`;
 
+    // Short summary of which fields print, shown in the toolbar next to the
+    // active layout name so the operator can see the current settings at a
+    // glance without opening the dialog.
+    const shownFields = [
+        showHeader && "Header",
+        showName   && "Name",
+        showMrp    && "MRP",
+        showPrice  && "Offer price",
+    ].filter(Boolean) as string[];
+    const shownSummary = shownFields.length ? shownFields.join(" · ") : "Barcode only";
+
     return (
-        <div className="space-y-4">
-            {/* Non-print toolbar / settings — hidden via .print-hide in CSS. */}
-            <div className="print-hide space-y-4">
-                {prefillSource && (
-                    <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-2 text-sm">
-                        Queue prefilled from <strong>{prefillSource.type}</strong>{" "}
-                        <span className="font-mono">{prefillSource.reference}</span>. Adjust quantities below or clear to start over.
-                    </div>
-                )}
-                <div className="rounded-md border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                        <h2 className="font-semibold">Add products</h2>
+        <div className="flex h-full flex-col">
+            {/* The pricing-strategy layout slot is overflow-hidden, so this
+                page owns its own scroll region (matches the sibling Items /
+                Needs-attention pages). The labels grid lives inside it too so
+                the on-screen preview is reachable; it is NOT wrapped in
+                .print-hide so it survives into print mode. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-4 pb-6 space-y-4">
+                {/* Non-print toolbar / settings — hidden via .print-hide in CSS. */}
+                <div className="print-hide space-y-4">
+                    {/* Top toolbar — replaces the removed page heading. Surfaces
+                        the active layout + printed fields and opens the settings
+                        dialog. */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm text-muted-foreground">
+                            <span className="font-medium text-foreground">{preset.label}</span>
+                            {" · "}{shownSummary}
+                        </p>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={openVoucherPicker}
+                            onClick={() => setSettingsOpen(true)}
                         >
-                            <FileText className="size-4" />
-                            Pick from GRN / Purchase
+                            <Settings2 className="size-4" />
+                            Label settings
                         </Button>
                     </div>
-                    <div className="max-w-xl">
-                        {/* `key={pickCount}` forces a remount on every add so
-                            the input clears and autoFocus re-engages — letting
-                            the operator scan / search the next item without
-                            any manual reset. */}
-                        <InvProductCombobox
-                            key={pickCount}
-                            value={null}
-                            onChange={addProduct}
-                            placeholder="Search / scan a product to add to the print queue…"
-                            allowCreate={false}
-                            autoFocus
-                        />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Tip: scan a barcode with a USB scanner — the combobox matches by SKU / barcode and adds the product (re-scanning the same item increments qty by 1). Or use the button above to load every line of a recent GRN / Purchase in one click.
-                    </p>
-                </div>
 
-                <div className="rounded-md border border-border bg-card p-4 space-y-3">
-                    <h2 className="font-semibold">Label settings</h2>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <label className="flex flex-col gap-1">
-                            <span className="text-sm font-medium">Layout</span>
-                            <Select value={presetId} onValueChange={(v) => setPresetId(v as LabelPresetId)}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {PRESETS.map((p) => (
-                                        <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </label>
-                        <div className="space-y-2">
-                            <span className="text-sm font-medium">Show on label</span>
-                            <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showHeader} onCheckedChange={(v) => setShowHeader(v === true)} />
-                                    Store header
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showName}   onCheckedChange={(v) => setShowName(v === true)} />
-                                    Product name
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showMrp}    onCheckedChange={(v) => setShowMrp(v === true)} />
-                                    MRP
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={showPrice}  onCheckedChange={(v) => setShowPrice(v === true)} />
-                                    Offer price
-                                </label>
-                            </div>
+                    {prefillSource && (
+                        <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-2 text-sm">
+                            Queue prefilled from <strong>{prefillSource.type}</strong>{" "}
+                            <span className="font-mono">{prefillSource.reference}</span>. Adjust quantities below or clear to start over.
                         </div>
+                    )}
+                    <div className="rounded-md border border-border bg-card p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                            <h2 className="font-semibold">Add products</h2>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={openVoucherPicker}
+                            >
+                                <FileText className="size-4" />
+                                Pick from GRN / Purchase
+                            </Button>
+                        </div>
+                        {/* Prominent search box. InvProductCombobox renders a
+                            borderless transparent input (it's normally a table
+                            cell), so we frame it here with a bordered, focusable
+                            shell + search icon to make the primary action read
+                            as a real input. `key={pickCount}` forces a remount
+                            on every add so the input clears and autoFocus
+                            re-engages — letting the operator scan / search the
+                            next item without any manual reset. */}
+                        <div className="flex h-11 items-center gap-2 rounded-md border border-input bg-background px-3 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
+                            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                            <InvProductCombobox
+                                key={pickCount}
+                                value={null}
+                                onChange={addProduct}
+                                placeholder="Search / scan a product to add to the print queue…"
+                                allowCreate={false}
+                                autoFocus
+                                className="flex-1"
+                            />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Tip: scan a barcode with a USB scanner — the combobox matches by SKU / barcode and adds the product (re-scanning the same item increments qty by 1). Or use the button above to load every line of a recent GRN / Purchase in one click.
+                        </p>
                     </div>
-                    <label className="flex flex-col gap-1">
-                        <span className="text-sm font-medium">Store header text</span>
-                        <Input
-                            type="text"
-                            value={headerText}
-                            onChange={(e) => setHeaderText(e.target.value)}
-                            placeholder="e.g. NETWORK SERVICE, +91 8876996996"
-                            maxLength={80}
-                        />
-                        <span className="text-[11px] text-muted-foreground">
-                            Saved in this browser. Leave blank or untick &ldquo;Store header&rdquo; to omit.
-                        </span>
-                    </label>
-                </div>
 
-                <div className="rounded-md border border-border bg-card p-4 space-y-3">
+                    <div className="rounded-md border border-border bg-card p-4 space-y-3">
                     <div className="flex items-center justify-between">
                         <h2 className="font-semibold">Queue ({totalLabels} {totalLabels === 1 ? "label" : "labels"})</h2>
                         <div className="flex gap-2">
@@ -647,6 +688,79 @@ export function PrintLabelsPage() {
                     );
                 })}
             </div>
+            </div>
+
+            {/* Label settings — layout, printed fields, and the store header.
+                Persisted to localStorage (see loadSettings) so the choices
+                carry to the next print run. print-hide on the content so the
+                portal doesn't bleed into the printed sheet. */}
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+                <DialogContent className="!max-w-lg print-hide">
+                    <DialogHeader>
+                        <DialogTitle>Label settings</DialogTitle>
+                        <DialogDescription>
+                            Pick the label layout and what prints on each sticker. Saved in this browser for next time.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-sm font-medium">Layout</span>
+                            <Select value={presetId} onValueChange={(v) => setSettings((s) => ({ ...s, presetId: v as LabelPresetId }))}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {PRESETS.map((p) => (
+                                        <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </label>
+
+                        <div className="space-y-2">
+                            <span className="text-sm font-medium">Show on label</span>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={showHeader} onCheckedChange={(v) => setSettings((s) => ({ ...s, showHeader: v === true }))} />
+                                    Store header
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={showName} onCheckedChange={(v) => setSettings((s) => ({ ...s, showName: v === true }))} />
+                                    Product name
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={showMrp} onCheckedChange={(v) => setSettings((s) => ({ ...s, showMrp: v === true }))} />
+                                    MRP
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={showPrice} onCheckedChange={(v) => setSettings((s) => ({ ...s, showPrice: v === true }))} />
+                                    Offer price
+                                </label>
+                            </div>
+                        </div>
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-sm font-medium">Store header text</span>
+                            <Input
+                                type="text"
+                                value={headerText}
+                                onChange={(e) => setHeaderText(e.target.value)}
+                                placeholder="e.g. NETWORK SERVICE, +91 8876996996"
+                                maxLength={80}
+                                disabled={!showHeader}
+                            />
+                            <span className="text-[11px] text-muted-foreground">
+                                Saved in this browser. Leave blank or untick &ldquo;Store header&rdquo; to omit.
+                            </span>
+                        </label>
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" onClick={() => setSettingsOpen(false)}>Done</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* "Pick from GRN / Purchase" — lazy-loaded list of POSTED
                 receiving vouchers. Click a row → soft-navigate to

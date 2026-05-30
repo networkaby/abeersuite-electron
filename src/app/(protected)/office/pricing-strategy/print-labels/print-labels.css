@@ -140,6 +140,10 @@
         left: 0;
         top: 0;
         width: 100%;
+        /* margin reset: on-screen the grid sits inside a space-y wrapper that
+           gives it a top margin; absolute positioning would otherwise carry
+           that margin into the printed sheet as a stray top offset. */
+        margin: 0;
         padding: 0;
         border: none;
         background: transparent;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -120,6 +120,244 @@ function attentionFor(item: Item): Attention {
     return { needs: missing.length > 0, critical: noCost, missing };
 }
 
+/** Default (unedited) row state derived from the item's saved values. */
+function defaultEditFor(item: Item): RowEdit {
+    return {
+        costMethod:    item.costMethod ?? "__inherit",
+        marginPercent: item.marginPercent != null ? String(item.marginPercent) : "",
+        priceRupees:   "",
+    };
+}
+
+/**
+ * Replays the server-side applyStrategy() formula using the row's current
+ * edit state. Returns the live computed price + cap status so the Computed
+ * column can show the in-progress value before save.
+ *
+ *   raw      = (cost + flatPaise) × (1 + markup% / 100)            [excl-GST]
+ *   gross    = raw × (1 + gst% / 100)                              [incl-GST]
+ *   rounded  = round to nearest roundingPaise (or exact if 0)
+ *   final    = min(rounded, mrpPaise) when mrp set, else rounded
+ *
+ * Returns both the inclusive sticker price (shown as "Computed") and the
+ * exclusive value (shown beneath, and used for the excl-vs-excl profit math).
+ */
+function livePreview(item: Item, e: RowEdit): {
+    pricePaise:     number | null;
+    pricePaiseIncl: number | null;
+    cappedAtMrp:    boolean;
+    markupPct:      number;
+    usedCost:       number | null;
+    dirty:          boolean;
+} {
+    // Cost is read-only in this UI (resolver-driven) — no typed override.
+    const cost: number | null = item.resolvedCostPaise;
+    // Margin: typed value wins if numeric. Empty input means "no per-item
+    // override" → use strategy's effective markup as visible in appliedMarkupPct.
+    let markup: number = item.appliedMarkupPct;
+    if (e.marginPercent.trim() !== "") {
+        const typed = Number(e.marginPercent);
+        if (Number.isFinite(typed)) markup = typed;
+    }
+    if (cost == null) {
+        return { pricePaise: null, pricePaiseIncl: null, cappedAtMrp: false, markupPct: markup, usedCost: null, dirty: false };
+    }
+    const raw      = (cost + item.appliedFlatPaise) * (1 + markup / 100);
+    const rounding = item.appliedRoundingPaise;
+    const gstMul   = item.gstRatePct > 0 ? 1 + item.gstRatePct / 100 : 1;
+    const roundTo  = (n: number) => (rounding > 0 ? Math.round(n / rounding) * rounding : Math.round(n));
+    // Inclusive sticker price — mirror server applyStrategy: apply GST before
+    // rounding, then cap at MRP (MRP is itself GST-inclusive).
+    const roundedIncl = roundTo(raw * gstMul);
+    const cap         = item.mrpPaise != null && item.mrpPaise > 0 ? item.mrpPaise : null;
+    const capped      = cap != null && roundedIncl > cap;
+    const finalIncl   = capped ? cap! : roundedIncl;
+    // Exclusive equivalent — back out of the cap so profit stays excl-vs-excl.
+    const finalExcl   = capped ? Math.round(cap! / gstMul) : roundTo(raw);
+    const dirty       = finalIncl !== item.computedPricePaise;
+    return { pricePaise: finalExcl, pricePaiseIncl: finalIncl, cappedAtMrp: capped, markupPct: markup, usedCost: cost, dirty };
+}
+
+interface ItemRowProps {
+    item:             Item;
+    /** This row's in-progress edit, or undefined when untouched. */
+    edit:             RowEdit | undefined;
+    saving:           boolean;
+    onChange:         (item: Item, patch: Partial<RowEdit>) => void;
+    onSave:           (item: Item, e: RowEdit) => void;
+    onToggleOverride: (item: Item) => void;
+}
+
+/**
+ * One pricing row. Memoised so a keystroke in one row's margin/price input
+ * only re-renders that row — not all ~600 rows. The parent passes stable
+ * callbacks + this row's own `edit` slice, so React.memo's shallow compare
+ * skips every untouched row.
+ */
+const ItemRow = memo(function ItemRow({ item, edit, saving, onChange, onSave, onToggleOverride }: ItemRowProps) {
+    const e = edit ?? defaultEditFor(item);
+    const itemMethodValue = item.costMethod ?? "__inherit";
+    const dirty =
+        e.costMethod !== itemMethodValue ||
+        e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
+        e.priceRupees.trim() !== "";
+    // Hint shows only when inheriting — names the resolved method.
+    const methodHint =
+        e.costMethod === "__inherit"
+            ? `using ${COST_METHOD_LABEL[item.effectiveCostMethod]}`
+            : "";
+    const productLabel = [item.sku, item.brandName, item.categoryName].filter(Boolean).join(" · ");
+    // Cost displayed inclusive of GST per user preference — both stored
+    // values are excl-GST so we gross up at display time only. Profit
+    // math below stays excl-vs-excl (still tax-adjusted).
+    const costInclPaise = item.resolvedCostPaise != null && item.gstRatePct > 0
+        ? Math.round(item.resolvedCostPaise * (1 + item.gstRatePct / 100))
+        : item.resolvedCostPaise;
+    const lp = livePreview(item, e);
+    const effectivePricePaise = item.priceOverridden ? item.pricePaise : lp.pricePaise;
+    const costForProfit = item.resolvedCostPaise;
+    const profitPaise = effectivePricePaise != null && costForProfit != null
+        ? effectivePricePaise - costForProfit
+        : null;
+    const profitPct = profitPaise != null && costForProfit && costForProfit > 0
+        ? (profitPaise / costForProfit) * 100
+        : null;
+    return (
+        <TableRow>
+            <TableCell className="max-w-[260px]">
+                <div className="font-medium text-sm truncate" title={item.name}>{item.name}</div>
+                <div className="text-xs text-muted-foreground truncate" title={productLabel}>
+                    {productLabel}
+                </div>
+            </TableCell>
+            <TableCell>
+                <Select
+                    value={e.costMethod}
+                    onValueChange={(v) => onChange(item, { costMethod: v as RowEdit["costMethod"] })}
+                >
+                    <SelectTrigger className="h-7 w-[140px] text-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__inherit">
+                            Inherit · {COST_METHOD_LABEL[item.strategyCostMethod ?? "WEIGHTED_AVG"]}
+                        </SelectItem>
+                        {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
+                            <SelectItem key={v} value={v}>{l}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {methodHint ? (
+                    <div className="text-[10px] text-muted-foreground mt-0.5 truncate" title={methodHint}>
+                        {methodHint}
+                    </div>
+                ) : null}
+            </TableCell>
+            <TableCell className="text-right">
+                <span className="text-sm font-mono">{paise(costInclPaise)}</span>
+                {item.gstRatePct > 0 && item.resolvedCostPaise != null ? (
+                    <div className="text-[10px] text-muted-foreground">
+                        {paise(item.resolvedCostPaise)} excl
+                    </div>
+                ) : null}
+            </TableCell>
+            <TableCell className="text-right">
+                <Input
+                    inputMode="decimal"
+                    placeholder="strategy"
+                    value={e.marginPercent}
+                    onChange={(ev) => onChange(item, { marginPercent: ev.target.value })}
+                    className="h-7 w-16 text-right text-xs font-mono"
+                />
+            </TableCell>
+            <TableCell>
+                <div className="text-xs truncate" title={item.strategyName ?? "—"}>{item.strategyName ?? "—"}</div>
+                <div className="text-[10px] text-muted-foreground">
+                    @{item.appliedMarkupPct.toFixed(2)}%
+                </div>
+            </TableCell>
+            <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                    <span className={`text-sm font-medium ${lp.dirty ? "text-blue-700" : ""}`}>
+                        {paise(lp.pricePaiseIncl)}
+                    </span>
+                    {lp.cappedAtMrp ? (
+                        <span
+                            className="inline-flex"
+                            aria-label={`Capped at MRP ${paise(item.mrpPaise)}`}
+                            title={`Capped at MRP ${paise(item.mrpPaise)}`}
+                        >
+                            <ShieldAlert className="size-3.5 text-amber-600" />
+                        </span>
+                    ) : null}
+                </div>
+                {item.gstRatePct > 0 && lp.pricePaise != null ? (
+                    <div className="text-[10px] text-muted-foreground">{paise(lp.pricePaise)} excl</div>
+                ) : null}
+            </TableCell>
+            <TableCell className="text-right">
+                {profitPaise == null ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                ) : (
+                    <>
+                        <div className="flex items-center justify-end gap-1">
+                            {profitPaise < 0 ? (
+                                <TrendingDown className="size-3 text-red-600" aria-hidden />
+                            ) : null}
+                            <span className={`text-sm font-mono ${profitPaise < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                                {paise(profitPaise)}
+                            </span>
+                        </div>
+                        {profitPct != null ? (
+                            <div className={`text-[10px] ${profitPaise < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                {profitPct.toFixed(1)}%
+                            </div>
+                        ) : null}
+                    </>
+                )}
+            </TableCell>
+            <TableCell className="text-right">
+                <span className="text-sm font-mono">{paise(item.pricePaise)}</span>
+                {item.priceOverridden ? (
+                    <Lock className="size-3 inline ml-1 text-muted-foreground" aria-label="Manual override" />
+                ) : null}
+            </TableCell>
+            <TableCell className="text-right">
+                <Input
+                    inputMode="decimal"
+                    placeholder="₹ 0.00"
+                    value={e.priceRupees}
+                    onChange={(ev) => onChange(item, { priceRupees: ev.target.value })}
+                    className="h-7 w-24 text-right text-xs font-mono"
+                />
+            </TableCell>
+            <TableCell className="text-right space-x-1 whitespace-nowrap">
+                {dirty ? (
+                    <Button
+                        type="button"
+                        size="icon-sm"
+                        aria-label="Save"
+                        onClick={() => onSave(item, e)}
+                        disabled={saving}
+                    >
+                        <Save className="size-4" />
+                    </Button>
+                ) : null}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={item.priceOverridden ? "Clear override" : "Lock manual"}
+                    onClick={() => onToggleOverride(item)}
+                    disabled={saving}
+                >
+                    {item.priceOverridden ? <Unlock className="size-4" /> : <Lock className="size-4" />}
+                </Button>
+            </TableCell>
+        </TableRow>
+    );
+});
+
 export default function PricingItemsPage() {
     const [items,               setItems]               = useState<Item[]>([]);
     const [loading,             setLoading]             = useState(true);
@@ -196,14 +434,14 @@ export default function PricingItemsPage() {
         });
     }, [ensureRefs]);
 
-    const load = () => {
+    const load = useCallback(() => {
         setLoading(true);
         axios
             .get<Item[]>("/api/pricing-strategy/items")
             .then((r) => setItems(r.data))
             .catch(() => toast.error("Failed to load pricing items"))
             .finally(() => setLoading(false));
-    };
+    }, []);
 
     useEffect(() => {
         load();
@@ -334,56 +572,14 @@ export default function PricingItemsPage() {
         setFilterStrategy("__all");
     };
 
-    /**
-     * Replays the server-side applyStrategy() formula using the row's current
-     * edit state. Returns the live computed price + cap status so the Computed
-     * column can show the in-progress value before save.
-     *
-     *   raw = (cost + flatPaise) × (1 + markup% / 100)
-     *   rounded = round to nearest roundingPaise (or exact if 0)
-     *   final = min(rounded, mrpPaise) when mrp set, else rounded
-     */
-    function livePreview(item: Item, e: RowEdit): {
-        pricePaise:   number | null;
-        cappedAtMrp:  boolean;
-        markupPct:    number;
-        usedCost:     number | null;
-        dirty:        boolean;
-    } {
-        // Cost is read-only in this UI (resolver-driven) — no typed override.
-        const cost: number | null = item.resolvedCostPaise;
-        // Margin: typed value wins if numeric. Empty input means "no per-item
-        // override" → use strategy's effective markup as visible in appliedMarkupPct.
-        let markup: number = item.appliedMarkupPct;
-        if (e.marginPercent.trim() !== "") {
-            const typed = Number(e.marginPercent);
-            if (Number.isFinite(typed)) markup = typed;
-        }
-        if (cost == null) {
-            return { pricePaise: null, cappedAtMrp: false, markupPct: markup, usedCost: null, dirty: false };
-        }
-        const raw     = (cost + item.appliedFlatPaise) * (1 + markup / 100);
-        const rounding = item.appliedRoundingPaise;
-        const rounded = rounding > 0 ? Math.round(raw / rounding) * rounding : Math.round(raw);
-        const cap     = item.mrpPaise != null && item.mrpPaise > 0 ? item.mrpPaise : null;
-        const capped  = cap != null && rounded > cap;
-        const finalP  = capped ? cap! : rounded;
-        const dirty   = finalP !== item.computedPricePaise;
-        return { pricePaise: finalP, cappedAtMrp: capped, markupPct: markup, usedCost: cost, dirty };
-    }
+    const handleChange = useCallback((item: Item, patch: Partial<RowEdit>) => {
+        setEdits((prev) => ({
+            ...prev,
+            [item.id]: { ...(prev[item.id] ?? defaultEditFor(item)), ...patch },
+        }));
+    }, []);
 
-    const editFor = (item: Item): RowEdit =>
-        edits[item.id] ?? {
-            costMethod:    item.costMethod ?? "__inherit",
-            marginPercent: item.marginPercent != null ? String(item.marginPercent) : "",
-            priceRupees:   "",
-        };
-
-    const setEdit = (id: number, item: Item, patch: Partial<RowEdit>) =>
-        setEdits((prev) => ({ ...prev, [id]: { ...editFor(item), ...prev[id], ...patch } }));
-
-    const saveRow = async (item: Item) => {
-        const e = editFor(item);
+    const handleSave = useCallback(async (item: Item, e: RowEdit) => {
         const payload: Record<string, unknown> = {};
         // Translate "__inherit" sentinel → null. Compare current edit to item value.
         const editMethod    = e.costMethod === "__inherit" ? null : e.costMethod;
@@ -424,9 +620,9 @@ export default function PricingItemsPage() {
         } finally {
             setSavingId(null);
         }
-    };
+    }, [load]);
 
-    const toggleOverride = async (item: Item) => {
+    const handleToggleOverride = useCallback(async (item: Item) => {
         setSavingId(item.id);
         try {
             await axios.patch(`/api/pricing-strategy/items/${item.id}`, {
@@ -439,7 +635,7 @@ export default function PricingItemsPage() {
         } finally {
             setSavingId(null);
         }
-    };
+    }, [load]);
 
     const applyAll = async () => {
         if (!confirm("Recompute and write pricePaise for every non-overridden product?")) return;
@@ -458,182 +654,8 @@ export default function PricingItemsPage() {
         }
     };
 
-    // ── Shared row renderer ──────────────────────────────────────────────────
-    function renderItemRow(item: Item) {
-        const e    = editFor(item);
-        const itemMethodValue = item.costMethod ?? "__inherit";
-        const dirty =
-            e.costMethod !== itemMethodValue ||
-            e.marginPercent !== (item.marginPercent != null ? String(item.marginPercent) : "") ||
-            e.priceRupees.trim() !== "";
-        // Hint shows only when inheriting — names the resolved method.
-        const methodHint =
-            e.costMethod === "__inherit"
-                ? `using ${COST_METHOD_LABEL[item.effectiveCostMethod]}`
-                : "";
-        const productLabel = [item.sku, item.brandName, item.categoryName].filter(Boolean).join(" · ");
-        // Cost displayed inclusive of GST per user preference — both stored
-        // values are excl-GST so we gross up at display time only. Profit
-        // math below stays excl-vs-excl (still tax-adjusted).
-        const costInclPaise = item.resolvedCostPaise != null && item.gstRatePct > 0
-            ? Math.round(item.resolvedCostPaise * (1 + item.gstRatePct / 100))
-            : item.resolvedCostPaise;
-        // Profit per unit (tax-adjusted): pricePaise and resolvedCostPaise are
-        // both stored excl-GST, so the difference is the realised margin after
-        // input-GST netting. Live preview uses the in-progress computed price.
-        const lp = livePreview(item, e);
-        const effectivePricePaise = item.priceOverridden ? item.pricePaise : lp.pricePaise;
-        const costForProfit = item.resolvedCostPaise;
-        const profitPaise = effectivePricePaise != null && costForProfit != null
-            ? effectivePricePaise - costForProfit
-            : null;
-        const profitPct = profitPaise != null && costForProfit && costForProfit > 0
-            ? (profitPaise / costForProfit) * 100
-            : null;
-        return (
-            <TableRow key={item.id}>
-                <TableCell className="max-w-[260px]">
-                    <div className="font-medium text-sm truncate" title={item.name}>{item.name}</div>
-                    <div className="text-xs text-muted-foreground truncate" title={productLabel}>
-                        {productLabel}
-                    </div>
-                </TableCell>
-                <TableCell>
-                    <Select
-                        value={e.costMethod}
-                        onValueChange={(v) => setEdit(item.id, item, { costMethod: v as RowEdit["costMethod"] })}
-                    >
-                        <SelectTrigger className="h-7 w-[140px] text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__inherit">
-                                Inherit · {COST_METHOD_LABEL[item.strategyCostMethod ?? "WEIGHTED_AVG"]}
-                            </SelectItem>
-                            {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
-                                <SelectItem key={v} value={v}>{l}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {methodHint ? (
-                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate" title={methodHint}>
-                            {methodHint}
-                        </div>
-                    ) : null}
-                </TableCell>
-                <TableCell className="text-right">
-                    <span className="text-sm font-mono">{paise(costInclPaise)}</span>
-                    {item.gstRatePct > 0 && item.resolvedCostPaise != null ? (
-                        <div className="text-[10px] text-muted-foreground">
-                            {paise(item.resolvedCostPaise)} excl
-                        </div>
-                    ) : null}
-                </TableCell>
-                <TableCell className="text-right">
-                    <Input
-                        inputMode="decimal"
-                        placeholder="strategy"
-                        value={e.marginPercent}
-                        onChange={(ev) => setEdit(item.id, item, { marginPercent: ev.target.value })}
-                        className="h-7 w-16 text-right text-xs font-mono"
-                    />
-                </TableCell>
-                <TableCell>
-                    <div className="text-xs truncate" title={item.strategyName ?? "—"}>{item.strategyName ?? "—"}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                        @{item.appliedMarkupPct.toFixed(2)}%
-                    </div>
-                </TableCell>
-                <TableCell className="text-right">
-                    {(() => {
-                        const showLive = lp.dirty;
-                        return (
-                            <>
-                                <div className="flex items-center justify-end gap-1">
-                                    <span className={`text-sm font-medium ${showLive ? "text-blue-700" : ""}`}>
-                                        {paise(lp.pricePaise)}
-                                    </span>
-                                    {lp.cappedAtMrp ? (
-                                        <span
-                                            className="inline-flex"
-                                            aria-label={`Capped at MRP ${paise(item.mrpPaise)}`}
-                                            title={`Capped at MRP ${paise(item.mrpPaise)}`}
-                                        >
-                                            <ShieldAlert className="size-3.5 text-amber-600" />
-                                        </span>
-                                    ) : null}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground">
-                                    {showLive ? <>was {paise(item.computedPricePaise)}</>
-                                              : item.mrpPaise && item.mrpPaise > 0 ? <>MRP {paise(item.mrpPaise)}</>
-                                              : null}
-                                </div>
-                            </>
-                        );
-                    })()}
-                </TableCell>
-                <TableCell className="text-right">
-                    {profitPaise == null ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                    ) : (
-                        <>
-                            <div className="flex items-center justify-end gap-1">
-                                {profitPaise < 0 ? (
-                                    <TrendingDown className="size-3 text-red-600" aria-hidden />
-                                ) : null}
-                                <span className={`text-sm font-mono ${profitPaise < 0 ? "text-red-700" : "text-emerald-700"}`}>
-                                    {paise(profitPaise)}
-                                </span>
-                            </div>
-                            {profitPct != null ? (
-                                <div className={`text-[10px] ${profitPaise < 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                                    {profitPct.toFixed(1)}%
-                                </div>
-                            ) : null}
-                        </>
-                    )}
-                </TableCell>
-                <TableCell className="text-right">
-                    <span className="text-sm font-mono">{paise(item.pricePaise)}</span>
-                    {item.priceOverridden ? (
-                        <Lock className="size-3 inline ml-1 text-muted-foreground" aria-label="Manual override" />
-                    ) : null}
-                </TableCell>
-                <TableCell className="text-right">
-                    <Input
-                        inputMode="decimal"
-                        placeholder="₹ 0.00"
-                        value={e.priceRupees}
-                        onChange={(ev) => setEdit(item.id, item, { priceRupees: ev.target.value })}
-                        className="h-7 w-24 text-right text-xs font-mono"
-                    />
-                </TableCell>
-                <TableCell className="text-right space-x-1 whitespace-nowrap">
-                    {dirty ? (
-                        <Button
-                            type="button"
-                            size="icon-sm"
-                            aria-label="Save"
-                            onClick={() => saveRow(item)}
-                            disabled={savingId === item.id}
-                        >
-                            <Save className="size-4" />
-                        </Button>
-                    ) : null}
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={item.priceOverridden ? "Clear override" : "Lock manual"}
-                        onClick={() => toggleOverride(item)}
-                        disabled={savingId === item.id}
-                    >
-                        {item.priceOverridden ? <Unlock className="size-4" /> : <Lock className="size-4" />}
-                    </Button>
-                </TableCell>
-            </TableRow>
-        );
-    }
+    // Row rendering moved to the module-level memoised <ItemRow> so a keystroke
+    // in one margin/price input no longer re-renders all ~600 rows.
 
     function TableColumns() {
         return (
@@ -643,7 +665,7 @@ export default function PricingItemsPage() {
                 <TableHead className="text-right text-xs">Cost (₹ incl GST)</TableHead>
                 <TableHead className="text-right text-xs">Margin %</TableHead>
                 <TableHead className="text-xs">Strategy</TableHead>
-                <TableHead className="text-right text-xs">Computed</TableHead>
+                <TableHead className="text-right text-xs">Computed (₹ incl GST)</TableHead>
                 <TableHead className="text-right text-xs">Profit</TableHead>
                 <TableHead className="text-right text-xs">Current</TableHead>
                 <TableHead className="text-right text-xs">Manual price (₹)</TableHead>
@@ -828,7 +850,17 @@ export default function PricingItemsPage() {
                                     : "No products match."
                             } />
                         ) : (
-                            normalFiltered.map((item) => renderItemRow(item))
+                            normalFiltered.map((item) => (
+                                <ItemRow
+                                    key={item.id}
+                                    item={item}
+                                    edit={edits[item.id]}
+                                    saving={savingId === item.id}
+                                    onChange={handleChange}
+                                    onSave={handleSave}
+                                    onToggleOverride={handleToggleOverride}
+                                />
+                            ))
                         )}
                     </TableBody>
                 </Table>
@@ -836,7 +868,7 @@ export default function PricingItemsPage() {
 
             <p className="flex-none text-[11px] text-muted-foreground leading-relaxed">
                 <strong>Cost</strong> is resolved per the row&apos;s cost method (opening + purchases) — read-only here; manual entry lives on the <em>Needs Attention</em> page.{" "}
-                <strong>Computed</strong> = (cost + flat) × (1 + markup%), rounded, capped at MRP.{" "}
+                <strong>Computed</strong> = (cost + flat) × (1 + markup%) × (1 + GST%), rounded, capped at MRP — shown GST-inclusive, with the exclusive value beneath.{" "}
                 <strong>Profit</strong> = price − cost (both excl-GST, so tax-adjusted).{" "}
                 <strong>Manual price</strong> sets <code>pricePaise</code> directly and locks the row.
             </p>

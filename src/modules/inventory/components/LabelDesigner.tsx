@@ -1,0 +1,628 @@
+"use client";
+
+/**
+ * LabelDesigner (UI only) — the barcode-label design sandbox.
+ *
+ * Extracted from the /print-labels/test page so it can be mounted in two places:
+ *   1. The standalone /print-labels/test route (seeded with SAMPLE items).
+ *   2. The "Print" tab of /print-labels/generate, fed by the product selection
+ *      (each picked product flows in via `externalItems`).
+ *
+ * Nothing here is persisted or fetched for the label list itself — you edit a
+ * small list of items and see (a) the computed "secret date code" per row and
+ * (b) every row rendered as a real label in the grid below.
+ *
+ * Secret date code (staff-only, customer can't read it):
+ *   - year   → omitted
+ *   - MM     → 2-digit month  (01–12)
+ *   - T      → ten-day third of the month: 1 = 1–10, 2 = 11–20, 3 = 21–end
+ *   e.g. 2026-05-14 → "052"   (May, second third)
+ */
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { cn } from "@/shared/lib/format/utils";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { FileText, Loader2, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
+import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
+
+// ── Item shape (one label) ───────────────────────────────────────────────────
+
+export type Item = { id: number; name: string; barcode: string; price: string; mrp: string; date: string };
+
+// ── Secret date code ─────────────────────────────────────────────────────────
+
+/** Ten-day third of a month: 1 (1–10), 2 (11–20), 3 (21–end). */
+function tenDayThird(day: number): 1 | 2 | 3 {
+    if (day <= 10) return 1;
+    if (day <= 20) return 2;
+    return 3;
+}
+
+/**
+ * Build the secret code from a "YYYY-MM-DD" string. Parsed from the string
+ * directly (no Date object) so there are no timezone surprises.
+ * Returns "" for an empty/invalid date.
+ */
+function secretDateCode(dateStr: string): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
+    if (!m) return "";
+    const day = parseInt(m[3], 10);
+    if (day < 1 || day > 31) return "";
+    return `${m[2]}${tenDayThird(day)}`;
+}
+
+const THIRD_LABEL = ["", "days 1–10", "days 11–20", "days 21–end"];
+
+// ── Label size presets (mm) ──────────────────────────────────────────────────
+
+type Preset = { id: string; label: string; w: number; h: number; cols: number; barHeight: number; fontSize: number };
+const PRESETS: Preset[] = [
+    { id: "thermal-50x25", label: "Thermal 50 × 25 mm", w: 50, h: 25, cols: 4, barHeight: 28, fontSize: 11 },
+    { id: "a4-3x8", label: "A4 3×8 — 63.5 × 33.9 mm", w: 63.5, h: 33.9, cols: 3, barHeight: 36, fontSize: 13 },
+    { id: "a4-4x10", label: "A4 4×10 — 48.5 × 25.4 mm", w: 48.5, h: 25.4, cols: 4, barHeight: 26, fontSize: 10 },
+];
+
+// ── Default sample items (used by the standalone /test route) ─────────────────
+
+export const SAMPLE_ITEMS: Item[] = [
+    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", barcode: "4250593440769", price: "1550", mrp: "4200", date: "2026-05-14" },
+    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", barcode: "4250593443319", price: "1650", mrp: "4250", date: "2026-05-04" },
+    { id: 3, name: "Adapter 19v 40w 2.1mp", barcode: "38686599387", price: "600", mrp: "900", date: "2026-01-27" },
+    { id: 4, name: "30Pin Lvds Cable Universal Board", barcode: "38692809948", price: "242", mrp: "286", date: "2026-12-22" },
+];
+
+// Today as YYYY-MM-DD — stamped as the price date on a freshly added product.
+function todayISO(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ── Voucher prefill (Pick from GRN / Purchase) ────────────────────────────────
+type VoucherListRow = { id: number; type: string; reference: string; date: string; partyName: string | null; _count?: { lines: number } };
+type VoucherLineFromApi = { productId: number; quantity: string | number; mrpPaise: number | null; product: { id: number; sku: string; name: string } };
+type VoucherFromApi = { id: number; type: string; reference: string; lines: VoucherLineFromApi[] };
+type ProductLookupRow = { id: number; sku: string; name: string; barcode1: string | null; pricePaise: number | null; mrpPaise: number | null };
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+type LabelDesignerProps = {
+    /** Initial label list (defaults to SAMPLE_ITEMS for the standalone route). */
+    seedItems?: Item[];
+    /** Items pushed in from outside (e.g. the Generate selection). Merged additively, once per barcode. */
+    externalItems?: Item[];
+    pageTitle?: string;
+    pageSubtitle?: string;
+    /** Root wrapper classes — the standalone route owns its scroll; embedded uses the parent's. */
+    rootClassName?: string;
+};
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
+export function LabelDesigner({
+    seedItems = SAMPLE_ITEMS,
+    externalItems,
+    pageTitle = "Label test — UI only",
+    pageSubtitle = "Edit the list, watch the secret code, and preview every label. Nothing is saved.",
+    rootClassName = "h-full overflow-y-auto px-6 pt-4 pb-10",
+}: LabelDesignerProps) {
+    const [items, setItems] = useState<Item[]>(seedItems);
+    const nextId = useRef((seedItems.reduce((mx, it) => Math.max(mx, it.id), 0)) + 1);
+
+    // Global label options (apply to every label).
+    const [showHeader, setShowHeader] = useState(true);
+    const [header, setHeader] = useState("NETWORK SERVICE  ·  +91 8876996996");
+    const [showMrp, setShowMrp] = useState(true);
+    const [showSecret, setShowSecret] = useState(true);
+    const [side, setSide] = useState<"left" | "right">("right");
+    const [orientation, setOrientation] = useState<"spine" | "upright">("spine");
+    const [presetId, setPresetId] = useState(PRESETS[0].id);
+    const [zoom, setZoom] = useState(2.5);
+    const [settingsOpen, setSettingsOpen] = useState(true);
+
+    const preset = PRESETS.find((p) => p.id === presetId) ?? PRESETS[0];
+
+    const update = (id: number, patch: Partial<Item>) =>
+        setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    const remove = (id: number) => setItems((prev) => prev.filter((it) => it.id !== id));
+    const addRow = () =>
+        setItems((prev) => [
+            ...prev,
+            { id: nextId.current++, name: "New item", barcode: "0000000000000", price: "0", mrp: "0", date: todayISO() },
+        ]);
+
+    // Update barcode = re-stamp every label's price date to today, so the secret
+    // date code reflects a fresh print (the barcode "as of now").
+    const updateBarcodes = () => {
+        if (items.length === 0) return;
+        const today = todayISO();
+        setItems((prev) => prev.map((it) => ({ ...it, date: today })));
+        toast.success(`Updated ${items.length} barcode${items.length === 1 ? "" : "s"} — date code set to today`);
+    };
+
+    // ── Merge externally-supplied items (the Generate selection) ───────────────
+    // Additive, once per barcode — removing a row here won't make it re-appear.
+    const mergedBarcodes = useRef<Set<string>>(new Set(seedItems.map((i) => i.barcode)));
+    useEffect(() => {
+        if (!externalItems || externalItems.length === 0) return;
+        const adds = externalItems.filter((it) => it.barcode && !mergedBarcodes.current.has(it.barcode));
+        if (adds.length === 0) return;
+        adds.forEach((it) => mergedBarcodes.current.add(it.barcode));
+        setItems((prev) => {
+            const seen = new Set(prev.map((p) => p.barcode));
+            const fresh = adds.filter((a) => !seen.has(a.barcode)).map((a) => ({ ...a, id: nextId.current++ }));
+            return fresh.length ? [...prev, ...fresh] : prev;
+        });
+    }, [externalItems]);
+
+    // ── Add product via the shared combobox (search + scan, real lookup) ───────
+    const [pickCount, setPickCount] = useState(0);
+    const addFromCombobox = (sp: SelectedProduct | null) => {
+        if (!sp) return;
+        setPickCount((c) => c + 1);
+        setItems((prev) => {
+            if (prev.some((it) => it.barcode === sp.sku)) return prev; // already in the list
+            return [
+                ...prev,
+                {
+                    id: nextId.current++,
+                    name: sp.name,
+                    barcode: sp.sku,
+                    price: sp.salePrice != null ? String(sp.salePrice) : "0",
+                    mrp: sp.mrp != null ? String(sp.mrp) : "0",
+                    date: todayISO(),
+                },
+            ];
+        });
+    };
+
+    // ── Pick from GRN / Purchase voucher ──────────────────────────────────────
+    const [lookupById, setLookupById] = useState<Map<number, ProductLookupRow>>(new Map());
+    useEffect(() => {
+        axios.get<ProductLookupRow[]>("/api/inventory/products/lookup")
+            .then((r) => setLookupById(new Map(r.data.map((p) => [p.id, p]))))
+            .catch(() => { /* combobox will surface lookup issues */ });
+    }, []);
+
+    const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
+    const [voucherList, setVoucherList] = useState<VoucherListRow[] | null>(null);
+    const [voucherSearch, setVoucherSearch] = useState("");
+    const [voucherTypeFilter, setVoucherTypeFilter] = useState<"all" | "GRN" | "PURCHASE">("all");
+    const [voucherLoading, setVoucherLoading] = useState(false);
+
+    async function loadVoucherList(force = false) {
+        if (voucherList && !force) return;
+        setVoucherLoading(true);
+        try {
+            const [grn, pur] = await Promise.all([
+                axios.get<VoucherListRow[]>("/api/inventory/vouchers", { params: { type: "GRN", status: "POSTED" } }),
+                axios.get<VoucherListRow[]>("/api/inventory/vouchers", { params: { type: "PURCHASE", status: "POSTED" } }),
+            ]);
+            const merged = [...grn.data, ...pur.data].sort((a, b) =>
+                a.date !== b.date ? (a.date < b.date ? 1 : -1) : (a.id < b.id ? 1 : -1));
+            setVoucherList(merged);
+        } catch {
+            toast.error("Failed to load vouchers");
+        } finally {
+            setVoucherLoading(false);
+        }
+    }
+    const openVoucherPicker = () => { setVoucherPickerOpen(true); loadVoucherList(); };
+
+    async function pickVoucher(v: VoucherListRow) {
+        setVoucherPickerOpen(false);
+        try {
+            const r = await axios.get<VoucherFromApi>(`/api/inventory/vouchers/${v.id}`);
+            const lines = r.data.lines;
+            let added = 0;
+            setItems((prev) => {
+                const next = [...prev];
+                const seen = new Set(next.map((it) => it.barcode));
+                for (const line of lines) {
+                    if ((Math.ceil(Math.max(0, Number(line.quantity) || 0))) <= 0) continue;
+                    const lookup = lookupById.get(line.productId);
+                    const barcode = (lookup?.barcode1 && lookup.barcode1.trim()) || line.product.sku;
+                    if (seen.has(barcode)) continue;
+                    seen.add(barcode);
+                    const mrpPaise = line.mrpPaise ?? lookup?.mrpPaise ?? null;
+                    next.push({
+                        id: nextId.current++,
+                        name: line.product.name,
+                        barcode,
+                        price: lookup?.pricePaise != null ? String(lookup.pricePaise / 100) : "0",
+                        mrp: mrpPaise != null ? String(mrpPaise / 100) : "0",
+                        date: todayISO(),
+                    });
+                    added += 1;
+                }
+                return next;
+            });
+            toast.success(added > 0 ? `Added ${added} product${added === 1 ? "" : "s"} from ${r.data.reference}` : `No new products in ${r.data.reference}`);
+        } catch {
+            toast.error("Failed to load voucher");
+        }
+    }
+
+    const filteredVouchers = useMemo(() => {
+        if (!voucherList) return [];
+        const q = voucherSearch.trim().toLowerCase();
+        return voucherList.filter((v) => {
+            if (voucherTypeFilter !== "all" && v.type !== voucherTypeFilter) return false;
+            if (!q) return true;
+            return v.reference.toLowerCase().includes(q) || (v.partyName ?? "").toLowerCase().includes(q);
+        });
+    }, [voucherList, voucherSearch, voucherTypeFilter]);
+
+    const secretStyle: React.CSSProperties = {
+        writingMode: "vertical-rl",
+        textOrientation: orientation === "upright" ? "upright" : "mixed",
+        [side === "left" ? "left" : "right"]: "0.4mm",
+    };
+
+    return (
+        <div className={cn(rootClassName)}>
+            <style>{labelCss}</style>
+
+            <div className="print-hide mb-4 flex items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-lg font-semibold">{pageTitle}</h1>
+                    <p className="text-sm text-muted-foreground">{pageSubtitle}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={updateBarcodes} disabled={items.length === 0}>
+                        <RefreshCw className="size-4" /> Update barcode
+                    </Button>
+                    <Button type="button" variant={settingsOpen ? "secondary" : "outline"} onClick={() => setSettingsOpen((o) => !o)}>
+                        <SlidersHorizontal className="size-4" /> {settingsOpen ? "Hide settings" : "Settings"}
+                    </Button>
+                    <Button onClick={() => window.print()}>Print (real size)</Button>
+                </div>
+            </div>
+
+            {/* ── Global label options ─────────────────────────────────────── */}
+            {settingsOpen ? (
+                <div className="print-hide mb-4 flex flex-wrap items-end gap-4 rounded-sm border bg-muted/30 p-3">
+                    <Opt label="Store header">
+                        <div className="flex items-center gap-2">
+                            <Checkbox checked={showHeader} onCheckedChange={(v) => setShowHeader(!!v)} />
+                            <Input value={header} onChange={(e) => setHeader(e.target.value)} className="h-8 w-64 text-xs" />
+                        </div>
+                    </Opt>
+                    <Opt label="Show MRP">
+                        <Checkbox checked={showMrp} onCheckedChange={(v) => setShowMrp(!!v)} />
+                    </Opt>
+                    <Opt label="Show secret code">
+                        <Checkbox checked={showSecret} onCheckedChange={(v) => setShowSecret(!!v)} />
+                    </Opt>
+                    <Opt label="Code side">
+                        <Select value={side} onValueChange={(v) => setSide(v as "left" | "right")}>
+                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="left">Left edge</SelectItem>
+                                <SelectItem value="right">Right edge</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </Opt>
+                    <Opt label="Code orientation">
+                        <Select value={orientation} onValueChange={(v) => setOrientation(v as "spine" | "upright")}>
+                            <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="spine">Spine (rotated)</SelectItem>
+                                <SelectItem value="upright">Upright (stacked)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </Opt>
+                    <Opt label="Label size">
+                        <Select value={presetId} onValueChange={setPresetId}>
+                            <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {PRESETS.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </Opt>
+                    <Opt label={`Preview zoom ×${zoom}`}>
+                        <input type="range" min={1} max={5} step={0.5} value={zoom}
+                            onChange={(e) => setZoom(parseFloat(e.target.value))} className="w-40" />
+                    </Opt>
+                </div>
+            ) : null}
+
+            {/* ── Add product — same search/scan box as the real Print Labels ─ */}
+            <div className="print-hide m-4 flex items-center gap-2">
+                <div className="flex h-11 flex-1 items-center gap-2 rounded-md border border-input bg-background px-3 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
+                    <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <InvProductCombobox
+                        key={pickCount}
+                        value={null}
+                        onChange={addFromCombobox}
+                        placeholder="Search / scan a product to add to the list…"
+                        allowCreate={false}
+                        autoFocus
+                        className="flex-1"
+                    />
+                </div>
+                <Button type="button" variant="outline" className="h-11" onClick={openVoucherPicker}>
+                    <FileText className="size-4" /> Pick from GRN / Purchase
+                </Button>
+            </div>
+
+            {/* ── Items table ──────────────────────────────────────────────── */}
+            <div className="print-hide mb-6 rounded-sm border">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-8 text-xs">#</TableHead>
+                            <TableHead className="text-xs">Product name</TableHead>
+                            <TableHead className="text-xs">Barcode</TableHead>
+                            <TableHead className="text-right text-xs">Sale ₹</TableHead>
+                            <TableHead className="text-right text-xs">MRP ₹</TableHead>
+                            <TableHead className="text-xs">Price date</TableHead>
+                            <TableHead className="text-center text-xs">Secret code</TableHead>
+                            <TableHead className="w-8" />
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {items.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                                    No labels yet — add products above, or pick them in the Selected product tab.
+                                </TableCell>
+                            </TableRow>
+                        ) : null}
+                        {items.map((it, i) => {
+                            const code = secretDateCode(it.date);
+                            return (
+                                <TableRow key={it.id}>
+                                    <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                                    <TableCell>
+                                        <Input value={it.name} onChange={(e) => update(it.id, { name: e.target.value })} className="h-7 text-xs" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Input value={it.barcode} onChange={(e) => update(it.id, { barcode: e.target.value })} className="h-7 w-36 text-xs font-mono" />
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Input inputMode="decimal" value={it.price} onChange={(e) => update(it.id, { price: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Input inputMode="decimal" value={it.mrp} onChange={(e) => update(it.id, { mrp: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Input type="date" value={it.date} onChange={(e) => update(it.id, { date: e.target.value })} className="h-7 w-36 text-xs" />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <span className="font-mono text-sm font-semibold">{code || "—"}</span>
+                                        {code ? (
+                                            <div className="text-[10px] text-muted-foreground">
+                                                {code.slice(0, 2)} · {THIRD_LABEL[Number(code.slice(2))]}
+                                            </div>
+                                        ) : null}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => remove(it.id)}>
+                                            <Trash2 className="size-4 text-muted-foreground" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+                <div className="border-t p-2">
+                    <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                        <Plus className="size-4" /> Add row
+                    </Button>
+                </div>
+            </div>
+
+            {/* ── Labels preview grid (screen) ─────────────────────────────── */}
+            <div className="print-hide">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    Preview — {items.length} label{items.length !== 1 ? "s" : ""} (enlarged ×{zoom})
+                </div>
+                <div className="overflow-auto rounded-sm border bg-[#fafafa] p-6">
+                    <div className="lt-grid" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                        {items.map((it) => (
+                            <LabelCard key={it.id} preset={preset} item={it}
+                                header={showHeader ? header : ""} showMrp={showMrp}
+                                code={showSecret ? secretDateCode(it.date) : ""} side={side} secretStyle={secretStyle} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Print-only: labels at real size ──────────────────────────── */}
+            <div className="label-print-area" style={{ ["--label-cols" as string]: preset.cols }}>
+                {items.map((it) => (
+                    <LabelCard key={it.id} preset={preset} item={it}
+                        header={showHeader ? header : ""} showMrp={showMrp}
+                        code={showSecret ? secretDateCode(it.date) : ""} side={side} secretStyle={secretStyle} />
+                ))}
+            </div>
+
+            {/* ── Pick from GRN / Purchase — loads voucher lines into the list ─ */}
+            <Dialog open={voucherPickerOpen} onOpenChange={setVoucherPickerOpen}>
+                <DialogContent className="!max-w-3xl print-hide">
+                    <DialogHeader>
+                        <DialogTitle>Pick a GRN or Purchase voucher</DialogTitle>
+                        <DialogDescription>
+                            Loads each line as a product in the list (deduped). Only POSTED vouchers are shown.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Input value={voucherSearch} onChange={(e) => setVoucherSearch(e.target.value)} placeholder="Search by reference or party…" className="h-8 max-w-xs" autoFocus />
+                        <Select value={voucherTypeFilter} onValueChange={(v) => setVoucherTypeFilter(v as "all" | "GRN" | "PURCHASE")}>
+                            <SelectTrigger className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="GRN">GRN</SelectItem>
+                                <SelectItem value="PURCHASE">Purchase</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => loadVoucherList(true)} disabled={voucherLoading}>
+                            {voucherLoading ? <Loader2 className="size-4 animate-spin" /> : null} Refresh
+                        </Button>
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto rounded-md border">
+                        {voucherLoading && !voucherList ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin" /> Loading…</div>
+                        ) : filteredVouchers.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-muted-foreground">No matching vouchers.</p>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[100px]">Date</TableHead>
+                                        <TableHead className="w-[90px]">Type</TableHead>
+                                        <TableHead>Reference</TableHead>
+                                        <TableHead>Party</TableHead>
+                                        <TableHead className="w-[70px] text-right">Lines</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredVouchers.map((v) => (
+                                        <TableRow key={v.id} className="cursor-pointer" onClick={() => pickVoucher(v)}>
+                                            <TableCell className="text-xs tabular-nums">{new Date(v.date).toLocaleDateString("en-IN", { year: "2-digit", month: "short", day: "2-digit" })}</TableCell>
+                                            <TableCell className="text-xs">{v.type}</TableCell>
+                                            <TableCell className="font-mono text-xs">{v.reference}</TableCell>
+                                            <TableCell className="text-xs">{v.partyName ?? "—"}</TableCell>
+                                            <TableCell className="text-right text-xs tabular-nums">{v._count?.lines ?? "—"}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+// ── Label card ───────────────────────────────────────────────────────────────
+
+function LabelCard({
+    preset, item, header, showMrp, code, side, secretStyle,
+}: {
+    preset: Preset;
+    item: Item;
+    header: string;
+    showMrp: boolean;
+    code: string;
+    side: "left" | "right";
+    secretStyle: React.CSSProperties;
+}) {
+    return (
+        <div className="lt-label" style={{ ["--label-w" as string]: `${preset.w}mm`, ["--label-h" as string]: `${preset.h}mm` }}>
+            {code ? <span className={`lt-secret lt-secret-${side}`} style={secretStyle}>{code}</span> : null}
+            <div className="lt-body">
+                {header ? <div className="lt-header">{header}</div> : null}
+                {item.name ? <div className="lt-name">{item.name}</div> : null}
+                <div className="lt-barcode">
+                    <BarcodeSvg value={item.barcode} height={preset.barHeight} fontSize={preset.fontSize} margin={2} />
+                </div>
+                <div className="lt-meta">
+                    {showMrp && item.mrp ? <span className="lt-mrp">MRP ₹{item.mrp}</span> : <span />}
+                    {item.price ? <span className="lt-price">₹{item.price}/-</span> : null}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Small inline option helper ───────────────────────────────────────────────
+
+function Opt({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+// ── Label styles (scoped, mirrors print-labels.css conventions) ──────────────
+
+const labelCss = `
+.lt-grid { display: flex; flex-wrap: wrap; gap: 2mm; align-content: flex-start; }
+.lt-label {
+    position: relative;
+    width: var(--label-w, 50mm);
+    height: var(--label-h, 25mm);
+    box-sizing: border-box;
+    padding: 1mm 1.5mm;
+    outline: 0.5px dashed #ccc;
+    color: #000;
+    background: #fff;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.lt-body {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    text-align: center;
+    padding: 0 3mm; /* room down both edges for the side code */
+}
+.lt-header {
+    font-size: 7pt; font-weight: 700; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5mm;
+}
+.lt-name {
+    font-size: 7pt; font-weight: 600; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0.5mm 0;
+}
+.lt-barcode { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; max-width: 100%; }
+.lt-barcode svg { max-width: 100%; height: auto; }
+.lt-meta {
+    display: flex; justify-content: space-between; align-items: baseline;
+    width: 100%; gap: 1mm; font-size: 7pt; line-height: 1.1; margin-top: 0.5mm;
+}
+.lt-mrp { font-weight: 600; text-align: left; }
+.lt-price { font-weight: 700; text-align: right; margin-left: auto; }
+
+/* The secret date code — vertical, pinned to one edge, staff-only. */
+.lt-secret {
+    position: absolute; top: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 6pt; font-weight: 700; letter-spacing: 1px; color: #000;
+}
+
+/* Screen: the print-only grid is hidden. */
+.label-print-area { display: none; }
+
+@media print {
+    .print-hide { display: none !important; }
+    body * { visibility: hidden; }
+    .label-print-area, .label-print-area * { visibility: visible; }
+    .label-print-area {
+        display: grid; position: absolute; left: 0; top: 0; width: 100%;
+        grid-template-columns: repeat(var(--label-cols, 3), var(--label-w, 50mm));
+        gap: 0; justify-content: center;
+    }
+    .lt-label { outline: none; }
+    @page { margin: 4mm; }
+}
+`;
