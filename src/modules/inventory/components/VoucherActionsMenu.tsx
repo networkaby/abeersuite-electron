@@ -112,7 +112,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     // sensible entry points.
     const canPrintLabels = voucherType === "GRN" || voucherType === "PURCHASE";
     const goPrintLabels = () => {
-        router.push(`/office/pricing-strategy/print-labels?fromVoucher=${voucherId}`);
+        router.push(`/office/pricing-strategy/update-print-labels?fromVoucher=${voucherId}`);
     };
 
     // Edit just navigates to the editable form with ?voucherId=. The form

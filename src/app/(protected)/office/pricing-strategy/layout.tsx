@@ -7,7 +7,7 @@ const NAV = [
     { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
     { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
     { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
-    { label: "Print labels", icon: Printer, href: "/office/pricing-strategy/print-labels" },
+    { label: "Update & print labels", icon: Printer, href: "/office/pricing-strategy/update-print-labels" },
 ];
 
 export default function PricingStrategyLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +19,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                     "items": "Items",
                     "strategies": "Strategies",
                     "needs-attention": "Needs Attention",
+                    "update-print-labels": "Update & Print Labels",
                 }}
             />
             {/* <nav

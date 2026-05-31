@@ -16,7 +16,7 @@
  *   e.g. 2026-05-14 → "052"   (May, second third)
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/format/utils";
@@ -103,6 +103,11 @@ type LabelDesignerProps = {
     onRemoveItem: (id: number) => void;
     /** Go to the price/barcode editor (parent switches sub-tab). Button hidden if omitted. */
     onUpdateBarcode?: () => void;
+    /** Deep-link prefill: when set, this GRN/Purchase voucher's lines are added
+     *  to the set once, on mount (after the product lookup resolves). */
+    prefillVoucherId?: number | null;
+    /** Called after a prefill voucher has been processed (parent can clear the URL). */
+    onPrefillConsumed?: () => void;
     pageTitle?: string;
     pageSubtitle?: string;
     /** Root wrapper classes — embedded panels use the parent's scroll/padding. */
@@ -116,6 +121,8 @@ export function LabelDesigner({
     onAddProducts,
     onRemoveItem,
     onUpdateBarcode,
+    prefillVoucherId = null,
+    onPrefillConsumed,
     pageTitle = "Print labels",
     pageSubtitle = "Pick products, then print.",
     rootClassName = "pb-10",
@@ -151,10 +158,12 @@ export function LabelDesigner({
     // ── Pick from GRN / Purchase voucher ──────────────────────────────────────
     // Product lookup map (resolves barcode1 + sale/MRP for voucher lines).
     const [lookupById, setLookupById] = useState<Map<number, ProductLookupRow>>(new Map());
+    const [lookupLoaded, setLookupLoaded] = useState(false);
     useEffect(() => {
         axios.get<ProductLookupRow[]>("/api/inventory/products/lookup")
             .then((r) => setLookupById(new Map(r.data.map((p) => [p.id, p]))))
-            .catch(() => { /* combobox will surface lookup issues */ });
+            .catch(() => { /* combobox will surface lookup issues */ })
+            .finally(() => setLookupLoaded(true));
     }, []);
 
     const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
@@ -182,10 +191,11 @@ export function LabelDesigner({
     }
     const openVoucherPicker = () => { setVoucherPickerOpen(true); loadVoucherList(); };
 
-    async function pickVoucher(v: VoucherListRow) {
-        setVoucherPickerOpen(false);
+    // Fetch one GRN/Purchase voucher and add its (deduped) lines to the shared set.
+    // Shared by the picker dialog and the ?fromVoucher deep-link prefill.
+    async function addVoucherById(id: number) {
         try {
-            const r = await axios.get<VoucherFromApi>(`/api/inventory/vouchers/${v.id}`);
+            const r = await axios.get<VoucherFromApi>(`/api/inventory/vouchers/${id}`);
             const seen = new Set<string>();
             const products: AddedProduct[] = [];
             for (const line of r.data.lines) {
@@ -209,6 +219,23 @@ export function LabelDesigner({
             toast.error("Failed to load voucher");
         }
     }
+
+    async function pickVoucher(v: VoucherListRow) {
+        setVoucherPickerOpen(false);
+        await addVoucherById(v.id);
+    }
+
+    // Deep-link prefill (?fromVoucher=<id>): run once, after the product lookup
+    // has settled so barcodes/prices resolve. The ref guard survives re-renders
+    // (incl. the parent clearing the URL via onPrefillConsumed).
+    const prefilledRef = useRef(false);
+    useEffect(() => {
+        if (prefilledRef.current || prefillVoucherId == null || !lookupLoaded) return;
+        prefilledRef.current = true;
+        void addVoucherById(prefillVoucherId).finally(() => onPrefillConsumed?.());
+        // addVoucherById/onPrefillConsumed intentionally omitted — guarded to run once.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillVoucherId, lookupLoaded]);
 
     const filteredVouchers = useMemo(() => {
         if (!voucherList) return [];

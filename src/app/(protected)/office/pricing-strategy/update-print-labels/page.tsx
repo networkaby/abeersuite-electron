@@ -25,7 +25,8 @@
  *   voicePrice = (cost_incl + charges) × (1 + margin% / 100)
  */
 
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -399,6 +400,16 @@ export default function GeneratePage() {
     const [tab, setTab] = useState<"all" | "selected">("all");
     // Sub-tab inside "Selected product": price/barcode table vs the label designer.
     const [selTab, setSelTab] = useState<"price" | "print">("price");
+
+    // Deep-link: ?fromVoucher=<id> (from the GRN/Purchase "Print labels" action).
+    // Land on Selected product → Print so the designer mounts and prefills.
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const fromVoucher = searchParams.get("fromVoucher");
+    const fromVoucherId = fromVoucher && /^\d+$/.test(fromVoucher) ? Number(fromVoucher) : null;
+    useEffect(() => {
+        if (fromVoucherId != null) { setTab("selected"); setSelTab("print"); }
+    }, [fromVoucherId]);
     const [selectionIds, setSelectionIds] = useState<Set<number>>(new Set());
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [fBrand, setFBrand] = useState("ALL");
@@ -1047,6 +1058,8 @@ export default function GeneratePage() {
                             onAddProducts={addProducts}
                             onRemoveItem={removePrintItem}
                             onUpdateBarcode={() => setSelTab("price")}
+                            prefillVoucherId={fromVoucherId}
+                            onPrefillConsumed={() => router.replace("/office/pricing-strategy/update-print-labels", { scroll: false })}
                             pageTitle="Print labels"
                             pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Update price / barcode."
                             rootClassName="pb-10"
