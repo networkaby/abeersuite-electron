@@ -120,6 +120,7 @@ type Row = {
     baseline: string;       // last-saved Sale Price, for dirty detection
     mrp: string;            // MRP ceiling (incl GST). "" = no MRP
     saleSource: SaleSource; // which voice actually sells
+    baseSource: SaleSource; // last-saved sale source, for dirty detection
     savedAt: string;        // ISO date the Sale Price was last frozen → barcode date code
     savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
 };
@@ -169,6 +170,7 @@ function itemToRow(it: PricingItem): Row {
         baseline: sale,
         mrp: it.mrpPaise != null ? (it.mrpPaise / 100).toFixed(2) : "",
         saleSource: voiceFromDb(it.effectiveSalePriceSource),
+        baseSource: voiceFromDb(it.effectiveSalePriceSource),
         savedAt: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",
         savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
     };
@@ -380,6 +382,12 @@ function saleCapped(r: Row): boolean {
     const applic = applicableSalePrice(r);
     return applic != null && applic < chosen - 0.005;
 }
+
+// A row has an unsaved FREEZE decision when its Sale Price OR its selling source
+// differs from what was last saved. (Margin/MRP/method aren't here — they persist
+// on their own as you edit; the Save button only commits the freeze decision.)
+const rowDirty = (r: Row): boolean =>
+    r.salePrice.trim() !== r.baseline.trim() || r.saleSource !== r.baseSource;
 
 const stockQty = (r: Row): number => numOrNull(r.stock) ?? 0;
 
@@ -647,6 +655,9 @@ export default function GeneratePage() {
     const [loading, setLoading] = useState(true);
     const nextId = useRef(-1); // locally-added rows get negative ids (never persisted)
     const [query, setQuery] = useState("");
+    // Client-side pagination of the rendered rows (pageSize 0 = show All).
+    const [pageSize, setPageSize] = useState(150);
+    const [pageIndex, setPageIndex] = useState(0);
     // Top tab (All products / Selected product) + the working "selection".
     const [tab, setTab] = useState<"all" | "selected">("all");
     // Sub-tab inside "Selected product": price/barcode table vs the label designer.
@@ -678,7 +689,7 @@ export default function GeneratePage() {
                 const merged = mapped.map((m) => {
                     const old = byId.get(m.id);
                     return old
-                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, savedAt: old.savedAt, savedProfit: old.savedProfit }
+                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource, savedAt: old.savedAt, savedProfit: old.savedProfit }
                         : m;
                 });
                 const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
@@ -847,14 +858,20 @@ export default function GeneratePage() {
         return v;
     }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort]);
 
+    // Jump back to the first page whenever the filtered/sorted list or page size
+    // changes, so you never land on a now-empty page.
+    useEffect(() => { setPageIndex(0); }, [query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort, tab, pageSize]);
+
     // The Selected tab shows only the picked rows (still honouring the same filters/sort).
     const selectionRows = useMemo(() => visible.filter((r) => selectionIds.has(r.id)), [visible, selectionIds]);
     // The list the active tab actually renders. (Only the active tab's body mounts.)
     const listRows = tab === "selected" ? selectionRows : visible;
-    // Cap rendered rows so the full catalogue stays responsive (filters narrow it).
-    const RENDER_CAP = 150;
-    const cappedRows = listRows.slice(0, RENDER_CAP);
-    const renderTruncated = listRows.length > RENDER_CAP;
+    // Paginate the rendered rows so the full catalogue stays responsive — the page
+    // slice keeps the DOM small even when thousands match. pageSize 0 = show All.
+    const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(listRows.length / pageSize));
+    const safePage = Math.min(pageIndex, totalPages - 1);
+    const pageStart = pageSize === 0 ? 0 : safePage * pageSize;
+    const pageRows = pageSize === 0 ? listRows : listRows.slice(pageStart, pageStart + pageSize);
 
     // Selected rows → label items for the Print tab. The printed price is the
     // barcode price (the band-buffered cap), falling back to the sale price.
@@ -914,7 +931,7 @@ export default function GeneratePage() {
                 id, name: p.name, sku: "", barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
                 method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", gst: "18",
                 margin: "25", strategyMargin: "30", strategyPaise: null, salePrice: sale, baseline: sale,
-                mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", savedAt: "", savedProfit: "",
+                mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", baseSource: "SAVED", savedAt: "", savedProfit: "",
             };
             additions.push(row);
             if (row.barcode) byBarcode.set(row.barcode, row); // dedupe within this batch
@@ -948,9 +965,13 @@ export default function GeneratePage() {
     // SAVED rows store savedSalePricePaise; STRATEGY/COMPUTED rows clear it (follow
     // the live engine). Local-only rows (negative ids) freeze in the UI only.
     const [freezing, setFreezing] = useState(false);
+    // A row is a save target if it's ticked OR has an unsaved freeze decision
+    // (Sale Price edited or selling source switched). This lets a plain edit/source
+    // click activate the Save button without needing a checkbox.
+    const isSaveTarget = (r: Row) => selected.has(r.id) || rowDirty(r);
     const save = async () => {
         const today = todayISO();
-        const checked = rows.filter((r) => selected.has(r.id));
+        const checked = rows.filter(isSaveTarget);
         const payload = checked
             .filter((r) => r.id > 0)
             .map((r) => {
@@ -971,13 +992,14 @@ export default function GeneratePage() {
             }
             setRows((prev) =>
                 prev.map((r) => {
-                    if (!selected.has(r.id)) return r;
+                    if (!isSaveTarget(r)) return r;
                     const sp = numOrNull(r.salePrice);
                     const isSaved = r.saleSource === "SAVED" && sp != null;
                     const decided = isSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
                     return {
                         ...r,
                         baseline: r.salePrice,
+                        baseSource: r.saleSource,
                         savedAt: isSaved ? today : "",
                         savedProfit: decided != null ? decided.toFixed(2) : "",
                     };
@@ -993,7 +1015,10 @@ export default function GeneratePage() {
         }
     };
 
-    const dirtyCount = rows.filter((r) => r.salePrice.trim() !== r.baseline.trim()).length;
+    const dirtyCount = rows.filter(rowDirty).length;
+    // Rows that the Save action will write: ticked OR edited. Drives the button's
+    // enabled state + count, so a plain Sale Price edit activates Save on its own.
+    const saveCount = rows.filter(isSaveTarget).length;
 
     const sortIcon = (k: SortKey) =>
         sort?.key === k
@@ -1084,7 +1109,7 @@ export default function GeneratePage() {
     const productBody = (
         <>
             {/* Toolbar: tab switcher + search + filters + the selection/print actions + columns */}
-            <div className="mb-3 flex items-center gap-3">
+            <div className="mb-3 flex shrink-0 items-center gap-3">
                 {tabSwitcher}
                 <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -1125,8 +1150,8 @@ export default function GeneratePage() {
                             ? `${selected.size} ticked`
                             : dirtyCount === 0 ? "Barcodes current" : `${dirtyCount} to update`}
                     </span>
-                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={selected.size === 0 || freezing} title="Freeze & save the Sale Price for the ticked rows. SAVED rows store the sticky price (POS + shop use it); Strategy/Computed rows follow the live engine. Margin %, MRP and Method save automatically as you edit.">
-                        {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Freeze sale price{selected.size > 0 ? ` (${selected.size})` : ""}
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the barcode price for ticked or edited rows. SAVED rows store the sticky price (POS + shop use it); Strategy/Computed rows follow the live engine. Margin %, MRP and Method save automatically as you edit.">
+                        {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save barcode Price{saveCount > 0 ? ` (${saveCount})` : ""}
                     </Button>
                 </div>
                 <DropdownMenu>
@@ -1156,7 +1181,7 @@ export default function GeneratePage() {
 
             {/* Collapsible filter card — categorical + numeric ranges */}
             {filtersOpen ? (
-                <div className="mb-3 rounded-md border bg-muted/30 p-3">
+                <div className="mb-3 shrink-0 rounded-md border bg-muted/30 p-3">
                     <div className="mb-2 flex items-center justify-between">
                         {/* <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span> */}
                         {activeFilterCount > 0 ? (
@@ -1200,12 +1225,12 @@ export default function GeneratePage() {
                 </div>
             ) : null}
 
-            {/* Fixed-height scroll box: one container scrolls BOTH axes, so the
-                horizontal scrollbar stays pinned at its bottom (always visible)
-                and the sticky header keeps the column row visible while rows
-                scroll under it. */}
-            {/* <div className="h-[calc(100vh-11rem)] overflow-auto rounded-sm border [&>[data-slot=table-container]]:overflow-x-visible"> */}
-            <div className="h-[calc(100vh-11rem)] rounded-sm border [&>[data-slot=table-container]]:overflow-x-visible">
+            {/* Flex-fill scroll box: it takes the leftover vertical space (toolbar +
+                filter card are shrink-0 above it) and scrolls BOTH axes itself, so
+                ONLY the rows scroll — the page never does. The horizontal scrollbar
+                stays pinned at its bottom and the sticky header keeps the column row
+                visible while rows scroll under it. */}
+            <div className="min-h-0 flex-1 overflow-auto rounded-sm border [&>[data-slot=table-container]]:overflow-x-visible">
                 {/* Compact density: tighter than the default shadcn cell padding so the
                     grid fits more columns and the Product name gets the leftover width. */}
                 <Table className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1">
@@ -1242,11 +1267,11 @@ export default function GeneratePage() {
                                 </TableCell>
                             </TableRow>
                         ) : null}
-                        {cappedRows.map((r, i) => (
+                        {pageRows.map((r, i) => (
                             <ProductRow
                                 key={r.id}
                                 r={r}
-                                index={i}
+                                index={pageStart + i}
                                 hidden={hidden}
                                 selected={selected.has(r.id)}
                                 onUpdate={update}
@@ -1258,12 +1283,40 @@ export default function GeneratePage() {
                     </TableBody>
                 </Table>
             </div>
-            {renderTruncated ? (
-                // <p className="mt-2 text-[11px] text-muted-foreground">
-                //     Showing first {RENDER_CAP} of {listRows.length} products — narrow with search or filters to see the rest.
-                // </p> 
-                null
-            ) : null}
+            {/* Pager — fixed below the scrolling rows; reaches the whole catalogue. */}
+            <div className="mt-2 flex shrink-0 items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                    {listRows.length === 0
+                        ? "No rows"
+                        : pageSize === 0
+                            ? `Showing all ${listRows.length}`
+                            : `${pageStart + 1}–${Math.min(pageStart + pageSize, listRows.length)} of ${listRows.length}`}
+                </span>
+                <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                        Page size
+                        <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                        >
+                            <option value={50}>50</option>
+                            <option value={150}>150</option>
+                            <option value={300}>300</option>
+                            <option value={0}>All</option>
+                        </select>
+                    </label>
+                    {pageSize !== 0 && totalPages > 1 ? (
+                        <div className="flex items-center gap-1">
+                            <Button type="button" variant="outline" size="sm" className="h-8" disabled={safePage === 0} onClick={() => setPageIndex(0)}>«</Button>
+                            <Button type="button" variant="outline" size="sm" className="h-8" disabled={safePage === 0} onClick={() => setPageIndex(safePage - 1)}>‹</Button>
+                            <span className="px-2 text-xs text-muted-foreground">{safePage + 1} / {totalPages}</span>
+                            <Button type="button" variant="outline" size="sm" className="h-8" disabled={safePage >= totalPages - 1} onClick={() => setPageIndex(safePage + 1)}>›</Button>
+                            <Button type="button" variant="outline" size="sm" className="h-8" disabled={safePage >= totalPages - 1} onClick={() => setPageIndex(totalPages - 1)}>»</Button>
+                        </div>
+                    ) : null}
+                </div>
+            </div>
         </>
     );
 
@@ -1271,14 +1324,14 @@ export default function GeneratePage() {
     // the table view and the print view each carry the switcher — no separate tabs row.
     const showTable = tab === "all" || (tab === "selected" && selTab === "price");
     return (
-        <div className="h-full overflow-y-auto px-4 pt-3 pb-3">
+        <div className="flex h-full flex-col overflow-hidden px-4 pt-3 pb-3">
             {/* Table view: All products, or Selected → price. productBody's toolbar carries the switcher. */}
-            <div className={showTable ? "" : "hidden"}>{productBody}</div>
+            <div className={showTable ? "flex min-h-0 flex-1 flex-col" : "hidden"}>{productBody}</div>
 
             {/* Print view — LabelDesigner stays mounted while on the Selected tab so
                 its label settings survive price↔print toggles. */}
             {tab === "selected" ? (
-                <div className={selTab === "print" ? "" : "hidden"}>
+                <div className={selTab === "print" ? "flex min-h-0 flex-1 flex-col overflow-y-auto" : "hidden"}>
                     <div className="mb-3 flex items-center gap-3">
                         {tabSwitcher}
                         <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setSelTab("price")}>
