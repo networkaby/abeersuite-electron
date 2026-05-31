@@ -5,10 +5,8 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { pricingApplySchema } from "@/shared/lib/schemas/pricingSchemas";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
-import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
-import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
+import { loadStrategyPoints, additiveMarginPct, additivePrice } from "@/modules/pricing-strategy/lib/additiveMargin";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
-import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 
 interface ApplyResult {
     updated: number;
@@ -16,6 +14,9 @@ interface ApplyResult {
     errors:  Array<{ productId: number; reason: string }>;
 }
 
+// Bulk-recompute effectiveSalePricePaise from the additive-margin engine (the
+// STRATEGY source) + the per-item COMPUTED margin. SAVED + priceOverridden rows
+// are left untouched (unless forceOverridden + explicit ids).
 export async function POST(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.INVENTORY_MANAGE);
     if (response) return response;
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
             ? { id: { in: data.productIds }, isActive: true }
             : { isActive: true, ...(data.forceOverridden ? {} : { priceOverridden: false }) };
 
-        const [products, strategies, orgDefaults] = await Promise.all([
+        const [products, points, orgDefaults] = await Promise.all([
             prisma.invProduct.findMany({
                 where,
                 select: {
@@ -37,61 +38,27 @@ export async function POST(req: Request) {
                     categoryId:    true,
                     groupId:       true,
                     brandId:       true,
-                    attrsJson:     true,
                     costMethod:    true,
                     marginPercent: true,
                     priceOverridden: true,
+                    effectiveSalePriceSource: true,
                 },
             }),
-            prisma.pricingStrategy.findMany({ where: { isActive: true } }),
+            loadStrategyPoints(),
             prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
         ]);
         const orgDefault = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
 
-        // Build match context once; query lastSaleAgeDays only when needed.
-        const needsStaleness = strategies.some((s) => s.minStaleDays != null || s.maxStaleDays != null);
-        const matchCtx = await buildMatchContext({
-            productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
-        });
-
-        // Pre-resolve LAST_INWARD as the matcher's cost signal (drives the
-        // cost-range filter on PricingStrategy). Matches pre-PR3 semantics
-        // where the now-removed costPaise cache was always the most recent
-        // inward rate.
-        const matcherCosts = await valueStockBatch(
-            products.map((p) => ({ id: p.id, stock: p.stock })),
-            "LAST_INWARD",
-        );
-
-        // Pre-compute matched strategy + effective cost method per product
-        // (product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod).
+        // Effective cost method: product override else org default.
         type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
-        const matched = new Map<number, { strategy: typeof strategies[number] | null; effectiveMethod: EffectiveMethod }>();
-        for (const p of products) {
-            const mc = matcherCosts.get(p.id);
-            const matcherCostPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
-            const s = pickStrategy(
-                {
-                    id:         p.id,
-                    brandId:    p.brandId,
-                    groupId:    p.groupId,
-                    categoryId: p.categoryId,
-                    costPaise:  matcherCostPaise,
-                    stock:      p.stock,
-                    attrsJson:  (p.attrsJson ?? null) as Record<string, unknown> | null,
-                },
-                strategies,
-                matchCtx,
-            );
-            const effective: EffectiveMethod = p.costMethod ?? s?.costMethod ?? orgDefault;
-            matched.set(p.id, { strategy: s, effectiveMethod: effective });
-        }
+        const effectiveMethodOf = (p: typeof products[number]): EffectiveMethod => p.costMethod ?? orgDefault;
 
-        // Batch resolve costs grouped by effective method.
+        // Batch resolve costs grouped by effective method (skip SAVED + overridden).
         const byMethod = new Map<EffectiveMethod, typeof products>();
         for (const p of products) {
+            if (p.effectiveSalePriceSource === "SAVED") continue;
             if (!data.forceOverridden && p.priceOverridden && (!data.productIds || data.productIds.length === 0)) continue;
-            const m = matched.get(p.id)!.effectiveMethod;
+            const m = effectiveMethodOf(p);
             const arr = byMethod.get(m);
             if (arr) arr.push(p); else byMethod.set(m, [p]);
         }
@@ -104,14 +71,22 @@ export async function POST(req: Request) {
             for (const [id, r] of resolved) costById.set(id, r.costPaise);
         }
 
-        // Resolve GST so the written pricePaise is inclusive of tax.
+        // Resolve GST so the written effectiveSalePricePaise is inclusive of tax.
         const taxResult = await resolveProductTaxBatch({ productIds: products.map((p) => p.id) });
         const taxByProduct = taxResult.products;
+
+        const mrpCap = (val: number, mrp: number | null): number =>
+            mrp != null && mrp > 0 ? Math.min(val, mrp) : val;
 
         const result: ApplyResult = { updated: 0, skipped: 0, errors: [] };
 
         await prisma.$transaction(async (tx) => {
             for (const p of products) {
+                if (p.effectiveSalePriceSource === "SAVED") {
+                    // SAVED products carry a human-frozen price; never clobber it.
+                    result.skipped += 1;
+                    continue;
+                }
                 if (!data.forceOverridden && p.priceOverridden && data.productIds && data.productIds.length > 0) {
                     // Explicit id list AND not forcing → still skip overridden.
                     result.skipped += 1;
@@ -119,20 +94,22 @@ export async function POST(req: Request) {
                 }
                 const cost = costById.get(p.id) ?? null;
                 const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
-                const priced = applyStrategy(
-                    cost,
-                    p.marginPercent != null ? Number(p.marginPercent) : null,
-                    matched.get(p.id)!.strategy,
-                    p.mrpPaise,
-                    gstRatePct,
-                );
-                if (priced.pricePaise == null) {
+                let price: number | null;
+                if (p.effectiveSalePriceSource === "COMPUTED" && p.marginPercent != null && cost != null) {
+                    // COMPUTED → cost × (1 + margin%), GST-inclusive, MRP-capped.
+                    const gross = cost * (1 + Number(p.marginPercent) / 100) * (1 + gstRatePct / 100);
+                    price = mrpCap(Math.round(gross), p.mrpPaise);
+                } else {
+                    // STRATEGY (default) → additive-margin engine (markup on cost).
+                    price = additivePrice(cost, additiveMarginPct(p, points), p.mrpPaise, gstRatePct).pricePaise;
+                }
+                if (price == null) {
                     result.errors.push({ productId: p.id, reason: "No cost basis" });
                     continue;
                 }
                 await tx.invProduct.update({
                     where: { id: p.id },
-                    data:  { pricePaise: priced.pricePaise },
+                    data:  { effectiveSalePricePaise: price },
                 });
                 result.updated += 1;
             }

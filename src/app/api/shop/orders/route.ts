@@ -42,7 +42,7 @@ export async function POST(req: Request) {
         const resolvedLines: { productId: number; quantity: number; unitPricePaise: number }[] = [];
         for (const l of lines) {
             const p = byId.get(l.productId);
-            if (!p || p.pricePaise == null) {
+            if (!p || p.effectiveSalePricePaise == null) {
                 return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
             }
             if (p.stock !== null && p.stock < l.quantity) {
@@ -51,11 +51,11 @@ export async function POST(req: Request) {
                     { status: 400 }
                 );
             }
-            totalPaise += p.pricePaise * l.quantity;
+            totalPaise += p.effectiveSalePricePaise * l.quantity;
             resolvedLines.push({
                 productId: l.productId,
                 quantity: l.quantity,
-                unitPricePaise: p.pricePaise,
+                unitPricePaise: p.effectiveSalePricePaise,
             });
         }
 

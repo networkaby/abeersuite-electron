@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 sku: true,
                 name: true,
                 stock: true,
-                pricePaise: true,
+                effectiveSalePricePaise: true,
                 lowStockThreshold: true,
                 openingStock: true,
                 openingRate: true,

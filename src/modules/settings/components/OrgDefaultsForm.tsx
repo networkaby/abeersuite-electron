@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { invalidateOrgDefaultsCache } from "@/shared/lib/orgDefaults";
-import { Save } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,12 @@ interface GstRateOpt {
     isActive: boolean;
 }
 
+interface BarcodeBand {
+    max: number;
+    add: number;
+    hint: number;
+}
+
 interface OrgDefaults {
     id: number;
     defaultUnitId: number | null;
@@ -40,7 +46,10 @@ interface OrgDefaults {
     defaultSaleCreditPeriod: number | null;
     defaultPurchaseCreditPeriod: number | null;
     defaultCurrencySymbol: string;
+    barcodeBandsJson: BarcodeBand[];
 }
+
+const digitsOnly = (s: string): string => s.replace(/\D/g, "");
 
 const TAXABILITY_OPTIONS = [
     { value: "TAXABLE", label: "Taxable" },
@@ -72,8 +81,14 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates"),
         ])
             .then(([defaultsRes, ratesRes]) => {
-                setData(defaultsRes.data);
-                setDraft(defaultsRes.data);
+                const od: OrgDefaults = {
+                    ...defaultsRes.data,
+                    barcodeBandsJson: Array.isArray(defaultsRes.data.barcodeBandsJson)
+                        ? defaultsRes.data.barcodeBandsJson
+                        : [],
+                };
+                setData(od);
+                setDraft(od);
                 setGstRates(ratesRes.data);
             })
             .catch(() => toast.error("Failed to load org defaults"))
@@ -83,6 +98,20 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
     function set<K extends keyof OrgDefaults>(key: K, value: OrgDefaults[K]) {
         setDraft((d) => d && { ...d, [key]: value });
     }
+
+    // ── Barcode bands editor helpers ──────────────────────────────────────────
+    const bands = draft?.barcodeBandsJson ?? [];
+    const setBand = (i: number, key: keyof BarcodeBand, raw: string) =>
+        setDraft((d) => {
+            if (!d) return d;
+            const next = [...(d.barcodeBandsJson ?? [])];
+            next[i] = { ...next[i], [key]: Number(digitsOnly(raw) || "0") };
+            return { ...d, barcodeBandsJson: next };
+        });
+    const addBand = () =>
+        setDraft((d) => d && { ...d, barcodeBandsJson: [...(d.barcodeBandsJson ?? []), { max: 0, add: 0, hint: 0 }] });
+    const removeBand = (i: number) =>
+        setDraft((d) => d && { ...d, barcodeBandsJson: (d.barcodeBandsJson ?? []).filter((_, idx) => idx !== i) });
 
     async function handleSave() {
         if (!draft) return;
@@ -97,6 +126,10 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 defaultSaleCreditPeriod: draft.defaultSaleCreditPeriod,
                 defaultPurchaseCreditPeriod: draft.defaultPurchaseCreditPeriod,
                 defaultCurrencySymbol: draft.defaultCurrencySymbol,
+                // Sorted ascending by `max` so barcodePrice's `find(price <= max)` picks the right band.
+                barcodeBandsJson: [...(draft.barcodeBandsJson ?? [])]
+                    .filter((b) => b.max > 0)
+                    .sort((a, b) => a.max - b.max),
             };
             const { data: saved } = await axios.patch<OrgDefaults>("/api/settings/org-defaults", payload);
             setData(saved);
@@ -289,6 +322,68 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                         value={draft.defaultCurrencySymbol}
                         onChange={(e) => set("defaultCurrencySymbol", e.target.value)}
                     />
+                </div>
+            </section>
+
+            {/* Barcode price bands */}
+            <section className="rounded-lg border bg-card p-4 space-y-4">
+                <div>
+                    <h2 className="text-sm font-semibold">Barcode price bands</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Used by <span className="font-medium">Update &amp; Print Labels</span>. For a Sale Price up to
+                        <span className="font-mono"> Max ₹</span>, the printed barcode price is the Sale Price plus
+                        <span className="font-mono"> Add ₹</span> (rounded to the nearest 10), with the
+                        <span className="font-mono"> Hint</span> digit set as the units digit so staff can read which band applied.
+                    </p>
+                </div>
+
+                <div className="space-y-2">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Up to Max ₹</span>
+                        <span>Add ₹</span>
+                        <span>Hint digit (0–9)</span>
+                        <span className="w-8" />
+                    </div>
+                    {bands.length === 0 ? (
+                        <p className="text-xs italic text-muted-foreground">
+                            No bands — the barcode price falls back to the Sale Price (no buffer). Click Add band.
+                        </p>
+                    ) : null}
+                    {bands.map((b, i) => (
+                        <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2">
+                            <Input
+                                inputMode="numeric"
+                                className="h-8 text-right font-mono text-xs"
+                                placeholder="0"
+                                value={b.max ? String(b.max) : ""}
+                                onChange={(e) => setBand(i, "max", e.target.value)}
+                            />
+                            <Input
+                                inputMode="numeric"
+                                className="h-8 text-right font-mono text-xs"
+                                placeholder="0"
+                                value={b.add ? String(b.add) : ""}
+                                onChange={(e) => setBand(i, "add", e.target.value)}
+                            />
+                            <Input
+                                inputMode="numeric"
+                                className="h-8 text-right font-mono text-xs"
+                                placeholder="0"
+                                maxLength={1}
+                                value={b.hint ? String(b.hint) : ""}
+                                onChange={(e) => setBand(i, "hint", e.target.value.slice(0, 1))}
+                            />
+                            <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove band" onClick={() => removeBand(i)}>
+                                <Trash2 className="size-4 text-muted-foreground" />
+                            </Button>
+                        </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={addBand}>
+                        <Plus className="size-4" /> Add band
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground">
+                        Bands are sorted by Max on save; the first band whose Max ≥ the Sale Price applies.
+                    </p>
                 </div>
             </section>
 

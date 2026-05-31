@@ -5,7 +5,9 @@
 // Additive-margin model, DB-backed. You give POINTS to each dimension; a
 // product's margin% is the SUM of the points of the values it falls under:
 //   margin% = base + brand + category + group
-//   price   = cost × (1 + margin/100)        (margin on cost; MRP ignored)
+//   price   = cost_incl × (1 + margin/100)   (margin on cost; MRP ignored)
+// Cost + Price are shown GST-INCLUSIVE (cost_incl = cost × (1 + gst/100)), so the
+// preview matches the engine's tax-inclusive sell price.
 //
 // Data is real:
 //   • masters  — /api/inventory/brands | categories | product-groups
@@ -95,10 +97,12 @@ const strMapToNum = (m: Points): Record<string, number> =>
 type Product = {
     id: number;
     name: string;
+    sku: string;
     brandId: number | null;
     categoryId: number | null;
     groupId: number | null;
     costPaise: number | null;
+    gstPct: number;
     stock: number | null;
 };
 
@@ -281,6 +285,7 @@ export default function PricingStrategiesPage() {
                         categoryId: it.categoryId,
                         groupId: it.groupId,
                         costPaise: it.resolvedCostPaise,
+                        gstPct: it.gstRatePct ?? 0,
                         stock: it.stock,
                     })),
                 );
@@ -309,8 +314,11 @@ export default function PricingStrategiesPage() {
                 { label: `group · ${nameOf(groups, p.groupId)}`, pts: p.groupId != null ? num(groupPts[String(p.groupId)] ?? "") : 0 },
             ];
             const margin = pieces.reduce((a, x) => a + x.pts, 0);
-            const price = p.costPaise != null ? Math.round(p.costPaise * (1 + margin / 100)) : null;
-            return { p, pieces, margin, price };
+            // Cost + price are shown GST-INCLUSIVE: cost_incl = cost × (1 + gst/100),
+            // price = cost_incl × (1 + margin/100) — matches the engine's inclusive price.
+            const costIncl = p.costPaise != null ? Math.round(p.costPaise * (1 + p.gstPct / 100)) : null;
+            const price = costIncl != null ? Math.round(costIncl * (1 + margin / 100)) : null;
+            return { p, pieces, margin, costIncl, price };
         });
     }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPts]);
 
@@ -535,7 +543,7 @@ export default function PricingStrategiesPage() {
                                         </TableCell>
                                     </TableRow>
                                 ) : null}
-                                {capped.map(({ p, pieces, margin, price }) => (
+                                {capped.map(({ p, pieces, margin, costIncl, price }) => (
                                     <TableRow key={p.id}>
                                         <TableCell className="whitespace-normal break-words text-sm font-medium leading-snug">{p.name}</TableCell>
                                         <TableCell className="whitespace-normal"><Breakdown pieces={pieces} margin={margin} /></TableCell>
@@ -543,7 +551,7 @@ export default function PricingStrategiesPage() {
                                             {margin.toFixed(1)}%
                                         </TableCell>
                                         <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                                            {rupee(p.costPaise)}
+                                            {rupee(costIncl)}
                                         </TableCell>
                                         <TableCell className={`text-right font-mono text-xs font-semibold ${margin < 0 ? "text-red-600" : ""}`}>
                                             {rupee(price)}

@@ -17,29 +17,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (error) return error;
 
         // Enforce MRP cap on manual price entries. If MRP is set on the product
-        // and the caller is trying to write a higher pricePaise, refuse.
-        if (data.pricePaise != null && data.pricePaise > 0) {
+        // and the caller is trying to write a higher effectiveSalePricePaise, refuse.
+        if (data.effectiveSalePricePaise != null && data.effectiveSalePricePaise > 0) {
             const existing = await prisma.invProduct.findUnique({
                 where:  { id },
                 select: { mrpPaise: true },
             });
             if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-            if (existing.mrpPaise != null && existing.mrpPaise > 0 && data.pricePaise > existing.mrpPaise) {
+            if (existing.mrpPaise != null && existing.mrpPaise > 0 && data.effectiveSalePricePaise > existing.mrpPaise) {
                 return NextResponse.json(
                     {
-                        error: `Manual price (₹${(data.pricePaise / 100).toFixed(2)}) exceeds MRP (₹${(existing.mrpPaise / 100).toFixed(2)}). Sell price cannot be above MRP.`,
+                        error: `Manual price (₹${(data.effectiveSalePricePaise / 100).toFixed(2)}) exceeds MRP (₹${(existing.mrpPaise / 100).toFixed(2)}). Sell price cannot be above MRP.`,
                     },
                     { status: 400 },
                 );
             }
         }
 
-        // Setting pricePaise explicitly flips priceOverridden=true unless the
+        // Setting effectiveSalePricePaise explicitly flips priceOverridden=true unless the
         // caller is explicitly clearing the override (priceOverridden=false).
         const overrideFlag =
             data.priceOverridden !== undefined
                 ? data.priceOverridden
-                : data.pricePaise !== undefined
+                : data.effectiveSalePricePaise !== undefined
                   ? true
                   : undefined;
 
@@ -69,7 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.costMethod      !== undefined ? { costMethod:    data.costMethod } : {}),
                 ...(data.marginPercent   !== undefined ? { marginPercent: data.marginPercent != null ? data.marginPercent.toString() : null } : {}),
                 ...(overrideFlag         !== undefined ? { priceOverridden: overrideFlag } : {}),
-                ...(data.pricePaise      !== undefined ? { pricePaise:    data.pricePaise } : {}),
+                ...(data.effectiveSalePricePaise      !== undefined ? { effectiveSalePricePaise:    data.effectiveSalePricePaise } : {}),
                 ...(data.mrpPaise        !== undefined ? { mrpPaise:      data.mrpPaise } : {}),
                 ...openingPatch,
             },
@@ -78,7 +78,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 costMethod:       true,
                 marginPercent:    true,
                 priceOverridden:  true,
-                pricePaise:       true,
+                effectiveSalePricePaise:       true,
                 mrpPaise:         true,
                 openingRate:      true,
                 openingStock:     true,

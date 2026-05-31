@@ -1,0 +1,73 @@
+// The single pricing engine: additive-margin "strategy points".
+//
+// A product's margin% is the SUM of the points for the dimensions it falls under:
+//   margin% = base + brand[brandId] + category[categoryId] + group[groupId]
+// (a missing point row contributes 0). The sell price is a markup on cost,
+// GST-inclusive, MRP-capped — IDENTICAL to the /office/pricing-strategy/strategies
+// preview, so the preview and what actually sells always agree:
+//   cost_incl = round(cost × (1 + gst/100))
+//   price     = round(cost_incl × (1 + margin/100))   then clamped to MRP
+//
+// Band dimensions (STOCK_BAND / AGE_BAND / MOVE_BAND) exist in the schema but are
+// reserved — they contribute 0 until a banding feature is built.
+//
+// Replaces the dropped PricingStrategy engine (pickStrategy + applyStrategy).
+
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+
+/** Grouped points — same shape the points GET/PUT API uses. */
+export interface StrategyPointsResolved {
+    base: number;
+    brand: Record<string, number>;
+    category: Record<string, number>;
+    group: Record<string, number>;
+}
+
+/** Load the single org-wide additive-margin point set, grouped by dimension. */
+export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
+    const rows = await prisma.strategyPoint.findMany();
+    const out: StrategyPointsResolved = { base: 0, brand: {}, category: {}, group: {} };
+    for (const r of rows) {
+        const v = Number(r.points);
+        switch (r.dimension) {
+            case "BASE":     out.base = v; break;
+            case "BRAND":    out.brand[r.refKey] = v; break;
+            case "CATEGORY": out.category[r.refKey] = v; break;
+            case "GROUP":    out.group[r.refKey] = v; break;
+            // STOCK_BAND / AGE_BAND / MOVE_BAND — reserved, contribute 0 for now.
+            default: break;
+        }
+    }
+    return out;
+}
+
+/** Sum the points that apply to a product: base + its brand + category + group. */
+export function additiveMarginPct(
+    p: { brandId: number | null; categoryId: number | null; groupId: number | null },
+    points: StrategyPointsResolved,
+): number {
+    let m = points.base;
+    if (p.brandId    != null) m += points.brand[String(p.brandId)]       ?? 0;
+    if (p.categoryId != null) m += points.category[String(p.categoryId)] ?? 0;
+    if (p.groupId    != null) m += points.group[String(p.groupId)]       ?? 0;
+    return m;
+}
+
+/**
+ * Markup-on-cost sell price (GST-inclusive, MRP-capped). `costPaise` is the
+ * GST-EXCLUSIVE resolved cost. Mirrors the /strategies preview's two-step
+ * rounding so preview === live. `costPaise == null` → null price.
+ */
+export function additivePrice(
+    costPaise: number | null,
+    marginPct: number,
+    mrpPaise: number | null = null,
+    gstRatePct: number = 0,
+): { pricePaise: number | null; rawPricePaise: number | null; cappedAtMrp: boolean } {
+    if (costPaise == null) return { pricePaise: null, rawPricePaise: null, cappedAtMrp: false };
+    const costIncl = Math.round(costPaise * (1 + gstRatePct / 100));
+    const raw      = Math.round(costIncl * (1 + marginPct / 100));
+    const cap      = mrpPaise != null && mrpPaise > 0 ? mrpPaise : null;
+    const capped   = cap != null && raw > cap;
+    return { pricePaise: capped ? cap! : raw, rawPricePaise: raw, cappedAtMrp: capped };
+}

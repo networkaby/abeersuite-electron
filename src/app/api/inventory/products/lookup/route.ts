@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
                 name:              true,
                 stock:             true,
                 lowStockThreshold: true,
-                pricePaise:        true,
+                effectiveSalePricePaise: true,
                 mrpPaise:          true,
                 barcode1:          true,
                 unit:         { select: { code: true } },
@@ -62,6 +62,9 @@ export async function GET(req: NextRequest) {
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
         return NextResponse.json({
             ...product,
+            // Boundary: expose the materialized effectiveSalePricePaise under the
+            // stable `pricePaise` field name so POS / Sale-voucher / lab read it raw.
+            pricePaise: product.effectiveSalePricePaise,
             taxRate: resolved?.gstRate ?? null,
             hsnCode: resolved?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(product.id) ?? null,
@@ -77,7 +80,7 @@ export async function GET(req: NextRequest) {
             name:              true,
             stock:             true,
             lowStockThreshold: true,
-            pricePaise:        true,
+            effectiveSalePricePaise: true,
             mrpPaise:          true,
             barcode1:          true,
             unit:         { select: { code: true } },
@@ -105,6 +108,9 @@ export async function GET(req: NextRequest) {
         const r = taxByProduct.get(p.id);
         return {
             ...p,
+            // Boundary: expose the materialized effectiveSalePricePaise under the
+            // stable `pricePaise` field name so POS / Sale-voucher / lab read it raw.
+            pricePaise: p.effectiveSalePricePaise,
             taxRate: r?.gstRate ?? null,
             hsnCode: r?.hsnCode ?? null,
             lastPurchasePaise: lastInward.get(p.id) ?? null,

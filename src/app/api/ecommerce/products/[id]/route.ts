@@ -83,7 +83,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         if (b.shopSubheading !== undefined) data.shopSubheading = b.shopSubheading;
         if (b.shopDescription !== undefined) data.shopDescription = b.shopDescription;
         if (b.shopCategory !== undefined) data.shopCategory = b.shopCategory;
-        if (b.pricePaise !== undefined) data.pricePaise = b.pricePaise;
+        // Boundary: ecommerce admin sends `pricePaise`; map to the renamed column.
+        if (b.pricePaise !== undefined) data.effectiveSalePricePaise = b.pricePaise;
         if (b.mrpPaise !== undefined) data.mrpPaise = b.mrpPaise;
         if (b.shopBadge !== undefined) data.shopBadge = b.shopBadge;
         if (b.imageUrl !== undefined) data.imageUrl = b.imageUrl && b.imageUrl !== "" ? b.imageUrl : null;

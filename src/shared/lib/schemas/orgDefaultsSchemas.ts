@@ -13,6 +13,14 @@ const trimToNullable = (maxLen: number) =>
             return t.slice(0, maxLen);
         });
 
+/// Single barcode band — exported so the settings editor + label page share one shape.
+export const barcodeBandSchema = z.object({
+    max:  z.number().int().positive(),
+    add:  z.number().int().min(0),
+    hint: z.number().int().min(0).max(9),
+});
+export type BarcodeBand = z.infer<typeof barcodeBandSchema>;
+
 export const orgDefaultsUpdateSchema = z.object({
     defaultUnitId:              z.number().int().positive().nullable().optional(),
     /// FK to GstRate master — used as the final fallback in the cascading
@@ -27,6 +35,8 @@ export const orgDefaultsUpdateSchema = z.object({
     defaultSaleCreditPeriod:     z.number().int().min(0).nullable().optional(),
     defaultPurchaseCreditPeriod: z.number().int().min(0).nullable().optional(),
     defaultCurrencySymbol:      z.string().trim().min(1).max(8).optional(),
+    /// Barcode price bands for Update & Print Labels — [{max, add, hint}].
+    barcodeBandsJson:           z.array(barcodeBandSchema).max(32).optional(),
 });
 
 export type OrgDefaultsUpdateInput = z.infer<typeof orgDefaultsUpdateSchema>;

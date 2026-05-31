@@ -261,7 +261,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             hsnCode: string | null;
             gstRateId: number | null;
             taxability: Taxability | null;
-            pricePaise: number | null;
+            savedSalePricePaise: number | null;
             mrpPaise: number | null;
             openingStock: number | null;
             openingRate: number | null;
@@ -365,8 +365,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         // provided. The existing `toNumber` already returns null for both
         // "field absent" and "field present but unparseable" — we distinguish
         // via the `present` set so an absent column never errors.
-        const pricePaise = rupeesToPaise(v.salePrice);
-        if (pricePaise === null && present.has("salePrice")) errors.push(`salePrice "${v.salePrice}" is not a valid number`);
+        const savedSalePricePaise = rupeesToPaise(v.salePrice);
+        if (savedSalePricePaise === null && present.has("salePrice")) errors.push(`salePrice "${v.salePrice}" is not a valid number`);
         const mrpPaise = rupeesToPaise(v.mrp);
         if (mrpPaise === null && present.has("mrp")) errors.push(`mrp "${v.mrp}" is not a valid number`);
         const openingStock = toNumber(v.openingStock);
@@ -439,7 +439,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 hsnCode: v.hsnCode?.trim() || null,
                 gstRateId,
                 taxability,
-                pricePaise: pricePaise ?? null,
+                savedSalePricePaise: savedSalePricePaise ?? null,
                 mrpPaise: mrpPaise ?? null,
                 openingStock: openingStock ?? null,
                 openingRate: openingRate ?? null,
@@ -485,7 +485,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             hsnCode: v.data.hsnCode,
             gstRateId: v.data.gstRateId,
             taxability: v.data.taxability,
-            pricePaise: v.data.pricePaise,
+            savedSalePricePaise: v.data.savedSalePricePaise,
             mrpPaise: v.data.mrpPaise,
             openingStock: v.data.openingStock,
             openingRate: v.data.openingRate,
@@ -517,7 +517,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         if (p.has("hsnCode")) out.hsnCode = v.data.hsnCode;
         if (p.has("gstRate")) out.gstRateId = v.data.gstRateId;
         if (p.has("taxability")) out.taxability = v.data.taxability;
-        if (p.has("salePrice")) out.pricePaise = v.data.pricePaise;
+        if (p.has("salePrice")) out.savedSalePricePaise = v.data.savedSalePricePaise;
         if (p.has("mrp")) out.mrpPaise = v.data.mrpPaise;
         // Opening fields move as a group — if any are touched, recompute the
         // derived openingValue + cache columns. Untouched openings stay null

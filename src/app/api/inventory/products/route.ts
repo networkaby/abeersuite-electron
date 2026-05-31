@@ -140,7 +140,8 @@ export async function POST(req: Request) {
                 shopSubheading: b.shopSubheading ?? null,
                 slug: b.slug ?? null,
                 attrsJson: b.attrsJson ?? Prisma.DbNull,
-                pricePaise: b.pricePaise ?? null,
+                effectiveSalePricePaise: b.effectiveSalePricePaise ?? null,
+                savedSalePricePaise: b.savedSalePricePaise ?? null,
                 mrpPaise:   b.mrpPaise   ?? null,
                 // Books-beginning opening stock — server computes openingValue.
                 openingStock:     b.openingStock ?? null,

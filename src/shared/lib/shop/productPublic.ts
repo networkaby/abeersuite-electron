@@ -45,7 +45,9 @@ export function invProductToPublic(
         subheading: p.shopSubheading,
         description: p.shopDescription,
         category: p.shopCategory ?? p.category?.name ?? "Accessories",
-        pricePaise: p.pricePaise ?? 0,
+        // Boundary: expose the materialized effectiveSalePricePaise under the stable
+        // shop field name `pricePaise` so the storefront UI is unchanged.
+        pricePaise: p.effectiveSalePricePaise ?? 0,
         mrpPaise: p.mrpPaise,
         badge: p.shopBadge,
         imageUrl: p.imageUrl,

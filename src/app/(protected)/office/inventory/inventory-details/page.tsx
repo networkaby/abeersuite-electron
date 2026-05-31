@@ -59,7 +59,7 @@ type ProductDetail = {
     stock: number | null;
     /** Derived from LAST_INWARD ledger walk (PR 4 enrichment of the transactions API). */
     lastPurchasePaise: number | null;
-    pricePaise: number | null;
+    effectiveSalePricePaise: number | null;
     lowStockThreshold: number;
     unit: { code: string; label: string };
     category: { name: string } | null;
@@ -296,7 +296,7 @@ export default function InventoryDetailsPage() {
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                                 <StatBox
                                     label="Sale Price"
-                                    value={detail.product.pricePaise != null ? fmt(detail.product.pricePaise / 100) : "—"}
+                                    value={detail.product.effectiveSalePricePaise != null ? fmt(detail.product.effectiveSalePricePaise / 100) : "—"}
                                 />
                                 <StatBox
                                     label="Cost Price"

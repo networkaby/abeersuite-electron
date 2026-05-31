@@ -728,7 +728,7 @@ function QuickCreateProductDialog({
                 sku: form.sku.trim(),
                 name: form.name.trim(),
                 unitId: Number(form.unitId),
-                pricePaise: rupeesToPaise(form.priceRupees),
+                savedSalePricePaise: rupeesToPaise(form.priceRupees),
                 openingStock: hasOpening ? openingQty : null,
                 openingRate: hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
                 openingStockDate: hasOpening ? form.openingDate : null,

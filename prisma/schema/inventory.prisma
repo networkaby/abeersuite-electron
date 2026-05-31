@@ -199,8 +199,11 @@ model InvProduct {
   shopDescription   String?
   /// Display category label for storefront (falls back to InvCategory.name)
   shopCategory      String?
-  /// null = not listed in shop
-  pricePaise        Int?
+  /// Materialized "effective sale price" (paise, GST-inclusive). The single value
+  /// every sale transaction (POS + Sale voucher) charges. Rewritten from the chosen
+  /// `effectiveSalePriceSource` by the recompute trigger after each transaction and
+  /// immediately on Freeze. null = not priced / not listed in shop.
+  effectiveSalePricePaise Int?
   mrpPaise          Int?
   shopBadge         String?
   imageUrl          String?
@@ -226,8 +229,25 @@ model InvProduct {
   /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
   /// PricingStrategy chain (BRAND → GROUP → CATEGORY → ORG).
   marginPercent     Decimal?   @db.Decimal(6, 2)
-  /// True when a user has manually set pricePaise — bulk recompute skips this row.
+  /// True when a user has manually set effectiveSalePricePaise — bulk recompute skips this row.
   priceOverridden   Boolean    @default(false)
+
+  // ── Saved "Sale Price" (the human sale price — barcode source) ──────────────
+  /// Which source materializes effectiveSalePricePaise. SAVED = the frozen
+  /// savedSalePricePaise below; STRATEGY/COMPUTED = the live engine. Set on the
+  /// Update & Print Labels page AND by Edit Product / Item Import.
+  effectiveSalePriceSource EffectiveSalePriceSource @default(STRATEGY)
+  /// The saved, human-entered sale price (paise). null = not set. The pricing
+  /// engine NEVER overwrites this (unlike effectiveSalePricePaise). MRP-capped at
+  /// save time. Single source of truth for the printed barcode, and the value that
+  /// materializes into effectiveSalePricePaise when effectiveSalePriceSource = SAVED.
+  /// Written by Edit Product, Item Import, and the Update & Print Labels "Sale Price" column.
+  savedSalePricePaise Int?
+  /// When savedSalePricePaise was last frozen — drives the printed barcode date code.
+  salePriceFrozenAt   DateTime?
+  /// After-tax profit (paise) decided at freeze time — basis for the drift /
+  /// profit-gap filter on the labels page (current profit vs this snapshot).
+  savedProfitPaise  Int?
 
   // ── Tally-style opening stock — entered on the master, dated at booksBeginningFrom.
   // Mismatch between Σ(openingValue) and the "Stock-in-Hand" line on the
@@ -577,65 +597,7 @@ model InvVoucherTender {
   @@index([accountId])
 }
 
-// ── Pricing strategy (cost + margin → sale price) ────────────────────────────
-//
-// Multi-condition margin rules. A strategy AND-matches every condition that
-// is specified; an empty conditions set matches all products (the ORG-default).
-// Among strategies that match a given product, the highest `priority` wins
-// (ties broken by createdAt ASC). A future conflict report flags rows where
-// multiple equal-priority strategies match.
-
-model PricingStrategy {
-  id              Int      @id @default(autoincrement())
-  name            String
-  // ── Taxonomy filters ───────────────────────────────────────────────────────
-  // Empty array = "any" (filter not specified). Non-empty = product must
-  // match at least one. For groupIds / categoryIds, the matcher also walks
-  // descendants of each selected id, so picking "Networking" matches every
-  // sub-group too.
-  brandIds        Int[]    @default([])
-  groupIds        Int[]    @default([])
-  categoryIds    Int[]    @default([])
-  /// Attribute-value spec evaluated against InvProduct.attrsJson. Shape:
-  ///   { "<attrKey>": { op: "eq"|"in"|"gte"|"lte"|"between", value: ... } }
-  /// null = no attribute filter.
-  attrFilters     Json?
-  // ── Range filters (null on either end = unbounded) ─────────────────────────
-  minCostPaise    Int?
-  maxCostPaise    Int?
-  minStock        Int?
-  maxStock        Int?
-  /// Range on "days since last SALE/POS voucher". Never-sold products
-  /// have infinite age and match minStaleDays but fail maxStaleDays.
-  ///   minStaleDays: matches when ageDays ≥ minStaleDays. null = unbounded below.
-  ///   maxStaleDays: matches when ageDays ≤ maxStaleDays. null = unbounded above.
-  /// Example: minStaleDays=30, maxStaleDays=90 → "stale 30–90 days".
-  minStaleDays    Int?
-  maxStaleDays    Int?
-  // ── Markup formula ─────────────────────────────────────────────────────────
-  /// Margin in percent (e.g. 25.00 = +25%).
-  markupPercent   Decimal  @default(0) @db.Decimal(6, 2)
-  /// Flat amount in paise added to cost before the percent markup.
-  markupFlatPaise Int      @default(0)
-  /// Round resulting sell price to nearest N paise (0 = exact, 100 = ₹1, 1000 = ₹10).
-  roundingPaise   Int      @default(0)
-  /// Higher wins among strategies that match the same product.
-  priority        Int      @default(0)
-  /// Default cost-basis method for products matched by this strategy.
-  /// Null = no strategy-level default; products use their own
-  /// InvProduct.costMethod (or fall through to WEIGHTED_AVG_COST).
-  /// Per-item costMethod always wins when set — strategy's value only
-  /// applies to products whose InvProduct.costMethod is null.
-  costMethod      CostMethod?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([isActive, priority])
-  @@map("pricing_strategies")
-}
-
-// ── Strategy points (additive-margin model) ──────────────────────────────────
+// ── Strategy points (additive-margin model — the single pricing engine) ──────
 //
 // A single org-wide additive-margin configuration. Every dimension value gets a
 // points number, and a product's margin% is the SUM of the points of the values

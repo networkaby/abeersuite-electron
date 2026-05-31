@@ -1176,14 +1176,26 @@ async function main() {
         defaultSaleCreditPeriod:     0,
         defaultPurchaseCreditPeriod: 0,
     };
+    // Default barcode price bands (Update & Print Labels). Create-only so admin
+    // edits via Settings → Org Defaults survive a reseed (left out of `update`).
+    const DEFAULT_BARCODE_BANDS = [
+        { max: 50,    add: 10,  hint: 1 },
+        { max: 100,   add: 20,  hint: 2 },
+        { max: 300,   add: 30,  hint: 3 },
+        { max: 500,   add: 50,  hint: 5 },
+        { max: 2000,  add: 100, hint: 6 },
+        { max: 5000,  add: 150, hint: 7 },
+        { max: 10000, add: 200, hint: 8 },
+        { max: 99999, add: 500, hint: 9 },
+    ];
     await prisma.orgDefaults.upsert({
         where:  { id: 1 },
-        // Both create and update use the same data so re-seeding always
-        // restores the baseline. Admin can override via UI after seeding.
-        create: { id: 1, ...orgDefaultsData },
+        // Scalars in `orgDefaultsData` re-seed to baseline; barcodeBandsJson is
+        // create-only so admin customisation is preserved across reseeds.
+        create: { id: 1, ...orgDefaultsData, barcodeBandsJson: DEFAULT_BARCODE_BANDS },
         update: orgDefaultsData,
     });
-    console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days)\n`);
+    console.log(`      ✓ OrgDefaults singleton seeded (GST 18%, UNIT, TAXABLE, ₹, credit=0 days, ${DEFAULT_BARCODE_BANDS.length} barcode bands)\n`);
 
     // ── Section 12: VoucherSeries ──────────────────────────────────────
     console.log("[12/16] VoucherSeries (all GL + inventory series)");
@@ -1262,45 +1274,19 @@ async function main() {
                      + (companyFix.rowCount ?? 0) + (orgFix.rowCount ?? 0);
     console.log(`      ✓ Re-aligned gstStateCode on ${fixedTotal} row(s) where it disagreed with GSTIN\n`);
 
-    // ── Section 16: PricingStrategy default ──────────────────────────────────
-    // One strategy with no conditions — matches every product as the fallback.
-    // Users add more specific strategies later (brand/group/category/attr/range
-    // filters) and they win by `priority`.
-    // Idempotent via findFirst-then-upsert (no @unique on name lets users
-    // add multiple all-match strategies later and tier them by priority).
-    console.log("[16/16] Pricing strategy default (all-match, +25% markup)");
-    const defaultStrategy = await prisma.pricingStrategy.findFirst({
-        where: { name: "Default ORG markup" },
-    });
-    if (!defaultStrategy) {
-        await prisma.pricingStrategy.create({
-            data: {
-                name: "Default ORG markup",
-                brandIds:        [],
-                groupIds:        [],
-                categoryIds:     [],
-                attrFilters:     undefined,
-                markupPercent:   "25.00",
-                markupFlatPaise: 0,
-                roundingPaise:   0,
-                priority:        0,
-                isActive:        true,
-            },
-        });
-        console.log(`      ✓ Created "Default ORG markup" (+25%)\n`);
-    } else {
-        console.log(`      ✓ "Default ORG markup" already present, skipped\n`);
-    }
-
-    // ── Strategy points (additive-margin model) default ───────────────────────
-    // Seed a single BASE = 0 row so the org-wide additive-margin config exists on
-    // a fresh DB. Other dimensions (brand/category/group/band points) are added
-    // by the user in /office/pricing-strategy/strategies. A missing row = 0 pts.
-    console.log("      Strategy points default (BASE = 0)");
+    // ── Section 16: Strategy points (the additive-margin pricing engine) ──────
+    // The single org-wide additive-margin config. A product's margin% = the SUM
+    // of the points for the dimensions it falls under (base + brand + category +
+    // group). Seed BASE = 25 so a fresh DB keeps the org-default +25% markup that
+    // the old (dropped) "Default ORG markup" PricingStrategy provided. Brand /
+    // category / group / band points are added by the user in
+    // /office/pricing-strategy/strategies. A missing row = 0 pts.
+    // create-only so an admin's edited base survives a reseed.
+    console.log("[16/16] Strategy points default (BASE = 25)");
     await prisma.strategyPoint.upsert({
         where:  { dimension_refKey: { dimension: "BASE", refKey: "" } },
         update: {},
-        create: { dimension: "BASE", refKey: "", points: 0 },
+        create: { dimension: "BASE", refKey: "", points: 25 },
     });
     console.log("      ✓ StrategyPoint BASE row present\n");
 

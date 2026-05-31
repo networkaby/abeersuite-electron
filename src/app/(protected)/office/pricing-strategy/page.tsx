@@ -12,14 +12,18 @@ export default function PricingStrategyOverviewPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
                 <p>
-                    <strong>Strategies</strong> set margin rules at four scopes (ORG, CATEGORY,
-                    GROUP, BRAND). Resolution walks BRAND → GROUP → CATEGORY → ORG; the most
-                    specific match wins, with priority as a tiebreaker.
+                    <strong>Strategies</strong> use an additive-margin model: you assign margin
+                    POINTS to each dimension, and a product&apos;s margin% is their{" "}
+                    <strong>sum</strong> — <code>base + brand + category + group</code>. The sell
+                    price is a markup on cost, GST-inclusive and MRP-capped:{" "}
+                    <code>price = cost × (1 + margin/100)</code>.
                 </p>
                 <p>
-                    Each <strong>InvProduct</strong> picks one of five cost-basis methods —
-                    Weighted Average (default), FIFO, Last Purchase, Monthly Average, or Standard
-                    Cost. The matched strategy applies a percent + flat markup, then rounds.
+                    Each <strong>InvProduct</strong> picks a cost-basis method — Weighted Average
+                    (default), FIFO, Simple Average, Monthly Average, or Last Inward — or inherits
+                    the org default. A product&apos;s <strong>sale-price source</strong>
+                    (Strategy / Computed / Saved) decides which price materializes into the live{" "}
+                    <code>effectiveSalePricePaise</code> that POS and the shop charge.
                 </p>
                 <p className="text-xs">
                     Discounts and coupons are tracked as a separate future module.

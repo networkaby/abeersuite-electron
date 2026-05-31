@@ -73,7 +73,10 @@ const productIdentifiers = {
 // costPaise was dropped in PR 3 of noble-boole; cost now derives from the
 // ledger walk (opening rate is the synthetic first lot).
 const productPricing = {
-    pricePaise: z.number().int().nonnegative().nullish(),
+    effectiveSalePricePaise: z.number().int().nonnegative().nullish(),
+    // Human SAVED sale price (barcode source). Edit Product / Item Import write
+    // this; the recompute engine never overwrites it (unlike effectiveSalePricePaise).
+    savedSalePricePaise: z.number().int().nonnegative().nullish(),
     mrpPaise:   z.number().int().nonnegative().nullish(),
 };
 

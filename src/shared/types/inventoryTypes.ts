@@ -9,7 +9,6 @@ export type InvProductFull = InvProduct & {
     shopSubheading: string | null;
     shopDescription: string | null;
     shopCategory: string | null;
-    pricePaise: number | null;
     mrpPaise: number | null;
     shopBadge: string | null;
     imageUrl: string | null;

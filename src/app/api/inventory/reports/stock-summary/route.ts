@@ -10,7 +10,7 @@ import {
 // GET /api/inventory/reports/stock-summary?method=LAST_INWARD|WEIGHTED_AVG|SIMPLE_AVG|FIFO|MONTHLY_AVG&branchId=<id>
 //
 // Returns one row per active product with:
-//   - master fields (sku, name, stock, pricePaise, low-stock flag)
+//   - master fields (sku, name, stock, effectiveSalePricePaise, low-stock flag)
 //   - grouping (group / category / brand) so the UI can pivot views client-side
 //   - valuation block computed via `valueStockBatch` for the requested method
 //   - stock is per-branch when branchId is supplied, otherwise global InvProduct.stock
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
                 name:              true,
                 stock:             true,
                 lowStockThreshold: true,
-                pricePaise:        true,
+                effectiveSalePricePaise: true,
                 unit:     { select: { code: true, label: true } },
                 group:    { select: { id: true, name: true } },
                 brand:    { select: { id: true, name: true } },
@@ -76,7 +76,7 @@ export async function GET(req: Request) {
             name:              p.name,
             stock,
             lowStockThreshold: p.lowStockThreshold,
-            pricePaise:        p.pricePaise,
+            effectiveSalePricePaise: p.effectiveSalePricePaise,
             unit:              p.unit,
             group:             p.group,
             brand:             p.brand,

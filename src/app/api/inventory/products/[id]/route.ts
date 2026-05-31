@@ -117,7 +117,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
                 ...(b.slug !== undefined ? { slug: b.slug } : {}),
                 ...(b.attrsJson !== undefined ? { attrsJson: b.attrsJson ?? Prisma.DbNull } : {}),
-                ...(b.pricePaise !== undefined ? { pricePaise: b.pricePaise } : {}),
+                ...(b.effectiveSalePricePaise !== undefined ? { effectiveSalePricePaise: b.effectiveSalePricePaise } : {}),
+                ...(b.savedSalePricePaise !== undefined ? { savedSalePricePaise: b.savedSalePricePaise } : {}),
                 ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
                 // Opening fields are written together so openingValue stays consistent.
                 ...((b.openingStock !== undefined || b.openingRate !== undefined) ? {

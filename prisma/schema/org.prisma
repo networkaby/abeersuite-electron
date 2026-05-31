@@ -121,6 +121,12 @@ model OrgDefaults {
   // Currency display (free-form: ₹ / INR / Rs. / $ / USD — no conversion)
   defaultCurrencySymbol String @default("₹")
 
+  // Barcode price bands for the Update & Print Labels page — a band-based buffer
+  // added onto the Sale Price to leave headroom on the printed barcode, plus a
+  // "hint" units digit telling staff which band applied. Shape: [{max,add,hint}].
+  // Seeded create-only so admin edits survive reseed.
+  barcodeBandsJson Json @default("[]")
+
   updatedAt DateTime @updatedAt
 }
 

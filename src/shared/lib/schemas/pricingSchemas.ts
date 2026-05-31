@@ -38,67 +38,14 @@ export const attrFiltersSchema = z.record(z.string(), attrFilterEntrySchema);
 export type AttrFilterEntry = z.infer<typeof attrFilterEntrySchema>;
 export type AttrFilters     = z.infer<typeof attrFiltersSchema>;
 
-// ── Strategy create/update ────────────────────────────────────────────────
-
-const baseStrategyShape = z.object({
-    name:            z.string().trim().min(1).max(120),
-    // Taxonomy multi-match — empty = "any". For group/category, the matcher
-    // walks descendants so the user only picks roots.
-    brandIds:        z.array(z.number().int().positive()).default([]),
-    groupIds:        z.array(z.number().int().positive()).default([]),
-    categoryIds:     z.array(z.number().int().positive()).default([]),
-    attrFilters:     attrFiltersSchema.nullable().optional(),
-    minCostPaise:    z.number().int().min(0).nullable().optional(),
-    maxCostPaise:    z.number().int().min(0).nullable().optional(),
-    minStock:        z.number().int().min(0).nullable().optional(),
-    maxStock:        z.number().int().min(0).nullable().optional(),
-    minStaleDays:    z.number().int().min(0).nullable().optional(),
-    maxStaleDays:    z.number().int().min(0).nullable().optional(),
-    markupPercent:   z.number().gte(-100).lte(10_000),
-    markupFlatPaise: z.number().int().min(0),
-    roundingPaise:   z.number().int().min(0),
-    priority:        z.number().int(),
-    /** Strategy-level default cost method. null = no override, products use their own. */
-    costMethod:      costMethodEnum.nullable().optional(),
-    isActive:        z.boolean().optional(),
-});
-
-// Cross-field: max ≥ min on every range.
-function refineRanges(
-    value: {
-        minCostPaise?: number | null;
-        maxCostPaise?: number | null;
-        minStock?:     number | null;
-        maxStock?:     number | null;
-        minStaleDays?: number | null;
-        maxStaleDays?: number | null;
-    },
-    ctx: z.RefinementCtx,
-): void {
-    if (value.minCostPaise != null && value.maxCostPaise != null && value.maxCostPaise < value.minCostPaise) {
-        ctx.addIssue({ code: "custom", path: ["maxCostPaise"], message: "maxCostPaise must be ≥ minCostPaise" });
-    }
-    if (value.minStock != null && value.maxStock != null && value.maxStock < value.minStock) {
-        ctx.addIssue({ code: "custom", path: ["maxStock"], message: "maxStock must be ≥ minStock" });
-    }
-    if (value.minStaleDays != null && value.maxStaleDays != null && value.maxStaleDays < value.minStaleDays) {
-        ctx.addIssue({ code: "custom", path: ["maxStaleDays"], message: "maxStaleDays must be ≥ minStaleDays" });
-    }
-}
-
-export const pricingStrategyCreateSchema = baseStrategyShape.superRefine(refineRanges);
-
-export const pricingStrategyUpdateSchema = baseStrategyShape
-    .partial()
-    .superRefine(refineRanges);
-
-export type PricingStrategyCreateInput = z.infer<typeof pricingStrategyCreateSchema>;
-export type PricingStrategyUpdateInput = z.infer<typeof pricingStrategyUpdateSchema>;
+// NOTE: the legacy PricingStrategy create/update schemas were removed when the
+// PricingStrategy engine was dropped in favour of the additive StrategyPoint
+// model (see `strategyPointsSaveSchema` below + `additiveMargin.ts`).
 
 // Per-product pricing fields editable from the Items / Needs Attention pages.
 // All optional — callers patch only the columns they're touching.
 //
-// `pricePaise` flips `priceOverridden=true` when set (manual price lock).
+// `effectiveSalePricePaise` flips `priceOverridden=true` when set (manual price lock).
 //
 // `openingRatePaise` is the Tally-style opening unit cost (excl-GST). It
 // writes to InvProduct.openingRate (Decimal rupees) and is picked up by the
@@ -110,7 +57,7 @@ export const pricingItemUpdateSchema = z
         costMethod:       costMethodEnum.nullable().optional(),
         marginPercent:    z.number().gte(-100).lte(10_000).nullable().optional(),
         priceOverridden:  z.boolean().optional(),
-        pricePaise:       z.number().int().min(0).nullable().optional(),
+        effectiveSalePricePaise: z.number().int().min(0).nullable().optional(),
         mrpPaise:         z.number().int().min(0).nullable().optional(),
         openingRatePaise: z.number().int().min(0).nullable().optional(),
     });
@@ -127,6 +74,28 @@ export const pricingApplySchema = z.object({
 });
 
 export type PricingApplyInput = z.infer<typeof pricingApplySchema>;
+
+// ── Sticky Sale Price (Update & Print Labels "Freeze sale price") ───────────
+// Bulk-freeze: each row carries which voice sells + (for SAVED) the frozen
+// price in paise and the decided after-tax profit. SAVED writes savedSalePricePaise
+// (MRP-capped server-side) + stamps salePriceFrozenAt; STRATEGY/COMPUTED clear
+// the frozen fields so POS/storefront fall back to the live engine.
+export const effectiveSalePriceSourceEnum = z.enum(["STRATEGY", "COMPUTED", "SAVED"]);
+export const salePriceSaveSchema = z.object({
+    items: z
+        .array(
+            z.object({
+                id:                       z.number().int().positive(),
+                effectiveSalePriceSource: effectiveSalePriceSourceEnum,
+                savedSalePricePaise:      z.number().int().min(0).nullable(),
+                savedProfitPaise:         z.number().int().nullable(),
+            }),
+        )
+        .min(1)
+        .max(2000),
+});
+
+export type SalePriceSaveInput = z.infer<typeof salePriceSaveSchema>;
 
 // ── Strategy points (additive-margin model) ───────────────────────────────
 // The single org-wide points configuration. GET and PUT share this grouped

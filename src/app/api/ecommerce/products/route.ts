@@ -93,7 +93,8 @@ export async function POST(req: Request) {
                 shopSubheading: b.shopSubheading ?? null,
                 shopDescription: b.shopDescription ?? null,
                 shopCategory: b.shopCategory ?? null,
-                pricePaise: b.pricePaise ?? null,
+                // Boundary: ecommerce admin sends `pricePaise`; map to the renamed column.
+                effectiveSalePricePaise: b.pricePaise ?? null,
                 mrpPaise: b.mrpPaise ?? null,
                 shopBadge: b.shopBadge ?? null,
                 imageUrl: b.imageUrl && b.imageUrl !== "" ? b.imageUrl : galleryJson?.[0] ?? null,

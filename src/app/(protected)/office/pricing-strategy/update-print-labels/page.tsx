@@ -1,32 +1,39 @@
 "use client";
 
 /**
- * GENERATE page (UI only) — prototype of the price-generation step that feeds
- * the barcode labels. Nothing here is fetched or saved yet; it's a sandbox to
- * agree the columns + behaviour before wiring it to real data.
+ * Update & Print Labels — the price-generation step that feeds the barcode labels.
+ *
+ * DATA (wired to the live engine):
+ *   • Products + cost + Strategy/Computed voices ← GET /api/pricing-strategy/items?withSaleAge=1
+ *   • Barcode bands ← OrgDefaults.barcodeBandsJson (GET /api/settings/org-defaults)
  *
  * A product has THREE price "voices":
- *   • Strategy — the winning pricing-strategy rule's output. LIVE (floats with cost).
+ *   • Strategy — the winning pricing-strategy rule's output (engine `computedPricePaise`). LIVE.
  *   • Computed — cost × my margin. LIVE (floats with cost).
- *   • Sale Price — the sticky, human-frozen price. Changes only when you Save.
+ *   • Sale Price — the sticky, human-frozen price (NOT yet persisted — Phase C).
  *
  * You pick which voice actually sells by CLICKING it — the highlighted one is the
  * selling price. POS makes no decision; it just charges that voice, capped by the
  * barcode price and MRP (cap not shown as its own column — see Barcode).
  *
+ * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Margin % →
+ * marginPercent, MRP → mrpPaise, Method → costMethod. Everything else (name,
+ * taxonomy, stock, cost, GST, Strategy voice, days-since-sale, barcode) is
+ * read-only/derived. Cost is GST-inclusive; because cost_incl × (1+margin) equals
+ * the engine's cost_excl × (1+margin) × (1+gst), the Computed voice matches POS.
+ *
  * The barcode price is computed from the Sale Price (buffer band + hint digit,
  * MRP-capped) and acts as a CEILING — never the charge. Each voice shows its own
  * AFTER-TAX profit (₹ + %) beneath the price, so all three can be compared.
  *
- * For the real ~3000-product list: a name filter + sortable headers. The barcode
- * carries a secret date code (MM + ten-day third) so staff can read how old a
- * printed price is.
- *
- *   voicePrice = (cost_incl + charges) × (1 + margin% / 100)
+ *   voicePrice = cost_incl × (1 + margin% / 100)
  */
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import axios from "axios";
+import { toast } from "sonner";
+import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -45,7 +52,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LabelDesigner, type Item as LabelItem, type AddedProduct } from "@/modules/inventory/components/LabelDesigner";
 import {
     DropdownMenu,
@@ -55,11 +61,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Plus, Printer, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Loader2, Plus, Printer, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 
 // ── Cost methods (short code ↔ real CostMethod enum, for later wiring) ────────
 
 type CostCode = "WA" | "FO" | "SA" | "MA" | "LI";
+// `enum` mirrors prisma CostMethod (costMethodEnum) — sent verbatim to the items PATCH.
 const COST_METHODS: { code: CostCode; full: string; enum: string }[] = [
     { code: "WA", full: "Weighted Avg", enum: "WEIGHTED_AVG" },
     { code: "FO", full: "FIFO", enum: "FIFO" },
@@ -67,18 +74,20 @@ const COST_METHODS: { code: CostCode; full: string; enum: string }[] = [
     { code: "MA", full: "Monthly Avg", enum: "MONTHLY_AVG" },
     { code: "LI", full: "Last Inward", enum: "LAST_INWARD" },
 ];
+const codeFromEnum = (e: string | null): CostCode =>
+    COST_METHODS.find((m) => m.enum === e)?.code ?? "WA";
+const enumFromCode = (c: CostCode): string =>
+    COST_METHODS.find((m) => m.code === c)?.enum ?? "WEIGHTED_AVG";
 
 // ── Toggleable columns (show/hide) ───────────────────────────────────────────
 // Name / # / select / remove are always shown; everything else can be hidden.
-type ColKey = "brand" | "category" | "group" | "stock" | "method" | "cost" | "charges" | "margin" | "strategy" | "computed" | "sale" | "mrp" | "barcode";
+type ColKey = "brand" | "category" | "group" | "stock" | "cost" | "margin" | "strategy" | "computed" | "sale" | "mrp" | "barcode";
 const COLS: { key: ColKey; label: string }[] = [
     { key: "brand", label: "Brand" },
     { key: "category", label: "Category" },
     { key: "group", label: "Group" },
     { key: "stock", label: "Stock" },
-    { key: "method", label: "Method" },
-    { key: "cost", label: "Cost (incl)" },
-    { key: "charges", label: "Charges ₹" },
+    { key: "cost", label: "Cost + Method" },
     { key: "margin", label: "Margin %" },
     { key: "strategy", label: "Strategy" },
     { key: "computed", label: "Computed" },
@@ -94,6 +103,7 @@ type SaleSource = "STRATEGY" | "MY" | "SAVED";
 type Row = {
     id: number;
     name: string;
+    sku: string;            // stock-keeping unit — shown under the name + searchable
     barcode: string;        // scannable EAN/SKU printed on the label (feeds the Print tab)
     brand: string;          // taxonomy — for the Brand filter (mirrors InvProduct.brand)
     category: string;       // taxonomy — for the Category filter
@@ -101,11 +111,11 @@ type Row = {
     stock: string;          // current stock (qty) — for the "in stock only" toggle + Stock range
     lastSoldAt: string;     // ISO date of the last sale; "" = never sold (infinite age) — Days since last sale range
     method: CostCode;
-    costIncl: string;       // ₹ incl GST, typed
-    gst: string;            // GST %, typed
-    margin: string;         // % — drives the "Computed" voice
-    strategyMargin: string; // % — drives the mock "Strategy" voice (stand-in for the engine)
-    charges: string;        // other ₹ charges added onto cost (freight, handling…)
+    costIncl: string;       // ₹ incl GST (resolvedCostPaise × (1+gst)), display + voice math. Read-only.
+    gst: string;            // GST % (resolved). Read-only.
+    margin: string;         // % — drives the "Computed" voice. Editable → InvProduct.marginPercent.
+    strategyMargin: string; // % — the matched strategy's applied markup (for the Margin range filter).
+    strategyPaise: number | null; // engine's exact Strategy-voice price (computedPricePaise), ₹·100. Authoritative.
     salePrice: string;      // Sale Price (sticky), user-editable; "" = not set
     baseline: string;       // last-saved Sale Price, for dirty detection
     mrp: string;            // MRP ceiling (incl GST). "" = no MRP
@@ -114,44 +124,88 @@ type Row = {
     savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
 };
 
-const SAMPLE: Row[] = [
-    // savedProfit = profit decided when last printed; current cost edits make it drift (shrinking/over).
-    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", barcode: "4250593440769", brand: "CP Plus", category: "Camera", group: "CCTV", stock: "12", lastSoldAt: "2026-05-20", method: "WA", costIncl: "992", gst: "18", margin: "25", strategyMargin: "35", charges: "0", salePrice: "1240", baseline: "1240", mrp: "1400", saleSource: "SAVED", savedAt: "2026-05-14", savedProfit: "250" },
-    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", barcode: "4250593443319", brand: "CP Plus", category: "Camera", group: "CCTV", stock: "0", lastSoldAt: "2026-04-12", method: "WA", costIncl: "1349", gst: "18", margin: "25", strategyMargin: "30", charges: "0", salePrice: "1650", baseline: "1650", mrp: "1700", saleSource: "STRATEGY", savedAt: "2026-05-03", savedProfit: "200" },
-    { id: 3, name: "Adapter 19v 40w 2.1mp", barcode: "38686599387", brand: "Generic", category: "Adapter", group: "Spare Parts", stock: "5", lastSoldAt: "", method: "LI", costIncl: "400", gst: "18", margin: "30", strategyMargin: "20", charges: "0", salePrice: "", baseline: "", mrp: "600", saleSource: "MY", savedAt: "", savedProfit: "" },
-    { id: 4, name: "30Pin Lvds Cable Universal Board", barcode: "38692809948", brand: "Generic", category: "Cable", group: "Spare Parts", stock: "0", lastSoldAt: "2026-05-30", method: "WA", costIncl: "229", gst: "18", margin: "20", strategyMargin: "28", charges: "0", salePrice: "260", baseline: "260", mrp: "300", saleSource: "SAVED", savedAt: "2026-05-28", savedProfit: "26.27" },
-];
+// ── Map the engine's PricingItem → a table Row ────────────────────────────────
+// Cost is GST-inclusive for display + voice math: costIncl = resolvedCostPaise
+// (GST-exclusive) × (1 + gst/100). Because multiplication commutes,
+//   costIncl × (1+margin) ≡ costExcl × (1+margin) × (1+gst)
+// which is exactly what the engine computes — so the Computed voice matches POS.
+// The Strategy voice uses the engine's own `computedPricePaise` verbatim.
+function isoDaysAgo(days: number | null): string {
+    if (days == null) return "";
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// page "MY" ↔ db "COMPUTED"; STRATEGY/SAVED pass through.
+const voiceFromDb = (s: string): SaleSource => (s === "COMPUTED" ? "MY" : s === "SAVED" ? "SAVED" : "STRATEGY");
+const voiceToDb = (s: SaleSource): "STRATEGY" | "COMPUTED" | "SAVED" => (s === "MY" ? "COMPUTED" : s);
+
+function itemToRow(it: PricingItem): Row {
+    const gst = it.gstRatePct ?? 0;
+    const costInclRupees =
+        it.resolvedCostPaise != null ? (it.resolvedCostPaise / 100) * (1 + gst / 100) : null;
+    // Sale Price = the saved sale price ONLY (savedSalePricePaise). Blank when
+    // nothing is set yet — never prefilled from another voice, because the
+    // printed barcode is derived from this value and must reflect a real decision.
+    const sale = it.savedSalePricePaise != null ? (it.savedSalePricePaise / 100).toFixed(2) : "";
+    return {
+        id: it.id,
+        name: it.name,
+        sku: it.sku ?? "",
+        barcode: it.barcode ?? "",
+        brand: it.brandName ?? "",
+        category: it.categoryName ?? "",
+        group: it.groupName ?? "",
+        stock: it.stock != null ? String(it.stock) : "",
+        lastSoldAt: isoDaysAgo(it.daysSinceLastSale),
+        method: codeFromEnum(it.effectiveCostMethod),
+        costIncl: costInclRupees != null ? costInclRupees.toFixed(2) : "",
+        gst: String(gst),
+        margin: it.marginPercent != null ? String(it.marginPercent) : "",
+        strategyMargin: String(it.appliedMarkupPct ?? 0),
+        strategyPaise: it.computedPricePaise,
+        salePrice: sale,
+        baseline: sale,
+        mrp: it.mrpPaise != null ? (it.mrpPaise / 100).toFixed(2) : "",
+        saleSource: voiceFromDb(it.effectiveSalePriceSource),
+        savedAt: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",
+        savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
+    };
+}
 
 // ── Compute ──────────────────────────────────────────────────────────────────
 
-// A voice price = (cost + charges) × (1 + margin/100). Used for both Strategy
-// (strategyMargin) and Computed (margin). Exact value; rounding at voucher time.
-function priceWithMargin(costIncl: string, charges: string, marginStr: string): number | null {
+// A voice price = cost × (1 + margin/100). Used for the Computed voice
+// (margin). Exact value; rounding at voucher time. (Strategy voice comes from
+// the engine — `Row.strategyPaise` — not this fn.)
+function priceWithMargin(costIncl: string, marginStr: string): number | null {
     const cost = parseFloat(costIncl);
     if (!isFinite(cost) || cost < 0) return null;
-    const ch = parseFloat(charges);
-    const base = cost + (isFinite(ch) ? ch : 0);
     const m = parseFloat(marginStr);
-    return base * (1 + (isFinite(m) ? m : 0) / 100);
+    if (!isFinite(m)) return null;
+    return cost * (1 + m / 100);
 }
 
-// After-tax profit on a given selling price: strip GST from both sale and the
-// charged-up cost (output GST owed, input GST reclaimed). pct = margin on net sale.
+// The engine's Strategy-voice price in ₹ (from computedPricePaise), or null.
+function strategyRupees(r: Row): number | null {
+    return r.strategyPaise != null ? r.strategyPaise / 100 : null;
+}
+
+// After-tax profit on a given selling price: strip GST from both sale and cost
+// (output GST owed, input GST reclaimed). pct = margin on net sale.
 function profitOf(
     price: number | null,
     costIncl: string,
-    charges: string,
     gstStr: string,
 ): { amt: number; pct: number | null } | null {
     if (price == null) return null;
     const cost = parseFloat(costIncl);
     if (!isFinite(cost)) return null;
-    const ch = parseFloat(charges);
-    const chg = isFinite(ch) ? ch : 0;
     const gst = parseFloat(gstStr);
     const gstMul = isFinite(gst) && gst > 0 ? 1 + gst / 100 : 1;
     const netSale = price / gstMul;
-    const netCost = (cost + chg) / gstMul;
+    const netCost = cost / gstMul;
     const amt = netSale - netCost;
     const pct = netSale > 0 ? (amt / netSale) * 100 : null;
     return { amt, pct };
@@ -184,10 +238,12 @@ function todayISO(): string {
 // (from the band) is set as the units digit — silently telling staff which band
 // applied. Fallback: no band → barcode = sale price. MRP cap: when MRP is tight,
 // the barcode floors to MRP (trailing 0 = capped); if even that drops below the
-// sale price, print MRP exactly (token "m" → underlined). Bands will live on
-// OrgDefaults (JSON); hardcoded here for now as the seed default.
+// sale price, print MRP exactly (token "m" → underlined). Bands live on
+// OrgDefaults.barcodeBandsJson; the in-code default below is the seed fallback
+// and is replaced at runtime by `setBarcodeBands()` once the config loads.
 
-const BARCODE_BANDS: { max: number; add: number; hint: number }[] = [
+type BarcodeBand = { max: number; add: number; hint: number };
+const DEFAULT_BARCODE_BANDS: BarcodeBand[] = [
     { max: 50, add: 10, hint: 1 },
     { max: 100, add: 20, hint: 2 },
     { max: 300, add: 30, hint: 3 },
@@ -197,13 +253,21 @@ const BARCODE_BANDS: { max: number; add: number; hint: number }[] = [
     { max: 10000, add: 200, hint: 8 },
     { max: 99999, add: 500, hint: 9 },
 ];
+// Module-level active bands — config for this single page; set once from
+// OrgDefaults on mount. Kept ascending-by-max so `find(price <= max)` works.
+let ACTIVE_BARCODE_BANDS: BarcodeBand[] = DEFAULT_BARCODE_BANDS;
+function setBarcodeBands(bands: BarcodeBand[]) {
+    ACTIVE_BARCODE_BANDS = bands.length
+        ? [...bands].sort((a, b) => a.max - b.max)
+        : DEFAULT_BARCODE_BANDS;
+}
 
 function barcodePrice(
     price: number | null,
     mrp: number | null = null,
 ): { value: number | null; hint: string; capped: boolean } {
     if (price == null || !isFinite(price) || price < 1) return { value: null, hint: "", capped: false };
-    const band = BARCODE_BANDS.find((b) => price <= b.max);
+    const band = ACTIVE_BARCODE_BANDS.find((b) => price <= b.max);
     let value = band ? Math.round((price + band.add) / 10) * 10 + band.hint : Math.round(price);
     let hint = band ? String(band.hint) : "";
     let capped = false;
@@ -233,8 +297,8 @@ function sortVal(r: Row, key: SortKey): number | string {
         case "group": return r.group.toLowerCase();
         case "stock": { const v = parseFloat(r.stock); return isFinite(v) ? v : -Infinity; }
         case "cost": { const v = parseFloat(r.costIncl); return isFinite(v) ? v : -Infinity; }
-        case "strategy": return priceWithMargin(r.costIncl, r.charges, r.strategyMargin) ?? -Infinity;
-        case "computed": return priceWithMargin(r.costIncl, r.charges, r.margin) ?? -Infinity;
+        case "strategy": return strategyRupees(r) ?? -Infinity;
+        case "computed": return priceWithMargin(r.costIncl, r.margin) ?? -Infinity;
         case "saved": { const v = parseFloat(r.salePrice); return isFinite(v) ? v : -Infinity; }
         case "barcode": {
             const v = parseFloat(r.salePrice);
@@ -281,8 +345,8 @@ const inRange = (val: number | null, lo: number | null, hi: number | null): bool
 function applicableSalePrice(r: Row): number | null {
     const saved = numOrNull(r.salePrice);
     const chosen =
-        r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
-            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+        r.saleSource === "STRATEGY" ? strategyRupees(r)
+            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
                 : saved;
     if (chosen == null) return null;
     let val = chosen;
@@ -309,8 +373,8 @@ function barcodeCapped(r: Row): boolean {
 function saleCapped(r: Row): boolean {
     const saved = numOrNull(r.salePrice);
     const chosen =
-        r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
-            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+        r.saleSource === "STRATEGY" ? strategyRupees(r)
+            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
                 : saved;
     if (chosen == null) return false;
     const applic = applicableSalePrice(r);
@@ -341,12 +405,12 @@ function rangeVal(r: Row, key: RangeKey): number | null {
             // After-tax profit on the price that actually applies (capped selling voice).
             const price = applicableSalePrice(r);
             if (price == null) return null;
-            return profitOf(price, r.costIncl, r.charges, r.gst)?.amt ?? null;
+            return profitOf(price, r.costIncl, r.gst)?.amt ?? null;
         }
         case "profitPct": {
             const price = applicableSalePrice(r);
             if (price == null) return null;
-            return profitOf(price, r.costIncl, r.charges, r.gst)?.pct ?? null;
+            return profitOf(price, r.costIncl, r.gst)?.pct ?? null;
         }
     }
 }
@@ -363,8 +427,8 @@ function barcodeShrinkPct(r: Row): number | null {
     const bc = barcodePrice(saved, m != null && m > 0 ? m : null).value;
     if (bc == null || bc === 0) return null;
     const live =
-        r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
-            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+        r.saleSource === "STRATEGY" ? strategyRupees(r)
+            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
                 : saved;
     if (live == null) return null;
     return ((live - saved) / bc) * 100;
@@ -376,7 +440,7 @@ function profitGapPct(r: Row): number | null {
     const decided = numOrNull(r.savedProfit);
     const saved = numOrNull(r.salePrice);
     if (decided == null || decided === 0 || saved == null) return null;
-    const cur = profitOf(saved, r.costIncl, r.charges, r.gst)?.amt;
+    const cur = profitOf(saved, r.costIncl, r.gst)?.amt;
     if (cur == null) return null;
     return ((cur - decided) / Math.abs(decided)) * 100;
 }
@@ -394,11 +458,194 @@ const SELLING_TAG = (
     </span>
 );
 
+const ProfitSub = ({ p }: { p: { amt: number; pct: number | null } | null }) =>
+    p == null ? (
+        <span className="block text-[10px] text-muted-foreground">—</span>
+    ) : (
+        <span className={`block text-[10px] font-mono ${p.amt < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+            {rupee(p.amt)}{p.pct != null ? ` · ${p.pct.toFixed(1)}%` : ""}
+        </span>
+    );
+
+type RowPersistPatch = { marginPercent?: number | null; mrpPaise?: number | null; costMethod?: string };
+
+// Memoized row — only re-renders when its own `r`, `selected`, or column
+// visibility (`hidden`) changes. With ~hundreds of rows this keeps typing in one
+// cell from re-rendering the whole table. Requires stable callback props +
+// stable `r` references for unchanged rows (setRows keeps them via the ternary).
+const ProductRow = memo(function ProductRow({
+    r, index, hidden, selected,
+    onUpdate, onPersist, onToggleSel, onRemove,
+}: {
+    r: Row;
+    index: number;
+    hidden: Set<ColKey>;
+    selected: boolean;
+    onUpdate: (id: number, patch: Partial<Row>) => void;
+    onPersist: (id: number, patch: RowPersistPatch, opts?: { reload?: boolean }) => void;
+    onToggleSel: (id: number) => void;
+    onRemove: (id: number) => void;
+}) {
+    const show = (k: ColKey) => !hidden.has(k);
+    const strategyPrice = strategyRupees(r);
+    const myPrice = priceWithMargin(r.costIncl, r.margin);
+    const savedNum = parseFloat(r.salePrice);
+    const savedPrice = isFinite(savedNum) ? savedNum : null;
+    const mrpNum = parseFloat(r.mrp);
+    const mrp = isFinite(mrpNum) && mrpNum > 0 ? mrpNum : null;
+    const bc = savedPrice != null ? barcodePrice(savedPrice, mrp) : null;
+    const dateCode = secretDateCode(r.savedAt);
+    const stratProfit = profitOf(strategyPrice, r.costIncl, r.gst);
+    const myProfit = profitOf(myPrice, r.costIncl, r.gst);
+    const savedProfit = profitOf(savedPrice, r.costIncl, r.gst);
+    const dirty = r.salePrice.trim() !== r.baseline.trim();
+
+    return (
+        <TableRow data-state={selected ? "selected" : undefined}>
+            <TableCell>
+                <Checkbox checked={selected} onCheckedChange={() => onToggleSel(r.id)} aria-label={`Select ${r.name}`} />
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
+            <TableCell className="max-w-[320px] text-xs font-medium" title={r.sku ? `${r.name} · ${r.sku}` : r.name}>
+                <div className="truncate">{r.name}</div>
+                {r.sku ? <div className="truncate text-[10px] font-normal text-muted-foreground">{r.sku}</div> : null}
+            </TableCell>
+            {show("brand") ? <TableCell className="text-xs text-muted-foreground">{r.brand || "—"}</TableCell> : null}
+            {show("category") ? <TableCell className="text-xs text-muted-foreground">{r.category || "—"}</TableCell> : null}
+            {show("group") ? <TableCell className="text-xs text-muted-foreground">{r.group || "—"}</TableCell> : null}
+            {show("stock") ? (
+                <TableCell className={`text-right text-xs font-mono ${stockQty(r) <= 0 ? "text-red-600" : ""}`}>
+                    {r.stock === "" ? "—" : r.stock}
+                </TableCell>
+            ) : null}
+            {show("cost") ? (
+                <TableCell className="align-top">
+                    <div className="flex flex-col items-end gap-1">
+                        <span className="text-xs font-mono text-muted-foreground">
+                            {r.costIncl === "" ? "—" : `₹${r.costIncl}`}
+                        </span>
+                        <Select
+                            value={r.method}
+                            onValueChange={(v) => {
+                                onUpdate(r.id, { method: v as CostCode });
+                                onPersist(r.id, { costMethod: enumFromCode(v as CostCode) }, { reload: true });
+                            }}
+                        >
+                            <SelectTrigger className="h-6 w-16 text-xs font-mono"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {COST_METHODS.map((m) => (
+                                    <SelectItem key={m.code} value={m.code}>
+                                        <span className="font-mono">{m.code}</span>
+                                        <span className="ml-2 text-muted-foreground">{m.full}</span>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </TableCell>
+            ) : null}
+            {show("margin") ? (
+                <TableCell className="text-right">
+                    <Input
+                        inputMode="decimal"
+                        value={r.margin}
+                        placeholder="—"
+                        onChange={(e) => onUpdate(r.id, { margin: e.target.value })}
+                        onBlur={() => onPersist(r.id, { marginPercent: numOrNull(r.margin) })}
+                        className="h-7 w-16 text-right text-xs font-mono"
+                    />
+                </TableCell>
+            ) : null}
+
+            {show("strategy") ? (
+                <TableCell className="p-1 text-right align-top">
+                    <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => onUpdate(r.id, { saleSource: "STRATEGY" })}>
+                        {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
+                        <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
+                        <ProfitSub p={stratProfit} />
+                    </button>
+                </TableCell>
+            ) : null}
+
+            {show("computed") ? (
+                <TableCell className="p-1 text-right align-top">
+                    <button type="button" className={voiceClass(r.saleSource === "MY")} onClick={() => onUpdate(r.id, { saleSource: "MY" })}>
+                        {r.saleSource === "MY" ? SELLING_TAG : null}
+                        <span className="block text-sm font-mono font-semibold">{rupee(myPrice)}</span>
+                        <ProfitSub p={myProfit} />
+                    </button>
+                </TableCell>
+            ) : null}
+
+            {show("sale") ? (
+                <TableCell className="p-1 text-right align-top">
+                    {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+                    <div className={voiceClass(r.saleSource === "SAVED")} onClick={() => onUpdate(r.id, { saleSource: "SAVED" })}>
+                        {r.saleSource === "SAVED" ? SELLING_TAG : null}
+                        <Input
+                            inputMode="decimal"
+                            value={r.salePrice}
+                            placeholder="—"
+                            onFocus={() => onUpdate(r.id, { saleSource: "SAVED" })}
+                            onChange={(e) => onUpdate(r.id, { salePrice: e.target.value })}
+                            className={`h-7 w-24 text-right text-xs font-mono font-semibold ${dirty ? "ring-1 ring-amber-400 focus-visible:ring-amber-400" : ""}`}
+                        />
+                        <ProfitSub p={savedProfit} />
+                    </div>
+                </TableCell>
+            ) : null}
+
+            {show("mrp") ? (
+                <TableCell className="text-right">
+                    <Input
+                        inputMode="decimal"
+                        value={r.mrp}
+                        placeholder="—"
+                        onChange={(e) => onUpdate(r.id, { mrp: e.target.value })}
+                        onBlur={() => { const v = numOrNull(r.mrp); onPersist(r.id, { mrpPaise: v != null ? Math.round(v * 100) : null }); }}
+                        className="h-7 w-20 text-right text-xs font-mono"
+                    />
+                </TableCell>
+            ) : null}
+
+            {show("barcode") ? (
+                <TableCell className="text-right">
+                    {bc == null || bc.value == null ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                        <span className="inline-flex items-baseline justify-end gap-1">
+                            <span
+                                className={`text-sm font-mono font-semibold ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
+                                title={bc.capped ? (bc.hint === "m" ? "Capped at MRP exactly (no markup room)" : "Capped at MRP — no markup room") : undefined}
+                            >
+                                {rupee(bc.value)}
+                                {bc.hint && bc.hint !== "m" ? <span className="ml-1 text-[10px] text-muted-foreground">·{bc.hint}</span> : null}
+                            </span>
+                            {dateCode ? (
+                                <span className="rounded bg-muted px-1 text-[9px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
+                                    {dateCode}
+                                </span>
+                            ) : null}
+                        </span>
+                    )}
+                </TableCell>
+            ) : null}
+
+            <TableCell>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => onRemove(r.id)}>
+                    <Trash2 className="size-4 text-muted-foreground" />
+                </Button>
+            </TableCell>
+        </TableRow>
+    );
+});
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function GeneratePage() {
-    const [rows, setRows] = useState<Row[]>(SAMPLE);
-    const nextId = useRef(SAMPLE.length + 1);
+    const [rows, setRows] = useState<Row[]>([]);
+    const [loading, setLoading] = useState(true);
+    const nextId = useRef(-1); // locally-added rows get negative ids (never persisted)
     const [query, setQuery] = useState("");
     // Top tab (All products / Selected product) + the working "selection".
     const [tab, setTab] = useState<"all" | "selected">("all");
@@ -414,6 +661,55 @@ export default function GeneratePage() {
     useEffect(() => {
         if (fromVoucherId != null) { setTab("selected"); setSelTab("print"); }
     }, [fromVoucherId]);
+
+    // ── Load real products (engine) + barcode bands (OrgDefaults) ─────────────
+    // Merge preserves locally-edited sticky Sale-Price fields and any locally
+    // added rows (negative ids) across a reload (e.g. after a cost-method change).
+    const loadData = useCallback(async () => {
+        try {
+            const [itemsRes, odRes] = await Promise.all([
+                axios.get<PricingItem[]>("/api/pricing-strategy/items?withSaleAge=1"),
+                axios.get<{ barcodeBandsJson?: BarcodeBand[] }>("/api/settings/org-defaults"),
+            ]);
+            setBarcodeBands(Array.isArray(odRes.data.barcodeBandsJson) ? odRes.data.barcodeBandsJson : []);
+            const mapped = itemsRes.data.map(itemToRow);
+            setRows((prev) => {
+                const byId = new Map(prev.map((r) => [r.id, r]));
+                const merged = mapped.map((m) => {
+                    const old = byId.get(m.id);
+                    return old
+                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, savedAt: old.savedAt, savedProfit: old.savedProfit }
+                        : m;
+                });
+                const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
+                return [...merged, ...locals];
+            });
+        } catch {
+            toast.error("Failed to load products.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+    useEffect(() => { loadData(); }, [loadData]);
+
+    // Persist an editable field to InvProduct via the items PATCH. Local-only
+    // rows (negative ids) are skipped. `reload` re-pulls the engine values when a
+    // change alters the cost basis (cost method) so derived voices stay accurate.
+    const persist = useCallback(async (
+        id: number,
+        patch: { marginPercent?: number | null; mrpPaise?: number | null; costMethod?: string },
+        opts?: { reload?: boolean },
+    ) => {
+        if (id < 0) return;
+        try {
+            await axios.patch(`/api/pricing-strategy/items/${id}`, patch);
+            if (opts?.reload) await loadData();
+        } catch (e) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
+            toast.error(msg ?? "Failed to save change.");
+        }
+    }, [loadData]);
+
     const [selectionIds, setSelectionIds] = useState<Set<number>>(new Set());
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [fBrand, setFBrand] = useState("ALL");
@@ -509,7 +805,7 @@ export default function GeneratePage() {
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
         let v = rows;
-        if (q) v = v.filter((r) => r.name.toLowerCase().includes(q));
+        if (q) v = v.filter((r) => r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q));
         if (fBrand !== "ALL") v = v.filter((r) => r.brand === fBrand);
         if (fCategory !== "ALL") v = v.filter((r) => r.category === fCategory);
         if (fGroup !== "ALL") v = v.filter((r) => r.group === fGroup);
@@ -555,6 +851,10 @@ export default function GeneratePage() {
     const selectionRows = useMemo(() => visible.filter((r) => selectionIds.has(r.id)), [visible, selectionIds]);
     // The list the active tab actually renders. (Only the active tab's body mounts.)
     const listRows = tab === "selected" ? selectionRows : visible;
+    // Cap rendered rows so the full catalogue stays responsive (filters narrow it).
+    const RENDER_CAP = 150;
+    const cappedRows = listRows.slice(0, RENDER_CAP);
+    const renderTruncated = listRows.length > RENDER_CAP;
 
     // Selected rows → label items for the Print tab. The printed price is the
     // barcode price (the band-buffered cap), falling back to the sale price.
@@ -577,13 +877,13 @@ export default function GeneratePage() {
     const toggleSort = (key: SortKey) =>
         setSort((s) => (s && s.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
 
-    const toggleSel = (id: number) =>
+    const toggleSel = useCallback((id: number) =>
         setSelected((prev) => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
             return next;
-        });
+        }), []);
     const allSelected = listRows.length > 0 && listRows.every((r) => selected.has(r.id));
     const toggleAll = () =>
         setSelected((prev) => {
@@ -608,12 +908,12 @@ export default function GeneratePage() {
         for (const p of products) {
             const existing = p.barcode ? byBarcode.get(p.barcode) : undefined;
             if (existing) { selectIds.push(existing.id); continue; }
-            const id = nextId.current++;
+            const id = nextId.current--;  // local-only rows get negative ids (never persisted)
             const sale = p.salePrice != null ? String(p.salePrice) : "";
             const row: Row = {
-                id, name: p.name, barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
+                id, name: p.name, sku: "", barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
                 method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", gst: "18",
-                margin: "25", strategyMargin: "30", charges: "0", salePrice: sale, baseline: sale,
+                margin: "25", strategyMargin: "30", strategyPaise: null, salePrice: sale, baseline: sale,
                 mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", savedAt: "", savedProfit: "",
             };
             additions.push(row);
@@ -633,46 +933,64 @@ export default function GeneratePage() {
             return next;
         });
 
-    const update = (id: number, patch: Partial<Row>) =>
-        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-    const remove = (id: number) => {
+    const update = useCallback((id: number, patch: Partial<Row>) =>
+        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
+    const remove = useCallback((id: number) => {
         setRows((prev) => prev.filter((r) => r.id !== id));
         setSelected((prev) => {
             const next = new Set(prev);
             next.delete(id);
             return next;
         });
-    };
-    const addRow = () =>
-        setRows((prev) => [
-            ...prev,
-            {
-                id: nextId.current++, name: "New item", barcode: "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
-                method: "WA", costIncl: "0", gst: "18", margin: "25", strategyMargin: "30",
-                charges: "0", salePrice: "", baseline: "", mrp: "", saleSource: "SAVED", savedAt: "", savedProfit: "",
-            },
-        ]);
-
-    // Save = freeze price + date + the DECIDED PROFIT (profit on the saved price at
-    // today's cost) for CHECKED rows, then clear the ticks. Storing the decided
-    // profit avoids any historical-cost lookup later — the gap is current vs stored.
-    const save = () => {
+    }, []);
+    // Freeze = persist the sticky Sale Price for CHECKED rows via the sale-price
+    // endpoint, then reflect the freeze locally (baseline + date + decided profit).
+    // SAVED rows store savedSalePricePaise; STRATEGY/COMPUTED rows clear it (follow
+    // the live engine). Local-only rows (negative ids) freeze in the UI only.
+    const [freezing, setFreezing] = useState(false);
+    const save = async () => {
         const today = todayISO();
-        setRows((prev) =>
-            prev.map((r) => {
-                if (!selected.has(r.id)) return r;
+        const checked = rows.filter((r) => selected.has(r.id));
+        const payload = checked
+            .filter((r) => r.id > 0)
+            .map((r) => {
                 const sp = numOrNull(r.salePrice);
-                if (sp == null) return { ...r, baseline: r.salePrice };
-                const decided = profitOf(sp, r.costIncl, r.charges, r.gst)?.amt ?? null;
+                const isSaved = r.saleSource === "SAVED" && sp != null;
+                const decided = isSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
                 return {
-                    ...r,
-                    baseline: r.salePrice,
-                    savedAt: today,
-                    savedProfit: decided != null ? decided.toFixed(2) : "",
+                    id: r.id,
+                    effectiveSalePriceSource: voiceToDb(r.saleSource),
+                    savedSalePricePaise: isSaved && sp != null ? Math.round(sp * 100) : null,
+                    savedProfitPaise: decided != null ? Math.round(decided * 100) : null,
                 };
-            }),
-        );
-        setSelected(new Set());
+            });
+        setFreezing(true);
+        try {
+            if (payload.length) {
+                await axios.put("/api/pricing-strategy/sale-price", { items: payload });
+            }
+            setRows((prev) =>
+                prev.map((r) => {
+                    if (!selected.has(r.id)) return r;
+                    const sp = numOrNull(r.salePrice);
+                    const isSaved = r.saleSource === "SAVED" && sp != null;
+                    const decided = isSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
+                    return {
+                        ...r,
+                        baseline: r.salePrice,
+                        savedAt: isSaved ? today : "",
+                        savedProfit: decided != null ? decided.toFixed(2) : "",
+                    };
+                }),
+            );
+            setSelected(new Set());
+            toast.success(`Frozen — ${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
+        } catch (e) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
+            toast.error(msg ?? "Failed to save sale prices.");
+        } finally {
+            setFreezing(false);
+        }
     };
 
     const dirtyCount = rows.filter((r) => r.salePrice.trim() !== r.baseline.trim()).length;
@@ -740,18 +1058,40 @@ export default function GeneratePage() {
         setRanges(emptyRanges());
     };
 
+    // Inline tab switcher — lives in the toolbar row (no separate tabs row) so the
+    // table gets the extra vertical space.
+    const tabSwitcher = (
+        <div className="flex shrink-0 items-center rounded-md border bg-muted/40 p-0.5 text-xs font-medium">
+            <button
+                type="button"
+                onClick={() => setTab("all")}
+                className={`rounded px-2.5 py-1 transition-colors ${tab === "all" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+                All products
+            </button>
+            <button
+                type="button"
+                onClick={() => setTab("selected")}
+                className={`rounded px-2.5 py-1 transition-colors ${tab === "selected" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+                Selected{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
+            </button>
+        </div>
+    );
+
     // The product table body — shared by the "All products" and "Selected product"
     // tabs (same UI for now; "Selected product" will narrow the list later).
     const productBody = (
         <>
-            {/* Toolbar: search + filters + the selection/print actions + columns */}
+            {/* Toolbar: tab switcher + search + filters + the selection/print actions + columns */}
             <div className="mb-3 flex items-center gap-3">
+                {tabSwitcher}
                 <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search name…"
+                        placeholder="Search name / SKU…"
                         className="h-8 w-56 pl-7 text-xs"
                     />
                 </div>
@@ -785,8 +1125,8 @@ export default function GeneratePage() {
                             ? `${selected.size} ticked`
                             : dirtyCount === 0 ? "Barcodes current" : `${dirtyCount} to update`}
                     </span>
-                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={selected.size === 0} title="Save the edited prices — freeze the sale price and stamp today's date (the printed barcode price + date code)">
-                        <Save className="size-4" /> Save changes{selected.size > 0 ? ` (${selected.size})` : ""}
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={selected.size === 0 || freezing} title="Freeze & save the Sale Price for the ticked rows. SAVED rows store the sticky price (POS + shop use it); Strategy/Computed rows follow the live engine. Margin %, MRP and Method save automatically as you edit.">
+                        {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Freeze sale price{selected.size > 0 ? ` (${selected.size})` : ""}
                     </Button>
                 </div>
                 <DropdownMenu>
@@ -818,7 +1158,7 @@ export default function GeneratePage() {
             {filtersOpen ? (
                 <div className="mb-3 rounded-md border bg-muted/30 p-3">
                     <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span>
+                        {/* <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span> */}
                         {activeFilterCount > 0 ? (
                             <button type="button" onClick={clearAllFilters} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
                                 Clear all ({activeFilterCount})
@@ -860,11 +1200,16 @@ export default function GeneratePage() {
                 </div>
             ) : null}
 
-            <div className="rounded-sm border">
+            {/* Fixed-height scroll box: one container scrolls BOTH axes, so the
+                horizontal scrollbar stays pinned at its bottom (always visible)
+                and the sticky header keeps the column row visible while rows
+                scroll under it. */}
+            {/* <div className="h-[calc(100vh-11rem)] overflow-auto rounded-sm border [&>[data-slot=table-container]]:overflow-x-visible"> */}
+            <div className="h-[calc(100vh-11rem)] rounded-sm border [&>[data-slot=table-container]]:overflow-x-visible">
                 {/* Compact density: tighter than the default shadcn cell padding so the
                     grid fits more columns and the Product name gets the leftover width. */}
                 <Table className="[&_th]:h-9 [&_th]:px-2 [&_td]:px-2 [&_td]:py-1">
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
                             <TableHead className="w-8">
                                 <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all visible rows" />
@@ -875,9 +1220,7 @@ export default function GeneratePage() {
                             {show("category") ? <SortTh label="Category" k="category" align="left" /> : null}
                             {show("group") ? <SortTh label="Group" k="group" align="left" /> : null}
                             {show("stock") ? <SortTh label="Stock" k="stock" /> : null}
-                            {show("method") ? <TableHead className="text-xs">Method</TableHead> : null}
                             {show("cost") ? <SortTh label="Cost (incl)" k="cost" /> : null}
-                            {show("charges") ? <TableHead className="text-right text-xs">Charges ₹</TableHead> : null}
                             {show("margin") ? <TableHead className="text-right text-xs">Margin %</TableHead> : null}
                             {show("strategy") ? <SortTh label="Strategy" k="strategy" /> : null}
                             {show("computed") ? <SortTh label="Computed" k="computed" /> : null}
@@ -891,230 +1234,70 @@ export default function GeneratePage() {
                         {listRows.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={colSpan} className="py-8 text-center text-sm text-muted-foreground">
-                                    {tab === "selected"
+                                    {loading ? (
+                                        <span className="inline-flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Loading products…</span>
+                                    ) : tab === "selected"
                                         ? "No products in selection — tick rows in All products and click Add to selection."
                                         : `No products match “${query}”.`}
                                 </TableCell>
                             </TableRow>
                         ) : null}
-                        {listRows.map((r, i) => {
-                            const strategyPrice = priceWithMargin(r.costIncl, r.charges, r.strategyMargin);
-                            const myPrice = priceWithMargin(r.costIncl, r.charges, r.margin);
-                            const savedNum = parseFloat(r.salePrice);
-                            const savedPrice = isFinite(savedNum) ? savedNum : null;
-                            const mrpNum = parseFloat(r.mrp);
-                            const mrp = isFinite(mrpNum) && mrpNum > 0 ? mrpNum : null;
-
-                            // Barcode is computed from the Sale Price; its value is the POS cap.
-                            const bc = savedPrice != null ? barcodePrice(savedPrice, mrp) : null;
-                            const dateCode = secretDateCode(r.savedAt);
-
-                            // Per-voice profit (after GST) — shown under each price for comparison.
-                            const stratProfit = profitOf(strategyPrice, r.costIncl, r.charges, r.gst);
-                            const myProfit = profitOf(myPrice, r.costIncl, r.charges, r.gst);
-                            const savedProfit = profitOf(savedPrice, r.costIncl, r.charges, r.gst);
-
-                            const dirty = r.salePrice.trim() !== r.baseline.trim();
-
-                            // Per-voice profit sub-line (₹ + %), after tax — so all three can be compared.
-                            const profitSub = (p: { amt: number; pct: number | null } | null) =>
-                                p == null ? (
-                                    <span className="block text-[10px] text-muted-foreground">—</span>
-                                ) : (
-                                    <span className={`block text-[10px] font-mono ${p.amt < 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                                        {rupee(p.amt)}{p.pct != null ? ` · ${p.pct.toFixed(1)}%` : ""}
-                                    </span>
-                                );
-
-                            return (
-                                <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined}>
-                                    <TableCell>
-                                        <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSel(r.id)} aria-label={`Select ${r.name}`} />
-                                    </TableCell>
-                                    <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
-                                    <TableCell>
-                                        <Input value={r.name} onChange={(e) => update(r.id, { name: e.target.value })} className="h-7 text-xs" />
-                                    </TableCell>
-                                    {show("brand") ? (
-                                        <TableCell>
-                                            <Input value={r.brand} onChange={(e) => update(r.id, { brand: e.target.value })} placeholder="—" className="h-7 w-24 text-xs" />
-                                        </TableCell>
-                                    ) : null}
-                                    {show("category") ? (
-                                        <TableCell>
-                                            <Input value={r.category} onChange={(e) => update(r.id, { category: e.target.value })} placeholder="—" className="h-7 w-24 text-xs" />
-                                        </TableCell>
-                                    ) : null}
-                                    {show("group") ? (
-                                        <TableCell>
-                                            <Input value={r.group} onChange={(e) => update(r.id, { group: e.target.value })} placeholder="—" className="h-7 w-24 text-xs" />
-                                        </TableCell>
-                                    ) : null}
-                                    {show("stock") ? (
-                                        <TableCell className="text-right">
-                                            <Input inputMode="decimal" value={r.stock} onChange={(e) => update(r.id, { stock: e.target.value })} placeholder="0" className={`h-7 w-16 text-right text-xs font-mono ${stockQty(r) <= 0 ? "text-red-600" : ""}`} />
-                                        </TableCell>
-                                    ) : null}
-                                    {show("method") ? (
-                                        <TableCell>
-                                            <Select value={r.method} onValueChange={(v) => update(r.id, { method: v as CostCode })}>
-                                                <SelectTrigger className="h-7 w-16 text-xs font-mono"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    {COST_METHODS.map((m) => (
-                                                        <SelectItem key={m.code} value={m.code}>
-                                                            <span className="font-mono">{m.code}</span>
-                                                            <span className="ml-2 text-muted-foreground">{m.full}</span>
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </TableCell>
-                                    ) : null}
-                                    {show("cost") ? (
-                                        <TableCell className="text-right">
-                                            <Input inputMode="decimal" value={r.costIncl} onChange={(e) => update(r.id, { costIncl: e.target.value })} className="h-7 w-24 text-right text-xs font-mono" />
-                                        </TableCell>
-                                    ) : null}
-                                    {show("charges") ? (
-                                        <TableCell className="text-right">
-                                            <Input inputMode="decimal" value={r.charges} onChange={(e) => update(r.id, { charges: e.target.value })} className="h-7 w-16 text-right text-xs font-mono" />
-                                        </TableCell>
-                                    ) : null}
-                                    {show("margin") ? (
-                                        <TableCell className="text-right">
-                                            <Input inputMode="decimal" value={r.margin} onChange={(e) => update(r.id, { margin: e.target.value })} className="h-7 w-16 text-right text-xs font-mono" />
-                                        </TableCell>
-                                    ) : null}
-
-                                    {/* ── Strategy voice ── */}
-                                    {show("strategy") ? (
-                                        <TableCell className="p-1 text-right align-top">
-                                            <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => update(r.id, { saleSource: "STRATEGY" })}>
-                                                {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
-                                                <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
-                                                {profitSub(stratProfit)}
-                                            </button>
-                                        </TableCell>
-                                    ) : null}
-
-                                    {/* ── Computed voice ── */}
-                                    {show("computed") ? (
-                                        <TableCell className="p-1 text-right align-top">
-                                            <button type="button" className={voiceClass(r.saleSource === "MY")} onClick={() => update(r.id, { saleSource: "MY" })}>
-                                                {r.saleSource === "MY" ? SELLING_TAG : null}
-                                                <span className="block text-sm font-mono font-semibold">{rupee(myPrice)}</span>
-                                                {profitSub(myProfit)}
-                                            </button>
-                                        </TableCell>
-                                    ) : null}
-
-                                    {/* ── Sale Price voice (editable, sticky) ── */}
-                                    {show("sale") ? (
-                                        <TableCell className="p-1 text-right align-top">
-                                            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-                                            <div className={voiceClass(r.saleSource === "SAVED")} onClick={() => update(r.id, { saleSource: "SAVED" })}>
-                                                {r.saleSource === "SAVED" ? SELLING_TAG : null}
-                                                <Input
-                                                    inputMode="decimal"
-                                                    value={r.salePrice}
-                                                    placeholder="—"
-                                                    onFocus={() => update(r.id, { saleSource: "SAVED" })}
-                                                    onChange={(e) => update(r.id, { salePrice: e.target.value })}
-                                                    className={`h-7 w-24 text-right text-xs font-mono font-semibold ${dirty ? "ring-1 ring-amber-400 focus-visible:ring-amber-400" : ""}`}
-                                                />
-                                                {profitSub(savedProfit)}
-                                            </div>
-                                        </TableCell>
-                                    ) : null}
-
-                                    {show("mrp") ? (
-                                        <TableCell className="text-right">
-                                            <Input inputMode="decimal" value={r.mrp} placeholder="—" onChange={(e) => update(r.id, { mrp: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
-                                        </TableCell>
-                                    ) : null}
-
-                                    {/* ── Barcode (cap) + secret date code ── */}
-                                    {show("barcode") ? (
-                                        <TableCell className="text-right">
-                                            {bc == null || bc.value == null ? (
-                                                <span className="text-xs text-muted-foreground">—</span>
-                                            ) : (
-                                                <span className="inline-flex items-baseline justify-end gap-1">
-                                                    <span
-                                                        className={`text-sm font-mono font-semibold ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
-                                                        title={bc.capped ? (bc.hint === "m" ? "Capped at MRP exactly (no markup room)" : "Capped at MRP — no markup room") : undefined}
-                                                    >
-                                                        {rupee(bc.value)}
-                                                        {bc.hint && bc.hint !== "m" ? <span className="ml-1 text-[10px] text-muted-foreground">·{bc.hint}</span> : null}
-                                                    </span>
-                                                    {dateCode ? (
-                                                        <span className="rounded bg-muted px-1 text-[9px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
-                                                            {dateCode}
-                                                        </span>
-                                                    ) : null}
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                    ) : null}
-
-                                    <TableCell>
-                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove" onClick={() => remove(r.id)}>
-                                            <Trash2 className="size-4 text-muted-foreground" />
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
+                        {cappedRows.map((r, i) => (
+                            <ProductRow
+                                key={r.id}
+                                r={r}
+                                index={i}
+                                hidden={hidden}
+                                selected={selected.has(r.id)}
+                                onUpdate={update}
+                                onPersist={persist}
+                                onToggleSel={toggleSel}
+                                onRemove={remove}
+                            />
+                        ))}
                     </TableBody>
                 </Table>
-                <div className="border-t p-2">
-                    <Button type="button" variant="outline" size="sm" onClick={addRow}>
-                        <Plus className="size-4" /> Add row
-                    </Button>
-                </div>
             </div>
+            {renderTruncated ? (
+                // <p className="mt-2 text-[11px] text-muted-foreground">
+                //     Showing first {RENDER_CAP} of {listRows.length} products — narrow with search or filters to see the rest.
+                // </p> 
+                null
+            ) : null}
         </>
     );
 
+    // The single header row (tab switcher + toolbar) lives inside productBody, so
+    // the table view and the print view each carry the switcher — no separate tabs row.
+    const showTable = tab === "all" || (tab === "selected" && selTab === "price");
     return (
-        <div className="h-full overflow-y-auto px-4 pt-4 pb-10">
-            {/* <div className="mb-3">
-                <h1 className="text-lg font-semibold">Print labels — UI only</h1>
-                <p className="text-sm text-muted-foreground">
-                    Pick products (here or from a voucher), set the barcode price across three voices —{" "}
-                    <span className="font-medium">Strategy</span>, <span className="font-medium">Computed</span>,{" "}
-                    <span className="font-medium">Sale Price</span> — then print. Selected product &amp; Print share one set. Nothing is persisted here.
-                </p>
-            </div> */}
+        <div className="h-full overflow-y-auto px-4 pt-3 pb-3">
+            {/* Table view: All products, or Selected → price. productBody's toolbar carries the switcher. */}
+            <div className={showTable ? "" : "hidden"}>{productBody}</div>
 
-            <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "selected")}>
-                <TabsList>
-                    <TabsTrigger value="all">All products</TabsTrigger>
-                    <TabsTrigger value="selected">
-                        Selected product{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
-                    </TabsTrigger>
-                </TabsList>
-                <TabsContent value="all" className="mt-3">{productBody}</TabsContent>
-                <TabsContent value="selected" className="mt-3">
-                    {/* Two views of the one selection, toggled by the inline buttons:
-                        the price toolbar's "Print" → labels, the designer's "Update barcode" → back.
-                        The designer stays mounted (hidden) so its label settings survive switches. */}
-                    {selTab === "price" ? productBody : null}
-                    <div className={selTab === "print" ? "" : "hidden"}>
-                        <LabelDesigner
-                            items={printItems}
-                            onAddProducts={addProducts}
-                            onRemoveItem={removePrintItem}
-                            onUpdateBarcode={() => setSelTab("price")}
-                            prefillVoucherId={fromVoucherId}
-                            onPrefillConsumed={() => router.replace("/office/pricing-strategy/update-print-labels", { scroll: false })}
-                            pageTitle="Print labels"
-                            pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Update price / barcode."
-                            rootClassName="pb-10"
-                        />
+            {/* Print view — LabelDesigner stays mounted while on the Selected tab so
+                its label settings survive price↔print toggles. */}
+            {tab === "selected" ? (
+                <div className={selTab === "print" ? "" : "hidden"}>
+                    <div className="mb-3 flex items-center gap-3">
+                        {tabSwitcher}
+                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setSelTab("price")}>
+                            Update price / barcode
+                        </Button>
                     </div>
-                </TabsContent>
-            </Tabs>
+                    <LabelDesigner
+                        items={printItems}
+                        onAddProducts={addProducts}
+                        onRemoveItem={removePrintItem}
+                        onUpdateBarcode={() => setSelTab("price")}
+                        prefillVoucherId={fromVoucherId}
+                        onPrefillConsumed={() => router.replace("/office/pricing-strategy/update-print-labels", { scroll: false })}
+                        pageTitle="Print labels"
+                        pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Update price / barcode."
+                        rootClassName="pb-10"
+                    />
+                </div>
+            ) : null}
         </div>
     );
 }

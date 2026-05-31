@@ -4,8 +4,8 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
-import { applyStrategy } from "@/modules/pricing-strategy/lib/resolvePrice";
-import { pickStrategy, buildMatchContext } from "@/modules/pricing-strategy/lib/matchStrategy";
+import { loadStrategyPoints, additiveMarginPct, additivePrice } from "@/modules/pricing-strategy/lib/additiveMargin";
+import { loadLastSaleAgeDays } from "@/modules/pricing-strategy/lib/matchStrategy";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 
@@ -21,15 +21,15 @@ export interface PricingItem {
     brandName:        string | null;
     /** Current cached stock balance. null = stock not tracked (e.g. services). */
     stock:                number | null;
-    /** Per-item cost method override. null = inherit from strategy. */
+    /** Per-item cost method override. null = inherit from OrgDefaults.valuationMethod. */
     costMethod:           string | null;
-    /** Resolved method actually used: product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod. */
+    /** Resolved method actually used: product.costMethod ?? OrgDefaults.valuationMethod. */
     effectiveCostMethod:  string;
-    /** Strategy's default cost method, surfaced for the UI to show "from strategy" hints. */
+    /** Deprecated (PricingStrategy dropped) — always null. */
     strategyCostMethod:   string | null;
     marginPercent:    number | null;
     priceOverridden:  boolean;
-    pricePaise:       number | null;
+    effectiveSalePricePaise: number | null;
     mrpPaise:         number | null;
     /** Stays in the interface as null for back-compat; STD_COST was dropped in PR 3. */
     stdCostPaise:     number | null;
@@ -38,22 +38,36 @@ export interface PricingItem {
     /** Cost resolved under the product's saved costMethod (null = no data). */
     resolvedCostPaise:    number | null;
     resolvedCostFallback: string | null;
-    /** Computed sell price under the matching strategy — already capped at MRP. */
+    /** Computed sell price (additive-margin engine) — already capped at MRP. */
     computedPricePaise:   number | null;
-    /** Pre-cap value from the cost+margin formula. Same as computedPricePaise when no cap fired. */
+    /** Pre-cap value from the cost×margin formula. Same as computedPricePaise when no cap fired. */
     rawComputedPricePaise: number | null;
     /** True when MRP capped the formula. */
     cappedAtMrp:          boolean;
-    /** Which strategy matched, or null if none active. */
+    /** Deprecated (PricingStrategy dropped) — always null. */
     strategyId:           number | null;
+    /** Deprecated (PricingStrategy dropped) — always null. */
     strategyName:         string | null;
+    /** The additive margin % applied (base + brand + category + group points). */
     appliedMarkupPct:     number;
-    /** Strategy's flat add (paise) — exposed so the client can replay the formula live. */
+    /** Deprecated (additive model has no flat add) — always 0. */
     appliedFlatPaise:     number;
-    /** Strategy's rounding step (paise) — same. */
+    /** Deprecated (additive model has no rounding step) — always 0. */
     appliedRoundingPaise: number;
     /** Resolved GST rate % (0 when no tax set anywhere in the cascade). */
     gstRatePct:           number;
+    /** Primary scannable barcode (InvProduct.barcode1). null = none set. */
+    barcode:              string | null;
+    /** Days since the last SALE/POS. null = never sold. Only populated with ?withSaleAge=1. */
+    daysSinceLastSale:    number | null;
+    /** Saved human sale price (paise). null = not set. Source of the barcode. */
+    savedSalePricePaise:  number | null;
+    /** Which source materializes the effective price: "STRATEGY" | "COMPUTED" | "SAVED". */
+    effectiveSalePriceSource: string;
+    /** ISO timestamp the sale price was last frozen, or null. */
+    salePriceFrozenAt:    string | null;
+    /** After-tax profit (paise) frozen at the last save, or null. */
+    savedProfitPaise:     number | null;
 }
 
 export async function GET(req: Request) {
@@ -62,8 +76,11 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const onlyAttention = searchParams.get("onlyAttention") === "1";
+        // Opt-in: compute days-since-last-sale per product (one ledger groupBy).
+        // Off by default so the items / needs-attention pages keep the cheap path.
+        const withSaleAge = searchParams.get("withSaleAge") === "1";
 
-        const [products, strategies, orgDefaults] = await Promise.all([
+        const [products, points, orgDefaults] = await Promise.all([
             prisma.invProduct.findMany({
                 where:   { isActive: true },
                 orderBy: [{ name: "asc" }],
@@ -75,18 +92,22 @@ export async function GET(req: Request) {
                     groupId:          true,
                     brandId:          true,
                     stock:            true,
-                    pricePaise:       true,
+                    effectiveSalePricePaise: true,
                     mrpPaise:         true,
                     costMethod:       true,
                     marginPercent:    true,
                     priceOverridden:  true,
-                    attrsJson:        true,
+                    barcode1:         true,
+                    effectiveSalePriceSource: true,
+                    savedSalePricePaise: true,
+                    salePriceFrozenAt:   true,
+                    savedProfitPaise:  true,
                     category: { select: { name: true } },
                     group:    { select: { name: true } },
                     brand:    { select: { name: true } },
                 },
             }),
-            prisma.pricingStrategy.findMany({ where: { isActive: true } }),
+            loadStrategyPoints(),
             prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
         ]);
         const orgDefault = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
@@ -95,55 +116,26 @@ export async function GET(req: Request) {
         const taxResult = await resolveProductTaxBatch({});
         const taxByProduct = taxResult.products;
 
-        // Build match context — only query lastSaleAgeDays when at least one
-        // active strategy uses staleAfterDays, to skip the ledger groupBy in
-        // the common case.
-        const needsStaleness = strategies.some((s) => s.minStaleDays != null || s.maxStaleDays != null);
-        const matchCtx = await buildMatchContext({
-            productIdsForStaleness: needsStaleness ? products.map((p) => p.id) : [],
-        });
+        // Days-since-last-sale — opt-in (one ledger groupBy) since only the
+        // labels page needs it.
+        const lastSaleAge = withSaleAge
+            ? await loadLastSaleAgeDays(products.map((p) => p.id))
+            : new Map<number, number | null>();
 
-        // Pre-resolve LAST_INWARD for the matcher's cost-range filter +
-        // display column. Replaces the dropped costPaise cache.
+        // Pre-resolve LAST_INWARD for the display column. Replaces the dropped costPaise cache.
         const lastInwardCosts = await valueStockBatch(
             products.map((p) => ({ id: p.id, stock: p.stock })),
             "LAST_INWARD",
         );
 
-        // Effective cost method per product: product.costMethod ?? matched
-        // strategy's costMethod ?? OrgDefaults.valuationMethod. Precompute so
-        // we can both group-batch the resolver and surface the source on the response.
+        // Effective cost method per product: product.costMethod ?? OrgDefaults.valuationMethod.
         type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
-        type Match = { effectiveMethod: EffectiveMethod; strategyId: number | null; strategyName: string | null };
-        const matches = new Map<number, Match>();
-        for (const p of products) {
-            const mc = lastInwardCosts.get(p.id);
-            const matcherCostPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
-            const matched = pickStrategy(
-                {
-                    id:         p.id,
-                    brandId:    p.brandId,
-                    groupId:    p.groupId,
-                    categoryId: p.categoryId,
-                    costPaise:  matcherCostPaise,
-                    stock:      p.stock,
-                    attrsJson:  (p.attrsJson ?? null) as Record<string, unknown> | null,
-                },
-                strategies,
-                matchCtx,
-            );
-            const effective: EffectiveMethod = p.costMethod ?? matched?.costMethod ?? orgDefault;
-            matches.set(p.id, {
-                effectiveMethod: effective,
-                strategyId:      matched?.id ?? null,
-                strategyName:    matched?.name ?? null,
-            });
-        }
+        const effectiveMethodOf = (p: typeof products[number]): EffectiveMethod => p.costMethod ?? orgDefault;
 
         // Group products by effective cost method so we issue one batch per method.
         const byMethod = new Map<EffectiveMethod, typeof products>();
         for (const p of products) {
-            const m = matches.get(p.id)!.effectiveMethod;
+            const m = effectiveMethodOf(p);
             const arr = byMethod.get(m);
             if (arr) arr.push(p); else byMethod.set(m, [p]);
         }
@@ -160,18 +152,12 @@ export async function GET(req: Request) {
 
         let items: PricingItem[] = products.map((p) => {
             const cost  = costById.get(p.id) ?? { paise: null, fallback: null };
-            const meta  = matches.get(p.id)!;
-            const matched = strategies.find((s) => s.id === meta.strategyId) ?? null;
             const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
             const mc = lastInwardCosts.get(p.id);
             const lastInwardPaise = mc && mc.unitCost > 0 ? Math.round(mc.unitCost * 100) : null;
-            const priced = applyStrategy(
-                cost.paise,
-                p.marginPercent != null ? Number(p.marginPercent) : null,
-                matched,
-                p.mrpPaise,
-                gstRatePct,
-            );
+            // STRATEGY voice = the additive-margin engine (markup on cost).
+            const margin = additiveMarginPct(p, points);
+            const priced = additivePrice(cost.paise, margin, p.mrpPaise, gstRatePct);
             return {
                 id:                p.id,
                 sku:               p.sku,
@@ -184,11 +170,11 @@ export async function GET(req: Request) {
                 brandName:         p.brand?.name ?? null,
                 stock:                p.stock,
                 costMethod:           p.costMethod,
-                effectiveCostMethod:  meta.effectiveMethod,
-                strategyCostMethod:   matched?.costMethod ?? null,
+                effectiveCostMethod:  effectiveMethodOf(p),
+                strategyCostMethod:   null,
                 marginPercent:     p.marginPercent != null ? Number(p.marginPercent) : null,
                 priceOverridden:   p.priceOverridden,
-                pricePaise:        p.pricePaise,
+                effectiveSalePricePaise: p.effectiveSalePricePaise,
                 mrpPaise:          p.mrpPaise,
                 stdCostPaise:      null,
                 lastPurchasePaise: lastInwardPaise,
@@ -197,12 +183,18 @@ export async function GET(req: Request) {
                 computedPricePaise:    priced.pricePaise,
                 rawComputedPricePaise: priced.rawPricePaise,
                 cappedAtMrp:           priced.cappedAtMrp,
-                strategyId:            meta.strategyId,
-                strategyName:          meta.strategyName,
-                appliedMarkupPct:      priced.appliedMarkupPct,
-                appliedFlatPaise:      priced.appliedFlatPaise,
-                appliedRoundingPaise:  priced.appliedRoundingPaise,
+                strategyId:            null,
+                strategyName:          null,
+                appliedMarkupPct:      margin,
+                appliedFlatPaise:      0,
+                appliedRoundingPaise:  0,
                 gstRatePct,
+                barcode:               p.barcode1 ?? null,
+                daysSinceLastSale:     lastSaleAge.get(p.id) ?? null,
+                savedSalePricePaise:   p.savedSalePricePaise,
+                effectiveSalePriceSource: p.effectiveSalePriceSource,
+                salePriceFrozenAt:     p.salePriceFrozenAt ? p.salePriceFrozenAt.toISOString() : null,
+                savedProfitPaise:      p.savedProfitPaise,
             };
         });
 
@@ -211,7 +203,7 @@ export async function GET(req: Request) {
                 (i) =>
                     i.resolvedCostPaise == null ||
                     i.mrpPaise == null || i.mrpPaise <= 0 ||
-                    i.pricePaise == null,
+                    i.effectiveSalePricePaise == null,
             );
         }
 

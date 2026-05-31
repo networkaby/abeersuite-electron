@@ -404,7 +404,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                             name: raw.name,
                             stock: raw.stock,
                             lowStockThreshold: raw.lowStockThreshold,
-                            pricePaise: raw.pricePaise,
+                            pricePaise: raw.effectiveSalePricePaise,
                             lastPurchasePaise: raw.lastPurchasePaise,
                             mrpPaise: raw.mrpPaise,
                             unit: { code: raw.unit.code },

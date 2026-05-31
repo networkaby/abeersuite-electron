@@ -169,7 +169,7 @@ async function upsertShopDemoCatalog() {
             shopSubheading: row.subheading,
             shopDescription: row.description,
             shopCategory: row.category,
-            pricePaise: row.pricePaise,
+            effectiveSalePricePaise: row.pricePaise,
             mrpPaise: row.mrpPaise,
             shopBadge: row.badge,
             imageUrl: row.imageUrl,
@@ -177,6 +177,12 @@ async function upsertShopDemoCatalog() {
             specsJson,
             isActive: true,
             isListedInShop: true,
+            // Demo of the saved Sale Price: badged/featured items have a
+            // human-frozen price (POS + shop materialize this when the source is
+            // SAVED); the rest follow the additive-margin engine.
+            effectiveSalePriceSource: (row.badge ? "SAVED" : "STRATEGY") as "SAVED" | "STRATEGY",
+            savedSalePricePaise: row.badge ? row.pricePaise : null,
+            salePriceFrozenAt: row.badge ? new Date() : null,
         };
         const db = invProductDb(prisma);
         const existing = await db.findFirst({

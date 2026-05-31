@@ -297,7 +297,7 @@ async function main() {
             id: true, sku: true, name: true,
             modelNo: true, barcode1: true,
             hsnCode: true, taxability: true,
-            pricePaise: true, mrpPaise: true,
+            effectiveSalePricePaise: true, mrpPaise: true,
             openingStock: true, openingRate: true, openingStockDate: true,
             unit:         { select: { code: true } },
             brand:        { select: { name: true } },
@@ -344,7 +344,7 @@ async function main() {
             proposedGst,
             p.taxability ?? "",
             // costPaise omitted — importer derives running cost from openingRate.
-            paiseToRupees(p.pricePaise),
+            paiseToRupees(p.effectiveSalePricePaise),
             paiseToRupees(p.mrpPaise),
             decimalStr(p.openingStock as unknown as { toString(): string } | null),
             decimalStr(p.openingRate  as unknown as { toString(): string } | null),

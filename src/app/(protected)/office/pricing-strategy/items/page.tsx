@@ -2,7 +2,6 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Boxes, Save, Wand2, Lock, Unlock, RefreshCw, ShieldAlert, AlertTriangle, AlertCircle, X, ArrowRight, TrendingDown } from "lucide-react";
@@ -60,7 +59,7 @@ type Item = {
     strategyCostMethod:    CostMethod | null;
     marginPercent:         number | null;
     priceOverridden:       boolean;
-    pricePaise:            number | null;
+    effectiveSalePricePaise: number | null;
     mrpPaise:              number | null;
     /** Last-inward rate from the ledger walk (display only — PR 3 dropped the cache). */
     lastPurchasePaise:     number | null;
@@ -113,7 +112,7 @@ function attentionFor(item: Item): Attention {
     const missing: string[] = [];
     const noCost  = item.resolvedCostPaise == null;
     const noMrp   = item.mrpPaise == null || item.mrpPaise <= 0;
-    const noPrice = item.pricePaise == null;
+    const noPrice = item.effectiveSalePricePaise == null;
     if (noCost)  missing.push("cost");
     if (noMrp)   missing.push("MRP");
     if (noPrice) missing.push("price");
@@ -214,7 +213,7 @@ const ItemRow = memo(function ItemRow({ item, edit, saving, onChange, onSave, on
         ? Math.round(item.resolvedCostPaise * (1 + item.gstRatePct / 100))
         : item.resolvedCostPaise;
     const lp = livePreview(item, e);
-    const effectivePricePaise = item.priceOverridden ? item.pricePaise : lp.pricePaise;
+    const effectivePricePaise = item.priceOverridden ? item.effectiveSalePricePaise : lp.pricePaise;
     const costForProfit = item.resolvedCostPaise;
     const profitPaise = effectivePricePaise != null && costForProfit != null
         ? effectivePricePaise - costForProfit
@@ -264,14 +263,14 @@ const ItemRow = memo(function ItemRow({ item, edit, saving, onChange, onSave, on
             <TableCell className="text-right">
                 <Input
                     inputMode="decimal"
-                    placeholder="strategy"
+                    placeholder="auto"
                     value={e.marginPercent}
                     onChange={(ev) => onChange(item, { marginPercent: ev.target.value })}
                     className="h-7 w-16 text-right text-xs font-mono"
                 />
             </TableCell>
             <TableCell>
-                <div className="text-xs truncate" title={item.strategyName ?? "—"}>{item.strategyName ?? "—"}</div>
+                <div className="text-xs text-muted-foreground">Additive points</div>
                 <div className="text-[10px] text-muted-foreground">
                     @{item.appliedMarkupPct.toFixed(2)}%
                 </div>
@@ -317,7 +316,7 @@ const ItemRow = memo(function ItemRow({ item, edit, saving, onChange, onSave, on
                 )}
             </TableCell>
             <TableCell className="text-right">
-                <span className="text-sm font-mono">{paise(item.pricePaise)}</span>
+                <span className="text-sm font-mono">{paise(item.effectiveSalePricePaise)}</span>
                 {item.priceOverridden ? (
                     <Lock className="size-3 inline ml-1 text-muted-foreground" aria-label="Manual override" />
                 ) : null}
@@ -367,14 +366,6 @@ export default function PricingItemsPage() {
     const [filterBrand,     setFilterBrand]     = useState<string>("__all");
     const [filterGroup,     setFilterGroup]     = useState<string>("__all");
     const [filterMethod,    setFilterMethod]    = useState<string>("__all");
-    const [filterStrategy,  setFilterStrategy]  = useState<string>("__all");
-
-    // Pre-fill strategy filter from ?strategy=<id> (link from Strategies page).
-    const searchParams = useSearchParams();
-    useEffect(() => {
-        const sid = searchParams.get("strategy");
-        if (sid) setFilterStrategy(sid);
-    }, [searchParams]);
     const [edits,           setEdits]           = useState<Record<number, RowEdit>>({});
     const [savingId,        setSavingId]        = useState<number | null>(null);
     const [applying,        setApplying]        = useState(false);
@@ -390,35 +381,31 @@ export default function PricingItemsPage() {
 
     type ParentOpt = { id: number; name: string; parentId?: number | null };
     type GstRateOpt = { id: number; rate: string | number; label: string };
-    type StrategyOpt = { id: number; name: string; isActive?: boolean };
     const [refCategories, setRefCategories] = useState<ParentOpt[]>([]);
     const [refGroups, setRefGroups] = useState<ParentOpt[]>([]);
     const [refBrands, setRefBrands] = useState<ParentOpt[]>([]);
     const [refGstRates, setRefGstRates] = useState<GstRateOpt[]>([]);
-    const [refStrategies, setRefStrategies] = useState<StrategyOpt[]>([]);
     const refsLoadedRef = useRef(false);
 
     /// Eagerly load master reference data on mount so every filter dropdown
-    /// (Category / Brand / Group / Strategy) reads from the real master
-    /// collections instead of unique-ing item.<name> strings. Also powers the
-    /// Parent picker (category / group) and GST rate dropdown inside the
+    /// (Category / Brand / Group) reads from the real master collections instead
+    /// of unique-ing item.<name> strings. Also powers the Parent picker
+    /// (category / group) and GST rate dropdown inside the
     /// InventoryMasterDropdownQuickDialog.
     const ensureRefs = useCallback(async () => {
         if (refsLoadedRef.current) return;
         refsLoadedRef.current = true;
         try {
-            const [c, g, b, gst, s] = await Promise.all([
+            const [c, g, b, gst] = await Promise.all([
                 axios.get<ParentOpt[]>("/api/inventory/categories"),
                 axios.get<ParentOpt[]>("/api/inventory/product-groups"),
                 axios.get<ParentOpt[]>("/api/inventory/brands"),
                 axios.get<GstRateOpt[]>("/api/inventory/gst-rates").catch(() => ({ data: [] as GstRateOpt[] })),
-                axios.get<StrategyOpt[]>("/api/pricing-strategy/strategies").catch(() => ({ data: [] as StrategyOpt[] })),
             ]);
             setRefCategories(c.data);
             setRefGroups(g.data);
             setRefBrands(b.data);
             setRefGstRates(gst.data);
-            setRefStrategies(s.data);
         } catch {
             toast.error("Failed to load master reference data");
             refsLoadedRef.current = false; // allow retry on next open
@@ -509,22 +496,6 @@ export default function PricingItemsPage() {
             searchText: r.name,
         }));
     }, [refGroups, uniqueGroups]);
-    /// Strategy filter options sourced from the strategy master so even
-    /// strategies that haven't been assigned to any item yet show up.
-    /// Falls back to items-derived during the load window.
-    const strategyFilterOptions = useMemo(() => {
-        if (refStrategies.length === 0) {
-            const map = new Map<number, string>();
-            for (const i of items) if (i.strategyId != null && i.strategyName) map.set(i.strategyId, i.strategyName);
-            return [...map.entries()]
-                .map(([id, name]) => ({ id, name }))
-                .sort((a, b) => a.name.localeCompare(b.name));
-        }
-        return refStrategies
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((s) => ({ id: s.id, name: s.name }));
-    }, [refStrategies, items]);
 
     // Base filter — no attention split yet.
     const baseFiltered = useMemo(() => {
@@ -537,7 +508,6 @@ export default function PricingItemsPage() {
             if (filterBrand    !== "__all" && i.brandName    !== filterBrand)    return false;
             if (filterGroup    !== "__all" && i.groupName    !== filterGroup)    return false;
             if (filterMethod   !== "__all" && i.effectiveCostMethod !== filterMethod) return false;
-            if (filterStrategy !== "__all" && String(i.strategyId ?? "") !== filterStrategy) return false;
             if (!q) return true;
             return (
                 i.name.toLowerCase().includes(q) ||
@@ -546,7 +516,7 @@ export default function PricingItemsPage() {
                 (i.categoryName?.toLowerCase().includes(q) ?? false)
             );
         });
-    }, [items, search, hideEmpty, filterCategory, filterBrand, filterGroup, filterMethod, filterStrategy]);
+    }, [items, search, hideEmpty, filterCategory, filterBrand, filterGroup, filterMethod]);
 
     // Split: abnormal items go to the Needs Attention panel; clean items to the main table.
     const normalFiltered    = useMemo(() => baseFiltered.filter((i) => !attentionFor(i).needs),    [baseFiltered]);
@@ -559,8 +529,7 @@ export default function PricingItemsPage() {
         filterCategory !== "__all" ||
         filterBrand !== "__all" ||
         filterGroup !== "__all" ||
-        filterMethod !== "__all" ||
-        filterStrategy !== "__all";
+        filterMethod !== "__all";
 
     const clearFilters = () => {
         setSearch("");
@@ -569,7 +538,6 @@ export default function PricingItemsPage() {
         setFilterBrand("__all");
         setFilterGroup("__all");
         setFilterMethod("__all");
-        setFilterStrategy("__all");
     };
 
     const handleChange = useCallback((item: Item, patch: Partial<RowEdit>) => {
@@ -598,7 +566,7 @@ export default function PricingItemsPage() {
                     `Manual price ₹${(n / 100).toFixed(2)} exceeds MRP ₹${(item.mrpPaise / 100).toFixed(2)}.`,
                 );
             }
-            payload.pricePaise = n;
+            payload.effectiveSalePricePaise = n;
             payload.priceOverridden = true;
         }
         if (Object.keys(payload).length === 0) {
@@ -638,7 +606,7 @@ export default function PricingItemsPage() {
     }, [load]);
 
     const applyAll = async () => {
-        if (!confirm("Recompute and write pricePaise for every non-overridden product?")) return;
+        if (!confirm("Recompute and write effectiveSalePricePaise for every non-overridden product?")) return;
         setApplying(true);
         try {
             const r = await axios.post<{ updated: number; skipped: number; errors: Array<{ productId: number; reason: string }> }>(
@@ -664,7 +632,7 @@ export default function PricingItemsPage() {
                 <TableHead className="text-xs">Cost method</TableHead>
                 <TableHead className="text-right text-xs">Cost (₹ incl GST)</TableHead>
                 <TableHead className="text-right text-xs">Margin %</TableHead>
-                <TableHead className="text-xs">Strategy</TableHead>
+                <TableHead className="text-xs">Margin</TableHead>
                 <TableHead className="text-right text-xs">Computed (₹ incl GST)</TableHead>
                 <TableHead className="text-right text-xs">Profit</TableHead>
                 <TableHead className="text-right text-xs">Current</TableHead>
@@ -789,16 +757,6 @@ export default function PricingItemsPage() {
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Strategy</label>
-                    <Select value={filterStrategy} onValueChange={setFilterStrategy}>
-                        <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Strategy" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all">All strategies</SelectItem>
-                            {strategyFilterOptions.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
                 <label className="flex items-center gap-1.5 cursor-pointer select-none h-8 text-xs">
                     <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
                     Hide empty
@@ -870,7 +828,7 @@ export default function PricingItemsPage() {
                 <strong>Cost</strong> is resolved per the row&apos;s cost method (opening + purchases) — read-only here; manual entry lives on the <em>Needs Attention</em> page.{" "}
                 <strong>Computed</strong> = (cost + flat) × (1 + markup%) × (1 + GST%), rounded, capped at MRP — shown GST-inclusive, with the exclusive value beneath.{" "}
                 <strong>Profit</strong> = price − cost (both excl-GST, so tax-adjusted).{" "}
-                <strong>Manual price</strong> sets <code>pricePaise</code> directly and locks the row.
+                <strong>Manual price</strong> sets <code>effectiveSalePricePaise</code> directly and locks the row.
             </p>
 
             <InventoryMasterDropdownQuickDialog
