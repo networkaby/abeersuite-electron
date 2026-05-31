@@ -566,9 +566,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/pricing-strategy",
         pathPrefixes: ["/office/pricing-strategy"],
         children: [
-            { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
+            // { label: "Overview", icon: ChartArea, href: "/office/pricing-strategy" },
             { label: "Strategies", icon: Calculator, href: "/office/pricing-strategy/strategies" },
-            { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
+            // { label: "Items", icon: Boxes, href: "/office/pricing-strategy/items" },
             { label: "Needs attention", icon: AlertTriangle, href: "/office/pricing-strategy/needs-attention" },
             { label: "Print labels", icon: Printer, href: "/office/pricing-strategy/print-labels" },
         ],

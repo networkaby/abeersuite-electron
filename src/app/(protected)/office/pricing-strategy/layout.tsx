@@ -21,7 +21,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                     "needs-attention": "Needs Attention",
                 }}
             />
-            <nav
+            {/* <nav
                 className="flex flex-none flex-wrap gap-2 border-b border-border px-6 pb-2 mb-3"
                 aria-label="Pricing strategy sections"
             >
@@ -35,7 +35,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                         {label}
                     </Link>
                 ))}
-            </nav>
+            </nav> */}
             <div className="min-h-0 flex-1 overflow-hidden">
                 {children}
             </div>

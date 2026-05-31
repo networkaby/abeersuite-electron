@@ -54,36 +54,36 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Plus, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Plus, Printer, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 
 // ── Cost methods (short code ↔ real CostMethod enum, for later wiring) ────────
 
 type CostCode = "WA" | "FO" | "SA" | "MA" | "LI";
 const COST_METHODS: { code: CostCode; full: string; enum: string }[] = [
     { code: "WA", full: "Weighted Avg", enum: "WEIGHTED_AVG" },
-    { code: "FO", full: "FIFO",         enum: "FIFO" },
-    { code: "SA", full: "Simple Avg",   enum: "SIMPLE_AVG" },
-    { code: "MA", full: "Monthly Avg",  enum: "MONTHLY_AVG" },
-    { code: "LI", full: "Last Inward",  enum: "LAST_INWARD" },
+    { code: "FO", full: "FIFO", enum: "FIFO" },
+    { code: "SA", full: "Simple Avg", enum: "SIMPLE_AVG" },
+    { code: "MA", full: "Monthly Avg", enum: "MONTHLY_AVG" },
+    { code: "LI", full: "Last Inward", enum: "LAST_INWARD" },
 ];
 
 // ── Toggleable columns (show/hide) ───────────────────────────────────────────
 // Name / # / select / remove are always shown; everything else can be hidden.
 type ColKey = "brand" | "category" | "group" | "stock" | "method" | "cost" | "charges" | "margin" | "strategy" | "computed" | "sale" | "mrp" | "barcode";
 const COLS: { key: ColKey; label: string }[] = [
-    { key: "brand",    label: "Brand" },
+    { key: "brand", label: "Brand" },
     { key: "category", label: "Category" },
-    { key: "group",    label: "Group" },
-    { key: "stock",    label: "Stock" },
-    { key: "method",   label: "Method" },
-    { key: "cost",     label: "Cost (incl)" },
-    { key: "charges",  label: "Charges ₹" },
-    { key: "margin",   label: "Margin %" },
+    { key: "group", label: "Group" },
+    { key: "stock", label: "Stock" },
+    { key: "method", label: "Method" },
+    { key: "cost", label: "Cost (incl)" },
+    { key: "charges", label: "Charges ₹" },
+    { key: "margin", label: "Margin %" },
     { key: "strategy", label: "Strategy" },
     { key: "computed", label: "Computed" },
-    { key: "sale",     label: "Sale Price" },
-    { key: "mrp",      label: "MRP" },
-    { key: "barcode",  label: "Barcode (cap)" },
+    { key: "sale", label: "Sale Price" },
+    { key: "mrp", label: "MRP" },
+    { key: "barcode", label: "Barcode (cap)" },
 ];
 
 // ── Row data (UI only) ───────────────────────────────────────────────────────
@@ -97,7 +97,8 @@ type Row = {
     brand: string;          // taxonomy — for the Brand filter (mirrors InvProduct.brand)
     category: string;       // taxonomy — for the Category filter
     group: string;          // taxonomy — for the Group filter
-    stock: string;          // current stock (qty) — for the "in stock only" filter
+    stock: string;          // current stock (qty) — for the "in stock only" toggle + Stock range
+    lastSoldAt: string;     // ISO date of the last sale; "" = never sold (infinite age) — Days since last sale range
     method: CostCode;
     costIncl: string;       // ₹ incl GST, typed
     gst: string;            // GST %, typed
@@ -114,10 +115,10 @@ type Row = {
 
 const SAMPLE: Row[] = [
     // savedProfit = profit decided when last printed; current cost edits make it drift (shrinking/over).
-    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", barcode: "4250593440769", brand: "CP Plus", category: "Camera",  group: "CCTV",        stock: "12", method: "WA", costIncl: "992",  gst: "18", margin: "25", strategyMargin: "35", charges: "0", salePrice: "1240", baseline: "1240", mrp: "1400", saleSource: "SAVED",    savedAt: "2026-05-14", savedProfit: "250" },
-    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", barcode: "4250593443319", brand: "CP Plus", category: "Camera",  group: "CCTV",        stock: "0",  method: "WA", costIncl: "1349", gst: "18", margin: "25", strategyMargin: "30", charges: "0", salePrice: "1650", baseline: "1650", mrp: "1700", saleSource: "STRATEGY", savedAt: "2026-05-03", savedProfit: "200" },
-    { id: 3, name: "Adapter 19v 40w 2.1mp",            barcode: "38686599387",   brand: "Generic", category: "Adapter", group: "Spare Parts", stock: "5",  method: "LI", costIncl: "400",  gst: "18", margin: "30", strategyMargin: "20", charges: "0", salePrice: "",     baseline: "",     mrp: "600",  saleSource: "MY",       savedAt: "",           savedProfit: "" },
-    { id: 4, name: "30Pin Lvds Cable Universal Board",  barcode: "38692809948",   brand: "Generic", category: "Cable",   group: "Spare Parts", stock: "0",  method: "WA", costIncl: "229",  gst: "18", margin: "20", strategyMargin: "28", charges: "0", salePrice: "260",  baseline: "260",  mrp: "300",  saleSource: "SAVED",    savedAt: "2026-05-28", savedProfit: "26.27" },
+    { id: 1, name: "360 Wifi Camera CP PLUS E24A-2MP", barcode: "4250593440769", brand: "CP Plus", category: "Camera", group: "CCTV", stock: "12", lastSoldAt: "2026-05-20", method: "WA", costIncl: "992", gst: "18", margin: "25", strategyMargin: "35", charges: "0", salePrice: "1240", baseline: "1240", mrp: "1400", saleSource: "SAVED", savedAt: "2026-05-14", savedProfit: "250" },
+    { id: 2, name: "360 Wifi Camera CP PLUS E35A-3MP", barcode: "4250593443319", brand: "CP Plus", category: "Camera", group: "CCTV", stock: "0", lastSoldAt: "2026-04-12", method: "WA", costIncl: "1349", gst: "18", margin: "25", strategyMargin: "30", charges: "0", salePrice: "1650", baseline: "1650", mrp: "1700", saleSource: "STRATEGY", savedAt: "2026-05-03", savedProfit: "200" },
+    { id: 3, name: "Adapter 19v 40w 2.1mp", barcode: "38686599387", brand: "Generic", category: "Adapter", group: "Spare Parts", stock: "5", lastSoldAt: "", method: "LI", costIncl: "400", gst: "18", margin: "30", strategyMargin: "20", charges: "0", salePrice: "", baseline: "", mrp: "600", saleSource: "MY", savedAt: "", savedProfit: "" },
+    { id: 4, name: "30Pin Lvds Cable Universal Board", barcode: "38692809948", brand: "Generic", category: "Cable", group: "Spare Parts", stock: "0", lastSoldAt: "2026-05-30", method: "WA", costIncl: "229", gst: "18", margin: "20", strategyMargin: "28", charges: "0", salePrice: "260", baseline: "260", mrp: "300", saleSource: "SAVED", savedAt: "2026-05-28", savedProfit: "26.27" },
 ];
 
 // ── Compute ──────────────────────────────────────────────────────────────────
@@ -186,12 +187,12 @@ function todayISO(): string {
 // OrgDefaults (JSON); hardcoded here for now as the seed default.
 
 const BARCODE_BANDS: { max: number; add: number; hint: number }[] = [
-    { max: 50,    add: 10,  hint: 1 },
-    { max: 100,   add: 20,  hint: 2 },
-    { max: 300,   add: 30,  hint: 3 },
-    { max: 500,   add: 50,  hint: 5 },
-    { max: 2000,  add: 100, hint: 6 },
-    { max: 5000,  add: 150, hint: 7 },
+    { max: 50, add: 10, hint: 1 },
+    { max: 100, add: 20, hint: 2 },
+    { max: 300, add: 30, hint: 3 },
+    { max: 500, add: 50, hint: 5 },
+    { max: 2000, add: 100, hint: 6 },
+    { max: 5000, add: 150, hint: 7 },
     { max: 10000, add: 200, hint: 8 },
     { max: 99999, add: 500, hint: 9 },
 ];
@@ -247,18 +248,20 @@ function sortVal(r: Row, key: SortKey): number | string {
 
 // ── Range filters (numeric parameters: min/max) ───────────────────────────────
 
-type RangeKey = "cost" | "margin" | "profit" | "profitPct";
+type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale";
 const RANGE_FIELDS: { key: RangeKey; label: string }[] = [
-    { key: "cost",      label: "Cost (incl)" },
-    { key: "margin",    label: "Margin % (strategy & mine)" },
-    { key: "profit",    label: "Profit ₹ (sale price)" },
+    { key: "cost", label: "Cost (incl)" },
+    { key: "margin", label: "Margin % (strategy & mine)" },
+    { key: "profit", label: "Profit ₹ (sale price)" },
     { key: "profitPct", label: "Profit % (sale price)" },
+    { key: "stock", label: "Stock (units)" },
+    { key: "daysSinceSale", label: "Days since last sale" },
 ];
 
 const SOURCE_OPTIONS = [
     { value: "STRATEGY", label: "Strategy" },
-    { value: "MY",       label: "Computed" },
-    { value: "SAVED",    label: "Sale Price" },
+    { value: "MY", label: "Computed" },
+    { value: "SAVED", label: "Sale Price" },
 ];
 
 const numOrNull = (s: string): number | null => {
@@ -274,8 +277,8 @@ function applicableSalePrice(r: Row): number | null {
     const saved = numOrNull(r.salePrice);
     const chosen =
         r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
-        : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
-        : saved;
+            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+                : saved;
     if (chosen == null) return null;
     let val = chosen;
     const m = numOrNull(r.mrp);
@@ -302,8 +305,8 @@ function saleCapped(r: Row): boolean {
     const saved = numOrNull(r.salePrice);
     const chosen =
         r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
-        : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
-        : saved;
+            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+                : saved;
     if (chosen == null) return false;
     const applic = applicableSalePrice(r);
     return applic != null && applic < chosen - 0.005;
@@ -311,12 +314,24 @@ function saleCapped(r: Row): boolean {
 
 const stockQty = (r: Row): number => numOrNull(r.stock) ?? 0;
 
+// Whole days between the last sale and today. Never-sold rows ("") have infinite
+// age — they match a lower bound but fail any upper bound (mirrors the strategy engine).
+function daysSinceSale(r: Row): number {
+    if (!r.lastSoldAt) return Infinity;
+    const sold = new Date(`${r.lastSoldAt}T00:00:00`);
+    if (isNaN(sold.getTime())) return Infinity;
+    const now = new Date(`${todayISO()}T00:00:00`);
+    return Math.floor((now.getTime() - sold.getTime()) / 86_400_000);
+}
+
 // The numeric value of a row for a given range parameter. The Margin range is
 // special-cased in the filter loop (it checks BOTH strategy & user margin).
 function rangeVal(r: Row, key: RangeKey): number | null {
     switch (key) {
         case "cost": return numOrNull(r.costIncl);
         case "margin": return numOrNull(r.margin);
+        case "stock": return numOrNull(r.stock);
+        case "daysSinceSale": return daysSinceSale(r);
         case "profit": {
             // After-tax profit on the price that actually applies (capped selling voice).
             const price = applicableSalePrice(r);
@@ -344,8 +359,8 @@ function barcodeShrinkPct(r: Row): number | null {
     if (bc == null || bc === 0) return null;
     const live =
         r.saleSource === "STRATEGY" ? priceWithMargin(r.costIncl, r.charges, r.strategyMargin)
-        : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
-        : saved;
+            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.charges, r.margin)
+                : saved;
     if (live == null) return null;
     return ((live - saved) / bc) * 100;
 }
@@ -364,9 +379,8 @@ function profitGapPct(r: Row): number | null {
 // ── Voice cell (clickable price chip) ─────────────────────────────────────────
 
 function voiceClass(selected: boolean): string {
-    return `w-full rounded px-1.5 py-1 text-right transition-colors ${
-        selected ? "bg-emerald-50 ring-1 ring-emerald-400" : "cursor-pointer hover:bg-muted"
-    }`;
+    return `w-full rounded px-1.5 py-1 text-right transition-colors ${selected ? "bg-emerald-50 ring-1 ring-emerald-400" : "cursor-pointer hover:bg-muted"
+        }`;
 }
 
 const SELLING_TAG = (
@@ -381,8 +395,10 @@ export default function GeneratePage() {
     const [rows, setRows] = useState<Row[]>(SAMPLE);
     const nextId = useRef(SAMPLE.length + 1);
     const [query, setQuery] = useState("");
-    // Active tab + the working "selection" (ids the user pushed into the Selected tab).
-    const [tab, setTab] = useState<"all" | "selected" | "print">("all");
+    // Top tab (All products / Selected product) + the working "selection".
+    const [tab, setTab] = useState<"all" | "selected">("all");
+    // Sub-tab inside "Selected product": price/barcode table vs the label designer.
+    const [selTab, setSelTab] = useState<"price" | "print">("price");
     const [selectionIds, setSelectionIds] = useState<Set<number>>(new Set());
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [fBrand, setFBrand] = useState("ALL");
@@ -523,16 +539,6 @@ export default function GeneratePage() {
         setSelectionIds((prev) => new Set([...prev, ...selected]));
         setSelected(new Set());
     };
-    // Drop the ticked rows from the selection (used in the Selected product tab).
-    const removeFromSelection = () => {
-        setSelectionIds((prev) => {
-            const next = new Set(prev);
-            selected.forEach((id) => next.delete(id));
-            return next;
-        });
-        setSelected(new Set());
-    };
-
     // Products added from the Print tab (combobox / voucher) flow back into the
     // shared set: an existing row (by barcode) is just selected; a new product
     // becomes a fresh pricing row and is selected — so it shows in BOTH tabs.
@@ -546,7 +552,7 @@ export default function GeneratePage() {
             const id = nextId.current++;
             const sale = p.salePrice != null ? String(p.salePrice) : "";
             const row: Row = {
-                id, name: p.name, barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0",
+                id, name: p.name, barcode: p.barcode || "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
                 method: "WA", costIncl: p.costPrice != null ? String(p.costPrice) : "0", gst: "18",
                 margin: "25", strategyMargin: "30", charges: "0", salePrice: sale, baseline: sale,
                 mrp: p.mrp != null ? String(p.mrp) : "", saleSource: "SAVED", savedAt: "", savedProfit: "",
@@ -582,7 +588,7 @@ export default function GeneratePage() {
         setRows((prev) => [
             ...prev,
             {
-                id: nextId.current++, name: "New item", barcode: "", brand: "", category: "", group: "", stock: "0",
+                id: nextId.current++, name: "New item", barcode: "", brand: "", category: "", group: "", stock: "0", lastSoldAt: "",
                 method: "WA", costIncl: "0", gst: "18", margin: "25", strategyMargin: "30",
                 charges: "0", salePrice: "", baseline: "", mrp: "", saleSource: "SAVED", savedAt: "", savedProfit: "",
             },
@@ -679,27 +685,7 @@ export default function GeneratePage() {
     // tabs (same UI for now; "Selected product" will narrow the list later).
     const productBody = (
         <>
-            <div className="mb-3 flex items-center justify-end gap-3">
-                {tab === "all" ? (
-                    <Button type="button" variant="outline" size="sm" onClick={addToSelection} disabled={selected.size === 0}>
-                        <Plus className="size-4" /> Add to selection{selected.size > 0 ? ` (${selected.size})` : ""}
-                    </Button>
-                ) : (
-                    <Button type="button" variant="outline" size="sm" onClick={removeFromSelection} disabled={selected.size === 0}>
-                        <Trash2 className="size-4" /> Remove from selection{selected.size > 0 ? ` (${selected.size})` : ""}
-                    </Button>
-                )}
-                <span className="text-xs text-muted-foreground">
-                    {selected.size > 0
-                        ? `${selected.size} ticked`
-                        : dirtyCount === 0 ? "Barcodes current" : `${dirtyCount} to update`}
-                </span>
-                <Button type="button" size="sm" onClick={save} disabled={selected.size === 0} title="Freeze the sale price and stamp today's date — the printed barcode price + date code">
-                    <Save className="size-4" /> Update barcode{selected.size > 0 ? ` (${selected.size})` : ""}
-                </Button>
-            </div>
-
-            {/* Toolbar: search + filters toggle + columns */}
+            {/* Toolbar: search + filters + the selection/print actions + columns */}
             <div className="mb-3 flex items-center gap-3">
                 <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -724,9 +710,29 @@ export default function GeneratePage() {
                         clear sort
                     </button>
                 ) : null}
+                {/* Selection / print actions — pushed to the right, just before Columns. */}
+                <div className="ml-auto flex items-center gap-3">
+                    {tab === "all" ? (
+                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={addToSelection} disabled={selected.size === 0}>
+                            <Plus className="size-4" /> Add to selection{selected.size > 0 ? ` (${selected.size})` : ""}
+                        </Button>
+                    ) : (
+                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setSelTab("print")} title="Go to the Print view — lay these out as labels (you can also add products there)">
+                            <Printer className="size-4" /> Go to Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
+                        </Button>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                        {selected.size > 0
+                            ? `${selected.size} ticked`
+                            : dirtyCount === 0 ? "Barcodes current" : `${dirtyCount} to update`}
+                    </span>
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={selected.size === 0} title="Save the edited prices — freeze the sale price and stamp today's date (the printed barcode price + date code)">
+                        <Save className="size-4" /> Save changes{selected.size > 0 ? ` (${selected.size})` : ""}
+                    </Button>
+                </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="outline" size="sm" className="ml-auto h-8">
+                        <Button type="button" variant="outline" size="sm" className="h-8">
                             <SlidersHorizontal className="size-3.5" /> Columns
                             {hidden.size > 0 ? <span className="ml-1 text-[10px] text-muted-foreground">({COLS.length - hidden.size}/{COLS.length})</span> : null}
                         </Button>
@@ -770,18 +776,21 @@ export default function GeneratePage() {
                     <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2">
                         <label className="flex items-center gap-1.5 text-xs">
                             <Checkbox checked={fBarcodeCapped} onCheckedChange={(v) => setFBarcodeCapped(v === true)} />
-                            Barcode capped <span className="text-muted-foreground">(MRP squeezing barcode)</span>
+                            Barcode capped
+                            {/* <span className="text-muted-foreground">(MRP squeezing barcode)</span> */}
                         </label>
                         <label className="flex items-center gap-1.5 text-xs">
                             <Checkbox checked={fSaleCapped} onCheckedChange={(v) => setFSaleCapped(v === true)} />
-                            Sale price capped <span className="text-muted-foreground">(selling held at ceiling)</span>
+                            Sale price capped
+                            {/* <span className="text-muted-foreground">(selling held at ceiling)</span> */}
                         </label>
                         <label className="flex items-center gap-1.5 text-xs">
                             <Checkbox checked={fInStock} onCheckedChange={(v) => setFInStock(v === true)} />
-                            In stock only <span className="text-muted-foreground">(hide zero stock)</span>
+                            In stock only
+                            {/* <span className="text-muted-foreground">(hide zero stock)</span> */}
                         </label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {/* </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3"> */}
                         {thresholdInput("Barcode gap shrunk", tBarcodeShrink, setTBarcodeShrink)}
                         {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
                         {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
@@ -866,125 +875,125 @@ export default function GeneratePage() {
                                         <Input value={r.name} onChange={(e) => update(r.id, { name: e.target.value })} className="h-7 text-xs" />
                                     </TableCell>
                                     {show("brand") ? (
-                                    <TableCell>
-                                        <Input value={r.brand} onChange={(e) => update(r.id, { brand: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
-                                    </TableCell>
+                                        <TableCell>
+                                            <Input value={r.brand} onChange={(e) => update(r.id, { brand: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
+                                        </TableCell>
                                     ) : null}
                                     {show("category") ? (
-                                    <TableCell>
-                                        <Input value={r.category} onChange={(e) => update(r.id, { category: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
-                                    </TableCell>
+                                        <TableCell>
+                                            <Input value={r.category} onChange={(e) => update(r.id, { category: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
+                                        </TableCell>
                                     ) : null}
                                     {show("group") ? (
-                                    <TableCell>
-                                        <Input value={r.group} onChange={(e) => update(r.id, { group: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
-                                    </TableCell>
+                                        <TableCell>
+                                            <Input value={r.group} onChange={(e) => update(r.id, { group: e.target.value })} placeholder="—" className="h-7 w-28 text-xs" />
+                                        </TableCell>
                                     ) : null}
                                     {show("stock") ? (
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={r.stock} onChange={(e) => update(r.id, { stock: e.target.value })} placeholder="0" className={`h-7 w-16 text-right text-xs font-mono ${stockQty(r) <= 0 ? "text-red-600" : ""}`} />
-                                    </TableCell>
+                                        <TableCell className="text-right">
+                                            <Input inputMode="decimal" value={r.stock} onChange={(e) => update(r.id, { stock: e.target.value })} placeholder="0" className={`h-7 w-16 text-right text-xs font-mono ${stockQty(r) <= 0 ? "text-red-600" : ""}`} />
+                                        </TableCell>
                                     ) : null}
                                     {show("method") ? (
-                                    <TableCell>
-                                        <Select value={r.method} onValueChange={(v) => update(r.id, { method: v as CostCode })}>
-                                            <SelectTrigger className="h-7 w-16 text-xs font-mono"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {COST_METHODS.map((m) => (
-                                                    <SelectItem key={m.code} value={m.code}>
-                                                        <span className="font-mono">{m.code}</span>
-                                                        <span className="ml-2 text-muted-foreground">{m.full}</span>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </TableCell>
+                                        <TableCell>
+                                            <Select value={r.method} onValueChange={(v) => update(r.id, { method: v as CostCode })}>
+                                                <SelectTrigger className="h-7 w-16 text-xs font-mono"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {COST_METHODS.map((m) => (
+                                                        <SelectItem key={m.code} value={m.code}>
+                                                            <span className="font-mono">{m.code}</span>
+                                                            <span className="ml-2 text-muted-foreground">{m.full}</span>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </TableCell>
                                     ) : null}
                                     {show("cost") ? (
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={r.costIncl} onChange={(e) => update(r.id, { costIncl: e.target.value })} className="h-7 w-24 text-right text-xs font-mono" />
-                                    </TableCell>
+                                        <TableCell className="text-right">
+                                            <Input inputMode="decimal" value={r.costIncl} onChange={(e) => update(r.id, { costIncl: e.target.value })} className="h-7 w-24 text-right text-xs font-mono" />
+                                        </TableCell>
                                     ) : null}
                                     {show("charges") ? (
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={r.charges} onChange={(e) => update(r.id, { charges: e.target.value })} className="h-7 w-16 text-right text-xs font-mono" />
-                                    </TableCell>
+                                        <TableCell className="text-right">
+                                            <Input inputMode="decimal" value={r.charges} onChange={(e) => update(r.id, { charges: e.target.value })} className="h-7 w-16 text-right text-xs font-mono" />
+                                        </TableCell>
                                     ) : null}
                                     {show("margin") ? (
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={r.margin} onChange={(e) => update(r.id, { margin: e.target.value })} className="h-7 w-16 text-right text-xs font-mono" />
-                                    </TableCell>
+                                        <TableCell className="text-right">
+                                            <Input inputMode="decimal" value={r.margin} onChange={(e) => update(r.id, { margin: e.target.value })} className="h-7 w-16 text-right text-xs font-mono" />
+                                        </TableCell>
                                     ) : null}
 
                                     {/* ── Strategy voice ── */}
                                     {show("strategy") ? (
-                                    <TableCell className="p-1 text-right align-top">
-                                        <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => update(r.id, { saleSource: "STRATEGY" })}>
-                                            {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
-                                            <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
-                                            {profitSub(stratProfit)}
-                                        </button>
-                                    </TableCell>
+                                        <TableCell className="p-1 text-right align-top">
+                                            <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => update(r.id, { saleSource: "STRATEGY" })}>
+                                                {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
+                                                <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
+                                                {profitSub(stratProfit)}
+                                            </button>
+                                        </TableCell>
                                     ) : null}
 
                                     {/* ── Computed voice ── */}
                                     {show("computed") ? (
-                                    <TableCell className="p-1 text-right align-top">
-                                        <button type="button" className={voiceClass(r.saleSource === "MY")} onClick={() => update(r.id, { saleSource: "MY" })}>
-                                            {r.saleSource === "MY" ? SELLING_TAG : null}
-                                            <span className="block text-sm font-mono font-semibold">{rupee(myPrice)}</span>
-                                            {profitSub(myProfit)}
-                                        </button>
-                                    </TableCell>
+                                        <TableCell className="p-1 text-right align-top">
+                                            <button type="button" className={voiceClass(r.saleSource === "MY")} onClick={() => update(r.id, { saleSource: "MY" })}>
+                                                {r.saleSource === "MY" ? SELLING_TAG : null}
+                                                <span className="block text-sm font-mono font-semibold">{rupee(myPrice)}</span>
+                                                {profitSub(myProfit)}
+                                            </button>
+                                        </TableCell>
                                     ) : null}
 
                                     {/* ── Sale Price voice (editable, sticky) ── */}
                                     {show("sale") ? (
-                                    <TableCell className="p-1 text-right align-top">
-                                        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-                                        <div className={voiceClass(r.saleSource === "SAVED")} onClick={() => update(r.id, { saleSource: "SAVED" })}>
-                                            {r.saleSource === "SAVED" ? SELLING_TAG : null}
-                                            <Input
-                                                inputMode="decimal"
-                                                value={r.salePrice}
-                                                placeholder="—"
-                                                onFocus={() => update(r.id, { saleSource: "SAVED" })}
-                                                onChange={(e) => update(r.id, { salePrice: e.target.value })}
-                                                className={`h-7 w-24 text-right text-xs font-mono font-semibold ${dirty ? "ring-1 ring-amber-400 focus-visible:ring-amber-400" : ""}`}
-                                            />
-                                            {profitSub(savedProfit)}
-                                        </div>
-                                    </TableCell>
+                                        <TableCell className="p-1 text-right align-top">
+                                            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+                                            <div className={voiceClass(r.saleSource === "SAVED")} onClick={() => update(r.id, { saleSource: "SAVED" })}>
+                                                {r.saleSource === "SAVED" ? SELLING_TAG : null}
+                                                <Input
+                                                    inputMode="decimal"
+                                                    value={r.salePrice}
+                                                    placeholder="—"
+                                                    onFocus={() => update(r.id, { saleSource: "SAVED" })}
+                                                    onChange={(e) => update(r.id, { salePrice: e.target.value })}
+                                                    className={`h-7 w-24 text-right text-xs font-mono font-semibold ${dirty ? "ring-1 ring-amber-400 focus-visible:ring-amber-400" : ""}`}
+                                                />
+                                                {profitSub(savedProfit)}
+                                            </div>
+                                        </TableCell>
                                     ) : null}
 
                                     {show("mrp") ? (
-                                    <TableCell className="text-right">
-                                        <Input inputMode="decimal" value={r.mrp} placeholder="—" onChange={(e) => update(r.id, { mrp: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
-                                    </TableCell>
+                                        <TableCell className="text-right">
+                                            <Input inputMode="decimal" value={r.mrp} placeholder="—" onChange={(e) => update(r.id, { mrp: e.target.value })} className="h-7 w-20 text-right text-xs font-mono" />
+                                        </TableCell>
                                     ) : null}
 
                                     {/* ── Barcode (cap) + secret date code ── */}
                                     {show("barcode") ? (
-                                    <TableCell className="text-right">
-                                        {bc == null || bc.value == null ? (
-                                            <span className="text-xs text-muted-foreground">—</span>
-                                        ) : (
-                                            <span className="inline-flex items-baseline justify-end gap-1">
-                                                <span
-                                                    className={`text-sm font-mono font-semibold ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
-                                                    title={bc.capped ? (bc.hint === "m" ? "Capped at MRP exactly (no markup room)" : "Capped at MRP — no markup room") : undefined}
-                                                >
-                                                    {rupee(bc.value)}
-                                                    {bc.hint && bc.hint !== "m" ? <span className="ml-1 text-[10px] text-muted-foreground">·{bc.hint}</span> : null}
-                                                </span>
-                                                {dateCode ? (
-                                                    <span className="rounded bg-muted px-1 text-[9px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
-                                                        {dateCode}
+                                        <TableCell className="text-right">
+                                            {bc == null || bc.value == null ? (
+                                                <span className="text-xs text-muted-foreground">—</span>
+                                            ) : (
+                                                <span className="inline-flex items-baseline justify-end gap-1">
+                                                    <span
+                                                        className={`text-sm font-mono font-semibold ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
+                                                        title={bc.capped ? (bc.hint === "m" ? "Capped at MRP exactly (no markup room)" : "Capped at MRP — no markup room") : undefined}
+                                                    >
+                                                        {rupee(bc.value)}
+                                                        {bc.hint && bc.hint !== "m" ? <span className="ml-1 text-[10px] text-muted-foreground">·{bc.hint}</span> : null}
                                                     </span>
-                                                ) : null}
-                                            </span>
-                                        )}
-                                    </TableCell>
+                                                    {dateCode ? (
+                                                        <span className="rounded bg-muted px-1 text-[9px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
+                                                            {dateCode}
+                                                        </span>
+                                                    ) : null}
+                                                </span>
+                                            )}
+                                        </TableCell>
                                     ) : null}
 
                                     <TableCell>
@@ -1008,37 +1017,39 @@ export default function GeneratePage() {
 
     return (
         <div className="h-full overflow-y-auto px-6 pt-4 pb-10">
-            <div className="mb-3">
+            {/* <div className="mb-3">
                 <h1 className="text-lg font-semibold">Print labels — UI only</h1>
                 <p className="text-sm text-muted-foreground">
                     Pick products (here or from a voucher), set the barcode price across three voices —{" "}
                     <span className="font-medium">Strategy</span>, <span className="font-medium">Computed</span>,{" "}
                     <span className="font-medium">Sale Price</span> — then print. Selected product &amp; Print share one set. Nothing is persisted here.
                 </p>
-            </div>
+            </div> */}
 
-            <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "selected" | "print")}>
+            <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "selected")}>
                 <TabsList>
                     <TabsTrigger value="all">All products</TabsTrigger>
                     <TabsTrigger value="selected">
                         Selected product{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
                     </TabsTrigger>
-                    <TabsTrigger value="print">
-                        Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
-                    </TabsTrigger>
                 </TabsList>
-                <TabsContent value="all">{productBody}</TabsContent>
-                <TabsContent value="selected">{productBody}</TabsContent>
-                {/* forceMount keeps the designer's label settings alive across tab switches. */}
-                <TabsContent value="print" forceMount className="data-[state=inactive]:hidden">
-                    <LabelDesigner
-                        items={printItems}
-                        onAddProducts={addProducts}
-                        onRemoveItem={removePrintItem}
-                        pageTitle="Print labels"
-                        pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Selected product."
-                        rootClassName="pb-10"
-                    />
+                <TabsContent value="all" className="mt-3">{productBody}</TabsContent>
+                <TabsContent value="selected" className="mt-3">
+                    {/* Two views of the one selection, toggled by the inline buttons:
+                        the price toolbar's "Print" → labels, the designer's "Update barcode" → back.
+                        The designer stays mounted (hidden) so its label settings survive switches. */}
+                    {selTab === "price" ? productBody : null}
+                    <div className={selTab === "print" ? "" : "hidden"}>
+                        <LabelDesigner
+                            items={printItems}
+                            onAddProducts={addProducts}
+                            onRemoveItem={removePrintItem}
+                            onUpdateBarcode={() => setSelTab("price")}
+                            pageTitle="Print labels"
+                            pageSubtitle="The selected products as labels. Add more by search/scan or voucher; set prices in Update price / barcode."
+                            rootClassName="pb-10"
+                        />
+                    </div>
                 </TabsContent>
             </Tabs>
         </div>

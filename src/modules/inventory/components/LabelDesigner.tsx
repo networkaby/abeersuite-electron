@@ -41,7 +41,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { FileText, Loader2, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { FileText, Loader2, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/components/InvProductCombobox";
 
@@ -101,6 +101,8 @@ type LabelDesignerProps = {
     onAddProducts: (products: AddedProduct[]) => void;
     /** Drop a label from the shared set. */
     onRemoveItem: (id: number) => void;
+    /** Go to the price/barcode editor (parent switches sub-tab). Button hidden if omitted. */
+    onUpdateBarcode?: () => void;
     pageTitle?: string;
     pageSubtitle?: string;
     /** Root wrapper classes — embedded panels use the parent's scroll/padding. */
@@ -113,6 +115,7 @@ export function LabelDesigner({
     items,
     onAddProducts,
     onRemoveItem,
+    onUpdateBarcode,
     pageTitle = "Print labels",
     pageSubtitle = "Pick products, then print.",
     rootClassName = "pb-10",
@@ -233,6 +236,16 @@ export function LabelDesigner({
                     <p className="text-sm text-muted-foreground">{pageSubtitle}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {onUpdateBarcode ? (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onUpdateBarcode}
+                            title="Go to Update price / barcode to set prices and stamp today's date"
+                        >
+                            <Save className="size-4" /> Update barcode{items.length > 0 ? ` (${items.length})` : ""}
+                        </Button>
+                    ) : null}
                     <Button type="button" variant={settingsOpen ? "secondary" : "outline"} onClick={() => setSettingsOpen((o) => !o)}>
                         <SlidersHorizontal className="size-4" /> {settingsOpen ? "Hide settings" : "Settings"}
                     </Button>
