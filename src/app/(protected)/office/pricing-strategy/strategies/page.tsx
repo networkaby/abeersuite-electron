@@ -1,22 +1,38 @@
 "use client";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategies — /office/pricing-strategy/strategies
+// Additive-margin model, DB-backed. You give POINTS to each dimension; a
+// product's margin% is the SUM of the points of the values it falls under:
+//   margin% = base + brand + category + group
+//   price   = cost × (1 + margin/100)        (margin on cost; MRP ignored)
+//
+// Data is real:
+//   • masters  — /api/inventory/brands | categories | product-groups
+//   • products — /api/pricing-strategy/items (uses resolvedCostPaise for cost)
+//   • points   — GET/PUT /api/pricing-strategy/points (the single org-wide set)
+// Stock / idle-age / movement band points exist in the backend but are not
+// edited here yet.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Calculator, X, Search, Tag, FolderTree, Boxes, IndianRupee, Package, CalendarClock } from "lucide-react";
+import {
+    Calculator,
+    RotateCcw,
+    Tag,
+    FolderTree,
+    Boxes,
+    ChevronDown,
+    Search,
+    Filter,
+    Save,
+    Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -25,911 +41,528 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { useDeleteWithConfirm } from "@/shared/hooks";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog";
+    MatchConditions,
+    matchesConditions,
+    emptyMatchConditions,
+    buildHierarchy,
+    type Master,
+    type MatchConditionsValue,
+    type ConditionProduct,
+} from "@/modules/pricing-strategy/components/MatchConditions";
+import type { PricingItem } from "@/app/api/pricing-strategy/items/route";
+import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
 
-// ── Types ─────────────────────────────────────────────────────────────────
+// Cap the preview table so a large catalogue stays responsive.
+const PREVIEW_CAP = 300;
 
-type CostMethod =
-    | "WEIGHTED_AVG_COST"
-    | "FIFO"
-    | "LAST_PURCHASE_COST"
-    | "MONTHLY_AVG_COST"
-    | "STD_COST";
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-type AttrOp = "eq" | "in" | "gte" | "lte" | "between";
+/** Parse a points field → number; empty/invalid → 0. Negatives allowed. */
+const num = (s: string): number => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+};
 
-interface AttrFilterEntry {
-    op: AttrOp;
-    value: string | number | boolean | (string | number)[];
-}
+/** Keep only digits, one leading "-", and a single ".". */
+const sanitize = (raw: string): string => {
+    let s = raw.replace(/[^0-9.-]/g, "");
+    const neg = s.startsWith("-");
+    s = s.replace(/-/g, "");
+    const firstDot = s.indexOf(".");
+    if (firstDot !== -1) {
+        s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+    }
+    return (neg ? "-" : "") + s;
+};
 
-type Strategy = {
+const rupee = (paise: number | null): string =>
+    paise == null
+        ? "—"
+        : `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+const nameOf = (list: Master[], id: number | null): string =>
+    id == null ? "—" : list.find((m) => m.id === id)?.name ?? `#${id}`;
+
+// Points state (string-keyed by master id).
+type Points = Record<string, string>;
+const numMapToStr = (m: Record<string, number>): Points =>
+    Object.fromEntries(Object.entries(m).map(([k, v]) => [k, String(v)]));
+const strMapToNum = (m: Points): Record<string, number> =>
+    Object.fromEntries(Object.entries(m).map(([k, v]) => [k, num(v)]));
+
+// Product shape the preview needs (mapped from the items API).
+type Product = {
     id: number;
     name: string;
-    brandIds: number[];
-    groupIds: number[];
-    categoryIds: number[];
-    attrFilters: Record<string, AttrFilterEntry> | null;
-    minCostPaise: number | null;
-    maxCostPaise: number | null;
-    minStock: number | null;
-    maxStock: number | null;
-    minStaleDays: number | null;
-    maxStaleDays: number | null;
-    markupPercent: string;
-    markupFlatPaise: number;
-    roundingPaise: number;
-    priority: number;
-    costMethod: CostMethod | null;
-    isActive: boolean;
-    createdAt: string;
-    updatedAt: string;
+    brandId: number | null;
+    categoryId: number | null;
+    groupId: number | null;
+    costPaise: number | null;
+    stock: number | null;
 };
 
-type Master = { id: number; name: string; parentId?: number | null };
+// ── Editable section ─────────────────────────────────────────────────────────
 
-/// Depth-first sort with depth markers so the list shows parents above their
-/// children. Items with a missing parent (parentId pointing to nothing in the
-/// list) surface at the end so they remain pickable.
-function buildHierarchy(rows: Master[]): (Master & { depth: number })[] {
-    const byParent = new Map<number | null, Master[]>();
-    for (const r of rows) {
-        const pid: number | null = r.parentId ?? null;
-        const arr = byParent.get(pid) ?? [];
-        arr.push(r);
-        byParent.set(pid, arr);
-    }
-    const out: (Master & { depth: number })[] = [];
-    const seen = new Set<number>();
-    function walk(parent: number | null, depth: number) {
-        const kids = (byParent.get(parent) ?? [])
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name));
-        for (const k of kids) {
-            if (seen.has(k.id)) continue;
-            seen.add(k.id);
-            out.push({ ...k, depth });
-            walk(k.id, depth + 1);
-        }
-    }
-    walk(null, 0);
-    for (const r of rows) {
-        if (!seen.has(r.id)) out.push({ ...r, depth: 0 });
-    }
-    return out;
-}
+type Row = { key: string; label: string; depth: number };
 
-// AttrRow is the editable form representation — value is always a string for
-// the user to type freely; we parse to the right shape on save.
-type AttrRow = { key: string; op: AttrOp; value: string };
-
-type FormState = {
-    name: string;
-    brandIds: Set<number>;
-    groupIds: Set<number>;
-    categoryIds: Set<number>;
-    attrs: AttrRow[];
-    minCost: string; // rupees decimal (user-facing); paise on save
-    maxCost: string;
-    minStock: string;
-    maxStock: string;
-    minStaleDays: string;
-    maxStaleDays: string;
-    markupPercent: string;
-    markupFlatPaise: string;
-    roundingPaise: string;
-    priority: string;
-    costMethod: string; // "__none" sentinel = null
-    isActive: boolean;
-};
-
-const emptyForm = (): FormState => ({
-    name: "",
-    brandIds: new Set(),
-    groupIds: new Set(),
-    categoryIds: new Set(),
-    attrs: [],
-    minCost: "",
-    maxCost: "",
-    minStock: "",
-    maxStock: "",
-    minStaleDays: "",
-    maxStaleDays: "",
-    markupPercent: "25",
-    markupFlatPaise: "0",
-    roundingPaise: "0",
-    priority: "0",
-    costMethod: "__none",
-    isActive: true,
-});
-
-const COST_METHOD_LABEL: Record<CostMethod, string> = {
-    WEIGHTED_AVG_COST: "Weighted Avg",
-    FIFO: "FIFO",
-    LAST_PURCHASE_COST: "Last Purchase",
-    MONTHLY_AVG_COST: "Monthly Avg",
-    STD_COST: "Standard",
-};
-
-const ATTR_OP_LABEL: Record<AttrOp, string> = {
-    eq: "equals",
-    in: "in",
-    gte: "≥",
-    lte: "≤",
-    between: "between",
-};
-
-// ── Format helpers ─────────────────────────────────────────────────────────
-
-function formatPaise(p: number | null): string {
-    if (p == null) return "—";
-    if (p === 0) return "₹0";
-    return `₹${(p / 100).toFixed(2)}`;
-}
-
-function formatRounding(p: number): string {
-    if (p === 0) return "Exact";
-    if (p >= 100) return `Nearest ₹${(p / 100).toFixed(p % 100 === 0 ? 0 : 2)}`;
-    return `Nearest ${p}p`;
-}
-
-function rupeesToPaise(s: string): number | null {
-    const t = s.trim();
-    if (t === "") return null;
-    const n = parseFloat(t);
-    if (!Number.isFinite(n) || n < 0) return null;
-    return Math.round(n * 100);
-}
-
-function paiseToRupees(p: number | null): string {
-    return p == null ? "" : (p / 100).toFixed(2);
-}
-
-type ItemForCount = { strategyId: number | null };
-
-// ── Multi-select checkbox group ───────────────────────────────────────────
-// Inline searchable checkbox list. Renders compact chips for selected ids on
-// top, then a search input, then a scrollable checkbox list. No popover —
-// keeps the form behaviour boring and predictable.
-
-function MultiSelectGroup({
-    label, helper, items, selected, onChange, icon: Icon,
+function PointSection({
+    title,
+    icon: Icon,
+    rows,
+    points,
+    onChange,
 }: {
-    label: string;
-    helper?: string;
-    items: (Master & { depth?: number })[];
-    selected: Set<number>;
-    onChange: (next: Set<number>) => void;
+    title: string;
     icon: React.ComponentType<{ className?: string }>;
+    rows: Row[];
+    points: Points;
+    onChange: (key: string, value: string) => void;
 }) {
+    const [open, setOpen] = useState(true);
     const [q, setQ] = useState("");
-    const filtered = useMemo(() => {
-        const needle = q.trim().toLowerCase();
-        if (!needle) return items;
-        return items.filter((m) => m.name.toLowerCase().includes(needle));
-    }, [items, q]);
-
-    const toggle = (id: number) => {
-        const next = new Set(selected);
-        if (next.has(id)) next.delete(id); else next.add(id);
-        onChange(next);
-    };
-
-    const clearAll = () => onChange(new Set());
-
+    const activeCount = rows.filter((r) => num(points[r.key] ?? "") !== 0).length;
+    const needle = q.trim().toLowerCase();
+    const shown = needle ? rows.filter((r) => r.label.toLowerCase().includes(needle)) : rows;
     return (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-                <Label className="flex items-center gap-1.5">
-                    <Icon className="size-3.5 text-muted-foreground" />
-                    {label}
-                    {selected.size > 0 ? (
-                        <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                            {selected.size}
-                        </Badge>
-                    ) : null}
-                </Label>
-                {selected.size > 0 ? (
-                    <button
-                        type="button"
-                        onClick={clearAll}
-                        className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                    >
-                        Clear
-                    </button>
+        <div className="rounded-md border bg-card">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                aria-expanded={open}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+            >
+                <Icon className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {title}
+                </span>
+                {activeCount > 0 ? (
+                    <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
+                        {activeCount}
+                    </span>
                 ) : null}
-            </div>
-            {helper ? <p className="text-[11px] text-muted-foreground -mt-1">{helper}</p> : null}
-            <div className="border border-border rounded-sm bg-card">
-                <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
-                    <Search className="size-3.5 text-muted-foreground" />
-                    <input
-                        type="text"
-                        value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        placeholder={`Filter ${label.toLowerCase()}…`}
-                        className="flex-1 bg-transparent outline-none text-xs"
-                    />
-                </div>
-                <div className="max-h-40 overflow-y-auto">
-                    {filtered.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic px-3 py-2">No matches.</p>
-                    ) : (
-                        filtered.map((m) => (
-                            <label
-                                key={m.id}
-                                className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/50 cursor-pointer"
-                                style={m.depth ? { paddingLeft: 8 + m.depth * 14 } : undefined}
-                            >
-                                <Checkbox
-                                    checked={selected.has(m.id)}
-                                    onCheckedChange={() => toggle(m.id)}
-                                />
-                                {m.depth ? (
-                                    <span className="text-muted-foreground/60 select-none" aria-hidden>
-                                        {"└─"}
+                <ChevronDown
+                    className={`ml-auto size-4 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+                />
+            </button>
+            <div className={`border-t ${open ? "" : "hidden"}`}>
+                {rows.length === 0 ? (
+                    <div className="px-3 py-2 text-xs italic text-muted-foreground">None yet.</div>
+                ) : (
+                    <div className="flex items-center gap-1.5 border-b px-2.5 py-1.5">
+                        <Search className="size-3.5 text-muted-foreground" />
+                        <input
+                            type="text"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            placeholder={`Filter ${title.toLowerCase()}…`}
+                            className="flex-1 bg-transparent text-xs outline-none"
+                        />
+                    </div>
+                )}
+                <div className="divide-y">
+                    {rows.length > 0 && shown.length === 0 ? (
+                        <div className="px-3 py-2 text-xs italic text-muted-foreground">No matches.</div>
+                    ) : null}
+                    {shown.map((r) => (
+                        <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 pr-3"
+                            style={{ paddingLeft: 12 + r.depth * 14 }}>
+                            <span className="flex min-w-0 items-baseline gap-1.5 text-sm">
+                                {r.depth > 0 ? (
+                                    <span className="select-none font-mono text-[10px] leading-none text-muted-foreground/60" aria-hidden>
+                                        {depthBullets(r.depth)}
                                     </span>
                                 ) : null}
-                                <span className="truncate">{m.name}</span>
-                            </label>
-                        ))
-                    )}
+                                <span className="truncate">{r.label}</span>
+                            </span>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <Input
+                                    inputMode="decimal"
+                                    value={points[r.key] ?? ""}
+                                    onChange={(e) => onChange(r.key, sanitize(e.target.value))}
+                                    placeholder="0"
+                                    className="h-6 w-10 text-right font-mono text-xs"
+                                />
+                                <span className="text-[10px] text-muted-foreground">pts</span>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
     );
 }
 
-// ── Range filter segment ─────────────────────────────────────────────────
-// Bordered card with title + helper + min/max inputs. Each range concept
-// (cost, stock, last-sale-age) gets one segment so the visual grouping
-// matches the semantics instead of being one undifferentiated 5-column grid.
+/** Flat list (no hierarchy) — used for brands. */
+const flatRows = (list: Master[]): Row[] =>
+    list.map((m) => ({ key: String(m.id), label: m.name, depth: 0 }));
 
-function RangeSegment({
-    icon: Icon, title, helper,
-    minLabel, maxLabel,
-    minValue, maxValue,
-    onMin, onMax,
-    inputMode = "decimal",
-    placeholderMin, placeholderMax,
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    helper: string;
-    minLabel: string;
-    maxLabel: string;
-    minValue: string;
-    maxValue: string;
-    onMin: (v: string) => void;
-    onMax: (v: string) => void;
-    inputMode?: "decimal" | "numeric";
-    placeholderMin?: string;
-    placeholderMax?: string;
-}) {
+/** Parent→child ordered rows with depth — used for categories & groups. */
+const treeRows = (list: Master[]): Row[] =>
+    buildHierarchy(list).map((m) => ({ key: String(m.id), label: m.name, depth: m.depth }));
+
+/** Depth bullets: depth 1 → "•", depth 2 → "• •", … (empty for parents). */
+const depthBullets = (depth: number): string => Array(depth).fill("•").join(" ");
+
+// ── Breakdown cell ───────────────────────────────────────────────────────────
+
+type Piece = { label: string; pts: number };
+
+function Breakdown({ pieces, margin }: { pieces: Piece[]; margin: number }) {
     return (
-        <div className="border border-border rounded-sm bg-muted/20 p-3 space-y-2">
-            <div className="flex items-center gap-1.5">
-                <Icon className="size-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold uppercase tracking-wide">{title}</p>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">{helper}</p>
-            <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">{minLabel}</Label>
-                    <Input
-                        inputMode={inputMode}
-                        placeholder={placeholderMin}
-                        value={minValue}
-                        onChange={(e) => onMin(e.target.value)}
-                        className="h-8 font-mono text-xs"
-                    />
-                </div>
-                <div className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">{maxLabel}</Label>
-                    <Input
-                        inputMode={inputMode}
-                        placeholder={placeholderMax}
-                        value={maxValue}
-                        onChange={(e) => onMax(e.target.value)}
-                        className="h-8 font-mono text-xs"
-                    />
-                </div>
-            </div>
-        </div>
+        <span className="font-mono text-[11px] text-muted-foreground">
+            {pieces.map((pc, i) => {
+                const sign = i === 0 ? "" : pc.pts < 0 ? " − " : " + ";
+                const val = i === 0 ? pc.pts : Math.abs(pc.pts);
+                return (
+                    <span key={i} title={pc.label} className={pc.pts !== 0 ? "text-foreground" : undefined}>
+                        {sign}
+                        {val}
+                    </span>
+                );
+            })}
+            <span className="text-muted-foreground"> = {margin.toFixed(1)}</span>
+        </span>
     );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PricingStrategiesPage() {
-    const [rows, setRows] = useState<Strategy[]>([]);
-    const [categories, setCategories] = useState<Master[]>([]);
-    const [groups, setGroups] = useState<Master[]>([]);
-    const [brands, setBrands] = useState<Master[]>([]);
-    const [usage, setUsage] = useState<Map<number, number>>(new Map());
     const [loading, setLoading] = useState(true);
-    const [adding, setAdding] = useState(false);
-    const [editId, setEditId] = useState<number | null>(null);
-    const [form, setForm] = useState<FormState>(emptyForm());
     const [saving, setSaving] = useState(false);
 
-    const load = () => {
-        setLoading(true);
-        Promise.all([
-            axios.get<Strategy[]>("/api/pricing-strategy/strategies"),
-            axios.get<Master[]>("/api/inventory/categories"),
-            axios.get<Master[]>("/api/inventory/product-groups"),
-            axios.get<Master[]>("/api/inventory/brands"),
-            axios.get<ItemForCount[]>("/api/pricing-strategy/items"),
-        ])
-            .then(([s, c, g, b, items]) => {
-                setRows(s.data);
-                setCategories(c.data);
-                setGroups(g.data);
-                setBrands(b.data);
-                const counts = new Map<number, number>();
-                for (const it of items.data) {
-                    if (it.strategyId != null) counts.set(it.strategyId, (counts.get(it.strategyId) ?? 0) + 1);
-                }
-                setUsage(counts);
-            })
-            .catch(() => toast.error("Failed to load pricing data"))
-            .finally(() => setLoading(false));
-    };
+    const [brands, setBrands] = useState<Master[]>([]);
+    const [categories, setCategories] = useState<Master[]>([]);
+    const [groups, setGroups] = useState<Master[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
 
-    useEffect(() => { load(); }, []);
+    const [base, setBase] = useState("0");
+    const [brandPts, setBrandPts] = useState<Points>({});
+    const [catPts, setCatPts] = useState<Points>({});
+    const [groupPts, setGroupPts] = useState<Points>({});
 
-    const cancel = () => {
-        setAdding(false);
-        setEditId(null);
-        setForm(emptyForm());
+    const [query, setQuery] = useState("");
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [conditions, setConditions] = useState<MatchConditionsValue>(() => emptyMatchConditions());
+
+    // Vertical scrollbar width — the tbody is the only scroll region, so we
+    // reserve a matching gutter on the header to keep the columns aligned.
+    const [scrollbarW, setScrollbarW] = useState(0);
+    useEffect(() => {
+        const el = document.createElement("div");
+        el.style.cssText = "overflow:scroll;position:absolute;top:-9999px;width:50px;height:50px";
+        document.body.appendChild(el);
+        setScrollbarW(el.offsetWidth - el.clientWidth);
+        el.remove();
+    }, []);
+
+    // Load masters + products + saved points on mount.
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const [b, c, g, items, pts] = await Promise.all([
+                    axios.get<Master[]>("/api/inventory/brands"),
+                    axios.get<Master[]>("/api/inventory/categories"),
+                    axios.get<Master[]>("/api/inventory/product-groups"),
+                    axios.get<PricingItem[]>("/api/pricing-strategy/items"),
+                    axios.get<StrategyPoints>("/api/pricing-strategy/points"),
+                ]);
+                if (!alive) return;
+                setBrands(b.data.map((m) => ({ id: m.id, name: m.name })));
+                setCategories(c.data.map((m) => ({ id: m.id, name: m.name, parentId: m.parentId ?? null })));
+                setGroups(g.data.map((m) => ({ id: m.id, name: m.name, parentId: m.parentId ?? null })));
+                setProducts(
+                    items.data.map((it) => ({
+                        id: it.id,
+                        name: it.name,
+                        brandId: it.brandId,
+                        categoryId: it.categoryId,
+                        groupId: it.groupId,
+                        costPaise: it.resolvedCostPaise,
+                        stock: it.stock,
+                    })),
+                );
+                const p = pts.data;
+                setBase(String(p.base ?? 0));
+                setBrandPts(numMapToStr(p.brand ?? {}));
+                setCatPts(numMapToStr(p.category ?? {}));
+                setGroupPts(numMapToStr(p.group ?? {}));
+            } catch {
+                if (alive) toast.error("Failed to load strategy data.");
+            } finally {
+                if (alive) setLoading(false);
+            }
+        })();
+        return () => { alive = false; };
+    }, []);
+
+    const baseN = num(base);
+
+    const rows = useMemo(() => {
+        return products.map((p) => {
+            const pieces: Piece[] = [
+                { label: "base", pts: baseN },
+                { label: `brand · ${nameOf(brands, p.brandId)}`, pts: p.brandId != null ? num(brandPts[String(p.brandId)] ?? "") : 0 },
+                { label: `category · ${nameOf(categories, p.categoryId)}`, pts: p.categoryId != null ? num(catPts[String(p.categoryId)] ?? "") : 0 },
+                { label: `group · ${nameOf(groups, p.groupId)}`, pts: p.groupId != null ? num(groupPts[String(p.groupId)] ?? "") : 0 },
+            ];
+            const margin = pieces.reduce((a, x) => a + x.pts, 0);
+            const price = p.costPaise != null ? Math.round(p.costPaise * (1 + margin / 100)) : null;
+            return { p, pieces, margin, price };
+        });
+    }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPts]);
+
+    // Active facet count for the Filter button badge.
+    const filterCount =
+        (conditions.brandIds.size > 0 ? 1 : 0) +
+        (conditions.groupIds.size > 0 ? 1 : 0) +
+        (conditions.categoryIds.size > 0 ? 1 : 0) +
+        (conditions.minCost.trim() || conditions.maxCost.trim() ? 1 : 0) +
+        (conditions.minStock.trim() || conditions.maxStock.trim() ? 1 : 0);
+
+    // Product filter — text search AND the Match-conditions filter.
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return rows.filter(({ p }) => {
+            const textOk =
+                !q ||
+                p.name.toLowerCase().includes(q) ||
+                nameOf(brands, p.brandId).toLowerCase().includes(q) ||
+                nameOf(categories, p.categoryId).toLowerCase().includes(q) ||
+                nameOf(groups, p.groupId).toLowerCase().includes(q);
+            if (!textOk) return false;
+            const cp: ConditionProduct = {
+                brandId: p.brandId,
+                groupId: p.groupId,
+                categoryId: p.categoryId,
+                costRupees: p.costPaise != null ? p.costPaise / 100 : null,
+                stock: p.stock,
+                staleDays: Infinity,
+                attrs: null,
+            };
+            return matchesConditions(cp, conditions);
+        });
+    }, [rows, query, conditions, brands, categories, groups]);
+
+    const capped = visible.slice(0, PREVIEW_CAP);
+    const truncated = visible.length > PREVIEW_CAP;
+
+    const stats = useMemo(() => {
+        const ms = visible.map((r) => r.margin);
+        if (ms.length === 0) return { avg: 0, min: 0, max: 0 };
+        const avg = ms.reduce((a, x) => a + x, 0) / ms.length;
+        return { avg, min: Math.min(...ms), max: Math.max(...ms) };
+    }, [visible]);
+
+    const reset = () => {
+        setBase("0");
+        setBrandPts({});
+        setCatPts({});
+        setGroupPts({});
     };
 
     const save = async () => {
-        if (!form.name.trim()) return toast.error("Name is required");
-
-        const markupPercent = Number(form.markupPercent);
-        const markupFlat = Number(form.markupFlatPaise);
-        const rounding = Number(form.roundingPaise);
-        const priority = Number(form.priority);
-        if (!Number.isFinite(markupPercent)) return toast.error("Markup % must be a number");
-        if (!Number.isFinite(markupFlat) || markupFlat < 0 || !Number.isInteger(markupFlat))
-            return toast.error("Flat (paise) must be a non-negative integer");
-        if (!Number.isFinite(rounding) || rounding < 0 || !Number.isInteger(rounding))
-            return toast.error("Rounding (paise) must be a non-negative integer");
-        if (!Number.isFinite(priority) || !Number.isInteger(priority))
-            return toast.error("Priority must be an integer");
-
-        // Build attr filter object from form rows.
-        const attrFilters: Record<string, AttrFilterEntry> = {};
-        for (const row of form.attrs) {
-            const key = row.key.trim();
-            if (!key) continue;
-            const raw = row.value.trim();
-            if (raw === "") continue;
-            try {
-                attrFilters[key] = parseAttrValue(row.op, raw);
-            } catch (e) {
-                return toast.error(`Attribute "${key}": ${(e as Error).message}`);
-            }
-        }
-
-        const minCostPaise = rupeesToPaise(form.minCost);
-        const maxCostPaise = rupeesToPaise(form.maxCost);
-        if (minCostPaise != null && maxCostPaise != null && maxCostPaise < minCostPaise)
-            return toast.error("Max cost must be ≥ min cost");
-
-        const minStock = form.minStock.trim() === "" ? null : Number(form.minStock);
-        const maxStock = form.maxStock.trim() === "" ? null : Number(form.maxStock);
-        if (minStock != null && (!Number.isFinite(minStock) || minStock < 0 || !Number.isInteger(minStock)))
-            return toast.error("Min stock must be a non-negative integer");
-        if (maxStock != null && (!Number.isFinite(maxStock) || maxStock < 0 || !Number.isInteger(maxStock)))
-            return toast.error("Max stock must be a non-negative integer");
-        if (minStock != null && maxStock != null && maxStock < minStock)
-            return toast.error("Max stock must be ≥ min stock");
-
-        const minStale = form.minStaleDays.trim() === "" ? null : Number(form.minStaleDays);
-        const maxStale = form.maxStaleDays.trim() === "" ? null : Number(form.maxStaleDays);
-        if (minStale != null && (!Number.isFinite(minStale) || minStale < 0 || !Number.isInteger(minStale)))
-            return toast.error("Min stale days must be a non-negative integer");
-        if (maxStale != null && (!Number.isFinite(maxStale) || maxStale < 0 || !Number.isInteger(maxStale)))
-            return toast.error("Max stale days must be a non-negative integer");
-        if (minStale != null && maxStale != null && maxStale < minStale)
-            return toast.error("Max stale days must be ≥ min stale days");
-
-        const payload = {
-            name: form.name.trim(),
-            brandIds: [...form.brandIds],
-            groupIds: [...form.groupIds],
-            categoryIds: [...form.categoryIds],
-            attrFilters: Object.keys(attrFilters).length === 0 ? null : attrFilters,
-            minCostPaise,
-            maxCostPaise,
-            minStock,
-            maxStock,
-            minStaleDays: minStale,
-            maxStaleDays: maxStale,
-            markupPercent,
-            markupFlatPaise: markupFlat,
-            roundingPaise: rounding,
-            priority,
-            costMethod: form.costMethod === "__none" ? null : (form.costMethod as CostMethod),
-            isActive: form.isActive,
-        };
-
         setSaving(true);
         try {
-            if (adding) {
-                await axios.post("/api/pricing-strategy/strategies", payload);
-                toast.success("Strategy created");
-            } else if (editId != null) {
-                await axios.patch(`/api/pricing-strategy/strategies/${editId}`, payload);
-                toast.success("Strategy updated");
-            }
-            cancel();
-            load();
-        } catch (e: unknown) {
-            const msg = axios.isAxiosError(e) ? e.response?.data?.error : null;
-            toast.error(msg ?? "Save failed");
+            const payload: StrategyPoints = {
+                base: baseN,
+                brand: strMapToNum(brandPts),
+                category: strMapToNum(catPts),
+                group: strMapToNum(groupPts),
+                stockBand: {},
+                ageBand: {},
+                moveBand: {},
+            };
+            const r = await axios.put<{ saved: number }>("/api/pricing-strategy/points", payload);
+            toast.success(`Saved — ${r.data.saved} point value${r.data.saved === 1 ? "" : "s"} stored.`);
+        } catch {
+            toast.error("Failed to save points.");
         } finally {
             setSaving(false);
         }
     };
 
-    const { remove: del } = useDeleteWithConfirm({
-        url: (id) => `/api/pricing-strategy/strategies/${id}`,
-        message: () => "Delete this pricing strategy?",
-        errorMessage: "Delete failed",
-        onSuccess: () => load(),
-    });
-
-    const beginEdit = (s: Strategy) => {
-        setAdding(false);
-        setEditId(s.id);
-        setForm({
-            name: s.name,
-            brandIds: new Set(s.brandIds),
-            groupIds: new Set(s.groupIds),
-            categoryIds: new Set(s.categoryIds),
-            attrs: s.attrFilters
-                ? Object.entries(s.attrFilters).map(([key, e]) => ({
-                    key,
-                    op: e.op,
-                    value: Array.isArray(e.value) ? e.value.join(", ") : String(e.value),
-                }))
-                : [],
-            minCost: paiseToRupees(s.minCostPaise),
-            maxCost: paiseToRupees(s.maxCostPaise),
-            minStock: s.minStock != null ? String(s.minStock) : "",
-            maxStock: s.maxStock != null ? String(s.maxStock) : "",
-            minStaleDays: s.minStaleDays != null ? String(s.minStaleDays) : "",
-            maxStaleDays: s.maxStaleDays != null ? String(s.maxStaleDays) : "",
-            markupPercent: s.markupPercent,
-            markupFlatPaise: String(s.markupFlatPaise),
-            roundingPaise: String(s.roundingPaise),
-            priority: String(s.priority),
-            costMethod: s.costMethod ?? "__none",
-            isActive: s.isActive,
-        });
-    };
-
-    const addAttrRow = () =>
-        setForm((f) => ({ ...f, attrs: [...f.attrs, { key: "", op: "eq", value: "" }] }));
-
-    const updateAttrRow = (idx: number, patch: Partial<AttrRow>) =>
-        setForm((f) => ({
-            ...f,
-            attrs: f.attrs.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
-        }));
-
-    const removeAttrRow = (idx: number) =>
-        setForm((f) => ({ ...f, attrs: f.attrs.filter((_, i) => i !== idx) }));
-
-    // Compact summary of a row's conditions for the table.
-    const conditionChips = (s: Strategy): React.ReactNode => {
-        const chips: React.ReactNode[] = [];
-        const labelFor = (ids: number[], list: Master[]): string => {
-            if (ids.length === 0) return "";
-            if (ids.length === 1) {
-                const found = list.find((m) => m.id === ids[0]);
-                return found?.name ?? `#${ids[0]}`;
-            }
-            return `${ids.length} items`;
-        };
-        if (s.brandIds.length > 0)
-            chips.push(<Badge key="b" variant="outline" className="text-[10px]">brand · {labelFor(s.brandIds, brands)}</Badge>);
-        if (s.groupIds.length > 0)
-            chips.push(<Badge key="g" variant="outline" className="text-[10px]">group · {labelFor(s.groupIds, groups)}</Badge>);
-        if (s.categoryIds.length > 0)
-            chips.push(<Badge key="c" variant="outline" className="text-[10px]">cat · {labelFor(s.categoryIds, categories)}</Badge>);
-        if (s.attrFilters && Object.keys(s.attrFilters).length > 0)
-            chips.push(<Badge key="a" variant="outline" className="text-[10px]">attrs · {Object.keys(s.attrFilters).length}</Badge>);
-        if (s.minCostPaise != null || s.maxCostPaise != null)
-            chips.push(<Badge key="cc" variant="outline" className="text-[10px]">cost {formatPaise(s.minCostPaise)}–{formatPaise(s.maxCostPaise)}</Badge>);
-        if (s.minStock != null || s.maxStock != null)
-            chips.push(<Badge key="ss" variant="outline" className="text-[10px]">stock {s.minStock ?? "—"}–{s.maxStock ?? "—"}</Badge>);
-        if (s.minStaleDays != null || s.maxStaleDays != null) {
-            const lo = s.minStaleDays ?? "—";
-            const hi = s.maxStaleDays ?? "∞";
-            chips.push(<Badge key="st" variant="outline" className="text-[10px]">last sale {lo}–{hi}d ago</Badge>);
-        }
-        if (chips.length === 0) return <span className="text-xs text-muted-foreground italic">all products</span>;
-        return <div className="flex flex-wrap gap-1">{chips}</div>;
-    };
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" /> Loading strategy points…
+            </div>
+        );
+    }
 
     return (
-        <div className="flex h-full flex-col gap-3 overflow-hidden px-6 pb-6">
-            <div className="flex flex-none flex-wrap items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
-                    <Calculator className="size-5" aria-hidden />
-                    Strategies
-                </h2>
-                <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => { setForm(emptyForm()); setEditId(null); setAdding(true); }}
-                    disabled={adding}
-                >
-                    <Plus className="size-4" />
-                    New strategy
-                </Button>
-            </div>
+        <div className="flex h-full flex-col px-2 pt-2 pb-1">
+            {/* <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,360px)_1fr] lg:grid-rows-[minmax(0,1fr)]"> */}
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(200px,250px)_1fr] lg:grid-rows-[minmax(0,1fr)]">
+                {/* ── Point editors ── */}
+                <div className="space-y-3 overflow-y-auto pb-2 lg:min-h-0">
+                    <div className="flex items-center gap-2">
+                        <Calculator className="size-5" aria-hidden />
+                        <h2 className="text-lg font-semibold tracking-tight">Strategy points</h2>
+                    </div>
 
-            <Dialog
-                open={adding || editId != null}
-                onOpenChange={(open) => { if (!open) cancel(); }}
-            >
-                <DialogContent className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-5xl">
-                    <DialogHeader className="border-b px-6 py-4">
-                        <DialogTitle>{adding ? "New strategy" : "Edit strategy"}</DialogTitle>
-                    </DialogHeader>
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                        <div className="space-y-4 px-6 py-4">
-
-                        {/* Basics */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div className="space-y-1.5 lg:col-span-2">
-                                <Label className="text-xs">Name</Label>
+                    <div className="rounded-md border bg-card">
+                        <div className="flex items-center justify-between gap-3 px-3 py-2">
+                            <Label htmlFor="base-pts" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Base points
+                            </Label>
+                            <div className="flex items-center gap-1">
                                 <Input
-                                    value={form.name}
-                                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                                    className="h-8"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Markup %</Label>
-                                <Input
+                                    id="base-pts"
                                     inputMode="decimal"
-                                    value={form.markupPercent}
-                                    onChange={(e) => setForm((f) => ({ ...f, markupPercent: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
+                                    value={base}
+                                    onChange={(e) => setBase(sanitize(e.target.value))}
+                                    placeholder="0"
+                                    className="h-6 w-10 text-right font-mono text-xs"
                                 />
+                                <span className="text-[10px] text-muted-foreground">pts</span>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Priority (higher wins)</Label>
-                                <Input
-                                    inputMode="numeric"
-                                    value={form.priority}
-                                    onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Flat add (paise)</Label>
-                                <Input
-                                    inputMode="numeric"
-                                    value={form.markupFlatPaise}
-                                    onChange={(e) => setForm((f) => ({ ...f, markupFlatPaise: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Rounding (paise)</Label>
-                                <Input
-                                    inputMode="numeric"
-                                    value={form.roundingPaise}
-                                    onChange={(e) => setForm((f) => ({ ...f, roundingPaise: e.target.value }))}
-                                    className="h-8 font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Default cost method</Label>
-                                <Select
-                                    value={form.costMethod}
-                                    onValueChange={(v) => setForm((f) => ({ ...f, costMethod: v }))}
-                                >
-                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__none">— Use item&apos;s own —</SelectItem>
-                                        {Object.entries(COST_METHOD_LABEL).map(([v, l]) => (
-                                            <SelectItem key={v} value={v}>{l}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <label className="flex items-center gap-2 text-xs self-end pb-2">
-                                <Checkbox
-                                    checked={form.isActive}
-                                    onCheckedChange={(c) => setForm((f) => ({ ...f, isActive: c === true }))}
-                                />
-                                Active
-                            </label>
-                        </div>
-
-                        {/* Taxonomy filters (multi-select) */}
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                Match conditions <span className="font-normal normal-case">(empty = matches every product)</span>
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <MultiSelectGroup
-                                    label="Brands" icon={Tag}
-                                    items={brands}
-                                    selected={form.brandIds}
-                                    onChange={(ids) => setForm((f) => ({ ...f, brandIds: ids }))}
-                                />
-                                <MultiSelectGroup
-                                    label="Groups" icon={FolderTree}
-                                    helper="Auto-includes sub-groups."
-                                    items={buildHierarchy(groups)}
-                                    selected={form.groupIds}
-                                    onChange={(ids) => setForm((f) => ({ ...f, groupIds: ids }))}
-                                />
-                                <MultiSelectGroup
-                                    label="Categories" icon={Boxes}
-                                    helper="Auto-includes sub-categories."
-                                    items={buildHierarchy(categories)}
-                                    selected={form.categoryIds}
-                                    onChange={(ids) => setForm((f) => ({ ...f, categoryIds: ids }))}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Range filters — three segments */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <RangeSegment
-                                icon={IndianRupee}
-                                title="Cost range"
-                                helper="Applied to InvProduct.costPaise (last-purchase snapshot). Both bounds optional."
-                                minLabel="Min ₹"
-                                maxLabel="Max ₹"
-                                minValue={form.minCost}
-                                maxValue={form.maxCost}
-                                onMin={(v) => setForm((f) => ({ ...f, minCost: v }))}
-                                onMax={(v) => setForm((f) => ({ ...f, maxCost: v }))}
-                                inputMode="decimal"
-                                placeholderMin="0.00"
-                                placeholderMax="∞"
-                            />
-                            <RangeSegment
-                                icon={Package}
-                                title="Stock range"
-                                helper="Units on hand (InvProduct.stock). Products with stock not tracked are excluded when this filter is set."
-                                minLabel="Min units"
-                                maxLabel="Max units"
-                                minValue={form.minStock}
-                                maxValue={form.maxStock}
-                                onMin={(v) => setForm((f) => ({ ...f, minStock: v }))}
-                                onMax={(v) => setForm((f) => ({ ...f, maxStock: v }))}
-                                inputMode="numeric"
-                                placeholderMin="0"
-                                placeholderMax="∞"
-                            />
-                            <RangeSegment
-                                icon={CalendarClock}
-                                title="Days since last sale"
-                                helper="Window for staleness. Never-sold products have infinite age — they match the lower bound and fail the upper bound."
-                                minLabel="From (days)"
-                                maxLabel="To (days)"
-                                minValue={form.minStaleDays}
-                                maxValue={form.maxStaleDays}
-                                onMin={(v) => setForm((f) => ({ ...f, minStaleDays: v }))}
-                                onMax={(v) => setForm((f) => ({ ...f, maxStaleDays: v }))}
-                                inputMode="numeric"
-                                placeholderMin="0"
-                                placeholderMax="∞"
-                            />
-                        </div>
-
-                        {/* Attribute filters */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                    Attribute filters (attrsJson)
-                                </p>
-                                <Button type="button" variant="outline" size="sm" onClick={addAttrRow}>
-                                    <Plus className="size-3" />
-                                    Add row
-                                </Button>
-                            </div>
-                            {form.attrs.length === 0 ? (
-                                <p className="text-[11px] text-muted-foreground italic">
-                                    No attribute filters. Click <strong>Add row</strong> to gate on values in <code>InvProduct.attrsJson</code>.
-                                </p>
-                            ) : (
-                                <div className="space-y-1.5">
-                                    {form.attrs.map((row, i) => (
-                                        <div key={i} className="grid grid-cols-[1fr_auto_1.5fr_auto] gap-2 items-start">
-                                            <Input
-                                                placeholder="key (e.g. ram, color)"
-                                                value={row.key}
-                                                onChange={(e) => updateAttrRow(i, { key: e.target.value })}
-                                                className="h-8 text-xs font-mono"
-                                            />
-                                            <Select
-                                                value={row.op}
-                                                onValueChange={(v) => updateAttrRow(i, { op: v as AttrOp })}
-                                            >
-                                                <SelectTrigger className="h-8 w-[110px] text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {(Object.keys(ATTR_OP_LABEL) as AttrOp[]).map((op) => (
-                                                        <SelectItem key={op} value={op}>{ATTR_OP_LABEL[op]}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <Input
-                                                placeholder={attrValuePlaceholder(row.op)}
-                                                value={row.value}
-                                                onChange={(e) => updateAttrRow(i, { value: e.target.value })}
-                                                className="h-8 text-xs font-mono"
-                                            />
-                                            <Button
-                                                type="button" variant="ghost" size="icon-sm"
-                                                aria-label="Remove"
-                                                onClick={() => removeAttrRow(i)}
-                                            >
-                                                <X className="size-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
                         </div>
                     </div>
-                    <DialogFooter className="border-t px-6 py-3">
-                        <Button type="button" variant="outline" size="sm" onClick={cancel}>
-                            Cancel
-                        </Button>
-                        <Button type="button" size="sm" onClick={save} disabled={saving}>
-                            Save
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
-            <ScrollArea className="min-h-0 flex-1 border border-border rounded-sm bg-card">
-                <Table>
-                    <TableHeader className="bg-muted/40">
-                        <TableRow>
-                            <TableHead className="text-xs">Name</TableHead>
-                            <TableHead className="text-xs">Conditions</TableHead>
-                            <TableHead className="text-right text-xs">Markup %</TableHead>
-                            <TableHead className="text-right text-xs">Flat</TableHead>
-                            <TableHead className="text-xs">Rounding</TableHead>
-                            <TableHead className="text-right text-xs">Priority</TableHead>
-                            <TableHead className="text-xs">Cost method</TableHead>
-                            <TableHead className="text-right text-xs">Used by</TableHead>
-                            <TableHead className="text-right text-xs w-20" />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableLoadingRow colSpan={9} />
-                        ) : rows.length === 0 ? (
-                            <TableEmptyRow colSpan={9} message="No pricing strategies yet." />
-                        ) : (
-                            rows.map((s) => (
-                                <TableRow key={s.id}>
-                                    <TableCell className="font-medium text-sm">
-                                        {s.name}
-                                        {!s.isActive ? (
-                                            <Badge variant="outline" className="ml-2 text-[10px]">inactive</Badge>
-                                        ) : null}
-                                    </TableCell>
-                                    <TableCell>{conditionChips(s)}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs">{Number(s.markupPercent).toFixed(2)}%</TableCell>
-                                    <TableCell className="text-right font-mono text-xs">{formatPaise(s.markupFlatPaise)}</TableCell>
-                                    <TableCell className="text-xs">{formatRounding(s.roundingPaise)}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs">{s.priority}</TableCell>
-                                    <TableCell className="text-xs">
-                                        {s.costMethod ? COST_METHOD_LABEL[s.costMethod] : <span className="text-muted-foreground">—</span>}
-                                    </TableCell>
-                                    <TableCell className="text-right text-xs">
-                                        {(() => {
-                                            const n = usage.get(s.id) ?? 0;
-                                            if (n === 0) return <span className="text-muted-foreground">—</span>;
-                                            return (
-                                                <Link
-                                                    href={`/office/pricing-strategy/items?strategy=${s.id}`}
-                                                    className="underline text-blue-700 hover:text-blue-900"
-                                                    title="Open Items filtered to this strategy"
-                                                >
-                                                    {n} {n === 1 ? "product" : "products"}
-                                                </Link>
-                                            );
-                                        })()}
-                                    </TableCell>
-                                    <TableCell className="text-right space-x-1 whitespace-nowrap">
-                                        <Button type="button" variant="outline" size="icon-sm" aria-label="Edit" onClick={() => beginEdit(s)}>
-                                            <Pencil className="size-4" />
-                                        </Button>
-                                        <Button type="button" variant="outline" size="icon-sm" aria-label="Delete" onClick={() => del(s.id)}>
-                                            <Trash2 className="size-4" />
-                                        </Button>
-                                    </TableCell>
+                    <PointSection title="Brands" icon={Tag} rows={flatRows(brands)} points={brandPts}
+                        onChange={(k, v) => setBrandPts((s) => ({ ...s, [k]: v }))} />
+                    <PointSection title="Categories" icon={FolderTree} rows={treeRows(categories)} points={catPts}
+                        onChange={(k, v) => setCatPts((s) => ({ ...s, [k]: v }))} />
+                    <PointSection title="Groups" icon={Boxes} rows={treeRows(groups)} points={groupPts}
+                        onChange={(k, v) => setGroupPts((s) => ({ ...s, [k]: v }))} />
+                </div>
+
+                {/* ── Live preview ── */}
+                <div className="flex min-h-0 flex-col gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <div className="relative w-56">
+                                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    placeholder="Filter products…"
+                                    className="h-8 pl-7 text-xs"
+                                />
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                                {visible.length} / {rows.length}
+                            </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-xs">
+                            <span className="rounded border bg-card px-2 py-1">
+                                Avg margin <strong className="font-mono">{stats.avg.toFixed(1)}%</strong>
+                            </span>
+                            <span className="rounded border bg-card px-2 py-1">
+                                Range <strong className="font-mono">{stats.min.toFixed(1)}%</strong> –{" "}
+                                <strong className="font-mono">{stats.max.toFixed(1)}%</strong>
+                            </span>
+                        </div>
+
+                        <div className="ml-auto flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant={filtersOpen ? "secondary" : "outline"}
+                                size="sm"
+                                className="h-8"
+                                onClick={() => setFiltersOpen((o) => !o)}
+                            >
+                                <Filter className="size-3.5" /> Filters
+                                {filterCount > 0 ? (
+                                    <span className="ml-1 rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                                        {filterCount}
+                                    </span>
+                                ) : null}
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" className="h-8" onClick={reset}>
+                                <RotateCcw className="size-4" /> Reset
+                            </Button>
+                            <Button type="button" size="sm" className="h-8" onClick={save} disabled={saving}>
+                                {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
+                            </Button>
+                        </div>
+                    </div>
+
+                    {filtersOpen ? (
+                        <div className="rounded-md border bg-muted/30 p-3">
+                            <div className="mb-3 flex items-center justify-between">
+                                <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span>
+                                {filterCount > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setConditions(emptyMatchConditions())}
+                                        className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                                    >
+                                        Clear all ({filterCount})
+                                    </button>
+                                ) : null}
+                            </div>
+                            <div className="space-y-4">
+                                <MatchConditions
+                                    brands={brands}
+                                    groups={groups}
+                                    categories={categories}
+                                    value={conditions}
+                                    onChange={(patch) => setConditions((c) => ({ ...c, ...patch }))}
+                                    showStaleDays={false}
+                                />
+                            </div>
+                        </div>
+                    ) : null}
+
+                    {/* Flex-column table: thead is a fixed flex item, tbody is the only
+                        scroll region. Every row shares one CSS-grid template so the
+                        header and body columns stay aligned without table layout. */}
+                    <div
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-card [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&>div]:overflow-hidden"
+                        style={{ "--sbw": `${scrollbarW}px` } as React.CSSProperties}
+                    >
+                        <Table className="flex min-h-0 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(0,1fr)_160px_72px_104px_104px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
+                            <TableHeader className="bg-muted [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
+                                <TableRow>
+                                    <TableHead className="text-xs">Product</TableHead>
+                                    <TableHead className="text-xs">Points breakdown</TableHead>
+                                    <TableHead className="text-right text-xs">Margin %</TableHead>
+                                    <TableHead className="text-right text-xs">Cost</TableHead>
+                                    <TableHead className="text-right text-xs">Price</TableHead>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-                <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+                            </TableHeader>
 
-            <p className="flex-none text-[11px] text-muted-foreground leading-relaxed">
-                A strategy <strong>AND-matches</strong> every condition it specifies; an empty conditions set
-                matches all products (the org-wide fallback). When multiple strategies match a product,
-                the highest <strong>priority</strong> wins.
-            </p>
+                            <TableBody>
+                                {visible.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                                            {products.length === 0 ? "No active products found." : `No products match “${query}”.`}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : null}
+                                {capped.map(({ p, pieces, margin, price }) => (
+                                    <TableRow key={p.id}>
+                                        <TableCell className="whitespace-normal break-words text-sm font-medium leading-snug">{p.name}</TableCell>
+                                        <TableCell className="whitespace-normal"><Breakdown pieces={pieces} margin={margin} /></TableCell>
+                                        <TableCell className={`text-right font-mono text-xs font-semibold ${margin < 0 ? "text-red-600" : ""}`}>
+                                            {margin.toFixed(1)}%
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                                            {rupee(p.costPaise)}
+                                        </TableCell>
+                                        <TableCell className={`text-right font-mono text-xs font-semibold ${margin < 0 ? "text-red-600" : ""}`}>
+                                            {rupee(price)}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+
+                        </Table>
+                    </div>
+                    {/* 
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        {truncated ? `Showing first ${PREVIEW_CAP} of ${visible.length} matched products. ` : null}
+                        Hover a number in the breakdown to see which dimension it came from. Cost is the
+                        resolved cost basis; price = cost × (1 + margin%). Click <strong>Save</strong> to
+                        store the points.
+                    </p> */}
+                </div>
+            </div>
         </div>
     );
-}
-
-// ── Attribute value parsing ───────────────────────────────────────────────
-
-function attrValuePlaceholder(op: AttrOp): string {
-    switch (op) {
-        case "eq": return "Black";
-        case "in": return "Black, White, Silver";
-        case "gte":
-        case "lte": return "100";
-        case "between": return "100, 500";
-    }
-}
-
-function parseAttrValue(op: AttrOp, raw: string): AttrFilterEntry {
-    if (op === "in") {
-        const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
-        if (parts.length === 0) throw new Error("'in' needs at least one value (comma-separated)");
-        // `in` lists only hold scalars (string | number); a "true"/"false" entry
-        // stays a literal string rather than coercing to boolean.
-        const value: (string | number)[] = parts.map((p) => {
-            const c = coerce(p);
-            return typeof c === "boolean" ? p : c;
-        });
-        return { op, value };
-    }
-    if (op === "between") {
-        const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
-        if (parts.length !== 2) throw new Error("'between' needs exactly two values (min, max)");
-        const lo = coerce(parts[0]);
-        const hi = coerce(parts[1]);
-        if (typeof lo !== "number" || typeof hi !== "number")
-            throw new Error("'between' values must be numeric");
-        if (hi < lo) throw new Error("max must be ≥ min");
-        return { op, value: [lo, hi] };
-    }
-    // eq / gte / lte — single scalar.
-    return { op, value: coerce(raw) };
-}
-
-/** "123" → 123, "Black" → "Black", "true"/"false" → boolean. */
-function coerce(s: string): string | number | boolean {
-    const lower = s.toLowerCase();
-    if (lower === "true") return true;
-    if (lower === "false") return false;
-    const n = Number(s);
-    return Number.isFinite(n) && s.trim() !== "" ? n : s;
 }

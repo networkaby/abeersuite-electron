@@ -20,6 +20,7 @@ export default function PricingStrategyLayout({ children }: { children: React.Re
                     "strategies": "Strategies",
                     "needs-attention": "Needs Attention",
                     "update-print-labels": "Update & Print Labels",
+                    "create": "Create",
                 }}
             />
             {/* <nav

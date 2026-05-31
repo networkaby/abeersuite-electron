@@ -1292,6 +1292,18 @@ async function main() {
         console.log(`      ✓ "Default ORG markup" already present, skipped\n`);
     }
 
+    // ── Strategy points (additive-margin model) default ───────────────────────
+    // Seed a single BASE = 0 row so the org-wide additive-margin config exists on
+    // a fresh DB. Other dimensions (brand/category/group/band points) are added
+    // by the user in /office/pricing-strategy/strategies. A missing row = 0 pts.
+    console.log("      Strategy points default (BASE = 0)");
+    await prisma.strategyPoint.upsert({
+        where:  { dimension_refKey: { dimension: "BASE", refKey: "" } },
+        update: {},
+        create: { dimension: "BASE", refKey: "", points: 0 },
+    });
+    console.log("      ✓ StrategyPoint BASE row present\n");
+
     console.log("━━━ Bootstrap complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("    Log in at /staff/login as admin@networkservice.in / admin123");
     console.log("    Run `pnpm seed:dummy-all` to populate demo data, or skip for a clean prod start.\n");

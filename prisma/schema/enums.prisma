@@ -187,6 +187,21 @@ enum CostMethod {
 // staleness ranges) instead of a single scope dimension. See
 // prisma/schema/inventory.prisma#PricingStrategy.
 
+// Dimensions of the additive-margin "strategy points" model (StrategyPoint).
+// A product's margin% is the SUM of the points of the dimension values it
+// falls under. BASE is the single org-wide baseline; BRAND/CATEGORY/GROUP key
+// on a master id; the *_BAND values key on a fixed band key (stock level /
+// idle age / movement). See prisma/schema/inventory.prisma#StrategyPoint.
+enum StrategyPointDimension {
+  BASE
+  BRAND
+  CATEGORY
+  GROUP
+  STOCK_BAND
+  AGE_BAND
+  MOVE_BAND
+}
+
 // ── Ecommerce / Order enums ───────────────────────────────────────────────────
 
 enum OrderSource {

@@ -634,3 +634,26 @@ model PricingStrategy {
   @@index([isActive, priority])
   @@map("pricing_strategies")
 }
+
+// ── Strategy points (additive-margin model) ──────────────────────────────────
+//
+// A single org-wide additive-margin configuration. Every dimension value gets a
+// points number, and a product's margin% is the SUM of the points of the values
+// it falls under: base + brand + category + group [+ stock/age/movement band].
+//   price = cost × (1 + margin/100)        (margin on cost; MRP ignored)
+// One row per (dimension, refKey):
+//   • BASE                      → refKey "" (single baseline row)
+//   • BRAND / CATEGORY / GROUP  → refKey = the master id as a string ("3")
+//   • STOCK_BAND/AGE_BAND/MOVE_BAND → refKey = the band key ("stock-out", …)
+// Singleton config — no name/priority (only one points set for now). Zero-point
+// values are simply absent (a missing row means 0).
+model StrategyPoint {
+  id        Int                    @id @default(autoincrement())
+  dimension StrategyPointDimension
+  refKey    String                 @default("")
+  points    Decimal                @default(0) @db.Decimal(8, 2)
+  updatedAt DateTime               @updatedAt
+
+  @@unique([dimension, refKey])
+  @@map("strategy_points")
+}

@@ -127,3 +127,25 @@ export const pricingApplySchema = z.object({
 });
 
 export type PricingApplyInput = z.infer<typeof pricingApplySchema>;
+
+// ── Strategy points (additive-margin model) ───────────────────────────────
+// The single org-wide points configuration. GET and PUT share this grouped
+// shape: `base` is the baseline; `brand`/`category`/`group` map a master id
+// (string) → points; the *_band maps key on a band key. Points may be negative
+// (a value can pull margin down) and are stored as Decimal(8,2). Zero points
+// are dropped server-side (a missing entry means 0).
+const pointsMap = z.record(z.string().max(64), z.number().gte(-100_000).lte(100_000));
+
+export const strategyPointsSaveSchema = z.object({
+    base:      z.number().gte(-100_000).lte(100_000).default(0),
+    brand:     pointsMap.default({}),
+    category:  pointsMap.default({}),
+    group:     pointsMap.default({}),
+    stockBand: pointsMap.default({}),
+    ageBand:   pointsMap.default({}),
+    moveBand:  pointsMap.default({}),
+});
+
+export type StrategyPointsSaveInput = z.infer<typeof strategyPointsSaveSchema>;
+/** The grouped shape returned by GET /api/pricing-strategy/points. */
+export type StrategyPoints = StrategyPointsSaveInput;
