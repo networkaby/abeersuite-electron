@@ -259,6 +259,10 @@ const RANGE_FIELDS: { key: RangeKey; label: string }[] = [
     { key: "daysSinceSale", label: "Days since last sale" },
 ];
 
+// localStorage key for the persisted ("saved") filter state. Bump the suffix
+// when the persisted shape changes so old blobs are ignored, not mis-applied.
+const FILTER_STORAGE_KEY = "pricing.update-print-labels.filters.v1";
+
 const SOURCE_OPTIONS = [
     { value: "STRATEGY", label: "Strategy" },
     { value: "MY", label: "Computed" },
@@ -434,6 +438,49 @@ export default function GeneratePage() {
         setRanges((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { min: "", max: "" }), [side]: val } }));
     const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
 
+    // ── Saved filters (localStorage) ──────────────────────────────────────────
+    // Hydrate once on mount (after SSR, so no hydration mismatch), then persist on
+    // every change. `hydrated` batches with the restored setStates, so the persist
+    // effect never fires with default values before the restore lands.
+    const [hydrated, setHydrated] = useState(false);
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+            if (raw) {
+                const s = JSON.parse(raw) as Record<string, unknown>;
+                if (typeof s.query === "string") setQuery(s.query);
+                if (typeof s.fBrand === "string") setFBrand(s.fBrand);
+                if (typeof s.fCategory === "string") setFCategory(s.fCategory);
+                if (typeof s.fGroup === "string") setFGroup(s.fGroup);
+                if (typeof s.fMethod === "string") setFMethod(s.fMethod);
+                if (typeof s.fSource === "string") setFSource(s.fSource);
+                if (typeof s.fBarcodeCapped === "boolean") setFBarcodeCapped(s.fBarcodeCapped);
+                if (typeof s.fSaleCapped === "boolean") setFSaleCapped(s.fSaleCapped);
+                if (typeof s.fInStock === "boolean") setFInStock(s.fInStock);
+                if (typeof s.tBarcodeShrink === "string") setTBarcodeShrink(s.tBarcodeShrink);
+                if (typeof s.tProfitReduce === "string") setTProfitReduceRaw(s.tProfitReduce);
+                if (typeof s.tProfitIncrease === "string") setTProfitIncreaseRaw(s.tProfitIncrease);
+                if (typeof s.filtersOpen === "boolean") setFiltersOpen(s.filtersOpen);
+                if (s.ranges && typeof s.ranges === "object") {
+                    setRanges({ ...emptyRanges(), ...(s.ranges as Record<RangeKey, { min: string; max: string }>) });
+                }
+            }
+        } catch { /* corrupt blob → ignore, fall back to defaults */ }
+        setHydrated(true);
+        // run once
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        if (!hydrated) return;
+        try {
+            localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
+                query, fBrand, fCategory, fGroup, fMethod, fSource,
+                fBarcodeCapped, fSaleCapped, fInStock,
+                tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, filtersOpen,
+            }));
+        } catch { /* quota / disabled storage → silently skip */ }
+    }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, filtersOpen]);
+
     // Dynamic filter options — distinct values present in the data.
     const distinct = (pick: (r: Row) => string) =>
         [...new Set(rows.map(pick).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -445,7 +492,8 @@ export default function GeneratePage() {
         [rows],
     );
     const [selected, setSelected] = useState<Set<number>>(new Set());
-    const [hidden, setHidden] = useState<Set<ColKey>>(new Set());
+    // Brand / Category / Group hidden by default — taxonomy noise; show via Columns.
+    const [hidden, setHidden] = useState<Set<ColKey>>(new Set<ColKey>(["brand", "category", "group"]));
     const show = (k: ColKey) => !hidden.has(k);
     const toggleCol = (k: ColKey) =>
         setHidden((prev) => {
