@@ -28,7 +28,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postContra } from "@/modules/accountancy/lib/postContra";
-import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
+import { computeExpectedCash, computeVariance, sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 import { nextRefFromSeries, balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 
 const closeSchema = z.object({
@@ -202,10 +202,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             });
         });
 
+        // Per-method tally of everything collected this shift (cash + digital),
+        // for the closing report. Uses the real closedAt window.
+        const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
+            counter:  result.counter,
+            openedAt: result.openedAt,
+            closedAt: result.closedAt,
+        });
+
         // Explicit fields only — never spread the Prisma object (BigInt fields
         // like counter.defaultFloatPaise would crash JSON.stringify after the
         // transaction commits, leaving a closed shift with no UI confirmation).
         return NextResponse.json({
+            tenderBreakdown,
             id:                  result.id,
             status:              result.status,
             openedAt:            result.openedAt,

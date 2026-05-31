@@ -42,7 +42,9 @@ const SUPPLIERS = [
 ];
 
 // ── Account-level settings (creditLimit lives on Account, not on Person/Company) ──
-// null = no limit enforced.
+// Deny-by-default: null/0 = NO credit (treated identically by checkCreditLimit);
+// only an explicit positive limit permits credit sales. Demo customers that need
+// credit are given a positive limit via ACCOUNT_CREDIT_LIMITS.
 const ACCOUNT_CREDIT_LIMITS: Record<string, number | null> = {
     // Sundry Debtors — persons
     "Anita Sharma":  25000,

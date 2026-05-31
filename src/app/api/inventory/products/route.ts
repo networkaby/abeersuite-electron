@@ -10,6 +10,8 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
 
 const productInclude = {
@@ -159,6 +161,13 @@ export async function POST(req: Request) {
                 ...syncProductCacheFromOpening(b),
             },
             include: productInclude,
+        });
+        // Materialize effectiveSalePricePaise so the new product is sellable in
+        // POS immediately (mirrors voucher posters). Fire-and-forget — a recompute
+        // failure must never fail the create.
+        await recomputePricesForProducts([row.id]).catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { source: "price-recompute", productId: String(row.id) } });
+            console.error("[price-recompute] failed for new product", row.id, err);
         });
         return NextResponse.json(row, { status: 201 });
     } catch (e) {

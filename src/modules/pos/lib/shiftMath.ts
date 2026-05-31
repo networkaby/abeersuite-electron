@@ -104,3 +104,103 @@ export async function sumShiftCashSalesPaise(
 
     return sum(posTenders) + sum(receiptLines);
 }
+
+/**
+ * Total collected per settlement account during a shift window, in paise.
+ *
+ * Same two sources as `sumShiftCashSalesPaise` (POS tender rows + RECEIPT
+ * debits) but for an arbitrary set of accounts and grouped per account — so
+ * the till gives the cash total (== reconciliation cash) and each non-cash
+ * routing account gives that method's total. Returns a Map keyed by accountId;
+ * accounts with no activity are simply absent.
+ */
+export async function sumShiftTendersByAccount(
+    tx: Tx,
+    args: {
+        accountIds: number[];
+        openedAt:   Date;
+        closedAt?:  Date | null;
+    },
+): Promise<Map<number, bigint>> {
+    const totals = new Map<number, bigint>();
+    if (args.accountIds.length === 0) return totals;
+    const end = args.closedAt ?? new Date();
+    const toPaise = (amount: { toString(): string } | null): bigint =>
+        amount == null ? BigInt(0) : BigInt(Math.round(Number(amount) * 100));
+    const add = (accountId: number, paise: bigint) =>
+        totals.set(accountId, (totals.get(accountId) ?? BigInt(0)) + paise);
+
+    // POS sale tenders (Dr Till / Bank / Wallet …) carried on the voucher.
+    const posTenders = await tx.invVoucherTender.groupBy({
+        by:    ["accountId"],
+        where: {
+            accountId: { in: args.accountIds },
+            voucher:   { type: "POS", status: "POSTED", deletedAt: null, createdAt: { gte: args.openedAt, lte: end } },
+        },
+        _sum:  { amount: true },
+    });
+    for (const r of posTenders) add(r.accountId, toPaise(r._sum.amount));
+
+    // Office RECEIPT vouchers settled at this counter (old credit bill paid).
+    const receiptLines = await tx.voucherLine.groupBy({
+        by:    ["accountId"],
+        where: {
+            accountId: { in: args.accountIds },
+            type:      "DEBIT",
+            voucher:   { type: "RECEIPT", status: "POSTED", deletedAt: null, createdAt: { gte: args.openedAt, lte: end } },
+        },
+        _sum:  { amount: true },
+    });
+    for (const r of receiptLines) if (r.accountId != null) add(r.accountId, toPaise(r._sum.amount));
+
+    return totals;
+}
+
+// Counter shape needed to map settlement accounts → method labels. Structurally
+// matched by the Prisma counter objects the shift routes already load.
+type CounterRouting = {
+    tillAccount:           { id: number };
+    upiAccountId:          number | null; upiLabel:          string | null;
+    cardAccountId:         number | null; cardLabel:         string | null;
+    walletAccountId:       number | null; walletLabel:       string | null;
+    chequeAccountId:       number | null; chequeLabel:       string | null;
+    bankTransferAccountId: number | null; bankTransferLabel: string | null;
+};
+
+export type TenderBreakdownRow = { method: string; label: string; amountPaise: string };
+
+/**
+ * Per-method tally of everything collected at a counter during a shift window,
+ * for the close report. CASH always routes to the till (so its total matches
+ * the cash reconciliation); each other method uses its per-counter routing
+ * account and optional custom label ("PhonePe UPI" etc.). Only methods with a
+ * positive total are returned. If two methods share one account, the first in
+ * display order claims it (no double-count).
+ */
+export async function buildShiftTenderBreakdown(
+    tx: Tx,
+    args: { counter: CounterRouting; openedAt: Date; closedAt?: Date | null },
+): Promise<TenderBreakdownRow[]> {
+    const c = args.counter;
+    const defs: Array<{ method: string; accountId: number | null; label: string }> = [
+        { method: "CASH",          accountId: c.tillAccount.id,        label: "Cash" },
+        { method: "UPI",           accountId: c.upiAccountId,          label: c.upiLabel?.trim()          || "UPI" },
+        { method: "CARD",          accountId: c.cardAccountId,         label: c.cardLabel?.trim()         || "Card" },
+        { method: "WALLET",        accountId: c.walletAccountId,       label: c.walletLabel?.trim()       || "Wallet" },
+        { method: "CHEQUE",        accountId: c.chequeAccountId,       label: c.chequeLabel?.trim()       || "Cheque" },
+        { method: "BANK_TRANSFER", accountId: c.bankTransferAccountId, label: c.bankTransferLabel?.trim() || "Bank Transfer" },
+    ];
+
+    const accountIds = [...new Set(defs.map((d) => d.accountId).filter((x): x is number => x != null))];
+    const totals = await sumShiftTendersByAccount(tx, { accountIds, openedAt: args.openedAt, closedAt: args.closedAt });
+
+    const claimed = new Set<number>();
+    const rows: TenderBreakdownRow[] = [];
+    for (const d of defs) {
+        if (d.accountId == null || claimed.has(d.accountId)) continue;
+        claimed.add(d.accountId);
+        const amt = totals.get(d.accountId) ?? BigInt(0);
+        if (amt > BigInt(0)) rows.push({ method: d.method, label: d.label, amountPaise: amt.toString() });
+    }
+    return rows;
+}

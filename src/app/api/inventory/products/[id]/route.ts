@@ -10,6 +10,8 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import * as Sentry from "@sentry/nextjs";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -139,6 +141,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
             include: productInclude,
         });
+        // Re-materialize effectiveSalePricePaise (saved price / cost / GST may have
+        // changed) so POS reflects the edit. Skip when the caller set an explicit
+        // effectiveSalePricePaise here — that's a deliberate exact price, don't clobber.
+        if (b.effectiveSalePricePaise === undefined) {
+            await recomputePricesForProducts([id]).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "price-recompute", productId: String(id) } });
+                console.error("[price-recompute] failed for product", id, err);
+            });
+        }
         return NextResponse.json(row);
     } catch (e) {
         return handleApiError(e, "Failed to update product");

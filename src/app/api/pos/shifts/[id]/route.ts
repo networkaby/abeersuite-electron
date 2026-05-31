@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { sumPaise, sumShiftCashSalesPaise } from "@/modules/pos/lib/shiftMath";
+import { sumPaise, sumShiftCashSalesPaise, buildShiftTenderBreakdown } from "@/modules/pos/lib/shiftMath";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_VIEW_BR);
@@ -75,8 +75,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         });
         const dropsPaise = sumPaise(shift.drops);
 
+        // Per-method tally of everything collected this shift (cash + digital).
+        const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
+            counter:  shift.counter,
+            openedAt: shift.openedAt,
+            closedAt: shift.closedAt,
+        });
+
         return NextResponse.json({
             ...shift,
+            tenderBreakdown,
             openingFloatPaise:   shift.openingFloatPaise.toString(),
             carryOverFloatPaise: shift.carryOverFloatPaise.toString(),
             vaultTopUpPaise:     shift.vaultTopUpPaise.toString(),

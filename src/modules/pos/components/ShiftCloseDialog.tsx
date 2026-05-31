@@ -31,12 +31,16 @@ import { fmt } from "@/utils/constants";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// One line of the "Payments collected this shift" tally (cash + digital).
+type TenderRow = { method: string; label: string; amountPaise: string };
+
 type ShiftDetail = {
     id: number;
     openingFloatPaise: string;
     cashSalesPaise: string;
     dropsPaise: string;
     runningExpectedPaise: string;
+    tenderBreakdown?: TenderRow[];
     counter: { id: number; name: string; tillAccount: { name: string } };
     branch:  { name: string };
 };
@@ -54,6 +58,7 @@ type ClosedReport = {
     variancePaise:       string | null;
     carryOverNextPaise:  string | null;
     toVaultPaise:        string | null;
+    tenderBreakdown?:    TenderRow[];
     counter: { id: number; name: string; tillAccount: { id: number; name: string } };
     branch:  { id: string; name: string };
     closingContraVoucher: { id: number; reference: string } | null;
@@ -121,6 +126,7 @@ export function ShiftCloseDialog({
     }, [mode, detail]);
 
     const expected     = detail ? Number(detail.runningExpectedPaise) / 100 : 0;
+    const tenderTotal  = (detail?.tenderBreakdown ?? []).reduce((s, t) => s + Number(t.amountPaise) / 100, 0);
     const declaredNum  = parseFloat(declared) || 0;
     const carryOverNum = parseFloat(carryOver) || 0;
     const toVault      = Math.max(0, declaredNum - carryOverNum);
@@ -274,6 +280,23 @@ export function ShiftCloseDialog({
                                         <span className="font-mono">₹{fmt(expected)}</span>
                                     </div>
                                 </div>
+
+                                {/* All payment methods collected this shift (cash + digital).
+                                    Informational — only cash is physically reconciled below. */}
+                                {detail.tenderBreakdown && detail.tenderBreakdown.length > 0 && (
+                                    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                            Payments collected this shift
+                                        </p>
+                                        {detail.tenderBreakdown.map((t) => (
+                                            <Row key={t.method} label={t.label} value={fmt(Number(t.amountPaise) / 100)} />
+                                        ))}
+                                        <div className="border-t border-border pt-1.5 flex justify-between font-semibold">
+                                            <span>Total collected</span>
+                                            <span className="font-mono">₹{fmt(tenderTotal)}</span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="space-y-1.5">
                                     <Label htmlFor="declared-amt">Physical count (₹)</Label>
@@ -451,6 +474,23 @@ const CloseReport = forwardRef<HTMLDivElement, { report: ClosedReport }>(
                         </span>
                     </div>
                 </div>
+
+                {/* Payments collected this shift — all methods (cash + digital) */}
+                {report.tenderBreakdown && report.tenderBreakdown.length > 0 && (
+                    <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Payments collected</p>
+                        {report.tenderBreakdown.map((t) => (
+                            <ReportRow key={t.method} label={t.label} value={`₹${fmt(Number(t.amountPaise) / 100)}`} />
+                        ))}
+                        <div className="border-t border-border pt-1.5">
+                            <ReportRow
+                                label="Total collected"
+                                value={`₹${fmt(report.tenderBreakdown.reduce((s, t) => s + Number(t.amountPaise) / 100, 0))}`}
+                                bold
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Disposition */}
                 <div className="rounded-md border border-border px-3 py-2.5 space-y-1.5">

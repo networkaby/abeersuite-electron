@@ -21,10 +21,11 @@ export class CreditLimitError extends Error {
 // Must be called INSIDE a prisma.$transaction so the balance read is fresh
 // and consistent with the writes that follow.
 //
-// Rules:
-//   creditLimit IS NULL  → no restriction; returns silently (unlimited account)
+// Rules (deny-by-default — credit is a privilege that must be granted):
+//   creditLimit IS NULL  → treated exactly like 0 — NO credit sales allowed
 //   creditLimit IS 0     → no credit sales allowed; any additionalDebit > 0 throws
-//   otherwise            → throws when (current balance + additionalDebit) > creditLimit
+//   creditLimit > 0      → throws when (current balance + additionalDebit) > creditLimit
+//   An explicit POSITIVE limit is the ONLY way to permit a credit sale.
 //
 // @param tx              Prisma transaction client
 // @param accountId       Customer AR account id (Account.id)
@@ -44,11 +45,12 @@ export async function checkCreditLimit(
         select: { creditLimit: true, balance: true },
     });
 
-    // Unknown account or unlimited credit — let the FK constraint handle
-    // the former; skip the check for the latter.
-    if (!account || account.creditLimit === null) return;
+    // Unknown account — let the FK constraint handle it.
+    if (!account) return;
 
-    const limit   = Number(account.creditLimit);
+    // Deny-by-default: a NULL limit is treated exactly like 0 (no credit). An
+    // account can only buy on credit when an explicit positive limit is set.
+    const limit   = account.creditLimit === null ? 0 : Number(account.creditLimit);
     const current = Number(account.balance);    // positive = customer owes us
 
     if (limit === 0) {

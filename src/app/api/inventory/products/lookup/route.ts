@@ -62,8 +62,10 @@ export async function GET(req: NextRequest) {
         const lastInward = await loadLastInwardCostMap([{ id: product.id, stock: product.stock }]);
         return NextResponse.json({
             ...product,
-            // Boundary: expose the materialized effectiveSalePricePaise under the
-            // stable `pricePaise` field name so POS / Sale-voucher / lab read it raw.
+            // The response already carries `effectiveSalePricePaise` (selected +
+            // spread above) — POS reads that column name directly. We ALSO expose
+            // it under the legacy `pricePaise` alias for the not-yet-renamed
+            // Sale-voucher / lab / home / inventory pickers.
             pricePaise: product.effectiveSalePricePaise,
             taxRate: resolved?.gstRate ?? null,
             hsnCode: resolved?.hsnCode ?? null,
@@ -108,8 +110,10 @@ export async function GET(req: NextRequest) {
         const r = taxByProduct.get(p.id);
         return {
             ...p,
-            // Boundary: expose the materialized effectiveSalePricePaise under the
-            // stable `pricePaise` field name so POS / Sale-voucher / lab read it raw.
+            // The response already carries `effectiveSalePricePaise` (selected +
+            // spread above) — POS reads that column name directly. We ALSO expose
+            // it under the legacy `pricePaise` alias for the not-yet-renamed
+            // Sale-voucher / lab / home / inventory pickers.
             pricePaise: p.effectiveSalePricePaise,
             taxRate: r?.gstRate ?? null,
             hsnCode: r?.hsnCode ?? null,

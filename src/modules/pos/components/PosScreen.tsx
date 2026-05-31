@@ -44,10 +44,10 @@ type Snapshot = {
     discountPct: number;
     loyaltyPoints: number;
     customerLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
-    creditLimit: number | null;    // null = unlimited (no check performed)
+    creditLimit: number | null;    // deny-by-default: 0 = no credit, >0 = cap (server maps legacy NULL→0)
     balanceDue: number;
     balanceOverdue: number;
-    availableCredit: number | null; // null when creditLimit is null
+    availableCredit: number | null; // = max(0, creditLimit − balanceDue)
     rating: number | null;
     favouriteCategory: string | null;
     personalizedOffers: Array<{ id: string; label: string; tag: string }>;
@@ -58,7 +58,9 @@ type Snapshot = {
 
 type ProductOption = {
     id: number; sku: string; name: string;
-    pricePaise?: number | null;
+    /// Materialized effective sale price (paise) — the value POS charges.
+    /// Read straight from the products/lookup response (column of the same name).
+    effectiveSalePricePaise?: number | null;
     mrpPaise?: number | null;
     /// Effective GST rate resolved by the cascade product → group → org-default.
     /// Null = no rate found anywhere in the chain (line stays untaxed).
@@ -360,11 +362,34 @@ export default function PosScreen() {
         }
     };
 
+    // Re-sync effective sale prices once, when a sale starts. A counter can sit
+    // idle for hours; prices may have been re-frozen elsewhere meanwhile. This
+    // hits the lightweight prices-only endpoint (no GST/cost cascade) and patches
+    // the in-memory list by id — cart lines stay snapshotted, so it never shifts
+    // a sale in progress. Failure is silent: keep the prices we already have.
+    const refreshPrices = async () => {
+        try {
+            const { data } = await axios.get<
+                Array<{ id: number; effectiveSalePricePaise: number | null; mrpPaise: number | null }>
+            >("/api/inventory/products/prices");
+            const byId = new Map(data.map((p) => [p.id, p]));
+            setAllProducts((prev) =>
+                prev.map((p) => {
+                    const fresh = byId.get(p.id);
+                    return fresh
+                        ? { ...p, effectiveSalePricePaise: fresh.effectiveSalePricePaise, mrpPaise: fresh.mrpPaise }
+                        : p;
+                }),
+            );
+        } catch { /* keep current prices if the refresh fails */ }
+    };
+
     const onPartyPicked = (p: PickedParty) => {
         if (p.accountId == null) {
             toast.error(`${p.name} has no ledger account yet`);
             return;
         }
+        void refreshPrices();          // billing starts — pull prices re-frozen while idle
         void fetchSnapshot(p.accountId);
     };
 
@@ -376,13 +401,13 @@ export default function PosScreen() {
 
     // ── Cart actions ────────────────────────────────────────────────────────
     const addToCart = (p: ProductOption) => {
-        // Product's pricePaise is treated as TAX-INCLUSIVE (matches the
-        // price tag / MRP-style retail expectations). We back-calculate the
+        // Product's effectiveSalePricePaise is treated as TAX-INCLUSIVE (matches
+        // the price tag / MRP-style retail expectations). We back-calculate the
         // pre-tax rate here so the rest of the math (calcLineTotals) — which
         // expects an exclusive rate — produces the right breakdown.
         // Cashier sees Subtotal ₹100 + Tax ₹18 = Total ₹118 for an 18% item
         // tagged at ₹118.
-        const inclusivePrice = p.pricePaise ? p.pricePaise / 100 : 0;
+        const inclusivePrice = p.effectiveSalePricePaise ? p.effectiveSalePricePaise / 100 : 0;
         const taxRate = p.taxRate ?? 0;
         const defaultPrice = taxRate > 0 ? inclusivePrice / (1 + taxRate / 100) : inclusivePrice;
         const warrantyLabel = p.warrantyTerm
@@ -810,7 +835,7 @@ export default function PosScreen() {
                                             >
                                                 <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
                                                 <span className="flex-1 px-3 truncate">{p.name}</span>
-                                                <span className="text-xs text-muted-foreground">{p.pricePaise ? `₹${(p.pricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
+                                                <span className="text-xs text-muted-foreground">{p.effectiveSalePricePaise ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}` : "—"}</span>
                                                 <Plus size={14} className="ml-2 text-muted-foreground" />
                                             </button>
                                         </li>

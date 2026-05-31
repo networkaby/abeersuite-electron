@@ -244,7 +244,9 @@ export async function POST(req: Request) {
                 select: { id: true },
             });
             await tx.account.create({
-                data: { personId: p.id, name: p.name, groupId: group?.id ?? null },
+                // creditLimit 0 = cash-only by default; credit is granted later
+                // by setting an explicit positive limit on the account.
+                data: { personId: p.id, name: p.name, groupId: group?.id ?? null, creditLimit: 0 },
             });
             return p;
         });

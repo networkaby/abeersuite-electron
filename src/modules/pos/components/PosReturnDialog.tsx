@@ -60,7 +60,8 @@ type Tab = "invoice" | "customer" | "lost";
 
 type ProductOption = {
     id: number; sku: string; name: string;
-    pricePaise?: number | null;
+    /// Materialized effective sale price (paise) from products/lookup.
+    effectiveSalePricePaise?: number | null;
 };
 
 type LostLine = {
@@ -308,7 +309,7 @@ export function PosReturnDialog({
     }, [allProducts, prodQuery]);
 
     const addLostLine = (prod: ProductOption) => {
-        const unitPrice = prod.pricePaise ? prod.pricePaise / 100 : 0;
+        const unitPrice = prod.effectiveSalePricePaise ? prod.effectiveSalePricePaise / 100 : 0;
         setLostLines((prev) => [
             ...prev,
             {
@@ -667,8 +668,8 @@ export function PosReturnDialog({
                                                                 </span>
                                                                 <span className="flex-1 px-3 truncate">{p.name}</span>
                                                                 <span className="text-xs text-muted-foreground shrink-0">
-                                                                    {p.pricePaise
-                                                                        ? `₹${(p.pricePaise / 100).toLocaleString("en-IN")}`
+                                                                    {p.effectiveSalePricePaise
+                                                                        ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}`
                                                                         : "—"}
                                                                 </span>
                                                                 <Plus size={13} className="ml-2 text-muted-foreground shrink-0" />

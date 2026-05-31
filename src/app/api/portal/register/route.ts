@@ -91,7 +91,9 @@ export async function POST(req: Request) {
                     });
                 }
                 await tx.account.create({
-                    data: { personId: p.id, name: p.name },
+                    // Self-registered portal customer — cash-only (creditLimit 0)
+                    // until staff explicitly grant a positive limit.
+                    data: { personId: p.id, name: p.name, creditLimit: 0 },
                 });
                 return p;
             });
@@ -128,7 +130,9 @@ export async function POST(req: Request) {
             });
             if (!existingAccount) {
                 await prisma.account.create({
-                    data: { personId: person.id, name: person.name },
+                    // Self-registered portal customer — cash-only (creditLimit 0)
+                    // until staff explicitly grant a positive limit.
+                    data: { personId: person.id, name: person.name, creditLimit: 0 },
                 });
             }
         }

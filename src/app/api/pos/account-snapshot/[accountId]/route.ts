@@ -151,20 +151,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                               : lifetimeTotal >= 10000  ? "Silver"
                                                         : "Bronze";
 
-        // null  = unlimited (no check performed anywhere)
-        // 0     = no credit facility (must pay in full)
-        // > 0   = hard cap; enforced at sale APIs and the POS checkout dialog
-        const creditLimit: number | null = account.creditLimit !== null
+        // Deny-by-default (matches checkCreditLimit): NULL is treated as 0.
+        //   0    = no credit facility (must pay in full)
+        //   > 0  = hard cap; enforced at sale APIs and the POS checkout dialog
+        const creditLimit: number = account.creditLimit !== null
             ? Number(account.creditLimit)
-            : null;
+            : 0;
         const balance    = Number(account.balance);    // ledger balance (positive = customer owes)
         const balanceDue = Math.max(0, balance);
         const overdueDue = ledgerOutstanding?.bills
             .filter((b) => b.daysOverdue > 0)
             .reduce((s, b) => s + b.outstanding, 0) ?? 0;
-        const availableCredit: number | null = creditLimit !== null
-            ? Math.max(0, creditLimit - balanceDue)
-            : null;                                    // null = unlimited
+        const availableCredit: number = Math.max(0, creditLimit - balanceDue);
 
         const lastVisitAt = (() => {
             const a = latestVoucher?.date ?? null;

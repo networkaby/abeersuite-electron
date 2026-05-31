@@ -1,5 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
+import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import * as Sentry from "@sentry/nextjs";
 import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "./productImportFields";
 
 export { PRODUCT_IMPORT_FIELDS };
@@ -556,6 +558,27 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         },
         { timeout: 10 * 60 * 1000, maxWait: 30_000 },
     );
+
+    // Materialize effectiveSalePricePaise for every touched product so imported
+    // rows are sellable in POS without a manual "Apply all". createMany returns
+    // no ids, so resolve created rows by their (unique) SKU. Recompute in small
+    // chunks — the engine's per-call transaction has a 5s limit. Best-effort:
+    // a recompute failure never fails the import.
+    try {
+        const updatedIds = updateRows.map((v) => v.existingId!);
+        const newSkus = validRows.filter((v) => v.existingId == null).map((v) => v.data.sku);
+        const createdIds = newSkus.length
+            ? (await prisma.invProduct.findMany({ where: { sku: { in: newSkus } }, select: { id: true } })).map((p) => p.id)
+            : [];
+        const touchedIds = [...new Set([...updatedIds, ...createdIds])];
+        const CHUNK_RECOMPUTE = 100;
+        for (let i = 0; i < touchedIds.length; i += CHUNK_RECOMPUTE) {
+            await recomputePricesForProducts(touchedIds.slice(i, i + CHUNK_RECOMPUTE));
+        }
+    } catch (err: unknown) {
+        Sentry.captureException(err, { tags: { source: "price-recompute", context: "product-import" } });
+        console.error("[price-recompute] failed after product import", err);
+    }
 
     return { willCreate, willUpdate, willSkip, errorCount, mastersAutoCreated, results };
 }
