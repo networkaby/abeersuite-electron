@@ -281,6 +281,7 @@ export default function PricingStrategiesPage() {
                     items.data.map((it) => ({
                         id: it.id,
                         name: it.name,
+                        sku: it.sku,
                         brandId: it.brandId,
                         categoryId: it.categoryId,
                         groupId: it.groupId,
@@ -318,7 +319,10 @@ export default function PricingStrategiesPage() {
             // price = cost_incl × (1 + margin/100) — matches the engine's inclusive price.
             const costIncl = p.costPaise != null ? Math.round(p.costPaise * (1 + p.gstPct / 100)) : null;
             const price = costIncl != null ? Math.round(costIncl * (1 + margin / 100)) : null;
-            return { p, pieces, margin, costIncl, price };
+            // Profit stays excl-vs-excl (tax-adjusted): priceExcl − costExcl =
+            // cost × margin/100. Matches the items page's profit convention.
+            const profit = p.costPaise != null ? Math.round(p.costPaise * (margin / 100)) : null;
+            return { p, pieces, margin, costIncl, price, profit };
         });
     }, [products, brands, categories, groups, baseN, brandPts, catPts, groupPts]);
 
@@ -337,6 +341,7 @@ export default function PricingStrategiesPage() {
             const textOk =
                 !q ||
                 p.name.toLowerCase().includes(q) ||
+                p.sku.toLowerCase().includes(q) ||
                 nameOf(brands, p.brandId).toLowerCase().includes(q) ||
                 nameOf(categories, p.categoryId).toLowerCase().includes(q) ||
                 nameOf(groups, p.groupId).toLowerCase().includes(q);
@@ -447,7 +452,7 @@ export default function PricingStrategiesPage() {
                                 <Input
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
-                                    placeholder="Filter products…"
+                                    placeholder="Filter products or SKU…"
                                     className="h-8 pl-7 text-xs"
                                 />
                             </div>
@@ -524,7 +529,7 @@ export default function PricingStrategiesPage() {
                         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm border bg-card [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col [&>div]:overflow-hidden"
                         style={{ "--sbw": `${scrollbarW}px` } as React.CSSProperties}
                     >
-                        <Table className="flex min-h-0 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(0,1fr)_160px_72px_104px_104px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
+                        <Table className="flex min-h-0 flex-1 flex-col [&_thead]:block [&_thead]:shrink-0 [&_thead]:pr-[var(--sbw)] [&_tbody]:block [&_tbody]:min-h-0 [&_tbody]:flex-1 [&_tbody]:overflow-y-auto [&_tbody]:[scrollbar-gutter:stable] [&_tr]:grid [&_tr]:grid-cols-[minmax(0,1fr)_160px_72px_96px_96px_96px] [&_thead_tr]:items-center [&_tbody_tr]:items-start [&_th]:px-3 [&_th]:py-2 [&_th]:whitespace-normal [&_td]:px-3 [&_td]:py-2">
                             <TableHeader className="bg-muted [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                                 <TableRow>
                                     <TableHead className="text-xs">Product</TableHead>
@@ -532,6 +537,7 @@ export default function PricingStrategiesPage() {
                                     <TableHead className="text-right text-xs">Margin %</TableHead>
                                     <TableHead className="text-right text-xs">Cost</TableHead>
                                     <TableHead className="text-right text-xs">Price</TableHead>
+                                    <TableHead className="text-right text-xs">Profit</TableHead>
                                 </TableRow>
                             </TableHeader>
 
@@ -543,7 +549,7 @@ export default function PricingStrategiesPage() {
                                         </TableCell>
                                     </TableRow>
                                 ) : null}
-                                {capped.map(({ p, pieces, margin, costIncl, price }) => (
+                                {capped.map(({ p, pieces, margin, costIncl, price, profit }) => (
                                     <TableRow key={p.id}>
                                         <TableCell className="whitespace-normal break-words text-sm font-medium leading-snug">{p.name}</TableCell>
                                         <TableCell className="whitespace-normal"><Breakdown pieces={pieces} margin={margin} /></TableCell>
@@ -555,6 +561,9 @@ export default function PricingStrategiesPage() {
                                         </TableCell>
                                         <TableCell className={`text-right font-mono text-xs font-semibold ${margin < 0 ? "text-red-600" : ""}`}>
                                             {rupee(price)}
+                                        </TableCell>
+                                        <TableCell className={`text-right font-mono text-xs font-semibold ${profit != null && profit < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                                            {rupee(profit)}
                                         </TableCell>
                                     </TableRow>
                                 ))}
